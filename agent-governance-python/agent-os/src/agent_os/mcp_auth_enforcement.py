@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -145,14 +146,27 @@ class McpAuthPolicy:
         entry = self._servers.get(server_name)
         if entry:
             if auth_method in entry.allowed_auth_methods:
-                # TLS check
-                if entry.require_tls and url and url.startswith("http://"):
-                    return AuthCheckResult(
-                        allowed=False,
-                        server_name=server_name,
-                        auth_method=auth_method,
-                        reason=f"Server '{server_name}' requires TLS but URL uses http://",
-                    )
+                # TLS check: parse the URL's scheme rather than testing
+                # for the literal "http://" prefix. Previously, a URL
+                # using `ftp://`, `ws://`, `gopher://`, or no scheme at
+                # all bypassed the require_tls gate because none of
+                # them start with "http://" — only `https://` and
+                # `wss://` represent actual TLS-secured transports.
+                if entry.require_tls and url:
+                    try:
+                        scheme = urlparse(url).scheme.lower()
+                    except (ValueError, AttributeError):
+                        scheme = ""
+                    if scheme not in {"https", "wss"}:
+                        return AuthCheckResult(
+                            allowed=False,
+                            server_name=server_name,
+                            auth_method=auth_method,
+                            reason=(
+                                f"Server '{server_name}' requires TLS but URL scheme "
+                                f"{scheme!r} is not in the TLS allowlist (https, wss)"
+                            ),
+                        )
                 return AuthCheckResult(
                     allowed=True,
                     server_name=server_name,

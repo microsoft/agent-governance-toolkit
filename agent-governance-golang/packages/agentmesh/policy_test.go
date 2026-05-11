@@ -554,3 +554,75 @@ func TestLoadFromYAMLEmptyRules(t *testing.T) {
 		t.Errorf("empty YAML rules: got %q, want deny", d)
 	}
 }
+
+// Regression: rate-limit state was previously keyed by rule.Action only,
+// so one agent / tenant making rapid calls could starve all others for
+// the rest of the window. Now keyed by (action, agent_id, tenant).
+func TestRateLimitIsolatedPerAgent(t *testing.T) {
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "api.call", Effect: Allow, MaxCalls: 2, Window: "60s"},
+	})
+
+	alice := map[string]interface{}{"agent_id": "alice", "tenant": "acme"}
+	bob := map[string]interface{}{"agent_id": "bob", "tenant": "acme"}
+
+	// Alice exhausts her budget.
+	if d := pe.Evaluate("api.call", alice); d != Allow {
+		t.Fatalf("alice call 1: got %q, want allow", d)
+	}
+	if d := pe.Evaluate("api.call", alice); d != Allow {
+		t.Fatalf("alice call 2: got %q, want allow", d)
+	}
+	if d := pe.Evaluate("api.call", alice); d != RateLimit {
+		t.Fatalf("alice call 3: got %q, want rate-limit", d)
+	}
+
+	// Bob must NOT be rate-limited by Alice's traffic.
+	if d := pe.Evaluate("api.call", bob); d != Allow {
+		t.Errorf("bob call 1 (independent of alice): got %q, want allow", d)
+	}
+	if d := pe.Evaluate("api.call", bob); d != Allow {
+		t.Errorf("bob call 2: got %q, want allow", d)
+	}
+}
+
+func TestRateLimitIsolatedPerTenant(t *testing.T) {
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "api.call", Effect: Allow, MaxCalls: 1, Window: "60s"},
+	})
+
+	acmeUser := map[string]interface{}{"agent_id": "u", "tenant": "acme"}
+	otherUser := map[string]interface{}{"agent_id": "u", "tenant": "other"}
+
+	if d := pe.Evaluate("api.call", acmeUser); d != Allow {
+		t.Fatalf("acme: got %q, want allow", d)
+	}
+	if d := pe.Evaluate("api.call", acmeUser); d != RateLimit {
+		t.Fatalf("acme follow-up: got %q, want rate-limit", d)
+	}
+
+	// Same agent_id but different tenant must have an independent budget.
+	if d := pe.Evaluate("api.call", otherUser); d != Allow {
+		t.Errorf("other-tenant: got %q, want allow", d)
+	}
+}
+
+func TestRateLimitNilContextRetainsGlobalBehavior(t *testing.T) {
+	// Callers that pass nil context (e.g. middleware paths) collapse
+	// to the empty agent/tenant segments — preserving the previous
+	// globally-scoped behavior rather than splitting the budget across
+	// unrelated callers.
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "api.call", Effect: Allow, MaxCalls: 2, Window: "60s"},
+	})
+
+	if d := pe.Evaluate("api.call", nil); d != Allow {
+		t.Fatalf("call 1: got %q, want allow", d)
+	}
+	if d := pe.Evaluate("api.call", nil); d != Allow {
+		t.Fatalf("call 2: got %q, want allow", d)
+	}
+	if d := pe.Evaluate("api.call", nil); d != RateLimit {
+		t.Fatalf("call 3: got %q, want rate-limit", d)
+	}
+}

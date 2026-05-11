@@ -5,6 +5,7 @@ package agentmesh
 
 import (
 	"bytes"
+	stdcontext "context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -215,17 +216,28 @@ func (b *OPABackend) evaluateCLI(context map[string]interface{}) (BackendDecisio
 		return BackendDecision{}, fmt.Errorf("writing opa input file: %w", err)
 	}
 
-	cmd := exec.Command(
+	ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), b.timeout)
+	defer cancel()
+	// The trailing `--` stops OPA's flag parser before it reaches the
+	// query positional; without it, a query that starts with `-` (e.g.
+	// from an attacker-supplied Options.Query) would be interpreted as
+	// an OPA flag.
+	cmd := exec.CommandContext(
+		ctx,
 		"opa",
 		"eval",
 		"--format", "json",
 		"--input", inputPath,
 		"--data", regoPath,
+		"--",
 		b.query,
 	)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() == stdcontext.DeadlineExceeded {
+			return BackendDecision{}, fmt.Errorf("opa eval timed out after %s", b.timeout)
+		}
 		return BackendDecision{}, fmt.Errorf("opa eval failed: %s", strings.TrimSpace(string(output)))
 	}
 
@@ -546,12 +558,19 @@ func (b *CedarBackend) evaluateCLI(context map[string]interface{}) (BackendDecis
 		"--request-json", requestPath,
 	}
 	if b.schemaPath != "" {
-		args = append(args, "--schema", b.schemaPath)
+		// Use --flag=value form so a schemaPath that starts with `-`
+		// cannot be parsed as a separate flag by cedar's CLI parser.
+		args = append(args, fmt.Sprintf("--schema=%s", b.schemaPath))
 	}
 
-	cmd := exec.Command("cedar", args...)
+	ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), b.timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "cedar", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() == stdcontext.DeadlineExceeded {
+			return BackendDecision{}, fmt.Errorf("cedar authorize timed out after %s", b.timeout)
+		}
 		return BackendDecision{}, fmt.Errorf("cedar authorize failed: %s", strings.TrimSpace(string(output)))
 	}
 

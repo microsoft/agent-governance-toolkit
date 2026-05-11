@@ -10,6 +10,7 @@ empty rule lists, and invalid priority values.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -205,8 +206,13 @@ def _lint_rules(
     result: LintResult,
 ) -> None:
     """Validate individual rules and detect conflicts."""
-    # Track (field, operator, value) -> action for conflict detection
-    seen: dict[tuple[str, str, str], str] = {}
+    # Track every (field, operator, value) -> [(rule_name, action), ...]
+    # so conflict detection sees every prior rule against the same key,
+    # not just the first one. The previous implementation stored only
+    # the first action per key and skipped seen[key] = action after a
+    # conflict was reported, so a third rule against the same key was
+    # silently swallowed.
+    seen: dict[tuple[str, str, str], list[tuple[str, str]]] = {}
 
     for idx, rule in enumerate(rules):
         if not isinstance(rule, dict):
@@ -298,25 +304,42 @@ def _lint_rules(
         # ── Conflict detection ────────────────────────────────
         if action in ("allow", "deny") and all_conditions:
             for cond in all_conditions:
+                # JSON-canonical form for the value key — collapses
+                # equivalent dicts/lists with reordered members and
+                # preserves int-vs-string distinctions that str()
+                # would lose. Falls back to repr() for objects that
+                # aren't JSON-serialisable (rare in YAML, but defended
+                # against rather than crashing).
+                try:
+                    canonical_value = json.dumps(
+                        cond.get("value"), sort_keys=True, default=str
+                    )
+                except (TypeError, ValueError):
+                    canonical_value = repr(cond.get("value"))
+
                 key = (
                     cond.get("field", ""),
                     cond.get("operator", ""),
-                    str(cond.get("value", "")),
+                    canonical_value,
                 )
-                prev_action = seen.get(key)
-                if prev_action is not None and prev_action != action:
-                    result.messages.append(
-                        LintMessage(
-                            "warning",
-                            f"Rule '{rule_name}': conflicts with a prior rule "
-                            f"— same condition has both '{prev_action}' and "
-                            f"'{action}'",
-                            filepath,
-                            rule_line,
+                history = seen.setdefault(key, [])
+                # Compare against EVERY prior rule that targets this
+                # key so the third, fourth, ... rule each surface as
+                # individual conflict warnings rather than being
+                # silently swallowed.
+                for prior_name, prior_action in history:
+                    if prior_action != action:
+                        result.messages.append(
+                            LintMessage(
+                                "warning",
+                                f"Rule '{rule_name}': conflicts with rule "
+                                f"'{prior_name}' — same condition has both "
+                                f"'{prior_action}' and '{action}'",
+                                filepath,
+                                rule_line,
+                            )
                         )
-                    )
-                elif prev_action is None:
-                    seen[key] = action
+                history.append((rule_name, action))
 
 
 def lint_path(path: str | Path) -> LintResult:

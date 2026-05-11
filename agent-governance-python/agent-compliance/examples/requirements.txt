@@ -1,1 +1,1 @@
-agent-governance-toolkit[full]>=3.2.2
+agent-governance-toolkit[full]>=3.5.0

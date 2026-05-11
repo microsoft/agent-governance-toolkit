@@ -252,8 +252,9 @@ saves time.
   ```
 
 **Python Code Quality (CodeQL):**
-- Never use `timedelta(days=365)` to represent "one year" — use `timedelta(days=366)`
-  or `dateutil.relativedelta(years=1)` for leap-year safety
+- Never use `timedelta(days=365)` or `timedelta(days=366)` to represent "one year" in
+  production code. Use `dateutil.relativedelta(years=1)` for leap-year safety. In tests
+  where approximate durations suffice, use `timedelta(days=400)` to avoid CodeQL flags.
 - Never use `is True` / `is False` for boolean comparison — use `== True` / `== False`
   (or just `if value:` / `if not value:`)
 - Never use mutable default arguments (`def f(x=[])`) — use `None` with body initialization:

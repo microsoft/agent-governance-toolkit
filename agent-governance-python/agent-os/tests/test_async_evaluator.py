@@ -294,6 +294,39 @@ class TestAsyncConcurrency:
         assert all(not r.allowed for r in denies)
         assert all(r.allowed for r in defaults)
 
+    async def test_async_evaluations_run_concurrently(self, evaluator):
+        """Regression: previously the asyncio.Lock around the executor call
+        serialized async evaluations. Several concurrent ``await
+        evaluate(...)`` calls should run in parallel — concurrent_peak
+        in the stats reflects how many executor threads were inside
+        ``_evaluate_with_read_lock`` at once.
+        """
+        import time as _time
+
+        # Use a slow evaluator so concurrent calls overlap detectably.
+        original_evaluate = evaluator.evaluate
+
+        def slow_evaluate(ctx):
+            _time.sleep(0.05)
+            return original_evaluate(ctx)
+
+        evaluator.evaluate = slow_evaluate
+        async_eval = AsyncPolicyEvaluator(evaluator)
+
+        await asyncio.gather(*[
+            async_eval.evaluate({"tool_name": "read_file"}) for _ in range(8)
+        ])
+
+        stats = async_eval.get_stats()
+        assert stats["evaluation_count"] == 8
+        # If asyncio.Lock still wrapped the executor call, concurrent_peak
+        # would top out at 1. Real concurrency on the default thread pool
+        # should comfortably exceed 1 with 8 50ms tasks.
+        assert stats["concurrent_peak"] > 1, (
+            f"Expected concurrent async evaluations, got concurrent_peak="
+            f"{stats['concurrent_peak']}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Batch evaluation

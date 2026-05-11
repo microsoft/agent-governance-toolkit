@@ -157,6 +157,86 @@ class TestSameAgentConcurrency:
         # Should have hit kill switch
         assert budget.killed is True
 
+    def test_check_and_charge_is_atomic_under_concurrency(self):
+        """Regression: previously check_task and record_cost were two
+        separate locked operations. Two concurrent callers could both
+        pass check_task (each saw spent_today < limit) and then both
+        record_cost (overshooting the limit). check_and_charge fuses
+        them into one locked transaction so this race is closed.
+
+        This test runs many concurrent check_and_charge calls against
+        a daily limit of $10 with $1 charges. Some calls succeed,
+        some are rejected. The total recorded spend MUST never
+        exceed the limit.
+        """
+        from agent_sre.cost.guard import CostGuard
+
+        guard = CostGuard(
+            per_task_limit=5.0,
+            per_agent_daily_limit=10.0,
+            auto_throttle=False,  # disable kill so we can observe limit-only behaviour
+        )
+
+        successes: list[bool] = []
+        errors: list[str] = []
+        results_lock = threading.Lock()
+
+        def attempt() -> None:
+            try:
+                for i in range(20):
+                    allowed, _reason, _alerts = guard.check_and_charge(
+                        "race-agent",
+                        f"t-{threading.current_thread().name}-{i}",
+                        1.0,
+                    )
+                    with results_lock:
+                        successes.append(allowed)
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=attempt) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == []
+        budget = guard.get_budget("race-agent")
+        # Hard invariant: never overshoot the limit, regardless of how
+        # many threads raced through. Pre-fix this could exceed $10.
+        assert budget.spent_today_usd <= 10.0, (
+            f"Overshot daily limit: ${budget.spent_today_usd:.2f} > $10.00 "
+            f"({successes.count(True)} successes)"
+        )
+        # Exactly $10 worth (10 successes at $1) should have been
+        # charged once concurrent check+charge serialises correctly.
+        assert successes.count(True) == 10
+
+    def test_check_and_charge_rejects_when_killed_or_throttled(self):
+        """check_and_charge must surface the same rejection reasons as
+        check_task, and must NOT record cost when rejected.
+        """
+        from agent_sre.cost.guard import CostGuard
+
+        guard = CostGuard(
+            per_task_limit=10.0,
+            per_agent_daily_limit=5.0,
+            auto_throttle=False,
+        )
+
+        # First call burns $5 — fits exactly under the daily limit.
+        allowed, _, _ = guard.check_and_charge("a1", "t1", 5.0)
+        assert allowed is True
+        assert guard.get_budget("a1").spent_today_usd == 5.0
+
+        # Second call would exceed the limit — must be rejected, and
+        # must NOT touch the budget.
+        allowed, reason, alerts = guard.check_and_charge("a1", "t2", 1.0)
+        assert allowed is False
+        assert "exceed" in reason.lower()
+        assert alerts == []
+        assert guard.get_budget("a1").spent_today_usd == 5.0  # unchanged
+
 
 # ---------------------------------------------------------------------------
 # Org Reset After Kill
@@ -273,3 +353,62 @@ class TestCostGuardEdgeCases:
         severities = {a.severity for a in all_alerts}
         assert CostAlertSeverity.WARNING in severities
         assert CostAlertSeverity.CRITICAL in severities
+
+
+# ---------------------------------------------------------------------------
+# Strict Concurrency — record_cost / get_budget under heavy contention must
+# preserve exact arithmetic (no race-induced drift). Older tolerant tests
+# (`< 1.0` drift) live in test_cost.py and test_cost_hardened.py above.
+# ---------------------------------------------------------------------------
+
+
+class TestStrictConcurrency:
+    def test_concurrent_record_cost_preserves_exact_total(self):
+        """With consistent locking, 1000 records of $0.01 must sum to exactly
+        $10.00 (no float drift from races). Partial locking allowed
+        ``< 1.0`` drift; this test locks in the stricter post-fix behaviour.
+        """
+        guard = CostGuard(
+            per_task_limit=100.0,
+            per_agent_daily_limit=10000.0,
+            org_monthly_budget=10000.0,
+        )
+
+        def spend(agent_id: str) -> None:
+            for i in range(100):
+                guard.record_cost(agent_id, f"t{i}", 0.01)
+
+        threads = [threading.Thread(target=spend, args=(f"bot-{i}",)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # 10 threads × 100 records × $0.01 = $10.00 exactly.
+        assert abs(guard.org_spent_month - 10.0) < 1e-9
+        assert sum(guard.get_budget(f"bot-{i}").spent_today_usd for i in range(10)) == pytest.approx(10.0, abs=1e-9)
+        assert sum(guard.get_budget(f"bot-{i}").task_count_today for i in range(10)) == 1000
+
+    def test_concurrent_get_budget_no_orphaned_instances(self):
+        """get_budget() had a TOCTOU on first-touch: two threads racing the
+        same new agent_id could both create AgentBudget instances, with the
+        loser's instance orphaned. After the fix, all callers see the same
+        instance.
+        """
+        guard = CostGuard()
+        instances: list[AgentBudget] = []
+        instances_lock = threading.Lock()
+
+        def grab() -> None:
+            b = guard.get_budget("contested-agent")
+            with instances_lock:
+                instances.append(b)
+
+        threads = [threading.Thread(target=grab) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All 20 callers must hold the same instance.
+        assert len({id(b) for b in instances}) == 1

@@ -166,6 +166,35 @@ class TestGovernedRunnerViolationTracking:
         assert runner._current_signals == []
 
 
+class TestGovernedRunnerCallableAnnotation:
+    """Regression: `violation_callback` was annotated `callable | None`.
+
+    `callable` is a builtin function, not a type. `typing.get_type_hints`
+    raises ``TypeError`` on the original annotation, which breaks Pydantic
+    auto-derivation, inspect-based config helpers, and runtime hint readers.
+    """
+
+    def test_get_type_hints_resolves_violation_callback(self):
+        import typing
+
+        hints = typing.get_type_hints(GovernedRunner.__init__)
+        assert "violation_callback" in hints
+        # Resolving without raising is the load-bearing assertion.
+
+    def test_callback_typing_includes_callable(self):
+        import typing
+
+        hint = typing.get_type_hints(GovernedRunner.__init__)["violation_callback"]
+        # Hint is `Callable[[PolicyViolation], None] | None` — a Union with
+        # NoneType. ``typing.get_args`` returns the union members.
+        args = typing.get_args(hint)
+        assert type(None) in args
+        # The non-None arg should be a Callable, not the builtin `callable`.
+        non_none = [a for a in args if a is not type(None)]
+        assert len(non_none) == 1
+        assert typing.get_origin(non_none[0]) in (typing.Callable, __import__("collections.abc", fromlist=["Callable"]).Callable)
+
+
 class TestGovernedRunnerCallbacks:
     def test_violation_callback_invoked(self):
         cb = MagicMock()
@@ -238,6 +267,28 @@ class TestPolicyViolation:
     def test_unknown_severity_defaults(self):
         v = PolicyViolation(PolicyViolationType.WARNED, "P", "d", "unknown")
         assert v.penalty == 10.0
+
+    def test_caller_supplied_penalty_preserved(self):
+        """Regression for REVIEW.md HIGH Extensions #11.
+
+        Previously ``__post_init__`` unconditionally overwrote whatever
+        ``penalty`` the caller passed with the severity-table value, so
+        custom weighting silently broke. The fix keeps the caller's
+        value when they supply one, and only derives from severity when
+        the field is left at its default (``None``).
+        """
+        v = PolicyViolation(
+            PolicyViolationType.BLOCKED, "P", "d", "high", penalty=999.0
+        )
+        assert v.penalty == 999.0
+
+    def test_caller_supplied_zero_penalty_preserved(self):
+        """An explicit ``penalty=0.0`` is a valid weighting decision and
+        must not be re-derived as if it were the default."""
+        v = PolicyViolation(
+            PolicyViolationType.WARNED, "P", "d", "critical", penalty=0.0
+        )
+        assert v.penalty == 0.0
 
 
 class TestGovernedRollout:
@@ -698,6 +749,93 @@ class TestFlightRecorderEmitterViolationSummary:
         assert summary["violation_rate"] == 0.0
 
 
+class TestFlightRecorderEmitterStream:
+    """``stream()`` is an async generator with a cooperative stop signal.
+
+    Regression for REVIEW.md HIGH Extensions #9: previously
+    ``async def stream()`` was annotated as returning
+    ``Iterator[LightningSpan]`` (wrong — it's an async generator) and
+    had no exit condition, so consumers could only terminate it by
+    cancelling the surrounding task.
+    """
+
+    def test_stream_return_type_is_async_iterator(self):
+        import inspect
+        import typing
+        from collections.abc import AsyncIterator
+
+        hints = typing.get_type_hints(FlightRecorderEmitter.stream)
+        ret = hints["return"]
+        assert typing.get_origin(ret) is AsyncIterator
+        # The method must itself be an async generator function.
+        assert inspect.isasyncgenfunction(FlightRecorderEmitter.stream)
+
+    def test_stream_stops_when_event_is_set(self):
+        """``stream()`` exits cleanly after the next poll when stop_event fires."""
+
+        async def _run():
+            recorder = _make_recorder([_FakeEntry(), _FakeEntry(id="e2")])
+            emitter = FlightRecorderEmitter(recorder)
+            stop = asyncio.Event()
+            stop.set()  # request stop before iteration
+
+            collected = [s async for s in emitter.stream(stop_event=stop)]
+            return collected
+
+        spans = asyncio.run(_run())
+        # With the event already set, the loop body must NOT execute and
+        # no spans must be yielded. This is the contract: ``stop_event``
+        # gives a clean exit, not "drain then stop".
+        assert spans == []
+
+    def test_stream_drains_then_stops(self):
+        """``stream()`` yields spans available before the stop fires, then exits."""
+
+        async def _run():
+            recorder = _make_recorder([_FakeEntry(), _FakeEntry(id="e2")])
+            emitter = FlightRecorderEmitter(recorder)
+            stop = asyncio.Event()
+
+            results: list = []
+            async for span in emitter.stream(stop_event=stop, poll_interval=0.0):
+                results.append(span)
+                if len(results) == 2:
+                    stop.set()
+            return results
+
+        spans = asyncio.run(_run())
+        assert len(spans) == 2
+
+    def test_stream_no_event_runs_until_cancelled(self):
+        """Without a stop_event, ``stream()`` runs until the caller cancels."""
+
+        async def _run():
+            recorder = _make_recorder([_FakeEntry()])
+            emitter = FlightRecorderEmitter(recorder)
+
+            results: list = []
+
+            async def consume():
+                async for span in emitter.stream(poll_interval=0.0):
+                    results.append(span)
+
+            task = asyncio.create_task(consume())
+            # Give the generator a few ticks to surface the initial entry.
+            for _ in range(5):
+                await asyncio.sleep(0)
+                if results:
+                    break
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            return results
+
+        spans = asyncio.run(_run())
+        assert len(spans) >= 1
+
+
 class TestFlightRecorderEmitterStreaming:
     def test_get_new_spans_incremental(self):
         entries = [_FakeEntry(), _FakeEntry(id="e2")]
@@ -710,6 +848,46 @@ class TestFlightRecorderEmitterStreaming:
         # No new entries → empty
         second = emitter.get_new_spans()
         assert len(second) == 0
+
+    def test_get_new_spans_only_converts_new_entries(self):
+        """Regression for REVIEW.md HIGH Extensions #10.
+
+        Previously ``get_new_spans`` called ``get_spans`` (which converts
+        every entry) on every poll and then sliced the tail. With N entries
+        already converted in prior polls, each new poll did N+k conversions
+        for k new entries — O(N²) over the lifetime of a polling consumer.
+
+        The fix keeps a cursor and only converts the suffix that arrived
+        since the last call. This test instruments ``_convert_entry`` so
+        every call is counted; the second poll, with only one *new* entry,
+        must invoke the converter exactly once — not N+1 times.
+        """
+        # Start with 10 entries, drain via get_new_spans (first poll).
+        entries = [_FakeEntry(id=f"e{i}") for i in range(10)]
+        recorder = _make_recorder(entries)
+        emitter = FlightRecorderEmitter(recorder)
+
+        first = emitter.get_new_spans()
+        assert len(first) == 10
+
+        # Spy on _convert_entry and add ONE new entry.
+        call_count = 0
+        original = emitter._convert_entry
+
+        def counting_convert(entry):
+            nonlocal call_count
+            call_count += 1
+            return original(entry)
+
+        emitter._convert_entry = counting_convert
+        entries.append(_FakeEntry(id="e10"))
+
+        new = emitter.get_new_spans()
+        assert len(new) == 1
+        assert call_count == 1, (
+            f"get_new_spans converted {call_count} entries; expected 1 "
+            f"(O(n²) behaviour returned)"
+        )
 
     def test_stats(self):
         entries = [_FakeEntry()]

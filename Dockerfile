@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /workspace
 
-RUN apt-get update \
+RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && apt-get install -y --no-install-recommends \
         bash \
         build-essential \
@@ -26,7 +26,7 @@ RUN apt-get update \
         | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
         > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
+    && for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && apt-get install -y --no-install-recommends nodejs \
     && python -m pip install --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
     && rm -rf /var/lib/apt/lists/*
@@ -52,6 +52,17 @@ RUN python -m pip install --no-cache-dir \
         -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt \
     && cd /workspace/agent-governance-typescript \
     && npm ci --legacy-peer-deps
+
+# Run as non-root for the developer workflow. The compose `dev` and
+# `dashboard` services bind-mount the repo at /workspace; running the
+# entrypoint as root creates files on the host owned by uid 0, which
+# is both an isolation hazard and an ergonomic problem (host editor
+# can't easily fix permissions). Create the user AFTER the package
+# installs so the system-site-packages writes don't need a sudo step.
+RUN useradd --create-home --shell /bin/bash --uid 1000 dev \
+    && chown -R dev:dev /workspace
+
+USER dev
 
 ENTRYPOINT ["bash", "/workspace/scripts/docker/dev-entrypoint.sh"]
 CMD ["sleep", "infinity"]

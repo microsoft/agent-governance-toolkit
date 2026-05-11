@@ -15,8 +15,14 @@
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
+[![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
+[![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
+[![GitHub stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=flat&label=Stars)](https://github.com/microsoft/agent-governance-toolkit)
+[![Contributors](https://img.shields.io/github/contributors/microsoft/agent-governance-toolkit?label=Contributors)](https://github.com/microsoft/agent-governance-toolkit/graphs/contributors)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
 > [!IMPORTANT]
@@ -24,7 +30,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.4.0 is out!** False-positive fix for contributor reputation check on established accounts, CI lint fixes, and README cleanup. [Changelog →](CHANGELOG.md)
+> **v3.5.0 is out!** Latest stable release with Bedrock adapter, prompt defense improvements, and governance hardening. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** -- deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **13,000+ tests**.
 
@@ -320,7 +326,24 @@ This toolkit provides **application-level governance** (Python middleware), not 
 
 - [Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-**Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md) — it helps the project gain momentum and helps others discover real-world use cases.
+**Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md), it helps the project gain momentum and helps others discover real-world use cases.
+
+## Governance & Standards
+
+AGT follows open governance practices aligned with foundation incubation requirements:
+
+| Document | Purpose |
+|----------|---------|
+| [GOVERNANCE.md](GOVERNANCE.md) | Decision-making, roles, contributor ladder |
+| [CHARTER.md](CHARTER.md) | Technical charter (LF Projects format) |
+| [MAINTAINERS.md](MAINTAINERS.md) | 6 maintainers from 4 organizations |
+| [RELEASE.md](RELEASE.md) | Release process, versioning, registries |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting and response SLAs |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Microsoft Open Source Code of Conduct |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | DCO, attribution policy, AI-assisted contribution rules |
+| [ADOPTERS.md](docs/ADOPTERS.md) | 9 adopters across production, pilot, and research |
+
+**Standards alignment:** [OWASP Agentic Top 10](docs/OWASP-COMPLIANCE.md) (10/10) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](docs/compliance/) · [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) (100%)
 
 ## Important Notes
 

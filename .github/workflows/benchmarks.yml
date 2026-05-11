@@ -18,34 +18,34 @@ jobs:
           python-version: "3.11"
 
       - name: Install agent-os dependencies
-        working-directory: agent-os
+        working-directory: agent-governance-python/agent-os
         run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
       - name: Install agent-sre dependencies
-        working-directory: agent-sre
+        working-directory: agent-governance-python/agent-sre
         run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
       - name: Run policy benchmarks
-        working-directory: agent-os
-        run: python agent-governance-python/benchmarks/bench_policy.py | tee /tmp/bench_policy.json
+        working-directory: agent-governance-python/agent-os
+        run: python benchmarks/bench_policy.py | tee /tmp/bench_policy.json
 
       - name: Run kernel benchmarks
-        working-directory: agent-os
-        run: python agent-governance-python/benchmarks/bench_kernel.py | tee /tmp/bench_kernel.json
+        working-directory: agent-governance-python/agent-os
+        run: python benchmarks/bench_kernel.py | tee /tmp/bench_kernel.json
 
       - name: Run audit benchmarks
-        working-directory: agent-os
-        run: python agent-governance-python/benchmarks/bench_audit.py | tee /tmp/bench_audit.json
+        working-directory: agent-governance-python/agent-os
+        run: python benchmarks/bench_audit.py | tee /tmp/bench_audit.json
 
       - name: Run adapter benchmarks
-        working-directory: agent-os
-        run: python agent-governance-python/benchmarks/bench_adapters.py | tee /tmp/bench_adapters.json
+        working-directory: agent-governance-python/agent-os
+        run: python benchmarks/bench_adapters.py | tee /tmp/bench_adapters.json
 
       - name: Run SRE benchmarks
-        working-directory: agent-sre
+        working-directory: agent-governance-python/agent-sre
         run: |
-          python agent-governance-python/benchmarks/bench_chaos.py | tee /tmp/bench_chaos.txt
-          python agent-governance-python/benchmarks/bench_slo.py | tee /tmp/bench_slo.txt
+          python benchmarks/bench_chaos.py | tee /tmp/bench_chaos.txt
+          python benchmarks/bench_slo.py | tee /tmp/bench_slo.txt
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -113,7 +113,7 @@ export class OnboardingPanel {
                         await this._completeStep(message.stepId);
                         break;
                     case 'executeAction':
-                        await this._executeAction(message.command, message.args);
+                        await this._executeAction(message.command);
                         break;
                     case 'skipOnboarding':
                         await this._skipOnboarding();
@@ -177,9 +177,27 @@ export class OnboardingPanel {
         }
     }
 
-    private async _executeAction(command: string, args?: any[]): Promise<void> {
+    private async _executeAction(command: string): Promise<void> {
+        // Only run commands declared by a configured onboarding step, and
+        // use the step's own ``args`` rather than anything supplied by the
+        // webview. A compromised renderer therefore cannot smuggle in an
+        // arbitrary VS Code command (e.g. one that opens a folder, runs a
+        // task, or sends keystrokes to the integrated terminal) or attach
+        // attacker-controlled arguments to a legitimate one.
+        const step = typeof command === 'string'
+            ? this._steps.find(s => s.action?.command === command)
+            : undefined;
+        if (!step?.action) {
+            vscode.window.showErrorMessage(
+                `Onboarding tried to run an unrecognized command: ${command}`
+            );
+            return;
+        }
         try {
-            await vscode.commands.executeCommand(command, ...(args || []));
+            await vscode.commands.executeCommand(
+                step.action.command,
+                ...(step.action.args || [])
+            );
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to execute: ${error}`);
         }
@@ -452,8 +470,8 @@ export class OnboardingPanel {
                 <a href="https://github.com/microsoft/agent-governance-toolkit" target="_blank">⭐ Star on GitHub</a>
             </div>
             <div class="footer-actions">
-                <button class="secondary" onclick="resetProgress()">Reset Progress</button>
-                <button class="secondary" onclick="skipOnboarding()">Skip Onboarding</button>
+                <button class="secondary" data-action="reset">Reset Progress</button>
+                <button class="secondary" data-action="skip">Skip Onboarding</button>
             </div>
         </div>
     </div>
@@ -482,12 +500,12 @@ export class OnboardingPanel {
                             <p class="step-description">\${escapeHtml(step.description)}</p>
                             <div class="step-actions">
                                 \${step.action ? \`
-                                    <button onclick="executeAction('\${escapeHtml(step.action.command)}')" \${step.completed ? 'disabled' : ''}>
+                                    <button data-action="execute" data-command="\${escapeHtml(step.action.command)}" \${step.completed ? 'disabled' : ''}>
                                         \${escapeHtml(step.action.label)}
                                     </button>
                                 \` : ''}
                                 \${!step.completed ? \`
-                                    <button class="secondary" onclick="completeStep('\${escapeHtml(step.id)}')">
+                                    <button class="secondary" data-action="complete" data-step-id="\${escapeHtml(step.id)}">
                                         Mark Complete
                                     </button>
                                 \` : ''}
@@ -545,6 +563,35 @@ export class OnboardingPanel {
                     renderSteps();
                     updateProgress();
                 }
+            }
+        });
+
+        // Buttons use ``data-action`` rather than inline ``onclick=``
+        // attributes so the page is CSP-compliant under
+        // ``script-src 'nonce-...'`` (which blocks inline event handlers).
+        // A single delegated click listener inside this nonce-gated script
+        // block dispatches to the right function and pulls any arguments
+        // from sibling ``data-*`` attributes on the button.
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-action]');
+            if (!target) return;
+            switch (target.dataset.action) {
+                case 'reset':
+                    resetProgress();
+                    break;
+                case 'skip':
+                    skipOnboarding();
+                    break;
+                case 'execute':
+                    if (target.dataset.command) {
+                        executeAction(target.dataset.command);
+                    }
+                    break;
+                case 'complete':
+                    if (target.dataset.stepId) {
+                        completeStep(target.dataset.stepId);
+                    }
+                    break;
             }
         });
 

@@ -79,7 +79,9 @@ public sealed class McpGatewayDecision
 
 /// <summary>
 /// Gateway pipeline for governed MCP traffic.
-/// Enforces deny-list → allow-list → payload sanitization → rate limiting → human approval.
+/// Enforces deny-list → allow-list → rate limiting → payload sanitization → suspicious-payload block → human approval.
+/// Cheap policy checks run before expensive payload scanning so denied or rate-limited
+/// requests do not pay regex/redaction cost.
 /// Thread-safe.
 /// </summary>
 public sealed class McpGateway
@@ -115,38 +117,38 @@ public sealed class McpGateway
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Sanitize payload
-        var sanitized = _sanitizer.ScanText(request.Payload);
-
-        // Deny list check
+        // Deny list check (cheap string match; runs before any payload work)
         if (MatchesAny(_config.DenyList, request.ToolName))
         {
-            return MakeDecision(McpGatewayStatus.Denied, sanitized);
+            return MakeUnscannedDecision(McpGatewayStatus.Denied, request.Payload);
         }
 
         // Allow list check (if non-empty, tool must be in list)
         if (_config.AllowList.Count > 0 && !MatchesAny(_config.AllowList, request.ToolName))
         {
-            return MakeDecision(McpGatewayStatus.Denied, sanitized);
+            return MakeUnscannedDecision(McpGatewayStatus.Denied, request.Payload);
         }
 
-        // Block on suspicious payload
-        if (_config.BlockOnSuspiciousPayload && sanitized.Findings.Count > 0)
-        {
-            return MakeDecision(McpGatewayStatus.Denied, sanitized);
-        }
-
-        // Rate limiting
+        // Rate limiting (gate expensive sanitization behind the throughput budget)
         var rateLimitKey = $"{request.AgentId}:{request.ToolName}";
         if (!_rateLimiter.TryAcquire(rateLimitKey, _maxCallsPerMinute, TimeSpan.FromMinutes(1)))
         {
             return new McpGatewayDecision
             {
                 Status = McpGatewayStatus.RateLimited,
-                SanitizedPayload = sanitized.Sanitized,
-                Findings = sanitized.Findings,
+                SanitizedPayload = request.Payload,
+                Findings = Array.Empty<McpResponseFinding>(),
                 RetryAfterSeconds = 60
             };
+        }
+
+        // Sanitize payload (only reached for requests that pass policy and rate-limit gates)
+        var sanitized = _sanitizer.ScanText(request.Payload);
+
+        // Block on suspicious payload
+        if (_config.BlockOnSuspiciousPayload && sanitized.Findings.Count > 0)
+        {
+            return MakeDecision(McpGatewayStatus.Denied, sanitized);
         }
 
         // Human approval check
@@ -156,6 +158,16 @@ public sealed class McpGateway
         }
 
         return MakeDecision(McpGatewayStatus.Allowed, sanitized);
+    }
+
+    private static McpGatewayDecision MakeUnscannedDecision(McpGatewayStatus status, string rawPayload)
+    {
+        return new McpGatewayDecision
+        {
+            Status = status,
+            SanitizedPayload = rawPayload,
+            Findings = Array.Empty<McpResponseFinding>()
+        };
     }
 
     private static McpGatewayDecision MakeDecision(McpGatewayStatus status, McpSanitizedResponse sanitized)

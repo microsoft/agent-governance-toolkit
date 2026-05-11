@@ -240,5 +240,5 @@ block — is written to the audit trail automatically.
   cryptographic agent identity and trust scoring.
 - **[Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md):** Persist
   your audit trail and generate OWASP ASI compliance reports.
-- **[Example policies](../../examples/policies/):** Drop-in YAML files for
+- **[Example policies](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/policies):** Drop-in YAML files for
   SQL safety, PII detection, MCP security, and more.

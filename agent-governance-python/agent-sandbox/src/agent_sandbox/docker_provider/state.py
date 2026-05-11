@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from agent_sandbox.docker_sandbox_provider import DockerSandboxProvider
+    from agent_sandbox.docker_provider.provider import DockerSandboxProvider
 
 logger = logging.getLogger(__name__)
 
@@ -101,32 +101,42 @@ class SandboxStateManager:
                 f"'{agent_id}'"
             ) from exc
 
-        # Preserve the policy evaluator across restore — destroy_session
-        # pops it from _evaluators, so we save and restore it.
-        evaluator = self._provider._evaluators.get(
-            (agent_id, session_id)
-        )
-
-        # Tear down the current container
-        self._provider.destroy_session(agent_id, session_id)
-
-        # Recreate container from the checkpoint image
+        # Hold the provider's state lock across the entire destroy +
+        # recreate sequence so a concurrent restore (or a concurrent
+        # session create) cannot interleave with this one. The
+        # explicit ``image`` argument to ``_create_container`` removes
+        # the previous global ``self._provider._image`` mutation,
+        # which let two concurrent restores swap images out from under
+        # each other. Even with that mutation gone, the destroy +
+        # recreate window must be serialised — otherwise an
+        # interleaved create_session for the same key could win the
+        # ``_containers[(agent_id, session_id)]`` slot.
         cfg = config or SandboxConfig()
-        original_image = self._provider._image
-        try:
-            self._provider._image = image_tag
+        with self._provider._state_lock:
+            # Preserve the policy evaluator across restore —
+            # destroy_session pops it from _evaluators, so we save
+            # and restore it. Also captured under the lock so the
+            # snapshot matches the destroyed session.
+            evaluator = self._provider._evaluators.get(
+                (agent_id, session_id)
+            )
+
+            # Tear down the current container
+            self._provider.destroy_session(agent_id, session_id)
+
+            # Recreate container from the checkpoint image, passing
+            # the image explicitly instead of mutating the provider's
+            # base image attribute.
             container = self._provider._create_container(
-                agent_id, session_id, cfg
+                agent_id, session_id, cfg, image=image_tag
             )
             self._provider._containers[(agent_id, session_id)] = container
-        finally:
-            self._provider._image = original_image
 
-        # Re-attach the policy evaluator to the restored session
-        if evaluator is not None:
-            self._provider._evaluators[
-                (agent_id, session_id)
-            ] = evaluator
+            # Re-attach the policy evaluator to the restored session
+            if evaluator is not None:
+                self._provider._evaluators[
+                    (agent_id, session_id)
+                ] = evaluator
 
         logger.info(
             "Restored checkpoint '%s' for agent '%s'", name, agent_id

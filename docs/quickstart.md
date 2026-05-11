@@ -1,8 +1,9 @@
-# 🚀 10-Minute Quick Start Guide
+# Quick Start
 
 Get from zero to governed AI agents in under 10 minutes.
 
-> **Prerequisites:** Python 3.11+ / Node.js 18+ / .NET 8.0+ (any one or more).
+!!! info "Prerequisites"
+    Python 3.11+ / Node.js 18+ / .NET 8.0+ (any one or more).
 
 ## Architecture Overview
 
@@ -347,8 +348,8 @@ agt integrity --manifest integrity.json
 | OWASP coverage map | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
 | Framework integrations | [agent-governance-python/agent-os/src/agent_os/integrations/](agent-governance-python/agent-os/src/agent_os/integrations/) |
 | Example applications | [agent-governance-python/agent-os/examples/](agent-governance-python/agent-os/examples/) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| Contributing | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Changelog | [CHANGELOG.md](../CHANGELOG.md) |
 
 ---
 

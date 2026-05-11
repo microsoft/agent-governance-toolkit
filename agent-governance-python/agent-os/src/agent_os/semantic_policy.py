@@ -394,17 +394,35 @@ class SemanticPolicyEngine:
 
     @staticmethod
     def _build_text(action: str, params: dict[str, Any]) -> str:
-        """Flatten action + params into a single searchable string."""
-        parts = [action]
-        for value in params.values():
-            if isinstance(value, str):
-                parts.append(value)
-            elif isinstance(value, (list, tuple)):
-                parts.extend(str(v) for v in value)
-            elif isinstance(value, dict):
-                parts.extend(str(v) for v in value.values())
+        """Flatten action + params into a single searchable string.
+
+        Walks both keys and values recursively. Previously this only
+        iterated `params.values()`, so a payload smuggled into a dict
+        key (e.g. `{"my-credit-card-1234-5678-..." : True}`) was never
+        scanned by downstream pattern matchers. Attackers control key
+        names as much as they control value names, so the scan has to
+        cover both.
+        """
+        parts: list[str] = [action]
+
+        def _walk(obj: Any) -> None:
+            if isinstance(obj, str):
+                parts.append(obj)
+            elif isinstance(obj, dict):
+                for k, v in obj.items():
+                    if isinstance(k, str):
+                        parts.append(k)
+                    _walk(v)
+            elif isinstance(obj, (list, tuple, set)):
+                for item in obj:
+                    _walk(item)
             else:
-                parts.append(str(value))
+                parts.append(str(obj))
+
+        for k, v in params.items():
+            if isinstance(k, str):
+                parts.append(k)
+            _walk(v)
         return " ".join(parts)
 
 

@@ -910,9 +910,9 @@ ${functionDefs}
         <section class="canvas-container" aria-labelledby="workflow-canvas-heading">
             <h2 id="workflow-canvas-heading" class="sr-only">Workflow canvas</h2>
             <div class="toolbar" role="toolbar" aria-label="Workflow actions">
-                <button onclick="simulate()">▶️ Simulate</button>
-                <button onclick="saveWorkflow()">💾 Save</button>
-                <button class="secondary" onclick="loadWorkflow()">📂 Load</button>
+                <button data-action="simulate">▶️ Simulate</button>
+                <button data-action="save">💾 Save</button>
+                <button class="secondary" data-action="load">📂 Load</button>
                 <div style="flex:1"></div>
                 <label class="sr-only" for="exportLang">Export language</label>
                 <select id="exportLang" aria-label="Export language">
@@ -920,7 +920,7 @@ ${functionDefs}
                     <option value="typescript">TypeScript</option>
                     <option value="go">Go</option>
                 </select>
-                <button onclick="exportCode()">📤 Export Code</button>
+                <button data-action="export">📤 Export Code</button>
             </div>
             <div class="canvas" id="canvas" tabindex="0" role="region" aria-label="Workflow canvas">
                 <svg class="connections" id="connections"></svg>
@@ -1315,6 +1315,26 @@ ${functionDefs}
                             : '0 0 10px #ffc107';
                     }
                     break;
+            }
+        });
+
+        // Toolbar buttons use ``data-action`` rather than inline ``onclick=``
+        // attributes so the page is CSP-compliant under
+        // ``script-src 'nonce-...'`` (which blocks inline event handlers).
+        // A single delegated click listener bound from this nonce-gated
+        // script dispatches to the appropriate function.
+        const __toolbarActions = {
+            simulate: simulate,
+            save: saveWorkflow,
+            load: loadWorkflow,
+            export: exportCode,
+        };
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-action]');
+            if (!target) return;
+            const handler = __toolbarActions[target.dataset.action];
+            if (handler) {
+                handler();
             }
         });
 

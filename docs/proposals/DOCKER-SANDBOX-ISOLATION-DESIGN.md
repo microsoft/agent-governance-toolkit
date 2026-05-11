@@ -98,10 +98,11 @@ class SandboxProvider(ABC):
 
 ### Built-in Providers
 
-| Provider | Backend | Isolation Level |
-|----------|---------|-----------------|
-| `DockerSandboxProvider` | Docker containers | Container-level (shared kernel), optional gVisor/Kata kernel isolation |
-| `HyperLightSandboxProvider` | Hyperlight micro-VMs | Hardware-level (own kernel via KVM/MSHV/Hyper-V) |
+| Provider | Backend | Isolation Level | Design doc |
+|----------|---------|-----------------|------------|
+| `DockerSandboxProvider` | Docker containers | Container-level (shared kernel), optional gVisor/Kata kernel isolation | this document |
+| `AzureSandboxProvider` | Azure Container Apps sandboxes (managed) | Container-level on Azure-managed infrastructure with egress proxy | planned |
+| `HyperLightSandboxProvider` | Hyperlight micro-VMs (via [`hyperlight-sandbox`](https://github.com/hyperlight-dev/hyperlight-sandbox)) | Hardware-level (own kernel via KVM/MSHV/WHP) | [HYPERLIGHT-SANDBOX-ISOLATION-DESIGN.md](./HYPERLIGHT-SANDBOX-ISOLATION-DESIGN.md) |
 
 ### Implementing a Custom Provider
 

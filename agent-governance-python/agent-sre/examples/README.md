@@ -7,8 +7,9 @@ Examples demonstrating SLO monitoring, cost guardrails, incident detection, and 
 The fastest way to see Agent-SRE in action:
 
 ```bash
-pip install -e "agent-sre[dev]"
-python agent-governance-python/agent-sre/examples/quickstart.py
+cd agent-governance-python/agent-sre
+pip install -e ".[dev]"
+python examples/quickstart.py
 ```
 
 This simulates 100 agent tasks with a 93% success rate (below the 95% target) and 8% hallucination rate (above the 5% target), then shows SLO status, error budget consumption, cost tracking, and burn rate alerts.
@@ -41,6 +42,6 @@ This simulates 100 agent tasks with a 93% success rate (below the 95% target) an
 ## Prerequisites
 
 - Python 3.10+
-- `pip install -e "agent-sre[dev]"`
+- From the `agent-sre` package root: `pip install -e ".[dev]"`
 - For the dashboard: `pip install streamlit plotly`
 - For LangChain examples: `pip install langchain`

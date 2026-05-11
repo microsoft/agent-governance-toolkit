@@ -45,6 +45,20 @@ def discover_policies(
     if action_path.is_file():
         action_path = action_path.parent
 
+    # Refuse to walk above ``root``. Without this guard, an action_path
+    # that resolves outside ``root`` (e.g. via a symlink, ``..`` segment,
+    # or a callsite that forwards an attacker-influenced path field)
+    # would cause the loop below to traverse to the filesystem root,
+    # loading governance.yaml files from arbitrary locations on disk —
+    # a path-traversal-style attack on the policy chain.
+    if not action_path.is_relative_to(root):
+        logger.warning(
+            "Refusing to discover policies for %s: not under root %s",
+            action_path,
+            root,
+        )
+        return []
+
     # Collect candidates walking up
     candidates: list[Path] = []
     current = action_path

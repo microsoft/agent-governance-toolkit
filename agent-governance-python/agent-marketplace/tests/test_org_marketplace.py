@@ -168,6 +168,43 @@ class TestOrgMarketplacePolicy:
         effective = policy.get_effective_policy("contoso")
         assert effective.require_signature is True
 
+    def test_get_effective_policy_passes_through_org_policies(self) -> None:
+        """Effective policy retains org_policies/org_mcp_policies so a caller
+        can still resolve overrides for other orgs against the returned object.
+
+        Previously the returned ``MarketplacePolicy`` dropped both dicts,
+        which silently flattened the per-org policy structure on every call.
+        """
+        contoso = OrgMarketplacePolicy(
+            organization="contoso",
+            additional_allowed_plugin_types=["agent"],
+        )
+        fabrikam = OrgMarketplacePolicy(
+            organization="fabrikam",
+            additional_allowed_plugin_types=["validator"],
+        )
+        contoso_mcp = MCPServerPolicy(mode="blocklist", blocked=["contoso-bad"])
+        fabrikam_mcp = MCPServerPolicy(mode="blocklist", blocked=["fabrikam-bad"])
+        policy = MarketplacePolicy(
+            allowed_plugin_types=["integration"],
+            org_policies={"contoso": contoso, "fabrikam": fabrikam},
+            org_mcp_policies={"contoso": contoso_mcp, "fabrikam": fabrikam_mcp},
+        )
+
+        # Resolving for contoso must NOT erase the fabrikam entry.
+        effective_for_contoso = policy.get_effective_policy("contoso")
+        assert "fabrikam" in effective_for_contoso.org_policies
+        assert "fabrikam" in effective_for_contoso.org_mcp_policies
+
+        # Re-resolving for fabrikam against the returned object must still
+        # find fabrikam's entry (merge composes on top of contoso's result,
+        # which contains "integration"+"agent"; fabrikam adds "validator").
+        effective_for_fabrikam = effective_for_contoso.get_effective_policy("fabrikam")
+        assert "validator" in effective_for_fabrikam.allowed_plugin_types
+        assert effective_for_fabrikam.get_effective_mcp_policy("fabrikam").blocked == [
+            "fabrikam-bad",
+        ]
+
 
 # ===========================================================================
 # Issue #736 — Plugin quality scoring
@@ -406,8 +443,17 @@ class TestGetEffectiveMCPPolicy:
         assert "approved-a" in effective.allowed
         assert "rogue-server" not in effective.allowed
 
-    def test_allowlist_org_inherits_base_when_no_overlap(self) -> None:
-        """When org's allowed list has no overlap, fall back to base."""
+    def test_allowlist_org_no_overlap_yields_empty(self, caplog) -> None:
+        """Org allowlist that doesn't overlap with base yields an empty
+        intersection — not a silent fallback to ``base.allowed``.
+
+        Previously the merge fell back to ``base.allowed`` when the
+        intersection was empty, silently granting the org the full
+        enterprise list when their declared allowlist contained no overlap
+        with base. That broadened the effective policy beyond what the org
+        requested. The merge is now strict intersection plus a warning log
+        when a non-empty org allowlist produces an empty merged list.
+        """
         policy = MarketplacePolicy(
             mcp_servers=MCPServerPolicy(
                 mode="allowlist",
@@ -420,9 +466,29 @@ class TestGetEffectiveMCPPolicy:
                 ),
             },
         )
+        with caplog.at_level("WARNING"):
+            effective = policy.get_effective_mcp_policy("contoso")
+        assert effective.allowed == []
+        assert "server-a" not in effective.allowed
+        assert "server-z" not in effective.allowed
+        assert any(
+            "no overlap with enterprise allowlist" in r.message
+            for r in caplog.records
+        )
+
+    def test_allowlist_org_empty_when_base_empty_uses_org(self) -> None:
+        """When base has no allowlist, the org's allowed list stands."""
+        policy = MarketplacePolicy(
+            mcp_servers=MCPServerPolicy(mode="allowlist", allowed=[]),
+            org_mcp_policies={
+                "contoso": MCPServerPolicy(
+                    mode="allowlist",
+                    allowed=["server-z"],
+                ),
+            },
+        )
         effective = policy.get_effective_mcp_policy("contoso")
-        # Falls back to base.allowed since intersection is empty
-        assert "server-a" in effective.allowed
+        assert effective.allowed == ["server-z"]
 
     def test_allowlist_org_adds_blocks(self) -> None:
         """Org can add blocked servers even in allowlist mode."""

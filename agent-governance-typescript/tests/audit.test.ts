@@ -119,5 +119,26 @@ describe('AuditLogger', () => {
       }
       expect(small.length).toBe(3);
     });
+
+    it('verify() returns true after rollover eviction', () => {
+      const small = new AuditLogger({ maxEntries: 3 });
+      for (let i = 0; i < 10; i++) {
+        small.log({ agentId: `a${i}`, action: 'x', decision: 'allow' });
+      }
+      expect(small.length).toBe(3);
+      expect(small.verify()).toBe(true);
+    });
+
+    it('detects tampering of the surviving head after rollover eviction', () => {
+      const small = new AuditLogger({ maxEntries: 3 });
+      for (let i = 0; i < 10; i++) {
+        small.log({ agentId: `a${i}`, action: 'x', decision: 'allow' });
+      }
+      // Replace the surviving head's previousHash with a bogus value — the
+      // seam from the evicted prefix should still be checked.
+      const entries = (small as any).entries as Array<{ previousHash: string }>;
+      entries[0].previousHash = '0'.repeat(64);
+      expect(small.verify()).toBe(false);
+    });
   });
 });

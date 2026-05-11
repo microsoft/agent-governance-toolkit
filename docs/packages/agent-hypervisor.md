@@ -748,7 +748,7 @@ When a saga fails, the hypervisor identifies the agent responsible for the failu
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](../../CONTRIBUTING.md) for details.
 
 - :bug: [Report a Bug](https://github.com/microsoft/agent-governance-toolkit/issues/new?labels=bug)
 - :bulb: [Request a Feature](https://github.com/microsoft/agent-governance-toolkit/issues/new?labels=enhancement)

@@ -29,7 +29,7 @@ from agent_sandbox.sandbox_provider import (
     SessionStatus,
 )
 from agent_sandbox.isolation_runtime import IsolationRuntime
-from agent_sandbox.docker_sandbox_provider import (
+from agent_sandbox.docker_provider.provider import (
     DockerSandboxProvider,
     _BLOCKED_ENV_VARS,
     _is_protected_path,
@@ -38,7 +38,7 @@ from agent_sandbox.docker_sandbox_provider import (
     _validate_resource_name,
     docker_config_from_policy,
 )
-from agent_sandbox.state import SandboxCheckpoint
+from agent_sandbox.docker_provider.state import SandboxCheckpoint
 
 
 # =========================================================================
@@ -288,26 +288,26 @@ class TestPathValidation:
         ],
     )
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_unix_protected_paths(self, mock_platform, _mock_realpath, path):
         mock_platform.system.return_value = "Linux"
         assert _is_protected_path(path) is True
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_unix_safe_path(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         assert _is_protected_path("/home/user/data") is False
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_validate_mount_raises_for_protected(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         with pytest.raises(ValueError, match="protected system directory"):
             _validate_mount_path("/etc", "input_dir")
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_validate_mount_safe(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         _validate_mount_path("/home/user/data", "input_dir")  # no exception
@@ -400,7 +400,7 @@ def _make_mock_container(agent_id="a1", session_id="s1"):
 def docker_provider():
     """DockerSandboxProvider with a fully mocked Docker client."""
     with patch(
-        "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+        "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
         return_value=None,
     ):
         provider = DockerSandboxProvider.__new__(DockerSandboxProvider)
@@ -418,7 +418,7 @@ def docker_provider():
         provider._available = True
         provider._runtime = IsolationRuntime.RUNC
 
-        def _create_container(agent_id, session_id, config):
+        def _create_container(agent_id, session_id, config, image=None):
             return _make_mock_container(agent_id, session_id)
 
         provider._create_container = MagicMock(
@@ -631,6 +631,52 @@ class TestDockerDestroySession:
         docker_provider.destroy_session("a1", h.session_id)
         docker_provider.destroy_session("a1", h.session_id)
 
+    def test_remove_failure_keeps_entry_for_retry(self, docker_provider):
+        """Regression: previously the container was popped from the
+        registry BEFORE stop()/remove() were called, so if both Docker
+        calls failed there was no handle left to retry. Now the entry
+        is retained when remove() fails, and a follow-up destroy_session
+        can complete the cleanup once the underlying Docker issue
+        clears.
+        """
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.stop.side_effect = Exception("daemon unreachable")
+        c.remove.side_effect = Exception("daemon unreachable")
+
+        docker_provider.destroy_session("a1", h.session_id)
+
+        # Entry must be retained so the caller can retry.
+        assert ("a1", h.session_id) in docker_provider._containers
+
+        # Once Docker comes back, retry succeeds and the entry is
+        # finally removed.
+        c.stop.side_effect = None
+        c.remove.side_effect = None
+        docker_provider.destroy_session("a1", h.session_id)
+        assert ("a1", h.session_id) not in docker_provider._containers
+
+    def test_remove_failure_keeps_evaluator_and_config(self, docker_provider):
+        """When destroy_session fails to remove the container, it must
+        also keep the evaluator and session config so a retry has the
+        full per-session state to operate on.
+        """
+        try:
+            from agent_os.policies.schema import PolicyDocument
+        except ImportError:
+            pytest.skip("agent-os-kernel not installed")
+
+        doc = PolicyDocument(name="test")
+        h = docker_provider.create_session("a1", policy=doc)
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.stop.side_effect = Exception("daemon unreachable")
+        c.remove.side_effect = Exception("daemon unreachable")
+
+        docker_provider.destroy_session("a1", h.session_id)
+
+        assert ("a1", h.session_id) in docker_provider._containers
+        assert ("a1", h.session_id) in docker_provider._evaluators
+
 
 # -- get_session_status ----------------------------------------------------
 
@@ -754,7 +800,7 @@ class TestDockerProperties:
 class TestContainerCreationHardening:
     def _make_raw_provider(self):
         with patch(
-            "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
             return_value=None,
         ):
             p = DockerSandboxProvider.__new__(DockerSandboxProvider)
@@ -795,7 +841,7 @@ class TestContainerCreationHardening:
         assert "/tmp" not in kw["tmpfs"]
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_volume_mounts(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         p, client = self._make_raw_provider()
@@ -807,7 +853,7 @@ class TestContainerCreationHardening:
         assert kw["volumes"]["/data/out"]["mode"] == "rw"
 
     @patch("os.path.realpath", side_effect=lambda p: p)
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_protected_input_dir_raises(self, mock_platform, _mock_realpath):
         mock_platform.system.return_value = "Linux"
         p, _ = self._make_raw_provider()
@@ -988,6 +1034,40 @@ class TestSandboxStateManager:
         with pytest.raises(RuntimeError, match="not found"):
             provider.restore_state("a1", h.session_id, "missing")
 
+    def test_restore_does_not_mutate_provider_image(self, provider_with_session):
+        """Regression: restore previously swapped self._image to the
+        checkpoint tag for the duration of _create_container, restoring
+        in finally. Two concurrent restores could interleave and one
+        would create a container from the OTHER restore's image. The
+        fix removes the global mutation entirely; image is passed
+        explicitly to _create_container.
+        """
+        provider, h = provider_with_session
+        provider._client.images.get.return_value = MagicMock()
+        original_image = provider._image
+
+        provider.restore_state("a1", h.session_id, "cp1")
+
+        # The provider's base image must not have been mutated by
+        # restore — its only side effect should be the per-session
+        # container slot pointing at a freshly-created container.
+        assert provider._image == original_image
+
+    def test_restore_passes_checkpoint_image_to_create_container(
+        self, provider_with_session,
+    ):
+        """The checkpoint image tag must be passed to _create_container
+        as an explicit ``image=`` argument so concurrent restores
+        cannot race on a shared mutable attribute.
+        """
+        provider, h = provider_with_session
+        provider._client.images.get.return_value = MagicMock()
+
+        provider.restore_state("a1", h.session_id, "cp1")
+
+        last_call = provider._create_container.call_args
+        assert last_call.kwargs.get("image") == "agent-sandbox-a1:cp1"
+
 
 # =========================================================================
 # Section 9: Multi-session isolation
@@ -1134,7 +1214,7 @@ class TestContainerEnvVarsAndHosts:
 
     def _make_raw_provider(self):
         with patch(
-            "agent_sandbox.docker_sandbox_provider.DockerSandboxProvider.__init__",
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
             return_value=None,
         ):
             p = DockerSandboxProvider.__new__(DockerSandboxProvider)
@@ -1407,17 +1487,17 @@ class TestSessionLifecyclePattern:
 
 
 class TestWindowsPathProtection:
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_drive_root_blocked(self, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_drive_letter_only_blocked(self, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("D:") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     def test_windows_safe_path(self, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\Users\\agent\\data") is False
@@ -1489,7 +1569,7 @@ class TestEnvVarSanitization:
     def test_sanitized_env_in_container(self):
         """Verify _create_container applies sanitization."""
         with patch(
-            "agent_sandbox.docker_sandbox_provider."
+            "agent_sandbox.docker_provider.provider."
             "DockerSandboxProvider.__init__",
             return_value=None,
         ):
@@ -1520,7 +1600,7 @@ class TestFailClosedPolicy:
     def test_policy_import_error_warns_only(self, docker_provider):
         """ImportError (SDK not installed) results in warning, not failure."""
         with patch(
-            "agent_sandbox.docker_sandbox_provider.docker_config_from_policy",
+            "agent_sandbox.docker_provider.provider.docker_config_from_policy",
             return_value=SandboxConfig(),
         ):
             with patch.dict(
@@ -1536,7 +1616,7 @@ class TestFailClosedPolicy:
     def test_policy_other_error_raises(self, docker_provider):
         """Non-ImportError exceptions must propagate (fail closed)."""
         with patch(
-            "agent_sandbox.docker_sandbox_provider.docker_config_from_policy",
+            "agent_sandbox.docker_provider.provider.docker_config_from_policy",
             return_value=SandboxConfig(),
         ):
             with patch(
@@ -1557,28 +1637,28 @@ class TestFailClosedPolicy:
 class TestSymlinkResolution:
     """_is_protected_path must resolve symlinks before checking."""
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_symlink_to_etc_blocked(self, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_realpath.return_value = "/etc"
         assert _is_protected_path("/tmp/sneaky-link") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_symlink_to_proc_blocked(self, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_realpath.return_value = "/proc"
         assert _is_protected_path("/tmp/proc-link") is True
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_symlink_to_safe_path_allowed(self, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_realpath.return_value = "/home/agent/data"
         assert _is_protected_path("/tmp/safe-link") is False
 
-    @patch("agent_sandbox.docker_sandbox_provider.platform")
+    @patch("agent_sandbox.docker_provider.provider.platform")
     @patch("os.path.realpath")
     def test_validate_mount_path_symlink_blocked(
         self, mock_realpath, mock_platform,

@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -31,24 +31,36 @@ class PolicyViolationType(Enum):
 
 @dataclass
 class PolicyViolation:
-    """Record of a policy violation during execution."""
+    """Record of a policy violation during execution.
+
+    ``penalty`` defaults to ``None``; on construction it is derived from
+    ``severity`` via :attr:`SEVERITY_PENALTIES` (with a 10.0 fallback for
+    unrecognised severities). Callers that pass an explicit ``penalty``
+    keep that value — the previous implementation unconditionally
+    overwrote any caller-supplied penalty from the severity table, which
+    silently broke callers that intentionally weighted individual
+    violations.
+    """
+
+    SEVERITY_PENALTIES = {
+        "critical": 100.0,
+        "high": 50.0,
+        "medium": 10.0,
+        "low": 1.0,
+    }
+
     violation_type: PolicyViolationType
     policy_name: str
     description: str
     severity: str  # critical, high, medium, low
     timestamp: datetime = field(default_factory=datetime.utcnow)
     action_blocked: bool = False
-    penalty: float = 0.0
+    penalty: float | None = None
 
     def __post_init__(self):
-        """Calculate penalty based on severity."""
-        severity_penalties = {
-            "critical": 100.0,
-            "high": 50.0,
-            "medium": 10.0,
-            "low": 1.0,
-        }
-        self.penalty = severity_penalties.get(self.severity, 10.0)
+        """Derive penalty from severity only when the caller didn't supply one."""
+        if self.penalty is None:
+            self.penalty = self.SEVERITY_PENALTIES.get(self.severity, 10.0)
 
 
 @dataclass
@@ -96,7 +108,7 @@ class GovernedRunner(Generic[T_task]):
         *,
         fail_on_violation: bool = False,
         log_violations: bool = True,
-        violation_callback: callable | None = None,
+        violation_callback: Callable[[PolicyViolation], None] | None = None,
     ):
         """
         Initialize governed runner.

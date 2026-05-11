@@ -2,7 +2,14 @@
 
 > **Level:** Advanced · **Time:** 45 min · **Prerequisites:** Tutorial 02 (Trust & Identity), Azure subscription with Entra ID
 
-This tutorial shows how to bridge Agent Governance Toolkit (AGT) DID-based identities with **Microsoft Entra Agent ID**, enabling enterprise lifecycle management, Conditional Access, and sponsor accountability through **Agent365**.
+---
+
+## What You'll Learn
+
+- Mapping AGT `did:agentmesh:` identities to Entra Agent ID objects
+- Synchronizing trust scores and kill-switch signals between AGT and Entra
+- Configuring Conditional Access policies for governed agents
+- Sponsor accountability through Agent365 directory integration
 
 ## Why Bridge?
 

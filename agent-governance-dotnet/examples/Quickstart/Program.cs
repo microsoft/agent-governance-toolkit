@@ -70,6 +70,8 @@ internal static class Program
         EvaluateAndReport(kernel, "file_read",
             new() { ["path"] = "/var/log/agent.log" });
 
+        // Simulated tool arguments for demo purposes only.
+        // These values trigger specific policy rules to show allow/deny behavior.
         EvaluateAndReport(kernel, "file_write",
             new() { ["path"] = "/etc/passwd", ["content"] = "..." });
 
@@ -129,7 +131,7 @@ internal static class Program
         }
 
         Console.WriteLine();
-        Console.WriteLine("Done. You just governed an agent in ~30 lines of C#.");
+        Console.WriteLine("Done. You just governed an agent in C#.");
         Console.WriteLine();
         Console.WriteLine("Next steps:");
         Console.WriteLine("  - Edit  policies/quickstart.yaml to add your own rules");

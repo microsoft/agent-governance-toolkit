@@ -13,7 +13,7 @@ that enforce the principle of least privilege across multi-agent systems.
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|

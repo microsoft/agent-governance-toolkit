@@ -550,8 +550,11 @@ class SecurityScanner:
 
     def scan_code_patterns(self) -> None:
         """Scan for dangerous code patterns using bandit (Python)."""
-        # Find Python files
-        py_files = list(self.plugin_dir.rglob("*.py"))
+        # Find Python files, excluding vendored directories
+        py_files = [
+            f for f in self.plugin_dir.rglob("*.py")
+            if self._should_scan_file(f)
+        ]
         if not py_files:
             return
 
@@ -648,7 +651,7 @@ class SecurityScanner:
         md_files = []
 
         # Scan skills and agents (primary content)
-        for pattern in ["skills/**/SKILL.md", "agents/*.md"]:
+        for pattern in ["skills/**/SKILL.md", "agents/**/*.md"]:
             md_files.extend(self.plugin_dir.glob(pattern))
 
         for md_file in md_files:

@@ -226,6 +226,79 @@ class TestLintFileConflictingRules:
         result = lint_file(p)
         assert any("conflicts" in m.message.lower() for m in result.warnings)
 
+    def test_third_rule_against_same_key_not_silently_swallowed(self, tmp_path):
+        """Regression: previously seen[key] = action only when no
+        prior action existed. Once the first conflict was reported,
+        further rules against the same key were compared only against
+        the FIRST action and never recorded themselves, so the third
+        rule and beyond were silently dropped from conflict reporting.
+        Fix: track every (rule_name, action) seen for a key.
+        """
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: test
+            rules:
+              - name: rule-a
+                condition: {field: tool_name, operator: eq, value: read_file}
+                action: allow
+              - name: rule-b
+                condition: {field: tool_name, operator: eq, value: read_file}
+                action: deny
+              - name: rule-c
+                condition: {field: tool_name, operator: eq, value: read_file}
+                action: allow
+        """)
+        result = lint_file(p)
+        conflict_msgs = [m for m in result.warnings if "conflicts" in m.message.lower()]
+        # rule-b conflicts with rule-a; rule-c conflicts with rule-b.
+        # Both must surface — not just the first.
+        assert any("rule-b" in m.message and "rule-a" in m.message for m in conflict_msgs)
+        assert any("rule-c" in m.message and "rule-b" in m.message for m in conflict_msgs)
+
+    def test_canonical_value_form_collapses_equivalent_dicts(self, tmp_path):
+        """Two conditions that differ only in dict key order in the
+        ``value`` field should be treated as equivalent for conflict
+        detection — JSON-canonical form collapses them.
+        """
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: test
+            rules:
+              - name: allow-x
+                condition:
+                  field: metadata
+                  operator: eq
+                  value: {a: 1, b: 2}
+                action: allow
+              - name: deny-x
+                condition:
+                  field: metadata
+                  operator: eq
+                  value: {b: 2, a: 1}
+                action: deny
+        """)
+        result = lint_file(p)
+        assert any("conflicts" in m.message.lower() for m in result.warnings)
+
+    def test_int_vs_string_value_distinguished(self, tmp_path):
+        """A condition on the integer 1 vs the string "1" should NOT
+        conflict — JSON-canonical form preserves the type distinction
+        that the prior str() approach erased.
+        """
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: test
+            rules:
+              - name: allow-int
+                condition: {field: count, operator: eq, value: 1}
+                action: allow
+              - name: deny-string
+                condition: {field: count, operator: eq, value: "1"}
+                action: deny
+        """)
+        result = lint_file(p)
+        assert not any("conflicts" in m.message.lower() for m in result.warnings)
+
 
 class TestLintFileDeprecatedFields:
     def test_deprecated_top_level(self, tmp_path):

@@ -4,6 +4,7 @@
 package agentmesh
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -13,14 +14,22 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// processListTimeout bounds the OS-native process-listing subprocess
+// (``powershell Get-CimInstance`` on Windows, ``ps -axo`` on Unix). A
+// pathologically slow ``ps`` or hung WMI provider must not stall the
+// discovery scan indefinitely.
+const processListTimeout = 10 * time.Second
 
 // DetectionBasis describes how a discovery finding was produced.
 type DetectionBasis string
@@ -611,8 +620,36 @@ func (c *GitHubDiscoveryClient) ListOrganizationRepositories(org string) ([]stri
 	return repositories, nil
 }
 
+// buildContentsAPIPath assembles the GitHub contents-API path for a given
+// repo and file path, URL-escaping each segment so that values containing
+// `?`, `#`, `..`, or other URL-meta characters cannot pivot the request to
+// a different endpoint. The repo argument must be a well-formed
+// `<owner>/<name>` string; the path argument may contain `/` as a
+// directory separator and each segment is escaped independently so
+// directory boundaries are preserved.
+func buildContentsAPIPath(repo, path string) (string, error) {
+	repoParts := strings.SplitN(repo, "/", 2)
+	if len(repoParts) != 2 || repoParts[0] == "" || repoParts[1] == "" {
+		return "", fmt.Errorf("invalid github repo %q: expected owner/name", repo)
+	}
+	owner := url.PathEscape(repoParts[0])
+	name := url.PathEscape(repoParts[1])
+
+	pathSegments := strings.Split(path, "/")
+	for i, seg := range pathSegments {
+		pathSegments[i] = url.PathEscape(seg)
+	}
+	escapedPath := strings.Join(pathSegments, "/")
+
+	return fmt.Sprintf("/repos/%s/%s/contents/%s", owner, name, escapedPath), nil
+}
+
 func (c *GitHubDiscoveryClient) getRepositoryFile(repo string, path string) (string, error) {
-	body, err := c.doRequest(fmt.Sprintf("/repos/%s/contents/%s", repo, path))
+	apiPath, err := buildContentsAPIPath(repo, path)
+	if err != nil {
+		return "", err
+	}
+	body, err := c.doRequest(apiPath)
 	if err != nil {
 		return "", err
 	}
@@ -674,7 +711,10 @@ func currentHostProcesses() ([]ProcessInfo, error) {
 }
 
 func currentWindowsProcesses() ([]ProcessInfo, error) {
-	command := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), processListTimeout)
+	defer cancel()
+	command := exec.CommandContext(
+		ctx,
 		"powershell",
 		"-NoProfile",
 		"-Command",
@@ -682,6 +722,9 @@ func currentWindowsProcesses() ([]ProcessInfo, error) {
 	)
 	output, err := command.Output()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("listing windows processes: timed out after %s", processListTimeout)
+		}
 		return nil, fmt.Errorf("listing windows processes: %w", err)
 	}
 
@@ -721,9 +764,14 @@ func currentWindowsProcesses() ([]ProcessInfo, error) {
 }
 
 func currentUnixProcesses() ([]ProcessInfo, error) {
-	command := exec.Command("ps", "-axo", "pid=,command=")
+	ctx, cancel := context.WithTimeout(context.Background(), processListTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, "ps", "-axo", "pid=,command=")
 	output, err := command.Output()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("listing unix processes: timed out after %s", processListTimeout)
+		}
 		return nil, fmt.Errorf("listing unix processes: %w", err)
 	}
 
@@ -734,8 +782,14 @@ func currentUnixProcesses() ([]ProcessInfo, error) {
 		if len(fields) < 2 {
 			continue
 		}
-		pid := 0
-		fmt.Sscanf(fields[0], "%d", &pid)
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			// `ps` output occasionally has malformed lines (header
+			// re-emit, embedded newlines in command). Drop the entry
+			// rather than silently store PID=0, which would otherwise
+			// shadow real processes.
+			continue
+		}
 		commandLine := strings.TrimSpace(strings.TrimPrefix(line, fields[0]))
 		processes = append(processes, ProcessInfo{
 			PID:         pid,

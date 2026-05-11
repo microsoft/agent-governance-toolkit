@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -108,26 +109,32 @@ func (tm *TrustManager) GetTrustScore(agentID string) TrustScore {
 
 // RecordSuccess increases an agent's trust score with decay.
 func (tm *TrustManager) RecordSuccess(agentID string, reward float64) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	snapshot := func() persistedScores {
+		tm.mu.Lock()
+		defer tm.mu.Unlock()
 
-	s := tm.getOrCreate(agentID)
-	s.interactions++
-	decayed := tm.applyDecay(s.score)
-	s.score = math.Min(1.0, decayed+reward*tm.config.RewardFactor)
-	_ = tm.saveToDisk()
+		s := tm.getOrCreate(agentID)
+		s.interactions++
+		decayed := tm.applyDecay(s.score)
+		s.score = math.Min(1.0, decayed+reward*tm.config.RewardFactor)
+		return tm.snapshotForPersist()
+	}()
+	_ = tm.persistSnapshot(snapshot)
 }
 
 // RecordFailure decreases an agent's trust score with asymmetric penalty.
 func (tm *TrustManager) RecordFailure(agentID string, penalty float64) {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
+	snapshot := func() persistedScores {
+		tm.mu.Lock()
+		defer tm.mu.Unlock()
 
-	s := tm.getOrCreate(agentID)
-	s.interactions++
-	decayed := tm.applyDecay(s.score)
-	s.score = math.Max(0.0, decayed-penalty*tm.config.PenaltyFactor)
-	_ = tm.saveToDisk()
+		s := tm.getOrCreate(agentID)
+		s.interactions++
+		decayed := tm.applyDecay(s.score)
+		s.score = math.Max(0.0, decayed-penalty*tm.config.PenaltyFactor)
+		return tm.snapshotForPersist()
+	}()
+	_ = tm.persistSnapshot(snapshot)
 }
 
 func (tm *TrustManager) getOrCreate(agentID string) *scoreState {
@@ -178,12 +185,13 @@ func (tm *TrustManager) loadFromDisk() error {
 	return nil
 }
 
-func (tm *TrustManager) saveToDisk() error {
-	if tm.config.PersistPath == "" {
-		return nil
-	}
+// snapshotForPersist returns a deep-copied view of the current scores
+// suitable for persisting outside the lock. Callers MUST hold tm.mu
+// (any mode) when invoking this; the snapshot itself is independent of
+// the live map afterwards.
+func (tm *TrustManager) snapshotForPersist() persistedScores {
 	persisted := persistedScores{
-		Scores: make(map[string]*persistedState),
+		Scores: make(map[string]*persistedState, len(tm.scores)),
 	}
 	for id, s := range tm.scores {
 		persisted.Scores[id] = &persistedState{
@@ -191,9 +199,48 @@ func (tm *TrustManager) saveToDisk() error {
 			Interactions: s.interactions,
 		}
 	}
+	return persisted
+}
+
+// persistSnapshot writes a previously-captured snapshot to disk
+// atomically (write to a sibling temp file, then rename). Marshalling
+// and the disk write happen WITHOUT holding tm.mu — concurrent readers
+// and writers are not blocked on disk I/O. A crash mid-write leaves
+// either the old file or the new one, never a half-written file.
+func (tm *TrustManager) persistSnapshot(persisted persistedScores) error {
+	if tm.config.PersistPath == "" {
+		return nil
+	}
 	data, err := json.MarshalIndent(persisted, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshalling trust state: %w", err)
 	}
-	return os.WriteFile(tm.config.PersistPath, data, 0644)
+
+	dir := filepath.Dir(tm.config.PersistPath)
+	tmp, err := os.CreateTemp(dir, ".trust-*.json.tmp")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpName) }
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("writing temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("syncing temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, tm.config.PersistPath); err != nil {
+		cleanup()
+		return fmt.Errorf("renaming temp file: %w", err)
+	}
+	return nil
 }

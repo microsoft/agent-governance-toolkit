@@ -3,7 +3,10 @@
 A step-by-step guide to governing AI agents with declarative policies, progressing
 from basic allow/deny rules to production-grade policy management.
 
-**Prerequisites:** Python 3.9+, basic YAML and Python familiarity.
+## Prerequisites
+
+- Python 3.9+
+- Basic YAML and Python familiarity
 
 ## Installation
 
@@ -37,7 +40,7 @@ python examples/01_first_policy.py
 
 - [Tutorial 01 — Policy Engine](../01-policy-engine.md) — Full YAML syntax and operator reference
 - [Policy Schema Source](../../../agent-governance-python/agent-os/src/agent_os/policies/schema.py) — PolicyDocument and PolicyRule models
-- [quickstart.md](../../../quickstart.md) — 10-minute getting started guide
+- [quickstart.md](../../quickstart.md) — 10-minute getting started guide
 
 ## Supplemental Guides
 

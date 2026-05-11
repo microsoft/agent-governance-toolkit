@@ -147,6 +147,58 @@ class TestRunbookExecutor:
         assert len(failed_step) == 1
         assert "step failed" in failed_step[0].error
 
+    def test_step_timeout_enforced(self) -> None:
+        """Regression: previously step.action was called synchronously
+        and step.timeout_seconds was ignored, so a hung action could
+        block the entire runbook indefinitely. Now the executor
+        enforces timeout_seconds via ThreadPoolExecutor and surfaces
+        a TimeoutError as a normal step failure.
+        """
+        import time as _time
+
+        def slow_action(incident: Incident) -> str:
+            _time.sleep(2.0)
+            return "should not reach here"
+
+        rb = Runbook(
+            id="rb-timeout",
+            name="Timeout Test",
+            steps=[
+                RunbookStep(
+                    name="hangs",
+                    action=slow_action,
+                    timeout_seconds=1,
+                ),
+            ],
+        )
+        executor = RunbookExecutor()
+        start = _time.monotonic()
+        execution = executor.execute(rb, _make_incident())
+        elapsed = _time.monotonic() - start
+
+        assert execution.status == ExecutionStatus.FAILED
+        failed = [r for r in execution.step_results if r.status == StepStatus.FAILED]
+        assert len(failed) == 1
+        assert "timeout" in failed[0].error.lower()
+        # Should have terminated near the timeout, not waited the full 2s.
+        assert elapsed < 1.8, f"executor did not honour timeout: elapsed={elapsed:.2f}s"
+
+    def test_step_timeout_zero_means_no_deadline(self) -> None:
+        """A timeout_seconds of 0 (or negative) means "no deadline"
+        — preserve the prior synchronous behaviour for steps that
+        explicitly opt out, since enforcing a zero deadline would
+        timeout instantly.
+        """
+        rb = Runbook(
+            id="rb-no-timeout",
+            name="No Timeout",
+            steps=[RunbookStep(name="ok", action=_ok_action, timeout_seconds=0)],
+        )
+        executor = RunbookExecutor()
+        execution = executor.execute(rb, _make_incident())
+        assert execution.status == ExecutionStatus.COMPLETED
+        assert execution.step_results[0].status == StepStatus.SUCCESS
+
     def test_rollback_on_failure(self) -> None:
         rb = Runbook(
             id="rb-rollback",

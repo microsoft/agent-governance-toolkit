@@ -314,6 +314,35 @@ class TestX3DHExchange:
         assert bundle.identity_key_ed == mgr.ed25519_public
 
 
+class TestKDFSpecCompliance:
+    """The KDF must match the Signal X3DH spec: F||IKM with zero salt."""
+
+    def test_kdf_uses_zero_salt_and_prepends_f_to_ikm(self):
+        """Regression: previously _kdf used 0xFF*32 as the HKDF salt and
+        passed raw ``dh_concat`` as IKM. The Signal X3DH spec §2.2
+        requires zero salt and IKM = F||KM where F = 0xFF*32 (X25519).
+        """
+        from cryptography.hazmat.primitives.hashes import SHA256
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+        from agentmesh.encryption.x3dh import KEY_LEN, X3DH_INFO, _kdf
+
+        dh_concat = bytes(range(96))  # 3*32-byte DH outputs
+
+        actual = _kdf(dh_concat)
+
+        spec_hkdf = HKDF(
+            algorithm=SHA256(),
+            length=KEY_LEN,
+            salt=b"\x00" * 32,
+            info=X3DH_INFO,
+        )
+        expected = spec_hkdf.derive(b"\xff" * 32 + dh_concat)
+
+        assert actual == expected
+        assert len(actual) == KEY_LEN
+
+
 class TestInMemoryPreKeyStore:
     def test_store_and_retrieve(self):
         store = InMemoryPreKeyStore()

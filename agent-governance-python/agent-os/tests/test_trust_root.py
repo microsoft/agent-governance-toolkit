@@ -46,6 +46,56 @@ class TestTrustRoot:
         assert decision.allowed is False
         assert "Blocked pattern" in decision.reason
 
+    def test_rejects_blocked_pattern_in_bytes_value(self) -> None:
+        # Regression: previously str({"data": b"DROP TABLE users"}) produced
+        # "{'data': b'DROP TABLE users'}" — readable in this case, but a
+        # bytes payload with non-printable bytes (e.g., \x90DROP TABLE) was
+        # repr-escaped and silently slipped past the regex.
+        policy = GovernancePolicy(blocked_patterns=["DROP TABLE"])
+        root = TrustRoot(policies=[policy])
+        decision = root.validate_action(
+            {"tool": "sql_query", "arguments": {"query": b"\x90DROP TABLE users"}}
+        )
+        assert decision.allowed is False
+        assert "Blocked pattern" in decision.reason
+
+    def test_rejects_blocked_pattern_in_dict_key(self) -> None:
+        policy = GovernancePolicy(blocked_patterns=["DROP TABLE"])
+        root = TrustRoot(policies=[policy])
+        decision = root.validate_action(
+            {"tool": "sql_query", "arguments": {"DROP TABLE users": "value"}}
+        )
+        assert decision.allowed is False
+
+    def test_rejects_blocked_pattern_in_nested_list(self) -> None:
+        policy = GovernancePolicy(blocked_patterns=["rm -rf /"])
+        root = TrustRoot(policies=[policy])
+        decision = root.validate_action(
+            {
+                "tool": "shell_exec",
+                "arguments": {"steps": [{"cmd": ["echo ok", "rm -rf /"]}]},
+            }
+        )
+        assert decision.allowed is False
+
+    def test_allows_clean_nested_arguments(self) -> None:
+        policy = GovernancePolicy(
+            allowed_tools=["sql_query"],
+            blocked_patterns=["DROP TABLE"],
+        )
+        root = TrustRoot(policies=[policy])
+        decision = root.validate_action(
+            {
+                "tool": "sql_query",
+                "arguments": {
+                    "query": "SELECT * FROM users",
+                    "params": {"limit": 10, "tags": ["safe", "values"]},
+                    "binary": b"\x00\x01\x02",
+                },
+            }
+        )
+        assert decision.allowed is True
+
     def test_requires_at_least_one_policy(self) -> None:
         with pytest.raises(ValueError, match="at least one policy"):
             TrustRoot(policies=[])

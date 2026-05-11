@@ -1,8 +1,15 @@
 # Tutorial 48: Intent-Based Authorization
 
-Agents say what they plan to do, the system approves the plan, and then
-verifies that the agent stuck to it. This tutorial walks through the full
-intent lifecycle: **declare, approve, execute, verify**.
+> **Package:** `agent-os-kernel` · **Time:** 20 minutes · **Level:** Advanced
+
+---
+
+## What You'll Learn
+
+- The declare/approve/execute/verify intent lifecycle
+- Detecting intent drift when agents deviate from declared plans
+- Child intent scope narrowing for delegated tasks
+- Combining intent authorization with existing policy rules
 
 **Prerequisites:** Install AGT with the agent-os kernel:
 

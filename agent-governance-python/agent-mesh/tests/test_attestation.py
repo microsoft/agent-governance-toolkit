@@ -74,7 +74,7 @@ class TestAttestationEvidence:
         assert evidence.key_bound_to_tee is True
 
     def test_rejects_empty_required_fields(self) -> None:
-        with pytest.raises(ValidationError, match="value must not be empty"):
+        with pytest.raises(ValidationError, match="must not be empty"):
             _valid_evidence(platform="")
 
     def test_rejects_invalid_public_key_hash(self) -> None:
@@ -144,7 +144,7 @@ class TestAttestationClaims:
         assert claims.is_expired(datetime.now(UTC)) is True
 
     def test_rejects_empty_platform(self) -> None:
-        with pytest.raises(ValidationError, match="value must not be empty"):
+        with pytest.raises(ValidationError, match="must not be empty"):
             AttestationClaims(platform="")
 
 

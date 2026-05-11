@@ -171,6 +171,11 @@ class CostGuard:
 
     def get_budget(self, agent_id: str) -> AgentBudget:
         """Get or create budget for an agent."""
+        with self._lock:
+            return self._get_or_create_budget_locked(agent_id)
+
+    def _get_or_create_budget_locked(self, agent_id: str) -> AgentBudget:
+        """Caller must hold ``self._lock``."""
         if agent_id not in self._budgets:
             self._budgets[agent_id] = AgentBudget(
                 agent_id=agent_id,
@@ -183,6 +188,13 @@ class CostGuard:
         """Check if a task should be allowed to proceed.
 
         Returns (allowed, reason).
+
+        WARNING — this is an advisory check. ``check_task`` does NOT
+        reserve budget, so two concurrent callers that both pass the
+        check can both proceed and overshoot the limit. For
+        budget-critical paths use :meth:`check_and_charge` instead,
+        which atomically combines the check with the cost reservation
+        under a single lock.
         """
         if not math.isfinite(estimated_cost):
             return False, f"Invalid estimated cost: {estimated_cost}"
@@ -190,10 +202,17 @@ class CostGuard:
             return False, f"Invalid negative estimated cost: {estimated_cost}"
 
         with self._lock:
-            if self._org_killed:
-                return False, "Organization budget exhausted"
+            allowed, reason = self._check_locked(agent_id, estimated_cost)
+            return allowed, reason
 
-        budget = self.get_budget(agent_id)
+    def _check_locked(
+        self, agent_id: str, estimated_cost: float
+    ) -> tuple[bool, str]:
+        """Caller must hold ``self._lock``. Pure check; no mutation."""
+        if self._org_killed:
+            return False, "Organization budget exhausted"
+
+        budget = self._get_or_create_budget_locked(agent_id)
 
         if budget.killed:
             return False, "Agent killed — budget exhausted"
@@ -205,17 +224,57 @@ class CostGuard:
             return False, f"Estimated cost ${estimated_cost:.2f} exceeds per-task limit ${self.per_task_limit:.2f}"
 
         if budget.spent_today_usd + estimated_cost > budget.daily_limit_usd:
-            return False, f"Would exceed daily budget (${budget.remaining_today_usd:.2f} remaining)"
+            remaining = max(0.0, budget.daily_limit_usd - budget.spent_today_usd)
+            return False, f"Would exceed daily budget (${remaining:.2f} remaining)"
 
         if self.org_monthly_budget > 0:
-            with self._lock:
-                if self._org_spent_month + estimated_cost > self.org_monthly_budget:
-                    return False, (
-                        f"Would exceed org monthly budget "
-                        f"(${self.org_remaining_month:.2f} remaining)"
-                    )
+            if self._org_spent_month + estimated_cost > self.org_monthly_budget:
+                org_remaining = max(0.0, self.org_monthly_budget - self._org_spent_month)
+                return False, (
+                    f"Would exceed org monthly budget "
+                    f"(${org_remaining:.2f} remaining)"
+                )
 
         return True, "ok"
+
+    def check_and_charge(
+        self,
+        agent_id: str,
+        task_id: str,
+        cost_usd: float,
+        breakdown: dict[str, float] | None = None,
+    ) -> tuple[bool, str, list[CostAlert]]:
+        """Atomically check budget and record a cost.
+
+        Combines :meth:`check_task` and :meth:`record_cost` in a
+        single locked transaction so two concurrent callers cannot
+        both pass the check and both record costs that overshoot the
+        limit. This is the correct primitive for any path that needs
+        budget enforcement to actually hold under concurrency.
+
+        Returns:
+            ``(allowed, reason, alerts)``. When ``allowed`` is
+            ``False``, ``alerts`` is an empty list and no cost was
+            recorded; the caller should not proceed with the work.
+            When ``allowed`` is ``True``, the cost has already been
+            charged and any threshold/anomaly alerts are returned.
+        """
+        if not math.isfinite(cost_usd):
+            raise ValueError(f"cost_usd must be finite, got {cost_usd}")
+        if cost_usd < 0:
+            raise ValueError(f"cost_usd must be non-negative, got {cost_usd}")
+
+        with self._lock:
+            allowed, reason = self._check_locked(agent_id, cost_usd)
+            if not allowed:
+                return False, reason, []
+            alerts = self._record_cost_locked(
+                agent_id=agent_id,
+                task_id=task_id,
+                cost_usd=cost_usd,
+                breakdown=breakdown,
+            )
+            return True, reason, alerts
 
     def record_cost(
         self,
@@ -227,108 +286,135 @@ class CostGuard:
         """Record a task cost and check budgets.
 
         Returns any alerts triggered.
+
+        WARNING — this method records cost unconditionally; it does
+        NOT check budgets first. For budget-critical paths use
+        :meth:`check_and_charge`.
         """
         if not math.isfinite(cost_usd):
             raise ValueError(f"cost_usd must be finite, got {cost_usd}")
         if cost_usd < 0:
             raise ValueError(f"cost_usd must be non-negative, got {cost_usd}")
+
+        with self._lock:
+            return self._record_cost_locked(
+                agent_id=agent_id,
+                task_id=task_id,
+                cost_usd=cost_usd,
+                breakdown=breakdown,
+            )
+
+    def _record_cost_locked(
+        self,
+        agent_id: str,
+        task_id: str,
+        cost_usd: float,
+        breakdown: dict[str, float] | None = None,
+    ) -> list[CostAlert]:
+        """Caller must hold ``self._lock``. Recording + alerts only."""
         alerts: list[CostAlert] = []
-        budget = self.get_budget(agent_id)
         record = CostRecord(
             agent_id=agent_id,
             task_id=task_id,
             cost_usd=cost_usd,
             breakdown=breakdown or {},
         )
-        self._records.append(record)
-        self._cost_history.append(cost_usd)
 
-        # Update budget
-        with self._lock:
+        if True:  # preserved indent for minimal diff against the prior body
+            budget = self._get_or_create_budget_locked(agent_id)
+            self._records.append(record)
+            self._cost_history.append(cost_usd)
+
+            # Update budget and org spend atomically.
+            prev_spent = budget.spent_today_usd
             budget.spent_today_usd += cost_usd
             budget.task_count_today += 1
+            prev_org_spent = self._org_spent_month
             self._org_spent_month += cost_usd
 
-        # Per-task limit check
-        if cost_usd > self.per_task_limit:
-            alerts.append(CostAlert(
-                severity=CostAlertSeverity.WARNING,
-                message=f"Task cost ${cost_usd:.2f} exceeded per-task limit ${self.per_task_limit:.2f}",
-                agent_id=agent_id,
-                current_value=cost_usd,
-                threshold=self.per_task_limit,
-            ))
-
-        # Daily budget threshold alerts
-        utilization = budget.utilization_percent / 100
-        for threshold in self.alert_thresholds:
-            prev_util = (budget.spent_today_usd - cost_usd) / budget.daily_limit_usd if budget.daily_limit_usd > 0 else 0
-            if prev_util < threshold <= utilization:
-                severity = CostAlertSeverity.CRITICAL if threshold >= 0.90 else CostAlertSeverity.WARNING
+            # Per-task limit check
+            if cost_usd > self.per_task_limit:
                 alerts.append(CostAlert(
-                    severity=severity,
-                    message=f"Agent {agent_id} at {utilization * 100:.0f}% daily budget",
+                    severity=CostAlertSeverity.WARNING,
+                    message=f"Task cost ${cost_usd:.2f} exceeded per-task limit ${self.per_task_limit:.2f}",
                     agent_id=agent_id,
-                    current_value=budget.spent_today_usd,
-                    threshold=budget.daily_limit_usd * threshold,
+                    current_value=cost_usd,
+                    threshold=self.per_task_limit,
                 ))
 
-        # Auto-throttle
-        if self.auto_throttle and utilization >= self.kill_switch_threshold:
-            budget.killed = True
-            alerts.append(CostAlert(
-                severity=CostAlertSeverity.CRITICAL,
-                message=f"Agent {agent_id} KILLED — {utilization * 100:.0f}% budget consumed",
-                agent_id=agent_id,
-                current_value=budget.spent_today_usd,
-                threshold=budget.daily_limit_usd * self.kill_switch_threshold,
-                action=BudgetAction.KILL,
-            ))
-        elif self.auto_throttle and utilization >= 0.85:
-            budget.throttled = True
-            alerts.append(CostAlert(
-                severity=CostAlertSeverity.WARNING,
-                message=f"Agent {agent_id} THROTTLED — {utilization * 100:.0f}% budget consumed",
-                agent_id=agent_id,
-                current_value=budget.spent_today_usd,
-                threshold=budget.daily_limit_usd * 0.85,
-                action=BudgetAction.THROTTLE,
-            ))
-
-        # Org budget kill alert
-        if self.auto_throttle and self.org_monthly_budget > 0:
-            org_util = self._org_spent_month / self.org_monthly_budget
-            prev_org_util = (
-                (self._org_spent_month - cost_usd) / self.org_monthly_budget
-                if self.org_monthly_budget > 0 else 0.0
+            # Daily budget threshold alerts
+            utilization = (
+                budget.spent_today_usd / budget.daily_limit_usd
+                if budget.daily_limit_usd > 0 else 0.0
             )
-            if prev_org_util < self.kill_switch_threshold <= org_util:
-                self._org_killed = True
-                for b in self._budgets.values():
-                    b.killed = True
+            prev_util = (
+                prev_spent / budget.daily_limit_usd if budget.daily_limit_usd > 0 else 0.0
+            )
+            for threshold in self.alert_thresholds:
+                if prev_util < threshold <= utilization:
+                    severity = CostAlertSeverity.CRITICAL if threshold >= 0.90 else CostAlertSeverity.WARNING
+                    alerts.append(CostAlert(
+                        severity=severity,
+                        message=f"Agent {agent_id} at {utilization * 100:.0f}% daily budget",
+                        agent_id=agent_id,
+                        current_value=budget.spent_today_usd,
+                        threshold=budget.daily_limit_usd * threshold,
+                    ))
+
+            # Auto-throttle
+            if self.auto_throttle and utilization >= self.kill_switch_threshold:
+                budget.killed = True
                 alerts.append(CostAlert(
                     severity=CostAlertSeverity.CRITICAL,
-                    message=(
-                        f"Org budget kill switch triggered -- "
-                        f"{org_util * 100:.0f}% of monthly budget consumed"
-                    ),
+                    message=f"Agent {agent_id} KILLED — {utilization * 100:.0f}% budget consumed",
                     agent_id=agent_id,
-                    current_value=self._org_spent_month,
-                    threshold=self.org_monthly_budget * self.kill_switch_threshold,
+                    current_value=budget.spent_today_usd,
+                    threshold=budget.daily_limit_usd * self.kill_switch_threshold,
                     action=BudgetAction.KILL,
                 ))
+            elif self.auto_throttle and utilization >= 0.85:
+                budget.throttled = True
+                alerts.append(CostAlert(
+                    severity=CostAlertSeverity.WARNING,
+                    message=f"Agent {agent_id} THROTTLED — {utilization * 100:.0f}% budget consumed",
+                    agent_id=agent_id,
+                    current_value=budget.spent_today_usd,
+                    threshold=budget.daily_limit_usd * 0.85,
+                    action=BudgetAction.THROTTLE,
+                ))
 
-        # Anomaly detection
-        if self.anomaly_detection and len(self._cost_history) >= 10:
-            anomaly_alert = self._check_anomaly(agent_id, cost_usd)
-            if anomaly_alert:
-                alerts.append(anomaly_alert)
+            # Org budget kill alert
+            if self.auto_throttle and self.org_monthly_budget > 0:
+                org_util = self._org_spent_month / self.org_monthly_budget
+                prev_org_util = prev_org_spent / self.org_monthly_budget
+                if prev_org_util < self.kill_switch_threshold <= org_util:
+                    self._org_killed = True
+                    for b in self._budgets.values():
+                        b.killed = True
+                    alerts.append(CostAlert(
+                        severity=CostAlertSeverity.CRITICAL,
+                        message=(
+                            f"Org budget kill switch triggered -- "
+                            f"{org_util * 100:.0f}% of monthly budget consumed"
+                        ),
+                        agent_id=agent_id,
+                        current_value=self._org_spent_month,
+                        threshold=self.org_monthly_budget * self.kill_switch_threshold,
+                        action=BudgetAction.KILL,
+                    ))
 
-        self._alerts.extend(alerts)
+            # Anomaly detection
+            if self.anomaly_detection and len(self._cost_history) >= 10:
+                anomaly_alert = self._check_anomaly_locked(agent_id, cost_usd)
+                if anomaly_alert:
+                    alerts.append(anomaly_alert)
+
+            self._alerts.extend(alerts)
+
         return alerts
 
-    def _check_anomaly(self, agent_id: str, cost_usd: float) -> CostAlert | None:
-        """Check if a cost is anomalous using Z-score."""
+    def _check_anomaly_locked(self, agent_id: str, cost_usd: float) -> CostAlert | None:
+        """Check if a cost is anomalous using Z-score. Caller must hold ``self._lock``."""
         history = list(self._cost_history)
         if len(history) < 10:
             return None
@@ -353,34 +439,39 @@ class CostGuard:
 
     def reset_daily(self, agent_id: str | None = None) -> None:
         """Reset daily budgets (call at start of each day)."""
-        targets = [agent_id] if agent_id else list(self._budgets.keys())
-        for aid in targets:
-            if aid in self._budgets:
-                budget = self._budgets[aid]
-                budget.spent_today_usd = 0.0
-                budget.task_count_today = 0
-                budget.throttled = False
-                budget.killed = False
+        with self._lock:
+            targets = [agent_id] if agent_id else list(self._budgets.keys())
+            for aid in targets:
+                if aid in self._budgets:
+                    budget = self._budgets[aid]
+                    budget.spent_today_usd = 0.0
+                    budget.task_count_today = 0
+                    budget.throttled = False
+                    budget.killed = False
 
     @property
     def org_spent_month(self) -> float:
-        return self._org_spent_month
+        with self._lock:
+            return self._org_spent_month
 
     @property
     def org_remaining_month(self) -> float:
-        return max(0.0, self.org_monthly_budget - self._org_spent_month)
+        with self._lock:
+            return max(0.0, self.org_monthly_budget - self._org_spent_month)
 
     @property
     def alerts(self) -> list[CostAlert]:
-        return self._alerts
+        with self._lock:
+            return list(self._alerts)
 
     def summary(self) -> dict[str, Any]:
         """Get cost summary across all agents."""
-        return {
-            "org_monthly_budget": self.org_monthly_budget,
-            "org_spent_month": round(self._org_spent_month, 4),
-            "org_remaining_month": round(self.org_remaining_month, 4),
-            "total_records": len(self._records),
-            "total_alerts": len(self._alerts),
-            "agents": {aid: b.to_dict() for aid, b in self._budgets.items()},
-        }
+        with self._lock:
+            return {
+                "org_monthly_budget": self.org_monthly_budget,
+                "org_spent_month": round(self._org_spent_month, 4),
+                "org_remaining_month": round(max(0.0, self.org_monthly_budget - self._org_spent_month), 4),
+                "total_records": len(self._records),
+                "total_alerts": len(self._alerts),
+                "agents": {aid: b.to_dict() for aid, b in self._budgets.items()},
+            }

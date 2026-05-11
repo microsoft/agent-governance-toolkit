@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import sys
+import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,21 +46,48 @@ class AuditBackend(Protocol):
 
 
 class JsonlFileBackend:
-    """Writes audit entries as JSONL to a file."""
+    """Writes audit entries as JSONL to a file.
+
+    Concurrency: writes are serialized via an internal lock so concurrent
+    callers can't interleave lines (a partially-written JSON object on
+    one line is unrecoverable). The lock is per-instance; sharing the
+    same backend across threads is the supported pattern.
+
+    File permissions: created with 0o600 (owner read/write only) so the
+    audit log isn't world-readable. The chmod runs after open() so a
+    pre-existing file with permissive perms gets tightened.
+    """
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._file = open(self.path, "a", encoding="utf-8")
+        self._lock = threading.Lock()
+        # Restrict to owner-only on POSIX. chmod is a no-op on Windows
+        # for the most part, but tightening when we can is the right
+        # default for an audit log.
+        if not sys.platform.startswith("win"):
+            try:
+                os.chmod(self.path, 0o600)
+            except OSError:
+                # Best effort — surfacing this as an exception would
+                # block audit writes on filesystems that don't support
+                # POSIX permissions (FAT-mounted volumes, some network
+                # filesystems). Log and continue.
+                logger.warning("Could not chmod %s to 0o600", self.path)
 
     def write(self, entry: AuditEntry) -> None:
-        self._file.write(entry.to_json() + "\n")
+        line = entry.to_json() + "\n"
+        with self._lock:
+            self._file.write(line)
 
     def flush(self) -> None:
-        self._file.flush()
+        with self._lock:
+            self._file.flush()
 
     def close(self) -> None:
-        self._file.close()
+        with self._lock:
+            self._file.close()
 
 
 class InMemoryBackend:

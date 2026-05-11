@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -229,55 +230,64 @@ class OPABackend:
 
     def _evaluate_cli(self, context: dict[str, Any]) -> BackendDecision:
         input_json = json.dumps(context)
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".rego", delete=False
-        ) as f:
-            f.write(self._rego_content)
-            rego_file = f.name
+        # TemporaryDirectory is created with 0o700 on POSIX and ACL'd to the
+        # current user on Windows, so the Rego file is not exposed to other
+        # local users (the previous NamedTemporaryFile path used the process
+        # umask, which on default-configured shared hosts left it
+        # world-readable).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rego_file = Path(tmpdir) / "policy.rego"
+            rego_file.write_text(self._rego_content)
+            try:
+                os.chmod(rego_file, 0o600)
+            except (NotImplementedError, OSError):
+                # Windows or filesystems that don't support chmod — directory
+                # permissions are still restrictive.
+                pass
 
-        cmd = [
-            "opa", "eval", "--format", "json",
-            "--input", "/dev/stdin",
-            "--data", rego_file,
-            self._query,
-        ]
-        try:
-            proc = subprocess.run(  # noqa: S603 — trusted subprocess for OPA policy engine
-                cmd,
-                input=input_json,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout,
-            )
-            if proc.returncode != 0:
+            # `--stdin-input` is OPA's portable way to read input from stdin;
+            # the previous `--input /dev/stdin` path failed on Windows.
+            cmd = [
+                "opa", "eval", "--format", "json",
+                "--stdin-input",
+                "--data", str(rego_file),
+                self._query,
+            ]
+            try:
+                proc = subprocess.run(  # noqa: S603 — trusted subprocess for OPA policy engine
+                    cmd,
+                    input=input_json,
+                    capture_output=True,
+                    text=True,
+                    timeout=self._timeout,
+                )
+                if proc.returncode != 0:
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=f"opa eval failed: {proc.stderr.strip()}",
+                        backend="opa",
+                        error=proc.stderr.strip(),
+                    )
+                result = json.loads(proc.stdout)
+                expressions = result.get("result", [{}])[0].get("expressions", [{}])
+                value = expressions[0].get("value", False) if expressions else False
+                allowed = bool(value)
+                return BackendDecision(
+                    allowed=allowed,
+                    action="allow" if allowed else "deny",
+                    reason=f"OPA local ({self._package}): {'allowed' if allowed else 'denied'}",
+                    backend="opa",
+                    raw_result=result,
+                )
+            except subprocess.TimeoutExpired:
                 return BackendDecision(
                     allowed=False,
                     action="deny",
-                    reason=f"opa eval failed: {proc.stderr.strip()}",
+                    reason="OPA eval timed out",
                     backend="opa",
-                    error=proc.stderr.strip(),
+                    error="timeout",
                 )
-            result = json.loads(proc.stdout)
-            expressions = result.get("result", [{}])[0].get("expressions", [{}])
-            value = expressions[0].get("value", False) if expressions else False
-            allowed = bool(value)
-            return BackendDecision(
-                allowed=allowed,
-                action="allow" if allowed else "deny",
-                reason=f"OPA local ({self._package}): {'allowed' if allowed else 'denied'}",
-                backend="opa",
-                raw_result=result,
-            )
-        except subprocess.TimeoutExpired:
-            return BackendDecision(
-                allowed=False,
-                action="deny",
-                reason="OPA eval timed out",
-                backend="opa",
-                error="timeout",
-            )
-        finally:
-            Path(rego_file).unlink(missing_ok=True)
 
     def _evaluate_builtin(self, context: dict[str, Any]) -> BackendDecision:
         """Built-in simple Rego evaluator for common patterns."""

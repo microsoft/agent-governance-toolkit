@@ -93,6 +93,28 @@ except ImportError:  # pragma: no cover
 # third-party clients (e.g. DynamoDB, Cosmos DB) as backends.
 # =============================================================================
 
+
+def _iter_string_values(value: Any):
+    """Yield every string contained in a nested params structure.
+
+    Used by the no_pii policy check so the PII detector runs against
+    every string value the caller passed in, not just the JSON-dumped
+    blob (which loses type information and matches keyword substrings
+    like 'lesson' contains 'sson').
+    """
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            if isinstance(k, str):
+                yield k
+            yield from _iter_string_values(v)
+    elif isinstance(value, (list, tuple, set)):
+        for item in value:
+            yield from _iter_string_values(item)
+    # numbers / bools / None: nothing to scan
+
+
 class StateBackend(Protocol):
     """Protocol for external state storage.
 
@@ -185,9 +207,16 @@ class RedisConfig:
     retry_on_timeout: bool = True
 
     def to_url(self) -> str:
-        """Build a Redis URL from host/port/db."""
-        auth = f":{self.password}@" if self.password else ""
-        return f"redis://{auth}{self.host}:{self.port}/{self.db}"
+        """Build a password-free Redis URL from host/port/db.
+
+        The password is intentionally NOT embedded in the URL. Anything
+        that reads back the URL — exception messages from the redis
+        client, structured logs at the connection layer, debug
+        introspection, traceback decorations — would otherwise leak the
+        password verbatim. Pass `password` separately via the redis
+        client's `password=` argument (see `RedisBackend._get_client`).
+        """
+        return f"redis://{self.host}:{self.port}/{self.db}"
 
 
 class RedisBackend:
@@ -217,12 +246,19 @@ class RedisBackend:
             import redis.asyncio as aioredis
 
             if self._config is not None:
+                # Password is passed via the keyword argument so it
+                # never enters the URL string (see RedisConfig.to_url).
+                pool_kwargs = {
+                    "max_connections": self._config.pool_size,
+                    "socket_connect_timeout": self._config.connect_timeout,
+                    "socket_timeout": self._config.read_timeout,
+                    "retry_on_timeout": self._config.retry_on_timeout,
+                }
+                if self._config.password:
+                    pool_kwargs["password"] = self._config.password
                 self._pool = aioredis.ConnectionPool.from_url(
                     self.url,
-                    max_connections=self._config.pool_size,
-                    socket_connect_timeout=self._config.connect_timeout,
-                    socket_timeout=self._config.read_timeout,
-                    retry_on_timeout=self._config.retry_on_timeout,
+                    **pool_kwargs,
                 )
                 self._client = aioredis.Redis(connection_pool=self._pool)
             else:
@@ -616,18 +652,40 @@ class StatelessKernel:
                     "reason": f"Action '{action}' blocked by '{policy_name}' policy. {suggestion}."
                 }
 
-            # Check blocked patterns in params
+            # Check blocked patterns in params. The keyword-substring
+            # check catches references to PII categories ("ssn",
+            # "password") in either keys or values. CredentialRedactor
+            # adds the harder check: detect actual PII data formats
+            # (real SSN strings, credit-card-shaped numbers, emails,
+            # phone numbers) that the keyword list cannot anticipate.
             params_str = json.dumps(params).lower()
-            for pattern in policy.get("blocked_patterns", []):
-                if pattern.lower() in params_str:
-                    return {
-                        "allowed": False,
-                        "reason": (
-                            f"Content blocked: '{pattern}' detected in request parameters. "
-                            f"Policy '{policy_name}' prohibits this pattern. "
-                            f"Remove the sensitive content and retry."
-                        )
-                    }
+            blocked_patterns = policy.get("blocked_patterns", [])
+            if blocked_patterns:
+                for pattern in blocked_patterns:
+                    if pattern.lower() in params_str:
+                        return {
+                            "allowed": False,
+                            "reason": (
+                                f"Content blocked: '{pattern}' detected in request parameters. "
+                                f"Policy '{policy_name}' prohibits this pattern. "
+                                f"Remove the sensitive content and retry."
+                            )
+                        }
+                # Second pass: walk all string-typed values and check
+                # for actual PII patterns (regex-based, not keyword).
+                from agent_os.credential_redactor import CredentialRedactor
+                for piece in _iter_string_values(params):
+                    matches = CredentialRedactor.find_pii_matches(piece)
+                    if matches:
+                        kind = matches[0].name
+                        return {
+                            "allowed": False,
+                            "reason": (
+                                f"Content blocked: {kind} detected in request parameters. "
+                                f"Policy '{policy_name}' prohibits PII. "
+                                f"Remove the sensitive content and retry."
+                            )
+                        }
 
             # Check requires approval
             if action in policy.get("require_approval", []):

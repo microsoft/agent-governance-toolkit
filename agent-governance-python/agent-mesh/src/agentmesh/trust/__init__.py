@@ -7,11 +7,12 @@ Implements IATP for agent-to-agent trust handshakes.
 Native A2A and MCP support with transparent protocol translation.
 """
 
-from .bridge import TrustBridge, ProtocolBridge
+from .bridge import ProtocolBridge, TrustBridge
+from .capability import CapabilityGrant, CapabilityRegistry, CapabilityScope
+from .cards import CardRegistry, TrustedAgentCard
 from .endorsement import Endorsement, EndorsementRegistry, EndorsementType
-from .handshake import TrustHandshake, HandshakeResult
-from .capability import CapabilityScope, CapabilityGrant, CapabilityRegistry
-from .cards import TrustedAgentCard, CardRegistry
+from .handshake import HandshakeResult, TrustHandshake
+from .levels import trust_level_for_score
 
 __all__ = [
     "TrustBridge",
@@ -26,4 +27,5 @@ __all__ = [
     "CapabilityRegistry",
     "TrustedAgentCard",
     "CardRegistry",
+    "trust_level_for_score",
 ]

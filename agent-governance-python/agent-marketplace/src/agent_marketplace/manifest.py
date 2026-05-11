@@ -10,7 +10,9 @@ Supports plugin types: policy_template, integration, agent, validator.
 from __future__ import annotations
 
 import enum
+import json
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +24,13 @@ from agent_marketplace.exceptions import MarketplaceError
 logger = logging.getLogger(__name__)
 
 MANIFEST_FILENAME = "agent-plugin.yaml"
+
+# Tighter than ``str.isdigit()``: matches only ASCII decimal digits 0-9.
+# isdigit() returns True for many Unicode digit-like characters (e.g.
+# superscript ``²``, circled ``⒈``) that ``int()`` cannot parse, so an
+# isdigit()-based check lets through versions whose components later
+# crash ``_semver_tuple``'s sort path in the registry.
+_ASCII_DIGITS_RE = re.compile(r"^[0-9]+$")
 
 
 class PluginType(str, enum.Enum):
@@ -82,12 +91,21 @@ class PluginManifest(BaseModel):
     @field_validator("version")
     @classmethod
     def validate_version(cls, v: str) -> str:
-        """Validate basic semver format (MAJOR.MINOR.PATCH)."""
+        """Validate basic semver format (MAJOR.MINOR.PATCH).
+
+        Each component must consist of ASCII decimal digits 0-9 only.
+        ``str.isdigit()`` was insufficient — it returns True for Unicode
+        digits like superscripts (``"²"``) and circled numerals (``"⒈"``)
+        that ``int()`` cannot parse. A version like ``"1.0.²"`` would
+        slip past an ``isdigit()``-based check and then crash the
+        registry's sort path (``_semver_tuple``) on every lookup,
+        DoSing the marketplace.
+        """
         parts = v.split(".")
         if len(parts) < 2 or len(parts) > 3:
             raise MarketplaceError(f"Invalid version format: {v} (expected MAJOR.MINOR[.PATCH])")
         for part in parts:
-            if not part.isdigit():
+            if not part or not _ASCII_DIGITS_RE.match(part):
                 raise MarketplaceError(f"Invalid version component: {part}")
         return v
 
@@ -99,10 +117,26 @@ class PluginManifest(BaseModel):
         return v
 
     def signable_bytes(self) -> bytes:
-        """Return the canonical bytes used for signing (excludes signature field)."""
+        """Return the canonical bytes used for signing (excludes signature field).
+
+        Uses JSON with ``sort_keys=True``, ASCII-safe escaping, no
+        whitespace, and ``allow_nan=False`` so the output is
+        byte-identical across machines, Python builds, and YAML
+        library versions. The prior ``yaml.dump(..., sort_keys=True)``
+        path was NOT a stable canonicalization — it emitted
+        Python-specific tags, used the host's default flow style,
+        and varied with PyYAML release — so a signature produced on
+        one machine could fail to verify on another even when the
+        manifest content was logically identical.
+        """
         data = self.model_dump(exclude={"signature"})
-        # Deterministic YAML serialization
-        return yaml.dump(data, sort_keys=True).encode()
+        return json.dumps(
+            data,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("ascii")
 
 
 def load_manifest(path: Path) -> PluginManifest:

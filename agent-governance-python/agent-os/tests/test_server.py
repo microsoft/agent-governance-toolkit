@@ -265,7 +265,7 @@ class TestExecuteEndpoint:
         session = authenticator.validate_token("env-token")
         assert session is not None
         assert session.agent_id == "test-agent"
-        assert session.expires_at is None
+        assert session.expires_at is not None
 
         server = GovServer(execute_authenticator=authenticator)
         client = TestClient(server.app)

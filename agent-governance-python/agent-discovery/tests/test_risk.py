@@ -65,7 +65,7 @@ class TestRiskScorer:
         agent = _make_agent(
             status=AgentStatus.SHADOW,
             agent_type="autogen",
-            first_seen_at=datetime.now(timezone.utc) - timedelta(days=366),
+            first_seen_at=datetime.now(timezone.utc) - timedelta(days=400),
         )
         risk = self.scorer.score(agent)
         assert risk.score <= 100.0
@@ -79,3 +79,20 @@ class TestRiskScorer:
         )
         risk = self.scorer.score(agent)
         assert risk.score >= 0.0
+
+    def test_future_first_seen_does_not_skip_thresholds(self):
+        """Regression: a future first_seen_at produced a negative
+        days_since_first_seen, which is always < 7 and < 30, so the
+        ungoverned-time risk was never added. Clamp to zero so future
+        timestamps don't artificially reduce risk.
+        """
+        agent = _make_agent(
+            status=AgentStatus.SHADOW,
+            first_seen_at=datetime.now(timezone.utc) + timedelta(days=365),
+        )
+        risk = self.scorer.score(agent)
+        # A future timestamp should NOT add ungoverned-time risk
+        # (the clamped delta is 0, which is < 7, so no factor is added)
+        # but crucially it should NOT produce a negative score contribution
+        assert risk.score >= 0.0
+        assert not any("Ungoverned for -" in f for f in risk.factors)

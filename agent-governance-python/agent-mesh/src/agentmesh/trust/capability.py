@@ -121,8 +121,15 @@ class CapabilityGrant(BaseModel):
         elif self.capability == requested:
             pass
         else:
-            # Fall back to component matching
-            req_action, req_resource, req_qualifier = self.parse_capability(requested)
+            # Fall back to component matching. parse_capability raises
+            # ValueError on inputs that don't contain a colon (e.g.
+            # bare verbs like "read") — fail-closed for those rather
+            # than crashing the caller. The grant simply doesn't match
+            # a malformed request.
+            try:
+                req_action, req_resource, req_qualifier = self.parse_capability(requested)
+            except ValueError:
+                return False
             if self.action != "*" and self.action != req_action:
                 return False
             if self.resource != "*" and self.resource != req_resource:

@@ -2,24 +2,25 @@
 
 AGT provides 50+ packages across 5 ecosystems covering every layer of agent governance.
 
-```
-+------------------+     +------------------+     +------------------+
-|    Agent OS      |     |   Agent Mesh     |     |  Agent Runtime   |
-|  Policy engine   |     |  Discovery &     |     |  Sandboxing &    |
-|  & lifecycle     |     |  trust mesh      |     |  privilege rings  |
-+------------------+     +------------------+     +------------------+
-        |                        |                        |
-+------------------+     +------------------+     +------------------+
-|   Agent SRE      |     | Agent Compliance |     | Agent Marketplace|
-|  Reliability &   |     |  Audit logging   |     |  Plugin trust    |
-|  monitoring      |     |  & frameworks    |     |  & governance    |
-+------------------+     +------------------+     +------------------+
-        |                        |                        |
-+------------------+     +------------------+     +------------------+
-| Agent Lightning  |     | Agent Hypervisor |     | Language + Tools |
-|  High-perf       |     |  HW isolation    |     |  .NET, TS, Rust  |
-|  orchestration   |     |  for workloads   |     |  Go, VS Code     |
-+------------------+     +------------------+     +------------------+
+```mermaid
+graph TB
+    subgraph Core["Core Packages"]
+        OS["Agent OS<br/>Policy engine"]
+        MESH["Agent Mesh<br/>Discovery & trust"]
+        RT["Agent Runtime<br/>Sandboxing"]
+    end
+    subgraph Operations["Operations"]
+        SRE["Agent SRE<br/>Reliability"]
+        COMP["Agent Compliance<br/>Audit & frameworks"]
+        MKT["Agent Marketplace<br/>Plugin trust"]
+    end
+    subgraph Platform["Platform"]
+        LT["Agent Lightning<br/>Orchestration"]
+        HV["Agent Hypervisor<br/>HW isolation"]
+        LANG["Language SDKs<br/>.NET, TS, Rust, Go"]
+    end
+    Core --> Operations
+    Operations --> Platform
 ```
 
 ## Core Packages

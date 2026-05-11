@@ -29,6 +29,67 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ## How to Contribute
 
+### Development Environment Setup
+
+**Prerequisites:** Git, Python 3.10+, and optionally Node.js 18+, .NET 8+, Rust 1.75+, or Go 1.21+ depending on what you are working on.
+
+```bash
+# Clone and enter the repo
+git clone https://github.com/microsoft/agent-governance-toolkit.git
+cd agent-governance-toolkit
+```
+
+**Python packages** (most common):
+
+```bash
+cd agent-governance-python
+python -m venv .venv
+source .venv/bin/activate        # Linux/macOS
+# .venv\Scripts\activate         # Windows
+
+# Install the package you are working on in editable mode
+pip install -e agent-os/[dev]       # Policy engine
+pip install -e agent-mesh/[dev]     # Identity/trust layer
+pip install -e agent-compliance/[dev]  # Compliance tooling
+
+# Run tests for that package
+cd agent-os && pytest
+```
+
+**TypeScript/Node.js:**
+
+```bash
+cd agent-governance-python/agent-mesh/sdks/typescript
+npm install && npm test
+```
+
+**.NET:**
+
+```bash
+cd agent-governance-dotnet
+dotnet build && dotnet test
+```
+
+**Rust:**
+
+```bash
+cd agent-governance-rust
+cargo build && cargo test
+```
+
+**Go:**
+
+```bash
+cd agent-governance-golang
+go build ./... && go test ./...
+```
+
+**Linting:** The CI runs `ruff check` for Python. Run it locally before submitting:
+
+```bash
+ruff check --fix .
+```
+
 ### Reporting Issues
 
 - Search [existing issues](https://github.com/microsoft/agent-governance-toolkit/issues) before creating a new one

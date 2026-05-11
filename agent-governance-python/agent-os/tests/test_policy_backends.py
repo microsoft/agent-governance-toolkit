@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agent_os.policies.backends import (
@@ -143,6 +145,50 @@ allow {
         backend = OPABackend(rego_content=rego, package="custom")
         decision = backend.evaluate({"role": "analyst"})
         assert decision.allowed is True
+
+    def test_opa_cli_uses_stdin_input_flag_not_dev_stdin(self, monkeypatch):
+        """Regression: the CLI invocation must not depend on /dev/stdin
+        (which doesn't exist on Windows) and must keep the rego file
+        inside a per-invocation TemporaryDirectory rather than a
+        umask-controlled NamedTemporaryFile.
+        """
+        captured: dict[str, object] = {}
+
+        class _FakeProc:
+            returncode = 0
+            stdout = '{"result":[{"expressions":[{"value":true}]}]}'
+            stderr = ""
+
+        def _fake_run(cmd, **kwargs):
+            captured["cmd"] = list(cmd)
+            captured["kwargs"] = kwargs
+            # Confirm the rego file existed during the call
+            data_idx = cmd.index("--data")
+            captured["rego_existed"] = Path(cmd[data_idx + 1]).is_file()
+            captured["rego_content"] = Path(cmd[data_idx + 1]).read_text()
+            return _FakeProc()
+
+        from agent_os.policies import backends as backends_mod
+        monkeypatch.setattr(backends_mod, "shutil", backends_mod.shutil)
+        # Force CLI path: pretend opa is available, no Python opa lib
+        monkeypatch.setattr(backends_mod.shutil, "which", lambda name: "/usr/local/bin/opa")
+        monkeypatch.setattr(backends_mod.subprocess, "run", _fake_run)
+
+        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        # Force CLI path even if python opa lib is installed
+        backend._opa_lib = None  # type: ignore[attr-defined]
+        backend._opa_cli_available = True  # type: ignore[attr-defined]
+
+        decision = backend._evaluate_cli({"tool_name": "file_read"})
+        assert decision.allowed is True
+        cmd = captured["cmd"]
+        assert "--stdin-input" in cmd
+        assert "/dev/stdin" not in cmd
+        assert captured["rego_existed"] is True
+        assert "package agentos" in captured["rego_content"]
+        # After the with-block exits, the tempdir is cleaned up
+        data_idx = cmd.index("--data")
+        assert not Path(cmd[data_idx + 1]).exists()
 
 
 # ── Cedar Backend Tests ───────────────────────────────────────

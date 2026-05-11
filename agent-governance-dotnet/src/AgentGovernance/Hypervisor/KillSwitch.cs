@@ -72,7 +72,10 @@ public class KillSwitch
     /// </summary>
     public void Arm()
     {
-        IsArmed = true;
+        lock (_lock)
+        {
+            IsArmed = true;
+        }
     }
 
     /// <summary>
@@ -80,7 +83,10 @@ public class KillSwitch
     /// </summary>
     public void Disarm()
     {
-        IsArmed = false;
+        lock (_lock)
+        {
+            IsArmed = false;
+        }
     }
 
     /// <summary>
@@ -93,15 +99,16 @@ public class KillSwitch
     /// <exception cref="InvalidOperationException">Thrown when the switch is not armed.</exception>
     public KillEvent Kill(string agentId, KillReason reason, string detail)
     {
-        if (!IsArmed)
-        {
-            throw new InvalidOperationException("Kill switch is not armed.");
-        }
-
-        var killEvent = new KillEvent(agentId, reason, detail, DateTimeOffset.UtcNow);
+        KillEvent killEvent;
 
         lock (_lock)
         {
+            if (!IsArmed)
+            {
+                throw new InvalidOperationException("Kill switch is not armed.");
+            }
+
+            killEvent = new KillEvent(agentId, reason, detail, DateTimeOffset.UtcNow);
             _history.Add(killEvent);
         }
 

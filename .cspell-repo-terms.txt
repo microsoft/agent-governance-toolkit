@@ -143,4 +143,12 @@ cref
 nameof
 aspnet
 appsettings
+bursty
+flatbuffer
+hypercall
+kwarg
+microkernel
+Nanvix
+reqwest
 requireapproval
+uncallable

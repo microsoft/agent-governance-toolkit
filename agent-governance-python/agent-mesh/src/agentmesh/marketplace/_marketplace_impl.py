@@ -10,6 +10,7 @@ core dependencies of ``agentmesh``.  It is used as a fallback by
 
 from __future__ import annotations
 
+import ast
 import base64
 import enum
 import json
@@ -277,6 +278,19 @@ class PluginInstaller:
         data = manifest.model_dump(mode="json")
         with open(manifest_file, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=True)
+
+        # Scan any bundled Python source files for restricted imports.
+        violations = self.scan_source_files(dest)
+        if violations:
+            try:
+                shutil.rmtree(dest)
+            except OSError:
+                pass
+            raise MarketplaceError(
+                f"Plugin {name}@{manifest.version} imports restricted modules: "
+                + "; ".join(violations)
+            )
+
         return dest
 
     def uninstall(self, name: str) -> None:
@@ -311,8 +325,67 @@ class PluginInstaller:
 
     @staticmethod
     def check_sandbox(module_name: str) -> bool:
+        """Return whether *module_name* is permitted under the sandbox policy.
+
+        This is a **policy predicate** — it answers "is this module on the
+        restricted list?" but does *not* block any import by itself.
+        Install-time enforcement is performed by :meth:`scan_source_files`,
+        which :meth:`install` calls automatically.
+
+        Args:
+            module_name: Fully-qualified module name (e.g. ``"os.path"``).
+
+        Returns:
+            ``True`` if the module is **allowed**, ``False`` if it is
+            **restricted**.
+        """
         top_level = module_name.split(".")[0]
         return top_level not in RESTRICTED_MODULES
+
+    @staticmethod
+    def scan_source_files(plugin_dir: Path) -> list[str]:
+        """Scan Python source files in *plugin_dir* for restricted imports.
+
+        Parses every ``*.py`` file under *plugin_dir* with :mod:`ast` and
+        reports any ``import X`` or ``from X import ...`` statements that
+        reference a top-level module in :data:`RESTRICTED_MODULES`.
+
+        Args:
+            plugin_dir: Directory containing the installed plugin files.
+
+        Returns:
+            List of human-readable violation strings (one per offending
+            import statement).  An empty list means no restricted imports
+            were found.
+        """
+        violations: list[str] = []
+        for py_file in sorted(plugin_dir.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8")
+            except OSError as exc:
+                logger.warning("Could not read %s for sandbox scan: %s", py_file, exc)
+                continue
+            try:
+                tree = ast.parse(source, filename=str(py_file))
+            except SyntaxError as exc:
+                logger.warning("Could not parse %s for sandbox scan: %s", py_file, exc)
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = alias.name.split(".")[0]
+                        if top in RESTRICTED_MODULES:
+                            violations.append(
+                                f"{py_file}: imports '{alias.name}'"
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        top = node.module.split(".")[0]
+                        if top in RESTRICTED_MODULES:
+                            violations.append(
+                                f"{py_file}: imports from '{node.module}'"
+                            )
+        return violations
 
 
 def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:

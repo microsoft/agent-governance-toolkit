@@ -133,9 +133,24 @@ class RelayServer:
                 # Deliver pending messages
                 await self._deliver_pending(agent_did, ws)
 
-                # Message loop
+                # Message loop. Each receive is bounded by an idle
+                # timeout — without it, a connected agent that never
+                # sends a frame can hold its slot in self._connections
+                # indefinitely. 90s is generous for typical heartbeat
+                # cadences (~30s) and lets a stalled peer be reaped.
+                _IDLE_TIMEOUT = 90.0
                 while True:
-                    raw = await ws.receive_text()
+                    try:
+                        raw = await asyncio.wait_for(
+                            ws.receive_text(), timeout=_IDLE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.info(
+                            "Idle timeout for %s after %ss; closing",
+                            agent_did, _IDLE_TIMEOUT,
+                        )
+                        await ws.close(code=4004)
+                        return
                     frame = json.loads(raw)
                     await self._handle_frame(agent_did, frame, ws)
 
@@ -216,13 +231,20 @@ class RelayServer:
             logger.debug("Stored offline message %s for %s", message_id, recipient_did)
 
     async def _deliver_pending(self, agent_did: str, ws: WebSocket) -> None:
-        """Push all pending messages to a newly connected agent."""
+        """Push all pending messages to a newly connected agent.
+
+        Messages stay in the inbox until the recipient explicitly sends
+        an ``ack`` frame for them — see the ``ack`` branch in
+        :meth:`_handle_frame`. Acknowledging on send (the previous
+        behaviour) silently dropped messages whenever the recipient
+        disconnected after ``send_json`` returned but before the frame
+        actually reached them.
+        """
         pending = self._inbox.fetch_pending(agent_did)
         for msg in pending:
             try:
                 frame = json.loads(msg.payload)
                 await ws.send_json(frame)
-                self._inbox.acknowledge(msg.message_id)
                 self._stats["messages_delivered"] += 1
             except Exception as e:
                 logger.warning("Failed to deliver pending %s: %s", msg.message_id, e)

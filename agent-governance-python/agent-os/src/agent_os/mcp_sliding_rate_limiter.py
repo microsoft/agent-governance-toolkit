@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import threading
 import time
@@ -118,7 +119,7 @@ class MCPSlidingRateLimiter:
             return len(bucket)
 
     def reset(self, agent_id: str) -> None:
-        """Clear state for a single agent.
+        """Clear state for a single agent and drop its tracked entries.
 
         Args:
             agent_id: Agent identifier whose bucket should be reset.
@@ -126,15 +127,25 @@ class MCPSlidingRateLimiter:
         key = self._normalize_agent_id(agent_id)
         with self._get_bucket_lock(key):
             self._rate_limit_store.set_bucket(key, [])
+        # Drop the per-agent lock and tracked-set entry so a churning
+        # set of one-off agent ids doesn't leak _bucket_locks /
+        # _tracked_agents entries indefinitely.
+        with self._state_lock:
+            self._bucket_locks.pop(key, None)
+            self._tracked_agents.discard(key)
 
     def reset_all(self) -> None:
         """Clear state for every agent.
 
-        This removes all retained timestamps from every tracked bucket.
+        This removes all retained timestamps from every tracked bucket
+        and drops the per-agent lock and tracked-set entries.
         """
         for key in self._tracked_agent_ids():
             with self._get_bucket_lock(key):
                 self._rate_limit_store.set_bucket(key, [])
+        with self._state_lock:
+            self._bucket_locks.clear()
+            self._tracked_agents.clear()
 
     def cleanup_expired(self) -> int:
         """Prune expired entries from all agents and return the number removed.
@@ -162,8 +173,16 @@ class MCPSlidingRateLimiter:
 
     @staticmethod
     def _prune_expired(timestamps: list[float], cutoff: float) -> None:
-        while timestamps and timestamps[0] <= cutoff:
-            timestamps.pop(0)
+        # Timestamps are appended monotonically, so a single bisect
+        # finds the cutoff index in O(log n) and a slice-delete copies
+        # the retained tail in one move. The previous list.pop(0)-in-a-
+        # loop was O(n^2) for buckets that filled up with expired
+        # entries (every pop shifts the whole list).
+        if not timestamps:
+            return
+        idx = bisect.bisect_right(timestamps, cutoff)
+        if idx > 0:
+            del timestamps[:idx]
 
     def _load_bucket(self, agent_id: str) -> list[float]:
         bucket = self._rate_limit_store.get_bucket(agent_id)

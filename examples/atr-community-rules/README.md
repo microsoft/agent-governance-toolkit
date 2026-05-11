@@ -54,6 +54,10 @@ pytest examples/atr-community-rules/test_atr_policy.py -v
 ```
 <!-- cspell:enable -->
 
+The test suite includes CVE regression coverage for April and May 2026 disclosure
+clusters, including Semantic Kernel CVE-2026-25592 and CVE-2026-26030 payload
+patterns.
+
 ## Keeping Rules Updated
 
 ATR includes a community-driven threat intelligence pipeline (Threat Cloud) that crystallizes new detection patterns from novel threats. As new rules are published, re-run the sync script to pull updates:

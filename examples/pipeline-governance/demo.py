@@ -412,7 +412,7 @@ def main() -> None:
     print("\n--- normal pipeline run ---\n")
 
     shard_r0 = PipelineShard(rank=0, model="gemma-3-12b-qat4", shard_size_mb=3460, total_shards=2)
-    shard_r1 = PipelineShard(rank=0, model="gemma-3-12b-qat4", shard_size_mb=3460, total_shards=2)
+    shard_r1 = PipelineShard(rank=1, model="gemma-3-12b-qat4", shard_size_mb=3460, total_shards=2)
 
     steps = [
         # R0 loads its shard

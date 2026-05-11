@@ -4,6 +4,7 @@
 package agentmesh
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -93,5 +94,38 @@ func TestCreateExecuteDestroy(t *testing.T) {
 	err = p.DestroySession("test-agent", session.SessionID)
 	if err != nil {
 		t.Fatalf("DestroySession failed: %v", err)
+	}
+}
+
+func TestCreateSessionRejectsInvalidAgentID(t *testing.T) {
+	p := &DockerSandboxProvider{available: true, image: "alpine"}
+	cases := []string{
+		"agent with space",
+		"agent$(rm)",
+		"agent'name",
+		"agent;ls",
+		"../etc",
+		"",
+		"agent\nname",
+	}
+	for _, agentID := range cases {
+		_, err := p.CreateSession(agentID, nil)
+		if err == nil {
+			t.Errorf("expected error for agentID %q, got nil", agentID)
+		}
+	}
+}
+
+func TestCreateSessionAcceptsValidAgentID(t *testing.T) {
+	// Confirms the regex is not over-restrictive on legitimate IDs.
+	// We don't actually call docker — IsAvailable=false short-circuits.
+	p := &DockerSandboxProvider{available: false, image: "alpine"}
+	_, err := p.CreateSession("agent-123_test.local", nil)
+	// Expect a `docker is not available` error, not an `invalid agentID` error.
+	if err == nil {
+		t.Fatal("expected docker-unavailable error, got nil")
+	}
+	if strings.Contains(err.Error(), "invalid agentID") {
+		t.Fatalf("regex rejected a valid agentID: %v", err)
 	}
 }

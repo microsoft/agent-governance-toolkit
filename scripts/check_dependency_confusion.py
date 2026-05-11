@@ -91,6 +91,8 @@ REGISTERED_PACKAGES = {
     "agentmesh-tool-registry", "agentmesh_tool_registry",
     # APS adapter optional deps
     "aps", "agent-passport-system",
+    # Hyperlight micro-VM SDK (CNCF Sandbox project, on PyPI)
+    "hyperlight-sandbox", "hyperlight_sandbox", "hyperlight",
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",

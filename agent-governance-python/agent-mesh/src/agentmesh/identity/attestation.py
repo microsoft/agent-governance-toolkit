@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Final
+from typing import Any, Final
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -131,9 +131,9 @@ class AttestationEvidence(BaseModel):
 
     @field_validator("platform", "evidence", "agent_did", "challenge_id", "nonce")
     @classmethod
-    def _validate_required_text(cls, value: str) -> str:
+    def _validate_required_text(cls, value: str, info: Any) -> str:
         if not value:
-            raise ValueError("value must not be empty")
+            raise ValueError(f"{info.field_name} must not be empty")
         return value
 
     @field_validator("public_key_hash", "report_data_hash")
@@ -204,9 +204,9 @@ class AttestationClaims(BaseModel):
 
     @field_validator("platform", "tcb_status")
     @classmethod
-    def _validate_required_text(cls, value: str) -> str:
+    def _validate_required_text(cls, value: str, info: Any) -> str:
         if not value:
-            raise ValueError("value must not be empty")
+            raise ValueError(f"{info.field_name} must not be empty")
         return value
 
     @field_validator("verified_at", "expires_at")
@@ -253,12 +253,18 @@ def _utf8_required(value: str, *, field_name: str) -> bytes:
 
 
 def _digest_hex(value: str) -> str:
+    """Normalize a hex-encoded SHA-256 digest to lowercase and validate length."""
     normalized = value.lower()
     _digest_bytes(normalized, field_name="digest")
     return normalized
 
 
 def _digest_bytes(value: bytes | str, *, field_name: str) -> bytes:
+    """Validate and convert a SHA-256 digest from bytes or hex string.
+
+    Accepts either raw 32-byte digest or 64-character lowercase hex string.
+    Raises ValueError with the field name if validation fails.
+    """
     if isinstance(value, bytes):
         if len(value) != SHA256_DIGEST_SIZE:
             raise ValueError(f"{field_name} must be exactly {SHA256_DIGEST_SIZE} bytes")
@@ -275,6 +281,10 @@ def _digest_bytes(value: bytes | str, *, field_name: str) -> bytes:
 
 
 def _normalize_datetime(value: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware and normalized to UTC.
+
+    Naive datetimes are assumed to be UTC. Aware datetimes are converted.
+    """
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)

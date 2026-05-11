@@ -227,8 +227,8 @@ agent-governance integrity --manifest integrity.json
 | OWASP カバレッジマップ | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
 | フレームワーク統合 | [agent-governance-python/agent-os/src/agent_os/integrations/](agent-governance-python/agent-os/src/agent_os/integrations/) |
 | サンプルアプリケーション | [agent-governance-python/agent-os/examples/](agent-governance-python/agent-os/examples/) |
-| コントリビュートガイド | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| 変更履歴 | [CHANGELOG.md](CHANGELOG.md) |
+| コントリビュートガイド | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| 変更履歴 | [CHANGELOG.md](../../CHANGELOG.md) |
 
 ---
 

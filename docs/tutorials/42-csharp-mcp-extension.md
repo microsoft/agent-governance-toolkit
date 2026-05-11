@@ -12,7 +12,7 @@ be sanitized before they go back to the client.
 > **Important:** the shipped NuGet package name in this repository is
 > `Microsoft.AgentGovernance.Extensions.ModelContextProtocol`.
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|
