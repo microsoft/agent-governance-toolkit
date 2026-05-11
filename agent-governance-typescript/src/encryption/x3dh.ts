@@ -106,6 +106,15 @@ export class X3DHKeyManager {
     this.identityKey = ed25519ToX25519(ed25519Private, ed25519Public);
   }
 
+  /**
+   * Ed25519 public key used to sign pre-keys. Distinct from
+   * `identityKey.publicKey` (X25519). Peers MUST be given this key to
+   * verify the signature on the signed pre-key (`verifyBundle`).
+   */
+  get identityKeyEd(): Uint8Array {
+    return this.ed25519Public;
+  }
+
   generateSignedPreKey(): { keyId: number; publicKey: Uint8Array; signature: Uint8Array } {
     const keyPair = generateX25519KeyPair();
     const signature = ed25519.sign(keyPair.publicKey, this.ed25519Private);

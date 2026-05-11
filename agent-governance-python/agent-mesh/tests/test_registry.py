@@ -150,6 +150,7 @@ class TestRegistryAPI:
         })
         client.put("/v1/agents/did:agentmesh:pk1/prekeys", json={
             "identity_key": _b64(b"\x11" * 32),
+            "identity_key_ed": _b64(b"\x77" * 32),
             "signed_pre_key": {
                 "key_id": 42,
                 "public_key": _b64(b"\x22" * 32),
@@ -165,6 +166,7 @@ class TestRegistryAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["signed_pre_key"]["key_id"] == 42
+        assert data["identity_key_ed"] == _b64(b"\x77" * 32)
         assert data["one_time_pre_key"] is not None
         assert data["one_time_pre_key"]["key_id"] == 100
 

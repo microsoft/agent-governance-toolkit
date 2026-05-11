@@ -278,7 +278,10 @@ export class MeshClient {
     const km = this.options.keyManager;
     // identityKey is the long-term X25519 public key derived from the
     // Ed25519 signing key in the X3DHKeyManager constructor.
+    // identityKeyEd is the Ed25519 public key — peers MUST receive it
+    // to verify the signed pre-key signature (see x3dh.ts verifyBundle).
     const identityKey = km.identityKey.publicKey;
+    const identityKeyEd = km.identityKeyEd;
     const signedPreKey = km.generateSignedPreKey();
     const oneTimePreKeys = km.generateOneTimePreKeys(this.oneTimePrekeyCount);
 
@@ -297,6 +300,7 @@ export class MeshClient {
     await this.registry.uploadPrekeys(
       this.options.agentDid,
       identityKey,
+      identityKeyEd,
       signedPreKey,
       oneTimePreKeys,
     );

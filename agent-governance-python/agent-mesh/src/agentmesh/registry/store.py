@@ -29,7 +29,8 @@ class AgentRecord:
     last_seen: datetime = field(default_factory=_utcnow)
 
     # Pre-key bundle
-    identity_key: bytes | None = None
+    identity_key: bytes | None = None  # X25519 long-term key (32 bytes)
+    identity_key_ed: bytes | None = None  # Ed25519 signing key (32 bytes) — required to verify signed_pre_key signature
     signed_pre_key: bytes | None = None
     signed_pre_key_signature: bytes | None = None
     signed_pre_key_id: int | None = None

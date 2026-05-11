@@ -85,9 +85,11 @@ describe("RegistryClient", () => {
     const { fetchImpl, calls } = makeFakeFetch(() => ({ status: 200, body: '{"otk_count":2}' }));
     const c = new RegistryClient({ baseUrl: "http://reg:8082", fetchImpl });
     const idk = new Uint8Array(32).fill(1);
+    const idkEd = new Uint8Array(32).fill(9);
     await c.uploadPrekeys(
       "did:agent:bob",
       idk,
+      idkEd,
       { keyId: 0, publicKey: new Uint8Array(32).fill(2), signature: new Uint8Array(64).fill(3) },
       [
         { keyId: 0, publicKey: new Uint8Array(32).fill(4) },
@@ -98,17 +100,20 @@ describe("RegistryClient", () => {
     expect(calls[0].url).toBe("http://reg:8082/v1/agents/did%3Aagent%3Abob/prekeys");
     const body = JSON.parse(calls[0].body!);
     expect(body.identity_key).toBe(Buffer.from(idk).toString("base64url"));
+    expect(body.identity_key_ed).toBe(Buffer.from(idkEd).toString("base64url"));
     expect(body.signed_pre_key.key_id).toBe(0);
     expect(body.one_time_pre_keys).toHaveLength(2);
   });
 
   it("fetchPrekeys decodes base64url back to Uint8Array", async () => {
     const idk = new Uint8Array(32).fill(9);
+    const idkEd = new Uint8Array(32).fill(11);
     const spk = new Uint8Array(32).fill(8);
     const sig = new Uint8Array(64).fill(7);
     const otk = new Uint8Array(32).fill(6);
     const body = JSON.stringify({
       identity_key: Buffer.from(idk).toString("base64url"),
+      identity_key_ed: Buffer.from(idkEd).toString("base64url"),
       signed_pre_key: {
         key_id: 0,
         public_key: Buffer.from(spk).toString("base64url"),
@@ -124,6 +129,7 @@ describe("RegistryClient", () => {
     const bundle = await c.fetchPrekeys("did:peer");
     expect(bundle).not.toBeNull();
     expect(Array.from(bundle!.identityKey)).toEqual(Array.from(idk));
+    expect(Array.from(bundle!.identityKeyEd)).toEqual(Array.from(idkEd));
     expect(Array.from(bundle!.signedPreKey)).toEqual(Array.from(spk));
     expect(Array.from(bundle!.signedPreKeySignature)).toEqual(Array.from(sig));
     expect(bundle!.signedPreKeyId).toBe(0);

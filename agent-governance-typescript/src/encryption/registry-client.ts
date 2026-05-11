@@ -190,12 +190,17 @@ export class RegistryClient {
   /**
    * Upload a pre-key bundle. Replaces any existing bundle for this DID.
    *
+   * @param identityKey   X25519 long-term key (32 bytes).
+   * @param identityKeyEd Ed25519 signing key (32 bytes) — REQUIRED for
+   *                      receivers to verify the signed pre-key signature.
+   *                      Pass `keyManager.identityKeyEd`.
    * @param signedPreKey  Output of X3DHKeyManager.generateSignedPreKey()
    * @param oneTimePreKeys Output of X3DHKeyManager.generateOneTimePreKeys(N)
    */
   async uploadPrekeys(
     did: string,
     identityKey: Uint8Array,
+    identityKeyEd: Uint8Array,
     signedPreKey: { keyId: number; publicKey: Uint8Array; signature: Uint8Array },
     oneTimePreKeys: ReadonlyArray<{ keyId: number; publicKey: Uint8Array }>,
   ): Promise<void> {
@@ -204,8 +209,14 @@ export class RegistryClient {
         `RegistryClient.uploadPrekeys: identityKey must be 32 bytes, got ${identityKey.length}`,
       );
     }
+    if (identityKeyEd.length !== 32) {
+      throw new Error(
+        `RegistryClient.uploadPrekeys: identityKeyEd must be 32 bytes, got ${identityKeyEd.length}`,
+      );
+    }
     const body = JSON.stringify({
       identity_key: toBase64Url(identityKey),
+      identity_key_ed: toBase64Url(identityKeyEd),
       signed_pre_key: {
         key_id: signedPreKey.keyId,
         public_key: toBase64Url(signedPreKey.publicKey),
@@ -238,12 +249,10 @@ export class RegistryClient {
    * The returned PreKeyBundle is shaped for direct use with
    * SecureChannel.createSender() / X3DHKeyManager.
    *
-   * Note: the registry only returns the X25519 identity_key; the Ed25519
-   * identityKeyEd is not stored. SecureChannel does not currently
-   * verify the prekey signature against identityKeyEd, so this is
-   * compatible. Callers that need to verify the prekey signature should
-   * additionally call getAgent(did) and use agent.metadata.identity_key_ed
-   * if the issuer publishes it there.
+   * `identityKeyEd` (Ed25519, used to verify the signed pre-key
+   * signature) is included when the publisher uploaded it via
+   * `uploadPrekeys()`. Bundles that lack identity_key_ed (older clients)
+   * will fail verifyBundle() — peers must upgrade.
    */
   async fetchPrekeys(did: string): Promise<PreKeyBundle | null> {
     const resp = await this.request(
@@ -260,16 +269,21 @@ export class RegistryClient {
     }
     const j = JSON.parse(resp.bodyText) as {
       identity_key: string;
+      identity_key_ed?: string | null;
       signed_pre_key: { key_id: number; public_key: string; signature: string };
       one_time_pre_key: { key_id: number; public_key: string } | null;
     };
     const identityKey = fromBase64Url(j.identity_key);
+    // Fall back to X25519 identity_key only when the publisher didn't
+    // upload identity_key_ed. verifyBundle() will reject this case
+    // (correctly) — it's preserved for forensic visibility, not to
+    // silently bypass signature checks.
+    const identityKeyEd = j.identity_key_ed
+      ? fromBase64Url(j.identity_key_ed)
+      : identityKey;
     const bundle: PreKeyBundle = {
       identityKey,
-      // Registry doesn't store the Ed25519 identity key; reuse the X25519
-      // one as a placeholder. SecureChannel does not currently consume
-      // identityKeyEd for verification, so this preserves protocol behavior.
-      identityKeyEd: identityKey,
+      identityKeyEd,
       signedPreKey: fromBase64Url(j.signed_pre_key.public_key),
       signedPreKeySignature: fromBase64Url(j.signed_pre_key.signature),
       signedPreKeyId: j.signed_pre_key.key_id,
