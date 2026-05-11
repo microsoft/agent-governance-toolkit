@@ -57,6 +57,15 @@ _PROTECTED_PATHS_WINDOWS = frozenset(
     )
 )
 
+# Paths blocked only when mounted at their exact root — not their
+# subdirectories. Mounting ``C:\Users`` exposes every user's profile
+# (documents, browser data, SSH keys); mounting a specific subdir like
+# ``C:\Users\agent\workspace`` is a legitimate per-user pattern and
+# remains allowed.
+_PROTECTED_PATHS_WINDOWS_ROOT_ONLY = frozenset(
+    p.lower() for p in ("C:\\Users",)
+)
+
 # Docker resource-name pattern (containers, image repos, tags).
 # Must start with [a-zA-Z0-9] and may include _.- afterwards, max 128 chars.
 _DOCKER_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
@@ -77,8 +86,12 @@ def _validate_resource_name(value: str, label: str) -> None:
 
 
 # Environment variables that could break container hardening.
+# Anything an interpreter/loader will source at startup belongs here:
+# each variable below redirects code execution before the sandbox's
+# entrypoint runs, defeating the cap_drop / no-new-privileges hardening.
 _BLOCKED_ENV_VARS = frozenset(
     {
+        # glibc dynamic linker
         "LD_PRELOAD",
         "LD_LIBRARY_PATH",
         "LD_AUDIT",
@@ -86,8 +99,23 @@ _BLOCKED_ENV_VARS = frozenset(
         "LD_PROFILE",
         "LD_SHOW_AUXV",
         "LD_DYNAMIC_WEAK",
+        # POSIX shell startup hooks (bash, dash, sh)
+        "BASH_ENV",
+        "ENV",
+        # Python
         "PYTHONSTARTUP",
         "PYTHONPATH",
+        "PYTHONHOME",
+        # Node.js
+        "NODE_OPTIONS",
+        # Ruby
+        "RUBYOPT",
+        # Perl
+        "PERL5LIB",
+        "PERL5OPT",
+        # Java
+        "JAVA_TOOL_OPTIONS",
+        "_JAVA_OPTIONS",
     }
 )
 
@@ -120,6 +148,8 @@ def _is_protected_path(path: str) -> bool:
             return True
         # Block well-known Windows system directories (case-insensitive).
         lowered = normalised.lower()
+        if lowered in _PROTECTED_PATHS_WINDOWS_ROOT_ONLY:
+            return True
         for protected in _PROTECTED_PATHS_WINDOWS:
             if lowered == protected or lowered.startswith(protected + "\\"):
                 return True
@@ -348,13 +378,29 @@ class DockerSandboxProvider(SandboxProvider):
 
         logger.info("Pulling image '%s' ...", target)
 
-        # Split image:tag for the pull API
-        if ":" in target and not target.startswith("sha256:"):
+        # Split image:tag for the pull API. We treat references that
+        # include neither an explicit tag nor a digest as unpinned and
+        # warn loudly: ``image:latest`` resolves differently on every
+        # pull and undermines reproducibility, which is precisely the
+        # property a sandbox image needs.
+        if "@sha256:" in target:
+            repo, tag = target, None
+        elif ":" in target and not target.startswith("sha256:"):
             repo, tag = target.rsplit(":", 1)
         else:
             repo, tag = target, "latest"
+            logger.warning(
+                "Image '%s' has no tag or digest; pulling '%s:latest'. "
+                "Pin to a digest (image@sha256:...) for reproducible "
+                "sandbox provisioning.",
+                target,
+                target,
+            )
 
-        self._client.images.pull(repo, tag=tag)
+        if tag is None:
+            self._client.images.pull(repo)
+        else:
+            self._client.images.pull(repo, tag=tag)
         logger.info("Pulled image '%s' successfully", target)
 
     # ------------------------------------------------------------------
@@ -734,11 +780,22 @@ class DockerSandboxProvider(SandboxProvider):
             "network_disabled": not config.network_enabled,
             "read_only": config.read_only_fs,
             "tmpfs": tmpfs,
-            "security_opt": ["no-new-privileges"],
+            # Be explicit about seccomp and apparmor so that hosts which
+            # have customized the Docker daemon defaults to weaker policies
+            # do not silently weaken the sandbox. `default` resolves to
+            # Docker's built-in profile on hosts that ship one.
+            "security_opt": [
+                "no-new-privileges",
+                "seccomp=default",
+                "apparmor=docker-default",
+            ],
             "cap_drop": ["ALL"],
             "user": "65534:65534",
             "working_dir": "/workspace",
-            "pids_limit": 256,
+            # 128 covers Python interpreters with thread pools and modest
+            # subprocess fan-out; 256 was generous enough to mask fork-bomb
+            # style misbehavior in tests.
+            "pids_limit": 128,
             # Resolve host.docker.internal on native Linux Docker
             # (Docker Desktop on macOS/Windows does this automatically)
             "extra_hosts": {"host.docker.internal": "host-gateway"},

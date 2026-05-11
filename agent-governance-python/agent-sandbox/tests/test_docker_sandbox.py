@@ -815,12 +815,16 @@ class TestContainerCreationHardening:
         p, client = self._make_raw_provider()
         p._create_container("a1", "s1", SandboxConfig())
         kw = client.containers.run.call_args[1]
-        assert kw["security_opt"] == ["no-new-privileges"]
+        assert kw["security_opt"] == [
+            "no-new-privileges",
+            "seccomp=default",
+            "apparmor=docker-default",
+        ]
         assert kw["cap_drop"] == ["ALL"]
         assert kw["read_only"] is True
         assert kw["user"] == "65534:65534"
         assert kw["working_dir"] == "/workspace"
-        assert kw["pids_limit"] == 256
+        assert kw["pids_limit"] == 128
         assert kw["network_disabled"] is True
         assert kw["mem_limit"] == "512m"
         assert kw["detach"] is True
@@ -1560,9 +1564,22 @@ class TestEnvVarSanitization:
     def test_blocked_vars_constant_complete(self):
         """Ensure all known dangerous vars are in the blocklist."""
         expected = {
+            # glibc dynamic linker
             "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT",
             "LD_DEBUG", "LD_PROFILE", "LD_SHOW_AUXV",
-            "LD_DYNAMIC_WEAK", "PYTHONSTARTUP", "PYTHONPATH",
+            "LD_DYNAMIC_WEAK",
+            # POSIX shell startup hooks
+            "BASH_ENV", "ENV",
+            # Python
+            "PYTHONSTARTUP", "PYTHONPATH", "PYTHONHOME",
+            # Node.js
+            "NODE_OPTIONS",
+            # Ruby
+            "RUBYOPT",
+            # Perl
+            "PERL5LIB", "PERL5OPT",
+            # Java
+            "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS",
         }
         assert _BLOCKED_ENV_VARS == expected
 
@@ -1884,3 +1901,134 @@ class TestThreadSafety:
         assert docker_provider._containers == {}
         assert docker_provider._evaluators == {}
         assert docker_provider._session_configs == {}
+
+
+class TestHardeningAdditions:
+    """Regression coverage for the audit-driven hardening changes."""
+
+    def test_security_opt_includes_seccomp_and_apparmor(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            client = MagicMock()
+            client.images.get.return_value = MagicMock()
+            client.containers.run.return_value = MagicMock()
+            p._client = client
+
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert "seccomp=default" in kw["security_opt"]
+        assert "apparmor=docker-default" in kw["security_opt"]
+
+    def test_pids_limit_tightened_to_128(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            client = MagicMock()
+            client.images.get.return_value = MagicMock()
+            client.containers.run.return_value = MagicMock()
+            p._client = client
+
+        p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert kw["pids_limit"] == 128
+
+    def test_blocked_envs_new_loaders(self):
+        env = {
+            "BASH_ENV": "/x",
+            "PYTHONHOME": "/x",
+            "NODE_OPTIONS": "--inspect",
+            "RUBYOPT": "-rmal",
+            "PERL5LIB": "/x",
+            "JAVA_TOOL_OPTIONS": "-javaagent:/x",
+            "_JAVA_OPTIONS": "-X",
+            "APP_SAFE": "ok",
+        }
+        result = _sanitize_env_vars(env)
+        for k in ("BASH_ENV", "PYTHONHOME", "NODE_OPTIONS", "RUBYOPT",
+                  "PERL5LIB", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS"):
+            assert k not in result, f"{k} must be blocked"
+        assert result["APP_SAFE"] == "ok"
+
+    def test_users_root_blocked_but_subdir_allowed(self, monkeypatch):
+        monkeypatch.setattr("platform.system", lambda: "Windows")
+        monkeypatch.setattr("os.path.realpath", lambda p: p)
+        assert _is_protected_path("C:\\Users") is True
+        # Existing maintainer design: a specific user's working subdir is fine.
+        assert _is_protected_path("C:\\Users\\agent\\workspace") is False
+
+    def test_ensure_image_warns_when_unpinned(self, caplog):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python"
+            client = MagicMock()
+            # First call: images.get raises -> need to pull.
+            client.images.get.side_effect = Exception("not present")
+            client.images.pull.return_value = MagicMock()
+            p._client = client
+
+        with caplog.at_level("WARNING", logger="agent_sandbox.docker_provider.provider"):
+            p.ensure_image()
+
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert any("digest" in r.getMessage() for r in warnings)
+        # And: pull was actually attempted with ('python', tag='latest')
+        client.images.pull.assert_called_once_with("python", tag="latest")
+
+    def test_ensure_image_no_warning_when_tagged(self, caplog):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            client = MagicMock()
+            client.images.get.side_effect = Exception("not present")
+            client.images.pull.return_value = MagicMock()
+            p._client = client
+
+        with caplog.at_level("WARNING", logger="agent_sandbox.docker_provider.provider"):
+            p.ensure_image()
+
+        assert not any(
+            "digest" in r.getMessage() for r in caplog.records
+            if r.levelname == "WARNING"
+        )
+
+    def test_ensure_image_digest_uses_no_tag(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python@sha256:abc123"
+            client = MagicMock()
+            client.images.get.side_effect = Exception("not present")
+            client.images.pull.return_value = MagicMock()
+            p._client = client
+
+        p.ensure_image()
+        # Digest-pinned images must NOT have a tag passed; Docker SDK requires
+        # the digest reference to be the full repo argument with no tag.
+        client.images.pull.assert_called_once_with("python@sha256:abc123")
