@@ -101,9 +101,7 @@ def scan(path: str, min_grade: str, output_json: bool, strict: bool) -> None:
         files = [target]
     elif target.is_dir():
         for ext in ("*.txt", "*.md", "*.prompt", "*.system"):
-            files.extend(target.glob(ext))
-            files.extend(target.rglob(f"**/{ext.lstrip('*')}"))
-        # Deduplicate
+            files.extend(target.rglob(ext))
         files = sorted(set(files))
 
     if not files:
