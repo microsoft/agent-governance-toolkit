@@ -218,6 +218,10 @@ func (b *OPABackend) evaluateCLI(context map[string]interface{}) (BackendDecisio
 
 	ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), b.timeout)
 	defer cancel()
+	// The trailing `--` stops OPA's flag parser before it reaches the
+	// query positional; without it, a query that starts with `-` (e.g.
+	// from an attacker-supplied Options.Query) would be interpreted as
+	// an OPA flag.
 	cmd := exec.CommandContext(
 		ctx,
 		"opa",
@@ -225,6 +229,7 @@ func (b *OPABackend) evaluateCLI(context map[string]interface{}) (BackendDecisio
 		"--format", "json",
 		"--input", inputPath,
 		"--data", regoPath,
+		"--",
 		b.query,
 	)
 
@@ -553,7 +558,9 @@ func (b *CedarBackend) evaluateCLI(context map[string]interface{}) (BackendDecis
 		"--request-json", requestPath,
 	}
 	if b.schemaPath != "" {
-		args = append(args, "--schema", b.schemaPath)
+		// Use --flag=value form so a schemaPath that starts with `-`
+		// cannot be parsed as a separate flag by cedar's CLI parser.
+		args = append(args, fmt.Sprintf("--schema=%s", b.schemaPath))
 	}
 
 	ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), b.timeout)
