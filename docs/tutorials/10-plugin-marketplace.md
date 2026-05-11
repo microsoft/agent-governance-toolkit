@@ -517,22 +517,44 @@ for plugin in installed:
     print(f"  {plugin.name} v{plugin.version} ({plugin.plugin_type.value})")
 ```
 
-### Sandboxing Check
+### Import Scanning and Sandboxing
 
-The installer enforces import restrictions.  Plugins are not allowed to use
-dangerous modules:
+`install()` automatically calls `scan_source_files()`, which parses every
+`*.py` file in the plugin directory using Python's `ast` module and rejects
+the plugin if it imports a module from `RESTRICTED_MODULES`:
 
 ```python
 from agent_marketplace import PluginInstaller
 
-# The RESTRICTED_MODULES set blocks these:
+# check_sandbox() is a *policy predicate* — call it to query the
+# restricted-modules list for a single name.  It does NOT block an
+# import by itself; install-time enforcement is done by
+# scan_source_files(), which install() calls automatically.
+# The RESTRICTED_MODULES set covers:
 #   subprocess, os, shutil, ctypes, importlib
 
 PluginInstaller.check_sandbox("json")          # → True  (allowed)
-PluginInstaller.check_sandbox("subprocess")    # → False (blocked)
-PluginInstaller.check_sandbox("os")            # → False (blocked)
-PluginInstaller.check_sandbox("ctypes")        # → False (blocked)
+PluginInstaller.check_sandbox("subprocess")    # → False (restricted)
+PluginInstaller.check_sandbox("os")            # → False (restricted)
+PluginInstaller.check_sandbox("ctypes")        # → False (restricted)
 ```
+
+`scan_source_files()` can also be called directly to inspect a plugin
+directory before or after installation:
+
+```python
+violations = PluginInstaller.scan_source_files(plugin_dir)
+# Returns a list of strings like:
+#   ["/path/to/plugin/main.py: imports 'subprocess'"]
+# An empty list means no restricted imports were found.
+```
+
+> **Note:** `check_sandbox` and `scan_source_files` detect static
+> `import` and `from … import` statements only.  Dynamic calls such as
+> `__import__("subprocess")` or `importlib.import_module("os")` are not
+> caught at install time.  For full runtime enforcement — including
+> dynamic imports — use `PluginSandbox` from the AgentMesh layer (see
+> [Sandboxed Execution](#sandboxed-execution) below).
 
 ---
 
