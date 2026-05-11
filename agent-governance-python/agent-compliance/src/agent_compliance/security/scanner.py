@@ -17,10 +17,41 @@ Integrates with sync-marketplace.py validation flow.
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _glob_to_regex(pattern: str) -> re.Pattern[str]:
+    """Translate a glob pattern with ``**`` recursive wildcards to a regex.
+
+    ``**`` matches zero or more path components (including ``/``);
+    ``*`` matches any chars except ``/``;
+    ``?`` matches a single char except ``/``.
+    """
+    parts: list[str] = []
+    i = 0
+    n = len(pattern)
+    while i < n:
+        c = pattern[i]
+        if c == "*":
+            if i + 1 < n and pattern[i + 1] == "*":
+                parts.append(".*")
+                i += 2
+                if i < n and pattern[i] == "/":
+                    i += 1
+            else:
+                parts.append("[^/]*")
+                i += 1
+        elif c == "?":
+            parts.append("[^/]")
+            i += 1
+        else:
+            parts.append(re.escape(c))
+            i += 1
+    return re.compile("^" + "".join(parts) + "$")
 
 # Severity levels and blocking behavior
 SEVERITY_CONFIG = {
@@ -60,6 +91,10 @@ SECURITY_SCAN_EXCLUSIONS = (
     "**/__pycache__/**",
     "**/README.md",
     "**/CONTRIBUTING.md",
+)
+
+_SECURITY_SCAN_EXCLUSION_RES = tuple(
+    _glob_to_regex(p) for p in SECURITY_SCAN_EXCLUSIONS
 )
 
 # Test credential patterns to allow
@@ -166,7 +201,6 @@ class SecurityScanner:
 
     # Pre-compiled regex patterns for performance
     _CODE_BLOCK_RE = re.compile(r"```(\w+)\n(.*?)```", re.DOTALL)
-    _SECRET_LOCATION_RE = re.compile(r"(\S+):(\d+)")
     _PYTHON_DANGEROUS_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
         (
             re.compile(r"\beval\s*\("),
@@ -331,68 +365,80 @@ class SecurityScanner:
 
     def _should_scan_file(self, file_path: Path) -> bool:
         """Check if file should be scanned based on exclusion patterns."""
-        rel_path = file_path.relative_to(self.plugin_dir)
-        for pattern in SECURITY_SCAN_EXCLUSIONS:
-            if rel_path.match(pattern.replace("**/", "")):
+        try:
+            rel_path = file_path.relative_to(self.plugin_dir).as_posix()
+        except ValueError:
+            # Path is not under plugin_dir (e.g., already relative);
+            # match the path as-is against the exclusion globs.
+            rel_path = file_path.as_posix()
+        for pattern_re in _SECURITY_SCAN_EXCLUSION_RES:
+            if pattern_re.match(rel_path):
                 return False
         return True
 
     def scan_secrets(self) -> None:
         """Scan for hardcoded secrets using detect-secrets."""
-        if not self._tool_available("detect-secrets"):
+        detect_secrets = shutil.which("detect-secrets")
+        if detect_secrets is None:
             if self.verbose:
                 print("    [secrets] detect-secrets not installed, skipping")
             return
 
         try:
-            result = subprocess.run(  # noqa: S603 — trusted subprocess in security scanner
-                ["detect-secrets", "scan", str(self.plugin_dir), "--all-files"],  # noqa: S607 — known CLI tool path
+            result = subprocess.run(  # noqa: S603 — resolved absolute path
+                [detect_secrets, "scan", str(self.plugin_dir), "--all-files"],
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
-
-            if "potential secrets" in result.stdout.lower():
-                # Parse output for secret locations
-                # detect-secrets outputs to stderr for found secrets
-                output = result.stdout + result.stderr
-
-                # Simple pattern matching for file:line
-                matches = self._SECRET_LOCATION_RE.finditer(output)
-
-                for match in matches:
-                    file_path = match.group(1)
-                    try:
-                        line_num = int(match.group(2))
-                    except (ValueError, TypeError):
-                        continue
-
-                    # Skip if in exclusion list
-                    try:
-                        path = Path(file_path)
-                        if not self._should_scan_file(path):
-                            continue
-                    except (ValueError, OSError):
-                        continue
-
-                    # Check against allowed test patterns
-                    if self._is_test_credential(file_path, line_num):
-                        continue
-
-                    self.findings.append(
-                        SecurityFinding(
-                            severity="critical",
-                            category="secrets",
-                            title="Potential hardcoded secret detected",
-                            file=file_path,
-                            line=line_num,
-                            description="Possible API key, token, or credential in source code",
-                            recommendation="Use environment variables, Azure Key Vault, or GitHub Secrets",
-                            cwe="CWE-798",
-                        )
-                    )
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+            return
+
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            if self.verbose:
+                print("    [secrets] detect-secrets output not JSON, skipping parse")
+            return
+
+        results = payload.get("results", {}) if isinstance(payload, dict) else {}
+        if not isinstance(results, dict):
+            return
+
+        for file_path, hits in results.items():
+            if not isinstance(hits, list):
+                continue
+            try:
+                path = Path(file_path)
+                if not self._should_scan_file(path):
+                    continue
+            except (ValueError, OSError):
+                continue
+
+            for hit in hits:
+                if not isinstance(hit, dict):
+                    continue
+                line_num = hit.get("line_number")
+                if not isinstance(line_num, int):
+                    continue
+                if self._is_test_credential(file_path, line_num):
+                    continue
+
+                self.findings.append(
+                    SecurityFinding(
+                        severity="critical",
+                        category="secrets",
+                        title="Potential hardcoded secret detected",
+                        file=file_path,
+                        line=line_num,
+                        description=(
+                            "Possible API key, token, or credential in source code"
+                            + (f" ({hit['type']})" if isinstance(hit.get("type"), str) else "")
+                        ),
+                        recommendation="Use environment variables, Azure Key Vault, or GitHub Secrets",
+                        cwe="CWE-798",
+                    )
+                )
 
     def _is_test_credential(self, file_path: str, line_num: int) -> bool:
         """Check if a potential secret matches allowed test patterns."""
@@ -736,16 +782,8 @@ class SecurityScanner:
                 )
 
     def _tool_available(self, tool_name: str) -> bool:
-        """Check if a security tool is available."""
-        try:
-            subprocess.run(  # noqa: S603 — trusted subprocess in security scanner
-                [tool_name, "--version"],
-                capture_output=True,
-                timeout=5,
-            )
-            return True
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return False
+        """Check if a security tool is available on PATH without executing it."""
+        return shutil.which(tool_name) is not None
 
     def run_all_scans(self) -> tuple[bool, list[SecurityFinding]]:
         """
