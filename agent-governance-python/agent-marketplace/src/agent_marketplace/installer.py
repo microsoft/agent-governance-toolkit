@@ -258,12 +258,15 @@ class PluginInstaller:
                 "Set artifact_sha256 in the manifest or install with verify=False."
             )
 
+        # `dest` is always a directory here: install() calls dest.mkdir() before
+        # invoking _fetch_artifact(), so mkstemp will not raise FileNotFoundError.
         artifact_path = dest / ARTIFACT_FILENAME
         fd, tmp_path = tempfile.mkstemp(
             prefix=".artifact.", suffix=".tmp", dir=str(dest)
         )
         try:
             with os.fdopen(fd, "wb") as f:
+                # S310 suppressed: scheme is validated above (http/https only).
                 with urllib.request.urlopen(artifact_url) as resp:  # noqa: S310
                     while True:
                         chunk = resp.read(65536)
