@@ -4,6 +4,7 @@
 package agentmesh
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -86,7 +87,7 @@ func (pe *PolicyEngine) Evaluate(action string, context map[string]interface{}) 
 	for _, rule := range pe.rules {
 		if matchAction(rule.Action, action) && matchConditions(rule.Conditions, context) {
 			if rule.MaxCalls > 0 {
-				decision := pe.checkRateLimit(rule)
+				decision := pe.checkRateLimit(rule, context)
 				pe.mu.Unlock()
 				return decision
 			}
@@ -128,9 +129,29 @@ func (pe *PolicyEngine) Evaluate(action string, context map[string]interface{}) 
 	return Allow
 }
 
+// rateLimitContextString returns a stable string representation of a
+// context value for use in the rate-limit composite key. Non-string
+// values fall through to fmt.Sprint to handle the common case where
+// an upstream caller plumbs int agent IDs or similar.
+func rateLimitContextString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprint(v)
+}
+
 // checkRateLimit tracks and enforces per-rule call limits within a time window.
-func (pe *PolicyEngine) checkRateLimit(rule PolicyRule) PolicyDecision {
-	key := rule.Action
+// The window state is keyed by (rule action, agent_id, tenant) so a single
+// noisy caller does not exhaust the budget for all other agents or tenants.
+// Missing context keys collapse to an empty segment — callers that don't
+// supply agent_id / tenant retain the previous globally-scoped behavior.
+func (pe *PolicyEngine) checkRateLimit(rule PolicyRule, context map[string]interface{}) PolicyDecision {
+	agentID := rateLimitContextString(context["agent_id"])
+	tenant := rateLimitContextString(context["tenant"])
+	key := rule.Action + "\x1f" + agentID + "\x1f" + tenant
 	now := time.Now()
 
 	window, err := time.ParseDuration(rule.Window)

@@ -89,6 +89,20 @@ type HTTPResolvedAgentIdentity struct {
 type HTTPAgentIDResolver func(*http.Request) (HTTPResolvedAgentIdentity, error)
 
 // LegacyTrustedHeaderAgentIDResolver explicitly trusts a caller-supplied header for short-lived migrations.
+//
+// SECURITY: This resolver sets Verified=true based solely on an
+// attacker-controllable HTTP header. ANY caller that can reach the
+// endpoint can claim to be any agent. The "verified" flag downstream
+// callers see is meaningless. Production deployments MUST replace
+// this with a resolver that validates a cryptographic credential:
+// signed JWT, mTLS client cert, or an HMAC-of-(agent_id || timestamp)
+// over a shared secret.
+//
+// Deprecated: Use a signed-credential resolver in production. This
+// helper exists only to ease the migration of a service that has no
+// agent-identity story yet and to keep test fixtures concise; the
+// example in `examples/http-middleware/main.go` documents the
+// required production pattern.
 func LegacyTrustedHeaderAgentIDResolver(headerName string) HTTPAgentIDResolver {
 	if strings.TrimSpace(headerName) == "" {
 		headerName = "X-Agent-ID"

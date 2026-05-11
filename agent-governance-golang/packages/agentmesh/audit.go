@@ -22,6 +22,19 @@ type AuditEntry struct {
 	PreviousHash string         `json:"previous_hash"`
 }
 
+// Clone returns a value-copy of the entry. Used at the AuditLogger
+// API boundary so callers cannot mutate the in-store record (and
+// thereby break the hash chain) through the returned pointer.
+// AuditEntry contains only value types, so a struct copy is a deep
+// copy.
+func (ae *AuditEntry) Clone() *AuditEntry {
+	if ae == nil {
+		return nil
+	}
+	c := *ae
+	return &c
+}
+
 // AuditLogger maintains an append-only hash-chained audit log.
 type AuditLogger struct {
 	mu         sync.Mutex
@@ -63,7 +76,9 @@ func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *Aud
 	}
 	entry.Hash = computeHash(entry)
 	al.entries = append(al.entries, entry)
-	return entry
+	// Return a clone so callers cannot mutate the in-store entry
+	// (and break the chain) through the returned pointer.
+	return entry.Clone()
 }
 
 // Verify checks the integrity of the entire hash chain. After rollover
@@ -113,7 +128,7 @@ func (al *AuditLogger) GetEntries(filter AuditFilter) []*AuditEntry {
 		if filter.EndTime != nil && e.Timestamp.After(*filter.EndTime) {
 			continue
 		}
-		result = append(result, e)
+		result = append(result, e.Clone())
 	}
 	return result
 }

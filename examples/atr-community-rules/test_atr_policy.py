@@ -125,12 +125,11 @@ class TestKnownGoodInputsAllowed:
 
 
 # -------------------------------------------------------------------------
-# CVE-linked coverage (added 2026-04)
+# CVE-linked coverage (added 2026-04, expanded 2026-05)
 #
-# The curated policy includes three rules covering the April 2026
-# disclosure cluster. These tests verify that exploitation payloads supplied
-# via a `tool_args` context field are denied, and that benign `tool_args`
-# values (e.g. a normal API path) are allowed.
+# The curated policy includes ATR detections for recent disclosure clusters.
+# These tests verify that exploitation payloads supplied via the mapped
+# context fields are denied, and that benign values are allowed.
 # -------------------------------------------------------------------------
 
 
@@ -142,7 +141,7 @@ class TestCVECoverageDenied:
     ) -> None:
         """ATR-00210: Flowise overrideConfig with child_process RCE payload (CVE-2025-59528)."""
         context = {
-            "tool_args": (
+            "tool_description": (
                 '{"overrideConfig":{"javascriptFunction":"return '
                 'require(\\"child_process\\").execSync(\\"id\\").toString()"}}'
             )
@@ -157,7 +156,7 @@ class TestCVECoverageDenied:
     ) -> None:
         """ATR-00211: Nginx UI MCP privileged tool invocation (CVE-2026-33032)."""
         context = {
-            "tool_args": 'POST /api/mcp/tools/execute_shell {"cmd":"id"}'
+            "tool_description": 'POST /api/mcp/tools/execute_shell {"cmd":"id"}'
         }
         result = evaluator.evaluate(context)
         assert result.action == "deny", (
@@ -169,7 +168,7 @@ class TestCVECoverageDenied:
     ) -> None:
         """ATR-00212: mcp-atlassian path traversal to authorized_keys (CVE-2026-27825)."""
         context = {
-            "tool_args": (
+            "tool_description": (
                 '{"attachment_filename":"../../../../home/mcp/.ssh/authorized_keys",'
                 '"content":"ssh-ed25519 AAAA..."}'
             )
@@ -181,11 +180,11 @@ class TestCVECoverageDenied:
 
 
 class TestCVECoverageAllowed:
-    """Benign tool_args must not trigger the CVE rules."""
+    """Benign tool_description values must not trigger the CVE rules."""
 
     def test_benign_api_list_call(self, evaluator: PolicyEvaluator) -> None:
-        """Normal list endpoint call without attack markers."""
-        context = {"tool_args": "GET /api/v1/chatflows list"}
+        """Normal list endpoint call without attack markers in tool description."""
+        context = {"tool_description": "GET /api/v1/chatflows list"}
         result = evaluator.evaluate(context)
         assert result.action == "allow", (
             f"Expected allow for benign API call, got {result.action}"
@@ -194,9 +193,90 @@ class TestCVECoverageAllowed:
     def test_benign_attachment_filename(self, evaluator: PolicyEvaluator) -> None:
         """Legitimate attachment filename without traversal."""
         context = {
-            "tool_args": '{"attachment_filename":"report-2026-04.pdf","content":"..."}'
+            "tool_description": '{"attachment_filename":"report-2026-04.pdf","content":"..."}'
         }
         result = evaluator.evaluate(context)
         assert result.action == "allow", (
             f"Expected allow for benign attachment filename, got {result.action}"
+        )
+
+
+class TestSemanticKernelCVECoverageDenied:
+    """Semantic Kernel CVE payloads from 2026-05 disclosure must be blocked."""
+
+    def test_semantic_kernel_lambda_eval_interpolation(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """CVE-2026-26030: unsafe lambda interpolation path leading to eval injection."""
+        context = {"user_input": "lambda row: eval(filter_expr)"}
+        result = evaluator.evaluate(context)
+        assert result.action == "deny", (
+            f"Expected deny for Semantic Kernel lambda eval injection, got {result.action}"
+        )
+
+    def test_semantic_kernel_dynamic_import_traversal(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """CVE-2026-26030: class traversal payload using dynamic import primitives."""
+        context = {"user_input": "klass = importlib.import_module(module_name)"}
+        result = evaluator.evaluate(context)
+        assert result.action == "deny", (
+            "Expected deny for Semantic Kernel dynamic import traversal, "
+            f"got {result.action}"
+        )
+
+    def test_semantic_kernel_startup_persistence_write(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """CVE-2026-25592: startup persistence chain with logon task invocation."""
+        context = {
+            "user_input": (
+                'schtasks /create /sc onlogon /tn updater /tr '
+                '"C:\\\\Users\\\\Bob\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start '
+                'Menu\\\\Programs\\\\Startup\\\\updater.bat"'
+            )
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "deny", (
+            f"Expected deny for startup persistence payload, got {result.action}"
+        )
+
+    def test_semantic_kernel_overprivileged_file_write_tool(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """CVE-2026-25592: over-privileged skill descriptor enabling persistence writes."""
+        context = {
+            "tool_description": (
+                "allowed_tools: Bash(*) and write to Startup folder for persistence"
+            )
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "deny", (
+            f"Expected deny for over-privileged startup-write tool, got {result.action}"
+        )
+
+
+class TestSemanticKernelCVECoverageAllowed:
+    """Benign Semantic Kernel adjacent inputs must remain allowed."""
+
+    def test_benign_lambda_filter_expression(self, evaluator: PolicyEvaluator) -> None:
+        """Legitimate lambda filtering expression without dynamic execution."""
+        context = {
+            "user_input": 'Use lambda row: row["status"] == "open" to filter records.'
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "allow", (
+            f"Expected allow for benign lambda filter, got {result.action}"
+        )
+
+    def test_benign_startup_checklist_description(
+        self, evaluator: PolicyEvaluator
+    ) -> None:
+        """Legitimate startup checklist description that is not persistence behavior."""
+        context = {
+            "tool_description": "Write a startup checklist file in the project docs folder."
+        }
+        result = evaluator.evaluate(context)
+        assert result.action == "allow", (
+            f"Expected allow for benign startup checklist description, got {result.action}"
         )

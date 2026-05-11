@@ -239,7 +239,6 @@ pub struct DockerSandboxProvider {
     available: bool,
     /// Maps `(agent_id, session_id)` → Docker container name.
     containers: HashMap<(String, String), String>,
-    runtime: String,
 }
 
 impl DockerSandboxProvider {
@@ -257,18 +256,12 @@ impl DockerSandboxProvider {
             image: image.to_string(),
             available,
             containers: HashMap::new(),
-            runtime: String::from("runc"),
         }
     }
 
     /// Return the configured Docker image.
     pub fn image(&self) -> &str {
         &self.image
-    }
-
-    /// Return the OCI runtime name.
-    pub fn runtime(&self) -> &str {
-        &self.runtime
     }
 }
 

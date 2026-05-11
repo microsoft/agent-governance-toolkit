@@ -169,7 +169,7 @@ class TestGrading:
 
     def test_partial_prompt_gets_middle_grade(self) -> None:
         report = self.evaluator.evaluate(PARTIAL_PROMPT)
-        assert report.grade in ("C", "D", "B")
+        assert report.grade in ("B", "C", "D", "F")
         assert report.score >= 15
 
 
@@ -230,7 +230,7 @@ class TestVectorDetection:
 
     def test_unicode_defended(self) -> None:
         report = self.evaluator.evaluate(
-            "Be aware of Unicode homoglyph attacks and encoding tricks.",
+            "Reject Unicode homoglyph and special character encoding tricks.",
         )
         assert self._find(report, "unicode-attack").defended is True
 
@@ -270,6 +270,19 @@ class TestVectorDetection:
             "Validate all user input. Reject SQL injection and XSS.",
         )
         assert self._find(report, "input-validation").defended is True
+
+    def test_concept_mentions_without_defense_are_not_marked_defended(self) -> None:
+        weak_prompts = {
+            "multilang-bypass": "Our localization docs list each supported language.",
+            "unicode-attack": "This section explains Unicode and homoglyph examples.",
+            "indirect-injection": "Our API receives user-provided JSON from external sources.",
+            "social-engineering": "Our marketing copy creates urgency around limited-time offers.",
+            "output-weaponization": "Our threat-intel feed catalogs phishing campaigns.",
+            "abuse-prevention": "We document common API misuse and abuse patterns.",
+        }
+        for vector_id, prompt in weak_prompts.items():
+            report = self.evaluator.evaluate(prompt)
+            assert self._find(report, vector_id).defended is False
 
 
 # ---------------------------------------------------------------------------

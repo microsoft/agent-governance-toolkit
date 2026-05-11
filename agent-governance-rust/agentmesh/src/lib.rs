@@ -28,6 +28,7 @@ pub mod integration_support;
 pub mod lifecycle;
 pub mod mcp;
 pub mod policy;
+pub(crate) mod regex_cache;
 pub mod reward_support;
 pub mod rings;
 pub mod sandbox;

@@ -506,17 +506,17 @@ print(f"Killed:      {budget.killed}")
 ### Cost anomaly detection
 
 ```python
-from agent_sre.cost import CostAnomalyDetector, CostDataPoint
+from agent_sre.cost import CostAnomalyDetector
 
 anomaly_detector = CostAnomalyDetector()
 
 # Feed historical cost data to build a baseline
 for cost in [0.40, 0.42, 0.38, 0.45, 0.41, 0.39, 0.43, 0.40, 0.42, 0.38]:
-    anomaly_detector.add_data_point(CostDataPoint(value=cost, agent_id="research-agent"))
+    anomaly_detector.ingest(cost, agent_id="research-agent")
 
 # Check a new data point for anomalies
-result = anomaly_detector.analyze(CostDataPoint(value=4.50, agent_id="research-agent"))
-if result.is_anomaly:
+result = anomaly_detector.ingest(4.50, agent_id="research-agent")
+if result and result.is_anomaly:
     print(f"🚨 Cost anomaly: ${result.value:.2f} (expected {result.expected_range})")
     print(f"   Severity: {result.severity.value}, Score: {result.score:.1f}")
 ```

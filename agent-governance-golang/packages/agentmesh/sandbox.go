@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -139,10 +140,22 @@ func containerName(agentID, sessionID string) string {
 	return fmt.Sprintf("agt-sandbox-%s-%s", agentID, sessionID)
 }
 
+// containerIDPattern is the character set Docker accepts in `--name`
+// values (alphanumeric, `_`, `.`, `-`). agentID values that contain
+// anything outside this set get rejected at the sandbox-provider
+// boundary so they cannot land in a `docker run --name` argument where
+// Docker would either reject them, truncate them, or — for a few
+// characters like `$` — produce a name whose collisions cause
+// surprising race conditions across concurrent sessions.
+var containerIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
 // CreateSession starts a hardened Docker container for the given agent.
 func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxConfig) (*SessionHandle, error) {
 	if !p.available {
 		return nil, fmt.Errorf("docker is not available")
+	}
+	if !containerIDPattern.MatchString(agentID) {
+		return nil, fmt.Errorf("invalid agentID %q: must match %s", agentID, containerIDPattern)
 	}
 	if config == nil {
 		config = DefaultSandboxConfig()

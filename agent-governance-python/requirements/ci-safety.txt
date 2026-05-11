@@ -1,3 +1,6 @@
 # Hashed CI safety scanner (Scorecard Pinned-Dependencies compliance)
+# --no-deps is used in CI because safety has 30+ transitive deps that
+# cannot all be hash-pinned portably. The main package hash is verified;
+# deps are installed via a separate unhashed pip install step.
 safety==3.2.1 \
     --hash=sha256:9f53646717ba052e1bf631bd54fb3da0fafa58e85d578b20a8b9affdcf81889e

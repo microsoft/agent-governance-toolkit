@@ -81,7 +81,6 @@ fn docker_provider_new_handles_missing_docker() {
     // On CI or machines without Docker the provider should not panic.
     let provider = DockerSandboxProvider::new("python:3.11-slim");
     assert_eq!(provider.image(), "python:3.11-slim");
-    assert_eq!(provider.runtime(), "runc");
     // is_available may be true or false depending on the host
 }
 

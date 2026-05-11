@@ -108,7 +108,18 @@ export class MeshClient {
         resolve();
       };
       this.ws!.onerror = (e) => reject(new Error(`WebSocket error: ${e}`));
-      this.ws!.onmessage = (event) => this.handleFrame(JSON.parse(String(event.data)));
+      this.ws!.onmessage = (event) => {
+        let frame: Record<string, unknown>;
+        try {
+          frame = JSON.parse(String(event.data));
+        } catch (err) {
+          console.warn(`MeshClient: dropping malformed frame (JSON parse): ${err}`);
+          return;
+        }
+        this.handleFrame(frame).catch((err) => {
+          console.warn(`MeshClient: handler error for frame type=${String(frame.type)}: ${err}`);
+        });
+      };
       this.ws!.onclose = () => {
         this.connected = false;
       };
@@ -405,31 +416,51 @@ export class MeshClient {
     const from = frame.from as string;
     const intent = frame.intent;
 
-    // Register as pending
-    const pendingPromise = new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => {
+    // Register pending entry so concurrent handleMessage calls wait for
+    // the verdict. handleMessage may wrap `resolve` to add its own waiter;
+    // we look up the (possibly-wrapped) function when we resolve below.
+    //
+    // The timer is the abort path: if no verdict arrives within
+    // knockTimeout, resolve waiters to false and clear the entry. A
+    // `timedOut` flag prevents a slow handler from sending knock_accept
+    // after the timer has already told waiters the KNOCK was rejected.
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      const entry = this.knockPending.get(from);
+      if (entry) {
         this.knockPending.delete(from);
-        resolve(false);
-      }, this.knockTimeout);
-      this.knockPending.set(from, { resolve, timer });
-    });
+        entry.resolve(false);
+      }
+    }, this.knockTimeout);
+    this.knockPending.set(from, { resolve: () => {}, timer });
 
-    // Evaluate via registered handlers
+    // Evaluate via registered handlers. Use try/finally so the timer is
+    // cleared and the pending entry resolved even if a handler throws —
+    // otherwise the entry would leak and a re-KNOCK from the same peer
+    // would race against stale state.
     let accepted = true;
-    for (const handler of this.knockHandlers) {
-      if (!(await handler(from, intent))) {
-        accepted = false;
-        break;
+    try {
+      for (const handler of this.knockHandlers) {
+        if (!(await handler(from, intent))) {
+          accepted = false;
+          break;
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+      if (!timedOut) {
+        const entry = this.knockPending.get(from);
+        if (entry) {
+          this.knockPending.delete(from);
+          entry.resolve(accepted);
+        }
       }
     }
 
-    // Resolve pending
-    const pending = this.knockPending.get(from);
-    if (pending) {
-      clearTimeout(pending.timer);
-      pending.resolve(accepted);
-      this.knockPending.delete(from);
-    }
+    // If the timer beat the handler eval, waiters were already told
+    // "rejected"; honor that decision when responding to the relay.
+    if (timedOut) accepted = false;
 
     if (accepted) {
       this.knockAccepted.add(from);

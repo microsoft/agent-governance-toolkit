@@ -40,14 +40,31 @@ export class EnterpriseAuthProvider {
     private _state: AuthState = { isAuthenticated: false };
     private _onAuthStateChanged = new vscode.EventEmitter<AuthState>();
     readonly onAuthStateChanged = this._onAuthStateChanged.event;
-    
+
     private _context: vscode.ExtensionContext;
     private _providers: Map<string, SSOProvider> = new Map();
+    private _initPromise: Promise<void> | undefined;
 
     constructor(context: vscode.ExtensionContext) {
         this._context = context;
-        this._loadState();
         this._registerProviders();
+    }
+
+    /**
+     * Load persisted state and restore the token from SecretStorage.
+     * Must be awaited before consumers read `isAuthenticated` or
+     * `currentUser` — otherwise the constructor leaves the provider
+     * in a transient state where `isAuthenticated` can be true while
+     * `currentUser.token` is undefined.
+     *
+     * Safe to call more than once; subsequent calls return the same
+     * promise.
+     */
+    init(): Promise<void> {
+        if (!this._initPromise) {
+            this._initPromise = this._loadState();
+        }
+        return this._initPromise;
     }
 
     private async _loadState(): Promise<void> {

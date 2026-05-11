@@ -99,7 +99,7 @@ class DelegationLink(BaseModel):
     # User context for OBO flows
     user_context: Optional[UserContext] = Field(None, description="End-user context for OBO flows")
 
-    # Kept for API compatibility (not cryptographically enforced)
+    # Compatibility field only: ScopeChain performs optional best-effort checks.
     parent_signature: str = Field(..., description="Parent's signature on this delegation")
     link_hash: str = Field(..., description="Hash of this link for chain verification")
     previous_link_hash: Optional[str] = Field(None, description="Hash of previous link in chain")
@@ -154,7 +154,9 @@ class ScopeChain(BaseModel):
     Simple scope chain from root sponsor to current agent.
 
     Sub-agent gets parent's scopes minus any denied ones.
-    No cryptographic chain verification.
+    Structural checks are always enforced (scope narrowing + hash chain).
+    Signature checks are optional best-effort only when ``known_identities``
+    contains the parent identity for a link.
     """
 
     DEFAULT_MAX_DEPTH: ClassVar[int] = DEFAULT_DELEGATION_MAX_DEPTH
@@ -167,7 +169,8 @@ class ScopeChain(BaseModel):
     root_sponsor_verified: bool = Field(default=False)
     root_capabilities: list[str] = Field(..., description="Capabilities granted by sponsor")
 
-    # Known agent identities (kept for API compatibility)
+    # Optional registry for compatibility-mode signature checks.
+    # If missing for a link parent, signature verification is skipped.
     known_identities: dict[str, AgentIdentity] = Field(default_factory=dict)
 
     # Chain links
@@ -251,16 +254,19 @@ class ScopeChain(BaseModel):
         self._update_chain_hash()
 
     def _verify_link_signature(self, link: DelegationLink) -> bool:
-        """Verify the Ed25519 signature on a delegation link."""
+        """Best-effort signature check for compatibility mode only."""
         identity = self.known_identities.get(link.parent_did)
         if identity is None:
-            return True  # Graceful fallback — can't verify without identity
+            return True  # Compatibility fallback: skip when parent identity is unknown.
         signable_data = f"{link.parent_did}:{link.child_did}:{','.join(sorted(link.delegated_capabilities))}"
         return identity.verify_signature(signable_data.encode(), link.parent_signature)
 
     def verify(self) -> tuple[bool, Optional[str]]:
         """
-        Verify the chain — scope narrowing, hash integrity, and signatures.
+        Verify the chain.
+
+        Always enforces scope narrowing and hash integrity.
+        Signature checks are compatibility-mode, best-effort only.
         """
         if not self.links:
             return True, None
@@ -285,7 +291,7 @@ class ScopeChain(BaseModel):
             if link.link_hash != link.compute_hash():
                 return False, f"Invalid link hash at link {i}"
 
-            # Verify Ed25519 signature
+            # Compatibility-mode signature check (best effort)
             if not self._verify_link_signature(link):
                 return False, f"Invalid signature at link {i}"
 

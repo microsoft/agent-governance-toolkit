@@ -159,6 +159,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="unicode-attack",
@@ -169,7 +170,15 @@ _RULES: tuple[_DefenseRule, ...] = (
                 r"(?:unicode|homoglyph|special character" r"|character encoding)",
                 re.IGNORECASE,
             ),
+            re.compile(
+                r"(?:do not (?:accept|process|follow)"
+                r"|never (?:accept|process)"
+                r"|reject|normalize|sanitize|filter|validate)"
+                r".*(?:unicode|homoglyph|special character|character encoding)",
+                re.IGNORECASE,
+            ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="context-overflow",
@@ -205,6 +214,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="social-engineering",
@@ -220,6 +230,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="output-weaponization",
@@ -235,6 +246,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="abuse-prevention",
@@ -254,6 +266,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="input-validation",

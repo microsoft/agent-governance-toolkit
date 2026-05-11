@@ -53,6 +53,17 @@ RUN python -m pip install --no-cache-dir \
     && cd /workspace/agent-governance-typescript \
     && npm ci --legacy-peer-deps
 
+# Run as non-root for the developer workflow. The compose `dev` and
+# `dashboard` services bind-mount the repo at /workspace; running the
+# entrypoint as root creates files on the host owned by uid 0, which
+# is both an isolation hazard and an ergonomic problem (host editor
+# can't easily fix permissions). Create the user AFTER the package
+# installs so the system-site-packages writes don't need a sudo step.
+RUN useradd --create-home --shell /bin/bash --uid 1000 dev \
+    && chown -R dev:dev /workspace
+
+USER dev
+
 ENTRYPOINT ["bash", "/workspace/scripts/docker/dev-entrypoint.sh"]
 CMD ["sleep", "infinity"]
 

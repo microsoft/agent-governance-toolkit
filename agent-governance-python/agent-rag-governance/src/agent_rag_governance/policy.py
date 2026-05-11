@@ -133,7 +133,7 @@ class RAGPolicy:
         })
 
         # If cedarpy or CLI evaluated — trust the result fully
-        if not ("builtin" in decision.reason.lower()):
+        if "builtin" not in decision.reason.lower():
             return (True, "ok") if decision.allowed else (False, "cedar_denied")
 
         # Built-in fallback ignores resource constraints — apply our own
