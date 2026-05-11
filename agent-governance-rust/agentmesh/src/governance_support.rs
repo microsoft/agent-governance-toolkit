@@ -181,7 +181,12 @@ impl AuditSink for FileAuditSink {
             Vec::new()
         };
         entries.push(entry.clone());
-        fs::write(&self.path, serde_json::to_string_pretty(&entries).unwrap())
+        // serde_json::to_string_pretty fails on non-finite floats (NaN, ±Inf)
+        // inside `details` because JSON has no representation for them.
+        // Propagate the error instead of panicking on the audit-write path.
+        let serialized =
+            serde_json::to_string_pretty(&entries).map_err(std::io::Error::other)?;
+        fs::write(&self.path, serialized)
     }
 }
 
