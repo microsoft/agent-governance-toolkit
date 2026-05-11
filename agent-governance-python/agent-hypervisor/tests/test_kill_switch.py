@@ -234,3 +234,74 @@ class TestKillSwitch:
         ks.register_substitute("s1", "backup")
         ks.kill("a1", "s1", KillReason.MANUAL, [{"step_id": "s1", "saga_id": "sg1"}])
         assert ks.total_handoffs == 1
+
+
+class TestKillSwitchCallbackSafety:
+    """Regression: callback must not block kill flow, and exceptions / hangs
+    must not corrupt kill history or registry state."""
+
+    def test_hung_callback_times_out(self):
+        """A callback that never returns must not freeze kill()."""
+        import threading
+        import time
+
+        ks = KillSwitch(callback_timeout=0.1)
+        started = threading.Event()
+        # Use an Event that nothing sets — the callback hangs forever.
+        never_set = threading.Event()
+
+        def hung_callback() -> None:
+            started.set()
+            never_set.wait()
+
+        ks.register_agent("a1", hung_callback)
+
+        t0 = time.monotonic()
+        result = ks.kill("a1", "s1", KillReason.MANUAL)
+        elapsed = time.monotonic() - t0
+
+        assert started.wait(timeout=1.0), "callback never ran"
+        # Must return within roughly the timeout (allow generous slack).
+        assert elapsed < 2.0, f"kill() took {elapsed:.2f}s — should be ~0.1s"
+        # `terminated=False` signals the callback didn't complete cleanly.
+        assert result.terminated is False
+        # Daemon thread keeps spinning, but the switch is usable.
+        # Set the event so the hung thread cleans up before test exit.
+        never_set.set()
+
+    def test_callback_exception_treated_as_failure(self):
+        ks = KillSwitch(callback_timeout=1.0)
+
+        def crashy() -> None:
+            raise RuntimeError("boom")
+
+        ks.register_agent("a1", crashy)
+        result = ks.kill("a1", "s1", KillReason.MANUAL)
+        assert result.terminated is False
+        # The kill flow still completes and the history is recorded.
+        assert len(ks.kill_history) == 1
+
+    def test_concurrent_kills_preserve_history(self):
+        """Multiple concurrent kills must each land exactly once in history."""
+        import threading
+
+        ks = KillSwitch(callback_timeout=1.0)
+
+        # Register many agents with quick callbacks.
+        N = 20
+        for i in range(N):
+            ks.register_agent(f"a{i}", lambda: None)
+
+        def killer(i: int) -> None:
+            ks.kill(f"a{i}", "s1", KillReason.MANUAL)
+
+        threads = [threading.Thread(target=killer, args=(i,)) for i in range(N)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # All N kills must be recorded; no entry lost to a race.
+        assert len(ks.kill_history) == N
+        recorded_dids = {r.agent_did for r in ks.kill_history}
+        assert recorded_dids == {f"a{i}" for i in range(N)}
