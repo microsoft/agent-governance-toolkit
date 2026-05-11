@@ -185,9 +185,16 @@ class RedisConfig:
     retry_on_timeout: bool = True
 
     def to_url(self) -> str:
-        """Build a Redis URL from host/port/db."""
-        auth = f":{self.password}@" if self.password else ""
-        return f"redis://{auth}{self.host}:{self.port}/{self.db}"
+        """Build a password-free Redis URL from host/port/db.
+
+        The password is intentionally NOT embedded in the URL. Anything
+        that reads back the URL — exception messages from the redis
+        client, structured logs at the connection layer, debug
+        introspection, traceback decorations — would otherwise leak the
+        password verbatim. Pass `password` separately via the redis
+        client's `password=` argument (see `RedisBackend._get_client`).
+        """
+        return f"redis://{self.host}:{self.port}/{self.db}"
 
 
 class RedisBackend:
@@ -217,12 +224,19 @@ class RedisBackend:
             import redis.asyncio as aioredis
 
             if self._config is not None:
+                # Password is passed via the keyword argument so it
+                # never enters the URL string (see RedisConfig.to_url).
+                pool_kwargs = {
+                    "max_connections": self._config.pool_size,
+                    "socket_connect_timeout": self._config.connect_timeout,
+                    "socket_timeout": self._config.read_timeout,
+                    "retry_on_timeout": self._config.retry_on_timeout,
+                }
+                if self._config.password:
+                    pool_kwargs["password"] = self._config.password
                 self._pool = aioredis.ConnectionPool.from_url(
                     self.url,
-                    max_connections=self._config.pool_size,
-                    socket_connect_timeout=self._config.connect_timeout,
-                    socket_timeout=self._config.read_timeout,
-                    retry_on_timeout=self._config.retry_on_timeout,
+                    **pool_kwargs,
                 )
                 self._client = aioredis.Redis(connection_pool=self._pool)
             else:
