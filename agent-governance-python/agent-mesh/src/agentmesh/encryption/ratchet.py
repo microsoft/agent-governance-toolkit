@@ -297,6 +297,13 @@ class DoubleRatchet:
         dh_output = crypto_scalarmult(s.dh_self_private, s.dh_remote_public)
         s.root_key, s.chain_key_send = _kdf_root(s.root_key, dh_output)
 
+    # Aggregate cap on cached skipped keys across all DH rotations.
+    # The per-call cap (_max_skip) bounds a SINGLE skip burst; this
+    # cap bounds the lifetime accumulation. Without it, a session
+    # that survives many DH ratchet steps with persistent
+    # out-of-order tails grows skipped_keys without limit.
+    _MAX_SKIPPED_KEYS_TOTAL: int = 2000
+
     def _skip_messages(self, until: int) -> None:
         """Cache skipped message keys for out-of-order delivery."""
         s = self._state
@@ -311,6 +318,13 @@ class DoubleRatchet:
             s.skipped_keys[(s.dh_remote_public, s.recv_message_number)] = message_key
             s.chain_key_recv = next_chain_key
             s.recv_message_number += 1
+            # Evict the oldest skipped key once we cross the aggregate
+            # cap. Dict iteration order is insertion order on Python
+            # 3.7+, so the first key is the oldest insertion that
+            # survived all prior evictions.
+            while len(s.skipped_keys) > self._MAX_SKIPPED_KEYS_TOTAL:
+                oldest = next(iter(s.skipped_keys))
+                del s.skipped_keys[oldest]
 
 
 # ── Primitives ──────────────────────────────────────────────────────
