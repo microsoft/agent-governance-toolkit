@@ -103,6 +103,9 @@ export async function activate(context: vscode.ExtensionContext) {
         // Initialize enterprise components
         console.log('Initializing enterprise components...');
         authProvider = new EnterpriseAuthProvider(context);
+        // Await persisted-state restore so consumers cannot observe
+        // isAuthenticated=true while currentUser.token is still undefined.
+        await authProvider.init();
         rbacManager = new RBACManager(authProvider);
         cicdIntegration = new CICDIntegration();
         complianceManager = new ComplianceManager();
