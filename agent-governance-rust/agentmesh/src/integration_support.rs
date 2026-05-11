@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn integration_now() -> u64 {
@@ -663,39 +663,52 @@ impl PromptDefenseEvaluator {
                 });
             }
         }
-        for (pattern, vector, severity, message, recommendation) in [
+        // The three regex patterns below are static; compile each one
+        // exactly once and share the compiled Regex across all calls.
+        // Previously `Regex::new(pattern)` ran inside the loop on every
+        // evaluate_internal invocation, re-parsing the pattern per call.
+        static INSTRUCTION_OVERRIDE_RE: OnceLock<Regex> = OnceLock::new();
+        static SECRET_EXFILTRATION_RE: OnceLock<Regex> = OnceLock::new();
+        static CHANNEL_CONFUSION_RE: OnceLock<Regex> = OnceLock::new();
+
+        let instruction_override = INSTRUCTION_OVERRIDE_RE
+            .get_or_init(|| Regex::new(r"(?i)ignore\s+all\s+previous").unwrap());
+        let secret_exfiltration = SECRET_EXFILTRATION_RE
+            .get_or_init(|| Regex::new(r"(?i)api[_ -]?key|token|secret").unwrap());
+        let channel_confusion = CHANNEL_CONFUSION_RE
+            .get_or_init(|| Regex::new(r"(?i)<\/?(system|developer|assistant)>").unwrap());
+
+        for (regex, vector, severity, message, recommendation) in [
             (
-                r"(?i)ignore\s+all\s+previous",
+                instruction_override,
                 "instruction_override",
                 PromptRiskLevel::High,
                 "prompt attempts to discard prior governance context",
                 "reject prompts that attempt to discard prior governance context",
             ),
             (
-                r"(?i)api[_ -]?key|token|secret",
+                secret_exfiltration,
                 "secret_exfiltration",
                 PromptRiskLevel::High,
                 "prompt references secret-bearing material",
                 "refuse access to secrets and redact sensitive output",
             ),
             (
-                r"(?i)<\/?(system|developer|assistant)>",
+                channel_confusion,
                 "channel_confusion",
                 PromptRiskLevel::Medium,
                 "prompt includes channel-like tags",
                 "treat system/developer channel tags as suspicious input",
             ),
         ] {
-            if let Ok(regex) = Regex::new(pattern) {
-                if let Some(matched) = regex.find(prompt) {
-                    findings.push(PromptDefenseFinding {
-                        vector: vector.to_string(),
-                        severity,
-                        message: message.to_string(),
-                        evidence: Some(matched.as_str().to_string()),
-                        recommendation: Some(recommendation.to_string()),
-                    });
-                }
+            if let Some(matched) = regex.find(prompt) {
+                findings.push(PromptDefenseFinding {
+                    vector: vector.to_string(),
+                    severity,
+                    message: message.to_string(),
+                    evidence: Some(matched.as_str().to_string()),
+                    recommendation: Some(recommendation.to_string()),
+                });
             }
         }
         findings
