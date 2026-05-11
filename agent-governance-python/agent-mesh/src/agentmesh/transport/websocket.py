@@ -238,7 +238,17 @@ class WebSocketTransport(Transport):
                     await self.send("trust.subscribe", {"agent_did": agent_did})
                 logger.info("Reconnected on attempt %d", attempt)
                 return
-            except ConnectionError:
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Catch any transient failure (TimeoutError, OSError,
+                # websockets.ConnectionClosed, DNS errors, etc.). The
+                # previous narrow `except ConnectionError` aborted the
+                # reconnect loop on any non-ConnectionError exception,
+                # which left the transport stuck in RECONNECTING with
+                # no retries fired. Log at debug so the operator can
+                # still trace what failed each attempt.
+                logger.debug("Reconnect attempt %d failed: %s", attempt, exc)
                 continue
         self._state = TransportState.DISCONNECTED
         logger.error("Failed to reconnect after %d attempts", self.config.max_retries)
