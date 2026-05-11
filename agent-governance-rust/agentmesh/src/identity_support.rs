@@ -380,6 +380,7 @@ pub struct DelegationLink {
     pub created_at_secs: u64,
     pub expires_at_secs: Option<u64>,
     pub user_context: Option<UserContext>,
+    // Compatibility marker only; not cryptographically validated by ScopeChain.
     pub parent_signature: String,
     pub link_hash: String,
     pub previous_link_hash: Option<String>,
@@ -415,6 +416,7 @@ impl DelegationLink {
             created_at_secs,
             expires_at_secs: None,
             user_context: None,
+            // Compatibility marker only (deterministic digest, not a digital signature).
             parent_signature: hex_sha256(&signable),
             link_hash: String::new(),
             previous_link_hash,

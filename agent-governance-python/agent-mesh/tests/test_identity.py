@@ -318,6 +318,71 @@ class TestDelegation:
         is_valid, error = chain.verify()
         assert is_valid
 
+    def test_verify_chain_signature_is_optional_without_known_identity(self):
+        """Test verify() remains fail-open for signatures without known identities."""
+        chain, root_link = ScopeChain.create_root(
+            sponsor_email="sponsor@example.com",
+            root_agent_did="did:mesh:root",
+            capabilities=["read", "write"],
+        )
+
+        chain.add_link(root_link)
+
+        import uuid
+        child_link = DelegationLink(
+            link_id=f"link_{uuid.uuid4().hex[:12]}",
+            depth=1,
+            parent_did="did:mesh:root",
+            child_did="did:mesh:child",
+            parent_capabilities=["read", "write"],
+            delegated_capabilities=["read"],
+            parent_signature="not_a_real_signature",
+            link_hash="",
+            previous_link_hash=root_link.link_hash,
+        )
+        child_link.link_hash = child_link.compute_hash()
+        chain.add_link(child_link)
+
+        is_valid, error = chain.verify()
+        assert is_valid
+        assert error is None
+
+    def test_verify_chain_rejects_invalid_signature_with_known_identity(self):
+        """Test verify() rejects bad signatures when parent identity is available."""
+        parent_identity = AgentIdentity.create(
+            name="root-agent",
+            sponsor="sponsor@example.com",
+            capabilities=["read", "write"],
+        )
+        root_did = str(parent_identity.did)
+        chain, root_link = ScopeChain.create_root(
+            sponsor_email="sponsor@example.com",
+            root_agent_did=root_did,
+            capabilities=["read", "write"],
+        )
+
+        chain.add_link(root_link)
+        chain.known_identities[root_did] = parent_identity
+
+        import uuid
+        child_link = DelegationLink(
+            link_id=f"link_{uuid.uuid4().hex[:12]}",
+            depth=1,
+            parent_did=root_did,
+            child_did="did:mesh:child",
+            parent_capabilities=["read", "write"],
+            delegated_capabilities=["read"],
+            parent_signature="invalid_signature",
+            link_hash="",
+            previous_link_hash=root_link.link_hash,
+        )
+        child_link.link_hash = child_link.compute_hash()
+        chain.add_link(child_link)
+
+        is_valid, error = chain.verify()
+        assert not is_valid
+        assert error == "Invalid signature at link 1"
+
 
 class TestSponsor:
     """Tests for HumanSponsor."""

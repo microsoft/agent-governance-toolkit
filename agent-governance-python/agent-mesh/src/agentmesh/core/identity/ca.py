@@ -78,6 +78,7 @@ class RegistrationRequest(BaseModel):
 
     # Delegation
     parent_did: str | None = None
+    # Compatibility field only: CA registration flow does not verify this value.
     parent_signature: bytes | None = None
 
     # Metadata
