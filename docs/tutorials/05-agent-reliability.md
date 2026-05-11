@@ -1,5 +1,6 @@
 # Tutorial 05 — Agent Reliability Engineering
 
+> **Windows users:** If characters appear corrupted in your terminal, run `chcp 65001` before starting, or use Windows Terminal / VS Code terminal which support UTF-8 by default.
 > **Package:** `agent-sre` · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
 
 ---
@@ -430,7 +431,7 @@ from agent_sre.chaos import ChaosLibrary, ExperimentTemplate
 library = ChaosLibrary()
 
 # List available templates
-for template in library.templates:
+for template in library.list_templates():
     print(f"  {template.name}: {template.description}")
 
 # Serialize experiment results for reporting
