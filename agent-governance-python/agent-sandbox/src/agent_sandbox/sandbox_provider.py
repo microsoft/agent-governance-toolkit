@@ -163,18 +163,18 @@ class SandboxProvider(ABC):
     ) -> SandboxResult:
         """Run a raw command in the sandbox (low-level helper).
 
-        The default implementation returns a failure result so that
-        providers that do not support raw commands behave predictably
-        instead of raising ``NotImplementedError``.  Subclasses such as
-        :class:`DockerSandboxProvider` override this with a real impl.
+        Default raises :class:`NotImplementedError` so that a custom
+        provider that forgets to override the method surfaces as a
+        programming error instead of silently returning a failure
+        result that callers might confuse with a normal command
+        failure. Providers that intentionally do not support raw
+        commands (e.g. Hyperlight, where the sandbox is wasm-only)
+        should override and either raise the same error or return an
+        explicit :class:`SandboxResult` documenting the reason.
         """
-        return SandboxResult(
-            success=False,
-            exit_code=-1,
-            stderr=(
-                f"{type(self).__name__}.run() is not implemented for "
-                f"this provider"
-            ),
+        raise NotImplementedError(
+            f"{type(self).__name__}.run() is not implemented; this "
+            "provider does not support raw command execution"
         )
 
     # --- Status tracking (defaults; cloud providers override) ---------------

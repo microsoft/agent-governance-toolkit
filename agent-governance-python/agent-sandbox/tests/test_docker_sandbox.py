@@ -239,12 +239,11 @@ class TestSandboxProviderABC:
             def is_available(self):
                 return True
 
-        # Default ``run()`` returns a failure ``SandboxResult`` so providers
-        # that do not support raw commands behave predictably (no stub raise).
-        result = Minimal().run("a", ["echo"])
-        assert result.success is False
-        assert result.exit_code == -1
-        assert "not implemented" in result.stderr.lower()
+        # Default ``run()`` raises ``NotImplementedError`` so a custom
+        # provider that forgets to override surfaces as a programming
+        # error rather than silently returning a failure ``SandboxResult``.
+        with pytest.raises(NotImplementedError, match="does not support"):
+            Minimal().run("a", ["echo"])
 
     def test_async_delegates_to_sync(self):
         class Minimal(SandboxProvider):
