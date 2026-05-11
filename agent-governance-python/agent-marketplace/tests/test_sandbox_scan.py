@@ -156,6 +156,9 @@ class TestInstallRejectsRestrictedImports:
         with pytest.raises(MarketplaceError, match="restricted modules"):
             installer.install("bad-plugin")
 
+        # Plugin directory must be cleaned up after rejection.
+        assert not plugin_dir.exists()
+
     def test_install_succeeds_when_no_restricted_imports(
         self, tmp_path: Path
     ) -> None:

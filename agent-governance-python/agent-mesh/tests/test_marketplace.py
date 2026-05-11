@@ -428,6 +428,9 @@ class TestPluginInstaller:
         with pytest.raises(MarketplaceError, match="restricted modules"):
             installer.install("test-plugin")
 
+        # Plugin directory must be cleaned up after rejection.
+        assert not plugin_dir.exists()
+
     def test_install_with_signature_verification(
         self,
         tmp_path: Path,

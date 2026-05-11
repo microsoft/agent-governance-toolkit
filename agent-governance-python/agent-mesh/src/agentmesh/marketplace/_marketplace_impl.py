@@ -282,6 +282,10 @@ class PluginInstaller:
         # Scan any bundled Python source files for restricted imports.
         violations = self.scan_source_files(dest)
         if violations:
+            try:
+                shutil.rmtree(dest)
+            except OSError:
+                pass
             raise MarketplaceError(
                 f"Plugin {name}@{manifest.version} imports restricted modules: "
                 + "; ".join(violations)
