@@ -38,7 +38,11 @@ class RegisterAgentRequest(BaseModel):
 
 
 class PreKeyBundleRequest(BaseModel):
-    identity_key: str  # base64url
+    identity_key: str  # base64url, X25519 (32 bytes)
+    # Ed25519 signing key (32 bytes, base64url). Required to verify the
+    # signed_pre_key signature on the receiver side. Optional for
+    # back-compat with older clients that conflated the two keys.
+    identity_key_ed: str | None = None
     signed_pre_key: dict[str, Any]
     one_time_pre_keys: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -46,6 +50,25 @@ class PreKeyBundleRequest(BaseModel):
 class ReputationRequest(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     reason: str = ""
+
+
+class SessionReputationRequest(BaseModel):
+    """Best-effort end-of-session telemetry from initiator/receiver.
+
+    The router-side `/agt/registry/registry/reputation/session` path lands
+    here (router strips `/agt/registry/` then prepends `/v1/`). Used by
+    AzureClaw to score session outcomes after `mesh_send` round-trips.
+    """
+
+    session_id: str
+    initiator_amid: str
+    receiver_amid: str
+    intent: str = ""
+    outcome: str  # "success" | "failed" | "timeout"
+    started_at: str = ""
+    reporter_amid: str
+    timestamp: str = ""
+    signature: str = ""
 
 
 # ── Auth ─────────────────────────────────────────────────────────────
@@ -184,6 +207,8 @@ class RegistryServer:
 
             try:
                 agent.identity_key = base64.urlsafe_b64decode(req.identity_key + "==")
+                if req.identity_key_ed:
+                    agent.identity_key_ed = base64.urlsafe_b64decode(req.identity_key_ed + "==")
                 spk = req.signed_pre_key
                 agent.signed_pre_key = base64.urlsafe_b64decode(spk["public_key"] + "==")
                 agent.signed_pre_key_signature = base64.urlsafe_b64decode(spk["signature"] + "==")
@@ -206,6 +231,11 @@ class RegistryServer:
 
             result: dict[str, Any] = {
                 "identity_key": base64.urlsafe_b64encode(agent.identity_key or b"").decode().rstrip("="),
+                "identity_key_ed": (
+                    base64.urlsafe_b64encode(agent.identity_key_ed).decode().rstrip("=")
+                    if agent.identity_key_ed
+                    else None
+                ),
                 "signed_pre_key": {
                     "key_id": agent.signed_pre_key_id,
                     "public_key": base64.urlsafe_b64encode(agent.signed_pre_key).decode().rstrip("="),
@@ -236,6 +266,29 @@ class RegistryServer:
                 "online": (_utcnow() - agent.last_seen).total_seconds() < 90,
             }
 
+        @app.post("/v1/agents/{did}/heartbeat")
+        async def heartbeat(did: str) -> dict:
+            """Bump an agent's `last_seen` to keep it visible in presence
+            checks. Without this, registry `last_seen` is frozen at
+            registration time forever (no other endpoint updates it),
+            which makes every agent look "offline" 90s after spawn —
+            breaking client-side discover stale filters and the
+            `online` field on `/presence`.
+
+            Unauthenticated and idempotent: any caller may keep an agent
+            alive. This matches how reputation/discover are currently
+            unauthenticated. Production deployments should layer auth
+            in front (mTLS / API gateway) if required.
+            """
+            if not store.get_agent(did):
+                raise HTTPException(status_code=404, detail="Agent not found")
+            store.update_last_seen(did)
+            agent = store.get_agent(did)
+            return {
+                "did": did,
+                "last_seen": agent.last_seen.isoformat() if agent else None,
+            }
+
         # ── Reputation ───────────────────────────────────────────
 
         @app.post("/v1/agents/{did}/reputation")
@@ -250,6 +303,48 @@ class RegistryServer:
             agent.reputation_score = alpha * req.score + (1 - alpha) * agent.reputation_score
             store.put_agent(agent)
             return {"did": did, "reputation_score": round(agent.reputation_score, 4)}
+
+        @app.post("/v1/registry/reputation/session")
+        async def submit_session_reputation(req: SessionReputationRequest) -> dict:
+            """Record a session outcome and update both endpoints' reputation.
+
+            Outcome mapping (EMA, alpha=0.2):
+              - success → score 1.0 toward both endpoints
+              - failed  → score 0.0 toward the receiver (initiator unchanged)
+              - timeout → score 0.2 toward the receiver (initiator unchanged)
+
+            Missing agents are silently skipped (best-effort telemetry).
+            """
+            outcome = (req.outcome or "").lower()
+            alpha = 0.2
+            updated: dict[str, float] = {}
+
+            def _apply(did: str, target_score: float) -> None:
+                agent = store.get_agent(did)
+                if not agent:
+                    return
+                agent.reputation_score = alpha * target_score + (1 - alpha) * agent.reputation_score
+                store.put_agent(agent)
+                updated[did] = round(agent.reputation_score, 4)
+
+            if outcome == "success":
+                _apply(req.receiver_amid, 1.0)
+                _apply(req.initiator_amid, 1.0)
+            elif outcome == "failed":
+                _apply(req.receiver_amid, 0.0)
+            elif outcome == "timeout":
+                _apply(req.receiver_amid, 0.2)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid outcome '{req.outcome}' (expected success|failed|timeout)",
+                )
+
+            return {
+                "session_id": req.session_id,
+                "outcome": outcome,
+                "reputation": updated,
+            }
 
         # ── Discovery ────────────────────────────────────────────
 
