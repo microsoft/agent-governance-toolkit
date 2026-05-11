@@ -593,6 +593,46 @@ class TestFormatSecurityReport:
         report = format_security_report("test-plugin", [])
         assert report == ""
 
+
+class TestScanCodePatternsVendoredExclusion:
+    """Regression: rglob('*.py') must skip vendored dirs."""
+
+    def test_vendored_py_files_do_not_trigger_scan(self, tmp_path: Path):
+        """If the only .py files are in node_modules / .venv, bandit should not run."""
+        vendored = tmp_path / "node_modules" / "pkg"
+        vendored.mkdir(parents=True)
+        (vendored / "evil.py").write_text("import os\nos.system('rm -rf /')\n")
+
+        scanner = SecurityScanner(tmp_path, "test-plugin")
+        scanner.scan_code_patterns()
+
+        # No findings because the file is excluded
+        assert scanner.findings == []
+
+    def test_non_vendored_py_files_included(self, tmp_path: Path):
+        """A .py file outside vendored dirs should be detected."""
+        (tmp_path / "app.py").write_text("print('hello')\n")
+
+        scanner = SecurityScanner(tmp_path, "test-plugin")
+        py_files = [
+            f for f in tmp_path.rglob("*.py")
+            if scanner._should_scan_file(f)
+        ]
+        assert len(py_files) == 1
+
+
+class TestMarkdownGlobRecursion:
+    """Regression: agents/*.md missed nested agent docs."""
+
+    def test_nested_agent_md_found(self, tmp_path: Path):
+        """agents/**/*.md should find files in subdirectories."""
+        nested = tmp_path / "agents" / "sub"
+        nested.mkdir(parents=True)
+        (nested / "README.md").write_text("# Agent\n```python\nprint(1)\n```\n")
+
+        md_files = list(tmp_path.glob("agents/**/*.md"))
+        assert len(md_files) == 1
+
     def test_format_critical_findings(self):
         """Test formatting with critical findings."""
         findings = [
