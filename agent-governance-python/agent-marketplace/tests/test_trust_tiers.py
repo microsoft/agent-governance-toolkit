@@ -262,12 +262,41 @@ class TestPluginTrustStore:
         assert store2.get_score("my-plugin") == 850
         assert store2.get_tier("my-plugin") == "trusted"
 
-    def test_corrupt_store_resets(self, tmp_path: Path) -> None:
+    def test_corrupt_store_refuses_to_start(self, tmp_path: Path) -> None:
+        """A corrupt trust store must surface as an error rather than
+        silently resetting to defaults — which would re-promote
+        previously-untrusted plugins on next startup.
+        """
         path = tmp_path / "trust.json"
         path.write_text("NOT VALID JSON", encoding="utf-8")
 
+        with pytest.raises(RuntimeError, match="corrupt"):
+            PluginTrustStore(store_path=path)
+
+    def test_persist_is_atomic_on_crash(self, tmp_path: Path) -> None:
+        """If the write of the *.tmp file aborts, the canonical store
+        remains intact (last fully-written copy)."""
+        path = tmp_path / "trust.json"
+
+        # Write a known-good state first.
         store = PluginTrustStore(store_path=path)
-        assert store.get_score("any") == 500
+        store.record_event("plugin-a", "install_success", 50)
+        before = path.read_text()
+
+        # Now sabotage the tmp write so os.replace never runs. The
+        # canonical file must be untouched.
+        from unittest.mock import patch
+
+        with patch("os.replace", side_effect=OSError("simulated crash")):
+            with pytest.raises(OSError):
+                store.record_event("plugin-b", "install_success", 5)
+
+        # Canonical file unchanged.
+        assert path.read_text() == before
+        # Reload sees only the pre-crash state.
+        reloaded = PluginTrustStore(store_path=path)
+        assert reloaded.get_score("plugin-a") != 500  # was bumped
+        assert reloaded.get_score("plugin-b") == 500  # default; never persisted
 
     def test_events_recorded_in_store(self, tmp_path: Path) -> None:
         path = tmp_path / "trust.json"
