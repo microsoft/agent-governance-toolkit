@@ -217,3 +217,52 @@ def test_cedar_and_list_coexist_cedar_wins():
     allowed, reason = policy.is_collection_allowed("hr_records")
     assert allowed is True
     assert reason == "ok"
+
+
+def test_cedar_backend_unavailable_falls_back_to_lists():
+    """When agent-os is unavailable, Cedar falls back to list-based check."""
+    import sys
+    import unittest.mock as mock
+
+    policy = RAGPolicy(
+        cedar_policy=CEDAR_PERMIT_PUBLIC,
+        allowed_collections=["public_docs"],
+        denied_collections=["hr_records"],
+    )
+
+    # Simulate agent-os not being available
+    with mock.patch.dict(sys.modules, {"agent_os.policies.backends": None}):
+        # Should fall back to list-based check — allowed collection
+        allowed, reason = policy.is_collection_allowed("public_docs")
+        assert allowed is True
+        assert reason == "ok"
+
+        # Should fall back to list-based check — denied collection
+        allowed, reason = policy.is_collection_allowed("hr_records")
+        assert allowed is False
+        assert reason == "denied"
+
+
+def test_cedar_backend_unavailable_no_lists_default_deny():
+    """When agent-os unavailable and no lists configured, default is allow all."""
+    import sys
+    import unittest.mock as mock
+
+    # No lists configured — default RAGPolicy allows all
+    policy = RAGPolicy(cedar_policy=CEDAR_PERMIT_PUBLIC)
+
+    with mock.patch.dict(sys.modules, {"agent_os.policies.backends": None}):
+        # Falls back to list check — no restrictions set, so allowed
+        allowed, reason = policy.is_collection_allowed("any_collection")
+        assert allowed is True
+        assert reason == "ok"
+
+
+def test_cedar_policy_invalid_content_handled_gracefully():
+    """Invalid Cedar policy content should not crash — Cedar engine handles it."""
+    policy = RAGPolicy(cedar_policy="this is not valid cedar syntax !!!")
+    # Should not raise — Cedar engine handles invalid syntax gracefully
+    allowed, reason = policy.is_collection_allowed("public_docs")
+    # Invalid policy → no permit matched → default deny
+    assert allowed is False
+    assert reason == "cedar_denied"
