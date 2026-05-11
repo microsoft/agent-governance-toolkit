@@ -290,6 +290,17 @@ class TestPolicyViolation:
         )
         assert v.penalty == 0.0
 
+    def test_timestamp_is_timezone_aware(self):
+        """Regression: ``datetime.utcnow()`` produced a naive timestamp
+        that compared-different against ``datetime.now(timezone.utc)``
+        used elsewhere in the codebase. The default must be aware."""
+        v = PolicyViolation(PolicyViolationType.BLOCKED, "P", "d", "high")
+        assert v.timestamp.tzinfo is not None
+        # Compare against an aware ``now`` without raising — naive
+        # vs. aware comparison was the symptom.
+        from datetime import datetime as _dt, timezone as _tz
+        assert v.timestamp <= _dt.now(_tz.utc)
+
 
 class TestGovernedRollout:
     def test_total_penalty_calculated(self):
