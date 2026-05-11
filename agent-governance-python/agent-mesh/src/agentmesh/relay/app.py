@@ -133,9 +133,24 @@ class RelayServer:
                 # Deliver pending messages
                 await self._deliver_pending(agent_did, ws)
 
-                # Message loop
+                # Message loop. Each receive is bounded by an idle
+                # timeout — without it, a connected agent that never
+                # sends a frame can hold its slot in self._connections
+                # indefinitely. 90s is generous for typical heartbeat
+                # cadences (~30s) and lets a stalled peer be reaped.
+                _IDLE_TIMEOUT = 90.0
                 while True:
-                    raw = await ws.receive_text()
+                    try:
+                        raw = await asyncio.wait_for(
+                            ws.receive_text(), timeout=_IDLE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.info(
+                            "Idle timeout for %s after %ss; closing",
+                            agent_did, _IDLE_TIMEOUT,
+                        )
+                        await ws.close(code=4004)
+                        return
                     frame = json.loads(raw)
                     await self._handle_frame(agent_did, frame, ws)
 
