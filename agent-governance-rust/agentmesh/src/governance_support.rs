@@ -369,7 +369,9 @@ impl TrustCondition {
             (ConditionOperator::Matches, Some(Value::String(actual))) => self
                 .value
                 .as_str()
-                .and_then(|pattern| Regex::new(pattern).ok().map(|regex| regex.is_match(actual)))
+                .and_then(|pattern| {
+                    crate::regex_cache::compiled_regex(pattern).map(|regex| regex.is_match(actual))
+                })
                 .unwrap_or(false),
             _ => false,
         }
@@ -952,8 +954,7 @@ impl PolicyCondition {
                 .as_str()
                 .zip(self.expected.as_str())
                 .and_then(|(actual, expected)| {
-                    Regex::new(expected)
-                        .ok()
+                    crate::regex_cache::compiled_regex(expected)
                         .map(|regex| regex.is_match(actual))
                 })
                 .unwrap_or(false),

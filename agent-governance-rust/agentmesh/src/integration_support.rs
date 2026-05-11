@@ -104,10 +104,10 @@ impl GovernancePattern {
             PatternType::Substring => text
                 .to_ascii_lowercase()
                 .contains(&self.pattern.to_ascii_lowercase()),
-            PatternType::Regex => Regex::new(&self.pattern)
+            PatternType::Regex => crate::regex_cache::compiled_regex(&self.pattern)
                 .map(|regex| regex.is_match(text))
                 .unwrap_or(false),
-            PatternType::Glob => Regex::new(&glob_to_regex(&self.pattern))
+            PatternType::Glob => crate::regex_cache::compiled_regex(&glob_to_regex(&self.pattern))
                 .map(|regex| regex.is_match(text))
                 .unwrap_or(false),
         }
