@@ -65,6 +65,7 @@ function makeClient(overrides?: Partial<MeshClientOptions>): MeshClient {
     keyManager: makeKeyManager(),
     agentDid: "did:agentmesh:test-agent",
     wsFactory: mockWsFactory,
+    autoRegister: false,
     ...overrides,
   });
 }
