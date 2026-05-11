@@ -375,6 +375,41 @@ class TestGovernanceVerifier:
         assert len(attestation.attestation_hash) == 64
         assert attestation.attestation_hash == attestation.attestation_hash
 
+    def test_attestation_hash_changes_when_passed_flipped(self):
+        """Regression: recalculate_hash previously omitted ``passed``,
+        ``controls_passed``, ``controls_total``, and control detail
+        fields. An attacker could flip passed=False to True in the JSON
+        without invalidating the hash.
+        """
+        verifier = GovernanceVerifier()
+        attestation = verifier.verify()
+        hash_original = attestation.attestation_hash
+
+        # Flip passed and recalculate
+        attestation.passed = not attestation.passed
+        attestation.recalculate_hash()
+        assert attestation.attestation_hash != hash_original
+
+    def test_attestation_hash_changes_when_controls_total_changed(self):
+        """controls_total was not hashed, so forging the count was free."""
+        verifier = GovernanceVerifier()
+        attestation = verifier.verify()
+        hash_original = attestation.attestation_hash
+
+        attestation.controls_total += 100
+        attestation.recalculate_hash()
+        assert attestation.attestation_hash != hash_original
+
+    def test_attestation_hash_changes_when_platform_changed(self):
+        """python_version and platform_info were not hashed."""
+        verifier = GovernanceVerifier()
+        attestation = verifier.verify()
+        hash_original = attestation.attestation_hash
+
+        attestation.python_version = "fake-3.99"
+        attestation.recalculate_hash()
+        assert attestation.attestation_hash != hash_original
+
     def test_custom_controls(self):
         verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
 

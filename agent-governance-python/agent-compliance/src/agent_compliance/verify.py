@@ -325,28 +325,47 @@ class GovernanceAttestation:
         return json.dumps(payload, indent=2)
 
     def recalculate_hash(self) -> None:
-        """Refresh the attestation hash."""
+        """Refresh the attestation hash.
+
+        Hashes all semantically meaningful fields so that any
+        modification to the attestation (flipping ``passed``, altering
+        control presence/names, changing evidence observations, etc.)
+        produces a different digest. Fields omitted from the hash in
+        prior versions allowed an attacker to forge the JSON without
+        invalidating the hash.
+        """
         payload = {
             "mode": self.mode,
             "strict": self.strict,
+            "passed": self.passed,
+            "controls_passed": self.controls_passed,
+            "controls_total": self.controls_total,
             "controls": [
                 {
                     "id": c.control_id,
+                    "name": c.name,
                     "present": c.present,
+                    "module": c.module,
+                    "component": c.component,
+                    "error": c.error,
                 }
                 for c in self.controls
             ],
             "evidence_checks": [
                 {
                     "id": c.check_id,
+                    "title": c.title,
                     "status": c.status,
                     "message": c.message,
+                    "observed": c.observed,
                 }
                 for c in self.evidence_checks
             ],
             "failures": self.failures,
             "verified_at": self.verified_at,
             "toolkit_version": self.toolkit_version,
+            "python_version": self.python_version,
+            "platform_info": self.platform_info,
             "evidence_source": self.evidence_source,
         }
         self.attestation_hash = hashlib.sha256(
