@@ -28,6 +28,7 @@ pub mod integration_support;
 pub mod lifecycle;
 pub mod mcp;
 pub mod policy;
+pub mod prompt_injection;
 pub(crate) mod regex_cache;
 pub mod reward_support;
 pub mod rings;
@@ -79,6 +80,12 @@ pub use integration_support::{
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
 pub use mcp::*;
 pub use policy::{PolicyEngine, PolicyError};
+pub use prompt_injection::{
+    AuditRecord as PromptInjectionAuditRecord, DetectionConfig as PromptInjectionDetectionConfig,
+    DetectionOptions as PromptInjectionDetectionOptions, DetectionResult as PromptInjectionResult,
+    InjectionType, PromptInjectionConfig, PromptInjectionDetector, PromptInjectionError,
+    Sensitivity as PromptInjectionSensitivity, ThreatLevel as PromptInjectionThreatLevel,
+};
 pub use reward_support::{
     AgentRewardState, ContributionWeightedStrategy, DimensionType, DistributionResult,
     EqualSplitStrategy, HierarchicalStrategy, InteractionEdge, NetworkTrustEngine, ParticipantInfo,
