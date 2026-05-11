@@ -285,7 +285,14 @@ class TestPromotionChecker:
         )
         assert report.overall_passed is False
         assert "exploding" in report.blockers
-        assert "exception" in report.gates[0].reason.lower()
+        # `reason` reports the exception TYPE and gate name but does
+        # NOT echo the raw exception message (which may contain
+        # secrets pulled from the gate's closure / context).
+        reason = report.gates[0].reason.lower()
+        assert "runtimeerror" in reason
+        assert "exploding" in reason
+        # The literal exception text ("boom") must NOT appear.
+        assert "boom" not in reason
 
     def test_deprecation_always_allowed(self):
         checker = PromotionChecker()
