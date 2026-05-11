@@ -281,4 +281,51 @@ public class PolicyRuleTests
         public override string ToString() =>
             throw new NotSupportedException("simulated rule-data bug");
     }
+
+    [Fact]
+    public void Evaluate_NestedDotNotation_WinsOverFlatDottedKey()
+    {
+        // Regression: a flat key shaped like "data.classification" used to
+        // win over the nested structure, so a caller injecting a flat dotted
+        // entry could bypass nested-walk semantics. The nested walk must run
+        // first, so a rule against the nested "secret" matches even when a
+        // shadow flat key with value "public" is also present.
+        var rule = new PolicyRule
+        {
+            Name = "nested-wins",
+            Condition = "data.classification == 'secret'",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["data"] = new Dictionary<string, object>
+            {
+                ["classification"] = "secret",
+            },
+            ["data.classification"] = "public",  // would-be shadow
+        };
+
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_FallsBackToFlatDottedKey_WhenNoNestedShape()
+    {
+        // When the nested walk can't resolve (no intermediate dict), the
+        // flat dotted key is still honoured so legacy contexts keep working.
+        var rule = new PolicyRule
+        {
+            Name = "flat-fallback",
+            Condition = "data.classification == 'public'",
+            Action = PolicyAction.Allow
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["data.classification"] = "public",
+        };
+
+        Assert.True(rule.Evaluate(context));
+    }
 }

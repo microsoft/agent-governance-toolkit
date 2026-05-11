@@ -298,43 +298,52 @@ public sealed class PolicyRule
     internal static object? ResolveField(string path, IReadOnlyDictionary<string, object> context)
     {
         var segments = path.Split('.');
-        object? current = null;
 
-        // Try the full key first (some contexts use dotted keys directly).
+        // Walk nested dictionaries first — that's the documented dot-notation
+        // behaviour. The flat full-key lookup that used to run first masked
+        // nested semantics whenever a context happened to carry the same
+        // dotted name as a flat key (and let a caller bypass nested
+        // resolution by injecting a flat dotted entry).
+        if (context.TryGetValue(segments[0], out object? current))
+        {
+            bool walkComplete = true;
+            for (int i = 1; i < segments.Length; i++)
+            {
+                if (current is IReadOnlyDictionary<string, object> roDict)
+                {
+                    if (!roDict.TryGetValue(segments[i], out current))
+                    {
+                        walkComplete = false;
+                        break;
+                    }
+                }
+                else if (current is IDictionary<string, object> dict)
+                {
+                    if (!dict.TryGetValue(segments[i], out current))
+                    {
+                        walkComplete = false;
+                        break;
+                    }
+                }
+                else
+                {
+                    walkComplete = false;
+                    break;
+                }
+            }
+            if (walkComplete)
+            {
+                return current;
+            }
+        }
+
+        // Fallback: legacy contexts that use the dotted name as a flat key.
         if (context.TryGetValue(path, out var directValue))
         {
             return directValue;
         }
 
-        // Walk nested dictionaries.
-        if (!context.TryGetValue(segments[0], out current))
-        {
-            return null;
-        }
-
-        for (int i = 1; i < segments.Length; i++)
-        {
-            if (current is IReadOnlyDictionary<string, object> roDict)
-            {
-                if (!roDict.TryGetValue(segments[i], out current))
-                {
-                    return null;
-                }
-            }
-            else if (current is IDictionary<string, object> dict)
-            {
-                if (!dict.TryGetValue(segments[i], out current))
-                {
-                    return null;
-                }
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        return current;
+        return null;
     }
 
     /// <summary>
