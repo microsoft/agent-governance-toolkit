@@ -209,6 +209,11 @@ class RegistryServer:
                 agent.identity_key = base64.urlsafe_b64decode(req.identity_key + "==")
                 if req.identity_key_ed:
                     agent.identity_key_ed = base64.urlsafe_b64decode(req.identity_key_ed + "==")
+                    if len(agent.identity_key_ed) != 32:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="identity_key_ed must be exactly 32 bytes (Ed25519 public key)",
+                        )
                 spk = req.signed_pre_key
                 agent.signed_pre_key = base64.urlsafe_b64decode(spk["public_key"] + "==")
                 agent.signed_pre_key_signature = base64.urlsafe_b64decode(spk["signature"] + "==")
@@ -314,7 +319,20 @@ class RegistryServer:
               - timeout → score 0.2 toward the receiver (initiator unchanged)
 
             Missing agents are silently skipped (best-effort telemetry).
+            The reporter must be a registered agent (either initiator or receiver).
             """
+            # Validate reporter is a session participant
+            if req.reporter_amid not in (req.initiator_amid, req.receiver_amid):
+                raise HTTPException(
+                    status_code=403,
+                    detail="reporter_amid must be a session participant",
+                )
+            reporter = store.get_agent(req.reporter_amid)
+            if not reporter:
+                raise HTTPException(
+                    status_code=403,
+                    detail="reporter_amid is not a registered agent",
+                )
             outcome = (req.outcome or "").lower()
             alpha = 0.2
             updated: dict[str, float] = {}

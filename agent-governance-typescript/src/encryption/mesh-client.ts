@@ -742,7 +742,7 @@ export class MeshClient {
 
     // Notify handlers
     for (const handler of this.messageHandlers) {
-      handler(from, payload, isPlaintext);
+      try { handler(from, payload, isPlaintext); } catch { /* swallow handler errors */ }
     }
   }
 
