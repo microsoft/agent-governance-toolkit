@@ -12,12 +12,31 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
 import sys
 import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+# Used to emit the unsalted-fallback warning exactly once per process
+# instead of one warning per audit entry.
+_unsalted_warned = False
+
+
+def _warn_unsalted_once() -> None:
+    global _unsalted_warned
+    if not _unsalted_warned:
+        _unsalted_warned = True
+        logger.warning(
+            "AGENT_RAG_AUDIT_SALT is not set — query hashes are "
+            "unsalted and trivially reversible via rainbow tables. "
+            "Set the env var to a per-deployment random value."
+        )
 
 
 @dataclass
@@ -49,9 +68,33 @@ class RAGAuditEntry:
     policy_triggered: Optional[str]
 
     @staticmethod
-    def hash_query(query: str) -> str:
-        """Return a SHA-256 hex digest of *query*."""
-        return hashlib.sha256(query.encode("utf-8")).hexdigest()
+    def hash_query(query: str, salt: Optional[str] = None) -> str:
+        """Return a salted SHA-256 hex digest of *query*.
+
+        Unsalted SHA-256 over a short query string is trivially
+        reversible via rainbow tables — common queries ("what's our
+        refund policy?", "list employees by department") hash to the
+        same value across every deployment, so an attacker who reads
+        the audit log can recover the queries by precomputing a
+        modest dictionary.
+
+        Salt with a per-deployment value: the AGENT_RAG_AUDIT_SALT
+        env var when `salt` is not supplied explicitly. Knowledge of
+        the salt by itself doesn't unlock anything; rotating it
+        invalidates correlation across older audit lines.
+
+        If neither argument nor env var is set, the function falls
+        back to the unsalted form and logs a one-time warning so
+        existing deployments aren't silently degraded.
+        """
+        if salt is None:
+            salt = os.environ.get("AGENT_RAG_AUDIT_SALT", "")
+        if not salt:
+            _warn_unsalted_once()
+            payload = query.encode("utf-8")
+        else:
+            payload = (salt + ":" + query).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
     def to_json(self) -> str:
         """Serialize to a single-line JSON string."""
