@@ -18,6 +18,7 @@ Commands:
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import click
@@ -48,17 +49,37 @@ from agent_marketplace.schema_adapters import (
 console = Console()
 logger = logging.getLogger(__name__)
 
-# Default paths
-DEFAULT_PLUGINS_DIR = Path(".agentmesh") / "plugins"
-DEFAULT_REGISTRY_FILE = Path(".agentmesh") / "registry.json"
+# Cached absolute path to the AgentMesh state directory. Resolved on first
+# access from ``$AGENTMESH_HOME`` if set, else ``<cwd-at-first-call>/.agentmesh``.
+# Caching guards against cwd-dependent registry split-brain when a long-running
+# process (tests, embedded CLI usage) chdirs between commands.
+_agentmesh_home_cache: Path | None = None
+
+
+def _agentmesh_home() -> Path:
+    """Return the absolute path to the AgentMesh state directory."""
+    global _agentmesh_home_cache
+    if _agentmesh_home_cache is None:
+        env = os.environ.get("AGENTMESH_HOME")
+        base = Path(env) if env else Path.cwd() / ".agentmesh"
+        _agentmesh_home_cache = base.resolve()
+    return _agentmesh_home_cache
+
+
+def _plugins_dir() -> Path:
+    return _agentmesh_home() / "plugins"
+
+
+def _registry_file() -> Path:
+    return _agentmesh_home() / "registry.json"
 
 
 def _get_registry() -> PluginRegistry:
-    return PluginRegistry(storage_path=DEFAULT_REGISTRY_FILE)
+    return PluginRegistry(storage_path=_registry_file())
 
 
 def _get_installer() -> PluginInstaller:
-    return PluginInstaller(plugins_dir=DEFAULT_PLUGINS_DIR, registry=_get_registry())
+    return PluginInstaller(plugins_dir=_plugins_dir(), registry=_get_registry())
 
 
 @click.group()
@@ -322,10 +343,10 @@ def evaluate_plugin(manifest_path: str, marketplace_policy: str) -> None:
 @click.option(
     "--store",
     "store_path",
-    default=str(Path(".agentmesh") / "trust.json"),
-    help="Path to the trust store JSON file",
+    default=None,
+    help="Path to the trust store JSON file (default: $AGENTMESH_HOME/trust.json)",
 )
-def trust_plugin(plugin_name: str, store_path: str) -> None:
+def trust_plugin(plugin_name: str, store_path: str | None) -> None:
     """Show trust score and tier for a plugin."""
     from agent_marketplace.trust_tiers import (
         PluginTrustStore,
@@ -333,7 +354,8 @@ def trust_plugin(plugin_name: str, store_path: str) -> None:
         get_trust_tier,
     )
 
-    store = PluginTrustStore(store_path=Path(store_path))
+    resolved_store = Path(store_path) if store_path else _agentmesh_home() / "trust.json"
+    store = PluginTrustStore(store_path=resolved_store)
     score = store.get_score(plugin_name)
     tier = get_trust_tier(score)
     config = get_tier_config(tier)
