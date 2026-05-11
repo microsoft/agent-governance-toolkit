@@ -9,10 +9,14 @@ resolution and basic plugin sandboxing (restricted imports).
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import shutil
 import tempfile
+import urllib.request
+import zipfile
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping, Optional
@@ -40,6 +44,10 @@ RESTRICTED_MODULES = frozenset(
         "importlib",
     }
 )
+
+# Name of the stored artifact archive inside each installed plugin directory.
+# Kept after unpacking so _verify_on_disk() can re-check the SHA-256 hash.
+ARTIFACT_FILENAME = ".artifact.zip"
 
 
 class PluginInstaller:
@@ -86,20 +94,31 @@ class PluginInstaller:
 
         Steps:
             1. Resolve manifest from registry.
-            2. Verify Ed25519 signature (if a trusted key is available).
+            2. Verify Ed25519 signature when ``verify=True`` (the signature
+               covers all manifest fields including ``artifact_sha256``, so
+               it cryptographically binds the manifest to the artifact).
             3. Resolve and install dependencies (recursively).
-            4. Create plugin directory with manifest copy.
+            4. Download the plugin artifact archive from ``manifest.artifact_url``
+               (if set), verify its SHA-256 digest against
+               ``manifest.artifact_sha256``, and unpack it under
+               ``plugins_dir/<name>/``.  The archive is also kept as
+               ``plugins_dir/<name>/.artifact.zip`` for on-load re-verification.
+               If ``artifact_url`` is not set, no code is placed on disk; only
+               the manifest is written (manifest-registration mode).
+            5. Write the manifest atomically to
+               ``plugins_dir/<name>/agent-plugin.yaml``.
 
         Args:
             name: Plugin name.
             version: Desired version (``None`` for latest).
-            verify: Whether to verify the signature.
+            verify: Whether to verify the Ed25519 signature and artifact hash.
 
         Returns:
             Path to the installed plugin directory.
 
         Raises:
-            MarketplaceError: On resolution, verification, or dependency errors.
+            MarketplaceError: On resolution, verification, download, or
+                dependency errors.
         """
         manifest = self._registry.get_plugin(name, version)
 
@@ -127,6 +146,11 @@ class PluginInstaller:
         # Install to plugins directory
         dest = self._plugins_dir / name
         dest.mkdir(parents=True, exist_ok=True)
+
+        # Artifact download + verification (when manifest declares an artifact)
+        if manifest.artifact_url:
+            self._fetch_artifact(manifest, dest, verify=verify)
+
         manifest_file = dest / MANIFEST_FILENAME
 
         data = manifest.model_dump(mode="json")
@@ -183,8 +207,92 @@ class PluginInstaller:
             results.append(manifest)
         return results
 
+    def _fetch_artifact(
+        self,
+        manifest: PluginManifest,
+        dest: Path,
+        *,
+        verify: bool = True,
+    ) -> None:
+        """Download, verify, and unpack the plugin artifact archive.
+
+        The archive is saved as ``dest/.artifact.zip`` after a successful
+        integrity check so that ``_verify_on_disk`` can re-verify the hash on
+        subsequent ``list_installed()`` calls.
+
+        Args:
+            manifest: Plugin manifest carrying ``artifact_url`` and optionally
+                ``artifact_sha256``.
+            dest: Destination directory (``plugins_dir/<name>``).
+            verify: When ``True``, ``artifact_sha256`` must be present and
+                the download must match it exactly.
+
+        Raises:
+            MarketplaceError: If ``verify=True`` and no ``artifact_sha256`` is
+                supplied, if the downloaded file fails the hash check, or if
+                the archive cannot be unpacked.
+        """
+        artifact_url = manifest.artifact_url
+        if not artifact_url:
+            return
+
+        if verify and not manifest.artifact_sha256:
+            raise MarketplaceError(
+                f"Plugin {manifest.name}@{manifest.version} declares artifact_url "
+                "but no artifact_sha256; cannot verify artifact integrity. "
+                "Set artifact_sha256 in the manifest or install with verify=False."
+            )
+
+        artifact_path = dest / ARTIFACT_FILENAME
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=".artifact.", suffix=".tmp", dir=str(dest)
+        )
+        try:
+            with os.fdopen(fd, "wb") as f:
+                with urllib.request.urlopen(artifact_url) as resp:  # noqa: S310
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                f.flush()
+                os.fsync(f.fileno())
+
+            if verify and manifest.artifact_sha256:
+                _verify_file_sha256(tmp_path, manifest.artifact_sha256)
+                logger.info(
+                    "Artifact SHA-256 verified for %s@%s",
+                    manifest.name,
+                    manifest.version,
+                )
+
+            # Unpack the archive into the plugin directory
+            try:
+                with zipfile.ZipFile(tmp_path) as zf:
+                    zf.extractall(dest)
+            except zipfile.BadZipFile as exc:
+                raise MarketplaceError(
+                    f"Artifact for {manifest.name}@{manifest.version} is not a valid "
+                    f"zip archive: {exc}"
+                ) from exc
+
+            # Keep the zip for on-disk re-verification
+            os.replace(tmp_path, artifact_path)
+            logger.info(
+                "Artifact for %s@%s downloaded and unpacked to %s",
+                manifest.name,
+                manifest.version,
+                dest,
+            )
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
     def _verify_on_disk(self, manifest: PluginManifest, location: Path) -> bool:
-        """Re-verify an on-disk manifest's signature against trusted keys."""
+        """Re-verify an on-disk manifest's signature and artifact hash."""
         if not manifest.signature:
             logger.warning(
                 "Skipping plugin %s at %s: no signature on disk",
@@ -205,6 +313,28 @@ class PluginInstaller:
                 manifest.name, location, exc,
             )
             return False
+
+        # Re-verify the artifact hash when the manifest declares one.
+        # The manifest signature already covers artifact_sha256, so a valid
+        # signature guarantees the hash itself has not been tampered with.
+        if manifest.artifact_sha256:
+            artifact_path = location / ARTIFACT_FILENAME
+            if not artifact_path.exists():
+                logger.warning(
+                    "Skipping plugin %s at %s: .artifact.zip missing "
+                    "(expected artifact_sha256 %s)",
+                    manifest.name, location, manifest.artifact_sha256,
+                )
+                return False
+            try:
+                _verify_file_sha256(str(artifact_path), manifest.artifact_sha256)
+            except MarketplaceError as exc:
+                logger.warning(
+                    "Skipping plugin %s at %s: artifact hash verification failed (%s)",
+                    manifest.name, location, exc,
+                )
+                return False
+
         return True
 
     # ------------------------------------------------------------------
@@ -255,6 +385,33 @@ class PluginInstaller:
         """
         top_level = module_name.split(".")[0]
         return top_level not in RESTRICTED_MODULES
+
+
+def _verify_file_sha256(path: str, expected_hex: str) -> None:
+    """Verify the SHA-256 digest of a file against an expected hex string.
+
+    Uses ``hmac.compare_digest`` for a timing-safe comparison to avoid
+    leaking information about a partial match.
+
+    Args:
+        path: Path to the file to hash.
+        expected_hex: Expected lowercase hex SHA-256 digest.
+
+    Raises:
+        MarketplaceError: If the computed digest does not match.
+    """
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    actual = h.hexdigest()
+    if not hmac.compare_digest(actual.lower(), expected_hex.lower()):
+        raise MarketplaceError(
+            f"Artifact SHA-256 mismatch: expected {expected_hex!r}, got {actual!r}"
+        )
 
 
 def _atomic_write_yaml(path: Path, data: Any) -> None:

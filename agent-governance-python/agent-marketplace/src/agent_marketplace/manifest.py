@@ -75,6 +75,17 @@ class PluginManifest(BaseModel):
         None,
         description="Owning organization (None = global/shared plugin)",
     )
+    artifact_url: Optional[str] = Field(
+        None,
+        description="URL to download the plugin artifact archive (.zip). "
+        "When set, install() downloads, verifies, and unpacks the archive.",
+    )
+    artifact_sha256: Optional[str] = Field(
+        None,
+        description="Expected SHA-256 hex digest of the artifact archive. "
+        "Must be set when artifact_url is set; included in signable_bytes() "
+        "so the Ed25519 signature binds both the manifest and the artifact.",
+    )
 
     @field_validator("name")
     @classmethod
