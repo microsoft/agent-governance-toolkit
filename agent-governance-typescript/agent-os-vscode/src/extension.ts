@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { PolicyEngine } from './policyEngine';
-import { CMVKClient } from './cmvkClient';
+import { CMVKClient, type CMVKResult, type ModelResult } from './cmvkClient';
 import { AuditLogger } from './auditLogger';
 import { AuditLogProvider } from './views/auditLogView';
 import { PoliciesProvider } from './views/policiesView';
@@ -913,24 +913,50 @@ async function reviewCodeWithCMVK(code: string, language: string): Promise<void>
     });
 }
 
-function generateCMVKResultsHTML(result: any, webview: vscode.Webview): string {
+function isValidCMVKResult(value: unknown): value is CMVKResult {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    if (typeof v.consensus !== 'number' || !Number.isFinite(v.consensus)) return false;
+    if (!Array.isArray(v.modelResults)) return false;
+    for (const m of v.modelResults) {
+        if (typeof m !== 'object' || m === null) return false;
+        const mr = m as Record<string, unknown>;
+        if (typeof mr.passed !== 'boolean') return false;
+        if (typeof mr.model !== 'string') return false;
+        if (typeof mr.summary !== 'string') return false;
+    }
+    if (!Array.isArray(v.issues)) return false;
+    if (v.recommendations !== undefined && typeof v.recommendations !== 'string') return false;
+    return true;
+}
+
+function generateCMVKResultsHTML(result: unknown, webview: vscode.Webview): string {
     const nonce = crypto.randomBytes(16).toString('base64');
     const cspSource = webview.cspSource;
 
+    if (!isValidCMVKResult(result)) {
+        return `<!DOCTYPE html><html><head>
+            <meta charset="UTF-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline';">
+            </head><body><h1>Agent OS Code Review</h1>
+            <p>The CMVK service returned a response that does not match the expected schema. Review aborted.</p>
+            </body></html>`;
+    }
+
     const consensusColor = result.consensus >= 0.8 ? '#28a745'
-        : result.consensus >= 0.5 ? '#ffc107' 
+        : result.consensus >= 0.5 ? '#ffc107'
         : '#dc3545';
 
-    const modelRows = result.modelResults.map((m: any) => `
+    const modelRows = result.modelResults.map((m: ModelResult) => `
         <tr>
             <td>${m.passed ? '✅' : '⚠️'}</td>
-            <td><strong>${escHtml(String(m.model))}</strong></td>
-            <td>${escHtml(String(m.summary))}</td>
+            <td><strong>${escHtml(m.model)}</strong></td>
+            <td>${escHtml(m.summary)}</td>
         </tr>
     `).join('');
 
     const issuesList = result.issues.length > 0
-        ? `<ul>${result.issues.map((i: string) => `<li>${escHtml(i)}</li>`).join('')}</ul>`
+        ? `<ul>${result.issues.map((i: string) => `<li>${escHtml(String(i))}</li>`).join('')}</ul>`
         : '<p>No issues detected</p>';
 
     return `
