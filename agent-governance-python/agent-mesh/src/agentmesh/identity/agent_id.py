@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives import serialization
 import hashlib
 import secrets
 import logging
-import uuid
+
 import base64
 
 from agentmesh.exceptions import IdentityError, HandshakeError
