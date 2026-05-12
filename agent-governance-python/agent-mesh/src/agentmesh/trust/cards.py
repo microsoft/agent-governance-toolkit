@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import json
 
-from agentmesh.identity.agent_id import AgentIdentity
+from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
 from agentmesh.identity.revocation import RevocationList
 
 
@@ -73,13 +73,35 @@ class TrustedAgentCard(BaseModel):
         self.card_signature = identity.sign(signable.encode())
         self.signature_timestamp = datetime.now(timezone.utc)
 
-    def verify_signature(self, identity: Optional[AgentIdentity] = None) -> bool:
+    def verify_signature(
+        self,
+        identity: Optional[AgentIdentity] = None,
+        identity_registry: Optional["IdentityRegistry"] = None,
+    ) -> bool:
         """
         Verify the card's signature is valid.
 
+        Verification authority precedence (highest first):
+
+        1. Explicit ``identity`` -- authoritative; signature checked
+           against the supplied identity's public key.
+        2. ``identity_registry`` -- looked up by ``agent_did``; the
+           registry's stored public key is authoritative. If the DID
+           is not registered, verification fails (the embedded key is
+           NOT consulted -- a registered lookup is required).
+        3. Embedded ``public_key`` on the card itself -- self-attesting
+           and trust-on-first-use only. An attacker can mint a card
+           that carries their own key and a matching signature, so this
+           path proves only that the bearer signed the card, not that
+           the bearer owns the claimed agent identity. Callers that
+           need authoritative verification should always pass either
+           ``identity`` or ``identity_registry``.
+
         Args:
-            identity: Optional identity to verify against. If not provided,
-                     uses the public key embedded in the card.
+            identity: Optional authoritative identity to verify against.
+            identity_registry: Optional registry; when provided and
+                the card's ``agent_did`` is registered, the registry's
+                public key is used and the embedded key is ignored.
 
         Returns:
             True if signature is valid, False otherwise
@@ -92,8 +114,18 @@ class TrustedAgentCard(BaseModel):
         if identity:
             return identity.verify_signature(signable.encode(), self.card_signature)
 
-        # Verify using embedded public key
-        # This requires reconstructing a minimal identity for verification
+        if identity_registry is not None and self.agent_did:
+            registered = identity_registry.get(self.agent_did)
+            if registered is None:
+                # Registry is authoritative: an unregistered DID cannot
+                # be verified by falling back to the card's own key.
+                return False
+            return registered.verify_signature(
+                signable.encode(), self.card_signature
+            )
+
+        # Self-attesting fallback: verify using the embedded public key.
+        # Trust-on-first-use only -- see method docstring.
         from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
 
@@ -195,6 +227,7 @@ class CardRegistry:
         self,
         cache_ttl_seconds: int = 900,
         revocation_list: Optional["RevocationList"] = None,
+        identity_registry: Optional["IdentityRegistry"] = None,
     ):
         """Initialise the card registry.
 
@@ -204,11 +237,19 @@ class CardRegistry:
             revocation_list: Optional revocation list to check during
                 verification. When set, revoked agent DIDs fail
                 ``is_verified()`` even if their signatures are valid.
+            identity_registry: Optional authoritative identity registry.
+                When set, card verification looks up the agent's
+                registered identity by DID and verifies against that
+                key rather than the card's self-attested embedded key.
+                Recommended in production -- without it, a tampered
+                card that re-signs its own content with an attacker's
+                key still passes ``verify_signature()``.
         """
         self._cards: Dict[str, TrustedAgentCard] = {}
         self._verified_cache: Dict[str, tuple[bool, datetime]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         self._revocation_list = revocation_list
+        self._identity_registry = identity_registry
 
     def register(self, card: TrustedAgentCard) -> bool:
         """
@@ -220,7 +261,7 @@ class CardRegistry:
         Returns:
             True if registered successfully, False if verification failed
         """
-        if not card.verify_signature():
+        if not card.verify_signature(identity_registry=self._identity_registry):
             return False
 
         if card.agent_did:
@@ -272,7 +313,9 @@ class CardRegistry:
         if not card:
             return False
 
-        verified = card.verify_signature()
+        verified = card.verify_signature(
+            identity_registry=self._identity_registry
+        )
         self._verified_cache[agent_did] = (verified, datetime.now(timezone.utc))
         return verified
 
