@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -56,11 +57,19 @@ type OPABackend struct {
 var opaLookPath = exec.LookPath
 
 // NewOPABackend creates an OPA/Rego backend.
+//
+// A `RegoPath` that cannot be read is logged at construction time and
+// the backend falls back to an empty `regoContent` — previously the
+// error was silently discarded, producing an OPA backend that always
+// failed evaluation without any signal that the configuration was
+// broken.
 func NewOPABackend(options OPAOptions) *OPABackend {
 	regoContent := options.RegoContent
 	if regoContent == "" && options.RegoPath != "" {
 		data, err := os.ReadFile(options.RegoPath)
-		if err == nil {
+		if err != nil {
+			log.Printf("agentmesh: opa backend: failed to read RegoPath %q: %v", options.RegoPath, err)
+		} else {
 			regoContent = string(data)
 		}
 	}
@@ -439,11 +448,21 @@ type CedarBackend struct {
 var cedarLookPath = exec.LookPath
 
 // NewCedarBackend creates a Cedar backend.
+//
+// File-system reads (PolicyPath, EntitiesPath) and JSON parsing of the
+// entities file are best-effort: failures are logged at construction
+// time and the backend is created with the corresponding field unset.
+// Previously these errors were silently discarded — a typo in the
+// EntitiesPath produced an empty entity set and policies evaluated
+// against zero entities without any signal that the configuration was
+// broken.
 func NewCedarBackend(options CedarOptions) *CedarBackend {
 	policyContent := options.PolicyContent
 	if policyContent == "" && options.PolicyPath != "" {
 		data, err := os.ReadFile(options.PolicyPath)
-		if err == nil {
+		if err != nil {
+			log.Printf("agentmesh: cedar backend: failed to read PolicyPath %q: %v", options.PolicyPath, err)
+		} else {
 			policyContent = string(data)
 		}
 	}
@@ -451,8 +470,11 @@ func NewCedarBackend(options CedarOptions) *CedarBackend {
 	entities := options.Entities
 	if len(entities) == 0 && options.EntitiesPath != "" {
 		data, err := os.ReadFile(options.EntitiesPath)
-		if err == nil {
-			_ = json.Unmarshal(data, &entities)
+		if err != nil {
+			log.Printf("agentmesh: cedar backend: failed to read EntitiesPath %q: %v", options.EntitiesPath, err)
+		} else if uerr := json.Unmarshal(data, &entities); uerr != nil {
+			log.Printf("agentmesh: cedar backend: failed to parse entities JSON at %q: %v", options.EntitiesPath, uerr)
+			entities = nil
 		}
 	}
 
