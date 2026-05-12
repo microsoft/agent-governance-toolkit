@@ -210,7 +210,14 @@ class AgentIdentity(BaseModel):
         return base64.b64encode(signature).decode()
 
     def verify_signature(self, data: bytes, signature: str) -> bool:
-        """Verify a signature against this agent's public key."""
+        """Verify a signature against this agent's public key.
+
+        All verification failures are logged at DEBUG. Bad signatures are
+        an expected, attacker-controllable signal -- logging them at
+        WARNING enables log flooding by any peer that can send messages.
+        Operators chasing forensic detail can enable DEBUG on this
+        logger explicitly.
+        """
         try:
             public_key_bytes = base64.b64decode(self.public_key)
             public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
@@ -221,7 +228,7 @@ class AgentIdentity(BaseModel):
             logger.debug("Malformed key or signature data: %s", exc)
             return False
         except Exception as exc:
-            logger.warning("Signature verification failed: %s", exc)
+            logger.debug("Signature verification failed: %s", exc)
             return False
 
     # Maximum delegation depth to prevent Sybil attacks via infinite chains.
