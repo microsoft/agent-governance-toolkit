@@ -8,7 +8,8 @@
  */
 
 import * as assert from 'assert';
-import { isAgentFailsafeAvailable, isValidPythonPath, SREServerManager } from '../../services/sreServer';
+import { EventEmitter } from 'events';
+import { isAgentFailsafeAvailable, isValidPythonPath, SREServerManager, wireExitListeners } from '../../services/sreServer';
 
 suite('isValidPythonPath', () => {
     test('rejects empty string', () => { assert.strictEqual(isValidPythonPath(''), false); });
@@ -72,5 +73,47 @@ suite('SREServerManager', () => {
         // Don't actually start — just verify the default port
         assert.strictEqual(mgr.getEndpoint(), '');
         mgr.stop();
+    });
+});
+
+suite('wireExitListeners', () => {
+    test('error before exit fires callback once and removes both listeners', () => {
+        const emitter = new EventEmitter();
+        let calls = 0;
+        wireExitListeners(emitter as unknown as Parameters<typeof wireExitListeners>[0], () => { calls += 1; });
+        assert.strictEqual(emitter.listenerCount('error'), 1);
+        assert.strictEqual(emitter.listenerCount('exit'), 1);
+
+        emitter.emit('error', new Error('spawn ENOENT'));
+        assert.strictEqual(calls, 1);
+        assert.strictEqual(emitter.listenerCount('error'), 0);
+        assert.strictEqual(emitter.listenerCount('exit'), 0);
+
+        // Subsequent 'exit' must not double-fire the callback.
+        emitter.emit('exit', 1);
+        assert.strictEqual(calls, 1);
+    });
+
+    test('exit alone fires callback once and removes both listeners', () => {
+        const emitter = new EventEmitter();
+        let calls = 0;
+        wireExitListeners(emitter as unknown as Parameters<typeof wireExitListeners>[0], () => { calls += 1; });
+
+        emitter.emit('exit', 0);
+        assert.strictEqual(calls, 1);
+        assert.strictEqual(emitter.listenerCount('error'), 0);
+        assert.strictEqual(emitter.listenerCount('exit'), 0);
+    });
+
+    test('error then exit (Node\'s common ordering on spawn failure) fires callback once', () => {
+        const emitter = new EventEmitter();
+        let calls = 0;
+        wireExitListeners(emitter as unknown as Parameters<typeof wireExitListeners>[0], () => { calls += 1; });
+
+        emitter.emit('error', new Error('spawn ENOENT'));
+        emitter.emit('exit', null, 'SIGTERM');
+        assert.strictEqual(calls, 1, 'callback must not double-fire when both events arrive');
+        assert.strictEqual(emitter.listenerCount('error'), 0);
+        assert.strictEqual(emitter.listenerCount('exit'), 0);
     });
 });
