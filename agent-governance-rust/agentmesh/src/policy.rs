@@ -166,9 +166,22 @@ impl PolicyEngine {
     }
 
     /// Load a policy profile from a YAML string.
+    ///
+    /// Rejects profiles whose `rate_limit` rules carry a malformed `window`
+    /// so configuration mistakes surface at load time rather than being
+    /// papered over by a silent fallback during evaluation.
     pub fn load_from_yaml(&self, yaml: &str) -> Result<(), PolicyError> {
         let profile: PolicyProfile =
             serde_yaml::from_str(yaml).map_err(PolicyError::InvalidYaml)?;
+        for rule in &profile.policies {
+            if rule.rule_type == "rate_limit" && rule.max_calls > 0 {
+                parse_duration(&rule.window).map_err(|reason| PolicyError::InvalidDuration {
+                    rule: rule.name.clone(),
+                    window: rule.window.clone(),
+                    reason,
+                })?;
+            }
+        }
         *self.profile.write().unwrap_or_else(|e| e.into_inner()) = Some(profile);
         Ok(())
     }
@@ -270,7 +283,15 @@ impl PolicyEngine {
     }
 
     fn check_rate_limit(&self, name: &str, max_calls: u32, window: &str) -> PolicyDecision {
-        let window_secs = parse_duration(window);
+        let window_secs = match parse_duration(window) {
+            Ok(secs) => secs,
+            Err(reason) => {
+                return PolicyDecision::Deny(format!(
+                    "Policy '{}' has invalid rate-limit window '{}': {}",
+                    name, window, reason
+                ));
+            }
+        };
         let mut counters = self
             .rate_counters
             .lock()
@@ -307,6 +328,12 @@ pub enum PolicyError {
     InvalidYaml(serde_yaml::Error),
     #[error("I/O error: {0}")]
     Io(std::io::Error),
+    #[error("rule '{rule}' has invalid duration '{window}': {reason}")]
+    InvalidDuration {
+        rule: String,
+        window: String,
+        reason: String,
+    },
 }
 
 /// Glob-style pattern matching: `shell:*` matches `shell:ls`.
@@ -343,16 +370,34 @@ fn conditions_match(
     true
 }
 
-fn parse_duration(s: &str) -> u64 {
-    if let Some(val) = s.strip_suffix('m') {
-        val.parse::<u64>().unwrap_or(1) * 60
-    } else if let Some(val) = s.strip_suffix('s') {
-        val.parse::<u64>().unwrap_or(60)
-    } else if let Some(val) = s.strip_suffix('h') {
-        val.parse::<u64>().unwrap_or(1) * 3600
-    } else {
-        s.parse::<u64>().unwrap_or(60)
+/// Parse a duration string of the form `<digits>[s|m|h]` (bare digits = seconds).
+///
+/// Returns an error rather than silently substituting a fallback when the
+/// input is not a recognised shape, so callers can reject the configuration
+/// instead of inheriting an arbitrary default (e.g. `"5x"` previously became
+/// 60s, `"abch"` became 3600s — both silent).
+fn parse_duration(s: &str) -> Result<u64, String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return Err("empty duration".to_string());
     }
+    let (num_str, multiplier) = if let Some(v) = trimmed.strip_suffix('s') {
+        (v, 1u64)
+    } else if let Some(v) = trimmed.strip_suffix('m') {
+        (v, 60u64)
+    } else if let Some(v) = trimmed.strip_suffix('h') {
+        (v, 3600u64)
+    } else {
+        (trimmed, 1u64)
+    };
+    let n: u64 = num_str.parse().map_err(|_| {
+        format!(
+            "expected non-negative integer with optional s/m/h suffix, got '{}'",
+            s
+        )
+    })?;
+    n.checked_mul(multiplier)
+        .ok_or_else(|| format!("duration '{}' overflows u64 seconds", s))
 }
 
 #[cfg(test)]
@@ -924,22 +969,129 @@ policies:
 
     #[test]
     fn test_parse_duration_minutes() {
-        assert_eq!(parse_duration("5m"), 300);
+        assert_eq!(parse_duration("5m").unwrap(), 300);
     }
 
     #[test]
     fn test_parse_duration_seconds() {
-        assert_eq!(parse_duration("30s"), 30);
+        assert_eq!(parse_duration("30s").unwrap(), 30);
     }
 
     #[test]
     fn test_parse_duration_hours() {
-        assert_eq!(parse_duration("2h"), 7200);
+        assert_eq!(parse_duration("2h").unwrap(), 7200);
     }
 
     #[test]
     fn test_parse_duration_bare_number() {
-        assert_eq!(parse_duration("120"), 120);
+        assert_eq!(parse_duration("120").unwrap(), 120);
+    }
+
+    #[test]
+    fn test_parse_duration_unknown_suffix_rejected() {
+        // "5x" previously silently fell through to the bare-number branch,
+        // failed to parse, and quietly became 60s. It must now error.
+        assert!(parse_duration("5x").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_garbage_with_known_suffix_rejected() {
+        // "abch" previously parsed to 1 * 3600 = 3600s, "abcm" to 60s, and
+        // "abcs" to 60s — three different silent defaults for the same kind
+        // of garbage. All three are now rejected.
+        assert!(parse_duration("abch").is_err());
+        assert!(parse_duration("abcm").is_err());
+        assert!(parse_duration("abcs").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_empty_rejected() {
+        assert!(parse_duration("").is_err());
+        assert!(parse_duration("   ").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_negative_rejected() {
+        assert!(parse_duration("-5s").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_overflow_rejected() {
+        // 18446744073709551615 is u64::MAX; multiplying by 3600 overflows.
+        assert!(parse_duration("18446744073709551615h").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_whitespace_tolerated() {
+        // Leading/trailing whitespace is normalised, but internal
+        // whitespace must still be rejected.
+        assert_eq!(parse_duration("  30s  ").unwrap(), 30);
+        assert!(parse_duration("3 0s").is_err());
+    }
+
+    #[test]
+    fn test_load_rejects_malformed_rate_limit_window() {
+        let yaml = r#"
+version: "1.0"
+agent: test-agent
+policies:
+  - name: bad-window
+    type: rate_limit
+    actions:
+      - "api.call"
+    max_calls: 3
+    window: "5x"
+"#;
+        let engine = PolicyEngine::new();
+        let err = engine.load_from_yaml(yaml).unwrap_err();
+        match err {
+            PolicyError::InvalidDuration {
+                rule,
+                window,
+                reason: _,
+            } => {
+                assert_eq!(rule, "bad-window");
+                assert_eq!(window, "5x");
+            }
+            other => panic!("expected InvalidDuration, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_load_rejects_empty_window_when_rate_limited() {
+        let yaml = r#"
+version: "1.0"
+agent: test-agent
+policies:
+  - name: missing-window
+    type: rate_limit
+    actions:
+      - "api.call"
+    max_calls: 3
+"#;
+        let engine = PolicyEngine::new();
+        assert!(matches!(
+            engine.load_from_yaml(yaml).unwrap_err(),
+            PolicyError::InvalidDuration { .. }
+        ));
+    }
+
+    #[test]
+    fn test_load_tolerates_disabled_rate_limit_with_empty_window() {
+        // max_calls: 0 disables the rule, so an empty window is allowed —
+        // this preserves serde-default ergonomics for non-rate-limit shapes.
+        let yaml = r#"
+version: "1.0"
+agent: test-agent
+policies:
+  - name: disabled
+    type: rate_limit
+    actions:
+      - "api.call"
+    max_calls: 0
+"#;
+        let engine = PolicyEngine::new();
+        assert!(engine.load_from_yaml(yaml).is_ok());
     }
 
     #[test]
