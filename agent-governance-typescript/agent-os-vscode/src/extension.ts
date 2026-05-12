@@ -621,7 +621,7 @@ safe_query = "SELECT * FROM users WHERE id = ?"
             const auditEntries = auditLogger.getAll().map(e => ({
                 timestamp: new Date(),
                 type: 'audit',
-                details: e as unknown as Record<string, unknown>
+                details: { ...e } as Record<string, unknown>
             }));
 
             const report = reportGenerator.generate({
