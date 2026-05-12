@@ -16,19 +16,37 @@ from typing import Any
 
 
 class CircuitState(Enum):
-    """Circuit breaker state."""
+    """Circuit breaker state.
+
+    ``HALF_OPEN`` is wired through the enum, the ``CircuitBreakerConfig``
+    knobs (``success_threshold``, ``half_open_max_calls``), the
+    ``CircuitBreaker._half_open_calls`` field, and the
+    ``CircuitBreakerRegistry.summary`` rollup — but **no code path ever
+    transitions to it** in Public Preview. The recovery flow is
+    documented as manual: callers ``force_close()`` or ``reset()`` after
+    deciding the agent is healthy. The HALF_OPEN surface is kept
+    forward-compatible so future versions can flip on auto-recovery
+    without breaking the public type or API shape.
+    """
     CLOSED = "closed"      # Normal operation
     OPEN = "open"          # Failing, reject calls
-    HALF_OPEN = "half_open"  # Testing recovery
+    HALF_OPEN = "half_open"  # Reserved for future auto-recovery; not entered in Public Preview
 
 
 @dataclass
 class CircuitBreakerConfig:
-    """Configuration for a circuit breaker."""
+    """Configuration for a circuit breaker.
+
+    ``success_threshold`` and ``half_open_max_calls`` are part of the
+    forward-compatible HALF_OPEN surface (see ``CircuitState``) and are
+    not read by any code path in Public Preview. They're kept on the
+    config so a future flip to auto-recovery does not break serialised
+    configs in the wild.
+    """
     failure_threshold: int = 5          # Failures before opening
-    success_threshold: int = 3          # Successes in half-open to close
-    timeout_seconds: float = 60.0       # Time in open before half-open
-    half_open_max_calls: int = 3        # Max test calls in half-open
+    success_threshold: int = 3          # Reserved: successes in half-open to close
+    timeout_seconds: float = 60.0       # Reserved: time in open before half-open
+    half_open_max_calls: int = 3        # Reserved: max test calls in half-open
 
     def to_dict(self) -> dict[str, Any]:
         return {
