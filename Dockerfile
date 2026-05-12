@@ -33,11 +33,29 @@ RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
 
 FROM base AS dev
 
+# Stage 1: TypeScript dependencies cache on package-lock.json alone, so
+# a Python-only source change doesn't trigger a full `npm ci` rebuild
+# (the slowest part of the dev image). Only package-lock.json / package.json
+# changes will invalidate this layer.
+COPY agent-governance-typescript/package.json \
+     agent-governance-typescript/package-lock.json \
+     /workspace/agent-governance-typescript/
+RUN cd /workspace/agent-governance-typescript \
+    && npm ci --legacy-peer-deps
+
+# Stage 2: bring in the full source. Subsequent layers are invalidated
+# by any source change, but the `npm ci` above is preserved.
 COPY . /workspace
 
-# Install local packages (Scorecard: pinned via pyproject.toml)
-# Requirements file dependencies have version constraints
-RUN python -m pip install --no-cache-dir \
+# Stage 3: Python editable installs. A BuildKit cache mount on the pip
+# download cache preserves wheel downloads across rebuilds even when
+# this layer is re-executed (editable installs need source, so the
+# layer itself can't be reused — but the download cache can).
+#
+# Scorecard: pinned via pyproject.toml. Requirements file dependencies
+# have version constraints.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install \
         -e "agent-governance-python/agent-primitives[dev]" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
         -e "agent-governance-python/agent-os[full,dev]" \
@@ -48,10 +66,8 @@ RUN python -m pip install --no-cache-dir \
         -e "agent-governance-python/agent-compliance" \
         -e "agent-governance-python/agent-marketplace[cli,dev]" \
         -e "agent-governance-python/agent-lightning[agent-os,dev]" \
-    && python -m pip install --no-cache-dir \
-        -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt \
-    && cd /workspace/agent-governance-typescript \
-    && npm ci --legacy-peer-deps
+    && python -m pip install \
+        -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt
 
 # Run as non-root for the developer workflow. The compose `dev` and
 # `dashboard` services bind-mount the repo at /workspace; running the
