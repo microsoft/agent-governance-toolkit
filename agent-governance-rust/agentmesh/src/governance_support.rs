@@ -481,6 +481,11 @@ pub struct PolicyBackendDiagnostic {
 }
 
 impl PolicyBackendDiagnostic {
+    /// Reserved for the in-progress policy compiler subsystem below
+    /// (`parse_opa_rules` / `parse_cedar_rules` and friends). Kept here so
+    /// the diagnostic API stays symmetric with `::error` once the compiler
+    /// callers come online.
+    #[allow(dead_code)]
     fn warning(message: impl Into<String>, expression: impl Into<String>) -> Self {
         Self {
             severity: PolicyDiagnosticSeverity::Warning,
@@ -844,6 +849,21 @@ fn cedar_escape_identifier(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+// ---------------------------------------------------------------------------
+// In-progress policy-expression compiler.
+//
+// The items below (PolicyOperator / PolicyCondition / PolicyRuleClause /
+// CompiledPolicyRule plus the `parse_*`, `compile_*`, `collect_*`, `split_*`,
+// `normalize_*`, `resolve_*`, `looks_like_*`, and `strip_*` free functions)
+// form a self-contained subsystem for parsing OPA/Cedar rule bodies into a
+// compiled in-memory AST. Production code does not yet route through it —
+// the live `PolicyEvaluator` calls regorus / cedar-policy directly — so the
+// whole tree is dead-code-warned. Items are individually marked
+// `#[allow(dead_code)]` (not the parent module) so that any other genuinely
+// dead code added to this file continues to surface in `cargo check`.
+// ---------------------------------------------------------------------------
+
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PolicyOperator {
     Eq,
@@ -860,6 +880,7 @@ enum PolicyOperator {
     RegexMatch,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct PolicyCondition {
     path: String,
@@ -867,11 +888,13 @@ struct PolicyCondition {
     expected: Value,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 struct PolicyRuleClause {
     conditions: Vec<PolicyCondition>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct CompiledPolicyRule {
     name: String,
@@ -879,6 +902,7 @@ struct CompiledPolicyRule {
     clauses: Vec<PolicyRuleClause>,
 }
 
+#[allow(dead_code)]
 impl CompiledPolicyRule {
     fn matches<'a>(&'a self, input: &HashMap<String, Value>) -> Option<(&'a Self, usize)> {
         self.clauses
@@ -889,6 +913,7 @@ impl CompiledPolicyRule {
     }
 }
 
+#[allow(dead_code)]
 impl PolicyRuleClause {
     fn matches(&self, input: &HashMap<String, Value>) -> bool {
         self.conditions
@@ -897,6 +922,7 @@ impl PolicyRuleClause {
     }
 }
 
+#[allow(dead_code)]
 impl PolicyCondition {
     fn matches(&self, input: &HashMap<String, Value>) -> bool {
         let Some(actual) = resolve_policy_value(input, &self.path) else {
@@ -967,6 +993,7 @@ impl PolicyCondition {
     }
 }
 
+#[allow(dead_code)]
 fn parse_opa_rules(
     source: &str,
     rule_name: &str,
@@ -986,6 +1013,7 @@ fn parse_opa_rules(
         .collect()
 }
 
+#[allow(dead_code)]
 fn parse_cedar_rules(
     source: &str,
     keyword: &str,
@@ -1000,6 +1028,7 @@ fn parse_cedar_rules(
         .collect()
 }
 
+#[allow(dead_code)]
 fn collect_policy_bodies(source: &str, rule_name: &str, keyword: &str) -> Vec<String> {
     let start = format!("{rule_name}");
     let mut results = Vec::new();
@@ -1044,6 +1073,7 @@ fn collect_policy_bodies(source: &str, rule_name: &str, keyword: &str) -> Vec<St
     results
 }
 
+#[allow(dead_code)]
 fn compile_policy_rule(
     name: String,
     raw_expression: String,
@@ -1070,6 +1100,7 @@ fn compile_policy_rule(
     }
 }
 
+#[allow(dead_code)]
 fn parse_policy_clause(
     clause: &str,
     prefix_to_trim: &str,
@@ -1086,6 +1117,7 @@ fn parse_policy_clause(
     }
 }
 
+#[allow(dead_code)]
 fn split_top_level(input: &str, delimiters: &[&str]) -> Vec<String> {
     let mut parts = Vec::new();
     let mut start = 0usize;
@@ -1151,6 +1183,7 @@ fn split_top_level(input: &str, delimiters: &[&str]) -> Vec<String> {
     parts
 }
 
+#[allow(dead_code)]
 fn parse_policy_condition(
     input: &str,
     prefix_to_trim: &str,
@@ -1220,6 +1253,7 @@ fn parse_policy_condition(
     None
 }
 
+#[allow(dead_code)]
 fn parse_policy_function(
     input: &str,
     prefix_to_trim: &str,
@@ -1279,6 +1313,7 @@ fn parse_policy_function(
     }
 }
 
+#[allow(dead_code)]
 fn looks_like_boolean_path(input: &str) -> bool {
     !input.is_empty()
         && !input.contains(' ')
@@ -1292,6 +1327,7 @@ fn looks_like_boolean_path(input: &str) -> bool {
         && !input.contains('<')
 }
 
+#[allow(dead_code)]
 fn strip_wrapping_parentheses(input: &str) -> &str {
     let mut trimmed = input.trim();
     while trimmed.starts_with('(') && trimmed.ends_with(')') && trimmed.len() > 1 {
@@ -1300,12 +1336,14 @@ fn strip_wrapping_parentheses(input: &str) -> &str {
     trimmed
 }
 
+#[allow(dead_code)]
 fn normalize_policy_path(path: &str, prefix_to_trim: &str) -> String {
     strip_wrapping_parentheses(path.trim())
         .trim_start_matches(prefix_to_trim)
         .to_string()
 }
 
+#[allow(dead_code)]
 fn parse_policy_value(input: &str) -> Value {
     let trimmed = strip_wrapping_parentheses(input.trim());
     if (trimmed.starts_with('[') && trimmed.ends_with(']'))
@@ -1340,6 +1378,7 @@ fn parse_policy_value(input: &str) -> Value {
     }
 }
 
+#[allow(dead_code)]
 fn resolve_policy_value<'a>(input: &'a HashMap<String, Value>, path: &str) -> Option<&'a Value> {
     let mut parts = path.split('.');
     let first = parts.next()?;
