@@ -265,11 +265,11 @@ Claude will now route tool calls through AgentMesh for policy enforcement and tr
 # Initialize a governed agent in 30 seconds
 agentmesh init --name my-agent --sponsor alice@company.com
 
-# Register with the mesh
-agentmesh register
+# Enter the generated project
+cd my-agent
 
-# Start with governance enabled
-agentmesh run
+# Run the generated governance smoke test
+python src/main.py
 ```
 
 ### Option 3: Wrap Any MCP Server
