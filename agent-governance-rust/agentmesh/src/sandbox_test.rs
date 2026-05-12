@@ -194,3 +194,59 @@ fn generate_id_uniqueness() {
     // Consecutive IDs should differ (not guaranteed but overwhelmingly likely)
     assert_ne!(id1, id2);
 }
+
+#[test]
+fn generate_id_no_collisions_under_burst() {
+    // Regression for the previous nanos+ThreadId+FNV-1a implementation, which
+    // could collide when two calls landed in the same nanosecond on the same
+    // thread. With `rand::random::<u64>()` the probability of a duplicate in
+    // 10 000 draws is ~2.7e-12, so any collision here is a real failure of
+    // the underlying RNG, not statistical noise.
+    use std::collections::HashSet;
+    const N: usize = 10_000;
+    let mut seen: HashSet<String> = HashSet::with_capacity(N);
+    for _ in 0..N {
+        let id = super::generate_id();
+        assert_eq!(id.len(), 16, "id should be 16 hex chars: {id}");
+        assert!(
+            id.chars().all(|c| c.is_ascii_hexdigit()),
+            "id should be hex only: {id}"
+        );
+        assert!(seen.insert(id.clone()), "duplicate id generated: {id}");
+    }
+    assert_eq!(seen.len(), N);
+}
+
+#[test]
+fn generate_id_no_collisions_across_threads() {
+    // The previous FNV-1a implementation mixed in `std::thread::ThreadId` to
+    // disambiguate concurrent callers, but two threads scheduled into the
+    // same nanosecond could still produce identical IDs. Spawn several
+    // threads that each burst-generate IDs; the union must be unique.
+    use std::collections::HashSet;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    const THREADS: usize = 8;
+    const PER_THREAD: usize = 2_000;
+
+    let all: Arc<Mutex<HashSet<String>>> =
+        Arc::new(Mutex::new(HashSet::with_capacity(THREADS * PER_THREAD)));
+    let mut handles = Vec::with_capacity(THREADS);
+    for _ in 0..THREADS {
+        let all = Arc::clone(&all);
+        handles.push(thread::spawn(move || {
+            let mut local = Vec::with_capacity(PER_THREAD);
+            for _ in 0..PER_THREAD {
+                local.push(super::generate_id());
+            }
+            let mut guard = all.lock().unwrap();
+            for id in local {
+                assert!(guard.insert(id.clone()), "duplicate id generated: {id}");
+            }
+        }));
+    }
+    for h in handles {
+        h.join().unwrap();
+    }
+    assert_eq!(all.lock().unwrap().len(), THREADS * PER_THREAD);
+}
