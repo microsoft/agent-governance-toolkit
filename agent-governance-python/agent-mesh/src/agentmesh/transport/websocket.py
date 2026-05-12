@@ -75,12 +75,25 @@ class WebSocketTransport(Transport):
     # -- Connection lifecycle --------------------------------------------------
 
     async def connect(self) -> None:
-        """Open a WebSocket connection to the server."""
+        """Open a WebSocket connection to the server.
+
+        When ``config.use_tls`` is true, ``config.ssl_context`` is
+        threaded through to the ``websockets`` client. If the caller
+        leaves ``ssl_context`` as ``None`` the library uses its default
+        context (system trust store, hostname verification on). Supply
+        a custom context when pinning a private CA, requiring client
+        certificates, or restricting cipher suites.
+        """
         self._state = TransportState.CONNECTING
         scheme = "wss" if self.config.use_tls else "ws"
         uri = f"{scheme}://{self.config.uri}"
+        connect_kwargs: dict[str, Any] = {
+            "open_timeout": self.config.timeout_seconds,
+        }
+        if self.config.use_tls and self.config.ssl_context is not None:
+            connect_kwargs["ssl"] = self.config.ssl_context
         try:
-            self._ws = await connect(uri, open_timeout=self.config.timeout_seconds)
+            self._ws = await connect(uri, **connect_kwargs)
             self._state = TransportState.CONNECTED
             self._should_reconnect = True
             self._last_pong = time.monotonic()
