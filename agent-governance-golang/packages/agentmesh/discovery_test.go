@@ -6,13 +6,68 @@ package agentmesh
 import (
 	"encoding/base64"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestAddEvidenceCombinesConfidenceViaNoisyOR(t *testing.T) {
+	agent := &DiscoveredAgent{}
+	agent.AddEvidence(DiscoveryEvidence{Confidence: 0.5, Timestamp: time.Unix(1, 0)})
+	if math.Abs(agent.Confidence-0.5) > 1e-9 {
+		t.Fatalf("after one 0.5 evidence: Confidence = %v, want 0.5", agent.Confidence)
+	}
+	agent.AddEvidence(DiscoveryEvidence{Confidence: 0.5, Timestamp: time.Unix(2, 0)})
+	// 1 - (1 - 0.5) * (1 - 0.5) = 0.75
+	if math.Abs(agent.Confidence-0.75) > 1e-9 {
+		t.Fatalf("after two 0.5 evidences: Confidence = %v, want 0.75", agent.Confidence)
+	}
+	agent.AddEvidence(DiscoveryEvidence{Confidence: 0.5, Timestamp: time.Unix(3, 0)})
+	// 1 - (1 - 0.75) * (1 - 0.5) = 0.875
+	if math.Abs(agent.Confidence-0.875) > 1e-9 {
+		t.Fatalf("after three 0.5 evidences: Confidence = %v, want 0.875", agent.Confidence)
+	}
+}
+
+func TestAddEvidenceSaturatesAtOne(t *testing.T) {
+	agent := &DiscoveredAgent{Confidence: 1.0}
+	agent.AddEvidence(DiscoveryEvidence{Confidence: 0.9, Timestamp: time.Unix(1, 0)})
+	if agent.Confidence != 1.0 {
+		t.Fatalf("Confidence = %v after combining 1.0 with 0.9, want 1.0", agent.Confidence)
+	}
+}
+
+func TestAddEvidenceClampsOutOfRangeInputs(t *testing.T) {
+	// Negative confidence clamps to 0 — should not move the aggregate.
+	agent := &DiscoveredAgent{Confidence: 0.5}
+	agent.AddEvidence(DiscoveryEvidence{Confidence: -1.0, Timestamp: time.Unix(1, 0)})
+	if agent.Confidence != 0.5 {
+		t.Fatalf("Confidence = %v after combining 0.5 with -1.0 (clamps to 0), want 0.5", agent.Confidence)
+	}
+	// > 1 clamps to 1 — should saturate the aggregate.
+	agent.AddEvidence(DiscoveryEvidence{Confidence: 5.0, Timestamp: time.Unix(2, 0)})
+	if agent.Confidence != 1.0 {
+		t.Fatalf("Confidence = %v after combining 0.5 with 5.0 (clamps to 1), want 1.0", agent.Confidence)
+	}
+}
+
+func TestAddEvidenceLowConfidencesCorroborate(t *testing.T) {
+	// The whole point of this change: ten 0.1 hits should aggregate
+	// well above 0.1 (which the old max() implementation produced).
+	agent := &DiscoveredAgent{}
+	for i := 0; i < 10; i++ {
+		agent.AddEvidence(DiscoveryEvidence{Confidence: 0.1, Timestamp: time.Unix(int64(i+1), 0)})
+	}
+	// 1 - 0.9^10 ≈ 0.6513
+	if agent.Confidence < 0.6 || agent.Confidence > 0.7 {
+		t.Fatalf("Confidence = %v after ten 0.1 evidences, want ~0.65", agent.Confidence)
+	}
+}
 
 func TestShadowDiscoveryScannerScanText(t *testing.T) {
 	scanner := NewShadowDiscoveryScanner()
