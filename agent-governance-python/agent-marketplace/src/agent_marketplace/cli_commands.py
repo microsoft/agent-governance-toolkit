@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 from rich.console import Console
@@ -33,7 +34,6 @@ from agent_marketplace import (
     load_manifest,
 )
 from agent_marketplace.marketplace_policy import (
-    ComplianceResult,
     MarketplacePolicy,
     MCPServerPolicy,
     evaluate_plugin_compliance,
@@ -45,6 +45,9 @@ from agent_marketplace.schema_adapters import (
     extract_capabilities,
     extract_mcp_servers,
 )
+
+if TYPE_CHECKING:
+    from agent_marketplace.manifest import PluginManifest
 
 console = Console()
 logger = logging.getLogger(__name__)
