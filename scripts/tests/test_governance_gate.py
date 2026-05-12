@@ -28,9 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 import governance_gate as gg
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _write_policy(tmp_path: Path, overrides: dict | None = None) -> Path:
     """Write a valid policy YAML, optionally overriding top-level keys."""
@@ -54,9 +52,7 @@ def _write_manifest(tmp_path: Path) -> Path:
     return p
 
 
-# ---------------------------------------------------------------------------
 # _get_nested
-# ---------------------------------------------------------------------------
 
 class TestGetNested:
     def test_top_level_key(self):
@@ -80,9 +76,7 @@ class TestGetNested:
         assert not found
 
 
-# ---------------------------------------------------------------------------
 # _validate_policy
-# ---------------------------------------------------------------------------
 
 class TestValidatePolicy:
     def test_valid_policy_no_failures(self, tmp_path):
@@ -134,9 +128,7 @@ class TestValidatePolicy:
         assert len(failures) >= 2
 
 
-# ---------------------------------------------------------------------------
 # _sha256
-# ---------------------------------------------------------------------------
 
 class TestSha256:
     def test_deterministic(self):
@@ -151,9 +143,7 @@ class TestSha256:
         int(result, 16)  # raises if not hex
 
 
-# ---------------------------------------------------------------------------
 # _generate_receipt
-# ---------------------------------------------------------------------------
 
 class TestGenerateReceipt:
     def test_receipt_has_required_fields(self):
@@ -200,9 +190,7 @@ class TestGenerateReceipt:
         assert r["signer_public_key"] is not None
 
 
-# ---------------------------------------------------------------------------
 # _write_audit_entry
-# ---------------------------------------------------------------------------
 
 class TestWriteAuditEntry:
     def test_creates_file_and_appends(self, tmp_path):
@@ -222,9 +210,7 @@ class TestWriteAuditEntry:
         assert json.loads(lines[1])["n"] == 2
 
 
-# ---------------------------------------------------------------------------
 # run() — integration-level
-# ---------------------------------------------------------------------------
 
 class TestRun:
     def test_valid_policy_exits_0(self, tmp_path):
@@ -303,9 +289,7 @@ class TestRun:
         assert code == 1
 
 
-# ---------------------------------------------------------------------------
 # _parse_args — env var fallbacks
-# ---------------------------------------------------------------------------
 
 class TestParseArgs:
     def test_defaults_from_env(self, monkeypatch):
