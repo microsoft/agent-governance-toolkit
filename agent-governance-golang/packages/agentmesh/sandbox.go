@@ -105,30 +105,40 @@ type SandboxProvider interface {
 
 // DockerSandboxProvider implements SandboxProvider using the Docker CLI.
 type DockerSandboxProvider struct {
-	image      string
-	available  bool
-	containers map[string]string // key: "agentID:sessionID", value: container name
-	mu         sync.Mutex
+	image          string
+	containers     map[string]string // key: "agentID:sessionID", value: container name
+	mu             sync.Mutex
+	availableOnce  sync.Once
+	available      bool
 }
 
 // NewDockerSandboxProvider creates a DockerSandboxProvider with the given base image.
-// It probes for Docker availability via `docker info` (bounded by
-// dockerInfoTimeout so a stalled daemon does not block initialisation).
+//
+// The constructor is non-blocking: Docker daemon reachability is probed
+// lazily on the first call to [DockerSandboxProvider.IsAvailable] (or
+// equivalently on the first [DockerSandboxProvider.CreateSession]).
+// Callers that never invoke a sandbox method — for example, unit tests
+// that exercise other code paths — never pay the `docker info` cost.
 func NewDockerSandboxProvider(image string) *DockerSandboxProvider {
-	p := &DockerSandboxProvider{
+	return &DockerSandboxProvider{
 		image:      image,
 		containers: make(map[string]string),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), dockerInfoTimeout)
-	defer cancel()
-	if err := exec.CommandContext(ctx, "docker", "info").Run(); err == nil {
-		p.available = true
-	}
-	return p
 }
 
-// IsAvailable reports whether the Docker daemon is reachable.
+// IsAvailable reports whether the Docker daemon is reachable. The
+// underlying `docker info` probe runs at most once per provider; the
+// result is cached for the lifetime of the receiver. A provider whose
+// first probe fails will not retry — construct a new provider if the
+// daemon becomes available later.
 func (p *DockerSandboxProvider) IsAvailable() bool {
+	p.availableOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), dockerInfoTimeout)
+		defer cancel()
+		if err := exec.CommandContext(ctx, "docker", "info").Run(); err == nil {
+			p.available = true
+		}
+	})
 	return p.available
 }
 
@@ -151,7 +161,7 @@ var containerIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 
 // CreateSession starts a hardened Docker container for the given agent.
 func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxConfig) (*SessionHandle, error) {
-	if !p.available {
+	if !p.IsAvailable() {
 		return nil, fmt.Errorf("docker is not available")
 	}
 	if !containerIDPattern.MatchString(agentID) {

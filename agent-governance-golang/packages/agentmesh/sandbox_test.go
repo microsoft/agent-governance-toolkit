@@ -6,6 +6,7 @@ package agentmesh
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // Compile-time interface satisfaction check.
@@ -48,6 +49,24 @@ func TestDockerSandboxProviderNew(t *testing.T) {
 	}
 	// available may be true or false depending on the host; just verify no panic.
 	t.Logf("Docker available: %v", p.IsAvailable())
+}
+
+func TestNewDockerSandboxProviderDoesNotProbeDocker(t *testing.T) {
+	// The constructor must not block on `docker info`. Wall-clock time
+	// is the most direct proxy for I/O having happened — a non-zero
+	// dockerInfoTimeout would dominate the duration if the probe ran
+	// here. The bound is intentionally loose (one tenth of the probe
+	// timeout) so we don't false-fail on slow CI.
+	start := time.Now()
+	p := NewDockerSandboxProvider("alpine:latest")
+	elapsed := time.Since(start)
+	if p == nil {
+		t.Fatal("NewDockerSandboxProvider returned nil")
+	}
+	if elapsed > dockerInfoTimeout/10 {
+		t.Fatalf("constructor took %s (> %s); appears to be probing docker synchronously",
+			elapsed, dockerInfoTimeout/10)
+	}
 }
 
 func TestSandboxProviderInterface(t *testing.T) {
