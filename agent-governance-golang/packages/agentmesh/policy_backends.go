@@ -590,7 +590,15 @@ func (b *CedarBackend) evaluateBuiltin(context map[string]interface{}) (BackendD
 	}
 
 	request := buildCedarRequest(context)
-	action := request["action"].(string)
+	// `buildCedarRequest` always stuffs a `string` under "action", but
+	// guard with the comma-ok form so a future change to the request
+	// shape can't panic the policy evaluator. On the (currently
+	// unreachable) wrong-type path we fall through to default-deny via
+	// the ordinary statement loop, which is fail-closed.
+	action, ok := request["action"].(string)
+	if !ok {
+		return BackendDecision{}, fmt.Errorf("cedar builtin: request action has unexpected type %T", request["action"])
+	}
 	statements := parseCedarStatements(b.policyContent)
 	hasPermit := false
 
