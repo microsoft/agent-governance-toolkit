@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn detects_rug_pulls_and_typosquatting() {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let scanner = McpSecurityScanner::new(
             redactor.clone(),
             Arc::new(InMemoryAuditSink::new(redactor)),
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn detects_schema_abuse() {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let scanner = McpSecurityScanner::new(
             redactor.clone(),
             Arc::new(InMemoryAuditSink::new(redactor)),
