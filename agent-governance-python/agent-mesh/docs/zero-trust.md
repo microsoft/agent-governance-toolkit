@@ -22,7 +22,7 @@ message = Message(
     to_agent="did:agentmesh:bob",
     payload={"request": "read_data"},
     signature=sign(payload, alice_private_key),
-    timestamp=datetime.utcnow(),
+    timestamp=datetime.now(timezone.utc),
 )
 
 # Recipient verifies before processing

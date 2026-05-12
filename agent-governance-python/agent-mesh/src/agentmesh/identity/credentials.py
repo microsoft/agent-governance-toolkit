@@ -7,7 +7,7 @@ Credentials with configurable TTL (default 15 min).
 Expired credentials are rejected; rotation is automatic and zero-downtime.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional, Literal
 from pydantic import BaseModel, Field
 import hashlib
@@ -44,7 +44,7 @@ class Credential(BaseModel):
     resources: list[str] = Field(default_factory=list, description="Accessible resources")
 
     # Timing
-    issued_at: datetime = Field(default_factory=datetime.utcnow)
+    issued_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime = Field(..., description="When credential expires")
     ttl_seconds: int = Field(default=900, description="TTL in seconds (default 15 min)")
 
@@ -89,7 +89,7 @@ class Credential(BaseModel):
         # Generate credential ID
         credential_id = f"cred_{uuid.uuid4().hex[:16]}"
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         return cls(
             credential_id=credential_id,
@@ -112,7 +112,7 @@ class Credential(BaseModel):
         """
         if self.status != "active":
             return False
-        return datetime.utcnow() < self.expires_at
+        return datetime.now(timezone.utc) < self.expires_at
 
     def is_expiring_soon(self, threshold_seconds: int = CREDENTIAL_ROTATION_THRESHOLD_SECONDS) -> bool:
         """Check if credential is about to expire.
@@ -124,7 +124,7 @@ class Credential(BaseModel):
         Returns:
             True if the credential expires within the threshold window.
         """
-        return datetime.utcnow() > (self.expires_at - timedelta(seconds=threshold_seconds))
+        return datetime.now(timezone.utc) > (self.expires_at - timedelta(seconds=threshold_seconds))
 
     def verify_token(self, token: str) -> bool:
         """Verify a token matches this credential.
@@ -144,7 +144,7 @@ class Credential(BaseModel):
             reason: Human-readable reason for revocation.
         """
         self.status = "revoked"
-        self.revoked_at = datetime.utcnow()
+        self.revoked_at = datetime.now(timezone.utc)
         self.revocation_reason = reason
 
     def rotate(self) -> "Credential":
@@ -223,7 +223,7 @@ class Credential(BaseModel):
         Returns:
             A non-negative timedelta; zero if already expired.
         """
-        return max(timedelta(0), self.expires_at - datetime.utcnow())
+        return max(timedelta(0), self.expires_at - datetime.now(timezone.utc))
 
     def to_bearer_token(self) -> str:
         """Get the bearer token for Authorization header.

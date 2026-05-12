@@ -3,7 +3,7 @@
 """Tests for AgentMesh Identity module."""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from agentmesh.identity import (
@@ -154,7 +154,7 @@ class TestCredentials:
         cred = Credential.issue(agent_did="did:mesh:test")
         
         # Should expire in approximately 15 minutes
-        time_diff = cred.expires_at - datetime.utcnow()
+        time_diff = cred.expires_at - datetime.now(timezone.utc)
         assert 14 * 60 < time_diff.total_seconds() < 16 * 60
     
     def test_credential_expiry(self):

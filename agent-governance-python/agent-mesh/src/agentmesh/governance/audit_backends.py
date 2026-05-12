@@ -14,7 +14,7 @@ import hmac
 import json
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Protocol, runtime_checkable
 
@@ -292,7 +292,7 @@ class FileAuditSink:
             return
         if self._path.stat().st_size >= self._max_file_size:
             rotated = self._path.with_suffix(
-                f".{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.jsonl"
+                f".{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.jsonl"
             )
             os.replace(self._path, rotated)
             # Reset chain for the new file

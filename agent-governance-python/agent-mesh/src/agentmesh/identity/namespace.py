@@ -8,7 +8,7 @@ communicate freely; cross-namespace interaction requires explicit rules.
 Supports nested namespaces (e.g. "finance.trading" is a child of "finance").
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -37,7 +37,7 @@ class AgentNamespace(BaseModel):
         None, description="Optional trust policy governing this namespace"
     )
     members: set[str] = Field(default_factory=set, description="Agent DIDs in this namespace")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class NamespaceRule(BaseModel):

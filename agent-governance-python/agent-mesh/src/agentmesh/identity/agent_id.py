@@ -7,7 +7,7 @@ Every agent gets a unique, cryptographically bound identity issued by AgentMesh 
 Identity persists across restarts; revocation propagates in ≤5s.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import ClassVar, Optional, Literal
 from pydantic import BaseModel, Field, field_validator
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -93,8 +93,8 @@ class AgentIdentity(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = Field(None, description="Identity expiration")
 
     # Status
@@ -298,13 +298,13 @@ class AgentIdentity(BaseModel):
         """Revoke this identity."""
         self.status = "revoked"
         self.revocation_reason = reason
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def suspend(self, reason: str) -> None:
         """Temporarily suspend this identity."""
         self.status = "suspended"
         self.revocation_reason = reason
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def reactivate(self, *, override_reason: bool = False) -> None:
         """Reactivate a suspended identity.
@@ -327,13 +327,13 @@ class AgentIdentity(BaseModel):
                 )
         self.status = "active"
         self.revocation_reason = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def is_active(self) -> bool:
         """Check if identity is active and not expired."""
         if self.status != "active":
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 

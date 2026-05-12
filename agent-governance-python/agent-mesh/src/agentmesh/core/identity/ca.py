@@ -83,7 +83,7 @@ class RegistrationRequest(BaseModel):
 
     # Metadata
     metadata: dict[str, str] = Field(default_factory=dict)
-    requested_at: datetime = Field(default_factory=datetime.utcnow)
+    requested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RegistrationResponse(BaseModel):
@@ -112,7 +112,7 @@ class RegistrationResponse(BaseModel):
 
     # Status
     status: str = "success"
-    registered_at: datetime = Field(default_factory=datetime.utcnow)
+    registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     next_rotation_at: datetime
 
 

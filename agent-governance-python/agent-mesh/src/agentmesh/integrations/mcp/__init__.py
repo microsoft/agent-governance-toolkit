@@ -33,7 +33,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Awaitable
 from enum import Enum
 
@@ -81,7 +81,7 @@ class MCPToolCall:
     capabilities_checked: List[str] = field(default_factory=list)
 
     # Timing
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
 
     # Result
@@ -180,7 +180,7 @@ class TrustGatedMCPServer:
         # Check cache
         if client_did in self._verified_clients:
             cached_time = self._verified_clients[client_did]
-            if datetime.utcnow() - cached_time < self._verification_ttl:
+            if datetime.now(timezone.utc) - cached_time < self._verification_ttl:
                 return True
             # Expired — remove stale entry
             del self._verified_clients[client_did]
@@ -194,7 +194,7 @@ class TrustGatedMCPServer:
             try:
                 result = await self.trust_bridge.verify_peer(client_did)
                 if result:
-                    self._verified_clients[client_did] = datetime.utcnow()
+                    self._verified_clients[client_did] = datetime.now(timezone.utc)
                     return True
             except Exception as e:
                 logger.error(f"Trust verification failed: {e}")
@@ -204,7 +204,7 @@ class TrustGatedMCPServer:
         if client_card:
             if hasattr(client_card, "trust_score"):
                 if client_card.trust_score >= self.min_trust_score:
-                    self._verified_clients[client_did] = datetime.utcnow()
+                    self._verified_clients[client_did] = datetime.now(timezone.utc)
                     return True
 
         logger.warning(f"Client {client_did} failed trust verification")
@@ -212,7 +212,7 @@ class TrustGatedMCPServer:
 
     def _evict_expired_clients(self) -> None:
         """Remove expired entries from the verified clients cache."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expired = [
             did for did, ts in self._verified_clients.items()
             if now - ts >= self._verification_ttl
@@ -281,14 +281,14 @@ class TrustGatedMCPServer:
             args_size = 0
         if args_size > self._MAX_ARGUMENTS_SIZE:
             call.error = f"Arguments too large: {args_size} bytes exceeds {self._MAX_ARGUMENTS_SIZE} limit"
-            call.completed_at = datetime.utcnow()
+            call.completed_at = datetime.now(timezone.utc)
             self._record_call(call)
             return call
 
         # Check tool exists
         if tool_name not in self._tools:
             call.error = f"Unknown tool: {tool_name}"
-            call.completed_at = datetime.utcnow()
+            call.completed_at = datetime.now(timezone.utc)
             self._record_call(call)
             return call
 
@@ -299,7 +299,7 @@ class TrustGatedMCPServer:
             call.error = (
                 f"Insufficient trust score: {caller_trust_score} < {tool.min_trust_score}"
             )
-            call.completed_at = datetime.utcnow()
+            call.completed_at = datetime.now(timezone.utc)
             tool.failed_calls += 1
             self._record_call(call)
             logger.warning(f"Trust check failed for {caller_did} on {tool_name}")
@@ -309,7 +309,7 @@ class TrustGatedMCPServer:
         if tool.required_capability:
             if not self._check_capability(caller_capabilities or [], tool.required_capability):
                 call.error = f"Missing capability: {tool.required_capability}"
-                call.completed_at = datetime.utcnow()
+                call.completed_at = datetime.now(timezone.utc)
                 tool.failed_calls += 1
                 self._record_call(call)
                 logger.warning(f"Capability check failed for {caller_did} on {tool_name}")
@@ -322,7 +322,7 @@ class TrustGatedMCPServer:
         fail_count = self._tool_failures.get(tool_name, 0)
         if fail_count >= self._circuit_breaker_threshold:
             call.error = f"Circuit breaker open: {tool_name} has {fail_count} consecutive failures"
-            call.completed_at = datetime.utcnow()
+            call.completed_at = datetime.now(timezone.utc)
             self._record_call(call)
             return call
 
@@ -343,7 +343,7 @@ class TrustGatedMCPServer:
             call.success = True
             call.result = result
             tool.total_calls += 1
-            tool.last_called = datetime.utcnow()
+            tool.last_called = datetime.now(timezone.utc)
             self._tool_failures.pop(tool_name, None)  # reset on success
             logger.info(f"Tool {tool_name} invoked successfully by {caller_did}")
         except Exception as e:
@@ -354,7 +354,7 @@ class TrustGatedMCPServer:
             self._tool_failures[tool_name] = self._tool_failures.get(tool_name, 0) + 1
             logger.error("Tool %s failed with %s (caller: %s)", tool_name, error_type, caller_did)
 
-        call.completed_at = datetime.utcnow()
+        call.completed_at = datetime.now(timezone.utc)
         self._record_call(call)
         return call
 

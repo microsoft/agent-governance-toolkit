@@ -495,7 +495,7 @@ class AuditLog:
         entries = self.query(start_time=start_time, end_time=end_time, limit=10000)
 
         return {
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
             "merkle_root": self._chain.get_root_hash(),
             "chain_root": self._chain.get_root_hash(),
             "entry_count": len(entries),

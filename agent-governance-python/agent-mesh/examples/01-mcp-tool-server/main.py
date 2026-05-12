@@ -11,7 +11,7 @@ MCP is Anthropic's protocol for connecting AI models to tools and data sources.
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -250,7 +250,7 @@ class GovernedMCPServer:
     def _audit_log_event(self, action: str, params: Dict[str, Any], result: str):
         """Log event to audit trail."""
         entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "agent": self.identity.did,
             "action": action,
             "params": params,

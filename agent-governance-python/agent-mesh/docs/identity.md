@@ -77,7 +77,7 @@ identity_document = {
     "public_key": base64.b64encode(public_bytes).decode(),
     "sponsor": "alice@company.com",
     "capabilities": ["read:customer-data"],
-    "created_at": datetime.utcnow().isoformat(),
+    "created_at": datetime.now(timezone.utc).isoformat(),
 }
 
 # 4. Sign the identity document

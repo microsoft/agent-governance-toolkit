@@ -212,7 +212,7 @@ class TestSVID:
             SVID.parse_spiffe_id("http://not-spiffe")
 
     def test_is_valid_true(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         svid = SVID(
             spiffe_id="spiffe://d/p",
             trust_domain="d",
@@ -223,7 +223,7 @@ class TestSVID:
         assert svid.is_valid() is True
 
     def test_is_valid_expired(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         svid = SVID(
             spiffe_id="spiffe://d/p",
             trust_domain="d",
@@ -234,7 +234,7 @@ class TestSVID:
         assert svid.is_valid() is False
 
     def test_time_remaining_positive(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         svid = SVID(
             spiffe_id="spiffe://d/p",
             trust_domain="d",
@@ -245,7 +245,7 @@ class TestSVID:
         assert svid.time_remaining() > timedelta(0)
 
     def test_time_remaining_expired(self):
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         svid = SVID(
             spiffe_id="spiffe://d/p",
             trust_domain="d",
@@ -391,7 +391,7 @@ class TestSPIFFERegistry:
 
     def test_validate_svid_unregistered_agent(self):
         reg = SPIFFERegistry()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         svid = SVID(
             spiffe_id="spiffe://agentmesh.local/agentmesh/unknown",
             trust_domain="agentmesh.local",
@@ -1116,7 +1116,7 @@ class TestCapabilityGrant:
     def test_is_valid_expired(self):
         g = CapabilityGrant.create(
             "read:data", "did:mesh:1", "did:mesh:0",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
         )
         assert g.is_valid() is False
 
@@ -1288,7 +1288,7 @@ class TestHandshakeChallenge:
 
     def test_is_expired_old(self):
         c = HandshakeChallenge.generate()
-        c.timestamp = datetime.utcnow() - timedelta(seconds=60)
+        c.timestamp = datetime.now(timezone.utc) - timedelta(seconds=60)
         c.expires_in_seconds = 30
         assert c.is_expired() is True
 
@@ -1401,7 +1401,7 @@ class TestTrustHandshake:
         me = AgentIdentity.create(name="me-re", sponsor="me@test.com", capabilities=["read:data"])
         th = TrustHandshake(agent_did=str(me.did), identity=me)
         challenge = HandshakeChallenge.generate()
-        challenge.timestamp = datetime.utcnow() - timedelta(seconds=60)
+        challenge.timestamp = datetime.now(timezone.utc) - timedelta(seconds=60)
         with pytest.raises(ValueError, match="expired"):
             await th.respond(challenge, ["read:data"], 750, identity=me)
 
@@ -1418,14 +1418,14 @@ class TestTrustHandshake:
 
     def test_clear_cache(self):
         th = TrustHandshake(agent_did="did:mesh:me")
-        th._verified_peers["did:mesh:peer"] = (MagicMock(), datetime.utcnow())
+        th._verified_peers["did:mesh:peer"] = (MagicMock(), datetime.now(timezone.utc))
         th.clear_cache()
         assert len(th._verified_peers) == 0
 
     @pytest.mark.asyncio
     async def test_get_cached_result_expired(self):
         th = TrustHandshake(agent_did="did:mesh:me", cache_ttl_seconds=0)
-        th._verified_peers["did:mesh:peer"] = (MagicMock(), datetime.utcnow() - timedelta(seconds=1))
+        th._verified_peers["did:mesh:peer"] = (MagicMock(), datetime.now(timezone.utc) - timedelta(seconds=1))
         assert await th._get_cached_result("did:mesh:peer") is None
         assert "did:mesh:peer" not in th._verified_peers
 
@@ -1447,7 +1447,7 @@ class TestCredential:
         c = Credential.issue("did:mesh:1", ttl_seconds=0)
         # Might still be valid since issued_at == expires_at edge
         # Force expiration
-        c.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        c.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         assert c.is_valid() is False
 
     def test_is_valid_revoked(self):
@@ -1663,7 +1663,7 @@ class TestDelegationLink:
 
     def test_is_valid_expired(self):
         link = self._make_link()
-        link.expires_at = datetime.utcnow() - timedelta(hours=1)
+        link.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         assert link.is_valid() is False
 
     def test_is_valid_bad_hash(self):

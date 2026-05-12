@@ -7,7 +7,7 @@ Direct passthrough bridge.
 Maintains the same API surface for compatibility.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
 from pydantic import BaseModel, Field
 import hashlib
@@ -172,7 +172,7 @@ class TrustBridge(BaseModel):
                 protocol=protocol,
                 trust_score=result.trust_score,
                 trust_verified=True,
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
                 capabilities=result.capabilities,
             )
             self.peers[peer_did] = peer
@@ -394,7 +394,7 @@ class A2AAdapter:
             raise PermissionError("Peer not trusted")
 
         return {
-            "task_id": f"task_{peer_did}_{datetime.utcnow().timestamp()}",
+            "task_id": f"task_{peer_did}_{datetime.now(timezone.utc).timestamp()}",
             "status": "created",
             "type": task_type,
         }
