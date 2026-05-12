@@ -153,6 +153,41 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 }
 
 /**
+ * Split `expr` on the literal separator `sep` only at positions that are
+ * outside of single- or double-quoted string literals. A naive
+ * `String.split(' or ')` mis-splits expressions like
+ * `name == 'foo or bar'` because the operator substring also appears inside
+ * the string literal; this helper walks the expression once, tracking quote
+ * state, and only treats separator occurrences outside quotes as boundaries.
+ * If no out-of-quote occurrence is found, the result has length 1 and the
+ * caller falls through to the comparison-operator branches.
+ */
+function splitOutsideQuotes(expr: string, sep: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i <= expr.length - sep.length; i++) {
+    const ch = expr[i];
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (!inSingle && !inDouble && expr.startsWith(sep, i)) {
+      parts.push(expr.slice(start, i));
+      start = i + sep.length;
+      i += sep.length - 1;
+    }
+  }
+  parts.push(expr.slice(start));
+  return parts;
+}
+
+/**
  * Evaluate a condition expression string against a context dictionary.
  * Supports: equality, inequality, numeric comparisons, `in` operator,
  * boolean attributes, and compound `and`/`or`.
@@ -160,16 +195,17 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 function evaluateExpression(expr: string, context: Record<string, unknown>): boolean {
   const trimmed = expr.trim();
 
-  // OR conditions (lowest precedence)
-  if (trimmed.includes(' or ')) {
-    const parts = trimmed.split(' or ');
-    return parts.some((p) => evaluateExpression(p.trim(), context));
+  // OR conditions (lowest precedence) — only split on out-of-quote separators
+  // so `name == 'foo or bar'` is not mis-tokenised.
+  const orParts = splitOutsideQuotes(trimmed, ' or ');
+  if (orParts.length > 1) {
+    return orParts.some((p) => evaluateExpression(p.trim(), context));
   }
 
-  // AND conditions
-  if (trimmed.includes(' and ')) {
-    const parts = trimmed.split(' and ');
-    return parts.every((p) => evaluateExpression(p.trim(), context));
+  // AND conditions — same out-of-quote split.
+  const andParts = splitOutsideQuotes(trimmed, ' and ');
+  if (andParts.length > 1) {
+    return andParts.every((p) => evaluateExpression(p.trim(), context));
   }
 
   // NOT IN: path not in ['a', 'b']
