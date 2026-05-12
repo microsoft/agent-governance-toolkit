@@ -18,7 +18,14 @@ class RAGPolicy:
         denied_collections: Collections that are always blocked, regardless
             of the allow list.
         max_retrievals_per_minute: Maximum retrieval calls per agent per
-            60-second sliding window. ``0`` disables rate limiting.
+            sliding window. ``0`` disables rate limiting. The window
+            length defaults to 60 seconds but can be overridden with
+            ``rate_limit_window_seconds``.
+        rate_limit_window_seconds: Length of the sliding rate-limit
+            window in seconds. Defaults to ``60``. Setting this lets
+            callers tune the limiter for shorter (burst-resistant) or
+            longer (quota-style) policies without monkey-patching the
+            governor.
         content_policies: Active content scan categories. Supported values:
             ``"block_pii"`` and ``"block_injections"``. Empty list disables
             content scanning.
@@ -72,6 +79,7 @@ class RAGPolicy:
     allowed_collections: Optional[List[str]] = None
     denied_collections: List[str] = field(default_factory=list)
     max_retrievals_per_minute: int = 0
+    rate_limit_window_seconds: int = 60
     content_policies: List[str] = field(default_factory=list)
     audit_enabled: bool = True
     audit_log_path: Optional[str] = None
@@ -79,7 +87,18 @@ class RAGPolicy:
     cedar_policy_path: Optional[str] = None
 
     def __post_init__(self) -> None:
-        """Load Cedar policy from file if path is provided."""
+        """Load Cedar policy from file if path is provided.
+
+        Also validates ``rate_limit_window_seconds`` — a non-positive
+        window would either disable the limiter or push the sliding
+        cutoff into the future, both of which are configuration
+        errors.
+        """
+        if self.rate_limit_window_seconds <= 0:
+            raise ValueError(
+                "rate_limit_window_seconds must be positive; got "
+                f"{self.rate_limit_window_seconds!r}"
+            )
         if self.cedar_policy_path and not self.cedar_policy:
             from pathlib import Path
             path = Path(self.cedar_policy_path)

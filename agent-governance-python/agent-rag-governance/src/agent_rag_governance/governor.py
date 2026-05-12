@@ -183,7 +183,9 @@ class RAGGovernor:
     def __init__(self, policy: RAGPolicy, agent_id: str = "default") -> None:
         self.policy = policy
         self.agent_id = agent_id
-        self._rate_limiter = RateLimiter(window_seconds=60)
+        self._rate_limiter = RateLimiter(
+            window_seconds=policy.rate_limit_window_seconds,
+        )
         self._content_scanner = ContentScanner(policy.content_policies)
         self._audit_logger: Optional[AuditLogger] = (
             AuditLogger(policy.audit_log_path) if policy.audit_enabled else None
@@ -284,7 +286,11 @@ class RAGGovernor:
                     policy_triggered="max_retrievals_per_minute",
                 )
                 self._audit_logger.emit(entry)
-            raise RateLimitExceededError(self.agent_id, limit)
+            raise RateLimitExceededError(
+                self.agent_id,
+                limit,
+                window_seconds=self.policy.rate_limit_window_seconds,
+            )
 
     def _retrieve(self, retriever: Any, query: str, kwargs: dict[str, Any]) -> List[Any]:
         if hasattr(retriever, "invoke"):
