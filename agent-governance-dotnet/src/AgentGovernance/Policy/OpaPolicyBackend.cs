@@ -33,7 +33,20 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
     private static readonly Regex AllowBlockRegex = new(@"allow\s*\{(?<body>.*?)\}", RegexOptions.Singleline | RegexOptions.CultureInvariant);
     private static readonly Regex EqualityRegex = new(@"^input\.(?<field>[A-Za-z0-9_]+)\s*(?<op>==|!=)\s*(?<value>true|false|""[^""]*"")$", RegexOptions.CultureInvariant);
     private static readonly Regex NotRegex = new(@"^not\s+input\.(?<field>[A-Za-z0-9_]+)$", RegexOptions.CultureInvariant);
-    private static readonly HttpClient HttpClient = new();
+
+    // Static HttpClient backed by a SocketsHttpHandler with a bounded
+    // PooledConnectionLifetime so long-running processes recycle the
+    // connection (and re-resolve DNS) every two minutes. Without this, a
+    // process-lifetime singleton HttpClient holds the original DNS answer
+    // forever and ignores rolling-deploy / scale-out / blue-green moves of
+    // the OPA endpoint. Per-request deadlines are enforced via CancellationToken
+    // (CancellationTokenSource.CancelAfter(_timeout)); HttpClient.Timeout is
+    // left at its default and not used as the primary deadline.
+    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1)
+    });
 
     private readonly string? _regoContent;
     private readonly string? _regoPath;
