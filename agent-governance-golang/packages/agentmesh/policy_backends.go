@@ -18,6 +18,16 @@ import (
 	"time"
 )
 
+// Package-level Cedar parsing regexes. Compiled once at package init
+// rather than per call — `parseCedarStatements` and `toolToCedarAction`
+// can run on every policy evaluation, so the previous per-call
+// `regexp.MustCompile` was wasted work.
+var (
+	cedarStatementPattern = regexp.MustCompile(`(?s)(permit|forbid)\s*\((.*?)\)\s*;`)
+	cedarActionPattern    = regexp.MustCompile(`action\s*==\s*Action::"([^"]+)"`)
+	cedarActionTokenSplit = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+)
+
 // OPAMode controls how an OPA/Rego backend evaluates policies.
 type OPAMode string
 
@@ -654,14 +664,12 @@ func buildCedarRequest(context map[string]interface{}) map[string]interface{} {
 }
 
 func parseCedarStatements(content string) []cedarStatement {
-	pattern := regexp.MustCompile(`(?s)(permit|forbid)\s*\((.*?)\)\s*;`)
-	actionPattern := regexp.MustCompile(`action\s*==\s*Action::"([^"]+)"`)
-	matches := pattern.FindAllStringSubmatch(content, -1)
+	matches := cedarStatementPattern.FindAllStringSubmatch(content, -1)
 	statements := make([]cedarStatement, 0, len(matches))
 
 	for _, match := range matches {
 		constraint := ""
-		if actionMatch := actionPattern.FindStringSubmatch(match[2]); len(actionMatch) == 2 {
+		if actionMatch := cedarActionPattern.FindStringSubmatch(match[2]); len(actionMatch) == 2 {
 			constraint = fmt.Sprintf(`Action::"%s"`, actionMatch[1])
 		}
 		statements = append(statements, cedarStatement{
@@ -675,8 +683,7 @@ func parseCedarStatements(content string) []cedarStatement {
 }
 
 func toolToCedarAction(toolName string) string {
-	splitter := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	parts := splitter.Split(toolName, -1)
+	parts := cedarActionTokenSplit.Split(toolName, -1)
 	builder := strings.Builder{}
 	for _, part := range parts {
 		if part == "" {
