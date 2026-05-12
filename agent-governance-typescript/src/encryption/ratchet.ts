@@ -13,7 +13,7 @@ import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
-import { webcrypto } from "node:crypto";
+import { timingSafeEqual, webcrypto } from "node:crypto";
 
 const randomBytes = (n: number): Uint8Array => {
   const buf = new Uint8Array(n);
@@ -98,13 +98,19 @@ function skippedKeyId(dhPub: Uint8Array, n: number): string {
   return `${Buffer.from(dhPub).toString("hex")}:${n}`;
 }
 
+// Used to detect a DH ratchet step by comparing the locally-cached
+// `dhRemotePublic` against the attacker-controlled header's `dhPublicKey`.
+// The per-byte early-return loop leaked match-prefix length via timing; the
+// X25519 public keys involved are exchanged in the clear over the wire so
+// the leak yields no new information in the current protocol, but
+// `crypto.timingSafeEqual` is the right primitive for key-shaped material
+// and protects against the same comparison being lifted into a future caller
+// that does treat the public key as sensitive (e.g. an unpublished one-time
+// pre-key the recipient committed to but never broadcast).
 function arraysEqual(a: Uint8Array | null, b: Uint8Array | null): boolean {
   if (a === null || b === null) return a === b;
   if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
+  return timingSafeEqual(a, b);
 }
 
 export class DoubleRatchet {
