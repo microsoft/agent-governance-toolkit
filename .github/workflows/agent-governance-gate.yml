@@ -1,0 +1,122 @@
+name: Agent Governance Gate
+
+# Reusable workflow — call from any deployment workflow:
+#
+#   jobs:
+#     governance:
+#       uses: microsoft/agent-governance-toolkit/.github/workflows/agent-governance-gate.yml@main
+#       with:
+#         policy_file: .agents/security.yaml
+#         agent_manifest: agents.yaml
+#         require_receipt: true
+#       secrets:
+#         signing_key: ${{ secrets.GOVERNANCE_SIGNING_KEY }}
+
+on:
+  workflow_call:
+    inputs:
+      policy_file:
+        description: "Path to the agent governance policy YAML file"
+        required: false
+        default: ".agents/security.yaml"
+        type: string
+      agent_manifest:
+        description: "Path to the agent manifest YAML file"
+        required: false
+        default: "agents.yaml"
+        type: string
+      python_version:
+        description: "Python version to use"
+        required: false
+        default: "3.11"
+        type: string
+      require_receipt:
+        description: "Fail if a signed receipt cannot be produced"
+        required: false
+        default: false
+        type: boolean
+      audit_log:
+        description: "Path to write the JSONL audit log entry"
+        required: false
+        default: ".governance/audit.jsonl"
+        type: string
+    secrets:
+      signing_key:
+        description: "Ed25519 private key PEM for signing deployment receipts (optional)"
+        required: false
+    outputs:
+      gate_result:
+        description: "Governance gate result: 'passed' or 'failed'"
+        value: ${{ jobs.governance-gate.outputs.gate_result }}
+      receipt_id:
+        description: "Generated deployment receipt ID"
+        value: ${{ jobs.governance-gate.outputs.receipt_id }}
+
+permissions:
+  contents: read
+
+jobs:
+  governance-gate:
+    name: Governance Gate
+    runs-on: ubuntu-latest
+
+    outputs:
+      gate_result: ${{ steps.gate.outputs.gate_result }}
+      receipt_id:  ${{ steps.gate.outputs.receipt_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install dependencies
+        run: pip install --no-cache-dir pyyaml cryptography
+
+      - name: Run governance gate
+        id: gate
+        env:
+          GOVERNANCE_POLICY:          ${{ inputs.policy_file }}
+          GOVERNANCE_MANIFEST:        ${{ inputs.agent_manifest }}
+          GITHUB_SHA:                 ${{ github.sha }}
+          GITHUB_ACTOR:               ${{ github.actor }}
+          GOVERNANCE_SIGNING_KEY:     ${{ secrets.signing_key }}
+          GOVERNANCE_REQUIRE_RECEIPT: ${{ inputs.require_receipt }}
+          AUDIT_LOG:                  ${{ inputs.audit_log }}
+        run: |
+          set +e
+          python scripts/governance_gate.py \
+            --policy      "$GOVERNANCE_POLICY" \
+            --manifest    "$GOVERNANCE_MANIFEST" \
+            --commit      "$GITHUB_SHA" \
+            --deployer    "$GITHUB_ACTOR" \
+            --audit-log   "$AUDIT_LOG" \
+            ${{ inputs.require_receipt && '--require-receipt' || '' }}
+          EXIT_CODE=$?
+          set -e
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "gate_result=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "gate_result=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Extract receipt ID from audit log for downstream jobs
+          if [ -f "$AUDIT_LOG" ]; then
+            RECEIPT_ID=$(tail -1 "$AUDIT_LOG" | python3 -c "import sys,json; print(json.load(sys.stdin).get('receipt_id',''))" 2>/dev/null || echo "")
+            echo "receipt_id=$RECEIPT_ID" >> "$GITHUB_OUTPUT"
+          fi
+
+          exit $EXIT_CODE
+
+      - name: Upload audit log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: governance-audit-log
+          path: ${{ inputs.audit_log }}
+          if-no-files-found: ignore
+          retention-days: 90
