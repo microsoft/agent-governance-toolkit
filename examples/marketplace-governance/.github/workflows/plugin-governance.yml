@@ -16,9 +16,13 @@ on:
       - 'plugins/**'
       - 'policies/**'
 
+# Workflow-level permissions are read-only. Each job below sets the
+# narrowest write scope it actually needs (principle of least privilege —
+# https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token).
+# Downstream consumers copy this file as a starting point, so per-job
+# scoping is important even though the example itself doesn't run here.
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   # ------------------------------------------------------------------
@@ -27,6 +31,8 @@ jobs:
   validate-manifest:
     name: Validate Plugin Manifests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -61,6 +67,8 @@ jobs:
     name: Evaluate Marketplace Policy
     runs-on: ubuntu-latest
     needs: validate-manifest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -104,6 +112,8 @@ jobs:
     name: Governance Verification
     runs-on: ubuntu-latest
     needs: evaluate-policy
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
