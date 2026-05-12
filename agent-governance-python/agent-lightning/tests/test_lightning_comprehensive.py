@@ -149,6 +149,44 @@ class TestGovernedRunnerStep:
         with pytest.raises(PolicyViolationError):
             runner._handle_violation("P", "desc", "critical", True)
 
+    def test_step_unexpected_kernel_failure_logs_traceback(self, caplog):
+        """Unexpected exceptions inside the kernel must surface a traceback.
+
+        Regression for an earlier formulation that used
+        ``logger.error(f"...{e}")`` in the bare-except branch: the stack
+        frame information was silently dropped, which made non-policy
+        kernel failures impossible to diagnose from the logs.
+        Switching to ``logger.exception`` preserves ``exc_info`` so the
+        traceback travels with the log record.
+        """
+        kernel = _make_mock_kernel()
+        runner = GovernedRunner(kernel)
+
+        async def _exploding_agent(_: Any) -> Any:
+            raise RuntimeError("kernel boom")
+
+        runner.agent = _exploding_agent  # type: ignore[assignment]
+
+        # Force the "no execute method" branch so ``self.agent`` is invoked
+        # directly. ``hasattr(...) == False`` for both ``execute_async`` and
+        # ``execute`` ensures we hit the fallback in ``step``.
+        kernel = MagicMock(spec=[])
+        runner.kernel = kernel
+
+        with caplog.at_level("ERROR", logger="agent_lightning_gov.runner"):
+            rollout = asyncio.run(runner.step("trigger"))
+
+        assert rollout.success is False
+        # ``logger.exception`` records the active exception in ``exc_info``,
+        # which is the contract that ``logger.error(f"...{e}")`` violated.
+        runner_records = [
+            r for r in caplog.records if r.name == "agent_lightning_gov.runner"
+        ]
+        assert any(
+            "Execution failed" in r.getMessage() and r.exc_info is not None
+            for r in runner_records
+        )
+
 
 class TestGovernedRunnerViolationTracking:
     def test_violation_count_increments(self):

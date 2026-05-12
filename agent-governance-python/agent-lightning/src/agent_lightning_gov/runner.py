@@ -300,10 +300,14 @@ class GovernedRunner(Generic[T_task]):
                 success = False
                 logger.error(f"Execution blocked by policy: {e.violation.description}")
 
-            except Exception as e:
+            except Exception:
                 result = None
                 success = False
-                logger.error(f"Execution failed: {e}")
+                # logger.exception captures the active traceback so unexpected
+                # kernel failures are diagnosable. ``logger.error(f"...{e}")``
+                # silently dropped the stack frame information that operators
+                # need to localise the failure.
+                logger.exception("Execution failed")
         finally:
             _active_violations_ctx.reset(v_token)
             _active_signals_ctx.reset(s_token)
