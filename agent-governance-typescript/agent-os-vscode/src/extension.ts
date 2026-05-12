@@ -1151,5 +1151,12 @@ function showWelcomeMessage(): void {
         } else if (selection === 'Learn More') {
             vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/agent-governance-toolkit'));
         }
+    }, (err) => {
+        // Surface rejection rather than letting it float — VS Code's
+        // showInformationMessage Thenable can reject if the host is
+        // shutting down or the dialog is dismissed by an extension-host
+        // crash. Floating rejections fail noisily on recent Node defaults
+        // and silently elsewhere.
+        console.error('Agent OS: showWelcomeMessage failed', err);
     });
 }

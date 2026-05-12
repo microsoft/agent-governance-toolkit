@@ -238,6 +238,13 @@ export class EnterpriseAuthProvider {
                 if (selection === 'Sign In') {
                     this.signIn();
                 }
+            }, (err) => {
+                // Surface rejection rather than letting it float — the VS
+                // Code Thenable can reject if the host is shutting down or
+                // the message dialog is torn down by an extension-host
+                // crash. Floating rejections fail noisily on recent Node
+                // defaults and silently elsewhere.
+                console.error('SsoProvider: requireAuth dialog failed', err);
             });
             return false;
         }
