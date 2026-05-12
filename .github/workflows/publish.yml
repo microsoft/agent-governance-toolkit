@@ -38,6 +38,9 @@ jobs:
     steps:
       - name: Resolve Python package matrix
         id: resolve
+        env:
+          INPUT: ${{ github.event.inputs.package }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           # Complete list of publishable Python packages (41 packages)
           ALL='[
@@ -86,12 +89,19 @@ jobs:
           # Compact the JSON
           ALL=$(echo "$ALL" | jq -c '.')
 
-          INPUT="${{ github.event.inputs.package }}"
-          if [ "${{ github.event_name }}" = "release" ] || [ "$INPUT" = "all" ] || [ "$INPUT" = "all-python" ]; then
+          # $INPUT and $EVENT_NAME come from the step env block, not
+          # from a GHA expression interpolated into the shell body, so
+          # an attacker-controlled inputs.package cannot break out into
+          # an injected shell command. Same hardening on the jq filter
+          # below: pass $INPUT as a jq variable via --arg rather than
+          # into the program text, so quote characters in the input
+          # cannot break out of the string and execute attacker-
+          # controlled jq.
+          if [ "$EVENT_NAME" = "release" ] || [ "$INPUT" = "all" ] || [ "$INPUT" = "all-python" ]; then
             echo "matrix={\"include\":$ALL}" >> "$GITHUB_OUTPUT"
             echo "any=true" >> "$GITHUB_OUTPUT"
           elif [ -n "$INPUT" ] && [ "$INPUT" != "agent-governance-dotnet" ]; then
-            FILTERED=$(echo "$ALL" | jq -c "[.[] | select(.name == \"$INPUT\")]")
+            FILTERED=$(echo "$ALL" | jq -c --arg name "$INPUT" '[.[] | select(.name == $name)]')
             if [ "$FILTERED" = "[]" ]; then
               echo "::error::Unknown package '$INPUT'. Run with 'all' to see available packages."
               echo "any=false" >> "$GITHUB_OUTPUT"
