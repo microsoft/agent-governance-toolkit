@@ -5,6 +5,8 @@ package agentmesh
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -12,6 +14,22 @@ import (
 	"sync"
 	"time"
 )
+
+// randomHex returns 2*n hex characters drawn from crypto/rand.
+//
+// A failure from crypto/rand indicates a broken entropy source (e.g.
+// /dev/urandom is unreachable) — the sandbox cannot safely produce
+// unique session identifiers in that state, so we panic rather than
+// return a degraded fallback. This is the same convention Go uses for
+// `rand.Read` in security-critical contexts (`crypto/rsa.GenerateKey`
+// etc.).
+func randomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("sandbox: crypto/rand failed: %v", err))
+	}
+	return hex.EncodeToString(b)
+}
 
 // Docker subprocess deadlines. ``docker exec`` runs user-supplied code so
 // it falls back to SandboxConfig.TimeoutSeconds when set; the others are
@@ -161,7 +179,11 @@ func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxCon
 		config = DefaultSandboxConfig()
 	}
 
-	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
+	// `time.Now().UnixNano()` alone collides on low-resolution clocks
+	// (Windows commonly resolves to ~100ns) and on closely-spaced
+	// concurrent calls; append a crypto/rand suffix so two sessions
+	// created in the same nanosecond cannot map to the same container.
+	sessionID := fmt.Sprintf("%d-%s", time.Now().UnixNano(), randomHex(8))
 	name := containerName(agentID, sessionID)
 
 	args := []string{
@@ -215,7 +237,9 @@ func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*E
 		return nil, fmt.Errorf("session %s:%s not found", agentID, sessionID)
 	}
 
-	execID := fmt.Sprintf("exec-%d", time.Now().UnixNano())
+	// Same collision concern as sessionID — keep the nanosecond prefix
+	// for human-readable ordering and append a random suffix.
+	execID := fmt.Sprintf("exec-%d-%s", time.Now().UnixNano(), randomHex(4))
 	start := time.Now()
 
 	ctx, cancel := context.WithTimeout(context.Background(), dockerExecTimeout)

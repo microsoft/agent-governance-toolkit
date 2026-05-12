@@ -129,3 +129,20 @@ func TestCreateSessionAcceptsValidAgentID(t *testing.T) {
 		t.Fatalf("regex rejected a valid agentID: %v", err)
 	}
 }
+
+func TestRandomHexProducesUniqueValues(t *testing.T) {
+	// 1000 consecutive calls must all be distinct. Two collisions from
+	// crypto/rand at 16 hex characters (8 bytes) is astronomically
+	// unlikely; if this fails, the entropy source is broken.
+	seen := make(map[string]struct{}, 1000)
+	for i := 0; i < 1000; i++ {
+		v := randomHex(8)
+		if len(v) != 16 {
+			t.Fatalf("randomHex(8) returned %d chars, want 16", len(v))
+		}
+		if _, dup := seen[v]; dup {
+			t.Fatalf("randomHex collided after %d iterations: %q", i, v)
+		}
+		seen[v] = struct{}{}
+	}
+}
