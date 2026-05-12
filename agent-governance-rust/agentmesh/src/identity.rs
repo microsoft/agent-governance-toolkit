@@ -48,10 +48,9 @@ impl AgentIdentity {
 
     /// Verify a signature against data using this identity's public key.
     pub fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
-        if signature.len() != 64 {
+        let Ok(sig_bytes) = <[u8; 64]>::try_from(signature) else {
             return false;
-        }
-        let sig_bytes: [u8; 64] = signature.try_into().unwrap();
+        };
         let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
         self.public_key.verify(data, &sig).is_ok()
     }
@@ -121,17 +120,17 @@ pub struct PublicIdentity {
 impl PublicIdentity {
     /// Verify a signature using this public identity.
     pub fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
-        if self.public_key.len() != 32 || signature.len() != 64 {
+        let Ok(key_bytes) = <[u8; 32]>::try_from(self.public_key.as_slice()) else {
             return false;
-        }
-        let key_bytes: [u8; 32] = self.public_key.as_slice().try_into().unwrap();
-        let sig_bytes: [u8; 64] = signature.try_into().unwrap();
-        if let Ok(verifying_key) = VerifyingKey::from_bytes(&key_bytes) {
-            let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
-            verifying_key.verify(data, &sig).is_ok()
-        } else {
-            false
-        }
+        };
+        let Ok(sig_bytes) = <[u8; 64]>::try_from(signature) else {
+            return false;
+        };
+        let Ok(verifying_key) = VerifyingKey::from_bytes(&key_bytes) else {
+            return false;
+        };
+        let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+        verifying_key.verify(data, &sig).is_ok()
     }
 }
 
@@ -264,6 +263,29 @@ mod tests {
             capabilities: vec![],
         };
         assert!(!public.verify(b"data", &[0u8; 64]));
+    }
+
+    #[test]
+    fn test_public_identity_oversize_public_key_rejects() {
+        // Exercises the let-else on `<[u8; 32]>::try_from(public_key)`:
+        // 33 bytes (one too many) must be rejected, not panic.
+        let public = PublicIdentity {
+            did: "did:agentmesh:test".to_string(),
+            public_key: vec![0u8; 33],
+            capabilities: vec![],
+        };
+        assert!(!public.verify(b"data", &[0u8; 64]));
+    }
+
+    #[test]
+    fn test_public_identity_oversize_signature_rejects() {
+        // Exercises the let-else on `<[u8; 64]>::try_from(signature)`.
+        let id = AgentIdentity::generate("oversize-sig", vec![]).unwrap();
+        let json = id.to_json().unwrap();
+        let public = AgentIdentity::from_json(&json).unwrap();
+        assert!(!public.verify(b"data", &[0u8; 65]));
+        assert!(!public.verify(b"data", &[0u8; 63]));
+        assert!(!public.verify(b"data", &[]));
     }
 
     #[test]
