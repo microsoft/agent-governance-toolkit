@@ -77,3 +77,34 @@ public interface IExternalPolicyBackend
         CancellationToken cancellationToken = default)
         => Task.FromResult(Evaluate(context));
 }
+
+/// <summary>
+/// Internal helpers shared by external policy backends.
+/// </summary>
+internal static class ExternalBackendUtilities
+{
+    /// <summary>
+    /// Checks whether <paramref name="executable"/> resolves to an existing file
+    /// on any directory of the PATH environment variable. Used by external
+    /// backends in Auto mode to decide between the CLI and the built-in
+    /// evaluator. Returns <c>false</c> when PATH is unset or empty.
+    /// </summary>
+    public static bool CommandExists(string executable)
+    {
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (File.Exists(Path.Combine(directory, executable)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

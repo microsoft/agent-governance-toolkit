@@ -318,7 +318,7 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
     private ExternalPolicyDecision? TryEvaluateWithCli(IReadOnlyDictionary<string, object> context)
     {
         var opaExecutable = OperatingSystem.IsWindows() ? "opa.exe" : "opa";
-        if (!CommandExists(opaExecutable))
+        if (!ExternalBackendUtilities.CommandExists(opaExecutable))
         {
             return null;
         }
@@ -543,26 +543,6 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
         startInfo.ArgumentList.Add(regoPath);
         startInfo.ArgumentList.Add(query);
         return startInfo;
-    }
-
-    private static bool CommandExists(string executable)
-    {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return false;
-        }
-
-        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var candidate = Path.Combine(directory, executable);
-            if (File.Exists(candidate))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private string? ResolveRegoContent()

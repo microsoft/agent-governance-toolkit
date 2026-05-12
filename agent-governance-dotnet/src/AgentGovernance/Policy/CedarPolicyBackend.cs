@@ -95,7 +95,7 @@ public sealed class CedarPolicyBackend : IExternalPolicyBackend
             return _mode;
         }
 
-        return CommandExists(OperatingSystem.IsWindows() ? "cedar.exe" : "cedar")
+        return ExternalBackendUtilities.CommandExists(OperatingSystem.IsWindows() ? "cedar.exe" : "cedar")
             ? CedarEvaluationMode.Cli
             : CedarEvaluationMode.Builtin;
     }
@@ -355,25 +355,6 @@ public sealed class CedarPolicyBackend : IExternalPolicyBackend
         startInfo.ArgumentList.Add("--request-json");
         startInfo.ArgumentList.Add(requestPath);
         return startInfo;
-    }
-
-    private static bool CommandExists(string executable)
-    {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return false;
-        }
-
-        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (File.Exists(Path.Combine(directory, executable)))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private sealed record CedarStatement(string Effect, string? ActionConstraint);
