@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nostr_wot_agentmesh"
-version = "3.5.0"
+version = "3.6.0"
 description = "Nostr Web of Trust integration for AgentMesh trust engine"
 readme = "README.md"
 license = {text = "MIT"}

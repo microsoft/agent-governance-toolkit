@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openshell_agentmesh"
-version = "3.5.0"
+version = "3.6.0"
 description = "Public Preview - OpenShell + AgentMesh governance skill"
 readme = "README.md"
 license = {text = "MIT"}
