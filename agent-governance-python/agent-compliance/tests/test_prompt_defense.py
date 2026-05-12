@@ -9,6 +9,8 @@ import hashlib
 
 
 from agent_compliance.prompt_defense import (
+    GRADE_THRESHOLD_LIST,
+    GRADE_THRESHOLDS,
     PromptDefenseConfig,
     PromptDefenseEvaluator,
     PromptDefenseFinding,
@@ -77,6 +79,24 @@ class TestScoreToGrade:
     def test_grade_f(self) -> None:
         assert _score_to_grade(29) == "F"
         assert _score_to_grade(0) == "F"
+
+    def test_threshold_list_is_descending(self) -> None:
+        # The list-of-tuples encoding pins scan order independently of
+        # Python's insertion-ordered-dict semantics. Each successive
+        # threshold must be strictly lower than the previous one for
+        # the top-down "first match wins" loop to be correct.
+        thresholds = [t for _, t in GRADE_THRESHOLD_LIST]
+        assert thresholds == sorted(thresholds, reverse=True)
+
+    def test_threshold_list_matches_legacy_dict(self) -> None:
+        # The public re-export stays in sync with the canonical tuple
+        # list so downstream callers reading ``GRADE_THRESHOLDS`` see
+        # the same numbers.
+        assert dict(GRADE_THRESHOLD_LIST) == GRADE_THRESHOLDS
+
+    def test_threshold_list_covers_all_grades(self) -> None:
+        grades = [g for g, _ in GRADE_THRESHOLD_LIST]
+        assert grades == ["A", "B", "C", "D", "F"]
 
 
 # ---------------------------------------------------------------------------

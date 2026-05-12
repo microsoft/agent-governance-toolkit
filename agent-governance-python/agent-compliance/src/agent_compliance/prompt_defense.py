@@ -30,12 +30,31 @@ from typing import Optional
 # Grade scale
 # ---------------------------------------------------------------------------
 
-GRADE_THRESHOLDS: dict[str, int] = {"A": 90, "B": 70, "C": 50, "D": 30, "F": 0}
+# Ordered descending by threshold. A list of tuples encodes the scan
+# order explicitly so the mapping survives ``dict(...)`` round-trips,
+# external mutation, and accidental re-ordering — all of which the
+# previous insertion-ordered dict relied on Python 3.7+ semantics to
+# guarantee silently. ``GRADE_THRESHOLDS`` (the historical dict) is
+# kept as a public re-export for backwards compatibility, but the
+# scoring function reads from the canonical tuple list below.
+GRADE_THRESHOLD_LIST: tuple[tuple[str, int], ...] = (
+    ("A", 90),
+    ("B", 70),
+    ("C", 50),
+    ("D", 30),
+    ("F", 0),
+)
+
+GRADE_THRESHOLDS: dict[str, int] = dict(GRADE_THRESHOLD_LIST)
 
 
 def _score_to_grade(score: int) -> str:
-    """Map a 0-100 score to a letter grade."""
-    for grade, threshold in GRADE_THRESHOLDS.items():
+    """Map a 0-100 score to a letter grade.
+
+    Scans ``GRADE_THRESHOLD_LIST`` top-down (highest threshold first)
+    and returns the first letter whose threshold the score meets.
+    """
+    for grade, threshold in GRADE_THRESHOLD_LIST:
         if score >= threshold:
             return grade
     return "F"
