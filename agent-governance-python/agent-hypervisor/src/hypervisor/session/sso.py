@@ -109,7 +109,21 @@ class SessionVFS:
         return self._permissions.get(self._resolve(path))
 
     def create_snapshot(self, snapshot_id: str | None = None) -> str:
-        """Snapshot current state (simple deep copy)."""
+        """Snapshot current state.
+
+        This is **not** a ``copy.deepcopy`` — it's a one-level copy that
+        relies on the value types being either immutable (``str`` file
+        contents) or explicitly rebuilt below (``set`` permission
+        entries). The two containers are independent of the live
+        ``_files`` / ``_permissions`` dicts, so subsequent writes don't
+        mutate the snapshot.
+
+        If either value shape ever changes to a mutable nested type
+        (e.g. ``dict[str, list[...]]`` for files, or sets-of-mutable
+        values for permissions), the snapshot would stop being
+        effectively-independent and this would need an actual
+        ``copy.deepcopy``.
+        """
         sid = snapshot_id or f"snap:{uuid.uuid4()}"
         self._snapshots[sid] = {
             "files": dict(self._files),
