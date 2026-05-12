@@ -178,24 +178,53 @@ func (pe *PolicyEngine) checkRateLimit(rule PolicyRule, context map[string]inter
 	return Allow
 }
 
-// LoadFromYAML loads rules from a YAML file, appending to existing rules.
+// LoadFromYAML replaces the engine's rule set with the rules from a YAML
+// file. Existing rules are discarded on success; on parse or I/O error the
+// previous rule set is left intact. This matches the natural semantics of a
+// "load" verb and prevents the rule set from doubling when the same file is
+// re-read (e.g. on config reload).
+//
+// To extend the rule set without replacing it, use MergeFromYAML.
 func (pe *PolicyEngine) LoadFromYAML(path string) error {
-	data, err := os.ReadFile(path)
+	rules, err := readPolicyRulesFromYAML(path)
 	if err != nil {
 		return err
+	}
+
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+	pe.rules = rules
+	return nil
+}
+
+// MergeFromYAML appends rules from a YAML file to the engine's existing rule
+// set. Use this when composing rules from multiple files; use LoadFromYAML
+// when reloading a single canonical rule set.
+func (pe *PolicyEngine) MergeFromYAML(path string) error {
+	rules, err := readPolicyRulesFromYAML(path)
+	if err != nil {
+		return err
+	}
+
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+	pe.rules = append(pe.rules, rules...)
+	return nil
+}
+
+func readPolicyRulesFromYAML(path string) ([]PolicyRule, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
 	}
 
 	var loaded struct {
 		Rules []PolicyRule `yaml:"rules"`
 	}
 	if err := yaml.Unmarshal(data, &loaded); err != nil {
-		return err
+		return nil, err
 	}
-
-	pe.mu.Lock()
-	defer pe.mu.Unlock()
-	pe.rules = append(pe.rules, loaded.Rules...)
-	return nil
+	return loaded.Rules, nil
 }
 
 func matchAction(pattern, action string) bool {

@@ -447,7 +447,7 @@ func TestLoadFromYAMLNonexistentFile(t *testing.T) {
 	}
 }
 
-func TestLoadFromYAMLAppendsToExistingRules(t *testing.T) {
+func TestLoadFromYAMLReplacesExistingRules(t *testing.T) {
 	pe := NewPolicyEngine([]PolicyRule{
 		{Action: "existing.action", Effect: Allow},
 	})
@@ -457,13 +457,107 @@ func TestLoadFromYAMLAppendsToExistingRules(t *testing.T) {
   - action: "new.action"
     effect: "deny"
 `
-	path := filepath.Join(dir, "append.yaml")
+	path := filepath.Join(dir, "load.yaml")
 	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := pe.LoadFromYAML(path); err != nil {
 		t.Fatalf("LoadFromYAML: %v", err)
+	}
+
+	// Existing rule is replaced — falls through to default deny
+	if d := pe.Evaluate("existing.action", nil); d != Deny {
+		t.Errorf("existing rule should be replaced: got %q, want deny", d)
+	}
+	// New rule is loaded
+	if d := pe.Evaluate("new.action", nil); d != Deny {
+		t.Errorf("new rule: got %q, want deny", d)
+	}
+}
+
+// Re-loading the same YAML must not double the rule set. Before LoadFromYAML
+// adopted replace semantics, calling it twice appended the rules twice, which
+// was harmless for first-match-wins but quietly doubled memory and evaluation
+// cost on every config reload.
+func TestLoadFromYAMLReloadDoesNotDouble(t *testing.T) {
+	dir := t.TempDir()
+	yamlContent := `rules:
+  - action: "a"
+    effect: "allow"
+  - action: "b"
+    effect: "deny"
+`
+	path := filepath.Join(dir, "reload.yaml")
+	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pe := NewPolicyEngine(nil)
+	if err := pe.LoadFromYAML(path); err != nil {
+		t.Fatalf("first load: %v", err)
+	}
+	if err := pe.LoadFromYAML(path); err != nil {
+		t.Fatalf("second load: %v", err)
+	}
+	if err := pe.LoadFromYAML(path); err != nil {
+		t.Fatalf("third load: %v", err)
+	}
+
+	pe.mu.RLock()
+	count := len(pe.rules)
+	pe.mu.RUnlock()
+	if count != 2 {
+		t.Errorf("rule count after 3 reloads = %d, want 2", count)
+	}
+}
+
+// On read or parse error, LoadFromYAML must leave the existing rule set
+// untouched so a bad reload doesn't strip enforcement.
+func TestLoadFromYAMLPreservesRulesOnError(t *testing.T) {
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "existing.action", Effect: Allow},
+	})
+
+	// Nonexistent file: read error
+	if err := pe.LoadFromYAML(filepath.Join(t.TempDir(), "nonexistent.yaml")); err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+	if d := pe.Evaluate("existing.action", nil); d != Allow {
+		t.Errorf("after failed load (missing file), existing rule should remain: got %q, want allow", d)
+	}
+
+	// Invalid YAML: parse error
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.yaml")
+	if err := os.WriteFile(path, []byte("this is: [not: valid: yaml: {{"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := pe.LoadFromYAML(path); err == nil {
+		t.Fatal("expected error for invalid YAML")
+	}
+	if d := pe.Evaluate("existing.action", nil); d != Allow {
+		t.Errorf("after failed load (bad yaml), existing rule should remain: got %q, want allow", d)
+	}
+}
+
+func TestMergeFromYAMLAppendsToExistingRules(t *testing.T) {
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "existing.action", Effect: Allow},
+	})
+
+	dir := t.TempDir()
+	yamlContent := `rules:
+  - action: "new.action"
+    effect: "deny"
+`
+	path := filepath.Join(dir, "merge.yaml")
+	if err := os.WriteFile(path, []byte(yamlContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := pe.MergeFromYAML(path); err != nil {
+		t.Fatalf("MergeFromYAML: %v", err)
 	}
 
 	// Existing rule still works

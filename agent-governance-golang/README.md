@@ -88,7 +88,8 @@ Rule-based policy engine with wildcard and condition matching.
 |---|---|
 | `NewPolicyEngine(rules)` | Create a policy engine |
 | `(*PolicyEngine).Evaluate(action, context)` | Evaluate an action |
-| `(*PolicyEngine).LoadFromYAML(path)` | Load rules from YAML file |
+| `(*PolicyEngine).LoadFromYAML(path)` | Replace rules from YAML file |
+| `(*PolicyEngine).MergeFromYAML(path)` | Append rules from a YAML file to the existing rule set |
 | `(*PolicyEngine).AddBackend(backend)` | Register an external policy backend |
 | `(*PolicyEngine).LoadRego(options)` | Register an OPA/Rego backend |
 | `(*PolicyEngine).LoadCedar(options)` | Register a Cedar backend |
