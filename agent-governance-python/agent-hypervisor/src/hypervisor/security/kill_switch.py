@@ -134,7 +134,20 @@ class KillSwitch:
         in_flight_steps: list[dict] | None = None,
         details: str = "",
     ) -> KillResult:
-        """Kill an agent, handing off in-flight steps to a substitute if available."""
+        """Kill an agent, handing off in-flight steps to a substitute if available.
+
+        Registration invariant: the agent is unregistered from the
+        process registry **unconditionally** at the end of this method,
+        regardless of whether the termination callback succeeded
+        (``terminated=True``) or failed/timed out (``terminated=False``).
+        This is intentional. The kill *intent* is durably recorded in
+        ``_kill_history`` and surfaced via the returned ``KillResult``;
+        leaving the callback registered would falsely advertise the
+        agent as live and re-callable when its process state is
+        actually unknown. Callers who detect ``terminated=False`` and
+        want to retry must re-register the agent (presumably with a
+        new, working callback) before issuing the second ``kill()``.
+        """
         in_flight = in_flight_steps or []
 
         with self._lock:
