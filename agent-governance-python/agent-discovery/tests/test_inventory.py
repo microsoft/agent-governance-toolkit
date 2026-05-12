@@ -123,6 +123,29 @@ class TestAgentInventory:
             assert inv2.get("a") is not None
             assert inv2.get("a").name == "Persistent"
 
+    def test_corrupt_inventory_logs_warning(self, caplog):
+        """When the on-disk inventory is corrupt, _load logs a warning
+        with the offending path instead of silently swallowing the
+        error. Operators need to know why the inventory came up empty.
+        """
+        import logging
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "inventory.json"
+            path.write_text("{not: valid json}", encoding="utf-8")
+
+            with caplog.at_level(logging.WARNING, logger="agent_discovery.inventory"):
+                inv = AgentInventory(storage_path=path)
+
+            assert inv.count == 0  # starts fresh
+            warning_records = [
+                r for r in caplog.records
+                if r.levelno >= logging.WARNING
+                and r.name == "agent_discovery.inventory"
+            ]
+            assert warning_records, "expected a WARNING log for corrupt inventory"
+            assert str(path) in warning_records[0].getMessage()
+
     def test_export_json(self):
         inv = AgentInventory()
         inv.ingest(ScanResult(scanner_name="test", agents=[_make_agent("a", "JSON Agent")]))
