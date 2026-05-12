@@ -25,6 +25,16 @@ const KDF_INFO_RATCHET = new TextEncoder().encode("AgentMesh_Ratchet_v1");
 const NONCE_LEN = 12;
 const KEY_LEN = 32;
 const MAX_SKIP = 100;
+/**
+ * Aggregate cap on cached skipped keys across all DH rotations.
+ *
+ * The per-call cap (`maxSkip`) bounds a single skip burst within one
+ * receive chain; this cap bounds the lifetime accumulation. Without it,
+ * a session that survives many DH ratchet steps with persistent out-of-
+ * order tails grows `skippedKeys` without limit. Mirrors the Python
+ * core implementation (`_MAX_SKIPPED_KEYS_TOTAL`).
+ */
+const MAX_SKIPPED_KEYS_TOTAL = 2000;
 
 export interface MessageHeader {
   dhPublicKey: Uint8Array;
@@ -256,6 +266,15 @@ export class DoubleRatchet {
       s.skippedKeys.set(skippedKeyId(s.dhRemotePublic!, s.recvMessageNumber), mk);
       s.chainKeyRecv = next;
       s.recvMessageNumber++;
+      // Evict the oldest skipped key once the aggregate cap is exceeded.
+      // ES2015+ `Map` iteration order is insertion order, so the first
+      // key returned is the oldest insertion that survived all prior
+      // evictions. Mirrors the Python core implementation.
+      while (s.skippedKeys.size > MAX_SKIPPED_KEYS_TOTAL) {
+        const oldest = s.skippedKeys.keys().next();
+        if (oldest.done) break;
+        s.skippedKeys.delete(oldest.value);
+      }
     }
   }
 
