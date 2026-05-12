@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1.7
 
-ARG PYTHON_VERSION=3.11
-
+# Python version is pinned in the FROM line below (tag + digest). The image
+# digest is the single source of truth for reproducibility; do not add an ARG
+# here unless it is actually referenced by the FROM line.
 FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634 AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
