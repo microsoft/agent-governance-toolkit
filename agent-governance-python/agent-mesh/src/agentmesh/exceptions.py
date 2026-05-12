@@ -17,6 +17,18 @@ class IdentityError(AgentMeshError):
     """Errors related to agent identity (DID, keys, credentials)."""
 
 
+class AttestationError(IdentityError):
+    """Errors related to confidential-computing attestation."""
+
+
+class AttestationCollectionError(AttestationError):
+    """Attestation evidence could not be collected from the runtime."""
+
+
+class AttestationVerificationError(AttestationError):
+    """Attestation evidence failed verification against reference values."""
+
+
 class TrustError(AgentMeshError):
     """Errors related to trust scoring and verification."""
 
@@ -60,6 +72,9 @@ class MarketplaceError(AgentMeshError):
 __all__ = [
     "AgentMeshError",
     "IdentityError",
+    "AttestationError",
+    "AttestationCollectionError",
+    "AttestationVerificationError",
     "TrustError",
     "TrustVerificationError",
     "TrustViolationError",
