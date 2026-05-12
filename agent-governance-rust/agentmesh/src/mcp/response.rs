@@ -193,6 +193,20 @@ impl McpResponseScanner {
                 .replace_all(&sanitized, "[REDACTED_INSTRUCTION]")
                 .into_owned();
         }
+        // Ordering invariant: lowercase the *post-redaction* text so the
+        // exfiltration-context heuristic looks at what the model would still
+        // be saying after the prompt-injection and imperative passes above
+        // have substituted their placeholders. Looking at the original text
+        // here would let an attacker plant exfil verbs ("send", "upload",
+        // "post", ...) inside a `<prompt>...</prompt>` tag or an "ignore
+        // previous instructions" directive that the earlier passes have
+        // already scrubbed, producing a finding for content that no longer
+        // exists in the sanitized output. The placeholders themselves
+        // (`[REDACTED_PROMPT_TAG]`, `[REDACTED_INSTRUCTION]`) deliberately
+        // contain none of the exfil verbs so this snapshot is safe to take
+        // here. `lower` is not used after the URL redaction below, so it
+        // intentionally is not refreshed; the credential-redaction pass
+        // operates on `sanitized` directly.
         let lower = sanitized.to_lowercase();
         if contains_exfiltration_context(&lower) && self.url_pattern.is_match(&sanitized) {
             findings.push(finding(
