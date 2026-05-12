@@ -1,5 +1,17 @@
 name: Deploy docs to GitHub Pages
 
+# This workflow rebuilds the MkDocs site and deploys to GitHub Pages.
+# The `paths:` filter keeps the build cheap by only firing on changes to
+# inputs that affect the rendered output:
+#   - site/**                — extra static assets copied into the build
+#   - mkdocs.yml             — site config (nav, theme, plugins)
+#   - docs/**                — the actual markdown sources
+#   - .github/workflows/docs.yml — this workflow file itself, so changes
+#                                  to the build/deploy logic still trigger
+#                                  a rebuild even when no doc content moved
+# A change anywhere else (e.g. Python source, Dockerfile) will not rebuild
+# the docs site, which is the intended trade-off — docs are derived from
+# this narrow input set, not from the full repository.
 on:
   push:
     branches: [main]
