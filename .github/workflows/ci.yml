@@ -281,13 +281,58 @@ jobs:
         env:
           GIT_TERMINAL_PROMPT: "0"
         run: |
+          set -e
+          # Install each package. A failure here means safety would scan
+          # against the wrong dependency set, so surface it instead of
+          # silently `|| true`-ing past it.
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning; do
             echo "=== $pkg ==="
-            cd agent-governance-python/$pkg
-            pip install --no-cache-dir -e . 2>/dev/null || true  # Install local package (Scorecard: pinned via pyproject.toml)
-            cd ../..
+            (cd "agent-governance-python/$pkg" \
+              && pip install --no-cache-dir -e .)
           done
-          safety check 2>/dev/null || echo "Safety check completed with warnings"
+
+          # Capture safety's exit code and stdout. The previous
+          # invocation discarded stderr and `|| echo`-d a placeholder
+          # message, so the step always exited 0 regardless of findings.
+          set +e
+          safety check --output json > safety-report.json
+          EXIT_CODE=$?
+          set -e
+
+          echo "safety check exit code: $EXIT_CODE"
+          echo "---- safety-report.json ----"
+          cat safety-report.json
+          echo "---- end safety-report.json ----"
+
+          # safety v3 exit codes: 0 = clean, 64 = vulnerabilities found,
+          # anything else = real failure (network, parse error, etc.).
+          if [ "$EXIT_CODE" -eq 0 ]; then
+            echo "No vulnerabilities detected."
+            exit 0
+          fi
+          if [ "$EXIT_CODE" -ne 64 ]; then
+            echo "::error::safety check failed with unexpected exit code $EXIT_CODE"
+            exit 1
+          fi
+
+          # Vulnerabilities found — fail the build on Critical severity,
+          # warn otherwise. Tolerant of safety's slightly-varying JSON
+          # shape across versions (severity may be a nested cvssv3
+          # block or a flat string).
+          CRITICAL=$(jq -r '
+            [.vulnerabilities[]?
+              | (.severity.cvssv3.base_severity? // .severity? // "")
+              | tostring
+              | ascii_downcase
+              | select(test("critical"))
+            ] | length
+          ' safety-report.json 2>/dev/null || echo 0)
+          echo "Critical CVE count: $CRITICAL"
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::$CRITICAL critical CVE(s) detected; failing build"
+            exit 1
+          fi
+          echo "::warning::Non-critical CVEs detected; see safety-report.json above"
 
   # ── .NET build + test (only when C# files change) ────────────────────
   test-dotnet:
