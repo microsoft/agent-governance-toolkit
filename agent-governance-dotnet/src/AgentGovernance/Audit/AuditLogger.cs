@@ -63,7 +63,16 @@ public sealed class AuditEntry
 public sealed class AuditLogger
 {
     private readonly List<AuditEntry> _entries = new();
-    private readonly object _lock = new();
+    // Two-level locking:
+    //   _appendLock  serializes writers (the hash chain is sequential, so
+    //                appends must happen one at a time), held for the
+    //                duration of a single Log call.
+    //   _entriesLock guards reads and writes of _entries; held very briefly
+    //                so reader operations (Count, Verify, GetEntries,
+    //                ExportJson) are not blocked while a writer is busy
+    //                computing the SHA-256 hash for its new entry.
+    private readonly object _appendLock = new();
+    private readonly object _entriesLock = new();
 
     /// <summary>
     /// Returns the number of entries in the audit log.
@@ -72,7 +81,7 @@ public sealed class AuditLogger
     {
         get
         {
-            lock (_lock)
+            lock (_entriesLock)
             {
                 return _entries.Count;
             }
@@ -93,12 +102,27 @@ public sealed class AuditLogger
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
         ArgumentException.ThrowIfNullOrWhiteSpace(decision);
 
-        lock (_lock)
+        // The hash chain is sequential -- each entry hashes the previous
+        // entry's hash, so appends must serialize. _appendLock provides that
+        // serialization for the entire Log call.
+        //
+        // Within _appendLock we still need a separate, very brief
+        // _entriesLock around _entries reads/writes so concurrent reader
+        // operations (Count, Verify, GetEntries, ExportJson) are not blocked
+        // by this writer while it spends ~all of its wall-clock time inside
+        // SHA-256. Pre-fix, readers were blocked on the same lock that held
+        // through ComputeHash + string allocations.
+        lock (_appendLock)
         {
-            var seq = _entries.Count;
-            var timestamp = DateTimeOffset.UtcNow;
-            var previousHash = seq == 0 ? string.Empty : _entries[seq - 1].Hash;
+            int seq;
+            string previousHash;
+            lock (_entriesLock)
+            {
+                seq = _entries.Count;
+                previousHash = seq == 0 ? string.Empty : _entries[seq - 1].Hash;
+            }
 
+            var timestamp = DateTimeOffset.UtcNow;
             var hash = ComputeHash(seq, timestamp, agentId, action, decision, previousHash);
 
             var entry = new AuditEntry
@@ -112,7 +136,10 @@ public sealed class AuditLogger
                 Hash = hash
             };
 
-            _entries.Add(entry);
+            lock (_entriesLock)
+            {
+                _entries.Add(entry);
+            }
             return entry;
         }
     }
@@ -125,7 +152,7 @@ public sealed class AuditLogger
     /// <returns><c>true</c> if the chain is intact; otherwise <c>false</c>.</returns>
     public bool Verify()
     {
-        lock (_lock)
+        lock (_entriesLock)
         {
             for (var i = 0; i < _entries.Count; i++)
             {
@@ -161,7 +188,7 @@ public sealed class AuditLogger
     /// <returns>A read-only list of matching entries.</returns>
     public IReadOnlyList<AuditEntry> GetEntries(string? agentId = null, string? action = null)
     {
-        lock (_lock)
+        lock (_entriesLock)
         {
             IEnumerable<AuditEntry> query = _entries;
 
@@ -185,7 +212,7 @@ public sealed class AuditLogger
     /// <returns>A JSON array of all audit entries.</returns>
     public string ExportJson()
     {
-        lock (_lock)
+        lock (_entriesLock)
         {
             return JsonSerializer.Serialize(_entries, JsonOptions);
         }
