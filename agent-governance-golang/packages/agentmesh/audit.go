@@ -5,6 +5,7 @@ package agentmesh
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -133,14 +134,41 @@ func (al *AuditLogger) GetEntries(filter AuditFilter) []*AuditEntry {
 	return result
 }
 
+// auditHashVersion identifies the wire format of the hash input. Bumping
+// this invalidates any persisted hashes and is required when the field
+// layout below changes.
+const auditHashVersion byte = 1
+
+// computeHash returns the SHA-256 hash of a length-prefixed encoding of the
+// entry's fields. Each variable-length field is encoded as a 4-byte
+// big-endian length followed by the raw bytes, with a fixed-position
+// version byte at the start. The encoding is unambiguous regardless of the
+// field contents, which closes the forgery seam in the previous
+// "|"-separated format (where e.g. AgentID="a", Action="b|c" hashed
+// identically to AgentID="a|b", Action="c").
 func computeHash(e *AuditEntry) string {
-	data := e.Timestamp.Format(time.RFC3339Nano) + "|" +
-		e.AgentID + "|" +
-		e.Action + "|" +
-		string(e.Decision) + "|" +
-		e.PreviousHash
-	h := sha256.Sum256([]byte(data))
+	timestamp := e.Timestamp.Format(time.RFC3339Nano)
+
+	// 1 byte version + 5 fields, each prefixed by a 4-byte length.
+	size := 1 + 5*4 + len(timestamp) + len(e.AgentID) + len(e.Action) + len(e.Decision) + len(e.PreviousHash)
+	buf := make([]byte, 0, size)
+	buf = append(buf, auditHashVersion)
+	buf = appendLengthPrefixed(buf, timestamp)
+	buf = appendLengthPrefixed(buf, e.AgentID)
+	buf = appendLengthPrefixed(buf, e.Action)
+	buf = appendLengthPrefixed(buf, string(e.Decision))
+	buf = appendLengthPrefixed(buf, e.PreviousHash)
+
+	h := sha256.Sum256(buf)
 	return hex.EncodeToString(h[:])
+}
+
+func appendLengthPrefixed(buf []byte, s string) []byte {
+	var lenBytes [4]byte
+	binary.BigEndian.PutUint32(lenBytes[:], uint32(len(s)))
+	buf = append(buf, lenBytes[:]...)
+	buf = append(buf, s...)
+	return buf
 }
 
 // ExportJSON serialises all audit entries to a JSON string.
