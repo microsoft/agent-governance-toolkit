@@ -550,3 +550,184 @@ class TestLintPolicyCLI:
     def test_lint_nonexistent_path(self, tmp_path, capsys):
         rc = run_cli("lint-policy", str(tmp_path / "nope.yaml"))
         assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# AST-based line resolution
+# ---------------------------------------------------------------------------
+
+
+class TestAstLineResolution:
+    """Pin that line numbers come from the YAML parse tree, not substring
+    grep. Each case exercises a layout where the substring approach
+    would have returned the wrong line, and confirms the AST resolver
+    points at the structural occurrence.
+    """
+
+    def test_deprecated_op_in_condition_points_at_op_not_operator(
+        self, tmp_path
+    ):
+        # Both keys appear in the condition; the line for the deprecated
+        # 'op:' must point at the 'op:' line, not the 'operator:' line.
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: t
+            rules:
+              - name: r1
+                action: allow
+                condition:
+                  field: tool_name
+                  op: eq
+                  operator: eq
+                  value: foo
+        """)
+        result = lint_file(p)
+        op_warnings = [
+            m for m in result.warnings
+            if "'op'" in m.message and "deprecated" in m.message.lower()
+        ]
+        assert op_warnings, "expected a deprecated-op warning"
+        # The op: key sits on line 8 (after `version`, `name`, `rules:`,
+        # `- name`, `action`, `condition:`, `field`).
+        assert op_warnings[0].line == 8
+
+    def test_unknown_operator_points_at_operator_value_line(self, tmp_path):
+        # An unrelated rule earlier in the file mentions 'nope' as a
+        # value. The substring approach would target that line instead
+        # of the actual unknown-operator line.
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: t
+            rules:
+              - name: distraction
+                action: allow
+                condition:
+                  field: nope
+                  operator: eq
+                  value: nope
+              - name: real-bad
+                action: allow
+                condition:
+                  field: tool_name
+                  operator: nope
+                  value: foo
+        """)
+        result = lint_file(p)
+        op_errors = [
+            m for m in result.errors
+            if "unknown operator" in m.message.lower() and "nope" in m.message
+        ]
+        assert op_errors, "expected a single unknown-operator error"
+        # The bad `operator: nope` token sits on line 14 (after the
+        # 7-line distraction rule).
+        assert op_errors[0].line == 14
+
+    def test_deprecated_type_in_rule_targets_correct_rule(self, tmp_path):
+        # Two rules each have a `type:` deprecated key. The previous
+        # approach used `_find_line(lines, "type:")` and would only
+        # ever return the first occurrence; the AST resolver gives
+        # distinct lines for each rule.
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: t
+            rules:
+              - name: first
+                type: allow
+                action: allow
+                condition: {field: a, operator: eq, value: x}
+              - name: second
+                type: deny
+                action: deny
+                condition: {field: b, operator: eq, value: y}
+        """)
+        result = lint_file(p)
+        type_warnings = [
+            m for m in result.warnings
+            if "'type'" in m.message and "deprecated" in m.message.lower()
+        ]
+        assert len(type_warnings) == 2
+        # First rule's `type:` is line 5, second rule's is line 9.
+        lines = sorted(m.line for m in type_warnings)
+        assert lines == [5, 9]
+
+    def test_unknown_action_points_at_action_key(self, tmp_path):
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: t
+            rules:
+              - name: r1
+                condition:
+                  field: x
+                  operator: eq
+                  value: y
+                action: zap
+        """)
+        result = lint_file(p)
+        action_errors = [
+            m for m in result.errors
+            if "unknown action" in m.message.lower()
+        ]
+        assert action_errors
+        # The `action: zap` key sits on line 9.
+        assert action_errors[0].line == 9
+
+    def test_invalid_priority_targets_priority_key(self, tmp_path):
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: t
+            rules:
+              - name: r1
+                action: allow
+                condition:
+                  field: x
+                  operator: eq
+                  value: y
+                priority: "high"
+        """)
+        result = lint_file(p)
+        prio_errors = [
+            m for m in result.errors
+            if "priority must be an integer" in m.message.lower()
+        ]
+        assert prio_errors
+        # `priority:` sits on line 10.
+        assert prio_errors[0].line == 10
+
+    def test_empty_rules_warning_points_at_rules_key(self, tmp_path):
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: t
+            rules: []
+        """)
+        result = lint_file(p)
+        empty = [m for m in result.warnings if "empty" in m.message.lower()]
+        assert empty
+        # `rules:` is on line 3.
+        assert empty[0].line == 3
+
+    def test_substring_collision_in_comment_ignored(self, tmp_path):
+        # The earlier comment line contains the literal text `op: eq`,
+        # which a substring search for "op:" would match before
+        # reaching the real deprecated key two lines below.
+        p = _write_policy(tmp_path, """\
+            version: "1.0"
+            name: t
+            rules:
+              - name: r1
+                action: allow
+                # legacy stub: op: eq
+                condition:
+                  field: x
+                  op: eq
+                  operator: eq
+                  value: y
+        """)
+        result = lint_file(p)
+        op_warnings = [
+            m for m in result.warnings
+            if "'op'" in m.message and "deprecated" in m.message.lower()
+        ]
+        assert op_warnings
+        # The structural `op:` key lives on line 9, not line 6 where
+        # the comment mentions it.
+        assert op_warnings[0].line == 9
