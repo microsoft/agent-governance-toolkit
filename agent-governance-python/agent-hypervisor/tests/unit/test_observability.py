@@ -127,7 +127,7 @@ class TestHypervisorEventBus:
         bus = HypervisorEventBus()
         bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))
         assert bus.event_count == 1
-        bus.clear()
+        bus._clear()
         assert bus.event_count == 0
 
     def test_query_with_limit(self):

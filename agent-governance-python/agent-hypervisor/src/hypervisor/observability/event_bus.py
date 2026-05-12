@@ -259,8 +259,20 @@ class HypervisorEventBus:
         with self._lock:
             return {t.value: len(evts) for t, evts in self._by_type.items()}
 
-    def clear(self) -> None:
-        """Clear all events (for testing)."""
+    def _clear(self) -> None:
+        """Clear all events. **Test-only — do not call in production.**
+
+        The event bus is wired into the hypervisor as a long-lived,
+        process-singleton-shaped collaborator (see
+        ``hypervisor.api.server._event_bus``): production calls would
+        wipe the audit trail of every running session at once.
+
+        The leading underscore makes the test-only contract visible at
+        every call site. The method is kept on the class (rather than
+        moved to a test helper) because some tests construct a fresh
+        bus and then exercise the clear path itself; it just shouldn't
+        be reached from non-test code.
+        """
         with self._lock:
             self._events.clear()
             self._by_type.clear()
