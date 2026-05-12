@@ -206,9 +206,29 @@ class CardRegistry:
                 ``is_verified()`` even if their signatures are valid.
         """
         self._cards: Dict[str, TrustedAgentCard] = {}
-        self._verified_cache: Dict[str, tuple[bool, datetime]] = {}
+        # Cache entry: (verified, timestamp, signed_content_hash). The
+        # hash pins the cached verdict to the exact signable content
+        # that was verified, so any in-place mutation of the stored
+        # card (capabilities, trust score, etc.) invalidates the entry
+        # on the next read.
+        self._verified_cache: Dict[str, tuple[bool, datetime, str]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         self._revocation_list = revocation_list
+
+    @staticmethod
+    def _card_content_hash(card: TrustedAgentCard) -> str:
+        """Stable hash of the card's signable content + signature.
+
+        Used as a cache key suffix so any mutation of the signed fields
+        or the signature itself produces a new hash and the cached
+        verdict is discarded.
+        """
+        import hashlib
+
+        signable = card._get_signable_content()
+        signature = card.card_signature or ""
+        material = f"{signable}|{signature}".encode()
+        return hashlib.sha256(material).hexdigest()
 
     def register(self, card: TrustedAgentCard) -> bool:
         """
@@ -225,7 +245,11 @@ class CardRegistry:
 
         if card.agent_did:
             self._cards[card.agent_did] = card
-            self._verified_cache[card.agent_did] = (True, datetime.now(timezone.utc))
+            self._verified_cache[card.agent_did] = (
+                True,
+                datetime.now(timezone.utc),
+                self._card_content_hash(card),
+            )
 
         return True
 
@@ -263,17 +287,29 @@ class CardRegistry:
             self._verified_cache.pop(agent_did, None)
             return False
 
-        if agent_did in self._verified_cache:
-            verified, timestamp = self._verified_cache[agent_did]
-            if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
-                return verified
-
         card = self._cards.get(agent_did)
         if not card:
             return False
 
+        current_hash = self._card_content_hash(card)
+
+        if agent_did in self._verified_cache:
+            verified, timestamp, cached_hash = self._verified_cache[agent_did]
+            if (
+                cached_hash == current_hash
+                and datetime.now(timezone.utc) - timestamp < self._cache_ttl
+            ):
+                return verified
+            # Mutation detected (or TTL expired) -- drop the entry and
+            # re-verify from scratch below.
+            self._verified_cache.pop(agent_did, None)
+
         verified = card.verify_signature()
-        self._verified_cache[agent_did] = (verified, datetime.now(timezone.utc))
+        self._verified_cache[agent_did] = (
+            verified,
+            datetime.now(timezone.utc),
+            current_hash,
+        )
         return verified
 
     def clear_cache(self) -> None:
