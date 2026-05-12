@@ -158,6 +158,57 @@ class TestAgentRateLimiter:
         assert ExecutionRing.RING_2_STANDARD in DEFAULT_RING_LIMITS
         assert ExecutionRing.RING_3_SANDBOX in DEFAULT_RING_LIMITS
 
+    def test_colon_in_agent_did_does_not_collide_with_other_session(self):
+        """A previous implementation used ``f"{agent_did}:{session_id}"`` as
+        the bucket key. Because ``agent_did`` is a DID (``did:key:z6Mk...``),
+        a colon in the agent identifier could collide with a different
+        ``(agent_did, session_id)`` pair — e.g. ``("did:key:abc", "s")``
+        and ``("did:key", "abc:s")`` both flattened to
+        ``"did:key:abc:s"`` and shared a single bucket and stats slot.
+
+        With a tuple key the two pairs are tracked independently.
+        """
+        limiter = AgentRateLimiter(
+            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
+        )
+        # Drain the bucket for the first pair.
+        limiter.check("did:key:abc", "s", ExecutionRing.RING_3_SANDBOX)
+        # The colliding-on-string pair must still have its own token.
+        assert (
+            limiter.try_check("did:key", "abc:s", ExecutionRing.RING_3_SANDBOX)
+            is True
+        )
+        # And tracked-agents reflects two distinct buckets, not one.
+        assert limiter.tracked_agents == 2
+
+    def test_colon_in_session_id_does_not_collide_with_other_agent(self):
+        """Mirror of the agent-side test: colon in ``session_id`` must not
+        leak into a different ``(agent_did, session_id)`` pair.
+        """
+        limiter = AgentRateLimiter(
+            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
+        )
+        limiter.check("a", "1:sess", ExecutionRing.RING_3_SANDBOX)
+        assert (
+            limiter.try_check("a:1", "sess", ExecutionRing.RING_3_SANDBOX)
+            is True
+        )
+        assert limiter.tracked_agents == 2
+
+    def test_get_stats_isolation_under_colon_collision(self):
+        """``get_stats`` must return distinct ``RateLimitStats`` instances
+        for two pairs that previously flattened to the same string key.
+        """
+        limiter = AgentRateLimiter()
+        limiter.check("did:key:abc", "s", ExecutionRing.RING_2_STANDARD)
+        limiter.check("did:key", "abc:s", ExecutionRing.RING_2_STANDARD)
+        a = limiter.get_stats("did:key:abc", "s")
+        b = limiter.get_stats("did:key", "abc:s")
+        assert a is not None and b is not None
+        assert a is not b
+        assert a.agent_did == "did:key:abc"
+        assert b.agent_did == "did:key"
+
 
 class TestConcurrency:
     def test_concurrent_check_does_not_overspend_tokens(self):
