@@ -188,10 +188,19 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 fn iso8601_now() -> String {
-    let d = SystemTime::now()
+    let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = d.as_secs();
+        .unwrap_or_default()
+        .as_secs();
+    iso8601_from_unix_secs(secs)
+}
+
+/// Format `secs` (seconds since the Unix epoch) as an ISO-8601 UTC timestamp
+/// (`YYYY-MM-DDTHH:MM:SSZ`).
+///
+/// Split out from [`iso8601_now`] so the civil-date conversion can be tested
+/// with fixed inputs.
+fn iso8601_from_unix_secs(secs: u64) -> String {
     let days = secs / 86400;
     let time_of_day = secs % 86400;
     let hours = time_of_day / 3600;
@@ -502,6 +511,41 @@ mod tests {
         assert_eq!(&ts[13..14], ":");
         assert_eq!(&ts[16..17], ":");
         assert_eq!(&ts[19..20], "Z");
+    }
+
+    #[test]
+    fn test_iso8601_from_unix_secs_known_values() {
+        // Unix epoch.
+        assert_eq!(iso8601_from_unix_secs(0), "1970-01-01T00:00:00Z");
+        // 2000-01-01T00:00:00Z — century start, divisible-by-400 leap year.
+        assert_eq!(iso8601_from_unix_secs(946_684_800), "2000-01-01T00:00:00Z");
+        // 2000-02-29T00:00:00Z — leap day in a divisible-by-400 century year.
+        assert_eq!(iso8601_from_unix_secs(951_782_400), "2000-02-29T00:00:00Z");
+        // 2001-09-09T01:46:40Z — common reference timestamp (1e9 seconds).
+        assert_eq!(
+            iso8601_from_unix_secs(1_000_000_000),
+            "2001-09-09T01:46:40Z"
+        );
+        // 2023-11-14T22:13:20Z (1.7e9 seconds) — sanity check in current era.
+        assert_eq!(
+            iso8601_from_unix_secs(1_700_000_000),
+            "2023-11-14T22:13:20Z"
+        );
+        // 2024-02-29T00:00:00Z — leap day in an ordinary (divisible-by-4) leap year.
+        assert_eq!(
+            iso8601_from_unix_secs(1_709_164_800),
+            "2024-02-29T00:00:00Z"
+        );
+        // 2024-03-01T00:00:00Z — day after the leap day, guards off-by-one.
+        assert_eq!(
+            iso8601_from_unix_secs(1_709_251_200),
+            "2024-03-01T00:00:00Z"
+        );
+        // 2024-12-31T23:59:59Z — last second of a leap year.
+        assert_eq!(
+            iso8601_from_unix_secs(1_735_689_599),
+            "2024-12-31T23:59:59Z"
+        );
     }
 
     #[test]
