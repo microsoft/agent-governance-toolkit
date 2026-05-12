@@ -276,6 +276,7 @@ jobs:
       - name: Install safety
         run: |
           pip install --no-cache-dir --require-hashes --no-deps -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
+          pip install --no-cache-dir 'typer>=0.9.0,<0.15.0'
           pip install --no-cache-dir safety==3.2.1
       - name: Check dependencies
         env:

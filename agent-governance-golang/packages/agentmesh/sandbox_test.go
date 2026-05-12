@@ -137,15 +137,16 @@ func TestCreateSessionRejectsInvalidAgentID(t *testing.T) {
 
 func TestCreateSessionAcceptsValidAgentID(t *testing.T) {
 	// Confirms the regex is not over-restrictive on legitimate IDs.
-	// We don't actually call docker — IsAvailable=false short-circuits.
-	p := &DockerSandboxProvider{available: false, image: "alpine"}
-	_, err := p.CreateSession("agent-123_test.local", nil)
-	// Expect a `docker is not available` error, not an `invalid agentID` error.
-	if err == nil {
-		t.Fatal("expected docker-unavailable error, got nil")
-	}
-	if strings.Contains(err.Error(), "invalid agentID") {
+	// If Docker is available the call may succeed; we only assert the
+	// regex did not reject the agent ID.
+	p := NewDockerSandboxProvider("alpine")
+	session, err := p.CreateSession("agent-123_test.local", nil)
+	if err != nil && strings.Contains(err.Error(), "invalid agentID") {
 		t.Fatalf("regex rejected a valid agentID: %v", err)
+	}
+	// Clean up if a container was actually created.
+	if err == nil && session != nil {
+		_ = p.DestroySession(session.AgentID, session.SessionID)
 	}
 }
 

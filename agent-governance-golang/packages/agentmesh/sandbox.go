@@ -228,6 +228,9 @@ func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxCon
 	}
 
 	p.mu.Lock()
+	if p.containers == nil {
+		p.containers = make(map[string]string)
+	}
 	p.containers[containerKey(agentID, sessionID)] = name
 	p.mu.Unlock()
 

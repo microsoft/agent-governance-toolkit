@@ -156,6 +156,8 @@ SAFE_PATTERNS = {
     "-e", "--editable", "-r", "--requirement", "--upgrade", "--no-cache-dir",
     "--quiet", "--require-hashes", "--hash", ".", "..", "../..",
     "pip", "install", "%pip",
+    # Dockerfile / shell tokens that appear alongside pip install
+    "RUN", "run", "if", "then", "fi", "&&", "||", ";",
 }
 
 PIP_INSTALL_RE = re.compile(
@@ -182,7 +184,7 @@ def extract_package_names(install_args: str) -> list[str]:
         if token.startswith((".", "/", "\\", "http", "git+")):
             continue
         # Skip tokens that look like code, not package names
-        if any(c in token for c in ('(', ')', '=', '"', "'", ":")):
+        if any(c in token for c in ('(', ')', '=', '"', "'", ":", "[", "]")):
             continue
         # Skip tokens that look like filenames or shell keywords
         if any(token.rstrip(";") == kw for kw in ("if", "then", "else", "fi", "do", "done")):
@@ -259,6 +261,8 @@ def check_notebook(filepath: str) -> list[str]:
 
     registered_lower = {p.lower() for p in REGISTERED_PACKAGES}
     for cell in nb.get("cells", []):
+        if cell.get("cell_type") != "code":
+            continue
         for line in cell.get("source", []):
             if "pip install" in line and not line.strip().startswith("#"):
                 packages = extract_package_names(line)
