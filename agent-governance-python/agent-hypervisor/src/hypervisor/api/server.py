@@ -180,19 +180,16 @@ async def get_stats() -> StatsResponse:
     """Get overall hypervisor statistics."""
     hv = _hv()
     bus = _bus()
-    total_participants = sum(
-        m.sso.participant_count for m in hv._sessions.values()
-    )
-    active_sagas = sum(
-        len(m.saga.active_sagas) for m in hv._sessions.values()
-    )
+    sessions = hv.sessions
+    total_participants = sum(m.sso.participant_count for m in sessions)
+    active_sagas = sum(len(m.saga.active_sagas) for m in sessions)
     return StatsResponse(
         version=__version__,
-        total_sessions=len(hv._sessions),
+        total_sessions=hv.session_count,
         active_sessions=len(hv.active_sessions),
         total_participants=total_participants,
         active_sagas=active_sagas,
-        total_vouches=len(hv.vouching._vouches),
+        total_vouches=hv.vouching.vouch_count,
         event_count=bus.event_count,
     )
 

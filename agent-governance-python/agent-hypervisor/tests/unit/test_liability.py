@@ -13,6 +13,21 @@ class TestVouchingEngine:
         self.engine = VouchingEngine()
         self.session = "session:test-1"
 
+    def test_vouch_count_accessor(self):
+        """``vouch_count`` is the public alternative to ``len(_vouches)`` —
+        callers (notably the stats API) should not reach into the
+        private dict.
+        """
+        assert self.engine.vouch_count == 0
+        self.engine.vouch("did:mesh:a", "did:mesh:b", self.session, 0.8)
+        assert self.engine.vouch_count == 1
+        self.engine.vouch("did:mesh:c", "did:mesh:d", self.session, 0.8)
+        assert self.engine.vouch_count == 2
+        # Releasing a bond does not remove the record — count includes released.
+        records = list(self.engine._vouches.values())
+        self.engine.release_bond(records[0].vouch_id)
+        assert self.engine.vouch_count == 2
+
     def test_basic_vouch(self):
         record = self.engine.vouch(
             voucher_did="did:mesh:high",
