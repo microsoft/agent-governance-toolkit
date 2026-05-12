@@ -25,6 +25,21 @@ pub mod identity;
 pub mod identity_support;
 pub mod integration_support;
 pub mod lifecycle;
+/// Deprecated: use the [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) crate directly.
+///
+/// `agentmesh::mcp` is a verbatim copy of `agentmesh_mcp::mcp` and will be
+/// removed in the next major release. The two paths resolve to *distinct*
+/// types in the Rust type system, so consumers that mix imports from
+/// `agentmesh::mcp::...` and `agentmesh_mcp::mcp::...` will hit confusing
+/// type-mismatch errors. Standardize on the `agentmesh-mcp` crate.
+///
+/// Tracking issues:
+/// <https://github.com/microsoft/agent-governance-toolkit/issues/2013> and
+/// <https://github.com/microsoft/agent-governance-toolkit/issues/2088>.
+#[deprecated(
+    since = "3.5.0",
+    note = "use the `agentmesh-mcp` crate directly; `agentmesh::mcp` will be removed in the next major release (see issue #2013)"
+)]
 pub mod mcp;
 pub mod policy;
 pub(crate) mod regex_cache;
@@ -76,6 +91,7 @@ pub use integration_support::{
     ShadowAgent,
 };
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
+#[allow(deprecated)]
 pub use mcp::*;
 pub use policy::{PolicyEngine, PolicyError};
 pub use reward_support::{
