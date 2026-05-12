@@ -36,7 +36,7 @@ class TestAgentPrimitives:
         """Test creating an AgentFailure."""
         from agent_primitives import AgentFailure, FailureType, FailureSeverity
         from datetime import datetime, timezone
-        
+
         failure = AgentFailure(
             agent_id="test-agent",
             failure_type=FailureType.TIMEOUT,
@@ -44,9 +44,35 @@ class TestAgentPrimitives:
             context={"action": "test"},
             timestamp=datetime.now(timezone.utc),
         )
-        
+
         assert failure.agent_id == "test-agent"
         assert failure.failure_type == FailureType.TIMEOUT
+
+    def test_default_timestamps_are_timezone_aware(self):
+        """Default-factory timestamps must be tz-aware UTC, not naive.
+
+        Regression guard: ``datetime.utcnow()`` returns a naive datetime that
+        silently misrepresents UTC. Switching to ``datetime.now(timezone.utc)``
+        produces a tz-aware value that survives JSON / ISO-8601 round-trips
+        with the correct ``+00:00`` suffix.
+        """
+        from agent_primitives import AgentFailure, FailureTrace, FailureType
+
+        failure = AgentFailure(
+            agent_id="agent-1",
+            failure_type=FailureType.TIMEOUT,
+            error_message="boom",
+        )
+        assert failure.timestamp.tzinfo is not None
+        assert failure.timestamp.utcoffset().total_seconds() == 0
+
+        trace = FailureTrace(
+            user_prompt="prompt",
+            failed_action={"action": "noop"},
+            error_details="details",
+        )
+        assert trace.timestamp.tzinfo is not None
+        assert trace.timestamp.utcoffset().total_seconds() == 0
 
 
 class TestCMVK:
