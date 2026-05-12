@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -888,21 +889,11 @@ func truncateForFingerprint(value string, max int) string {
 }
 
 func sortStrings(values []string) {
-	for index := 0; index < len(values); index++ {
-		for inner := index + 1; inner < len(values); inner++ {
-			if values[inner] < values[index] {
-				values[index], values[inner] = values[inner], values[index]
-			}
-		}
-	}
+	sort.Strings(values)
 }
 
 func sortDiscoveredAgents(values []DiscoveredAgent) {
-	for index := 0; index < len(values); index++ {
-		for inner := index + 1; inner < len(values); inner++ {
-			if values[inner].Fingerprint < values[index].Fingerprint {
-				values[index], values[inner] = values[inner], values[index]
-			}
-		}
-	}
+	sort.Slice(values, func(i, j int) bool {
+		return values[i].Fingerprint < values[j].Fingerprint
+	})
 }
