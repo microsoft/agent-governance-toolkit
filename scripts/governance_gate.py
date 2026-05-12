@@ -89,7 +89,7 @@ def _validate_policy(policy_data: dict) -> list[str]:
         if not found:
             failures.append(f"{display}: MISSING (field '{field_path}' not found)")
             continue
-        if expected is True and value is not True:
+        if expected is True and not value:
             failures.append(f"{display}: FAIL (expected true, got {value!r})")
         elif expected is list and not isinstance(value, list):
             failures.append(f"{display}: FAIL (expected a list, got {type(value).__name__})")
@@ -128,8 +128,8 @@ def _generate_receipt(
         "commit_sha": commit,
         "policy_hash": f"sha256:{policy_hash}",
         "manifest_hash": f"sha256:{manifest_hash}",
-        "nonce": uuid.uuid4().hex[:16],
-        "timestamp": time.time(),
+        "nonce": uuid.uuid4().hex,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "signature": None,
         "signer_public_key": None,
     }
@@ -145,6 +145,7 @@ def _generate_receipt(
                 receipt["signature"] = base64.b64encode(sig).decode()
                 receipt["signer_public_key"] = base64.b64encode(pub).decode()
         except Exception as exc:
+            print(f"  WARNING: signing failed: {exc}", file=sys.stderr)
             receipt["signature_error"] = str(exc)
 
     return receipt

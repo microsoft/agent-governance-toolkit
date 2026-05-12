@@ -298,8 +298,8 @@ class TestParseArgs:
         monkeypatch.setenv("GITHUB_SHA", "deadbeef")
         monkeypatch.setenv("GITHUB_ACTOR", "octocat")
         args = gg._parse_args([])
-        assert str(args.policy) == "custom/policy.yaml"
-        assert str(args.manifest) == "custom/agents.yaml"
+        assert args.policy == Path("custom/policy.yaml")
+        assert args.manifest == Path("custom/agents.yaml")
         assert args.commit == "deadbeef"
         assert args.deployer == "octocat"
 
