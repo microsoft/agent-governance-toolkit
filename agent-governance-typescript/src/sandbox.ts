@@ -225,7 +225,18 @@ export class DockerSandboxProvider implements SandboxProvider {
 
       execFile('docker', execArgs, { timeout: 60_000 }, (error, stdout, stderr) => {
         const durationSeconds = (Date.now() - startTime) / 1000.0;
-        const exitCode = error && 'code' in error ? (error.code as number ?? 1) : 0;
+        // Node's ExecException.code can be: a numeric exit code (child exited
+        // non-zero), `null` (child killed by a signal — `error.signal` is set
+        // instead), or a string like 'ENOENT' (the spawn itself failed). The
+        // previous `error.code as number ?? 1` cast handled the `null` case
+        // by accident — `null ?? 1` is `1` — but on the spawn-failure path it
+        // let the string ('ENOENT') flow through as a `number`-typed exit
+        // code, and downstream consumers treating `exitCode` as numeric saw
+        // a string. Narrow explicitly: only accept a numeric code; otherwise
+        // synthesise 1 for any error (signal kill, spawn failure, etc.).
+        const exitCode = error
+          ? typeof error.code === 'number' ? error.code : 1
+          : 0;
         const killed = error !== null && 'killed' in error && (error as { killed: boolean }).killed;
 
         const result: SandboxResult = {
