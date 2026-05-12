@@ -366,6 +366,14 @@ class MCPSecurityScanner:
                 stacklevel=2,
             )
         self._tool_registry: dict[str, ToolFingerprint] = {}
+        # Secondary index from `tool_name` to the list of `ToolFingerprint`
+        # records registered under that name (one per server). Used by
+        # `_check_cross_server` so exact-name impersonation detection is
+        # O(1) on registry size instead of O(N): the previous code scanned
+        # the entire `_tool_registry` for every `scan_tool` call, so a
+        # deployment registering K tools across S servers paid O(K*S) on
+        # each scan.
+        self._tool_by_name: dict[str, list[ToolFingerprint]] = {}
         # Bounded ring buffer — unbounded list grew without limit on
         # long-running deployments.
         self._audit_log: deque[dict[str, Any]] = deque(maxlen=10_000)
@@ -562,6 +570,11 @@ class MCPSecurityScanner:
             version=1,
         )
         self._tool_registry[key] = fp
+        # Mirror the new fingerprint into the by-name index for O(1)
+        # cross-server lookups. Append since multiple servers may register
+        # the same tool name (which is precisely what cross-server attack
+        # detection cares about).
+        self._tool_by_name.setdefault(tool_name, []).append(fp)
         return fp
 
     def check_rug_pull(
@@ -875,46 +888,70 @@ class MCPSecurityScanner:
         tool_name: str,
         server_name: str,
     ) -> list[MCPThreat]:
-        """Check for cross-server attack patterns."""
+        """Check for cross-server attack patterns.
+
+        Two patterns are detected:
+
+          1. **Impersonation** — same `tool_name` registered from a
+             different `server_name`. The `_tool_by_name` secondary index
+             gives O(1) lookup of all fingerprints sharing `tool_name`,
+             replacing the previous O(N) full-registry scan.
+
+          2. **Typosquatting** — a name that differs by ≤ 2 edits from an
+             already-registered tool name on a different server. This
+             still requires iterating over distinct tool names (since
+             edit distance has no general index), but we iterate the
+             keys of `_tool_by_name` rather than every fingerprint,
+             which collapses S registrations of the same tool name into
+             a single comparison.
+        """
         threats: list[MCPThreat] = []
 
-        for _key, fp in self._tool_registry.items():
-            # Same tool name from a different server
-            if fp.tool_name == tool_name and fp.server_name != server_name:
+        # 1. Exact-name impersonation — O(1) lookup via secondary index.
+        for fp in self._tool_by_name.get(tool_name, ()):
+            if fp.server_name == server_name:
+                continue
+            threats.append(
+                MCPThreat(
+                    threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
+                    severity=MCPSeverity.CRITICAL,
+                    tool_name=tool_name,
+                    server_name=server_name,
+                    message=(
+                        f"Tool '{tool_name}' already registered from server "
+                        f"'{fp.server_name}' — potential impersonation"
+                    ),
+                    details={"original_server": fp.server_name},
+                )
+            )
+
+        # 2. Typosquatting — iterate distinct names from the by-name index,
+        #    skipping the exact match (handled above) and same-server hits.
+        for other_name, fps in self._tool_by_name.items():
+            if other_name == tool_name:
+                continue
+            if not self._is_typosquat(tool_name, other_name):
+                continue
+            for fp in fps:
+                if fp.server_name == server_name:
+                    continue
                 threats.append(
                     MCPThreat(
                         threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
-                        severity=MCPSeverity.CRITICAL,
+                        severity=MCPSeverity.WARNING,
                         tool_name=tool_name,
                         server_name=server_name,
                         message=(
-                            f"Tool '{tool_name}' already registered from server "
-                            f"'{fp.server_name}' — potential impersonation"
+                            f"Tool name '{tool_name}' resembles "
+                            f"'{fp.tool_name}' from server '{fp.server_name}' "
+                            f"— potential typosquatting"
                         ),
-                        details={"original_server": fp.server_name},
+                        details={
+                            "similar_tool": fp.tool_name,
+                            "similar_server": fp.server_name,
+                        },
                     )
                 )
-
-            # Typosquatting: similar name from a different server
-            if fp.server_name != server_name and fp.tool_name != tool_name:
-                if self._is_typosquat(tool_name, fp.tool_name):
-                    threats.append(
-                        MCPThreat(
-                            threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
-                            severity=MCPSeverity.WARNING,
-                            tool_name=tool_name,
-                            server_name=server_name,
-                            message=(
-                                f"Tool name '{tool_name}' resembles "
-                                f"'{fp.tool_name}' from server '{fp.server_name}' "
-                                f"— potential typosquatting"
-                            ),
-                            details={
-                                "similar_tool": fp.tool_name,
-                                "similar_server": fp.server_name,
-                            },
-                        )
-                    )
 
         return threats
 
