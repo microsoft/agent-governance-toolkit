@@ -37,6 +37,40 @@ pub enum ComplianceFramework {
     Gdpr,
 }
 
+impl ComplianceFramework {
+    /// Approximate count of high-level controls for this framework, used
+    /// as the denominator when computing a compliance score.
+    ///
+    /// Each value reflects the framework's published top-level groupings:
+    ///
+    /// * **EU AI Act** — 8 obligations for high-risk AI systems
+    ///   (Articles 8–15: risk management, data governance, technical
+    ///   documentation, record-keeping, transparency, human oversight,
+    ///   accuracy/robustness/cybersecurity, quality management).
+    /// * **SOC 2** — 5 Trust Services Criteria categories (Security,
+    ///   Availability, Confidentiality, Processing Integrity, Privacy).
+    /// * **HIPAA** — 3 Security Rule safeguard categories
+    ///   (Administrative, Physical, Technical) plus the Privacy Rule and
+    ///   Breach Notification Rule = 5.
+    /// * **GDPR** — 7 data-protection principles enumerated in
+    ///   Article 5(1) (lawfulness, purpose limitation, data minimisation,
+    ///   accuracy, storage limitation, integrity & confidentiality,
+    ///   accountability).
+    ///
+    /// These are coarse approximations chosen because the framework
+    /// publishes them at this level; deployments with a richer control
+    /// catalogue should compute their own score rather than rely on this
+    /// engine's report.
+    pub fn default_control_count(self) -> u32 {
+        match self {
+            ComplianceFramework::EuAiAct => 8,
+            ComplianceFramework::Soc2 => 5,
+            ComplianceFramework::Hipaa => 5,
+            ComplianceFramework::Gdpr => 7,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceViolation {
     pub violation_id: String,
@@ -120,9 +154,12 @@ impl ComplianceEngine {
             .cloned()
             .collect::<Vec<_>>();
         let controls_failed = violations.len() as u32;
-        let total_controls: u32 = 10;
-        let compliance_score = ((total_controls.saturating_sub(controls_failed)) as f64
-            / total_controls as f64)
+        let total_controls = framework.default_control_count();
+        // `.max(1)` is a defensive floor: if a future variant ever returns
+        // 0 the score becomes 0 rather than `0/0 == NaN`.
+        let denominator = total_controls.max(1);
+        let compliance_score = ((denominator.saturating_sub(controls_failed)) as f64
+            / denominator as f64)
             * 100.0;
         ComplianceReport {
             report_id: format!("report_{:016x}", rand::random::<u64>()),
@@ -1616,6 +1653,85 @@ mod tests {
         let report = engine.generate_report(ComplianceFramework::Soc2);
         assert_eq!(report.controls_failed, 1);
         assert!(report.compliance_score < 100.0);
+    }
+
+    #[test]
+    fn compliance_report_uses_framework_specific_control_count() {
+        let engine = ComplianceEngine::new(vec![
+            ComplianceFramework::Soc2,
+            ComplianceFramework::Gdpr,
+            ComplianceFramework::Hipaa,
+            ComplianceFramework::EuAiAct,
+        ]);
+        for framework in [
+            ComplianceFramework::Soc2,
+            ComplianceFramework::Gdpr,
+            ComplianceFramework::Hipaa,
+            ComplianceFramework::EuAiAct,
+        ] {
+            let report = engine.generate_report(framework);
+            assert_eq!(
+                report.total_controls,
+                framework.default_control_count(),
+                "report denominator must match the framework's published \
+                 top-level control count, not a hardcoded value"
+            );
+        }
+    }
+
+    #[test]
+    fn compliance_score_is_full_when_no_violations() {
+        let engine = ComplianceEngine::default();
+        let report = engine.generate_report(ComplianceFramework::Soc2);
+        assert_eq!(report.controls_failed, 0);
+        assert_eq!(report.compliance_score, 100.0);
+    }
+
+    #[test]
+    fn compliance_score_reflects_one_violation_relative_to_framework_size() {
+        let engine = ComplianceEngine::default();
+        engine.record_violation(
+            ComplianceFramework::Soc2,
+            "did:agentmesh:test",
+            "x",
+            "c",
+            "low",
+            "d",
+        );
+        let report = engine.generate_report(ComplianceFramework::Soc2);
+        // SOC 2 = 5 top-level criteria, 1 failed → 4/5 = 80%.
+        assert_eq!(report.compliance_score, 80.0);
+    }
+
+    #[test]
+    fn compliance_score_floors_at_zero_when_violations_exceed_controls() {
+        let engine = ComplianceEngine::default();
+        for i in 0..10 {
+            engine.record_violation(
+                ComplianceFramework::Soc2,
+                "did:agentmesh:test",
+                "x",
+                &format!("c{i}"),
+                "low",
+                "d",
+            );
+        }
+        let report = engine.generate_report(ComplianceFramework::Soc2);
+        assert_eq!(report.compliance_score, 0.0);
+    }
+
+    #[test]
+    fn each_framework_publishes_a_nonzero_control_count() {
+        // Guards the divide-by-zero floor in `generate_report`: every
+        // variant must contribute a positive denominator.
+        for framework in [
+            ComplianceFramework::EuAiAct,
+            ComplianceFramework::Soc2,
+            ComplianceFramework::Hipaa,
+            ComplianceFramework::Gdpr,
+        ] {
+            assert!(framework.default_control_count() > 0);
+        }
     }
 
     #[test]
