@@ -112,6 +112,14 @@ public sealed class CircuitBreaker
             RecordSuccess();
             return result;
         }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is the caller backing out, not a failure of the
+            // underlying service -- recording it as a failure would let a
+            // burst of cancelled requests trip the breaker open against a
+            // perfectly healthy dependency. Let it flow through untouched.
+            throw;
+        }
         catch (Exception)
         {
             RecordFailure();
@@ -130,6 +138,12 @@ public sealed class CircuitBreaker
         {
             await action().ConfigureAwait(false);
             RecordSuccess();
+        }
+        catch (OperationCanceledException)
+        {
+            // See ExecuteAsync<T>: cancellation isn't a failure of the
+            // protected operation; never record it against the breaker.
+            throw;
         }
         catch (Exception)
         {
