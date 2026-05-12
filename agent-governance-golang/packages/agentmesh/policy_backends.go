@@ -574,14 +574,49 @@ func (b *CedarBackend) evaluateCLI(context map[string]interface{}) (BackendDecis
 		return BackendDecision{}, fmt.Errorf("cedar authorize failed: %s", strings.TrimSpace(string(output)))
 	}
 
-	normalized := strings.ToLower(string(output))
-	allowed := strings.Contains(normalized, "allow") && !strings.Contains(normalized, "deny")
+	allowed, parsed := cedarDecisionFromCLIOutput(string(output))
+	if !parsed {
+		return BackendDecision{}, fmt.Errorf("cedar authorize: unrecognised output %q", strings.TrimSpace(string(output)))
+	}
 	return BackendDecision{
 		Allowed:   allowed,
 		Decision:  boolToDecision(allowed),
 		Reason:    fmt.Sprintf("Cedar cli: %s", strings.TrimSpace(string(output))),
 		RawResult: map[string]interface{}{"stdout": string(output)},
 	}, nil
+}
+
+// cedarDecisionFromCLIOutput inspects `cedar authorize` stdout and
+// returns (allowed, true) when the first non-empty line is an
+// unambiguous "ALLOW" or "DENY" token (case-insensitive). Returns
+// (_, false) if the output cannot be interpreted unambiguously.
+//
+// The previous implementation used
+// `strings.Contains(stdout, "allow") && !strings.Contains(stdout, "deny")`,
+// which mis-matches inside words and adjective phrases — output like
+// "DENY (request was disallowed)" contains both substrings and would
+// be classified DENY by coincidence, and "ALLOW: caveats include the
+// deny-list scoping" would be mis-classified DENY.
+//
+// A future improvement is to invoke `cedar authorize --json` and parse
+// the structured response, once the project pins a Cedar CLI version
+// known to support that flag.
+func cedarDecisionFromCLIOutput(stdout string) (allowed bool, parsed bool) {
+	for _, line := range strings.Split(stdout, "\n") {
+		token := strings.TrimSpace(strings.ToLower(line))
+		if token == "" {
+			continue
+		}
+		switch token {
+		case "allow":
+			return true, true
+		case "deny":
+			return false, true
+		}
+		// First non-empty line is neither token — refuse to guess.
+		return false, false
+	}
+	return false, false
 }
 
 func (b *CedarBackend) evaluateBuiltin(context map[string]interface{}) (BackendDecision, error) {
