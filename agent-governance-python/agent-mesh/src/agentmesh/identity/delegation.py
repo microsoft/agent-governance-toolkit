@@ -105,12 +105,20 @@ class DelegationLink(BaseModel):
     previous_link_hash: Optional[str] = Field(None, description="Hash of previous link in chain")
 
     def verify_capability_narrowing(self) -> bool:
-        """Verify that delegated capabilities are a subset of parent's."""
-        for cap in self.delegated_capabilities:
-            if cap not in self.parent_capabilities:
-                if not self._is_narrower_capability(cap, self.parent_capabilities):
-                    return False
-        return True
+        """Verify that every delegated capability is a subset of the parent's.
+
+        A capability is considered narrowed when it appears literally
+        in the parent set or matches a parent wildcard via
+        ``_is_narrower_capability``. The previous early-return form
+        fanned the same predicate across two nested ``if`` blocks; the
+        ``all(...)`` form is shorter, has one predicate, and short-
+        circuits identically.
+        """
+        return all(
+            cap in self.parent_capabilities
+            or self._is_narrower_capability(cap, self.parent_capabilities)
+            for cap in self.delegated_capabilities
+        )
 
     def _is_narrower_capability(self, cap: str, parent_caps: list[str]) -> bool:
         """Check if a capability is a narrowed version of a parent capability."""
