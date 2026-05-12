@@ -27,7 +27,22 @@ public sealed class ProcessScanner
         ["google-adk"] = "google-adk"
     };
 
-    private static readonly Regex SecretPattern = new(@"(?i)(api[_-]?key|token|password|secret|jwt)=\S+", RegexOptions.CultureInvariant);
+    // Compiled + ignore-case + bounded match timeout. The inline `(?i)` was
+    // replaced with an options flag (equivalent), `Compiled` amortises the
+    // first call's setup, and a 250ms ceiling caps any pathological input
+    // (e.g. a multi-megabyte process name) so the redactor cannot stall a
+    // scan thread. The pattern itself has no alternation/quantifier overlap,
+    // so this is defence-in-depth rather than fixing a catastrophic-backtrack.
+    private static readonly Regex SecretPattern = new(
+        @"(api[_-]?key|token|password|secret|jwt)=\S+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(250));
+
+    // Hard cap on text fed to the redactor / substring matcher. Process names
+    // and executable paths above this length are almost certainly hostile or
+    // truncated junk; clipping bounds the linear-time regex pass and protects
+    // the per-process dictionary entries from absurd payloads.
+    private const int MaxScannedTextLength = 4096;
 
     /// <summary>
     /// Scan currently running processes.
@@ -45,12 +60,29 @@ public sealed class ProcessScanner
 
             try
             {
-                var name = process.ProcessName;
-                var executablePath = TryGetExecutablePath(process);
-                var framework = DetectFramework($"{name} {executablePath}");
+                var name = ClipForScan(process.ProcessName);
+
+                // Two-phase detection: try the cheap name check first; only
+                // pay the MainModule access cost when the name alone cannot
+                // classify the process. The previous version always called
+                // TryGetExecutablePath, which triggers PROCESS_QUERY_INFORMATION
+                // for every running PID.
+                string? executablePath = null;
+                var framework = DetectFramework(name);
                 if (framework is null)
                 {
-                    continue;
+                    var path = TryGetExecutablePath(process);
+                    if (path is null)
+                    {
+                        continue;
+                    }
+
+                    executablePath = ClipForScan(path);
+                    framework = DetectFramework(executablePath);
+                    if (framework is null)
+                    {
+                        continue;
+                    }
                 }
 
                 var source = process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -106,7 +138,31 @@ public sealed class ProcessScanner
     /// <summary>
     /// Redact obvious secret-like key/value fragments from captured process metadata.
     /// </summary>
-    public static string RedactSensitiveText(string value) => SecretPattern.Replace(value, "$1=<redacted>");
+    public static string RedactSensitiveText(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        try
+        {
+            return SecretPattern.Replace(value, "$1=<redacted>");
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // Refuse to return the raw input on timeout — the very thing we
+            // were trying to redact (a secret-shaped fragment) might be in it.
+            return "<scrubbed:regex-timeout>";
+        }
+    }
+
+    private static string ClipForScan(string value)
+    {
+        return value.Length <= MaxScannedTextLength
+            ? value
+            : value[..MaxScannedTextLength];
+    }
 
     private static string? DetectFramework(string value)
     {
