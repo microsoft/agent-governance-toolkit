@@ -281,4 +281,44 @@ public class PolicyRuleTests
         public override string ToString() =>
             throw new NotSupportedException("simulated rule-data bug");
     }
+
+    [Fact]
+    public void Evaluate_NestedDotNotation_WinsOverFlatDottedKey()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "nested-wins",
+            Condition = "data.classification == 'secret'",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["data"] = new Dictionary<string, object>
+            {
+                ["classification"] = "secret",
+            },
+            ["data.classification"] = "public",
+        };
+
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_FallsBackToFlatDottedKey_WhenNoNestedShape()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "flat-fallback",
+            Condition = "data.classification == 'public'",
+            Action = PolicyAction.Allow
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["data.classification"] = "public",
+        };
+
+        Assert.True(rule.Evaluate(context));
+    }
 }
