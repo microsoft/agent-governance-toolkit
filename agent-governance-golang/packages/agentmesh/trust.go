@@ -38,6 +38,11 @@ type persistedState struct {
 	Interactions int     `json:"interactions"`
 }
 
+// maxTrackedAgents caps the number of unique agent IDs tracked in the
+// scores map to bound memory growth.  When exceeded the least-recently-
+// updated entry is evicted.
+const maxTrackedAgents = 10_000
+
 // TrustManager tracks and updates per-agent trust scores.
 type TrustManager struct {
 	mu     sync.RWMutex
@@ -140,10 +145,28 @@ func (tm *TrustManager) RecordFailure(agentID string, penalty float64) {
 func (tm *TrustManager) getOrCreate(agentID string) *scoreState {
 	s, ok := tm.scores[agentID]
 	if !ok {
+		if len(tm.scores) >= maxTrackedAgents {
+			tm.evictOldest()
+		}
 		s = &scoreState{score: tm.config.InitialScore}
 		tm.scores[agentID] = s
 	}
 	return s
+}
+
+// evictOldest removes the entry with the fewest interactions (least active).
+func (tm *TrustManager) evictOldest() {
+	var evictKey string
+	minInteractions := int(^uint(0) >> 1) // max int
+	for k, v := range tm.scores {
+		if v.interactions < minInteractions {
+			minInteractions = v.interactions
+			evictKey = k
+		}
+	}
+	if evictKey != "" {
+		delete(tm.scores, evictKey)
+	}
 }
 
 func (tm *TrustManager) applyDecay(score float64) float64 {
