@@ -165,7 +165,7 @@ class Ticket:
     category: TicketCategory = TicketCategory.GENERAL
     priority: Priority = Priority.MEDIUM
     status: TicketStatus = TicketStatus.OPEN
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     assigned_to: Optional[str] = None
     tags: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)

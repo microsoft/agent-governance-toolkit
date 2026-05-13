@@ -13,7 +13,7 @@ This allows reducing context usage by 40-60% over the agent's lifetime.
 
 import logging
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models import (
     CorrectionPatch, ClassifiedPatch, PatchDecayType, 
@@ -257,7 +257,7 @@ class SemanticPurge:
         
         # Record purge event
         purge_event = {
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "old_version": old_model_version,
             "new_version": new_model_version,
             "purged_count": len(purged_patches),

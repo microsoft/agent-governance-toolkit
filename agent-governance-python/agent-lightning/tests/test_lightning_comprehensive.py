@@ -414,7 +414,7 @@ class TestPolicyViolation:
         assert v.penalty == 0.0
 
     def test_timestamp_is_timezone_aware(self):
-        """Regression: ``datetime.utcnow()`` produced a naive timestamp
+        """Regression: ``datetime.now(timezone.utc)`` produced a naive timestamp
         that compared-different against ``datetime.now(timezone.utc)``
         used elsewhere in the codebase. The default must be aware."""
         v = PolicyViolation(PolicyViolationType.BLOCKED, "P", "d", "high")

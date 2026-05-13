@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -388,7 +388,7 @@ class CMVKBenchmark:
             avg_latency_ms=avg_latency,
             by_category={},
             by_difficulty={},
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             config=config or {}
         )
     

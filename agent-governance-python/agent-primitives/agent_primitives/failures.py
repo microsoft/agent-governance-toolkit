@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, ConfigDict
 def _utcnow() -> datetime:
     """Return the current UTC time as a timezone-aware datetime.
 
-    ``datetime.utcnow()`` was deprecated in Python 3.12; it returns a naive
+    ``datetime.now(timezone.utc)`` was deprecated in Python 3.12; it returns a naive
     datetime that silently misrepresents UTC. This helper returns a proper
     tz-aware UTC datetime, which is what callers expect when they read these
     timestamps back later (e.g. for audit log serialisation).

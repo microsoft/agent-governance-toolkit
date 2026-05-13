@@ -51,7 +51,7 @@ class TestAgentPrimitives:
     def test_default_timestamps_are_timezone_aware(self):
         """Default-factory timestamps must be tz-aware UTC, not naive.
 
-        Regression guard: ``datetime.utcnow()`` returns a naive datetime that
+        Regression guard: ``datetime.now(timezone.utc)`` returns a naive datetime that
         silently misrepresents UTC. Switching to ``datetime.now(timezone.utc)``
         produces a tz-aware value that survives JSON / ISO-8601 round-trips
         with the correct ``+00:00`` suffix.

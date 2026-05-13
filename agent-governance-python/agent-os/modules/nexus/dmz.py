@@ -114,7 +114,7 @@ class DMZRequest(BaseModel):
     )
     
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = Field(
         default=None,
         description="When this request expires"
@@ -130,7 +130,7 @@ class SignedPolicy:
     
     # Signer
     signer_did: str
-    signed_at: datetime = field(default_factory=datetime.utcnow)
+    signed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Signature
     signature: str = ""

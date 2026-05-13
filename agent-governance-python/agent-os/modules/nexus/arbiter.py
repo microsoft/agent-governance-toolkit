@@ -84,7 +84,7 @@ class DisputeResolution:
     liar_identified: Optional[str] = None  # DID of agent found to be lying
     
     # Timestamps
-    resolved_at: datetime = field(default_factory=datetime.utcnow)
+    resolved_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Nexus attestation
     arbiter_signature: str = ""
