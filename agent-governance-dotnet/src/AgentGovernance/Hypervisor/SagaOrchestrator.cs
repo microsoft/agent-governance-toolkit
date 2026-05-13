@@ -207,7 +207,7 @@ public sealed class SagaOrchestrator
             }
             catch (Exception ex)
             {
-                lock (saga.SyncRoot) { step.Error = $"Step '{step.ActionId}' failed: {ex.Message}"; }
+                lock (saga.SyncRoot) { step.Error = $"Step '{step.ActionId}' failed — see server logs"; }
             }
 
             // Stop retrying if the caller cancelled the operation
@@ -258,7 +258,7 @@ public sealed class SagaOrchestrator
                 lock (saga.SyncRoot)
                 {
                     step.State = StepState.CompensationFailed;
-                    step.Error = $"Compensation for '{step.ActionId}' failed: {ex.Message}";
+                    step.Error = $"Compensation for '{step.ActionId}' failed — see server logs";
                     saga.FailedCompensations.Add(step.ActionId);
                 }
             }

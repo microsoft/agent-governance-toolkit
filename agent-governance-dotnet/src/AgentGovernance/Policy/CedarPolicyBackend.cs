@@ -81,8 +81,8 @@ public sealed class CedarPolicyBackend : IExternalPolicyBackend
             {
                 Backend = Name,
                 Allowed = false,
-                Reason = $"Cedar evaluation failed: {ex.Message}",
-                Error = ex.Message,
+                Reason = "Cedar evaluation failed — see server logs for details",
+                Error = "INTERNAL_ERROR",
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }

@@ -108,8 +108,8 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
             {
                 Backend = Name,
                 Allowed = false,
-                Reason = $"OPA evaluation failed: {ex.Message}",
-                Error = ex.Message,
+                Reason = "OPA evaluation failed — see server logs for details",
+                Error = "INTERNAL_ERROR",
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }
@@ -159,8 +159,8 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
             {
                 Backend = Name,
                 Allowed = false,
-                Reason = $"OPA evaluation failed: {ex.Message}",
-                Error = ex.Message,
+                Reason = "OPA evaluation failed — see server logs for details",
+                Error = "INTERNAL_ERROR",
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }
