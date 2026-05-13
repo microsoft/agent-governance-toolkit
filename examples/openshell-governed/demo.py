@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "packages" / "agentmesh-integrations" / "openshell-skill"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "agent-governance-python" / "agentmesh-integrations" / "openshell-skill"))
 from openshell_agentmesh.skill import GovernanceSkill
 
 def main():
