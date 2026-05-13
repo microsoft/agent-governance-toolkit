@@ -372,21 +372,31 @@ A few intentional properties of this mapping:
 
 ## Step 3 — Bootstrap the resource group and sandbox group
 
-You can do this with `az` or with `azure-mgmt-sandbox`. AGT's provider can
-optionally create the group on demand:
+The **resource group must already exist** — `ACASandboxProvider` does not
+create or manage resource groups. Create one out-of-band first:
+
+```bash
+az group create --name agents-rg --location westus2
+```
+
+The **sandbox group** (the sub-resource inside the RG) *can* be
+auto-created by the provider on demand:
 
 ```python
 from agent_sandbox import ACASandboxProvider
 
 provider = ACASandboxProvider(
-    resource_group="agents-rg",
+    resource_group="agents-rg",       # MUST already exist
     sandbox_group="agents",
-    ensure_group_location="westus2",  # creates group if missing
+    ensure_group_location="westus2",  # creates sandbox group if missing
 )
 ```
 
 Under the hood this calls `SandboxGroupManagementClient.create_group` only
-when `get_group` returns 404, so the call is idempotent.
+when `get_group` returns 404, so the call is idempotent. If the enclosing
+resource group is missing, the create call surfaces Azure's
+`ResourceGroupNotFound` 404 wrapped in a `RuntimeError` from
+`create_session`.
 
 For tighter control (custom managed identity, tags, separate
 provisioning pipeline), do it yourself once:
@@ -1289,6 +1299,7 @@ with many short sessions, prefer one short-lived sandbox per session
 | `azure-sandbox` not installed | `is_available()` returns `False`; `create_session` raises `RuntimeError` | `pip install azure-sandbox` |
 | `agent-os-kernel` not installed | Provider logs a warning and runs ungated (matches Docker backend) | Pin `agent-os-kernel` if you need fail-closed |
 | Invalid `agent_id` or `sandbox_group` | `ValueError` at `create_session` | Use `[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}` |
+| Resource group does not exist | `RuntimeError` from `create_session` wrapping Azure `ResourceGroupNotFound` 404 | Create the RG first: `az group create -n <rg> -l <region>`. The provider does not auto-create RGs. |
 | Sandbox group does not exist | `HTTPStatusError` 404 from `create_sandbox` | Pass `ensure_group_location` or pre-create the group |
 | Sandbox quota exceeded | `HTTPStatusError` 429 | Configure quota or destroy idle sessions |
 | Code exceeds `cfg.timeout_seconds` | `SandboxResult.killed = True`, `kill_reason` set | Treat as a failed execution; the sandbox is still alive — call `destroy_session` |

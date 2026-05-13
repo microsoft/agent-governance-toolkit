@@ -34,7 +34,6 @@ lifetime). Total spend per full run is small but non-zero.
 from __future__ import annotations
 
 import os
-import time
 import uuid
 
 import pytest

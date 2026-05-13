@@ -426,9 +426,17 @@ async def _verify_egress_audit(
     # We only assert on a pypi.org Allow inside the exec window. Other
     # entries (TLS handshakes to api.openai.com from the planner step,
     # the example.com Deny from snippet (c), etc.) are fine to ignore.
+    #
+    # Compare against the full hostname (or its subdomain segments) rather
+    # than a substring endswith of the raw string -- a host like
+    # ``evilpypi.org`` would slip past a naive ``.endswith("pypi.org")``
+    # check. See CodeQL py/incomplete-url-substring-sanitization.
     matching = [
         e for e in entries
-        if (e.get("host") or "").endswith("pypi.org")
+        if (
+            (host := (e.get("host") or "").lower()) == "pypi.org"
+            or host.endswith(".pypi.org")
+        )
         and (e.get("action") or "").lower() == "allow"
     ]
     if not matching:

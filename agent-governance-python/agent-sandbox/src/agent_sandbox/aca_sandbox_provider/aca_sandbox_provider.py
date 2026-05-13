@@ -140,10 +140,23 @@ def _network_default(policy: Any) -> str:
 class ACASandboxProvider(SandboxProvider):
     """``SandboxProvider`` backed by Azure Container Apps sandboxes.
 
+    .. note::
+       The ``resource_group`` **must already exist** in the target
+       subscription. This provider does not create or manage resource
+       groups — create one out-of-band first (e.g.
+       ``az group create -n my-rg -l westus2``) and pass its name here.
+       Calling :meth:`create_session` against a non-existent resource
+       group surfaces the Azure 404 as a ``RuntimeError`` wrapping the
+       upstream ``ResourceGroupNotFound`` error.
+
+       Sandbox groups (the sub-resource inside the RG) *can* be
+       auto-created — see ``ensure_group_location`` below.
+
     Parameters
     ----------
     resource_group:
-        Default resource group containing the sandbox group.
+        Default resource group containing the sandbox group.  Must
+        already exist; see the note above.
     sandbox_group:
         Sandbox group that holds per-agent sandboxes.  Must already exist
         unless ``ensure_group_location`` is set, in which case the
@@ -158,7 +171,8 @@ class ACASandboxProvider(SandboxProvider):
         (default ``"ubuntu"``).
     ensure_group_location:
         If set, the sandbox group will be created in this Azure region
-        when it does not already exist.
+        when it does not already exist.  The enclosing
+        ``resource_group`` is **not** created — it must pre-exist.
     """
 
     def __init__(
@@ -527,8 +541,15 @@ class ACASandboxProvider(SandboxProvider):
             if callable(close):
                 try:
                     close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    # Teardown is best-effort: a failure here must not mask
+                    # the original error (or a normal exit). Log at debug
+                    # so operators can still diagnose if needed.
+                    logger.debug(
+                        "Ignoring error while closing client %s: %s",
+                        type(client).__name__,
+                        exc,
+                    )
 
     def __enter__(self) -> "ACASandboxProvider":
         return self

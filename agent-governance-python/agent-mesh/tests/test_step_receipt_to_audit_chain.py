@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import pytest
-
 from agentmesh.governance.audit import AuditEntry, MerkleAuditChain
 
 
