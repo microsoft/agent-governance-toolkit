@@ -720,3 +720,33 @@ func TestRateLimitNilContextRetainsGlobalBehavior(t *testing.T) {
 		t.Fatalf("call 3: got %q, want rate-limit", d)
 	}
 }
+
+// Regression: checkRateLimit used to increment count then compare,
+// so once over the limit the counter grew unboundedly. After the fix,
+// the counter stays pinned at MaxCalls.
+func TestRateLimitCounterDoesNotGrowAfterDeny(t *testing.T) {
+	pe := NewPolicyEngine([]PolicyRule{
+		{Action: "api.call", Effect: Allow, MaxCalls: 3, Window: "60s"},
+	})
+	const key = "api.call\x1f\x1f"
+
+	for i := 0; i < 3; i++ {
+		if d := pe.Evaluate("api.call", nil); d != Allow {
+			t.Fatalf("call %d: decision = %q, want allow", i+1, d)
+		}
+	}
+
+	if d := pe.Evaluate("api.call", nil); d != RateLimit {
+		t.Fatalf("call 4: decision = %q, want rate-limit", d)
+	}
+	if got := pe.rateLimits[key].count; got != 3 {
+		t.Errorf("after first deny, count = %d, want 3", got)
+	}
+
+	for i := 4; i < 6; i++ {
+		_ = pe.Evaluate("api.call", nil)
+	}
+	if got := pe.rateLimits[key].count; got != 3 {
+		t.Errorf("after multiple denies, count = %d, want 3", got)
+	}
+}

@@ -81,27 +81,32 @@ func (pe *PolicyEngine) LoadCedar(options CedarOptions) {
 
 // Evaluate returns the decision for the given action and context.
 // Rules are evaluated in order; first match wins. Default is Deny.
+//
+// Concurrency: the rule scan runs under RLock so concurrent evaluations
+// don't serialize. Only checkRateLimit acquires the write lock.
 func (pe *PolicyEngine) Evaluate(action string, context map[string]interface{}) PolicyDecision {
-	pe.mu.Lock()
+	pe.mu.RLock()
 
-	for _, rule := range pe.rules {
-		if matchAction(rule.Action, action) && matchConditions(rule.Conditions, context) {
-			if rule.MaxCalls > 0 {
-				decision := pe.checkRateLimit(rule, context)
-				pe.mu.Unlock()
-				return decision
-			}
-			if rule.MinApprovals > 0 {
-				pe.mu.Unlock()
-				return RequiresApproval
-			}
-			pe.mu.Unlock()
-			return rule.Effect
+	var matched *PolicyRule
+	for i := range pe.rules {
+		r := &pe.rules[i]
+		if matchAction(r.Action, action) && matchConditions(r.Conditions, context) {
+			matched = r
+			break
 		}
 	}
-
 	backends := append([]ExternalPolicyBackend(nil), pe.backends...)
-	pe.mu.Unlock()
+	pe.mu.RUnlock()
+
+	if matched != nil {
+		if matched.MaxCalls > 0 {
+			return pe.checkRateLimit(*matched, context)
+		}
+		if matched.MinApprovals > 0 {
+			return RequiresApproval
+		}
+		return matched.Effect
+	}
 
 	backendContext := clonePolicyContext(context)
 	if _, ok := backendContext["action"]; !ok {
@@ -148,7 +153,12 @@ func rateLimitContextString(v interface{}) string {
 // noisy caller does not exhaust the budget for all other agents or tenants.
 // Missing context keys collapse to an empty segment — callers that don't
 // supply agent_id / tenant retain the previous globally-scoped behavior.
+//
+// Acquires the write lock internally; callers must NOT hold any lock.
 func (pe *PolicyEngine) checkRateLimit(rule PolicyRule, context map[string]interface{}) PolicyDecision {
+	pe.mu.Lock()
+	defer pe.mu.Unlock()
+
 	agentID := rateLimitContextString(context["agent_id"])
 	tenant := rateLimitContextString(context["tenant"])
 	key := rule.Action + "\x1f" + agentID + "\x1f" + tenant
@@ -171,10 +181,11 @@ func (pe *PolicyEngine) checkRateLimit(rule PolicyRule, context map[string]inter
 		return Allow
 	}
 
-	state.count++
-	if state.count > rule.MaxCalls {
+	// Check BEFORE incrementing so the counter never grows past MaxCalls.
+	if state.count >= rule.MaxCalls {
 		return RateLimit
 	}
+	state.count++
 	return Allow
 }
 
