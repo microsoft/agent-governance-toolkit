@@ -257,7 +257,9 @@ func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*E
 
 	ctx, cancel := context.WithTimeout(context.Background(), dockerExecTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "docker", "exec", name, "sh", "-c", code)
+	// Avoid shell interpolation: pipe code via stdin instead of sh -c.
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", name, "sh")
+	cmd.Stdin = strings.NewReader(code)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

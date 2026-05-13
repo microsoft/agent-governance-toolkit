@@ -385,7 +385,7 @@ class HashChainVerifier:
 
             # Content hash
             expected_hash = entry._compute_content_hash()
-            if entry.content_hash != expected_hash:
+            if not hmac.compare_digest(entry.content_hash, expected_hash):
                 errors.append(
                     f"Entry {idx} ({entry.entry_id}): content hash mismatch"
                 )

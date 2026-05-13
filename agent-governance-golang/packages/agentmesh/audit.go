@@ -5,6 +5,7 @@ package agentmesh
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -96,7 +97,7 @@ func (al *AuditLogger) Verify() bool {
 
 	for i, entry := range al.entries {
 		expected := computeHash(entry)
-		if entry.Hash != expected {
+		if subtle.ConstantTimeCompare([]byte(entry.Hash), []byte(expected)) != 1 {
 			return false
 		}
 		if i == 0 {

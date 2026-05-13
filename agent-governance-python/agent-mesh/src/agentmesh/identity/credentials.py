@@ -304,7 +304,7 @@ class CredentialManager:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
 
         for cred in self._credentials.values():
-            if cred.token_hash == token_hash:
+            if hmac.compare_digest(cred.token_hash, token_hash):
                 if cred.is_valid():
                     return cred
                 return None  # Found but invalid

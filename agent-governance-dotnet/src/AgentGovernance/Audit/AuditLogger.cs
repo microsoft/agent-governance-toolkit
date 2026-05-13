@@ -170,7 +170,9 @@ public sealed class AuditLogger
                     entry.Seq, entry.Timestamp, entry.AgentId,
                     entry.Action, entry.Decision, entry.PreviousHash);
 
-                if (entry.Hash != recomputed)
+                if (!CryptographicOperations.FixedTimeEquals(
+                        Encoding.UTF8.GetBytes(entry.Hash),
+                        Encoding.UTF8.GetBytes(recomputed)))
                 {
                     return false;
                 }

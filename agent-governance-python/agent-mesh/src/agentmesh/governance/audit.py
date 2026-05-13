@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional, Any
 from pydantic import BaseModel, Field
 import hashlib
+import hmac
 import json
 import uuid
 
@@ -85,7 +86,7 @@ class AuditEntry(BaseModel):
         Returns:
             ``True`` if ``entry_hash`` equals ``compute_hash()``.
         """
-        return self.entry_hash == self.compute_hash()
+        return hmac.compare_digest(self.entry_hash, self.compute_hash())
 
     # ── CloudEvents v1.0 ──────────────────────────────────
 

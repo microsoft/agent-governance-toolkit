@@ -33,6 +33,17 @@ fn hex_sha256(input: &str) -> String {
         .collect()
 }
 
+/// Constant-time byte comparison to prevent timing side-channels.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
+}
+
 fn parse_agent_name_from_did(did: &str) -> Result<&str, IdentityError> {
     did.strip_prefix("did:agentmesh:")
         .filter(|name| !name.is_empty())
@@ -190,7 +201,7 @@ impl Credential {
     }
 
     pub fn verify_token(&self, token: &str) -> bool {
-        self.token_hash == hex_sha256(token)
+        constant_time_eq(self.token_hash.as_bytes(), hex_sha256(token).as_bytes())
     }
 
     pub fn revoke(&mut self, reason: &str) {
@@ -564,7 +575,7 @@ impl ScopeChain {
             }
             previous_hash = Some(link.link_hash.as_str());
         }
-        self.chain_hash == self.compute_hash()
+        constant_time_eq(self.chain_hash.as_bytes(), self.compute_hash().as_bytes())
     }
 }
 

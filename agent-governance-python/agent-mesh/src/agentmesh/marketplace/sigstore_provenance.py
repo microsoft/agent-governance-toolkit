@@ -47,6 +47,7 @@ References:
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import subprocess
@@ -349,7 +350,7 @@ def verify_provenance(
 
     attestation = ProvenanceAttestation.load(attestation_path)
     actual_digest = _sha256_file(artifact_path)
-    digest_match = actual_digest == attestation.subject_digest
+    digest_match = hmac.compare_digest(actual_digest, attestation.subject_digest)
 
     if not digest_match:
         return VerificationResult(
