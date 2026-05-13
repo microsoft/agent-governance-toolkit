@@ -46,6 +46,7 @@ REGISTERED_PACKAGES = {
     "opentelemetry-sdk", "fhir.resources", "hl7apy", "zenpy", "freshdesk",
     "google-adk", "safety", "jupyter", "vitest", "tsup", "typescript",
     "requests",
+    "twine",
     # Dashboard / visualization (used in examples)
     "streamlit", "plotly", "pandas", "networkx", "matplotlib", "pyvis",
     # Async / caching (used in examples)
@@ -211,8 +212,24 @@ def check_file(filepath: str) -> list[str]:
     except (OSError, UnicodeDecodeError):
         return findings
 
+    is_shell = filepath.endswith((".sh", ".bash"))
+
     for match in PIP_INSTALL_RE.finditer(content):
         line_num = content[:match.start()].count("\n") + 1
+        # For shell scripts, filter out matches that are inside a comment
+        # or an echo/printf invocation. Only the current shell command
+        # segment (split on ;, &&, ||, |) is examined so that
+        # `echo done; pip install foo` is still flagged.
+        if is_shell:
+            line_start = content.rfind("\n", 0, match.start()) + 1
+            before_pip = content[line_start:match.start()]
+            # Take the last command segment on this line.
+            segment = re.split(r';|&&|\|\||(?<!\|)\|(?!\|)', before_pip)[-1]
+            if "#" in segment:
+                continue
+            stripped = segment.lstrip()
+            if re.match(r'(?:sudo\s+)?(?:echo|printf)\b', stripped):
+                continue
         packages = extract_package_names(match.group(1))
         for pkg in packages:
             if pkg.lower() not in {p.lower() for p in REGISTERED_PACKAGES}:
@@ -412,7 +429,7 @@ def main() -> int:
         )
         files = [
             f for f in result.stdout.strip().split("\n")
-            if f.endswith((".md", ".py", ".ts", ".txt", ".yaml", ".yml", ".ipynb", ".svg"))
+            if f.endswith((".md", ".py", ".ts", ".txt", ".yaml", ".yml", ".ipynb", ".svg", ".sh", ".bash"))
         ]
 
     all_findings = []
