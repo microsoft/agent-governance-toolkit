@@ -3,7 +3,7 @@
 """Agent Sandbox — execution isolation for AI agents.
 
 Provides ``SandboxProvider``, the abstract base class for all sandbox
-backends, plus two built-in implementations:
+backends, plus three built-in implementations:
 
 * :class:`DockerSandboxProvider` — hardened Docker containers with
   policy-driven resource limits, tool/network proxies, and filesystem
@@ -12,6 +12,9 @@ backends, plus two built-in implementations:
   upstream `hyperlight-sandbox <https://github.com/hyperlight-dev/hyperlight-sandbox>`_
   project (CNCF Sandbox). Capability-bound tools and domains, with
   in-memory snapshots.
+* :class:`AzureSandboxProvider` — Azure Dynamic Container (ADC)
+  managed sandbox sessions with host-side policy gating and Azure-side
+  egress allowlist enforcement.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -55,6 +58,13 @@ except ImportError:
     SnapshotHandle = None  # type: ignore[assignment,misc]
     hyperlight_config_from_policy = None  # type: ignore[assignment]
 
+# Lazy import: AzureSandboxProvider requires the optional
+# ``azure-sandbox`` (and optionally ``azure-mgmt-sandbox``) SDKs.
+try:
+    from agent_sandbox.azureadc_sandbox_provider import AzureSandboxProvider
+except ImportError:
+    AzureSandboxProvider = None  # type: ignore[assignment,misc]
+
 try:
     __version__ = version("agent-sandbox")
 except PackageNotFoundError:
@@ -62,6 +72,7 @@ except PackageNotFoundError:
 __author__ = "Microsoft Corporation"
 
 __all__ = [
+    "AzureSandboxProvider",
     "DockerSandboxProvider",
     "ExecutionHandle",
     "ExecutionStatus",
