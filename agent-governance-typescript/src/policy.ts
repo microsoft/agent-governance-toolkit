@@ -386,7 +386,7 @@ export class PolicyEngine {
   loadYaml(yamlContent: string): Policy {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const yaml = require('js-yaml');
-    const data = yaml.load(yamlContent) as Record<string, unknown>;
+    const data = yaml.load(yamlContent, { schema: yaml.DEFAULT_SCHEMA }) as Record<string, unknown>;
     const policy = dataToPolicy(data);
     this.loadPolicy(policy);
     return policy;
@@ -610,7 +610,7 @@ export class PolicyEngine {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const yaml = require('js-yaml');
     const content = readFileSync(yamlPath, 'utf-8');
-    const doc = yaml.load(content) as { rules?: PolicyRule[] };
+    const doc = yaml.load(content, { schema: yaml.DEFAULT_SCHEMA }) as { rules?: PolicyRule[] };
     if (doc?.rules && Array.isArray(doc.rules)) {
       this._legacyRules.push(...doc.rules);
     }
