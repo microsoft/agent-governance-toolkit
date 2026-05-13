@@ -17,9 +17,9 @@ Policy is loaded at session creation time:
 
 Example::
 
-    from agent_sandbox import AzureSandboxProvider
+    from agent_sandbox import ACASandboxProvider
 
-    provider = AzureSandboxProvider(
+    provider = ACASandboxProvider(
         resource_group="my-rg",
         sandbox_group="agents",
     )
@@ -71,7 +71,7 @@ def _validate_resource_name(value: str, label: str) -> None:
         )
 
 
-def azure_config_from_policy(
+def aca_config_from_policy(
     policy: Any, base: SandboxConfig
 ) -> SandboxConfig:
     """Project policy fields onto a :class:`SandboxConfig`.
@@ -137,7 +137,7 @@ def _network_default(policy: Any) -> str:
     return "deny"
 
 
-class AzureSandboxProvider(SandboxProvider):
+class ACASandboxProvider(SandboxProvider):
     """``SandboxProvider`` backed by Azure Container Apps sandboxes.
 
     Parameters
@@ -198,7 +198,7 @@ class AzureSandboxProvider(SandboxProvider):
         except ImportError:
             logger.warning(
                 "azure-sandbox is not installed — "
-                "AzureSandboxProvider is unavailable"
+                "ACASandboxProvider is unavailable"
             )
             return
         except Exception as exc:
@@ -314,7 +314,7 @@ class AzureSandboxProvider(SandboxProvider):
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         if not self._available:
-            raise RuntimeError("AzureSandboxProvider is not available")
+            raise RuntimeError("ACASandboxProvider is not available")
 
         _validate_resource_name(agent_id, "agent_id")
 
@@ -325,7 +325,7 @@ class AzureSandboxProvider(SandboxProvider):
         policy_provided = policy is not None
 
         if policy is not None:
-            cfg = azure_config_from_policy(policy, cfg)
+            cfg = aca_config_from_policy(policy, cfg)
             allow_hosts = _network_allowlist(policy)
             net_default = _network_default(policy)
             try:
@@ -530,7 +530,7 @@ class AzureSandboxProvider(SandboxProvider):
                 except Exception:
                     pass
 
-    def __enter__(self) -> "AzureSandboxProvider":
+    def __enter__(self) -> "ACASandboxProvider":
         return self
 
     def __exit__(self, *args: Any) -> None:

@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 """Schema tests for the sandbox-related ``PolicyDocument`` fields.
 
-These tests pin the contract that ``AzureSandboxProvider`` (and any
+These tests pin the contract that ``ACASandboxProvider`` (and any
 future ``SandboxProvider`` backend) relies on:
 
 * ``defaults.network_default`` exists, defaults to ``"deny"``

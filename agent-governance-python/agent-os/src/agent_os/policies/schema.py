@@ -117,7 +117,7 @@ class PolicyDocument(BaseModel):
     )
 
     # ---- Sandbox extension fields (provider-consumed) -----------------
-    # Read by AzureSandboxProvider / DockerSandboxProvider / etc.; the
+    # Read by ACASandboxProvider / DockerSandboxProvider / etc.; the
     # rule engine itself ignores them. Defined natively here so callers
     # do not need SimpleNamespace wrappers.
     network_allowlist: list[str] = Field(

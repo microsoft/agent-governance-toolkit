@@ -2,13 +2,13 @@
 # Licensed under the MIT License.
 """
 End-to-end smoke test for the Step 5 walkthrough in
-``docs/proposals/azure-adc-sandbox.md``.
+``docs/proposals/azure-aca-sandbox.md``.
 
 What this script does, in order:
 
   1. Builds an in-memory ``PolicyDocument`` that matches Step 5.1
      (network allowlist, tool allowlist, three deny rules).
-  2. Constructs ``AzureSandboxProvider`` with ``ensure_group_location``
+  2. Constructs ``ACASandboxProvider`` with ``ensure_group_location``
      so the sandbox group is created on first use if it does not exist.
   3. Calls ``create_session_async`` — which under the covers calls
      ``SandboxClient.create_sandbox`` *and* ``set_egress_policy`` from
@@ -69,7 +69,7 @@ from agent_os.policies.schema import (
     PolicyOperator,
     PolicyRule,
 )
-from agent_sandbox import AzureSandboxProvider
+from agent_sandbox import ACASandboxProvider
 
 LOG = logging.getLogger("step5-test")
 
@@ -225,7 +225,7 @@ def _short(text: str, limit: int = 200) -> str:
 
 
 async def _run_one(
-    provider: AzureSandboxProvider,
+    provider: ACASandboxProvider,
     agent_id: str,
     session_id: str,
     label: str,
@@ -283,7 +283,7 @@ async def _run_one(
 # ---------------------------------------------------------------------------
 
 async def _verify_remote_execution(
-    provider: AzureSandboxProvider,
+    provider: ACASandboxProvider,
     agent_id: str,
     session_id: str,
 ) -> None:
@@ -367,7 +367,7 @@ async def _verify_remote_execution(
 
 
 async def _verify_egress_audit(
-    provider: AzureSandboxProvider,
+    provider: ACASandboxProvider,
     agent_id: str,
     session_id: str,
 ) -> None:
@@ -487,7 +487,7 @@ async def main(keep_sandbox: bool) -> int:
         rg, sandbox_group, region, disk,
     )
 
-    provider = AzureSandboxProvider(
+    provider = ACASandboxProvider(
         resource_group=rg,
         sandbox_group=sandbox_group,
         disk=disk,
@@ -496,7 +496,7 @@ async def main(keep_sandbox: bool) -> int:
 
     if not provider.is_available():
         LOG.error(
-            "AzureSandboxProvider not available: install azure-sandbox "
+            "ACASandboxProvider not available: install azure-sandbox "
             "and run `az login`"
         )
         return 2

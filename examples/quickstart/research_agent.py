@@ -5,7 +5,7 @@ Governed research agent that runs LLM-generated analysis code in an
 Azure Container Apps sandbox under an AGT policy.
 
 This file is the runnable extraction of the Step 5.2 walkthrough in
-``docs/proposals/azure-adc-sandbox.md``.
+``docs/proposals/azure-aca-sandbox.md``.
 
 The agent never trusts the LLM. Every step it generates is:
   1. Gated by AGT PolicyDocument rules (host-side, before any Azure call).
@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_os.policies import PolicyDocument
-from agent_sandbox import AzureSandboxProvider
+from agent_sandbox import ACASandboxProvider
 from openai import AsyncOpenAI
 
 LOG = logging.getLogger("research-agent")
@@ -204,7 +204,7 @@ class ResearchAgent:
 
     def __init__(
         self,
-        provider: AzureSandboxProvider,
+        provider: ACASandboxProvider,
         policy: Any,                    # SimpleNamespace wrapper around PolicyDocument
         agent_id: str,
     ) -> None:
@@ -345,7 +345,7 @@ async def main(ticket_path: str) -> int:
         tool_allowlist=["fetch_arxiv", "fetch_github_readme", "search_index"],
     )
 
-    provider = AzureSandboxProvider(
+    provider = ACASandboxProvider(
         resource_group=os.environ["AZURE_RG"],
         sandbox_group=os.environ.get("AZURE_SANDBOX_GROUP", "agents-test"),
         # Default "ubuntu" image has no python3; use a Python sandbox

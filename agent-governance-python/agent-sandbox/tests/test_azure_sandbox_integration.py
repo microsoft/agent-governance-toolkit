@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Integration tests for ``AzureSandboxProvider`` against real Azure.
+"""Integration tests for ``ACASandboxProvider`` against real Azure.
 
 These tests provision real Azure Container Apps sandboxes and exercise
 the full data plane (``create_sandbox`` / ``set_egress_policy`` /
@@ -40,7 +40,7 @@ import uuid
 import pytest
 
 from agent_os.policies import PolicyDocument
-from agent_sandbox import AzureSandboxProvider
+from agent_sandbox import ACASandboxProvider
 from agent_sandbox.sandbox_provider import SessionStatus
 
 # ---------------------------------------------------------------------------
@@ -107,14 +107,14 @@ def _build_policy(
 @pytest.fixture(scope="module")
 def provider():
     """One provider per module — sandboxes are created/destroyed per test."""
-    p = AzureSandboxProvider(
+    p = ACASandboxProvider(
         resource_group=_RG,
         sandbox_group=_GROUP,
         disk=_DISK,
         ensure_group_location=_REGION,
     )
     if not p.is_available():
-        pytest.skip("AzureSandboxProvider is_available() returned False")
+        pytest.skip("ACASandboxProvider is_available() returned False")
     yield p
     p.close()
 

@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """Pin the ``StepReceipt`` -> ``MerkleAuditChain`` adapter from
-``docs/proposals/azure-adc-sandbox.md`` (Step 7) against the real
+``docs/proposals/azure-aca-sandbox.md`` (Step 7) against the real
 :class:`~agentmesh.governance.audit.AuditEntry` and
 :class:`~agentmesh.governance.audit.MerkleAuditChain` classes.
 
@@ -43,7 +43,7 @@ def chain_receipt(
     ticket_id: str,
     chain: MerkleAuditChain,
 ) -> AuditEntry:
-    """Verbatim adapter from docs/proposals/azure-adc-sandbox.md Step 7."""
+    """Verbatim adapter from docs/proposals/azure-aca-sandbox.md Step 7."""
     entry = AuditEntry(
         event_type="sandbox.execute",
         agent_did=agent_id,

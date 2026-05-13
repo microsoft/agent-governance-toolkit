@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Unit tests for ``AzureSandboxProvider``.
+"""Unit tests for ``ACASandboxProvider``.
 
 All ``azure-sandbox`` / ``azure-mgmt-sandbox`` calls are mocked, so this
 file runs without Azure credentials or network access.  Integration
@@ -9,7 +9,7 @@ tests that hit real Azure live in ``test_azure_sandbox_integration.py``.
 Covers:
 * Module-level helpers (``_validate_resource_name``,
   ``_network_allowlist``, ``_network_default``,
-  ``azure_config_from_policy``).
+  ``aca_config_from_policy``).
 * Construction: missing SDK, name validation,
   ``ensure_group_location`` wiring.
 * ``create_session``: with/without policy, fail-closed egress,
@@ -34,12 +34,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent_sandbox.azureadc_sandbox_provider import (
-    AzureSandboxProvider,
+from agent_sandbox.aca_sandbox_provider import (
+    ACASandboxProvider,
     _network_allowlist,
     _network_default,
     _validate_resource_name,
-    azure_config_from_policy,
+    aca_config_from_policy,
 )
 from agent_sandbox.sandbox_provider import (
     ExecutionStatus,
@@ -118,7 +118,7 @@ def provider(fake_clients):
     # Configure default create_sandbox response so happy paths "just work".
     data_client.create_sandbox.return_value = {"id": "sb-abc123"}
     data_client.exec.return_value = {"exitCode": 0, "stdout": "ok", "stderr": ""}
-    p = AzureSandboxProvider(
+    p = ACASandboxProvider(
         resource_group="rg",
         sandbox_group="grp",
     )
@@ -213,7 +213,7 @@ class TestNetworkDefault:
 class TestAzureConfigFromPolicy:
     def test_preserves_base_when_policy_empty(self):
         base = SandboxConfig(memory_mb=999, cpu_limit=3.0, timeout_seconds=42)
-        cfg = azure_config_from_policy(SimpleNamespace(defaults=SimpleNamespace()), base)
+        cfg = aca_config_from_policy(SimpleNamespace(defaults=SimpleNamespace()), base)
         assert cfg.memory_mb == 999
         assert cfg.cpu_limit == 3.0
         assert cfg.timeout_seconds == 42
@@ -221,7 +221,7 @@ class TestAzureConfigFromPolicy:
 
     def test_applies_resource_caps(self):
         policy = _make_policy(max_cpu=0.25, max_memory_mb=256, timeout_seconds=15)
-        cfg = azure_config_from_policy(policy, SandboxConfig())
+        cfg = aca_config_from_policy(policy, SandboxConfig())
         assert cfg.cpu_limit == 0.25
         assert cfg.memory_mb == 256
         assert cfg.timeout_seconds == 15
@@ -230,19 +230,19 @@ class TestAzureConfigFromPolicy:
         # Falsy values should leave the base config alone (provider default wins).
         policy = _make_policy(max_cpu=0, max_memory_mb=0, timeout_seconds=0)
         base = SandboxConfig(memory_mb=777, cpu_limit=4.0, timeout_seconds=30)
-        cfg = azure_config_from_policy(policy, base)
+        cfg = aca_config_from_policy(policy, base)
         assert cfg.memory_mb == 777
         assert cfg.cpu_limit == 4.0
         assert cfg.timeout_seconds == 30
 
     def test_network_allowlist_enables_network(self):
         policy = _make_policy(network_allowlist=["a.com"])
-        cfg = azure_config_from_policy(policy, SandboxConfig())
+        cfg = aca_config_from_policy(policy, SandboxConfig())
         assert cfg.network_enabled is True
 
     def test_env_vars_are_copied_not_aliased(self):
         base = SandboxConfig(env_vars={"K": "V"})
-        cfg = azure_config_from_policy(SimpleNamespace(defaults=SimpleNamespace()), base)
+        cfg = aca_config_from_policy(SimpleNamespace(defaults=SimpleNamespace()), base)
         cfg.env_vars["NEW"] = "X"
         assert "NEW" not in base.env_vars
 
@@ -265,14 +265,14 @@ class TestConstruction:
             return real_import(name, *a, **kw)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
-        p = AzureSandboxProvider(resource_group="rg", sandbox_group="grp")
+        p = ACASandboxProvider(resource_group="rg", sandbox_group="grp")
         assert p.is_available() is False
         with pytest.raises(RuntimeError, match="not available"):
             p.create_session("agent")
 
     def test_validates_sandbox_group_name(self, fake_clients):
         with pytest.raises(ValueError, match="sandbox_group"):
-            AzureSandboxProvider(resource_group="rg", sandbox_group="bad name")
+            ACASandboxProvider(resource_group="rg", sandbox_group="bad name")
 
     def test_data_client_construction_failure_marks_unavailable(self, monkeypatch):
         import builtins
@@ -288,12 +288,12 @@ class TestConstruction:
             return real_import(name, *a, **kw)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
-        p = AzureSandboxProvider(resource_group="rg", sandbox_group="grp")
+        p = ACASandboxProvider(resource_group="rg", sandbox_group="grp")
         assert p.is_available() is False
 
     def test_ensure_group_location_constructs_mgmt_client(self, fake_clients):
         _, mgmt_client = fake_clients
-        p = AzureSandboxProvider(
+        p = ACASandboxProvider(
             resource_group="rg",
             sandbox_group="grp",
             ensure_group_location="westus2",
@@ -302,7 +302,7 @@ class TestConstruction:
         assert p._mgmt_client is mgmt_client
 
     def test_no_mgmt_client_when_ensure_location_unset(self, fake_clients):
-        p = AzureSandboxProvider(resource_group="rg", sandbox_group="grp")
+        p = ACASandboxProvider(resource_group="rg", sandbox_group="grp")
         assert p._mgmt_client is None
 
     def test_mgmt_client_failure_does_not_kill_provider(self, monkeypatch):
@@ -327,7 +327,7 @@ class TestConstruction:
             return real_import(name, *a, **kw)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
-        p = AzureSandboxProvider(
+        p = ACASandboxProvider(
             resource_group="rg",
             sandbox_group="grp",
             ensure_group_location="westus2",
@@ -472,7 +472,7 @@ class TestCreateSession:
     def test_ensure_group_idempotent_on_existing_group(self, fake_clients):
         data_client, mgmt_client = fake_clients
         data_client.create_sandbox.return_value = {"id": "sb-1"}
-        p = AzureSandboxProvider(
+        p = ACASandboxProvider(
             resource_group="rg",
             sandbox_group="grp",
             ensure_group_location="westus2",
@@ -485,7 +485,7 @@ class TestCreateSession:
     def test_ensure_group_creates_when_missing(self, fake_clients):
         data_client, mgmt_client = fake_clients
         data_client.create_sandbox.return_value = {"id": "sb-1"}
-        p = AzureSandboxProvider(
+        p = ACASandboxProvider(
             resource_group="rg",
             sandbox_group="grp",
             ensure_group_location="westus2",
@@ -651,8 +651,8 @@ class TestExecuteCode:
             cfg.timeout_seconds = 0.001
 
         # Fake time.monotonic so duration > timeout_seconds.
-        from agent_sandbox.azureadc_sandbox_provider import (
-            azureadc_sandbox_provider as mod,
+        from agent_sandbox.aca_sandbox_provider import (
+            aca_sandbox_provider as mod,
         )
 
         ticks = iter([0.0, 1.0])
@@ -720,7 +720,7 @@ class TestDestroyAndStatus:
 
     def test_context_manager_calls_close(self, fake_clients):
         data_client, _ = fake_clients
-        with AzureSandboxProvider(resource_group="rg", sandbox_group="grp") as p:
+        with ACASandboxProvider(resource_group="rg", sandbox_group="grp") as p:
             assert p.is_available() is True
         data_client.close.assert_called_once()
 

@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 # Policy file referenced by the Step 5 walkthrough in
-# docs/proposals/azure-adc-sandbox.md. Sandbox-only fields
+# docs/proposals/azure-aca-sandbox.md. Sandbox-only fields
 # (network_allowlist, tool_allowlist, defaults.max_cpu, etc.)
 # are attached in code via SimpleNamespace; this YAML only
 # contains keys that are part of PolicyDocument's pydantic schema.

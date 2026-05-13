@@ -16,7 +16,7 @@
 container or hypervisor privileges and provide isolation only on that
 host.
 
-`AzureSandboxProvider` adds a **cloud backend** that maps a sandbox
+`ACASandboxProvider` adds a **cloud backend** that maps a sandbox
 session onto an **Azure Container Apps sandbox** inside an Azure
 **sandbox group**.  This lets governance toolkits run agents:
 
@@ -57,7 +57,7 @@ and present a `SandboxProvider`-shaped API.
 
 - Wrapping the full surface of `azure-sandbox` (snapshots, ports,
   volumes, files, telemetry).  Those remain available through
-  `AzureSandboxProvider._data_client` for power users but are not part
+  `ACASandboxProvider._data_client` for power users but are not part
   of the `SandboxProvider` contract.
 - Multi-region / multi-subscription orchestration — one provider
   instance is bound to one subscription, resource group, and sandbox
@@ -76,7 +76,7 @@ and present a `SandboxProvider`-shaped API.
 └──────────────┬─────────────────────────┬─────────────────────┘
                │                         │
    ┌───────────┴───────────┐  ┌──────────┴────────────┐
-   │ DockerSandboxProvider │  │ AzureSandboxProvider  │
+   │ DockerSandboxProvider │  │ ACASandboxProvider  │
    │   (local containers)  │  │  (Azure Container     │
    │                       │  │   Apps sandboxes)     │
    └───────────────────────┘  └──────────┬────────────┘
@@ -101,7 +101,7 @@ and present a `SandboxProvider`-shaped API.
 
 ## Mapping from `SandboxProvider` to Azure
 
-| `SandboxProvider`              | `AzureSandboxProvider` action                                        | Azure primitive |
+| `SandboxProvider`              | `ACASandboxProvider` action                                        | Azure primitive |
 |--------------------------------|----------------------------------------------------------------------|-----------------|
 | `create_session(agent_id, policy, config)` | Bootstrap group (optional) → `create_sandbox` → `set_egress_policy` | `Microsoft.App/sandboxGroups/sandboxes` |
 | `execute_code(agent_id, sid, code)`        | `PolicyEvaluator.evaluate` → `exec` (base64-piped python3)          | `…/sandboxes/{id}/executeShellCommand` |
@@ -121,7 +121,7 @@ the ABC.  A future revision can replace them with native async once
    `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$` to keep them safe inside ARM and
    data-plane URLs.
 2. Project the policy onto a `SandboxConfig` via
-   `azure_config_from_policy`:
+   `aca_config_from_policy`:
    - `defaults.max_memory_mb` → `memory_mb`
    - `defaults.max_cpu` → `cpu_limit`
    - `network_allowlist` non-empty → `network_enabled = True`
@@ -232,12 +232,12 @@ brokering should run a proxy of their own and add it to
 ## Usage
 
 ```python
-from agent_sandbox import AzureSandboxProvider
+from agent_sandbox import ACASandboxProvider
 from agent_os.policies import PolicyDocument
 
 policy = PolicyDocument.from_yaml("policies/research_policy.yaml")
 
-with AzureSandboxProvider(
+with ACASandboxProvider(
     resource_group="agents-rg",
     sandbox_group="agents",
     ensure_group_location="westus2",
@@ -254,10 +254,10 @@ with AzureSandboxProvider(
 
 ```python
 import asyncio
-from agent_sandbox import AzureSandboxProvider
+from agent_sandbox import ACASandboxProvider
 
 async def main() -> None:
-    provider = AzureSandboxProvider(
+    provider = ACASandboxProvider(
         resource_group="agents-rg",
         sandbox_group="agents",
     )
@@ -287,7 +287,7 @@ asyncio.run(main())
 
 ## Summary
 
-`AzureSandboxProvider` plugs Azure Container Apps sandboxes into the
+`ACASandboxProvider` plugs Azure Container Apps sandboxes into the
 existing `SandboxProvider` interface used by the agent governance
 toolkit.  It composes the existing `azure-sandbox` and
 `azure-mgmt-sandbox` clients, translates `agent-os` policy fields into

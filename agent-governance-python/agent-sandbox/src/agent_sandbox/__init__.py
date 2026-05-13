@@ -12,7 +12,7 @@ backends, plus three built-in implementations:
   upstream `hyperlight-sandbox <https://github.com/hyperlight-dev/hyperlight-sandbox>`_
   project (CNCF Sandbox). Capability-bound tools and domains, with
   in-memory snapshots.
-* :class:`AzureSandboxProvider` — Azure Dynamic Container (ADC)
+* :class:`ACASandboxProvider` — Azure Container Apps (ACA)
   managed sandbox sessions with host-side policy gating and Azure-side
   egress allowlist enforcement.
 """
@@ -58,12 +58,12 @@ except ImportError:
     SnapshotHandle = None  # type: ignore[assignment,misc]
     hyperlight_config_from_policy = None  # type: ignore[assignment]
 
-# Lazy import: AzureSandboxProvider requires the optional
+# Lazy import: ACASandboxProvider requires the optional
 # ``azure-sandbox`` (and optionally ``azure-mgmt-sandbox``) SDKs.
 try:
-    from agent_sandbox.azureadc_sandbox_provider import AzureSandboxProvider
+    from agent_sandbox.aca_sandbox_provider import ACASandboxProvider
 except ImportError:
-    AzureSandboxProvider = None  # type: ignore[assignment,misc]
+    ACASandboxProvider = None  # type: ignore[assignment,misc]
 
 try:
     __version__ = version("agent-sandbox")
@@ -72,7 +72,7 @@ except PackageNotFoundError:
 __author__ = "Microsoft Corporation"
 
 __all__ = [
-    "AzureSandboxProvider",
+    "ACASandboxProvider",
     "DockerSandboxProvider",
     "ExecutionHandle",
     "ExecutionStatus",
