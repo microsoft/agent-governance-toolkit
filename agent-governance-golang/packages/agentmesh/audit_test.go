@@ -547,3 +547,20 @@ func TestComputeHashDistinguishesFieldBoundaries(t *testing.T) {
 		})
 	}
 }
+
+// Regression: eviction via plain reslice kept the original backing array
+// alive; cap() grew proportional to total-logged count. After the fix,
+// cap() stays bounded close to MaxEntries.
+func TestMaxEntriesNoBackingArrayLeak(t *testing.T) {
+	al := NewAuditLogger()
+	al.MaxEntries = 5
+	for i := 0; i < 1000; i++ {
+		al.Log("agent", fmt.Sprintf("action-%d", i), Allow)
+	}
+	if got := len(al.entries); got != al.MaxEntries {
+		t.Fatalf("len(entries) = %d, want %d", got, al.MaxEntries)
+	}
+	if got := cap(al.entries); got > al.MaxEntries*4 {
+		t.Errorf("cap(entries) = %d, want close to %d (backing array leak)", got, al.MaxEntries)
+	}
+}

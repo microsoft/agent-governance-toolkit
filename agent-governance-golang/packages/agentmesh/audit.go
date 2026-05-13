@@ -38,7 +38,7 @@ func (ae *AuditEntry) Clone() *AuditEntry {
 
 // AuditLogger maintains an append-only hash-chained audit log.
 type AuditLogger struct {
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	entries    []*AuditEntry
 	seamHash   string
 	MaxEntries int
@@ -60,7 +60,12 @@ func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *Aud
 	if al.MaxEntries > 0 && len(al.entries) >= al.MaxEntries {
 		sliceFrom := len(al.entries) - al.MaxEntries + 1
 		al.seamHash = al.entries[sliceFrom-1].Hash
-		al.entries = al.entries[sliceFrom:]
+		// Allocate a fresh slice so the original backing array (and
+		// evicted *AuditEntry pointers in the dropped prefix) can be
+		// garbage-collected. A plain reslice keeps the old array alive.
+		retained := make([]*AuditEntry, len(al.entries)-sliceFrom)
+		copy(retained, al.entries[sliceFrom:])
+		al.entries = retained
 	}
 
 	prevHash := al.seamHash
@@ -86,8 +91,8 @@ func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *Aud
 // eviction, the surviving head's PreviousHash is checked against the seam
 // hash recorded at eviction time, so tampering with it is still detected.
 func (al *AuditLogger) Verify() bool {
-	al.mu.Lock()
-	defer al.mu.Unlock()
+	al.mu.RLock()
+	defer al.mu.RUnlock()
 
 	for i, entry := range al.entries {
 		expected := computeHash(entry)
@@ -109,8 +114,8 @@ func (al *AuditLogger) Verify() bool {
 
 // GetEntries returns entries matching the given filter.
 func (al *AuditLogger) GetEntries(filter AuditFilter) []*AuditEntry {
-	al.mu.Lock()
-	defer al.mu.Unlock()
+	al.mu.RLock()
+	defer al.mu.RUnlock()
 
 	var result []*AuditEntry
 	for _, e := range al.entries {
