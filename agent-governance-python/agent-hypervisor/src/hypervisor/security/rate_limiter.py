@@ -100,6 +100,7 @@ class AgentRateLimiter:
     def __init__(
         self,
         ring_limits: dict[ExecutionRing, tuple[float, float]] | None = None,
+        max_buckets: int = 100_000,
     ) -> None:
         self._limits = ring_limits or dict(DEFAULT_RING_LIMITS)
         # (agent_did, session_id) -> TokenBucket. A tuple is used so that
@@ -108,6 +109,7 @@ class AgentRateLimiter:
         self._buckets: dict[tuple[str, str], TokenBucket] = {}
         self._stats: dict[tuple[str, str], RateLimitStats] = {}
         self._lock = threading.Lock()
+        self._max_buckets = max_buckets
 
     @staticmethod
     def _bucket_key(agent_did: str, session_id: str) -> tuple[str, str]:
@@ -202,6 +204,10 @@ class AgentRateLimiter:
     ) -> TokenBucket:
         """Caller must hold ``self._lock``."""
         if key not in self._buckets:
+            if len(self._buckets) >= self._max_buckets:
+                oldest_key = next(iter(self._buckets))
+                del self._buckets[oldest_key]
+                self._stats.pop(oldest_key, None)
             rate, capacity = self._limits.get(ring, RATE_LIMIT_FALLBACK)
             self._buckets[key] = TokenBucket(
                 capacity=capacity,

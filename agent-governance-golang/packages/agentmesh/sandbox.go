@@ -39,6 +39,7 @@ const (
 	dockerStartTimeout   = 30 * time.Second
 	dockerExecTimeout    = 60 * time.Second
 	dockerRemoveTimeout  = 15 * time.Second
+	maxTrackedContainers = 10_000
 )
 
 // SessionStatus represents the lifecycle state of a sandbox session.
@@ -230,6 +231,13 @@ func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxCon
 	p.mu.Lock()
 	if p.containers == nil {
 		p.containers = make(map[string]string)
+	}
+	// Evict oldest tracked container if at capacity
+	if len(p.containers) >= maxTrackedContainers {
+		for k := range p.containers {
+			delete(p.containers, k)
+			break
+		}
 	}
 	p.containers[containerKey(agentID, sessionID)] = name
 	p.mu.Unlock()
