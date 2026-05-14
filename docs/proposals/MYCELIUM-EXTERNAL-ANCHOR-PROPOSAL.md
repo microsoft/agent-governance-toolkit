@@ -2,12 +2,16 @@
 
 **Author:** @giskard09
 **Date:** 2026-05-13
-**Status:** Draft v2
+**Status:** Draft v3
 **Related issues:** #2208
 **Related proposals:** [verifiable-compliance-receipts.md](verifiable-compliance-receipts.md)
 
-*v2: incorporates review feedback from @Ricky-G — canonicalization hardened to RFC 8785 JCS,
-verify() typed result, failure semantics 3-mode, observability spec, governance clean-up.*
+*v3: incorporates maintainer feedback from @Ricky-G and @miyannishar — Mycelium Trails moved to
+community plugin path, external references marked informational, forward-looking anchor_batch()
+note added to keep v1 interface extensible.*
+
+*v2: canonicalization hardened to RFC 8785 JCS, verify() typed result, failure semantics 3-mode,
+observability spec, governance clean-up.*
 
 ---
 
@@ -100,6 +104,10 @@ class EvidenceAnchor(ABC):
 
 CLI exit codes map to the result enum: 0 → VERIFIED, 1 → HASH_MISMATCH or NOT_FOUND, 2 → BACKEND_UNAVAILABLE.
 
+*v1 defines per-record anchoring only. The interface is intentionally designed to accommodate a
+future `anchor_batch()` method without breaking changes. Batched anchoring is deferred to a
+follow-up proposal.*
+
 ### Canonical action_ref derivation
 
 `action_ref` is derived using RFC 8785 JSON Canonicalization Scheme (JCS) to guarantee byte-identical output across implementations:
@@ -119,11 +127,9 @@ action_ref = SHA-256(JCS({
 - `scope`: lowercase string representing what the agent was authorized to do
 - `timestamp`: RFC 3339 string, UTC only, mandatory `Z`, fixed 3-digit millisecond precision — e.g. `"2026-05-13T10:00:00.123Z"`. Sub-millisecond precision is forbidden in v1.
 
-JCS (RFC 8785) handles key ordering and Unicode normalization deterministically. No custom encoding rules are needed beyond the field definitions above.
-
-*Canonicalization note [informational, non-normative]: the SafeAgent × DashClaw × Mycelium Trails
-joint interface spec (azender1/SafeAgent RFC_EXECUTION_GUARD.md, giskard09/argentum-core#7) uses
-the same four fields. Those references are external; the normative derivation is the JCS rule above.*
+JCS (RFC 8785) handles key ordering and Unicode normalization deterministically. No custom encoding
+rules are needed beyond the field definitions above. (See [Related work](#related-work) for
+informational references that use the same four-field derivation.)
 
 ### Schema changes to agt-evidence.json
 
@@ -229,8 +235,11 @@ S3 Object Lock or Azure immutable blob. `anchor_id` is the object key + version 
 **Priority 2 — Sigstore Rekor (most broadly trusted public option):**
 RFC 6962-style Merkle log. `anchor_id` is the log index. `verify` calls the Rekor API with the inclusion proof. Append-only by construction.
 
-**On-chain anchor (community plugins):**
-On-chain backends (Base, Arbitrum, etc.) are welcome as community plugins after the core interface lands. See `/community-plugins` for the plugin contribution guide. These are external contributions and are not in-tree references for this proposal.
+**Community plugins:**
+Community backends (e.g., Mycelium Trails, on-chain anchors on Base, Arbitrum, etc.) can implement
+the `EvidenceAnchor` interface independently and are listed on the community page. AGT ships with
+WORM and Sigstore Rekor as in-tree reference backends only. See `/community-plugins` for the plugin
+contribution guide.
 
 ---
 
@@ -304,6 +313,17 @@ flowchart LR
 8. Community plugin: on-chain anchor (separate PR, external contributor)
 
 Steps 1–5 are AGT-internal. Steps 6–8 are separate PRs.
+
+---
+
+## Related work
+
+*Informational only — these references do not affect the normative spec.*
+
+- azender1/SafeAgent `RFC_EXECUTION_GUARD.md` — independent proposal using the same four-field
+  `action_ref` derivation.
+- giskard09/argentum-core#7 — Mycelium Trails v0: an implementation of external trail anchoring
+  that informed the EvidenceAnchor design and is a planned community-plugin consumer of this SPI.
 
 ---
 
