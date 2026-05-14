@@ -143,7 +143,7 @@ flowchart LR
     SO --> J[stdout / journald]
     OE -->|OTLP gRPC/HTTP| C
 
-    subgraph CH["Customer-operated OpenTelemetry Collector"]
+    subgraph CH["OpenTelemetry Collector"]
         C[otlp receiver] --> B[batch +<br/>persistent_queue]
         B --> EX[vendor exporters<br/>configured by customer]
     end
