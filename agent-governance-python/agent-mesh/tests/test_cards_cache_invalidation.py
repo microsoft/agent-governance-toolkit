@@ -60,10 +60,7 @@ class TestCacheInvalidation:
         registry.register(signed_card)
         assert registry.is_verified(signed_card.agent_did) is True
 
-        # Flip the first byte to a character guaranteed to differ.
-        # The old code used "A" + original[1:] which is a no-op ~1/64
-        # of the time when the signature already starts with "A",
-        # causing intermittent failures.  See #2255.
+        # Ensure the replacement byte actually differs from the original
         original = signed_card.card_signature
         first_char = original[0]
         replacement = "B" if first_char != "B" else "C"
