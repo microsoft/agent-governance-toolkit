@@ -46,7 +46,7 @@ REGISTERED_PACKAGES = {
     "agent-sandbox", "agent_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
-    "fastapi", "uvicorn", "requests", "structlog", "click", "rich", "numpy", "scipy",
+    "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
     "pytest", "pytest-asyncio", "pytest-cov", "ruff", "mypy", "build",
     "openai", "anthropic", "langchain", "langchain-core", "crewai",
     "redis", "sqlalchemy", "asyncpg", "chromadb", "pinecone-client",

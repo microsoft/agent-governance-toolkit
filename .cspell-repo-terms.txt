@@ -62,6 +62,7 @@ aymenhmaidiwastaken
 carloshvp
 dataclass
 DOTALL
+endswith
 findall
 hashlib
 hexdigest
@@ -109,10 +110,12 @@ PYTHONPATH
 Ravande
 relativedelta
 Rootfs
+rstrip
 runsc
 sandboxing
 setuid
 siddique
+startswith
 syscalls
 timedelta
 tmpfs
