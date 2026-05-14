@@ -35,6 +35,29 @@ from typing import Any, Callable, Optional
 logger = logging.getLogger(__name__)
 
 
+_BLOCKED_HOSTS = frozenset({
+    "169.254.169.254",       # cloud metadata (AWS/Azure)
+    "metadata.google.internal",
+    "[fd00:ec2::254]",
+})
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Reject URLs with dangerous schemes or known SSRF targets."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"Unsupported URL scheme '{parsed.scheme}': only http and https are allowed"
+        )
+    host = (parsed.hostname or "").lower()
+    if host in _BLOCKED_HOSTS:
+        raise ValueError(
+            f"URL host '{host}' is blocked to prevent SSRF"
+        )
+
+
 @dataclass
 class AdvisoryDecision:
     """Result of an advisory check.
@@ -127,6 +150,7 @@ class HttpAdvisory(AdvisoryCheck):
         headers: Optional[dict[str, str]] = None,
         on_error: str = "allow",
     ):
+        _validate_webhook_url(url)
         self._url = url
         self._name = name
         self._timeout = timeout_seconds

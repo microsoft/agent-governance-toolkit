@@ -187,8 +187,25 @@ impl PolicyEngine {
     }
 
     /// Load a policy profile from a YAML file on disk.
+    ///
+    /// The path is canonicalized to prevent directory-traversal via
+    /// `..` segments. Relative paths are resolved against the current
+    /// working directory.
     pub fn load_from_file(&self, path: &str) -> Result<(), PolicyError> {
-        let yaml = std::fs::read_to_string(path).map_err(PolicyError::Io)?;
+        let requested = std::path::Path::new(path);
+
+        // Reject paths that contain traversal components before resolution
+        for component in requested.components() {
+            if matches!(component, std::path::Component::ParentDir) {
+                return Err(PolicyError::Validation(format!(
+                    "Policy path '{}' contains directory traversal",
+                    path
+                )));
+            }
+        }
+
+        let canonical = std::fs::canonicalize(requested).map_err(PolicyError::Io)?;
+        let yaml = std::fs::read_to_string(&canonical).map_err(PolicyError::Io)?;
         self.load_from_yaml(&yaml)
     }
 
@@ -328,6 +345,8 @@ pub enum PolicyError {
     InvalidYaml(serde_yaml::Error),
     #[error("I/O error: {0}")]
     Io(std::io::Error),
+    #[error("validation error: {0}")]
+    Validation(String),
     #[error("rule '{rule}' has invalid duration '{window}': {reason}")]
     InvalidDuration {
         rule: String,

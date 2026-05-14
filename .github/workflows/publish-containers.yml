@@ -91,12 +91,16 @@ jobs:
       - name: Set image tag
         if: steps.check.outputs.skip != 'true'
         id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
+          if [ "$EVENT_NAME" = "release" ]; then
+            TAG="${RELEASE_TAG}"
             TAG="${TAG#v}"
           else
-            TAG="${{ github.event.inputs.tag || 'latest' }}"
+            TAG="${INPUT_TAG:-latest}"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Image tag: $TAG"

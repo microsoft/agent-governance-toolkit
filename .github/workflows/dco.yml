@@ -17,12 +17,13 @@ jobs:
           fetch-depth: 0
 
       - name: Check DCO sign-off on commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
           MISSING=()
 
-          for SHA in $(git rev-list "$BASE".."$HEAD"); do
+          for SHA in $(git rev-list "$BASE_SHA".."$HEAD_SHA"); do
             # Skip merge commits (commits with more than one parent)
             PARENT_COUNT=$(git cat-file -p "$SHA" | grep -c '^parent ')
             if [ "$PARENT_COUNT" -gt 1 ]; then
