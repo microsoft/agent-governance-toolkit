@@ -1,0 +1,42 @@
+{
+  "name": "@microsoft/agent-governance-copilot-cli",
+  "version": "3.6.0",
+  "description": "Public Preview — Copilot CLI governance installer for Agent Governance Toolkit developer protection policies",
+  "type": "module",
+  "bin": {
+    "agt-copilot": "./bin/agt-copilot.mjs"
+  },
+  "files": [
+    "assets/",
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run check",
+    "check": "node --check ./bin/agt-copilot.mjs && node --check ./lib/cli.mjs && node --check ./assets/extensions/agt-global-policy/extension.mjs && node --check ./assets/extensions/agt-global-policy/main.mjs && node --check ./assets/extensions/agt-global-policy/lib/policy.mjs && node --check ./assets/extensions/agt-global-policy/lib/poisoning.mjs && node --check ./assets/extensions/agt-global-policy/lib/sdk-loader.mjs && node --check ./test/policy-engine.test.mjs && node --check ./test/install.test.mjs",
+    "test": "node --test ./test/policy-engine.test.mjs ./test/install.test.mjs"
+  },
+  "keywords": [
+    "copilot",
+    "cli",
+    "agent",
+    "governance",
+    "security",
+    "policy"
+  ],
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "agent-governance-copilot-cli"
+  },
+  "dependencies": {
+    "@microsoft/agent-governance-sdk": "3.6.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-copilot-cli"
+}

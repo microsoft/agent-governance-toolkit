@@ -188,6 +188,8 @@ jobs:
             path: agent-governance-python/agent-mesh/services/api
           - name: agentmesh-mcp-proxy
             path: agent-governance-python/agent-mesh/packages/mcp-proxy
+          - name: agent-governance-copilot-cli
+            path: agent-governance-copilot-cli
           - name: agentmesh-sdk
             path: agent-governance-typescript
           - name: agent-os-copilot-extension

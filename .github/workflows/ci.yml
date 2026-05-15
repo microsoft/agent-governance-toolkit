@@ -53,6 +53,7 @@ jobs:
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
+              - 'agent-governance-copilot-cli/**'
               - 'agent-governance-typescript/**'
               - 'agent-governance-python/agent-os/extensions/**'
               - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
@@ -601,6 +602,8 @@ jobs:
         include:
           - name: agentmesh-mcp-proxy
             path: agent-governance-python/agent-mesh/packages/mcp-proxy
+          - name: agent-governance-copilot-cli
+            path: agent-governance-copilot-cli
           - name: agent-governance-sdk
             path: agent-governance-typescript
           - name: agentmesh-api
@@ -799,4 +802,3 @@ jobs:
           fi
 
           echo "All required jobs succeeded."
-

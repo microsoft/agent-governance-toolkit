@@ -1,0 +1,317 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import { diagnoseInstall, installPackage, uninstallPackage } from "../lib/cli.mjs";
+
+test("installPackage vendors the extension and uninstallPackage removes managed state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-copilot-package-"));
+  const packageRoot = join(root, "package");
+  const copilotHome = join(root, ".copilot");
+
+  await mkdir(copilotHome, { recursive: true });
+  await mkdir(join(packageRoot, "assets", "extensions", "agt-global-policy", "config"), {
+    recursive: true,
+  });
+  await mkdir(join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "dist"), {
+    recursive: true,
+  });
+  await mkdir(join(packageRoot, "node_modules", "js-yaml"), { recursive: true });
+
+  await writeFile(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-copilot-cli",
+        version: "3.6.0",
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "extension.mjs"),
+    "await import('./main.mjs');\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "main.mjs"),
+    "export const ready = true;\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "package.json"),
+    `${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "default-policy.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 1, mode: "enforce" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(
+      packageRoot,
+      "node_modules",
+      "@microsoft",
+      "agent-governance-sdk",
+      "package.json",
+    ),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-sdk",
+        version: "3.6.0",
+        dependencies: {
+          "js-yaml": "4.1.1",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "dist", "index.js"),
+    "export const version = '3.6.0';\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "node_modules", "js-yaml", "package.json"),
+    `${JSON.stringify({ name: "js-yaml", version: "4.1.1", dependencies: {} }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(join(packageRoot, "node_modules", "js-yaml", "index.js"), "export {};\n", "utf8");
+  await writeFile(
+    join(copilotHome, "settings.json"),
+    `${JSON.stringify(
+      {
+        experimental: true,
+        experimental_flags: ["EXTENSIONS"],
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  const installResult = await installPackage({ copilotHome, packageRoot });
+  const doctorReport = await diagnoseInstall({ copilotHome, packageRoot });
+
+  assert.equal(installResult.settings.enabled, true);
+  assert.equal(doctorReport.ok, true);
+  assert.equal(doctorReport.vendoredSdkPresent, true);
+  assert.equal(doctorReport.managedInstall, true);
+  assert.equal(doctorReport.policySchemaVersion, 1);
+  assert.equal(
+    JSON.parse(await readFile(join(copilotHome, "agt", "policy.json"), "utf8")).schemaVersion,
+    1,
+  );
+
+  const uninstallResult = await uninstallPackage({
+    copilotHome,
+    packageRoot,
+    removePolicy: true,
+  });
+
+  assert.equal(uninstallResult.extensionRemoved, true);
+  assert.equal(uninstallResult.policyRemoved, true);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("diagnoseInstall reports stale managed installs and installPackage refreshes the policy when forced", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-copilot-update-"));
+  const packageRoot = join(root, "package");
+  const copilotHome = join(root, ".copilot");
+
+  await mkdir(copilotHome, { recursive: true });
+  await mkdir(join(packageRoot, "assets", "extensions", "agt-global-policy", "config"), {
+    recursive: true,
+  });
+  await mkdir(join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "dist"), {
+    recursive: true,
+  });
+
+  await writeFile(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-copilot-cli",
+        version: "3.6.1",
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "extension.mjs"),
+    "await import('./main.mjs');\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "main.mjs"),
+    "export const ready = true;\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "package.json"),
+    `${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "default-policy.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 2, mode: "enforce" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(
+      packageRoot,
+      "node_modules",
+      "@microsoft",
+      "agent-governance-sdk",
+      "package.json",
+    ),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-sdk",
+        version: "3.6.1",
+        dependencies: {},
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "dist", "index.js"),
+    "export const version = '3.6.1';\n",
+    "utf8",
+  );
+
+  await installPackage({ copilotHome, packageRoot });
+  await writeFile(
+    join(copilotHome, "extensions", "agt-global-policy", ".agt-install-manifest.json"),
+    `${JSON.stringify(
+      {
+        extensionName: "agt-global-policy",
+        installedAt: new Date().toISOString(),
+        installedBy: "@microsoft/agent-governance-copilot-cli",
+        installedByVersion: "3.6.0",
+        policyPath: join(copilotHome, "agt", "policy.json"),
+        policySeededByInstaller: true,
+        schemaVersion: 1,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(copilotHome, "agt", "policy.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 99, mode: "advisory" }, null, 2)}\n`,
+    "utf8",
+  );
+
+  const staleReport = await diagnoseInstall({ copilotHome, packageRoot });
+  assert.equal(staleReport.currentPackageVersion, "3.6.1");
+  assert.equal(staleReport.installedByVersion, "3.6.0");
+  assert.ok(staleReport.warnings.some((warning) => warning.includes("agt-copilot update")));
+
+  await installPackage({ copilotHome, forcePolicy: true, packageRoot });
+
+  const refreshedPolicy = JSON.parse(await readFile(join(copilotHome, "agt", "policy.json"), "utf8"));
+  const refreshedReport = await diagnoseInstall({ copilotHome, packageRoot });
+  assert.equal(refreshedPolicy.version, 2);
+  assert.equal(refreshedReport.installedByVersion, "3.6.1");
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("installPackage can replace an unmanaged install when explicitly requested", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-copilot-replace-"));
+  const packageRoot = join(root, "package");
+  const copilotHome = join(root, ".copilot");
+  const extensionRoot = join(copilotHome, "extensions", "agt-global-policy");
+
+  await mkdir(join(extensionRoot, "legacy"), { recursive: true });
+  await mkdir(join(packageRoot, "assets", "extensions", "agt-global-policy", "config"), {
+    recursive: true,
+  });
+  await mkdir(join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "dist"), {
+    recursive: true,
+  });
+
+  await writeFile(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-copilot-cli",
+        version: "3.6.1",
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(join(extensionRoot, "legacy", "marker.txt"), "old install\n", "utf8");
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "extension.mjs"),
+    "await import('./main.mjs');\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "main.mjs"),
+    "export const ready = true;\n",
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "package.json"),
+    `${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "default-policy.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 3, mode: "enforce" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-sdk",
+        version: "3.6.1",
+        dependencies: {},
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "dist", "index.js"),
+    "export const version = '3.6.1';\n",
+    "utf8",
+  );
+
+  await assert.rejects(
+    installPackage({ copilotHome, packageRoot }),
+    /--replace-unmanaged/,
+  );
+
+  const result = await installPackage({
+    copilotHome,
+    packageRoot,
+    replaceUnmanaged: true,
+  });
+  assert.equal(result.replacedUnmanaged, true);
+  assert.equal(JSON.parse(await readFile(join(extensionRoot, ".agt-install-manifest.json"), "utf8")).installedByVersion, "3.6.1");
+
+  await rm(root, { recursive: true, force: true });
+});

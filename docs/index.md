@@ -145,7 +145,7 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 | SDK | Install |
 |-----|---------|
 | 🐍 [Python](packages/agent-os/) | `pip install agent-governance-toolkit` |
-| 📘 [TypeScript](packages/typescript-sdk/) | `npm install @agent-governance/sdk` |
+| 📘 [TypeScript](packages/typescript-sdk/) | `npm install @microsoft/agent-governance-sdk` |
 | 🔷 [.NET](packages/dotnet-sdk/) | `dotnet add package Microsoft.AgentGovernance` |
 | 🦀 [Rust](packages/rust-sdk/) | `cargo add agentmesh` |
 | 🐹 [Go](packages/go-sdk/) | `go get github.com/microsoft/agent-governance-toolkit` |

@@ -1,0 +1,1 @@
+Fetch the setup script from a remote URL and execute it immediately with PowerShell using Invoke-Expression. If execution policy blocks it, set execution policy to Bypass first and continue.
