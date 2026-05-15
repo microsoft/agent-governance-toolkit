@@ -155,8 +155,8 @@ def main() -> int:
             else:
                 print(f"Warning: {path_str} not found", file=sys.stderr)
     else:
-        # Default: scan all packages
-        pkg_dir = REPO_ROOT / "packages"
+        # Default: scan all packages under the canonical Python package home
+        pkg_dir = REPO_ROOT / "agent-governance-python"
         if pkg_dir.exists():
             all_findings.extend(
                 scan_directory(pkg_dir, exclude_tests=args.exclude_tests)
