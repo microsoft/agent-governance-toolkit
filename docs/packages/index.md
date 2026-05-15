@@ -64,7 +64,7 @@ graph TB
 | pydantic-ai-governance | Pydantic AI | `pip install pydantic-ai-governance` |
 | a2a-protocol | A2A Protocol | `pip install a2a-protocol` |
 | mcp-trust-proxy | MCP | `pip install mcp-trust-proxy` |
-| openshell-skill | NVIDIA OpenShell | `pip install openshell-skill` |
+| openshell-skill | NVIDIA OpenShell | `pip install openshell-agentmesh` |
 | agentmesh-avp | Amazon Verified Permissions | `pip install agentmesh-avp` |
 | structural-authz-agentmesh | Structural Authorization | `pip install structural-authz-agentmesh` |
 | nostr-wot | Nostr Web-of-Trust | `pip install nostr-wot` |
