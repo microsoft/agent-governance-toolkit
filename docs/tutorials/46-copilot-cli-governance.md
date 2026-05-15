@@ -116,6 +116,22 @@ Doctor validates:
 If doctor reports an invalid policy, remove `~/.copilot/agt/policy.json` or set
 `AGT_COPILOT_POLICY_PATH` to a valid replacement before reloading Copilot CLI.
 
+### Try an example policy profile
+
+The example repo path includes ready-to-copy policy profiles:
+
+- `examples/copilot-cli-agt/config/profiles/strict.json`
+- `examples/copilot-cli-agt/config/profiles/balanced.json`
+- `examples/copilot-cli-agt/config/profiles/advisory.json`
+
+For example:
+
+```powershell
+Copy-Item .\examples\copilot-cli-agt\config\profiles\balanced.json $HOME\.copilot\agt\policy.json -Force
+```
+
+Then reload Copilot CLI with `/clear` and inspect the result with `/agt status`.
+
 ### Node is missing
 
 This package requires a working Node runtime. If `node --version` fails, install Node.js LTS and

@@ -82,6 +82,10 @@ The packaged default policy:
 - scans fetched-content tools for poisoning and exfiltration cues
 - inspects `bash` and `powershell` output in advisory mode so suspicious shell output is flagged without suppressing routine build and test logs
 
+This PR keeps that behavior as the shipped **strict** baseline. For reviewer discussion and local
+experimentation, example `strict`, `balanced`, and `advisory` profiles are included under
+`examples/copilot-cli-agt/config/profiles/`.
+
 The installed extension still carries its own bundled default policy so it can fall back safely if
 the user policy file is missing or invalid.
 

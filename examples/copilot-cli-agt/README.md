@@ -309,6 +309,31 @@ The bundled policy uses this structure:
 | `poisoningPatterns` | custom poisoning patterns added to `ContextPoisoningDetector` |
 | `policyDocument` | optional rich AGT policy document loaded into `PolicyEngine` |
 
+## Example policy profiles
+
+This PR keeps the shipped default as the **strict** baseline, but the example also includes
+ready-to-copy profile examples under `examples/copilot-cli-agt/config/profiles/`:
+
+| Profile | File | Intended use |
+| --- | --- | --- |
+| `strict` | `config/profiles/strict.json` | Security-first rollout, proof runs, and high-sensitivity repos |
+| `balanced` | `config/profiles/balanced.json` | Developer-friendly default with deterministic dangerous-pattern blocking and fewer review prompts |
+| `advisory` | `config/profiles/advisory.json` | Visibility-first evaluation without enforce-mode blocking |
+
+To try one, copy it into your Copilot home policy path and reload:
+
+```powershell
+Copy-Item .\config\profiles\balanced.json $HOME\.copilot\agt\policy.json -Force
+```
+
+```text
+/clear
+/agt status
+```
+
+These are examples, not host-aware auto-tuned presets. Review the allow/review tool lists for your
+Copilot CLI environment before using them broadly.
+
 ## Notes
 
 - The extension runtime resolves `@github/copilot-sdk` from Copilot CLI itself.

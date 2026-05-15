@@ -123,6 +123,11 @@ The packaged default policy is a developer-protection baseline that:
 - scans fetched-content tools for poisoning and exfiltration cues
 - inspects `bash` and `powershell` output in advisory mode so suspicious output is surfaced without being silently dropped
 
+For this PR, the package keeps that strict baseline as the shipped default. Example profile
+starting points for `strict`, `balanced`, and `advisory` live under:
+
+- `examples/copilot-cli-agt/config/profiles/`
+
 ## Notes
 
 - `npm install` for this package should remain inert with respect to `~/.copilot`.
