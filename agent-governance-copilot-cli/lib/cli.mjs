@@ -611,7 +611,12 @@ function resolvePolicySourcePath({ file, paths, profile }) {
     return resolved;
   }
 
-  const normalizedProfile = String(profile).toLowerCase();
+  const normalizedProfile = String(profile).trim().toLowerCase();
+  if (!/^[a-z0-9-]+$/.test(normalizedProfile)) {
+    throw new Error(
+      `Invalid policy profile '${profile}'. Expected one of: strict, balanced, advisory.`,
+    );
+  }
   const profilePath = join(paths.sourceProfilesRoot, `${normalizedProfile}.json`);
   if (!existsSync(profilePath)) {
     throw new Error(`Unknown policy profile '${profile}'. Expected one of: strict, balanced, advisory.`);

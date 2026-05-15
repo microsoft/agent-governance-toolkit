@@ -405,3 +405,59 @@ test("policy commands can apply, validate, show, and resolve bundled profiles", 
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("policy commands reject invalid profile and conflicting sources", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-copilot-policy-errors-"));
+  const packageRoot = join(root, "package");
+  const copilotHome = join(root, ".copilot");
+  const profileRoot = join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "profiles");
+
+  await mkdir(profileRoot, { recursive: true });
+  await writeFile(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-copilot-cli",
+        version: "3.6.1",
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(root, "custom-policy.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 4, mode: "enforce", profile: "custom" }, null, 2)}\n`,
+    "utf8",
+  );
+
+  await assert.rejects(
+    validatePolicy({
+      copilotHome,
+      packageRoot,
+      profile: "..\\..\\secrets",
+    }),
+    /Invalid policy profile/,
+  );
+
+  await assert.rejects(
+    validatePolicy({
+      copilotHome,
+      file: join(root, "custom-policy.json"),
+      packageRoot,
+      profile: "balanced",
+    }),
+    /Specify either --file or --profile, not both/,
+  );
+
+  await assert.rejects(
+    validatePolicy({
+      copilotHome,
+      packageRoot,
+      profile: "missing",
+    }),
+    /Unknown policy profile/,
+  );
+
+  await rm(root, { recursive: true, force: true });
+});
