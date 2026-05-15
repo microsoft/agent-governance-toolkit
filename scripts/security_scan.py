@@ -33,9 +33,26 @@ from pathlib import Path
 
 # Allow running from repo root without installing
 REPO_ROOT = Path(__file__).resolve().parent.parent
-AGENT_OS_SRC = REPO_ROOT / "packages" / "agent-os" / "src"
-if AGENT_OS_SRC.exists():
-    sys.path.insert(0, str(AGENT_OS_SRC))
+
+# Resolve agent_os source root — try the post-flattening path first,
+# fall back to the legacy path for older checkouts.
+_CANDIDATE_PATHS = [
+    REPO_ROOT / "agent-governance-python" / "agent-os" / "src",
+    REPO_ROOT / "packages" / "agent-os" / "src",
+]
+AGENT_OS_SRC = None
+for _candidate in _CANDIDATE_PATHS:
+    if _candidate.exists():
+        AGENT_OS_SRC = _candidate
+        break
+
+if AGENT_OS_SRC is None:
+    sys.exit(
+        "ERROR: Cannot locate agent_os source tree. "
+        "Tried:\n  " + "\n  ".join(str(p) for p in _CANDIDATE_PATHS)
+    )
+
+sys.path.insert(0, str(AGENT_OS_SRC))
 
 from agent_os.security_skills import (
     SecurityFinding,
