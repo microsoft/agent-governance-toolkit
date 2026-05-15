@@ -34,7 +34,15 @@
     "backdoors",
     "metacharacters",
     "metacharacter",
-    "Blocklist"
+    "Blocklist",
+    "splitlines",
+    "tomllib",
+    "uvicorn",
+    "tomli",
+    "fastapi",
+    "structlog",
+    "scipy",
+    "croniter"
   ],
   "ignorePaths": [
     "**/node_modules/**",

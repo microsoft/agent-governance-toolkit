@@ -21,6 +21,14 @@ import json
 import re
 import subprocess
 import sys
+from typing import Any
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:  # pragma: no cover - tomllib unavailable
+        tomllib = None  # type: ignore[assignment]
 
 # Known registered PyPI package names for this project
 REGISTERED_PACKAGES = {
@@ -38,9 +46,10 @@ REGISTERED_PACKAGES = {
     "agent-sandbox", "agent_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
-    "fastapi", "uvicorn", "structlog", "click", "rich", "numpy", "scipy",
+    "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
     "pytest", "pytest-asyncio", "pytest-cov", "ruff", "mypy", "build",
-    "openai", "anthropic", "langchain", "langchain-core", "crewai",
+    "openai", "openai-agents", "anthropic", "langchain", "langchain-core", "crewai",
+    "croniter",
     "redis", "sqlalchemy", "asyncpg", "chromadb", "pinecone-client",
     "sentence-transformers", "prometheus-client", "opentelemetry-api",
     "opentelemetry-sdk", "fhir.resources", "hl7apy", "zenpy", "freshdesk",
@@ -301,57 +310,141 @@ def check_pyproject_toml(filepath: str) -> list[str]:
     except (OSError, UnicodeDecodeError):
         return findings
 
+    # Keep legacy behavior as a compatibility fallback for malformed TOML.
+    def _legacy_scan() -> list[str]:
+        legacy_findings = []
+        registered_lower = {p.lower() for p in REGISTERED_PACKAGES}
+        dep_re = re.compile(r'^[\s"]*([a-zA-Z0-9_-]+)', re.MULTILINE)
+        in_deps = False
+        in_optional = False
+        for line_num, line in enumerate(content.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("[project.dependencies]"):
+                in_deps = True
+                in_optional = False
+                continue
+            if stripped.startswith("[project.optional-dependencies"):
+                in_deps = True
+                in_optional = True
+                continue
+            if stripped.startswith("[") and in_deps:
+                in_deps = False
+                in_optional = False
+                continue
+            if not in_deps:
+                continue
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            if in_optional and re.match(r'^[a-zA-Z0-9_-]+\s*=\s*\[', stripped):
+                bracket_content = stripped.split("[", 1)[1].rstrip("]").strip()
+                for item in bracket_content.split(","):
+                    item = item.strip().strip('"').strip("'")
+                    if item:
+                        base = re.split(r'[><=!~;@\s]', item)[0].strip()
+                        if base and base.lower() not in registered_lower:
+                            legacy_findings.append(
+                                f"  {filepath}:{line_num}: '{base}' may not be registered on PyPI"
+                            )
+                continue
+
+            m = dep_re.match(stripped.strip('"').strip("'").strip(","))
+            if m:
+                pkg = m.group(1)
+                if pkg.lower() not in registered_lower and pkg.lower() not in {
+                    "python", "requires-python",
+                }:
+                    severity = "HIGH RISK" if pkg.lower() in {
+                        p.lower() for p in LOCAL_ONLY_PACKAGES
+                    } else ""
+                    msg = f"  {filepath}:{line_num}: '{pkg}' may not be registered on PyPI"
+                    if severity:
+                        msg += f" [{severity}: local-only package]"
+                    legacy_findings.append(msg)
+        return legacy_findings
+
+    def _extract_package_name(requirement: str) -> str:
+        req = requirement.strip()
+        if not req:
+            return ""
+        req = req.split(";", 1)[0].strip()
+        req = req.split("@", 1)[0].strip()
+        req = re.sub(r'\[.*?\]', '', req)
+        m = re.match(r'^([A-Za-z0-9_.-]+)', req)
+        return m.group(1) if m else ""
+
+    def _safe_line_number_for_requirement(requirement: str) -> int:
+        needle = requirement.strip().strip('"').strip("'")
+        if not needle:
+            return 1
+        for line_num, line in enumerate(content.splitlines(), 1):
+            if needle in line:
+                return line_num
+        return 1
+
+    def _extract_pep621_dependency_entries(parsed: dict[str, Any]) -> tuple[list[tuple[str, int]], bool]:
+        entries: list[tuple[str, int]] = []
+
+        project = parsed.get("project")
+        if project is None:
+            return entries, False
+        if not isinstance(project, dict):
+            return entries, True
+
+        dependencies = project.get("dependencies", [])
+        if dependencies is not None:
+            if not isinstance(dependencies, list):
+                return entries, True
+            else:
+                for item in dependencies:
+                    if not isinstance(item, str):
+                        return entries, True
+                    entries.append((item, _safe_line_number_for_requirement(item)))
+
+        optional = project.get("optional-dependencies", {})
+        if optional is not None:
+            if not isinstance(optional, dict):
+                return entries, True
+            else:
+                for group, deps in optional.items():
+                    if not isinstance(deps, list):
+                        return entries, True
+                    for item in deps:
+                        if not isinstance(item, str):
+                            return entries, True
+                        entries.append((item, _safe_line_number_for_requirement(item)))
+
+        return entries, False
+
+    if tomllib is None:
+        return _legacy_scan()
+
+    try:
+        parsed = tomllib.loads(content)
+    except Exception:
+        return _legacy_scan()
+
     registered_lower = {p.lower() for p in REGISTERED_PACKAGES}
-    # Match dependency lines like: "package>=1.0" or "package[extra]>=1.0,<2.0"
-    dep_re = re.compile(r'^[\s"]*([a-zA-Z0-9_-]+)', re.MULTILINE)
-    in_deps = False
-    in_optional = False
-    for line_num, line in enumerate(content.splitlines(), 1):
-        stripped = line.strip()
-        if stripped.startswith("[project.dependencies]"):
-            in_deps = True
-            in_optional = False
+
+    entries, should_fallback = _extract_pep621_dependency_entries(parsed)
+    if should_fallback:
+        return _legacy_scan()
+
+    for requirement, line_num in entries:
+        pkg = _extract_package_name(requirement)
+        if not pkg:
             continue
-        if stripped.startswith("[project.optional-dependencies"):
-            in_deps = True
-            in_optional = True
-            continue
-        if stripped.startswith("[") and in_deps:
-            in_deps = False
-            in_optional = False
-            continue
-        if not in_deps:
-            continue
-        if not stripped or stripped.startswith("#"):
-            continue
-        # In optional-dependencies, lines like 'aps = ["pkg>=1.0"]' are group
-        # headers — the key (aps) is an extras name, not a package. Parse the
-        # values inside the brackets instead.
-        if in_optional and re.match(r'^[a-zA-Z0-9_-]+\s*=\s*\[', stripped):
-            # Extract package names from the bracket contents
-            bracket_content = stripped.split("[", 1)[1].rstrip("]").strip()
-            for item in bracket_content.split(","):
-                item = item.strip().strip('"').strip("'")
-                if item:
-                    base = re.split(r'[><=!~;@\s]', item)[0].strip()
-                    if base and base.lower() not in registered_lower:
-                        findings.append(
-                            f"  {filepath}:{line_num}: '{base}' may not be registered on PyPI"
-                        )
-            continue
-        m = dep_re.match(stripped.strip('"').strip("'").strip(","))
-        if m:
-            pkg = m.group(1)
-            if pkg.lower() not in registered_lower and pkg.lower() not in {
-                "python", "requires-python",
-            }:
-                severity = "HIGH RISK" if pkg.lower() in {
-                    p.lower() for p in LOCAL_ONLY_PACKAGES
-                } else ""
-                msg = f"  {filepath}:{line_num}: '{pkg}' may not be registered on PyPI"
-                if severity:
-                    msg += f" [{severity}: local-only package]"
-                findings.append(msg)
+        if pkg.lower() not in registered_lower and pkg.lower() not in {
+            "python", "requires-python",
+        }:
+            severity = "HIGH RISK" if pkg.lower() in {
+                p.lower() for p in LOCAL_ONLY_PACKAGES
+            } else ""
+            msg = f"  {filepath}:{line_num}: '{pkg}' may not be registered on PyPI"
+            if severity:
+                msg += f" [{severity}: local-only package]"
+            findings.append(msg)
+
     return findings
 
 
