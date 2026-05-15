@@ -471,11 +471,17 @@ export async function showPolicy({
 }
 
 async function vendorSdkDependencyTree({ destinationExtensionPath, packageRoot }) {
-  const require = createRequire(import.meta.url);
-  const sdkEntryPath = require.resolve("@microsoft/agent-governance-sdk", {
-    paths: [packageRoot],
-  });
-  const sdkPackageRoot = findPackageRoot(dirname(sdkEntryPath));
+  const packageRequire = createRequire(join(packageRoot, "package.json"));
+  let sdkPackageManifestPath;
+  try {
+    sdkPackageManifestPath = packageRequire.resolve("@microsoft/agent-governance-sdk/package.json");
+  } catch {
+    const cliRequire = createRequire(import.meta.url);
+    sdkPackageManifestPath = cliRequire.resolve("@microsoft/agent-governance-sdk/package.json", {
+      paths: [packageRoot],
+    });
+  }
+  const sdkPackageRoot = dirname(sdkPackageManifestPath);
   const sourceNodeModulesRoot = resolve(sdkPackageRoot, "..", "..");
   const destinationNodeModulesRoot = join(
     destinationExtensionPath,
@@ -640,11 +646,7 @@ function validatePolicyBaseline(policy, { allowBundledProfiles }) {
   const metadataRulePresent = (policy.directResourcePolicies?.urlRules ?? []).some(
     (rule) =>
       String(rule.effect ?? "").toLowerCase() === "deny" &&
-      (rule.urlPatterns ?? []).some((pattern) =>
-        /(169\.254\.169\.254|100\.100\.100\.200|metadata\.google\.internal)/i.test(
-          String(pattern.source ?? ""),
-        ),
-      ),
+      (rule.urlPatterns ?? []).some(patternMatchesMetadataTarget),
   );
   const credentialRulePresent = (policy.directResourcePolicies?.pathRules ?? []).some(
     (rule) =>
@@ -678,6 +680,26 @@ function validatePolicyBaseline(policy, { allowBundledProfiles }) {
       throw new Error(`Policies must scan ${requiredTool} output for poisoning attempts.`);
     }
   }
+}
+
+function patternMatchesMetadataTarget(pattern) {
+  const source = String(pattern?.source ?? "");
+  const flags = String(pattern?.flags ?? "");
+  let expression;
+  try {
+    expression = new RegExp(source, flags);
+  } catch (error) {
+    throw new Error(`Invalid metadata endpoint rule regex: ${source}`);
+  }
+
+  return [
+    "http://169.254.169.254/latest/meta-data/",
+    "https://169.254.169.254/latest/meta-data/",
+    "http://100.100.100.200/latest/meta-data/",
+    "https://100.100.100.200/latest/meta-data/",
+    "http://metadata.google.internal/computeMetadata/v1/",
+    "https://metadata.google.internal/computeMetadata/v1/",
+  ].some((candidate) => expression.test(candidate));
 }
 
 function isBundledPolicyPath(path, paths) {
