@@ -33,7 +33,7 @@ from pathlib import Path
 
 # Allow running from repo root without installing
 REPO_ROOT = Path(__file__).resolve().parent.parent
-AGENT_OS_SRC = REPO_ROOT / "packages" / "agent-os" / "src"
+AGENT_OS_SRC = REPO_ROOT / "agent-governance-python" / "agent-os" / "src"
 if AGENT_OS_SRC.exists():
     sys.path.insert(0, str(AGENT_OS_SRC))
 
@@ -139,7 +139,7 @@ def main() -> int:
                 print(f"Warning: {path_str} not found", file=sys.stderr)
     else:
         # Default: scan all packages
-        pkg_dir = REPO_ROOT / "packages"
+        pkg_dir = REPO_ROOT / "agent-governance-python"
         if pkg_dir.exists():
             all_findings.extend(
                 scan_directory(pkg_dir, exclude_tests=args.exclude_tests)
