@@ -87,7 +87,7 @@ services:
       - ./notebooks:/app/notebooks
     networks:
       - scak-network
-    command: jupyter lab --ip=0.0.0.0 --allow-root --no-browser --NotebookApp.token=''
+    command: jupyter lab --ip=0.0.0.0 --no-browser --IdentityProvider.token='changeme'
     restart: unless-stopped
 
 volumes:

@@ -60,9 +60,11 @@ class TestCacheInvalidation:
         registry.register(signed_card)
         assert registry.is_verified(signed_card.agent_did) is True
 
-        # Flip a byte in the signature
+        # Ensure the replacement byte actually differs from the original
         original = signed_card.card_signature
-        signed_card.card_signature = "A" + original[1:]
+        first_char = original[0]
+        replacement = "B" if first_char != "B" else "C"
+        signed_card.card_signature = replacement + original[1:]
         assert registry.is_verified(signed_card.agent_did) is False
 
     def test_unmutated_card_stays_cached(self, signed_card):

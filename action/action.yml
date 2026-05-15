@@ -126,14 +126,16 @@ runs:
               exit 1
             fi
             echo "📋 Evaluating policy: $POLICY"
-            OUTPUT=$(python -c "
-        import json, sys
+            OUTPUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT="$CONTEXT" python -c "
+        import json, sys, os
+
         from agent_os.policies import PolicyEvaluator
 
         evaluator = PolicyEvaluator()
-        evaluator.load_policies('$POLICY')
+        evaluator.load_policies(os.environ['AGT_POLICY'])
 
-        context = json.loads('$CONTEXT') if '$CONTEXT' else {}
+        ctx_raw = os.environ.get('AGT_CONTEXT', '')
+        context = json.loads(ctx_raw) if ctx_raw else {}
         decision = evaluator.evaluate(context)
 
         result = {
@@ -179,12 +181,13 @@ runs:
             POLICY="${{ inputs.policy-path }}"
             if [ -n "$POLICY" ]; then
               echo "--- Policy Evaluation ---"
-              PE_OUT=$(python -c "
-        import json, sys
+              PE_OUT=$(AGT_POLICY="$POLICY" AGT_CONTEXT='${{ inputs.context-json }}' python -c "
+        import json, sys, os
         from agent_os.policies import PolicyEvaluator
         evaluator = PolicyEvaluator()
-        evaluator.load_policies('$POLICY')
-        context = json.loads('${{ inputs.context-json }}') if '${{ inputs.context-json }}' else {}
+        evaluator.load_policies(os.environ['AGT_POLICY'])
+        ctx_raw = os.environ.get('AGT_CONTEXT', '')
+        context = json.loads(ctx_raw) if ctx_raw else {}
         decision = evaluator.evaluate(context)
         print(json.dumps({'allowed': decision.allowed, 'action': decision.action, 'reason': decision.reason}, indent=2))
         sys.exit(0 if decision.allowed else 1)

@@ -10,6 +10,7 @@ namespace AgentGovernance.RateLimiting;
 /// </summary>
 public sealed class RateLimiter
 {
+    private const int MaxTrackedKeys = 50_000;
     private readonly ConcurrentDictionary<string, CallWindow> _windows = new();
 
     /// <summary>
@@ -28,6 +29,13 @@ public sealed class RateLimiter
         if (window <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(window));
 
         var callWindow = _windows.GetOrAdd(key, _ => new CallWindow());
+
+        // Prevent unbounded dictionary growth: prune stale keys when at capacity.
+        if (_windows.Count > MaxTrackedKeys)
+        {
+            PruneStaleKeys(window);
+        }
+
         return callWindow.TryRecord(maxCalls, window);
     }
 
@@ -47,6 +55,17 @@ public sealed class RateLimiter
     /// Removes all tracked state. Useful for testing.
     /// </summary>
     public void Reset() => _windows.Clear();
+
+    private void PruneStaleKeys(TimeSpan window)
+    {
+        foreach (var kvp in _windows)
+        {
+            if (kvp.Value.CountWithin(window) == 0)
+            {
+                _windows.TryRemove(kvp.Key, out _);
+            }
+        }
+    }
 
     /// <summary>
     /// Parses a rate-limit expression like "100/minute", "50/hour", "10/second".

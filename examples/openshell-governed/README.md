@@ -8,7 +8,7 @@ Demonstrates AGT policy enforcement, trust scoring, and audit inside an OpenShel
 - No API keys required
 
 ```bash
-pip install agent-governance-toolkit[full]
+pip install openshell-agentmesh
 ```
 
 ## How to Run

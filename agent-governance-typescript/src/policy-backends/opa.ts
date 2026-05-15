@@ -9,6 +9,28 @@ interface OPABackendConfig {
   fetchImpl?: typeof fetch;
 }
 
+const BLOCKED_HOSTS = new Set([
+  '169.254.169.254',
+  'metadata.google.internal',
+]);
+
+function validateOpaUrl(endpoint: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new Error(`Invalid OPA endpoint URL: ${endpoint}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(
+      `Unsupported OPA URL scheme '${parsed.protocol}': only http and https are allowed`,
+    );
+  }
+  if (BLOCKED_HOSTS.has(parsed.hostname)) {
+    throw new Error(`OPA URL host '${parsed.hostname}' is blocked to prevent SSRF`);
+  }
+}
+
 export class OPABackend implements ExternalPolicyBackend {
   readonly name = 'opa';
   private readonly endpoint: string;
@@ -16,6 +38,7 @@ export class OPABackend implements ExternalPolicyBackend {
   private readonly fetchImpl: typeof fetch;
 
   constructor(config: OPABackendConfig) {
+    validateOpaUrl(config.endpoint);
     this.endpoint = config.endpoint.replace(/\/$/, '');
     this.policyPath = config.policyPath ?? 'agentmesh/allow';
     this.fetchImpl = config.fetchImpl ?? fetch;

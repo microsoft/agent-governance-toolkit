@@ -23,14 +23,17 @@ struct AuditState {
 }
 
 impl AuditLogger {
-    /// Create an empty audit logger with no entry limit.
+    /// Default maximum entries when no explicit limit is provided.
+    const DEFAULT_MAX_ENTRIES: usize = 100_000;
+
+    /// Create an empty audit logger with a default entry limit.
     pub fn new() -> Self {
         Self {
             state: Mutex::new(AuditState {
                 entries: Vec::new(),
                 seam_hash: None,
             }),
-            max_entries: None,
+            max_entries: Some(Self::DEFAULT_MAX_ENTRIES),
         }
     }
 

@@ -83,6 +83,9 @@ export class GovernanceMetrics {
   private readonly gauges: Record<string, number> = {};
   private readonly events: MetricEvent[] = [];
 
+  private static readonly MAX_HISTOGRAM_SAMPLES = 10_000;
+  private static readonly MAX_EVENTS = 50_000;
+
   constructor(config: boolean | GovernanceMetricsConfig = false) {
     if (typeof config === 'boolean') {
       this.enabled = config;
@@ -178,7 +181,14 @@ export class GovernanceMetrics {
   }
 
   private recordHistogram(name: string, value: number): void {
-    this.histograms[name] = [...(this.histograms[name] ?? []), value];
+    const samples = this.histograms[name] ?? [];
+    if (samples.length < GovernanceMetrics.MAX_HISTOGRAM_SAMPLES) {
+      samples.push(value);
+    } else {
+      // Reservoir-style: overwrite a random older sample to bound memory.
+      samples[Math.floor(Math.random() * samples.length)] = value;
+    }
+    this.histograms[name] = samples;
   }
 
   private emit(event: MetricEvent): void {
@@ -186,6 +196,9 @@ export class GovernanceMetrics {
       return;
     }
 
+    if (this.events.length >= GovernanceMetrics.MAX_EVENTS) {
+      this.events.splice(0, Math.floor(GovernanceMetrics.MAX_EVENTS / 4));
+    }
     this.events.push(event);
     for (const sink of this.sinks) {
       sink.record(event);

@@ -66,6 +66,7 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
         OpaEvaluationMode mode = OpaEvaluationMode.Auto,
         TimeSpan? timeout = null)
     {
+        ValidateOpaUrl(opaUrl);
         _regoContent = regoContent;
         _regoPath = regoPath;
         _query = query;
@@ -555,5 +556,27 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
         return !string.IsNullOrWhiteSpace(_regoPath) && File.Exists(_regoPath)
             ? File.ReadAllText(_regoPath, Encoding.UTF8)
             : null;
+    }
+
+    private static readonly HashSet<string> BlockedHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "169.254.169.254",
+        "metadata.google.internal",
+    };
+
+    private static void ValidateOpaUrl(string opaUrl)
+    {
+        if (!Uri.TryCreate(opaUrl, UriKind.Absolute, out var uri))
+            throw new ArgumentException($"Invalid OPA URL: {opaUrl}", nameof(opaUrl));
+
+        if (uri.Scheme != "http" && uri.Scheme != "https")
+            throw new ArgumentException(
+                $"Unsupported OPA URL scheme '{uri.Scheme}': only http and https are allowed",
+                nameof(opaUrl));
+
+        if (BlockedHosts.Contains(uri.Host))
+            throw new ArgumentException(
+                $"OPA URL host '{uri.Host}' is blocked to prevent SSRF",
+                nameof(opaUrl));
     }
 }

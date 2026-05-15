@@ -333,6 +333,16 @@ class Policy(BaseModel):
                 if os.path.isabs(parent_ref)
                 else os.path.join(base_dir, parent_ref)
             )
+
+            # Prevent path traversal: resolved path must stay within base_dir
+            real_parent = os.path.realpath(parent_path)
+            real_base = os.path.realpath(base_dir)
+            if not real_parent.startswith(real_base + os.sep) and real_parent != real_base:
+                raise ValueError(
+                    f"Policy extends '{parent_ref}' resolves to '{real_parent}' "
+                    f"which is outside the policy directory '{real_base}'"
+                )
+
             if not os.path.exists(parent_path):
                 raise FileNotFoundError(
                     f"Policy extends '{parent_ref}' not found at {parent_path}"

@@ -139,12 +139,15 @@ runs:
                 }
               );
               context.diff = await diffRes.text();
-              // Truncate diffs to stay within GitHub Models token limits
-              // (~4 chars per token, keep under ~6000 tokens for diff)
-              if (context.diff.length > 24000) {
+              // Truncate diffs to stay within GitHub Models token limits.
+              // Budget ~3k tokens for system prompt + PR body, leaving ~5k
+              // tokens (~12k chars) for the diff itself.  The old 24k limit
+              // exceeded model context windows on large PRs.
+              const MAX_DIFF_CHARS = 12000;
+              if (context.diff.length > MAX_DIFF_CHARS) {
                 context.diff =
-                  context.diff.slice(0, 24000) +
-                  "\n\n... [diff truncated — showing first 24k chars of full diff] ...";
+                  context.diff.slice(0, MAX_DIFF_CHARS) +
+                  `\n\n... [diff truncated — showing first ${MAX_DIFF_CHARS / 1000}k of ${(context.diff.length / 1000).toFixed(0)}k chars] ...`;
               }
             }
 
@@ -224,6 +227,16 @@ runs:
               `::warning::Primary model failed (${res.status}), trying fallback: ${env("INPUT_FALLBACK_MODEL")}`
             );
             body.model = env("INPUT_FALLBACK_MODEL");
+
+            // On 413 (payload too large), halve the user message to fit
+            if (res.status === 413) {
+              const userMsg = body.messages[body.messages.length - 1];
+              const half = Math.floor(userMsg.content.length / 2);
+              userMsg.content = userMsg.content.slice(0, half)
+                + "\n\n... [content truncated to fit model context window] ...";
+              console.log(`   Truncated user prompt from ${userMsg.content.length + half} to ${userMsg.content.length} chars for retry`);
+            }
+
             res = await fetch(modelsEndpoint, {
               method: "POST",
               headers: {
@@ -433,11 +446,13 @@ runs:
             setOutput("status", "success");
             setOutput("tokens_used", String(tokensUsed));
           } catch (err) {
-            console.error(`::error::Agent ${agentType} failed: ${err.message}`);
+            // AI agents are informational — log a warning instead of
+            // failing the check so large-diff PRs don't show spurious
+            // red X marks in the checks list.
+            console.log(`::warning::Agent ${agentType} failed: ${err.message}`);
             setOutput("response", "");
             setOutput("status", "failure");
             setOutput("tokens_used", "0");
-            process.exitCode = 1;
           }
         }
 

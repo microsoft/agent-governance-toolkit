@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,6 +109,9 @@ func NewOPABackend(options OPAOptions) *OPABackend {
 	if opaURL == "" {
 		opaURL = "http://localhost:8181"
 	}
+	if err := validateOPAURL(opaURL); err != nil {
+		log.Printf("[WARN] OPA URL validation failed: %v", err)
+	}
 
 	return &OPABackend{
 		mode:        mode,
@@ -162,6 +166,26 @@ func (b *OPABackend) evaluateWithMode(context map[string]interface{}) (BackendDe
 		}
 		return BackendDecision{}, fmt.Errorf("opa auto mode requires the opa CLI; use builtin mode explicitly or set AllowBuiltinFallback to true")
 	}
+}
+
+// validateOPAURL rejects URLs with non-HTTP schemes or known SSRF targets.
+func validateOPAURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid OPA URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("unsupported OPA URL scheme %q: only http and https are allowed", parsed.Scheme)
+	}
+	blockedHosts := map[string]bool{
+		"169.254.169.254":        true,
+		"metadata.google.internal": true,
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if blockedHosts[host] {
+		return fmt.Errorf("OPA URL host %q is blocked to prevent SSRF", host)
+	}
+	return nil
 }
 
 func (b *OPABackend) evaluateRemote(context map[string]interface{}) (BackendDecision, error) {

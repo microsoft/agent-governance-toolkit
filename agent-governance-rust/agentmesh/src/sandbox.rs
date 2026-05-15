@@ -344,9 +344,21 @@ impl SandboxProvider for DockerSandboxProvider {
         let execution_id = generate_id();
         let start = Instant::now();
 
+        // Avoid shell interpolation: pipe code via stdin instead of sh -c.
         let output = Command::new("docker")
-            .args(["exec", &name, "sh", "-c", code])
-            .output()
+            .args(["exec", "-i", &name, "sh"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|mut child| {
+                use std::io::Write;
+                if let Some(ref mut stdin) = child.stdin {
+                    stdin.write_all(code.as_bytes())?;
+                }
+                drop(child.stdin.take());
+                child.wait_with_output()
+            })
             .map_err(|e| format!("Failed to run docker exec: {}", e))?;
 
         let duration = start.elapsed().as_secs_f64();
