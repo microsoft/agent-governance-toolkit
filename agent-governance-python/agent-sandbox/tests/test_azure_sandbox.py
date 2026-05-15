@@ -36,10 +36,14 @@ import pytest
 
 from agent_sandbox.aca_sandbox_provider import (
     ACASandboxProvider,
+    aca_config_from_policy,
+)
+# Underscore-prefixed helpers are internal: import them directly from the
+# implementation module rather than the package's public ``__all__``.
+from agent_sandbox.aca_sandbox_provider.aca_sandbox_provider import (
     _network_allowlist,
     _network_default,
     _validate_resource_name,
-    aca_config_from_policy,
 )
 from agent_sandbox.sandbox_provider import (
     ExecutionStatus,

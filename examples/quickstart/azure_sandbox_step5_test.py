@@ -291,12 +291,12 @@ async def _verify_remote_execution(
 
     Empirically, an Azure Container Apps sandbox container reports::
 
-        SANDBOX_PROOF host=adc-sandbox kernel=6.12.8+ uid=0 cgroup=0::/container-0
+        SANDBOX_PROOF host=aca-sandbox kernel=6.12.8+ uid=0 cgroup=0::/container-0
 
     None of those values can be produced by the local Python interpreter
     that called ``execute_code``:
 
-      * ``host=adc-sandbox`` is a fixed container name, never the
+      * ``host=aca-sandbox`` is a fixed container name, never the
         developer's machine hostname.
       * The Linux kernel release (e.g. ``6.12.8+``) cannot be emitted
         from a Windows or macOS host.

@@ -44,14 +44,14 @@ The picture:
    │  • delete_sandbox    │      └────────────────────────────┘
    └──────────┬───────────┘
               ▼
-   management.azuredevcompute.io
-   (per-sandbox VM with managed identity + egress proxy)
+   management.containerapps.azure.com
+   (per-sandbox container with managed identity + egress proxy)
 ```
 
 The two SDKs come from the
-[`Q:\ADC\python\python\azure-sandbox`](https://pypi.org/project/azure-sandbox/)
+[`azure-sandbox`](https://pypi.org/project/azure-sandbox/)
 and
-[`Q:\ADC\python\python\azure-mgmt-sandbox`](https://pypi.org/project/azure-mgmt-sandbox/)
+[`azure-mgmt-sandbox`](https://pypi.org/project/azure-mgmt-sandbox/)
 packages. AGT does not vendor them — it only depends on their public
 surface, so any update Microsoft ships to those clients flows through unchanged.
 

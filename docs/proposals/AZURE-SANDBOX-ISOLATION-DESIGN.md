@@ -94,8 +94,8 @@ and present a `SandboxProvider`-shaped API.
                 └────────┬─────────┘         └───────────────────────┘
                          │
                          ▼
-            management.azuredevcompute.io
-            (per-sandbox VM / microVM with
+            management.containerapps.azure.com
+            (per-sandbox container / microVM with
              egress proxy and managed identity)
 ```
 
