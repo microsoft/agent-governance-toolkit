@@ -16,8 +16,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 jobs:
   # -------------------------------------------------------------------
@@ -141,6 +139,10 @@ jobs:
     needs: resolve-python-matrix
     if: needs.resolve-python-matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.resolve-python-matrix.outputs.matrix) }}
@@ -250,6 +252,10 @@ jobs:
     needs: resolve-npm-matrix
     if: needs.resolve-npm-matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.resolve-npm-matrix.outputs.matrix) }}

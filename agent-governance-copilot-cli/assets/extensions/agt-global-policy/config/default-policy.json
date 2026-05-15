@@ -239,7 +239,7 @@
       }
     ]
   },
-  "scanOutputTools": ["web_search", "web_fetch", "curl", "fetch", "browser", "bash", "powershell"],
+  "scanOutputTools": ["web_search", "web_fetch", "curl", "fetch", "browser", "bash", "powershell", "read_powershell", "list_powershell"],
   "poisoningPatterns": [
     {
       "source": "ignore (all|any|previous) instructions",

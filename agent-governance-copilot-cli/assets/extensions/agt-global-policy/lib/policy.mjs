@@ -7,7 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { safeJsonStringify, summarizeText } from "./poisoning.mjs";
+import { flattenText, safeJsonStringify, summarizeText, summarizeTextWindows } from "./poisoning.mjs";
 import { SDK_ENTRY_ENV, loadAgentGovernanceSdk } from "./sdk-loader.mjs";
 
 export const USER_POLICY_ENV = "AGT_COPILOT_POLICY_PATH";
@@ -19,7 +19,7 @@ const USER_AUDIT_RELATIVE_PATH = [".copilot", "agt", "audit-log.json"];
 const DEFAULT_AGENT_ID = "copilot-cli";
 const DEFAULT_MIN_PROMPT_DEFENSE_GRADE = "B";
 const SUPPORTED_POLICY_SCHEMA_VERSION = 1;
-const DEFAULT_TOOL_EFFECT = "allow";
+const DEFAULT_TOOL_EFFECT = "review";
 const SAFE_CLEANUP_TARGETS = new Set([
   "node_modules",
   "dist",
@@ -288,7 +288,7 @@ export async function inspectToolResult(state, input, invocation = {}) {
 
     const decision = await state.policyEngine.evaluateWithBackends(`tool_output.${toolName}`, {
       actionType: "tool_output",
-      outputText: summarizeText(input?.toolResult, 12000),
+      outputText: flattenText(input?.toolResult),
       sessionId: invocation.sessionId ?? "unknown-session",
       surface: "cli",
       toolName,
@@ -607,18 +607,21 @@ function createToolOutputBackend(policy, sdk) {
         return "allow";
       }
 
-      const entry = buildContextEntry({
-        agentId: DEFAULT_AGENT_ID,
-        content: outputText,
-        role: "tool",
-        sessionId: String(context.sessionId ?? "unknown-session"),
-        metadata: {
-          toolName: context.toolName,
-        },
-      });
       const detector = createContextDetector(sdk, policy);
-      detector.addEntry(entry);
-      const entryFindings = detector.scanEntry(entry);
+      const entryFindings = [];
+      for (const sample of summarizeTextWindows(outputText, 12000)) {
+        const entry = buildContextEntry({
+          agentId: DEFAULT_AGENT_ID,
+          content: sample,
+          role: "tool",
+          sessionId: String(context.sessionId ?? "unknown-session"),
+          metadata: {
+            toolName: context.toolName,
+          },
+        });
+        detector.addEntry(entry);
+        entryFindings.push(...detector.scanEntry(entry));
+      }
       const aggregate = detector.scan();
 
       return buildDetectorOutcome(policy, "tool output poisoning", entryFindings, aggregate, {
@@ -1034,6 +1037,7 @@ function isSafeEnvTemplateReadCommand(commandText) {
 
 export function evaluateDirectResourceAccess(policy, context) {
   const candidates = collectDirectResourceCandidates({
+    commandText: context.commandText,
     cwd: context.cwd,
     toolArgs: context.rawToolArgs,
     toolName: context.toolName,
@@ -1091,7 +1095,7 @@ export function getOutputHandlingMode(policy, toolName) {
   return "suppress";
 }
 
-function collectDirectResourceCandidates({ toolArgs, toolName, cwd }) {
+function collectDirectResourceCandidates({ commandText, toolArgs, toolName, cwd }) {
   const paths = [];
   const urls = [];
 
@@ -1125,10 +1129,76 @@ function collectDirectResourceCandidates({ toolArgs, toolName, cwd }) {
     });
   });
 
+  const shellCandidates = collectShellCommandCandidates({ commandText, cwd });
+  paths.push(...shellCandidates.paths);
+  urls.push(...shellCandidates.urls);
+
   return {
     paths: dedupeBy(paths, (candidate) => `${candidate.operation}:${candidate.normalizedPath}`),
     urls: dedupeBy(urls, (candidate) => candidate.normalizedUrl),
   };
+}
+
+function collectShellCommandCandidates({ commandText, cwd }) {
+  const command = String(commandText ?? "");
+  if (!command.trim()) {
+    return { paths: [], urls: [] };
+  }
+
+  const urls = [
+    ...extractRegexMatches(command, /https?:\/\/[^\s"'`]+/gi).map((value) => ({
+      normalizedUrl: normalizeUrlValue(value),
+    })),
+    ...extractRegexMatches(
+      command,
+      /\b(?:169\.254\.169\.254|100\.100\.100\.200|metadata\.google\.internal)(?:[^\s"'`]*)/gi,
+    ).map((value) => ({
+      normalizedUrl: normalizeUrlValue(
+        /^https?:\/\//i.test(value) ? value : `http://${value.replace(/^\/+/, "")}`,
+      ),
+    })),
+  ];
+
+  const operation = inferCommandTextOperation(command);
+  const paths = extractRegexMatches(command, /(['"])([^'"`\r\n]+)\1/g, 2)
+    .map((value) => ({
+      displayPath: value,
+      normalizedPath: normalizePathValue(value, cwd),
+      operation,
+    }))
+    .filter((candidate) => candidate.normalizedPath);
+
+  return {
+    paths,
+    urls,
+  };
+}
+
+function inferCommandTextOperation(commandText) {
+  const normalized = String(commandText ?? "").toLowerCase();
+  if (
+    /(set-content|add-content|out-file|writeall(text|bytes)|writefilesync|appendfilesync|fs\.writefile(sync)?|open\s*\([^)]*,\s*['"]w|set-executionpolicy)/i.test(
+      normalized,
+    )
+  ) {
+    return "write";
+  }
+  if (
+    /(get-content|cat|type|readall(text|bytes)|readfilesync|fs\.readfile(sync)?|open\s*\([^)]*['"]r|printenv|\benv\b|getenvironmentvariable)/i.test(
+      normalized,
+    )
+  ) {
+    return "read";
+  }
+  return "any";
+}
+
+function extractRegexMatches(text, regex, captureGroup = 0) {
+  const matches = [];
+  for (const match of String(text ?? "").matchAll(regex)) {
+    matches.push(match[captureGroup] ?? match[0]);
+  }
+  return matches;
 }
 
 function matchesDirectPathRule(rule, candidate) {

@@ -8,7 +8,7 @@
   "toolPolicies": {
     "allowedTools": ["view", "glob", "rg", "agt_policy_status", "agt_policy_check_text"],
     "blockedTools": [],
-    "defaultEffect": "allow",
+    "defaultEffect": "review",
     "reviewTools": ["powershell", "bash", "curl", "web_fetch", "fetch", "browser", "web_search"]
   },
   "outputPolicies": {
@@ -240,7 +240,7 @@
       }
     ]
   },
-  "scanOutputTools": ["web_search", "web_fetch", "curl", "fetch", "browser", "bash", "powershell"],
+  "scanOutputTools": ["web_search", "web_fetch", "curl", "fetch", "browser", "bash", "powershell", "read_powershell", "list_powershell"],
   "poisoningPatterns": [
     {
       "source": "ignore (all|any|previous) instructions",

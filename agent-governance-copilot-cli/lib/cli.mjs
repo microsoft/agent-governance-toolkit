@@ -426,7 +426,7 @@ export async function applyPolicy({
 } = {}) {
   const paths = getPackagePaths({ copilotHome, packageRoot });
   const sourcePath = resolvePolicySourcePath({ file, paths, profile });
-  const { schemaVersion } = await validatePolicyFile(sourcePath);
+  const { schemaVersion } = await validatePolicyFile(sourcePath, { paths });
   await mkdir(paths.policyRoot, { recursive: true });
   await cp(sourcePath, paths.policyPath, { force: true });
   return {
@@ -449,7 +449,7 @@ export async function validatePolicy({
       : existsSync(paths.policyPath)
         ? paths.policyPath
         : paths.sourcePolicyPath;
-  const { schemaVersion } = await validatePolicyFile(sourcePath);
+  const { schemaVersion } = await validatePolicyFile(sourcePath, { paths });
   return {
     schemaVersion,
     sourcePath,
@@ -584,11 +584,14 @@ async function readJsonFile(path, { allowComments = false } = {}) {
   return JSON.parse(contents);
 }
 
-async function validatePolicyFile(path) {
+async function validatePolicyFile(path, { allowBundledProfiles = false, paths } = {}) {
   const policy = await readJsonFile(path);
   if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
     throw new Error(`Policy file at ${path} must contain a JSON object.`);
   }
+  const bundledEquivalent =
+    allowBundledProfiles || (paths ? await isBundledPolicyEquivalent(path, policy, paths) : false);
+  validatePolicyBaseline(policy, { allowBundledProfiles: bundledEquivalent });
   return {
     policy,
     schemaVersion: normalizePolicySchemaVersion(policy.schemaVersion),
@@ -622,6 +625,117 @@ function resolvePolicySourcePath({ file, paths, profile }) {
     throw new Error(`Unknown policy profile '${profile}'. Expected one of: strict, balanced, advisory.`);
   }
   return profilePath;
+}
+
+function validatePolicyBaseline(policy, { allowBundledProfiles }) {
+  const mode = String(policy.mode ?? "enforce").toLowerCase();
+  const defaultEffect = String(policy.toolPolicies?.defaultEffect ?? "review").toLowerCase();
+  const minimumPromptDefenseGrade = String(
+    policy.minimumPromptDefenseGrade ?? "B",
+  ).toUpperCase();
+  const allowedTools = (policy.toolPolicies?.allowedTools ?? []).map(String);
+  const scanOutputTools = new Set(
+    (policy.scanOutputTools ?? []).map((tool) => String(tool).toLowerCase()),
+  );
+  const metadataRulePresent = (policy.directResourcePolicies?.urlRules ?? []).some(
+    (rule) =>
+      String(rule.effect ?? "").toLowerCase() === "deny" &&
+      (rule.urlPatterns ?? []).some((pattern) =>
+        /(169\.254\.169\.254|100\.100\.100\.200|metadata\.google\.internal)/i.test(
+          String(pattern.source ?? ""),
+        ),
+      ),
+  );
+  const credentialRulePresent = (policy.directResourcePolicies?.pathRules ?? []).some(
+    (rule) =>
+      String(rule.effect ?? "").toLowerCase() === "deny" &&
+      /(credential-read|secret-read|credential)/i.test(String(rule.id ?? "")),
+  );
+
+  if (!allowBundledProfiles && mode !== "enforce") {
+    throw new Error("Custom policies must run in enforce mode.");
+  }
+  if (policy.denyOnPolicyError === false) {
+    throw new Error("Policies must set denyOnPolicyError to true.");
+  }
+  if (!allowBundledProfiles && defaultEffect !== "review") {
+    throw new Error("Custom policies must keep toolPolicies.defaultEffect set to review.");
+  }
+  if (allowedTools.includes("*")) {
+    throw new Error("Policies may not wildcard-allow all tools.");
+  }
+  if (gradeRank(minimumPromptDefenseGrade) < gradeRank("B")) {
+    throw new Error("Policies must require a minimum prompt defense grade of B or stronger.");
+  }
+  if (!metadataRulePresent) {
+    throw new Error("Policies must deny cloud metadata endpoint access.");
+  }
+  if (!credentialRulePresent) {
+    throw new Error("Policies must deny direct credential and secret file reads.");
+  }
+  for (const requiredTool of ["powershell", "bash", "read_powershell", "list_powershell"]) {
+    if (!scanOutputTools.has(requiredTool)) {
+      throw new Error(`Policies must scan ${requiredTool} output for poisoning attempts.`);
+    }
+  }
+}
+
+function isBundledPolicyPath(path, paths) {
+  const normalizedPath = normalizePath(path);
+  return (
+    normalizedPath === normalizePath(paths.sourcePolicyPath) ||
+    normalizedPath.startsWith(`${normalizePath(paths.sourceProfilesRoot)}\\`)
+  );
+}
+
+async function isBundledPolicyEquivalent(path, policy, paths) {
+  if (isBundledPolicyPath(path, paths)) {
+    return true;
+  }
+
+  const bundledCandidates = [paths.sourcePolicyPath];
+  const profileName = String(policy.profile ?? "").trim().toLowerCase();
+  if (/^[a-z0-9-]+$/.test(profileName)) {
+    bundledCandidates.unshift(join(paths.sourceProfilesRoot, `${profileName}.json`));
+  }
+
+  const serializedPolicy = canonicalizePolicy(policy);
+  for (const candidatePath of bundledCandidates) {
+    if (!existsSync(candidatePath)) {
+      continue;
+    }
+    const candidatePolicy = await readJsonFile(candidatePath);
+    if (canonicalizePolicy(candidatePolicy) === serializedPolicy) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function normalizePath(path) {
+  return resolve(String(path)).replace(/\//g, "\\").toLowerCase();
+}
+
+function canonicalizePolicy(policy) {
+  return JSON.stringify(sortJsonValue(policy));
+}
+
+function sortJsonValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, sortJsonValue(child)]),
+    );
+  }
+  return value;
+}
+
+function gradeRank(grade) {
+  return { A: 5, B: 4, C: 3, D: 2, F: 1 }[String(grade).toUpperCase()] ?? 0;
 }
 
 function formatDoctorReport(report) {

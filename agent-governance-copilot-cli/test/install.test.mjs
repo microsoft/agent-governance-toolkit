@@ -16,6 +16,42 @@ import {
   validatePolicy,
 } from "../lib/cli.mjs";
 
+function createPolicyFixture(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    version: 1,
+    mode: "enforce",
+    denyOnPolicyError: true,
+    minimumPromptDefenseGrade: "B",
+    toolPolicies: {
+      allowedTools: ["view", "glob", "rg", "agt_policy_status", "agt_policy_check_text"],
+      blockedTools: [],
+      defaultEffect: "review",
+      reviewTools: ["powershell", "bash"],
+    },
+    directResourcePolicies: {
+      pathRules: [
+        {
+          id: "secret-read",
+          effect: "deny",
+          operation: "read",
+          pathPatterns: [{ source: "(^|/)\\.env$", flags: "i" }],
+        },
+      ],
+      urlRules: [
+        {
+          id: "metadata-endpoints",
+          effect: "deny",
+          urlPatterns: [{ source: "169\\.254\\.169\\.254|100\\.100\\.100\\.200|metadata\\.google\\.internal", flags: "i" }],
+        },
+      ],
+    },
+    scanOutputTools: ["powershell", "bash", "read_powershell", "list_powershell"],
+    poisoningPatterns: [],
+    ...overrides,
+  };
+}
+
 test("installPackage vendors the extension and uninstallPackage removes managed state", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-copilot-package-"));
   const packageRoot = join(root, "package");
@@ -344,22 +380,36 @@ test("policy commands can apply, validate, show, and resolve bundled profiles", 
   );
   await writeFile(
     join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "default-policy.json"),
-    `${JSON.stringify({ schemaVersion: 1, version: 1, mode: "enforce", profile: "strict" }, null, 2)}\n`,
+    `${JSON.stringify(createPolicyFixture({ profile: "strict" }), null, 2)}\n`,
     "utf8",
   );
   await writeFile(
     join(profileRoot, "balanced.json"),
-    `${JSON.stringify({ schemaVersion: 1, version: 2, mode: "enforce", profile: "balanced" }, null, 2)}\n`,
+    `${JSON.stringify(createPolicyFixture({ profile: "balanced", version: 2 }), null, 2)}\n`,
     "utf8",
   );
   await writeFile(
     join(profileRoot, "advisory.json"),
-    `${JSON.stringify({ schemaVersion: 1, version: 3, mode: "advisory", profile: "advisory" }, null, 2)}\n`,
+    `${JSON.stringify(
+      createPolicyFixture({
+        profile: "advisory",
+        version: 3,
+        mode: "advisory",
+        toolPolicies: {
+          allowedTools: ["view", "glob", "rg", "agt_policy_status", "agt_policy_check_text"],
+          blockedTools: [],
+          defaultEffect: "review",
+          reviewTools: ["powershell", "bash"],
+        },
+      }),
+      null,
+      2,
+    )}\n`,
     "utf8",
   );
   await writeFile(
     join(root, "custom-policy.json"),
-    `${JSON.stringify({ schemaVersion: 1, version: 4, mode: "enforce", profile: "custom" }, null, 2)}\n`,
+    `${JSON.stringify(createPolicyFixture({ profile: "custom", version: 4 }), null, 2)}\n`,
     "utf8",
   );
 
@@ -402,6 +452,73 @@ test("policy commands can apply, validate, show, and resolve bundled profiles", 
     profile: "advisory",
   });
   assert.equal(validatedProfile.sourcePath, join(profileRoot, "advisory.json"));
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("policy commands reject weakened custom policies but still allow bundled advisory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-copilot-policy-baseline-"));
+  const packageRoot = join(root, "package");
+  const profileRoot = join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "profiles");
+
+  await mkdir(profileRoot, { recursive: true });
+  await writeFile(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify({ name: "@microsoft/agent-governance-copilot-cli", version: "3.6.1" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(profileRoot, "advisory.json"),
+    `${JSON.stringify(
+      createPolicyFixture({
+        profile: "advisory",
+        version: 3,
+        mode: "advisory",
+      }),
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(root, "weakened-policy.json"),
+    `${JSON.stringify(
+      createPolicyFixture({
+        toolPolicies: {
+          allowedTools: ["view"],
+          blockedTools: [],
+          defaultEffect: "allow",
+          reviewTools: [],
+        },
+        scanOutputTools: ["powershell"],
+      }),
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  const bundled = await validatePolicy({ packageRoot, profile: "advisory" });
+  assert.equal(bundled.schemaVersion, 1);
+
+  await applyPolicy({
+    copilotHome: join(root, ".copilot"),
+    packageRoot,
+    profile: "advisory",
+  });
+  const validatedInstalledAdvisory = await validatePolicy({
+    copilotHome: join(root, ".copilot"),
+    packageRoot,
+  });
+  assert.equal(validatedInstalledAdvisory.schemaVersion, 1);
+
+  await assert.rejects(
+    validatePolicy({
+      file: join(root, "weakened-policy.json"),
+      packageRoot,
+    }),
+    /Custom policies must keep toolPolicies\.defaultEffect set to review|Policies must scan read_powershell output/,
+  );
 
   await rm(root, { recursive: true, force: true });
 });

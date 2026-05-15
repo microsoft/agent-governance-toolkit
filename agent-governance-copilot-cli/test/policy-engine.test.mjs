@@ -31,6 +31,8 @@ test("default packaged policy keeps the hardened developer-protection baseline",
   assert.ok(rawPolicy.outputPolicies.advisoryTools.includes("bash"));
   assert.ok(rawPolicy.outputPolicies.suppressTools.includes("web_fetch"));
   assert.ok(rawPolicy.scanOutputTools.includes("powershell"));
+  assert.ok(rawPolicy.scanOutputTools.includes("read_powershell"));
+  assert.ok(rawPolicy.scanOutputTools.includes("list_powershell"));
   assert.ok(
     rawPolicy.directResourcePolicies.urlRules.some((rule) => rule.id === "metadata-endpoints"),
   );
@@ -366,6 +368,26 @@ test("evaluateDirectResourceAccess denies secret reads, allows env templates, re
       toolName: "web_fetch",
       cwd: "C:\\repo",
       rawToolArgs: { url: "http://169.254.169.254/latest/meta-data/" },
+    })?.effect,
+    "deny",
+  );
+
+  assert.equal(
+    evaluateDirectResourceAccess(policy, {
+      toolName: "powershell",
+      commandText: "Get-Content '.env'",
+      cwd: "C:\\repo",
+      rawToolArgs: {},
+    })?.effect,
+    "deny",
+  );
+
+  assert.equal(
+    evaluateDirectResourceAccess(policy, {
+      toolName: "powershell",
+      commandText: "curl http://169.254.169.254/latest/meta-data/",
+      cwd: "C:\\repo",
+      rawToolArgs: {},
     })?.effect,
     "deny",
   );

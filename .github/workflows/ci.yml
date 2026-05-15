@@ -9,8 +9,8 @@ on:
     - cron: "0 6 * * *" # Daily at 06:00 UTC
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 permissions:
   contents: read
@@ -47,7 +47,9 @@ jobs:
               - 'agent-governance-python/agent-primitives/**'
               - 'agent-governance-python/agent-mcp-governance/**'
               - 'agent-governance-python/agent-marketplace/**'
+              - 'agent-governance-python/agent-discovery/**'
               - 'agent-governance-python/agent-rag-governance/**'
+              - 'agent-governance-python/agent-sandbox/**'
               - 'scripts/**'
               - 'agent-governance-python/requirements/**'
             dotnet:
@@ -92,6 +94,18 @@ jobs:
               - 'agent-governance-python/agent-runtime/**'
             pkg-agent-lightning:
               - 'agent-governance-python/agent-lightning/**'
+            pkg-agent-primitives:
+              - 'agent-governance-python/agent-primitives/**'
+            pkg-agent-mcp-governance:
+              - 'agent-governance-python/agent-mcp-governance/**'
+            pkg-agent-marketplace:
+              - 'agent-governance-python/agent-marketplace/**'
+            pkg-agent-discovery:
+              - 'agent-governance-python/agent-discovery/**'
+            pkg-agent-rag-governance:
+              - 'agent-governance-python/agent-rag-governance/**'
+            pkg-agent-sandbox:
+              - 'agent-governance-python/agent-sandbox/**'
       - name: Compose changed-py-pkgs JSON list
         id: py-pkgs
         env:
@@ -102,6 +116,12 @@ jobs:
           AC: ${{ steps.filter.outputs.pkg-agent-compliance }}
           AR: ${{ steps.filter.outputs.pkg-agent-runtime }}
           AL: ${{ steps.filter.outputs.pkg-agent-lightning }}
+          AP: ${{ steps.filter.outputs.pkg-agent-primitives }}
+          AMG: ${{ steps.filter.outputs.pkg-agent-mcp-governance }}
+          AMP: ${{ steps.filter.outputs.pkg-agent-marketplace }}
+          AD: ${{ steps.filter.outputs.pkg-agent-discovery }}
+          ARG: ${{ steps.filter.outputs.pkg-agent-rag-governance }}
+          ASB: ${{ steps.filter.outputs.pkg-agent-sandbox }}
         run: |
           set -euo pipefail
           pkgs=()
@@ -112,6 +132,12 @@ jobs:
           [ "$AC" = "true" ] && pkgs+=('"agent-compliance"')
           [ "$AR" = "true" ] && pkgs+=('"agent-runtime"')
           [ "$AL" = "true" ] && pkgs+=('"agent-lightning"')
+          [ "$AP" = "true" ] && pkgs+=('"agent-primitives"')
+          [ "$AMG" = "true" ] && pkgs+=('"agent-mcp-governance"')
+          [ "$AMP" = "true" ] && pkgs+=('"agent-marketplace"')
+          [ "$AD" = "true" ] && pkgs+=('"agent-discovery"')
+          [ "$ARG" = "true" ] && pkgs+=('"agent-rag-governance"')
+          [ "$ASB" = "true" ] && pkgs+=('"agent-sandbox"')
           ifs=$IFS; IFS=,; list="[${pkgs[*]:-}]"; IFS=$ifs
           echo "list=$list" >> "$GITHUB_OUTPUT"
           echo "Changed Python packages: $list"
@@ -132,7 +158,12 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-primitives,
+            agent-mcp-governance,
+            agent-marketplace,
+            agent-discovery,
             agent-rag-governance,
+            agent-sandbox,
           ]
     steps:
       - name: Determine if package changed
@@ -183,7 +214,12 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-primitives,
+            agent-mcp-governance,
+            agent-marketplace,
+            agent-discovery,
             agent-rag-governance,
+            agent-sandbox,
           ]
         python-version: [ "3.10", "3.11", "3.12", "3.13" ]
         exclude:
@@ -198,6 +234,16 @@ jobs:
           - package: agent-runtime
             python-version: "3.10"
           - package: agent-lightning
+            python-version: "3.10"
+          - package: agent-primitives
+            python-version: "3.10"
+          - package: agent-mcp-governance
+            python-version: "3.10"
+          - package: agent-marketplace
+            python-version: "3.10"
+          - package: agent-discovery
+            python-version: "3.10"
+          - package: agent-sandbox
             python-version: "3.10"
     env:
       RUN_TESTS: ${{ needs.changes.outputs.python == 'true' || github.event_name == 'schedule' }}
@@ -248,7 +294,12 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-primitives,
+            agent-mcp-governance,
+            agent-marketplace,
+            agent-discovery,
             agent-rag-governance,
+            agent-sandbox,
           ]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -287,7 +338,7 @@ jobs:
           # Install each package. A failure here means safety would scan
           # against the wrong dependency set, so surface it instead of
           # silently `|| true`-ing past it.
-          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning; do
+          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning agent-primitives agent-mcp-governance agent-marketplace agent-discovery agent-rag-governance agent-sandbox; do
             echo "=== $pkg ==="
             (cd "agent-governance-python/$pkg" \
               && pip install --no-cache-dir -e .)
