@@ -44,6 +44,9 @@ agt-copilot install
 agt-copilot install --force-policy
 agt-copilot update
 agt-copilot update --force-policy
+agt-copilot policy apply --profile balanced
+agt-copilot policy validate
+agt-copilot policy show
 agt-copilot uninstall
 agt-copilot uninstall --remove-policy
 agt-copilot doctor
@@ -52,6 +55,14 @@ agt-copilot doctor --json
 
 `install` writes a manifest so `uninstall` only removes AGT-managed installs. `update` refreshes an
 existing AGT-managed install in place and can reseed the packaged policy with `--force-policy`.
+
+Policy management is handled through first-class CLI commands rather than slash commands:
+
+- `agt-copilot policy path`
+- `agt-copilot policy show`
+- `agt-copilot policy validate`
+- `agt-copilot policy apply --file <path>`
+- `agt-copilot policy apply --profile <strict|balanced|advisory>`
 
 ## Copilot CLI setup
 

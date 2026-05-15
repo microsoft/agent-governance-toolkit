@@ -38,9 +38,11 @@ export async function runCli(argv = [], io = console) {
       allowPositionals: true,
       options: {
         "copilot-home": { type: "string" },
+        file: { type: "string" },
         "force-policy": { type: "boolean" },
         help: { type: "boolean", short: "h" },
         json: { type: "boolean" },
+        profile: { type: "string" },
         "remove-policy": { type: "boolean" },
         "replace-unmanaged": { type: "boolean" },
         version: { type: "boolean", short: "v" },
@@ -83,6 +85,56 @@ export async function runCli(argv = [], io = console) {
       );
       io.log("Reload Copilot CLI with /clear and inspect with /agt status.");
       return 0;
+    }
+
+    if (command === "policy") {
+      const subcommand = (parsed.positionals[1] ?? "help").toLowerCase();
+      const packageRoot = getPackageRoot();
+
+      if (subcommand === "apply") {
+        const result = await applyPolicy({
+          copilotHome,
+          file: parsed.values.file,
+          packageRoot,
+          profile: parsed.values.profile,
+        });
+        io.log(`Applied policy to ${result.policyPath}`);
+        io.log(`Source: ${result.sourcePath}`);
+        io.log(`Schema version: ${result.schemaVersion}`);
+        io.log("Reload Copilot CLI with /clear or /agt reload to pick up the new policy.");
+        return 0;
+      }
+
+      if (subcommand === "validate") {
+        const result = await validatePolicy({
+          copilotHome,
+          file: parsed.values.file,
+          packageRoot,
+          profile: parsed.values.profile,
+        });
+        io.log(`Valid policy: ${result.sourcePath}`);
+        io.log(`Schema version: ${result.schemaVersion}`);
+        return 0;
+      }
+
+      if (subcommand === "path") {
+        io.log(getPackagePaths({ copilotHome, packageRoot }).policyPath);
+        return 0;
+      }
+
+      if (subcommand === "show") {
+        const result = await showPolicy({
+          copilotHome,
+          packageRoot,
+        });
+        io.log(`Policy source: ${result.source}`);
+        io.log(`Policy path: ${result.sourcePath}`);
+        io.log(JSON.stringify(result.policy, null, 2));
+        return 0;
+      }
+
+      io.log(getPolicyHelpText());
+      return subcommand === "help" ? 0 : 1;
     }
 
     if (command === "uninstall") {
@@ -351,11 +403,71 @@ function getPackagePaths({ copilotHome, packageRoot }) {
       "config",
       "default-policy.json",
     ),
+    sourceProfilesRoot: join(
+      packageRoot,
+      "assets",
+      "extensions",
+      EXTENSION_NAME,
+      "config",
+      "profiles",
+    ),
   };
 }
 
 async function readPackageMetadata(packageRoot = getPackageRoot()) {
   return readJsonFile(join(packageRoot, "package.json"));
+}
+
+export async function applyPolicy({
+  copilotHome = resolveCopilotHome(),
+  file,
+  packageRoot = getPackageRoot(),
+  profile,
+} = {}) {
+  const paths = getPackagePaths({ copilotHome, packageRoot });
+  const sourcePath = resolvePolicySourcePath({ file, paths, profile });
+  const { schemaVersion } = await validatePolicyFile(sourcePath);
+  await mkdir(paths.policyRoot, { recursive: true });
+  await cp(sourcePath, paths.policyPath, { force: true });
+  return {
+    policyPath: paths.policyPath,
+    schemaVersion,
+    sourcePath,
+  };
+}
+
+export async function validatePolicy({
+  copilotHome = resolveCopilotHome(),
+  file,
+  packageRoot = getPackageRoot(),
+  profile,
+} = {}) {
+  const paths = getPackagePaths({ copilotHome, packageRoot });
+  const sourcePath =
+    file || profile
+      ? resolvePolicySourcePath({ file, paths, profile })
+      : existsSync(paths.policyPath)
+        ? paths.policyPath
+        : paths.sourcePolicyPath;
+  const { schemaVersion } = await validatePolicyFile(sourcePath);
+  return {
+    schemaVersion,
+    sourcePath,
+  };
+}
+
+export async function showPolicy({
+  copilotHome = resolveCopilotHome(),
+  packageRoot = getPackageRoot(),
+} = {}) {
+  const paths = getPackagePaths({ copilotHome, packageRoot });
+  const sourcePath = existsSync(paths.policyPath) ? paths.policyPath : paths.sourcePolicyPath;
+  const policy = await readJsonFile(sourcePath);
+  return {
+    policy,
+    source: existsSync(paths.policyPath) ? "user" : "bundled-default",
+    sourcePath,
+  };
 }
 
 async function vendorSdkDependencyTree({ destinationExtensionPath, packageRoot }) {
@@ -472,6 +584,41 @@ async function readJsonFile(path, { allowComments = false } = {}) {
   return JSON.parse(contents);
 }
 
+async function validatePolicyFile(path) {
+  const policy = await readJsonFile(path);
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+    throw new Error(`Policy file at ${path} must contain a JSON object.`);
+  }
+  return {
+    policy,
+    schemaVersion: normalizePolicySchemaVersion(policy.schemaVersion),
+  };
+}
+
+function resolvePolicySourcePath({ file, paths, profile }) {
+  if (file && profile) {
+    throw new Error("Specify either --file or --profile, not both.");
+  }
+  if (!file && !profile) {
+    throw new Error("Specify --file <path> or --profile <name>.");
+  }
+
+  if (file) {
+    const resolved = resolve(String(file));
+    if (!existsSync(resolved)) {
+      throw new Error(`Policy file not found: ${resolved}`);
+    }
+    return resolved;
+  }
+
+  const normalizedProfile = String(profile).toLowerCase();
+  const profilePath = join(paths.sourceProfilesRoot, `${normalizedProfile}.json`);
+  if (!existsSync(profilePath)) {
+    throw new Error(`Unknown policy profile '${profile}'. Expected one of: strict, balanced, advisory.`);
+  }
+  return profilePath;
+}
+
 function formatDoctorReport(report) {
   const lines = [
     "AGT Copilot CLI doctor",
@@ -514,6 +661,7 @@ function getHelpText() {
     "Usage:",
     "  agt-copilot install [--copilot-home <path>] [--force-policy]",
     "  agt-copilot update [--copilot-home <path>] [--force-policy] [--replace-unmanaged]",
+    "  agt-copilot policy <apply|validate|path|show> [...]",
     "  agt-copilot uninstall [--copilot-home <path>] [--remove-policy]",
     "  agt-copilot doctor [--copilot-home <path>] [--json]",
     "  agt-copilot help",
@@ -522,9 +670,27 @@ function getHelpText() {
     "  install copies the packaged Copilot extension into ~/.copilot/extensions/agt-global-policy",
     "  update refreshes an existing AGT-managed install in place",
     "  --replace-unmanaged lets install or update replace a pre-existing unmanaged agt-global-policy extension",
+    "  policy apply copies a validated policy file or bundled profile into ~/.copilot/agt/policy.json",
     "  uninstall removes only AGT-managed installs",
     "  doctor validates the install, policy file, vendored SDK, and Copilot extension settings",
     "  if a custom policy is invalid, remove ~/.copilot/agt/policy.json or set AGT_COPILOT_POLICY_PATH to a valid file",
+  ].join("\n");
+}
+
+function getPolicyHelpText() {
+  return [
+    `${PACKAGE_NAME} policy`,
+    "",
+    "Usage:",
+    "  agt-copilot policy apply --file <path>",
+    "  agt-copilot policy apply --profile <strict|balanced|advisory>",
+    "  agt-copilot policy validate [--file <path> | --profile <name>]",
+    "  agt-copilot policy path",
+    "  agt-copilot policy show",
+    "",
+    "Notes:",
+    "  validate without --file or --profile checks the active user policy, or the bundled default if none is set",
+    "  show prints the active user policy, or the bundled default if no user policy exists",
   ].join("\n");
 }
 

@@ -7,7 +7,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { diagnoseInstall, installPackage, uninstallPackage } from "../lib/cli.mjs";
+import {
+  applyPolicy,
+  diagnoseInstall,
+  installPackage,
+  showPolicy,
+  uninstallPackage,
+  validatePolicy,
+} from "../lib/cli.mjs";
 
 test("installPackage vendors the extension and uninstallPackage removes managed state", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-copilot-package-"));
@@ -312,6 +319,89 @@ test("installPackage can replace an unmanaged install when explicitly requested"
   });
   assert.equal(result.replacedUnmanaged, true);
   assert.equal(JSON.parse(await readFile(join(extensionRoot, ".agt-install-manifest.json"), "utf8")).installedByVersion, "3.6.1");
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("policy commands can apply, validate, show, and resolve bundled profiles", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-copilot-policy-"));
+  const packageRoot = join(root, "package");
+  const copilotHome = join(root, ".copilot");
+  const profileRoot = join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "profiles");
+
+  await mkdir(profileRoot, { recursive: true });
+  await writeFile(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "@microsoft/agent-governance-copilot-cli",
+        version: "3.6.1",
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(packageRoot, "assets", "extensions", "agt-global-policy", "config", "default-policy.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 1, mode: "enforce", profile: "strict" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(profileRoot, "balanced.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 2, mode: "enforce", profile: "balanced" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(profileRoot, "advisory.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 3, mode: "advisory", profile: "advisory" }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(root, "custom-policy.json"),
+    `${JSON.stringify({ schemaVersion: 1, version: 4, mode: "enforce", profile: "custom" }, null, 2)}\n`,
+    "utf8",
+  );
+
+  const appliedProfile = await applyPolicy({
+    copilotHome,
+    packageRoot,
+    profile: "balanced",
+  });
+  assert.equal(appliedProfile.schemaVersion, 1);
+  assert.equal(
+    JSON.parse(await readFile(join(copilotHome, "agt", "policy.json"), "utf8")).profile,
+    "balanced",
+  );
+
+  const validatedCurrent = await validatePolicy({
+    copilotHome,
+    packageRoot,
+  });
+  assert.equal(validatedCurrent.schemaVersion, 1);
+  assert.equal(validatedCurrent.sourcePath, join(copilotHome, "agt", "policy.json"));
+
+  const appliedFile = await applyPolicy({
+    copilotHome,
+    file: join(root, "custom-policy.json"),
+    packageRoot,
+  });
+  assert.equal(appliedFile.schemaVersion, 1);
+  assert.equal(
+    JSON.parse(await readFile(join(copilotHome, "agt", "policy.json"), "utf8")).profile,
+    "custom",
+  );
+
+  const shown = await showPolicy({ copilotHome, packageRoot });
+  assert.equal(shown.source, "user");
+  assert.equal(shown.policy.profile, "custom");
+
+  const validatedProfile = await validatePolicy({
+    copilotHome,
+    packageRoot,
+    profile: "advisory",
+  });
+  assert.equal(validatedProfile.sourcePath, join(profileRoot, "advisory.json"));
 
   await rm(root, { recursive: true, force: true });
 });

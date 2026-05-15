@@ -84,6 +84,23 @@ agt-copilot update --force-policy
 agt-copilot install --copilot-home C:\temp\.copilot
 ```
 
+### Policy
+
+```powershell
+agt-copilot policy path
+agt-copilot policy show
+agt-copilot policy validate
+agt-copilot policy validate --file .\my-policy.json
+agt-copilot policy apply --file .\my-policy.json
+agt-copilot policy apply --profile balanced
+```
+
+Bundled profiles currently available:
+
+- `strict`
+- `balanced`
+- `advisory`
+
 ### Uninstall
 
 ```powershell

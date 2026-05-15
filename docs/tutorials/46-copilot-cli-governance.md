@@ -132,6 +132,14 @@ Copy-Item .\examples\copilot-cli-agt\config\profiles\balanced.json $HOME\.copilo
 
 Then reload Copilot CLI with `/clear` and inspect the result with `/agt status`.
 
+You can also manage policy files directly with the installer CLI:
+
+```bash
+agt-copilot policy path
+agt-copilot policy validate
+agt-copilot policy apply --profile balanced
+```
+
 ### Node is missing
 
 This package requires a working Node runtime. If `node --version` fails, install Node.js LTS and
