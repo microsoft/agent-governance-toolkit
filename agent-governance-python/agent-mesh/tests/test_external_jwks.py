@@ -9,7 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import httpx
@@ -108,7 +108,7 @@ async def test_verify_returns_external_identity_for_valid_token():
             "authority_scope": ["read:invoices"],
             "liveness_attestation_ref": "heartbeat-1",
             "policy_context_id": "policy-ctx-99",
-            "issued_at": datetime.utcfromtimestamp(now).isoformat(),
+            "issued_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
         },
     }
     token = _sign_jwt(private_key, payload)
@@ -201,7 +201,7 @@ async def test_verify_resolves_typed_delegation_claims():
             "authority_scope": ["read", "write"],
             "liveness_attestation_ref": "hb-9",
             "policy_context_id": "ctx-7",
-            "issued_at": datetime.utcfromtimestamp(now).isoformat(),
+            "issued_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
         },
     }
     token = _sign_jwt(private_key, payload)

@@ -18,9 +18,9 @@ import asyncio
 import base64
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from cryptography.exceptions import InvalidSignature
@@ -222,13 +222,24 @@ class ExternalJWKSProvider:
 
         Override is taken only from the already-signature-verified payload,
         not from unverified token contents, to prevent attackers steering
-        verifiers at attacker-controlled URLs.
+        verifiers at attacker-controlled URLs. Default URL is derived by
+        rewriting the JWKS URL's path filename — robust against query
+        strings, fragments, and non-standard JWKS URL shapes.
         """
         delegation = verified_payload.get("delegation_claims") or {}
         override = delegation.get("revocation_check_url")
         if override:
             return str(override)
-        return str(endpoint.jwks_url).replace("/jwks.json", "/jwks-revoked.json")
+        parsed = urlparse(str(endpoint.jwks_url))
+        # Replace only the final path segment if it ends in jwks.json; else
+        # append the revocation filename to the path. Preserves scheme,
+        # netloc, params, query, and fragment.
+        path = parsed.path
+        if path.endswith("/jwks.json"):
+            new_path = path[: -len("/jwks.json")] + "/jwks-revoked.json"
+        else:
+            new_path = path.rstrip("/") + "/jwks-revoked.json"
+        return urlunparse(parsed._replace(path=new_path))
 
     def _resolve_endpoint(self, iss: str) -> Optional[TrustedEndpoint]:
         domain = urlparse(iss if "://" in iss else f"https://{iss}").netloc
@@ -310,7 +321,7 @@ class ExternalJWKSProvider:
             jwks_url=endpoint.jwks_url,
             issuer_domain=endpoint.domain,
             federation_tier=endpoint.trust_tier,
-            verified_at=datetime.utcnow(),
-            token_expires_at=datetime.fromtimestamp(payload["exp"]),
+            verified_at=datetime.now(timezone.utc),
+            token_expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
             delegation_claims=DelegationClaims.model_validate(delegation),
         )
