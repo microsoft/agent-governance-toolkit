@@ -96,6 +96,19 @@ ruff check --fix .
 - Use the provided issue templates when available
 - Include reproduction steps, expected behavior, and actual behavior
 
+**Automated and AI-assisted audit findings:**
+
+If you are filing issues from an automated scanner, LLM-assisted code review, or bulk audit
+(e.g. running a tool across the whole repo), please consolidate low-severity findings into a
+single tracking issue with a summary table. One well-prioritized issue is more useful to
+maintainers than a dozen separate filings that each need individual triage.
+
+For high-severity findings (security bugs, data loss risks, correctness issues), individual
+issues are fine and encouraged.
+
+This helps maintainers focus review time on the findings that actually matter and avoids
+burying genuine bugs under a pile of style nits.
+
 ### Pull Requests
 
 1. Fork the repository and create a feature branch from `main`

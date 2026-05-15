@@ -113,6 +113,46 @@ For major design changes, always ask the maintainer (@imran-siddique) before pro
 
 Do NOT auto-merge large feature PRs without maintainer review.
 
+## PR Description Standards
+
+Every PR must have a well-structured, properly formatted description. Lightweight or mangled descriptions are not acceptable.
+
+### Required sections
+
+1. **Summary** (1-2 sentences): What this PR does and why.
+2. **Problem** (optional for trivial fixes): What was broken, missing, or suboptimal.
+3. **Changes**: A table or bullet list of files changed and what changed in each. Use a markdown table for 3+ files.
+4. **Testing**: How the changes were verified (test results, manual validation, docs-only note).
+
+### Formatting rules
+
+- Use proper markdown: headings (`##`), backtick code spans, tables, blank lines between sections.
+- Never pass PR body text through PowerShell inline strings. Always write the body to a temp file with Python (to preserve backticks and special characters) and use `gh pr create --body-file`.
+- Verify the rendered PR description on GitHub after creation. If formatting is broken, fix it immediately with `gh pr edit --body-file`.
+- No escaped backslashes where backticks should be. No missing blank lines between paragraphs. No corrupted characters.
+
+### Template
+
+```markdown
+## Summary
+
+<What and why, 1-2 sentences.>
+
+## Problem
+
+<What was broken or missing. Skip for trivial changes.>
+
+## Changes
+
+| File | What changed |
+|------|-------------|
+| `path/to/file.py` | Description of change |
+
+## Testing
+
+<How verified: "All N tests pass", "Docs-only, verified links", etc.>
+```
+
 ## External Contribution Quality Gate
 
 When external contributors open issues or PRs proposing integration with their own project/tool/library, apply these quality checks before investing review time:

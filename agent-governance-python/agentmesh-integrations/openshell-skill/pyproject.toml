@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openshell_agentmesh"
+name = "openshell-agentmesh"
 version = "3.6.0"
 description = "Public Preview - OpenShell + AgentMesh governance skill"
 readme = "README.md"
@@ -21,6 +21,9 @@ Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 
 [tool.hatch.build.targets.wheel]
 packages = ["openshell_agentmesh"]
+
+[project.scripts]
+openshell-governance = "openshell_agentmesh.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

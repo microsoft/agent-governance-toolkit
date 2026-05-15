@@ -86,7 +86,11 @@ if not decision.allowed:
 
 See the [runnable example](../../examples/openshell-governed/) for a complete demo.
 
-### Option B: Governance Sidecar (Production)
+### Option B: Governance Sidecar (Planned)
+
+> **Status:** The sidecar deployment pattern is documented as a reference architecture.
+> The governance HTTP API is not yet packaged as a standalone server.
+> See the [OpenClaw sidecar deployment guide](../deployment/openclaw-sidecar.md) for progress and known limitations.
 
 Run the governance API server as a sidecar container. Your agent (or orchestration layer) calls the sidecar's HTTP API before executing actions:
 
@@ -104,19 +108,7 @@ network:
     - action: deny           # Block everything else
 ```
 
-```bash
-# Start the governance sidecar (Agent OS server)
-python -m agent_os.server --host 127.0.0.1 --port 8081 &
-
-# Create the sandbox with the policy
-openshell sandbox create \
-  --policy openshell-governance-policy.yaml \
-  -- claude
-```
-
-> **Note:** The sidecar does not yet transparently intercept tool calls — your agent must call `http://localhost:8081/api/v1/detect/injection` or `/api/v1/execute` explicitly. See the [sidecar API docs](../deployment/openclaw-sidecar.md#sidecar-api-endpoints).
-
-See the full [OpenClaw sidecar deployment guide](../deployment/openclaw-sidecar.md) for Docker Compose and AKS configurations.
+> **Note:** The sidecar does not yet transparently intercept tool calls. See the [sidecar deployment guide](../deployment/openclaw-sidecar.md) for the current state of this integration.
 
 ---
 
@@ -172,11 +164,13 @@ Result: Action blocked before reaching OpenShell
 
 When running both layers, you get two complementary telemetry streams:
 
-**Governance Toolkit metrics** (Prometheus / OpenTelemetry):
+**Governance Toolkit metrics** (planned, reference schema):
 - `policy_decisions_total{result="allow|deny"}`
 - `trust_score_current{agent="did:mesh:..."}`
 - `audit_chain_entries_total`
 - `authority_resolutions_total{decision="allow|deny|narrowed"}`
+
+> These metric names are a reference design. The OpenShell governance skill currently provides in-memory audit logs via `get_audit_log()`. Prometheus/OpenTelemetry export is planned.
 
 **OpenShell metrics**:
 - Sandbox network egress logs
