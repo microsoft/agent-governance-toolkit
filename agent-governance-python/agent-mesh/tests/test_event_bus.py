@@ -253,3 +253,67 @@ class TestAnalyticsPlane:
         assert stats.handshakes_per_min_1m == 0.0
         assert stats.avg_trust_score_1m == 0.0
         assert stats.events_by_type == {}
+
+
+class TestInMemoryEventBusConcurrency:
+    """InMemoryEventBus must tolerate concurrent emit / subscribe / unsubscribe."""
+
+    def test_concurrent_emit_and_subscribe_no_crash(self) -> None:
+        """Without locking, list-iteration during emit() races with
+        subscribe()/unsubscribe() list mutation and can raise RuntimeError
+        ("list changed size during iteration") or yield torn views.
+        """
+        import threading
+
+        bus = InMemoryEventBus()
+        delivered = 0
+        delivered_lock = threading.Lock()
+        errors: list[str] = []
+
+        def handler(_event: Event) -> None:
+            nonlocal delivered
+            with delivered_lock:
+                delivered += 1
+
+        # Pre-populate with 10 handlers so emit has work to do.
+        for _ in range(10):
+            bus.subscribe("*", handler)
+
+        stop = threading.Event()
+
+        def emitter() -> None:
+            try:
+                while not stop.is_set():
+                    bus.emit(Event(event_type="test.event", source="src"))
+            except Exception as e:  # pragma: no cover — failure path
+                errors.append(repr(e))
+
+        def churner() -> None:
+            try:
+                local_handlers: list = []
+                for _ in range(500):
+                    h = lambda _e: None  # noqa: E731 — distinct objects per iteration
+                    bus.subscribe("test.*", h)
+                    local_handlers.append(h)
+                for h in local_handlers:
+                    bus.unsubscribe(h)
+            except Exception as e:  # pragma: no cover — failure path
+                errors.append(repr(e))
+
+        threads = [
+            threading.Thread(target=emitter),
+            threading.Thread(target=emitter),
+            threading.Thread(target=churner),
+            threading.Thread(target=churner),
+        ]
+        for t in threads:
+            t.start()
+        # Give the churners a moment to finish (they don't run forever).
+        for t in threads[2:]:
+            t.join()
+        stop.set()
+        for t in threads[:2]:
+            t.join()
+
+        assert errors == []
+        assert delivered > 0  # sanity: handlers actually fired

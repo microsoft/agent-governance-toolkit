@@ -23,6 +23,7 @@ FORBIDDEN=(
 
 # Build a combined grep pattern
 PATTERN=$(IFS='|'; echo "${FORBIDDEN[*]}")
+CONFLICT_PATTERN='^(<<<<<<< .*$|=======$|>>>>>>> .*$)'
 
 # Get only added lines from the diff, excluding test files and this script
 ADDED=$(git diff "$BASE_REF"...HEAD --diff-filter=ACMR -U0 -- \
@@ -33,6 +34,19 @@ ADDED=$(git diff "$BASE_REF"...HEAD --diff-filter=ACMR -U0 -- \
 if [ -z "$ADDED" ]; then
   echo "✅ no-stubs: no new production lines to check"
   exit 0
+fi
+
+# Detect unresolved git merge conflict markers in added lines only.
+# Use content-only lines (strip leading diff '+') so patterns remain anchored.
+ADDED_CONTENT=$(echo "$ADDED" | sed 's/^+//')
+CONFLICT_HITS=$(echo "$ADDED_CONTENT" | grep -E "$CONFLICT_PATTERN" || true)
+
+if [ -n "$CONFLICT_HITS" ]; then
+  echo "❌ no-stubs: found unresolved merge conflict markers in new code:"
+  echo "$CONFLICT_HITS"
+  echo ""
+  echo "Fix: resolve the conflict and remove marker lines before committing."
+  exit 1
 fi
 
 HITS=$(echo "$ADDED" | grep -iE "$PATTERN" || true)

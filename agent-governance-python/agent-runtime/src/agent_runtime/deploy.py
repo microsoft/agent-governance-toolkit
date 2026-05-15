@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 import tempfile
@@ -20,6 +21,47 @@ from pathlib import Path
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
+
+
+# Conservative identifier shape that survives every downstream consumer this
+# module hands `agent_id` to:
+#
+#   - Docker container names accept `[a-zA-Z0-9][a-zA-Z0-9_.-]+`. Combined
+#     with the `agt-` prefix the deployer prepends, a leading dash or dot in
+#     `agent_id` cannot trigger Docker's "invalid name" path, but `agent_id`
+#     is also embedded raw into `--label agt.agent-id=<id>`, where a value
+#     starting with `-` would be reinterpreted as a CLI flag if the order
+#     ever changes.
+#   - Kubernetes pod/label names follow RFC-1123: `[a-z0-9]([-a-z0-9]*[a-z0-9])?`,
+#     63 chars max. We allow uppercase here because the runtime lowercases
+#     when constructing the actual pod name (`agt-<id>`); upstream of that
+#     point the value is just an opaque tag.
+#
+# 63 chars matches Kubernetes' label-value length cap; the `agt-` prefix uses
+# the remaining 4 chars.
+_AGENT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$")
+
+
+def _validate_agent_id(agent_id: str) -> str:
+    """Reject ``agent_id`` values that would be unsafe to interpolate into
+    Docker / kubectl command-lines and label values.
+
+    Returns the validated id unchanged so call sites can write
+    ``agent_id = _validate_agent_id(agent_id)`` as a single guard.
+
+    Raises:
+        ValueError: if ``agent_id`` is empty, starts with a dash (would be
+            reparsed as a CLI flag), exceeds 63 characters, or contains any
+            character outside ``[a-zA-Z0-9_-]``.
+    """
+    if not isinstance(agent_id, str) or not _AGENT_ID_PATTERN.match(agent_id):
+        raise ValueError(
+            f"invalid agent_id {agent_id!r}: must match "
+            f"^[a-zA-Z0-9][a-zA-Z0-9_-]{{0,62}}$ "
+            "(alphanumeric start, then alphanumerics/underscores/dashes, "
+            "max 63 chars)"
+        )
+    return agent_id
 
 
 class DeploymentStatus(str, Enum):
@@ -91,6 +133,7 @@ class DockerDeployer:
 
     def deploy(self, agent_id: str, image: str, config: GovernanceConfig,
                port: int = 0, env: dict[str, str] | None = None, **kwargs: Any) -> DeploymentResult:
+        agent_id = _validate_agent_id(agent_id)
         container_name = f"agt-{agent_id}"
         cmd = [
             "run", "-d",
@@ -141,6 +184,7 @@ class DockerDeployer:
             )
 
     def stop(self, agent_id: str) -> DeploymentResult:
+        agent_id = _validate_agent_id(agent_id)
         container_name = f"agt-{agent_id}"
         try:
             self._run(["stop", container_name])
@@ -159,6 +203,7 @@ class DockerDeployer:
             )
 
     def status(self, agent_id: str) -> DeploymentResult:
+        agent_id = _validate_agent_id(agent_id)
         container_name = f"agt-{agent_id}"
         try:
             result = self._run(["inspect", container_name, "--format", "{{.State.Status}}"])
@@ -178,6 +223,7 @@ class DockerDeployer:
             )
 
     def logs(self, agent_id: str, tail: int = 100) -> str:
+        agent_id = _validate_agent_id(agent_id)
         try:
             result = self._run(["logs", f"agt-{agent_id}", "--tail", str(tail)])
             return result.stdout
@@ -270,6 +316,7 @@ class KubernetesDeployer:
         }
 
     def deploy(self, agent_id: str, image: str, config: GovernanceConfig, **kwargs: Any) -> DeploymentResult:
+        agent_id = _validate_agent_id(agent_id)
         manifest = self._build_pod_manifest(agent_id, image, config)
         manifest_json = json.dumps(manifest)
         try:
@@ -297,6 +344,7 @@ class KubernetesDeployer:
             )
 
     def stop(self, agent_id: str) -> DeploymentResult:
+        agent_id = _validate_agent_id(agent_id)
         try:
             self._run(["delete", "pod", f"agt-{agent_id}", "-n", self._namespace])
             return DeploymentResult(
@@ -313,6 +361,7 @@ class KubernetesDeployer:
             )
 
     def status(self, agent_id: str) -> DeploymentResult:
+        agent_id = _validate_agent_id(agent_id)
         try:
             result = self._run([
                 "get", "pod", f"agt-{agent_id}",
@@ -339,6 +388,7 @@ class KubernetesDeployer:
             )
 
     def logs(self, agent_id: str, tail: int = 100) -> str:
+        agent_id = _validate_agent_id(agent_id)
         try:
             result = self._run([
                 "logs", f"agt-{agent_id}",

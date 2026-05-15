@@ -1,0 +1,185 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+"""Structured audit logging for RAG retrieval calls.
+
+Emits JSON-lines entries to a file or stdout. Each entry records the
+agent identity, target collection, a privacy-safe query hash, chunk
+counts, and the governance decision — enabling EU AI Act traceability
+requirements without exposing raw query text.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import os
+import sys
+import threading
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+# Used to emit the unsalted-fallback warning exactly once per process
+# instead of one warning per audit entry.
+_unsalted_warned = False
+
+
+def _warn_unsalted_once() -> None:
+    global _unsalted_warned
+    if not _unsalted_warned:
+        _unsalted_warned = True
+        logger.warning(
+            "AGENT_RAG_AUDIT_SALT is not set — query hashes are "
+            "unsalted and trivially reversible via rainbow tables. "
+            "Set the env var to a per-deployment random value."
+        )
+
+
+@dataclass
+class RAGAuditEntry:
+    """A single audit record for one retrieval call.
+
+    Attributes:
+        timestamp: ISO 8601 UTC timestamp of the call.
+        agent_id: Identifier of the agent that made the retrieval.
+        collection: Name of the target collection.
+        query_hash: SHA-256 hex digest of the raw query string. The raw
+            query is never logged to avoid leaking sensitive search terms.
+        num_chunks_retrieved: Number of chunks returned by the retriever
+            before content scanning.
+        num_chunks_blocked: Number of chunks withheld after content scanning.
+        decision: Governance outcome — ``"allowed"``, ``"denied"``, or
+            ``"rate_limited"``.
+        policy_triggered: Name of the specific policy that caused a non-
+            ``"allowed"`` decision, or ``None`` for clean passes.
+    """
+
+    timestamp: str
+    agent_id: str
+    collection: str
+    query_hash: str
+    num_chunks_retrieved: int
+    num_chunks_blocked: int
+    decision: str
+    policy_triggered: Optional[str]
+
+    @staticmethod
+    def hash_query(query: str, salt: Optional[str] = None) -> str:
+        """Return a salted SHA-256 hex digest of *query*.
+
+        Unsalted SHA-256 over a short query string is trivially
+        reversible via rainbow tables — common queries ("what's our
+        refund policy?", "list employees by department") hash to the
+        same value across every deployment, so an attacker who reads
+        the audit log can recover the queries by precomputing a
+        modest dictionary.
+
+        Salt with a per-deployment value: the AGENT_RAG_AUDIT_SALT
+        env var when `salt` is not supplied explicitly. Knowledge of
+        the salt by itself doesn't unlock anything; rotating it
+        invalidates correlation across older audit lines.
+
+        If neither argument nor env var is set, the function falls
+        back to the unsalted form and logs a one-time warning so
+        existing deployments aren't silently degraded.
+        """
+        if salt is None:
+            salt = os.environ.get("AGENT_RAG_AUDIT_SALT", "")
+        if not salt:
+            _warn_unsalted_once()
+            payload = query.encode("utf-8")
+        else:
+            payload = (salt + ":" + query).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    def to_json(self) -> str:
+        """Serialize to a single-line JSON string."""
+        return json.dumps(asdict(self))
+
+
+class AuditLogger:
+    """Emits :class:`RAGAuditEntry` records to a file or stdout.
+
+    Concurrent ``emit`` calls from multiple threads are safe within a
+    single process: the logger holds an instance-level lock around the
+    file open/write so audit lines do not interleave at the byte level.
+    Multi-process deployments (e.g. multiple Gunicorn/Uvicorn workers
+    sharing the same on-disk log file) require external coordination —
+    the in-process lock does not cross process boundaries. Use a
+    process-level handoff (a centralised log shipper, syslog, or
+    per-worker log paths) in that case.
+
+    Args:
+        log_path: Path to the JSON-lines log file. ``None`` writes to
+            stdout.
+
+    Example::
+
+        logger = AuditLogger(log_path="/var/log/rag-audit.jsonl")
+        logger.emit(entry)
+    """
+
+    def __init__(self, log_path: Optional[str] = None) -> None:
+        self._path = Path(log_path) if log_path else None
+        # Serialise concurrent emit() calls so audit lines from threads
+        # racing through the request path do not interleave.
+        # POSIX O_APPEND only guarantees atomic appends below PIPE_BUF
+        # bytes on filesystems that honour it, and Windows has no
+        # equivalent guarantee — relying on the kernel's write-atomicity
+        # is too fragile for compliance-grade audit evidence.
+        self._lock = threading.Lock()
+
+    def emit(self, entry: RAGAuditEntry) -> None:
+        """Write *entry* as a JSON line.
+
+        Thread-safe within a single process; see the class docstring
+        for multi-process notes.
+        """
+        line = entry.to_json() + "\n"
+        with self._lock:
+            if self._path is None:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            else:
+                with self._path.open("a", encoding="utf-8") as fh:
+                    fh.write(line)
+
+
+def make_entry(
+    *,
+    agent_id: str,
+    collection: str,
+    query: str,
+    num_chunks_retrieved: int,
+    num_chunks_blocked: int,
+    decision: str,
+    policy_triggered: Optional[str] = None,
+) -> RAGAuditEntry:
+    """Convenience factory for :class:`RAGAuditEntry`.
+
+    Args:
+        agent_id: Agent identifier.
+        collection: Target collection name.
+        query: Raw query string — hashed before storage.
+        num_chunks_retrieved: Chunk count before scanning.
+        num_chunks_blocked: Chunk count withheld by scanner.
+        decision: ``"allowed"``, ``"denied"``, or ``"rate_limited"``.
+        policy_triggered: Policy name that caused non-allowed decision.
+
+    Returns:
+        A populated :class:`RAGAuditEntry`.
+    """
+    return RAGAuditEntry(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        agent_id=agent_id,
+        collection=collection,
+        query_hash=RAGAuditEntry.hash_query(query),
+        num_chunks_retrieved=num_chunks_retrieved,
+        num_chunks_blocked=num_chunks_blocked,
+        decision=decision,
+        policy_triggered=policy_triggered,
+    )

@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agent_os.policies.backends import (
@@ -144,6 +146,50 @@ allow {
         decision = backend.evaluate({"role": "analyst"})
         assert decision.allowed is True
 
+    def test_opa_cli_uses_stdin_input_flag_not_dev_stdin(self, monkeypatch):
+        """Regression: the CLI invocation must not depend on /dev/stdin
+        (which doesn't exist on Windows) and must keep the rego file
+        inside a per-invocation TemporaryDirectory rather than a
+        umask-controlled NamedTemporaryFile.
+        """
+        captured: dict[str, object] = {}
+
+        class _FakeProc:
+            returncode = 0
+            stdout = '{"result":[{"expressions":[{"value":true}]}]}'
+            stderr = ""
+
+        def _fake_run(cmd, **kwargs):
+            captured["cmd"] = list(cmd)
+            captured["kwargs"] = kwargs
+            # Confirm the rego file existed during the call
+            data_idx = cmd.index("--data")
+            captured["rego_existed"] = Path(cmd[data_idx + 1]).is_file()
+            captured["rego_content"] = Path(cmd[data_idx + 1]).read_text()
+            return _FakeProc()
+
+        from agent_os.policies import backends as backends_mod
+        monkeypatch.setattr(backends_mod, "shutil", backends_mod.shutil)
+        # Force CLI path: pretend opa is available, no Python opa lib
+        monkeypatch.setattr(backends_mod.shutil, "which", lambda name: "/usr/local/bin/opa")
+        monkeypatch.setattr(backends_mod.subprocess, "run", _fake_run)
+
+        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        # Force CLI path even if python opa lib is installed
+        backend._opa_lib = None  # type: ignore[attr-defined]
+        backend._opa_cli_available = True  # type: ignore[attr-defined]
+
+        decision = backend._evaluate_cli({"tool_name": "file_read"})
+        assert decision.allowed is True
+        cmd = captured["cmd"]
+        assert "--stdin-input" in cmd
+        assert "/dev/stdin" not in cmd
+        assert captured["rego_existed"] is True
+        assert "package agentos" in captured["rego_content"]
+        # After the with-block exits, the tempdir is cleaned up
+        data_idx = cmd.index("--data")
+        assert not Path(cmd[data_idx + 1]).exists()
+
 
 # ── Cedar Backend Tests ───────────────────────────────────────
 
@@ -241,6 +287,128 @@ permit(
         assert stmts[0]["action_constraint"] == 'Action::"ReadData"'
         assert stmts[2]["effect"] == "forbid"
         assert stmts[2]["action_constraint"] == 'Action::"DeleteFile"'
+
+
+class TestCedarDecisionFromCliOutput:
+    """Regression tests for the Cedar CLI decision parser.
+
+    The previous parser used ``"allow" in stdout and "deny" not in stdout``
+    on the lowercased output — a substring sniff that gets fooled by
+    diagnostic phrases like ``DENY (request disallowed by policy)`` or
+    ``ALLOW: caveats reference the deny-list scoping``. The new parser only
+    accepts the first non-empty line being a bare ``ALLOW`` or ``DENY``
+    token (case-insensitive); anything else returns ``parsed=False`` so the
+    caller can fail closed.
+    """
+
+    @pytest.mark.parametrize("stdout", [
+        "ALLOW\n",
+        "ALLOW",
+        "allow",
+        "  ALLOW  \n",
+        "\n\nALLOW\n",  # leading blank lines tolerated
+    ])
+    def test_recognises_bare_allow_token(self, stdout: str) -> None:
+        from agent_os.policies.backends import _cedar_decision_from_cli_output
+
+        allowed, parsed = _cedar_decision_from_cli_output(stdout)
+        assert parsed is True
+        assert allowed is True
+
+    @pytest.mark.parametrize("stdout", [
+        "DENY\n",
+        "DENY",
+        "deny",
+        "  DENY  \n",
+        "\n\nDENY\n",
+    ])
+    def test_recognises_bare_deny_token(self, stdout: str) -> None:
+        from agent_os.policies.backends import _cedar_decision_from_cli_output
+
+        allowed, parsed = _cedar_decision_from_cli_output(stdout)
+        assert parsed is True
+        assert allowed is False
+
+    @pytest.mark.parametrize("stdout,description", [
+        ("DENY (request disallowed by policy)\n",
+         "first-line adjective phrase: contains 'allow' as substring of 'disallowed'"),
+        ("ALLOW: caveats reference the deny-list scoping\n",
+         "first-line adjective phrase: contains 'deny' as substring of 'deny-list'"),
+        ("", "empty stdout"),
+        ("\n\n  \n", "whitespace-only stdout"),
+        ("Decision: allow\n", "labelled decision, not a bare token"),
+        ("authorization failed\n", "garbage output"),
+        ("garbage line 1\nALLOW\n", "first line is garbage; second is ALLOW"),
+    ])
+    def test_rejects_ambiguous_output(self, stdout: str, description: str) -> None:
+        from agent_os.policies.backends import _cedar_decision_from_cli_output
+
+        allowed, parsed = _cedar_decision_from_cli_output(stdout)
+        assert parsed is False, description
+        assert allowed is False, description
+
+
+class TestCedarBackendCliPath:
+    """End-to-end test that `_evaluate_cli` routes through the new parser
+    and fails closed on ambiguous output.
+    """
+
+    SIMPLE_POLICY = 'permit(principal, action == Action::"ReadData", resource);'
+
+    def test_cli_allow_decision(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from agent_os.policies import backends as backends_mod
+
+        class _FakeProc:
+            stdout = "ALLOW\n"
+            stderr = ""
+
+        monkeypatch.setattr(
+            backends_mod.subprocess, "run",
+            lambda *_a, **_kw: _FakeProc(),
+        )
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        decision = backend._evaluate_cli({"tool_name": "read_data", "agent_id": "a1"})
+        assert decision.allowed is True
+        assert decision.error is None
+
+    def test_cli_deny_decision(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from agent_os.policies import backends as backends_mod
+
+        class _FakeProc:
+            stdout = "DENY\n"
+            stderr = ""
+
+        monkeypatch.setattr(
+            backends_mod.subprocess, "run",
+            lambda *_a, **_kw: _FakeProc(),
+        )
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        decision = backend._evaluate_cli({"tool_name": "read_data", "agent_id": "a1"})
+        assert decision.allowed is False
+
+    def test_cli_fails_closed_on_ambiguous_output(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The old parser flipped the verdict on adjective phrases. The new
+        parser refuses to interpret them and fails closed with an explicit
+        error.
+        """
+        from agent_os.policies import backends as backends_mod
+
+        class _FakeProc:
+            # Would have classified as ALLOW under the old "allow in output"
+            # check because of "disallowed". New behaviour: deny + error.
+            stdout = "DENY (request disallowed by policy)\n"
+            stderr = ""
+
+        monkeypatch.setattr(
+            backends_mod.subprocess, "run",
+            lambda *_a, **_kw: _FakeProc(),
+        )
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        decision = backend._evaluate_cli({"tool_name": "read_data", "agent_id": "a1"})
+        assert decision.allowed is False
+        assert decision.error == "unrecognised cedar CLI output"
 
 
 # ── PolicyEvaluator Integration Tests ─────────────────────────

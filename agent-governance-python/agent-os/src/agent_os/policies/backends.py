@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -229,55 +230,64 @@ class OPABackend:
 
     def _evaluate_cli(self, context: dict[str, Any]) -> BackendDecision:
         input_json = json.dumps(context)
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".rego", delete=False
-        ) as f:
-            f.write(self._rego_content)
-            rego_file = f.name
+        # TemporaryDirectory is created with 0o700 on POSIX and ACL'd to the
+        # current user on Windows, so the Rego file is not exposed to other
+        # local users (the previous NamedTemporaryFile path used the process
+        # umask, which on default-configured shared hosts left it
+        # world-readable).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rego_file = Path(tmpdir) / "policy.rego"
+            rego_file.write_text(self._rego_content)
+            try:
+                os.chmod(rego_file, 0o600)
+            except (NotImplementedError, OSError):
+                # Windows or filesystems that don't support chmod — directory
+                # permissions are still restrictive.
+                pass
 
-        cmd = [
-            "opa", "eval", "--format", "json",
-            "--input", "/dev/stdin",
-            "--data", rego_file,
-            self._query,
-        ]
-        try:
-            proc = subprocess.run(  # noqa: S603 — trusted subprocess for OPA policy engine
-                cmd,
-                input=input_json,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout,
-            )
-            if proc.returncode != 0:
+            # `--stdin-input` is OPA's portable way to read input from stdin;
+            # the previous `--input /dev/stdin` path failed on Windows.
+            cmd = [
+                "opa", "eval", "--format", "json",
+                "--stdin-input",
+                "--data", str(rego_file),
+                self._query,
+            ]
+            try:
+                proc = subprocess.run(  # noqa: S603 — trusted subprocess for OPA policy engine
+                    cmd,
+                    input=input_json,
+                    capture_output=True,
+                    text=True,
+                    timeout=self._timeout,
+                )
+                if proc.returncode != 0:
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=f"opa eval failed: {proc.stderr.strip()}",
+                        backend="opa",
+                        error=proc.stderr.strip(),
+                    )
+                result = json.loads(proc.stdout)
+                expressions = result.get("result", [{}])[0].get("expressions", [{}])
+                value = expressions[0].get("value", False) if expressions else False
+                allowed = bool(value)
+                return BackendDecision(
+                    allowed=allowed,
+                    action="allow" if allowed else "deny",
+                    reason=f"OPA local ({self._package}): {'allowed' if allowed else 'denied'}",
+                    backend="opa",
+                    raw_result=result,
+                )
+            except subprocess.TimeoutExpired:
                 return BackendDecision(
                     allowed=False,
                     action="deny",
-                    reason=f"opa eval failed: {proc.stderr.strip()}",
+                    reason="OPA eval timed out",
                     backend="opa",
-                    error=proc.stderr.strip(),
+                    error="timeout",
                 )
-            result = json.loads(proc.stdout)
-            expressions = result.get("result", [{}])[0].get("expressions", [{}])
-            value = expressions[0].get("value", False) if expressions else False
-            allowed = bool(value)
-            return BackendDecision(
-                allowed=allowed,
-                action="allow" if allowed else "deny",
-                reason=f"OPA local ({self._package}): {'allowed' if allowed else 'denied'}",
-                backend="opa",
-                raw_result=result,
-            )
-        except subprocess.TimeoutExpired:
-            return BackendDecision(
-                allowed=False,
-                action="deny",
-                reason="OPA eval timed out",
-                backend="opa",
-                error="timeout",
-            )
-        finally:
-            Path(rego_file).unlink(missing_ok=True)
 
     def _evaluate_builtin(self, context: dict[str, Any]) -> BackendDecision:
         """Built-in simple Rego evaluator for common patterns."""
@@ -365,6 +375,55 @@ class OPABackend:
 
 
 # ── Cedar Backend ─────────────────────────────────────────────
+
+
+def _cedar_decision_from_cli_output(stdout: str) -> tuple[bool, bool]:
+    """Parse the decision token from a ``cedar authorize`` invocation.
+
+    Returns ``(allowed, parsed)``:
+
+      - ``(True, True)`` if the first non-empty line is ALLOW (any case)
+      - ``(False, True)`` if the first non-empty line is DENY (any case)
+      - ``(False, False)`` if the first non-empty line is anything else
+        (caller should treat as fail-closed)
+
+    Why not "allow" in stdout?
+        The previous parser was ``"allow" in output and "deny" not in output``
+        on the lowercased stdout. That is a substring sniff, not a token
+        match: it misclassifies adjective phrases that future Cedar CLI
+        versions may plausibly emit as diagnostic context, e.g.
+        ``"DENY (request disallowed by policy)"`` classifies as DENY only by
+        coincidence (both substrings present), and
+        ``"ALLOW: caveats reference the deny-list scoping"`` flips to DENY
+        for the same reason. A single character difference between the
+        decision token and the rest of the diagnostic output flips the
+        verdict.
+
+    Why not ``--json``?
+        REVIEW.md proposed switching to ``cedar authorize --json``. Cedar
+        CLI 4.x supports structured output, but this project does not pin
+        a minimum Cedar CLI version, and older releases reject the flag
+        with ``unknown argument``. The first-line token parse keeps
+        backward compatibility with every Cedar CLI version while
+        eliminating the substring trap; a future PR can switch to JSON
+        once a minimum is pinned.
+
+        The Go sibling (`agent-governance-golang/.../policy_backends.go`)
+        took the same first-line-token approach in
+        microsoft/agent-governance-toolkit#2127.
+    """
+    for line in stdout.split("\n"):
+        token = line.strip().lower()
+        if not token:
+            continue
+        if token == "allow":
+            return True, True
+        if token == "deny":
+            return False, True
+        # First non-empty line was neither bare ALLOW nor bare DENY; refuse
+        # to guess. The caller's fail-closed path takes over.
+        return False, False
+    return False, False
 
 
 class CedarBackend:
@@ -564,8 +623,25 @@ class CedarBackend:
                     text=True,
                     timeout=self._timeout,
                 )
-                output = proc.stdout.strip().lower()
-                allowed = "allow" in output and "deny" not in output
+                allowed, parsed = _cedar_decision_from_cli_output(proc.stdout)
+                if not parsed:
+                    # Cedar CLI emitted something other than a clean
+                    # ALLOW/DENY token on the first non-empty line. Fail
+                    # closed rather than guessing.
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            f"Cedar CLI: unrecognised output "
+                            f"{proc.stdout.strip()!r}"
+                        ),
+                        backend="cedar",
+                        raw_result={
+                            "stdout": proc.stdout,
+                            "stderr": proc.stderr,
+                        },
+                        error="unrecognised cedar CLI output",
+                    )
                 return BackendDecision(
                     allowed=allowed,
                     action="allow" if allowed else "deny",

@@ -335,6 +335,44 @@ class TestActiveSessions:
 
 
 # ---------------------------------------------------------------------------
+# sessions / session_count accessors
+# ---------------------------------------------------------------------------
+
+class TestSessionsAccessor:
+    """``sessions`` and ``session_count`` expose the full session registry
+    without callers having to reach into ``_sessions``. ``active_sessions``
+    is filtered by the active index; these accessors include archived /
+    terminating ones too.
+    """
+
+    async def test_session_count_empty(self, hypervisor):
+        assert hypervisor.session_count == 0
+        assert hypervisor.sessions == []
+
+    async def test_session_count_includes_terminated(self, hypervisor, config):
+        s1 = await hypervisor.create_session(config, creator_did=CREATOR)
+        s2 = await hypervisor.create_session(config, creator_did=CREATOR)
+        await hypervisor.join_session(s1.sso.session_id, AGENT_1, sigma_raw=0.85)
+        await hypervisor.activate_session(s1.sso.session_id)
+        await hypervisor.terminate_session(s1.sso.session_id)
+        # active_sessions drops s1; session_count keeps it.
+        assert len(hypervisor.active_sessions) == 1
+        assert hypervisor.session_count == 2
+        assert {m.sso.session_id for m in hypervisor.sessions} == {
+            s1.sso.session_id,
+            s2.sso.session_id,
+        }
+
+    async def test_sessions_returns_snapshot_not_live_view(self, hypervisor, config):
+        await hypervisor.create_session(config, creator_did=CREATOR)
+        snapshot = hypervisor.sessions
+        await hypervisor.create_session(config, creator_did=CREATOR)
+        # Snapshot taken before second create must not grow.
+        assert len(snapshot) == 1
+        assert hypervisor.session_count == 2
+
+
+# ---------------------------------------------------------------------------
 # verify_behavior
 # ---------------------------------------------------------------------------
 

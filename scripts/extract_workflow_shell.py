@@ -121,12 +121,19 @@ def workflow_files(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*.yml") if path.is_file())
 
 
+def _sanitize_gha_expressions(lines: list[str]) -> list[str]:
+    """Replace ${{ ... }} GitHub Actions expressions with shellcheck-safe placeholders."""
+    import re as _re
+    gha_expr = _re.compile(r"\$\{\{.*?\}\}")
+    return [gha_expr.sub("__GHA_EXPR__", line) for line in lines]
+
+
 def emit_shell(root: Path) -> str:
     sections: list[str] = []
     for path in workflow_files(root):
         for file_name, line_number, block in extract_file(path):
             sections.append(f"# === {file_name}:{line_number} ===")
-            sections.extend(block)
+            sections.extend(_sanitize_gha_expressions(block))
             sections.append("")
     return "\n".join(sections).rstrip() + "\n" if sections else ""
 

@@ -25,6 +25,8 @@ internal static class AgentFrameworkGovernanceTestHelpers
 
         public bool WasRun { get; private set; }
 
+        public List<ChatMessage> ReceivedMessages { get; } = new();
+
         public override string Name { get; }
 
         protected override string IdCore => $"did:test:{Name}";
@@ -36,6 +38,7 @@ internal static class AgentFrameworkGovernanceTestHelpers
             CancellationToken cancellationToken)
         {
             WasRun = true;
+            ReceivedMessages.AddRange(messages);
             return Task.FromResult(new AgentResponse(new ChatMessage(ChatRole.Assistant, "allowed")));
         }
 

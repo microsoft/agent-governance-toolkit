@@ -23,7 +23,7 @@ import hashlib
 import threading
 import atexit
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from collections import deque
 import json
@@ -116,7 +116,7 @@ class FlightRecorder:
         # Batching state
         self._write_buffer: deque = deque()
         self._buffer_lock = threading.Lock()
-        self._last_flush = datetime.utcnow()
+        self._last_flush = datetime.now(timezone.utc)
         self._last_hash: Optional[str] = None
         
         # Cache immutable trace data for content hash recomputation
@@ -218,7 +218,7 @@ class FlightRecorder:
                     cursor.execute(operation['sql'], operation['params'])
                 
                 conn.commit()
-                self._last_flush = datetime.utcnow()
+                self._last_flush = datetime.now(timezone.utc)
                 self.logger.debug(f"Flushed write buffer")
             except Exception as e:
                 conn.rollback()
@@ -233,7 +233,7 @@ class FlightRecorder:
             
         should_flush = (
             len(self._write_buffer) >= self.batch_size or
-            (datetime.utcnow() - self._last_flush).total_seconds() >= self.flush_interval
+            (datetime.now(timezone.utc) - self._last_flush).total_seconds() >= self.flush_interval
         )
         if should_flush:
             self._flush_buffer()
@@ -365,7 +365,7 @@ class FlightRecorder:
             >>> recorder.log_success(trace_id, result="wrote 5 bytes")
         """
         trace_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         tool_args_json = json.dumps(tool_args) if tool_args else None
         
         # Compute hash for Merkle chain (immutable after INSERT)

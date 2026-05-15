@@ -47,6 +47,7 @@ guides.
 | 11 | [Saga Orchestration](11-saga-orchestration.md) | Multi-step transactions, DSL, fan-out, compensating actions | `agentmesh-runtime` |
 | 12 | [Liability & Attribution](12-liability-and-attribution.md) | Vouching, slashing, causal attribution, quarantine | `agentmesh-runtime` |
 | 14 | [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency termination, rate limiting, ring elevation | `agentmesh-runtime` |
+| 51 | [Cost Governance](51-cost-governance.md) | Tiered budgets, auto-throttle, kill switch, anomaly detection, cost optimization | `agent-sre` |
 
 ## Trust & Networking
 
@@ -65,6 +66,7 @@ guides.
 | 13 | [Observability & Tracing](13-observability-and-tracing.md) | Causal traces, event bus, Prometheus, OpenTelemetry | `agentmesh-runtime` |
 | 15 | [RL Training Governance](15-rl-training-governance.md) | GovernedRunner, PolicyReward, Gym-compatible environments | `agentmesh-lightning` |
 | 18 | [Compliance Verification](18-compliance-verification.md) | Governance grading, regulatory frameworks, attestation | `agent-governance-toolkit` |
+| 50 | [Decision BOM](50-decision-bom.md) | Reconstruct full decision context from observability signals, completeness scoring, batch audit | `agentmesh-platform` |
 
 ## Multi-Language Packages
 
@@ -82,6 +84,7 @@ guides.
 |---|----------|-------------------|---------|
 | 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@microsoft/agentmesh-sdk` |
 | 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Per-session token limits, context scheduling, budget signals | `agent-os-kernel` |
+| 49 | [Multi-Agent Collective Policies](49-multi-agent-policies.md) | Aggregate constraints across agents: rate limits, concurrent caps, alert-only monitoring | `agentmesh-platform` |
 
 ## Supply Chain Security
 
@@ -118,6 +121,7 @@ guides.
 | 39 | [DLP with Attribute Ratchets](39-dlp-attribute-ratchets.md) | Monotonic session state — sensitivity only goes up, never resets | `agentmesh-platform` |
 | 40 | [OTel Observability](40-otel-observability.md) | OpenTelemetry spans + metrics for policy, approval, and trust operations | `agentmesh-platform` |
 | 41 | [Advisory Defense-in-Depth](41-advisory-defense-in-depth.md) | Pattern, ML, and HTTP classifiers as non-deterministic defense layer | `agentmesh-platform` |
+| 48 | [Intent-Based Authorization](48-intent-based-authorization.md) | Declare/approve/execute/verify lifecycle, drift detection, child intent scope narrowing | `agent-os-kernel` |
 
 ## Extending the Toolkit
 
@@ -223,7 +227,7 @@ go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang  # 
 
 ## More Resources
 
-- **[Quick Start](../../QUICKSTART.md)** — Zero to governed agents in 10 minutes
+- **[Quick Start](../../quickstart.md)** — Zero to governed agents in 10 minutes
 - **[Architecture](../ARCHITECTURE.md)** — System design and security model
 - **[OWASP Compliance](../OWASP-COMPLIANCE.md)** — ASI-01 through ASI-10 mapping
 - **[Benchmarks](../../BENCHMARKS.md)** — Performance data

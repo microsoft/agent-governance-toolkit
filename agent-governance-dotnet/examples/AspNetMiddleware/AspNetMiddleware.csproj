@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>AgentGovernance.Examples.AspNetMiddleware</RootNamespace>
+    <AssemblyName>AgentGovernance.Examples.AspNetMiddleware</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- Examples don't need strong naming or NuGet metadata. -->
+    <SignAssembly>false</SignAssembly>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <UserSecretsId>agt-aspnet-middleware-example</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AgentGovernance\AgentGovernance.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="policies\aspnet.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -11,7 +11,8 @@ Interactive Jupyter notebooks for exploring the **agent-hypervisor** runtime.
 ## Quick Start
 
 ```bash
-# From the repository root
+# From the agent-hypervisor package root
+cd agent-governance-python/agent-hypervisor
 pip install -e ".[dev]" plotly nest-asyncio
 jupyter notebook notebooks/
 ```

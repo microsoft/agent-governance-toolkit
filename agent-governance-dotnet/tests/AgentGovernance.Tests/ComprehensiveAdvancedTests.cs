@@ -79,8 +79,10 @@ public class ExecutionRingsAdvancedTests
     {
         var e = new RingEnforcer(new Dictionary<ExecutionRing, double>
         {
-            [ExecutionRing.Ring0] = 0.99, [ExecutionRing.Ring1] = 0.95,
-            [ExecutionRing.Ring2] = 0.80, [ExecutionRing.Ring3] = 0.0
+            [ExecutionRing.Ring0] = 0.99,
+            [ExecutionRing.Ring1] = 0.95,
+            [ExecutionRing.Ring2] = 0.80,
+            [ExecutionRing.Ring3] = 0.0
         });
         Assert.Equal(ExecutionRing.Ring3, e.ComputeRing(0.70));
         Assert.Equal(ExecutionRing.Ring2, e.ComputeRing(0.85));
@@ -319,8 +321,11 @@ public class GovernanceKernelAdvancedTests
     {
         var k = new GovernanceKernel(new GovernanceOptions
         {
-            EnableRings = true, EnablePromptInjectionDetection = true,
-            EnableCircuitBreaker = true, EnableMetrics = true, EnableAudit = true
+            EnableRings = true,
+            EnablePromptInjectionDetection = true,
+            EnableCircuitBreaker = true,
+            EnableMetrics = true,
+            EnableAudit = true
         });
         Assert.NotNull(k.Rings);
         Assert.NotNull(k.InjectionDetector);
@@ -335,8 +340,11 @@ public class GovernanceKernelAdvancedTests
     {
         var k = new GovernanceKernel(new GovernanceOptions
         {
-            EnableRings = false, EnablePromptInjectionDetection = false,
-            EnableCircuitBreaker = false, EnableMetrics = false, EnableAudit = false
+            EnableRings = false,
+            EnablePromptInjectionDetection = false,
+            EnableCircuitBreaker = false,
+            EnableMetrics = false,
+            EnableAudit = false
         });
         Assert.Null(k.Rings); Assert.Null(k.InjectionDetector); Assert.Null(k.CircuitBreaker); Assert.Null(k.Metrics);
         Assert.NotNull(k.SagaOrchestrator); Assert.NotNull(k.SloEngine);

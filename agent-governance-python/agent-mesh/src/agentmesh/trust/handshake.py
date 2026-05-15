@@ -6,7 +6,7 @@ Trust Handshake
 Ed25519 challenge/response handshake with registry-backed identity verification.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Literal
 from pydantic import BaseModel, Field
 import logging
@@ -33,7 +33,7 @@ class HandshakeChallenge(BaseModel):
         None,
         description="RFC 9334 freshness nonce for Evidence liveness proof",
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_in_seconds: int = 30
 
     @classmethod
@@ -53,7 +53,7 @@ class HandshakeChallenge(BaseModel):
 
     def is_expired(self) -> bool:
         """Check if the challenge has exceeded its time-to-live."""
-        elapsed = (datetime.utcnow() - self.timestamp).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.timestamp).total_seconds()
         return elapsed > self.expires_in_seconds
 
 
@@ -79,7 +79,7 @@ class HandshakeResponse(BaseModel):
     user_context: Optional[dict] = Field(None, description="End-user context for OBO flows")
 
     # Metadata
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class HandshakeResult(BaseModel):
@@ -100,7 +100,7 @@ class HandshakeResult(BaseModel):
     user_context: Optional[UserContext] = Field(None, description="End-user context if acting on behalf of a user")
 
     # Timing
-    handshake_started: datetime = Field(default_factory=datetime.utcnow)
+    handshake_started: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     handshake_completed: Optional[datetime] = None
     latency_ms: Optional[int] = None
 
@@ -118,7 +118,7 @@ class HandshakeResult(BaseModel):
         user_context: Optional[UserContext] = None,
     ) -> "HandshakeResult":
         """Create a successful handshake result."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         start = started or now
         latency = int((now - start).total_seconds() * 1000)
 
@@ -152,7 +152,7 @@ class HandshakeResult(BaseModel):
         started: Optional[datetime] = None,
     ) -> "HandshakeResult":
         """Create a failed handshake result."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         start = started or now
         latency = int((now - start).total_seconds() * 1000)
 
@@ -216,22 +216,44 @@ class TrustHandshake:
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         # V10: Limit pending challenges to prevent DoS accumulation
         self._max_pending_challenges = 1000
+        # Serialise mutations on _pending_challenges so concurrent
+        # initiate() coroutines cannot all pass the size check and
+        # then each insert past the cap, and so the finally-block
+        # cleanup at the end of initiate() can't race a sibling's
+        # insert/lookup.
+        self._challenges_lock = asyncio.Lock()
+        # Serialise mutations on _verified_peers so concurrent
+        # _cache_result / _get_cached_result / clear_cache calls
+        # cannot race the read+TTL-delete sequence. clear_cache()
+        # remains sync-callable; concurrent sync+async mixing is
+        # documented as out-of-scope (use async paths only).
+        self._peers_lock = asyncio.Lock()
 
-    def _get_cached_result(self, peer_did: str) -> Optional[HandshakeResult]:
-        """Get cached verification result if still valid."""
-        if peer_did in self._verified_peers:
-            result, timestamp = self._verified_peers[peer_did]
-            if datetime.utcnow() - timestamp < self._cache_ttl:
-                return result
-            del self._verified_peers[peer_did]
+    async def _get_cached_result(self, peer_did: str) -> Optional[HandshakeResult]:
+        """Get cached verification result if still valid.
+
+        Locked so the read+TTL-delete sequence cannot race a sibling
+        coroutine's _cache_result for the same DID.
+        """
+        async with self._peers_lock:
+            if peer_did in self._verified_peers:
+                result, timestamp = self._verified_peers[peer_did]
+                if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
+                    return result
+                del self._verified_peers[peer_did]
         return None
 
-    def _cache_result(self, peer_did: str, result: HandshakeResult) -> None:
+    async def _cache_result(self, peer_did: str, result: HandshakeResult) -> None:
         """Cache a verification result with timestamp."""
-        self._verified_peers[peer_did] = (result, datetime.utcnow())
+        async with self._peers_lock:
+            self._verified_peers[peer_did] = (result, datetime.now(timezone.utc))
 
     def _purge_expired_challenges(self) -> None:
-        """Remove expired challenges to prevent unbounded growth."""
+        """Remove expired challenges to prevent unbounded growth.
+
+        Caller must hold self._challenges_lock — this method only
+        runs from within initiate()'s locked section.
+        """
         expired = [
             cid for cid, ch in self._pending_challenges.items()
             if ch.is_expired()
@@ -240,7 +262,13 @@ class TrustHandshake:
             del self._pending_challenges[cid]
 
     def clear_cache(self) -> None:
-        """Clear all cached peer verification results."""
+        """Clear all cached peer verification results.
+
+        Sync-callable for compatibility with non-async callers. Do
+        not mix sync clear_cache() with concurrent async access to
+        _verified_peers; if both code paths are in play, use the
+        async _peers_lock manually.
+        """
         self._verified_peers.clear()
 
     async def initiate(
@@ -261,11 +289,11 @@ class TrustHandshake:
                 call produces a fresh Evidence verification.
         """
         if use_cache and not require_freshness:
-            cached = self._get_cached_result(peer_did)
+            cached = await self._get_cached_result(peer_did)
             if cached:
                 return cached
 
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
 
         try:
             result = await asyncio.wait_for(
@@ -295,16 +323,20 @@ class TrustHandshake:
         """Execute the core handshake: generate nonce, verify it comes back."""
         challenge: Optional[HandshakeChallenge] = None
         try:
-            # V10: Purge expired challenges and enforce limit
-            self._purge_expired_challenges()
-            if len(self._pending_challenges) >= self._max_pending_challenges:
-                return HandshakeResult.failure(
-                    peer_did, "Too many pending challenges — try again later", start
-                )
+            # V10: Purge expired challenges and enforce limit. The purge,
+            # size check, and insert MUST run as one atomic step under the
+            # async lock — otherwise concurrent initiates can each pass
+            # the size check and then each insert, blowing past the cap.
+            async with self._challenges_lock:
+                self._purge_expired_challenges()
+                if len(self._pending_challenges) >= self._max_pending_challenges:
+                    return HandshakeResult.failure(
+                        peer_did, "Too many pending challenges — try again later", start
+                    )
 
-            # Generate nonce challenge (with optional RFC 9334 freshness nonce)
-            challenge = HandshakeChallenge.generate(require_freshness=require_freshness)
-            self._pending_challenges[challenge.challenge_id] = challenge
+                # Generate nonce challenge (with optional RFC 9334 freshness nonce)
+                challenge = HandshakeChallenge.generate(require_freshness=require_freshness)
+                self._pending_challenges[challenge.challenge_id] = challenge
 
             # Get peer response
             response = await self._get_peer_response(peer_did, challenge)
@@ -337,11 +369,15 @@ class TrustHandshake:
                 user_context=response_user_ctx,
             )
 
-            self._cache_result(peer_did, result)
+            await self._cache_result(peer_did, result)
             return result
         finally:
-            if challenge and challenge.challenge_id in self._pending_challenges:
-                del self._pending_challenges[challenge.challenge_id]
+            # Cleanup must run under the challenges lock so a sibling
+            # initiate() can't race on the same challenge_id during
+            # its size check.
+            if challenge:
+                async with self._challenges_lock:
+                    self._pending_challenges.pop(challenge.challenge_id, None)
 
     async def respond(
         self,
@@ -484,7 +520,10 @@ class TrustHandshake:
             }
 
         if not self.registry.is_trusted(response.agent_did):
-            raise HandshakeError(f"Agent {response.agent_did} is not trusted in registry")
+            return {
+                "valid": False,
+                "reason": f"Agent {response.agent_did} is not trusted in registry",
+            }
 
         # Verify Ed25519 signature over the challenge payload
         payload = f"{response.challenge_id}:{challenge.nonce}:{response.response_nonce}:{response.agent_did}"

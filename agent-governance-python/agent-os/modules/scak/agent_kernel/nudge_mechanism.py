@@ -16,7 +16,7 @@ This implements "The Nudge" pattern from industry best practices:
 import logging
 import uuid
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models import AgentOutcome, NudgeResult, GiveUpSignal
 
@@ -150,7 +150,7 @@ class NudgeMechanism:
         recent_nudges = [
             n for n in self.nudge_history
             if n.original_outcome.agent_id == outcome.agent_id
-            and (datetime.utcnow() - n.original_outcome.timestamp).total_seconds() < 300  # 5 min
+            and (datetime.now(timezone.utc) - n.original_outcome.timestamp).total_seconds() < 300  # 5 min
         ]
         
         if len(recent_nudges) >= max_nudges:

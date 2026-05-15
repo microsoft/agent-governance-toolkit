@@ -18,13 +18,38 @@ please review the latest guidance for Microsoft repositories at
 To report a vulnerability, email **secure@microsoft.com**. You will receive acknowledgement
 within 24 hours and a detailed response within 72 hours indicating next steps.
 
+## Scope
+
+The following components are in scope for security reports:
+
+- **Policy engine** (agent_os): policy bypass, evaluation errors, deterministic guarantee violations
+- **Identity layer** (agentmesh): DID/key material leaks, trust score manipulation, attestation forgery
+- **Sandbox** (agent_sandbox): guest escape, host resource access, isolation boundary violations
+- **Supply chain** (CI/CD, publishing): build tampering, dependency confusion, secret exposure
+- **Compliance tooling** (agent_compliance): false negatives in security scanning
+
+Out of scope:
+- Denial of service against local CLI tools (e.g., `agt` commands)
+- Issues in third-party dependencies already tracked by Dependabot
+- Social engineering or phishing attacks against maintainers
+
+## Severity Definitions
+
+| Severity | Description | Example |
+|----------|-------------|---------|
+| Critical | Remote exploitation, data exfiltration, or complete policy bypass without authentication | Sandbox escape allowing host code execution |
+| High | Policy bypass under specific conditions, credential exposure, or trust boundary violation | Kill switch bypass via crafted IEEE 754 values |
+| Medium | Race conditions, information disclosure, or partial bypass requiring local access | Thread safety issue in concurrent policy evaluation |
+| Low | Minor information leak, hardening gap, or defense-in-depth improvement | Missing input validation on non-security path |
+
 ## Supported Versions
 
 | Version | Supported          |
 |---------|--------------------|
-| 2.1.x   | :white_check_mark: |
-| 2.0.x   | :white_check_mark: |
-| < 2.0   | :x:                |
+| 3.4.x   | :white_check_mark: |
+| 3.3.x   | :white_check_mark: |
+| 3.2.x   | :white_check_mark: |
+| < 3.2   | :x:                |
 
 ## Disclosure Policy
 

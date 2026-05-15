@@ -122,18 +122,36 @@ class MCPSessionAuthenticator:
         agent_id: str,
         session_token: str,
         user_id: str | None = None,
+        *,
+        ttl: timedelta,
     ) -> str:
         """Persist a pre-provisioned session token bound to an agent.
 
-        This is intended for environments that need deterministic bootstrap
-        credentials (for example, wiring a FastAPI server to a deployment-time
-        token map). Bootstrapped sessions do not expire automatically; they
-        remain valid until explicitly revoked or the process restarts.
+        Intended for environments that need deterministic bootstrap
+        credentials (for example, wiring a FastAPI server to a
+        deployment-time token map). The caller MUST supply ``ttl`` —
+        bootstrapped sessions expire on a clock just like sessions issued
+        by :meth:`create_session`, and there is no never-expire mode.
+        Long-lived deployment tokens should pass an explicitly long
+        ``timedelta`` (e.g. ``timedelta(days=30)``) and rotate via
+        redeployment.
+
+        Args:
+            agent_id: Agent identifier the session is bound to.
+            session_token: Caller-supplied opaque session token.
+            user_id: Optional user or tenant identifier.
+            ttl: Positive lifetime applied to the bootstrap session.
+
+        Raises:
+            ValueError: If ``agent_id`` or ``session_token`` is empty, or
+                ``ttl`` is not strictly positive.
         """
         if not agent_id or not agent_id.strip():
             raise ValueError("agent_id must not be empty")
         if not session_token or not session_token.strip():
             raise ValueError("session_token must not be empty")
+        if ttl <= timedelta(0):
+            raise ValueError("ttl must be positive — bootstrap sessions cannot be permanent")
 
         now = _utcnow()
         with self._lock:
@@ -163,12 +181,12 @@ class MCPSessionAuthenticator:
                 agent_id=agent_id,
                 user_id=user_id,
                 created_at=now,
-                expires_at=None,
+                expires_at=now + ttl,
                 rate_limit_key=f"{user_id}:{agent_id}" if user_id else agent_id,
             )
             self._store_session_locked(session)
 
-        logger.info("Bootstrapped MCP session for agent %s", agent_id)
+        logger.info("Bootstrapped MCP session for agent %s (ttl=%s)", agent_id, ttl)
         return session_token
 
     def validate_session(self, agent_id: str, session_token: str) -> MCPSession | None:

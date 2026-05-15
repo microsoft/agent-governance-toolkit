@@ -15,6 +15,7 @@ See also:
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -89,16 +90,39 @@ class AgentRateLimiter:
 
     Higher-privilege rings get more generous limits. When an agent
     is promoted/demoted, their bucket is recreated with new limits.
+
+    Thread-safe: all bucket and stats mutations are guarded by a single
+    lock. The lock also covers the underlying ``TokenBucket.consume`` /
+    ``TokenBucket.available`` calls, which mutate ``tokens`` and
+    ``last_refill`` and are not themselves synchronised.
     """
 
     def __init__(
         self,
         ring_limits: dict[ExecutionRing, tuple[float, float]] | None = None,
+        max_buckets: int = 100_000,
     ) -> None:
         self._limits = ring_limits or dict(DEFAULT_RING_LIMITS)
-        # (agent_did, session_id) -> TokenBucket
-        self._buckets: dict[str, TokenBucket] = {}
-        self._stats: dict[str, RateLimitStats] = {}
+        # (agent_did, session_id) -> TokenBucket. A tuple is used so that
+        # identifiers containing ``:`` cannot collide across distinct
+        # (agent, session) pairs — see ``_bucket_key`` for the rationale.
+        self._buckets: dict[tuple[str, str], TokenBucket] = {}
+        self._stats: dict[tuple[str, str], RateLimitStats] = {}
+        self._lock = threading.Lock()
+        self._max_buckets = max_buckets
+
+    @staticmethod
+    def _bucket_key(agent_did: str, session_id: str) -> tuple[str, str]:
+        """Build the per-(agent, session) bucket key.
+
+        Using ``(agent_did, session_id)`` rather than the joined string
+        ``f"{agent_did}:{session_id}"`` keeps the identifiers
+        unambiguous: ``("a:b", "c")`` and ``("a", "b:c")`` would
+        otherwise hash to the same bucket and quietly share a rate
+        limit. ``agent_did`` is a DID (e.g. ``did:key:z6Mk...``) so the
+        colon collision is the realistic case, not the contrived one.
+        """
+        return (agent_did, session_id)
 
     def check(
         self,
@@ -112,23 +136,23 @@ class AgentRateLimiter:
 
         Returns True if allowed, raises RateLimitExceeded if not.
         """
-        key = f"{agent_did}:{session_id}"
-        bucket = self._get_or_create_bucket(key, ring)
-
-        # Track stats
-        stats = self._stats.setdefault(
-            key,
-            RateLimitStats(agent_did=agent_did, ring=ring),
-        )
-        stats.total_requests += 1
-
-        if not bucket.consume(cost):
-            stats.rejected_requests += 1
-            raise RateLimitExceeded(
-                f"Agent {agent_did} exceeded rate limit for ring "
-                f"{ring.value} ({stats.rejected_requests} rejections)"
+        key = self._bucket_key(agent_did, session_id)
+        with self._lock:
+            bucket = self._get_or_create_bucket_locked(key, ring)
+            stats = self._stats.setdefault(
+                key,
+                RateLimitStats(agent_did=agent_did, ring=ring),
             )
-        return True
+            stats.total_requests += 1
+
+            if not bucket.consume(cost):
+                stats.rejected_requests += 1
+                rejected = stats.rejected_requests
+                raise RateLimitExceeded(
+                    f"Agent {agent_did} exceeded rate limit for ring "
+                    f"{ring.value} ({rejected} rejections)"
+                )
+            return True
 
     def try_check(
         self,
@@ -150,33 +174,40 @@ class AgentRateLimiter:
         new_ring: ExecutionRing,
     ) -> None:
         """Update an agent's rate limit when their ring changes."""
-        key = f"{agent_did}:{session_id}"
+        key = self._bucket_key(agent_did, session_id)
         rate, capacity = self._limits.get(
             new_ring, RATE_LIMIT_FALLBACK
         )
-        self._buckets[key] = TokenBucket(
-            capacity=capacity,
-            tokens=capacity,  # Start full
-            refill_rate=rate,
-        )
-        if key in self._stats:
-            self._stats[key].ring = new_ring
+        with self._lock:
+            self._buckets[key] = TokenBucket(
+                capacity=capacity,
+                tokens=capacity,  # Start full
+                refill_rate=rate,
+            )
+            if key in self._stats:
+                self._stats[key].ring = new_ring
 
     def get_stats(self, agent_did: str, session_id: str) -> RateLimitStats | None:
         """Get rate limit stats for an agent."""
-        key = f"{agent_did}:{session_id}"
-        stats = self._stats.get(key)
-        if stats:
-            bucket = self._buckets.get(key)
-            if bucket:
-                stats.tokens_available = bucket.available
-                stats.capacity = bucket.capacity
-        return stats
+        key = self._bucket_key(agent_did, session_id)
+        with self._lock:
+            stats = self._stats.get(key)
+            if stats:
+                bucket = self._buckets.get(key)
+                if bucket:
+                    stats.tokens_available = bucket.available
+                    stats.capacity = bucket.capacity
+            return stats
 
-    def _get_or_create_bucket(
-        self, key: str, ring: ExecutionRing
+    def _get_or_create_bucket_locked(
+        self, key: tuple[str, str], ring: ExecutionRing
     ) -> TokenBucket:
+        """Caller must hold ``self._lock``."""
         if key not in self._buckets:
+            if len(self._buckets) >= self._max_buckets:
+                oldest_key = next(iter(self._buckets))
+                del self._buckets[oldest_key]
+                self._stats.pop(oldest_key, None)
             rate, capacity = self._limits.get(ring, RATE_LIMIT_FALLBACK)
             self._buckets[key] = TokenBucket(
                 capacity=capacity,
@@ -187,4 +218,5 @@ class AgentRateLimiter:
 
     @property
     def tracked_agents(self) -> int:
-        return len(self._buckets)
+        with self._lock:
+            return len(self._buckets)

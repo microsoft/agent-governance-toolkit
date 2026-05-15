@@ -136,6 +136,108 @@ public class FileTrustStoreTests : IDisposable
         Assert.Equal(0, store.Count);
     }
 
+    [Fact]
+    public void Constructor_FilePathUnderAllowedBase_Accepted()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), $"trust-base-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var path = Path.Combine(baseDir, "store.json");
+            using var store = new FileTrustStore(path, decayRate: 0, allowedBaseDirectory: baseDir);
+            store.SetScore("did:agentmesh:agent1", 700);
+            Assert.Equal(700, store.GetScore("did:agentmesh:agent1"));
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Constructor_FilePathEscapingAllowedBase_Throws()
+    {
+        // Resolves to a path outside the allowed base — the old substring
+        // check on ".." would have caught this case, but it also caught
+        // legitimate filenames containing ".." and missed absolute-path
+        // bypasses.
+        var baseDir = Path.Combine(Path.GetTempPath(), $"trust-base-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var escaping = Path.Combine(baseDir, "..", "elsewhere.json");
+            var ex = Assert.Throws<ArgumentException>(
+                () => new FileTrustStore(escaping, allowedBaseDirectory: baseDir));
+            Assert.Contains("Path traversal blocked", ex.Message);
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Constructor_AbsolutePathOutsideBase_Throws()
+    {
+        // Regression: an absolute path that does not start with the base
+        // used to slip past the substring check (no ".." characters).
+        var baseDir = Path.Combine(Path.GetTempPath(), $"trust-base-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var elsewhere = Path.Combine(Path.GetTempPath(), $"trust-elsewhere-{Guid.NewGuid():N}.json");
+            Assert.Throws<ArgumentException>(
+                () => new FileTrustStore(elsewhere, allowedBaseDirectory: baseDir));
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Constructor_SiblingDirectoryWithSharedPrefix_Throws()
+    {
+        // Regression: a base of ".../trust" must not accept ".../trust-elsewhere/x".
+        // The fix appends a directory separator before the StartsWith check.
+        var parent = Path.Combine(Path.GetTempPath(), $"trust-parent-{Guid.NewGuid():N}");
+        var baseDir = Path.Combine(parent, "trust");
+        var siblingDir = Path.Combine(parent, "trust-elsewhere");
+        Directory.CreateDirectory(baseDir);
+        Directory.CreateDirectory(siblingDir);
+        try
+        {
+            var sibling = Path.Combine(siblingDir, "store.json");
+            Assert.Throws<ArgumentException>(
+                () => new FileTrustStore(sibling, allowedBaseDirectory: baseDir));
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Constructor_NoBase_AcceptsFilenameContainingDotDot()
+    {
+        // Regression: filenames containing literal ".." used to be rejected
+        // by the substring check, which was a false positive (e.g.,
+        // "backup..2024.json").
+        var dir = Path.Combine(Path.GetTempPath(), $"trust-fp-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "backup..2024.json");
+            using var store = new FileTrustStore(path, decayRate: 0);
+            store.SetScore("did:agentmesh:agent1", 600);
+            Assert.Equal(600, store.GetScore("did:agentmesh:agent1"));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
     public void Dispose()
     {
         try { File.Delete(_tempFile); } catch { }

@@ -309,27 +309,34 @@ if scan_result.safe:
 
 ## Multi-Language Package Coverage
 
-MCP governance components are available across five language packages:
+This section is a **package-level snapshot** of the language SDKs. It is intentionally narrower
+than the stack-wide coverage summary above, which also includes MCP proxies, platform services,
+and other runtime surfaces outside the package APIs themselves.
 
-| Component | Python | .NET | TypeScript | Rust | Go |
-|-----------|--------|------|-----------|------|-----|
-| MCP Gateway | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MCP Security Scanner | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MCP Message Signer | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MCP Session Authenticator | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MCP Sliding Rate Limiter | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MCP Response Scanner | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Credential Redactor | ✅ | ✅ | ✅ | ✅ | ✅ |
+| OWASP MCP Top 10 | Python | TypeScript | .NET | Rust | Go |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **MCP01 Token Mismanagement & Secret Exposure** | ◑ | — | ✅ | ✅ | ◑ |
+| **MCP02 Privilege Escalation via Scope Creep** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **MCP03 Tool Poisoning** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **MCP04 Supply Chain Attacks & Dependency Tampering** | ◑ | ◑ | ◑ | ◑ | ◑ |
+| **MCP05 Command Injection & Execution** | ◑ | ◑ | ◑ | ◑ | ◑ |
+| **MCP06 Intent Flow Subversion** | ◑ | ◑ | ◑ | ◑ | ◑ |
+| **MCP07 Insufficient Authentication & Authorization** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **MCP08 Lack of Audit and Telemetry** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **MCP09 Shadow MCP Servers** | ◑ | ◑ | ◑ | ◑ | ◑ |
+| **MCP10 Context Injection & Over-Sharing** | ◑ | ◑ | ✅ | ◑ | ◑ |
 
-Each SDK includes a standalone governance package for MCP-only adoption:
+**Legend:** ✅ Strong coverage · ◑ Partial coverage · — Not clearly exposed today
 
-| Language | Standalone Package | Full Package |
-|----------|--------------------|-------------|
-| Python | `agent-mcp-governance` | `agent-governance-toolkit` |
-| .NET | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `Microsoft.AgentGovernance` |
-| TypeScript | `@microsoft/agentmesh-mcp-governance` | `@microsoft/agentmesh-sdk` |
-| Rust | `agentmesh-mcp` | `agentmesh` |
-| Go | `mcp-governance-go` | `agentmesh` Go module |
+- **.NET** currently provides the richest MCP-specific runtime hardening surface.
+- **Rust** follows with a dedicated `agentmesh-mcp` package.
+- **TypeScript** and **Go** provide strong baseline governance primitives and MCP threat scanning,
+  but have lighter first-class package surfaces for secret redaction, response sanitization, and
+  context-hardening.
+- **Python** remains strong at the toolkit level, but some MCP coverage is expressed in broader
+  governance and compliance surfaces rather than a single MCP-only package layer.
+- **MCP06** and **MCP09** remain intentionally conservative here because the broader stack-wide
+  mapping on this page still treats them as partial coverage today.
 
 ---
 

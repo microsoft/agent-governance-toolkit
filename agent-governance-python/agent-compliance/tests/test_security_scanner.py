@@ -593,6 +593,46 @@ class TestFormatSecurityReport:
         report = format_security_report("test-plugin", [])
         assert report == ""
 
+
+class TestScanCodePatternsVendoredExclusion:
+    """Regression: rglob('*.py') must skip vendored dirs."""
+
+    def test_vendored_py_files_do_not_trigger_scan(self, tmp_path: Path):
+        """If the only .py files are in node_modules / .venv, bandit should not run."""
+        vendored = tmp_path / "node_modules" / "pkg"
+        vendored.mkdir(parents=True)
+        (vendored / "evil.py").write_text("import os\nos.system('rm -rf /')\n")
+
+        scanner = SecurityScanner(tmp_path, "test-plugin")
+        scanner.scan_code_patterns()
+
+        # No findings because the file is excluded
+        assert scanner.findings == []
+
+    def test_non_vendored_py_files_included(self, tmp_path: Path):
+        """A .py file outside vendored dirs should be detected."""
+        (tmp_path / "app.py").write_text("print('hello')\n")
+
+        scanner = SecurityScanner(tmp_path, "test-plugin")
+        py_files = [
+            f for f in tmp_path.rglob("*.py")
+            if scanner._should_scan_file(f)
+        ]
+        assert len(py_files) == 1
+
+
+class TestMarkdownGlobRecursion:
+    """Regression: agents/*.md missed nested agent docs."""
+
+    def test_nested_agent_md_found(self, tmp_path: Path):
+        """agents/**/*.md should find files in subdirectories."""
+        nested = tmp_path / "agents" / "sub"
+        nested.mkdir(parents=True)
+        (nested / "README.md").write_text("# Agent\n```python\nprint(1)\n```\n")
+
+        md_files = list(tmp_path.glob("agents/**/*.md"))
+        assert len(md_files) == 1
+
     def test_format_critical_findings(self):
         """Test formatting with critical findings."""
         findings = [
@@ -666,8 +706,139 @@ class TestFormatSecurityReport:
             ),
         ]
         report = format_security_report("test-plugin", findings)
-        
+
         assert "🟠 MEDIUM" in report
         assert "🟢 LOW" in report
         assert "Exit code: 0" in report
         assert "warnings only" in report
+
+
+class TestShouldScanFileNestedGlob:
+    """Regression: nested `**` segments must both expand."""
+
+    def test_nested_fixtures_excluded(self, tmp_path: Path):
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+        # `**/tests/fixtures/**` must match arbitrary nesting on BOTH sides
+        assert scanner._should_scan_file(
+            plugin_dir / "tests" / "fixtures" / "deep" / "case" / "data.py"
+        ) is False
+        assert scanner._should_scan_file(
+            plugin_dir / "pkg" / "sub" / "tests" / "fixtures" / "data.py"
+        ) is False
+
+    def test_examples_dir_at_any_depth(self, tmp_path: Path):
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+        assert scanner._should_scan_file(
+            plugin_dir / "examples" / "demo.py"
+        ) is False
+        assert scanner._should_scan_file(
+            plugin_dir / "docs" / "examples" / "demo.py"
+        ) is False
+
+    def test_source_paths_with_similar_names_still_scanned(self, tmp_path: Path):
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+        # `tests` in a name but not as a path component should still scan
+        assert scanner._should_scan_file(
+            plugin_dir / "src" / "contests.py"
+        ) is True
+
+
+class TestScanSecretsJsonParse:
+    """Regression: detect-secrets emits JSON, not file:line strings."""
+
+    def test_parses_detect_secrets_json(self, tmp_path: Path, monkeypatch):
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        (plugin_dir / "leaked.py").write_text("api = 'AKIA1234567890123456'\n")
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+
+        payload = {
+            "version": "1.5.0",
+            "plugins_used": [],
+            "results": {
+                "leaked.py": [
+                    {
+                        "type": "AWS Access Key",
+                        "filename": "leaked.py",
+                        "hashed_secret": "deadbeef",
+                        "line_number": 1,
+                        "is_verified": False,
+                    }
+                ]
+            },
+        }
+
+        class _FakeCompleted:
+            stdout = json.dumps(payload)
+            stderr = ""
+            returncode = 0
+
+        from agent_compliance.security import scanner as scanner_mod
+
+        monkeypatch.setattr(
+            scanner_mod.shutil, "which", lambda name: "/usr/bin/detect-secrets"
+        )
+        monkeypatch.setattr(
+            scanner_mod.subprocess, "run", lambda *a, **kw: _FakeCompleted()
+        )
+
+        scanner.scan_secrets()
+        secret_findings = [f for f in scanner.findings if f.category == "secrets"]
+        assert len(secret_findings) == 1
+        assert secret_findings[0].line == 1
+        assert "AWS Access Key" in secret_findings[0].description
+
+    def test_handles_non_json_output(self, tmp_path: Path, monkeypatch):
+        """Older or broken output must not raise."""
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+
+        class _FakeCompleted:
+            stdout = "not json"
+            stderr = ""
+            returncode = 0
+
+        from agent_compliance.security import scanner as scanner_mod
+
+        monkeypatch.setattr(
+            scanner_mod.shutil, "which", lambda name: "/usr/bin/detect-secrets"
+        )
+        monkeypatch.setattr(
+            scanner_mod.subprocess, "run", lambda *a, **kw: _FakeCompleted()
+        )
+
+        scanner.scan_secrets()
+        # No crash, no spurious findings from the literal "not json"
+        assert [f for f in scanner.findings if f.category == "secrets"] == []
+
+
+class TestToolAvailableDoesNotExecute:
+    """Regression: `_tool_available` must not invoke arbitrary PATH binaries."""
+
+    def test_uses_shutil_which_not_subprocess(self, tmp_path: Path, monkeypatch):
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        scanner = SecurityScanner(plugin_dir, "test-plugin")
+
+        from agent_compliance.security import scanner as scanner_mod
+
+        called = {"subprocess_run": 0}
+
+        def _record(*args, **kwargs):
+            called["subprocess_run"] += 1
+            raise AssertionError("subprocess.run must not be called from _tool_available")
+
+        monkeypatch.setattr(scanner_mod.subprocess, "run", _record)
+        monkeypatch.setattr(scanner_mod.shutil, "which", lambda n: "/usr/bin/x")
+        assert scanner._tool_available("some-tool") is True
+
+        monkeypatch.setattr(scanner_mod.shutil, "which", lambda n: None)
+        assert scanner._tool_available("absent-tool") is False
+        assert called["subprocess_run"] == 0

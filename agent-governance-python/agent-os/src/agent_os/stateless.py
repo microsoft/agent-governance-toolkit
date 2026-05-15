@@ -93,6 +93,28 @@ except ImportError:  # pragma: no cover
 # third-party clients (e.g. DynamoDB, Cosmos DB) as backends.
 # =============================================================================
 
+
+def _iter_string_values(value: Any):
+    """Yield every string contained in a nested params structure.
+
+    Used by the no_pii policy check so the PII detector runs against
+    every string value the caller passed in, not just the JSON-dumped
+    blob (which loses type information and matches keyword substrings
+    like 'lesson' contains 'sson').
+    """
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            if isinstance(k, str):
+                yield k
+            yield from _iter_string_values(v)
+    elif isinstance(value, (list, tuple, set)):
+        for item in value:
+            yield from _iter_string_values(item)
+    # numbers / bools / None: nothing to scan
+
+
 class StateBackend(Protocol):
     """Protocol for external state storage.
 
@@ -185,9 +207,16 @@ class RedisConfig:
     retry_on_timeout: bool = True
 
     def to_url(self) -> str:
-        """Build a Redis URL from host/port/db."""
-        auth = f":{self.password}@" if self.password else ""
-        return f"redis://{auth}{self.host}:{self.port}/{self.db}"
+        """Build a password-free Redis URL from host/port/db.
+
+        The password is intentionally NOT embedded in the URL. Anything
+        that reads back the URL — exception messages from the redis
+        client, structured logs at the connection layer, debug
+        introspection, traceback decorations — would otherwise leak the
+        password verbatim. Pass `password` separately via the redis
+        client's `password=` argument (see `RedisBackend._get_client`).
+        """
+        return f"redis://{self.host}:{self.port}/{self.db}"
 
 
 class RedisBackend:
@@ -217,12 +246,19 @@ class RedisBackend:
             import redis.asyncio as aioredis
 
             if self._config is not None:
+                # Password is passed via the keyword argument so it
+                # never enters the URL string (see RedisConfig.to_url).
+                pool_kwargs = {
+                    "max_connections": self._config.pool_size,
+                    "socket_connect_timeout": self._config.connect_timeout,
+                    "socket_timeout": self._config.read_timeout,
+                    "retry_on_timeout": self._config.retry_on_timeout,
+                }
+                if self._config.password:
+                    pool_kwargs["password"] = self._config.password
                 self._pool = aioredis.ConnectionPool.from_url(
                     self.url,
-                    max_connections=self._config.pool_size,
-                    socket_connect_timeout=self._config.connect_timeout,
-                    socket_timeout=self._config.read_timeout,
-                    retry_on_timeout=self._config.retry_on_timeout,
+                    **pool_kwargs,
                 )
                 self._client = aioredis.Redis(connection_pool=self._pool)
             else:
@@ -305,15 +341,19 @@ class ExecutionContext:
     history: list[dict[str, Any]] = field(default_factory=list)
     state_ref: str | None = None  # Reference to external state
     metadata: dict[str, Any] = field(default_factory=dict)
+    intent_id: str | None = None  # Opt-in intent-based authorization
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "agent_id": self.agent_id,
             "policies": self.policies,
             "history": self.history,
             "state_ref": self.state_ref,
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
+        if self.intent_id is not None:
+            d["intent_id"] = self.intent_id
+        return d
 
 
 @dataclass
@@ -413,6 +453,7 @@ class StatelessKernel:
         policies: dict[str, Any] | None = None,
         enable_tracing: bool = False,
         circuit_breaker_config: CircuitBreakerConfig | None = None,
+        intent_manager: Any | None = None,
     ):
         self.backend = backend or MemoryBackend()
         self.policies = {**self.DEFAULT_POLICIES, **(policies or {})}
@@ -422,6 +463,7 @@ class StatelessKernel:
         )
         self._backend_type = type(self.backend).__name__
         self.circuit_breaker = CircuitBreaker(circuit_breaker_config)
+        self.intent_manager = intent_manager
 
     async def execute(
         self,
@@ -499,6 +541,38 @@ class StatelessKernel:
                 }
             )
 
+        # 2b. Check intent (opt-in: only when intent_id is present)
+        intent_metadata: dict[str, Any] = {}
+        if context.intent_id and self.intent_manager:
+            intent_check = await self.intent_manager.check_action(
+                intent_id=context.intent_id,
+                action=action,
+                params=params,
+                agent_id=context.agent_id,
+                request_id=request.request_id or "",
+            )
+            if not intent_check.allowed:
+                return ExecutionResult(
+                    success=False,
+                    data=None,
+                    error=intent_check.reason,
+                    signal="SIGKILL",
+                    metadata={
+                        "request_id": request.request_id,
+                        "intent_drift": True,
+                        "drift_policy": intent_check.drift_policy_applied.value
+                        if intent_check.drift_policy_applied else None,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            if not intent_check.was_planned:
+                intent_metadata["intent_drift"] = True
+                intent_metadata["trust_penalty"] = intent_check.trust_penalty
+                intent_metadata["drift_policy"] = (
+                    intent_check.drift_policy_applied.value
+                    if intent_check.drift_policy_applied else None
+                )
+
         # 3. Execute action
         try:
             result = await self._execute_action(action, params, external_state)
@@ -528,17 +602,21 @@ class StatelessKernel:
                 "success": True
             }],
             state_ref=new_state_ref,
-            metadata=context.metadata
+            metadata=context.metadata,
+            intent_id=context.intent_id,
         )
+
+        result_metadata = {
+            "request_id": request.request_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **intent_metadata,
+        }
 
         return ExecutionResult(
             success=True,
             data=result.get("data"),
             updated_context=updated_context,
-            metadata={
-                "request_id": request.request_id,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
+            metadata=result_metadata,
         )
 
     def _check_policies(
@@ -574,18 +652,40 @@ class StatelessKernel:
                     "reason": f"Action '{action}' blocked by '{policy_name}' policy. {suggestion}."
                 }
 
-            # Check blocked patterns in params
+            # Check blocked patterns in params. The keyword-substring
+            # check catches references to PII categories ("ssn",
+            # "password") in either keys or values. CredentialRedactor
+            # adds the harder check: detect actual PII data formats
+            # (real SSN strings, credit-card-shaped numbers, emails,
+            # phone numbers) that the keyword list cannot anticipate.
             params_str = json.dumps(params).lower()
-            for pattern in policy.get("blocked_patterns", []):
-                if pattern.lower() in params_str:
-                    return {
-                        "allowed": False,
-                        "reason": (
-                            f"Content blocked: '{pattern}' detected in request parameters. "
-                            f"Policy '{policy_name}' prohibits this pattern. "
-                            f"Remove the sensitive content and retry."
-                        )
-                    }
+            blocked_patterns = policy.get("blocked_patterns", [])
+            if blocked_patterns:
+                for pattern in blocked_patterns:
+                    if pattern.lower() in params_str:
+                        return {
+                            "allowed": False,
+                            "reason": (
+                                f"Content blocked: '{pattern}' detected in request parameters. "
+                                f"Policy '{policy_name}' prohibits this pattern. "
+                                f"Remove the sensitive content and retry."
+                            )
+                        }
+                # Second pass: walk all string-typed values and check
+                # for actual PII patterns (regex-based, not keyword).
+                from agent_os.credential_redactor import CredentialRedactor
+                for piece in _iter_string_values(params):
+                    matches = CredentialRedactor.find_pii_matches(piece)
+                    if matches:
+                        kind = matches[0].name
+                        return {
+                            "allowed": False,
+                            "reason": (
+                                f"Content blocked: {kind} detected in request parameters. "
+                                f"Policy '{policy_name}' prohibits PII. "
+                                f"Remove the sensitive content and retry."
+                            )
+                        }
 
             # Check requires approval
             if action in policy.get("require_approval", []):

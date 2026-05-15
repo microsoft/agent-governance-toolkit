@@ -5,16 +5,29 @@ package agentmesh
 
 import (
 	"bytes"
+	stdcontext "context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+)
+
+// Package-level Cedar parsing regexes. Compiled once at package init
+// rather than per call — `parseCedarStatements` and `toolToCedarAction`
+// can run on every policy evaluation, so the previous per-call
+// `regexp.MustCompile` was wasted work.
+var (
+	cedarStatementPattern = regexp.MustCompile(`(?s)(permit|forbid)\s*\((.*?)\)\s*;`)
+	cedarActionPattern    = regexp.MustCompile(`action\s*==\s*Action::"([^"]+)"`)
+	cedarActionTokenSplit = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 )
 
 // OPAMode controls how an OPA/Rego backend evaluates policies.
@@ -55,11 +68,19 @@ type OPABackend struct {
 var opaLookPath = exec.LookPath
 
 // NewOPABackend creates an OPA/Rego backend.
+//
+// A `RegoPath` that cannot be read is logged at construction time and
+// the backend falls back to an empty `regoContent` — previously the
+// error was silently discarded, producing an OPA backend that always
+// failed evaluation without any signal that the configuration was
+// broken.
 func NewOPABackend(options OPAOptions) *OPABackend {
 	regoContent := options.RegoContent
 	if regoContent == "" && options.RegoPath != "" {
 		data, err := os.ReadFile(options.RegoPath)
-		if err == nil {
+		if err != nil {
+			log.Printf("agentmesh: opa backend: failed to read RegoPath %q: %v", options.RegoPath, err)
+		} else {
 			regoContent = string(data)
 		}
 	}
@@ -87,6 +108,9 @@ func NewOPABackend(options OPAOptions) *OPABackend {
 	opaURL := options.OPAURL
 	if opaURL == "" {
 		opaURL = "http://localhost:8181"
+	}
+	if err := validateOPAURL(opaURL); err != nil {
+		log.Printf("[WARN] OPA URL validation failed: %v", err)
 	}
 
 	return &OPABackend{
@@ -142,6 +166,26 @@ func (b *OPABackend) evaluateWithMode(context map[string]interface{}) (BackendDe
 		}
 		return BackendDecision{}, fmt.Errorf("opa auto mode requires the opa CLI; use builtin mode explicitly or set AllowBuiltinFallback to true")
 	}
+}
+
+// validateOPAURL rejects URLs with non-HTTP schemes or known SSRF targets.
+func validateOPAURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid OPA URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("unsupported OPA URL scheme %q: only http and https are allowed", parsed.Scheme)
+	}
+	blockedHosts := map[string]bool{
+		"169.254.169.254":        true,
+		"metadata.google.internal": true,
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if blockedHosts[host] {
+		return fmt.Errorf("OPA URL host %q is blocked to prevent SSRF", host)
+	}
+	return nil
 }
 
 func (b *OPABackend) evaluateRemote(context map[string]interface{}) (BackendDecision, error) {
@@ -215,17 +259,28 @@ func (b *OPABackend) evaluateCLI(context map[string]interface{}) (BackendDecisio
 		return BackendDecision{}, fmt.Errorf("writing opa input file: %w", err)
 	}
 
-	cmd := exec.Command(
+	ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), b.timeout)
+	defer cancel()
+	// The trailing `--` stops OPA's flag parser before it reaches the
+	// query positional; without it, a query that starts with `-` (e.g.
+	// from an attacker-supplied Options.Query) would be interpreted as
+	// an OPA flag.
+	cmd := exec.CommandContext(
+		ctx,
 		"opa",
 		"eval",
 		"--format", "json",
 		"--input", inputPath,
 		"--data", regoPath,
+		"--",
 		b.query,
 	)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() == stdcontext.DeadlineExceeded {
+			return BackendDecision{}, fmt.Errorf("opa eval timed out after %s", b.timeout)
+		}
 		return BackendDecision{}, fmt.Errorf("opa eval failed: %s", strings.TrimSpace(string(output)))
 	}
 
@@ -427,11 +482,21 @@ type CedarBackend struct {
 var cedarLookPath = exec.LookPath
 
 // NewCedarBackend creates a Cedar backend.
+//
+// File-system reads (PolicyPath, EntitiesPath) and JSON parsing of the
+// entities file are best-effort: failures are logged at construction
+// time and the backend is created with the corresponding field unset.
+// Previously these errors were silently discarded — a typo in the
+// EntitiesPath produced an empty entity set and policies evaluated
+// against zero entities without any signal that the configuration was
+// broken.
 func NewCedarBackend(options CedarOptions) *CedarBackend {
 	policyContent := options.PolicyContent
 	if policyContent == "" && options.PolicyPath != "" {
 		data, err := os.ReadFile(options.PolicyPath)
-		if err == nil {
+		if err != nil {
+			log.Printf("agentmesh: cedar backend: failed to read PolicyPath %q: %v", options.PolicyPath, err)
+		} else {
 			policyContent = string(data)
 		}
 	}
@@ -439,8 +504,11 @@ func NewCedarBackend(options CedarOptions) *CedarBackend {
 	entities := options.Entities
 	if len(entities) == 0 && options.EntitiesPath != "" {
 		data, err := os.ReadFile(options.EntitiesPath)
-		if err == nil {
-			_ = json.Unmarshal(data, &entities)
+		if err != nil {
+			log.Printf("agentmesh: cedar backend: failed to read EntitiesPath %q: %v", options.EntitiesPath, err)
+		} else if uerr := json.Unmarshal(data, &entities); uerr != nil {
+			log.Printf("agentmesh: cedar backend: failed to parse entities JSON at %q: %v", options.EntitiesPath, uerr)
+			entities = nil
 		}
 	}
 
@@ -546,17 +614,26 @@ func (b *CedarBackend) evaluateCLI(context map[string]interface{}) (BackendDecis
 		"--request-json", requestPath,
 	}
 	if b.schemaPath != "" {
-		args = append(args, "--schema", b.schemaPath)
+		// Use --flag=value form so a schemaPath that starts with `-`
+		// cannot be parsed as a separate flag by cedar's CLI parser.
+		args = append(args, fmt.Sprintf("--schema=%s", b.schemaPath))
 	}
 
-	cmd := exec.Command("cedar", args...)
+	ctx, cancel := stdcontext.WithTimeout(stdcontext.Background(), b.timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "cedar", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() == stdcontext.DeadlineExceeded {
+			return BackendDecision{}, fmt.Errorf("cedar authorize timed out after %s", b.timeout)
+		}
 		return BackendDecision{}, fmt.Errorf("cedar authorize failed: %s", strings.TrimSpace(string(output)))
 	}
 
-	normalized := strings.ToLower(string(output))
-	allowed := strings.Contains(normalized, "allow") && !strings.Contains(normalized, "deny")
+	allowed, parsed := cedarDecisionFromCLIOutput(string(output))
+	if !parsed {
+		return BackendDecision{}, fmt.Errorf("cedar authorize: unrecognised output %q", strings.TrimSpace(string(output)))
+	}
 	return BackendDecision{
 		Allowed:   allowed,
 		Decision:  boolToDecision(allowed),
@@ -565,13 +642,54 @@ func (b *CedarBackend) evaluateCLI(context map[string]interface{}) (BackendDecis
 	}, nil
 }
 
+// cedarDecisionFromCLIOutput inspects `cedar authorize` stdout and
+// returns (allowed, true) when the first non-empty line is an
+// unambiguous "ALLOW" or "DENY" token (case-insensitive). Returns
+// (_, false) if the output cannot be interpreted unambiguously.
+//
+// The previous implementation used
+// `strings.Contains(stdout, "allow") && !strings.Contains(stdout, "deny")`,
+// which mis-matches inside words and adjective phrases — output like
+// "DENY (request was disallowed)" contains both substrings and would
+// be classified DENY by coincidence, and "ALLOW: caveats include the
+// deny-list scoping" would be mis-classified DENY.
+//
+// A future improvement is to invoke `cedar authorize --json` and parse
+// the structured response, once the project pins a Cedar CLI version
+// known to support that flag.
+func cedarDecisionFromCLIOutput(stdout string) (allowed bool, parsed bool) {
+	for _, line := range strings.Split(stdout, "\n") {
+		token := strings.TrimSpace(strings.ToLower(line))
+		if token == "" {
+			continue
+		}
+		switch token {
+		case "allow":
+			return true, true
+		case "deny":
+			return false, true
+		}
+		// First non-empty line is neither token — refuse to guess.
+		return false, false
+	}
+	return false, false
+}
+
 func (b *CedarBackend) evaluateBuiltin(context map[string]interface{}) (BackendDecision, error) {
 	if b.policyContent == "" {
 		return BackendDecision{}, fmt.Errorf("cedar builtin mode requires policy content or file")
 	}
 
 	request := buildCedarRequest(context)
-	action := request["action"].(string)
+	// `buildCedarRequest` always stuffs a `string` under "action", but
+	// guard with the comma-ok form so a future change to the request
+	// shape can't panic the policy evaluator. On the (currently
+	// unreachable) wrong-type path we fall through to default-deny via
+	// the ordinary statement loop, which is fail-closed.
+	action, ok := request["action"].(string)
+	if !ok {
+		return BackendDecision{}, fmt.Errorf("cedar builtin: request action has unexpected type %T", request["action"])
+	}
 	statements := parseCedarStatements(b.policyContent)
 	hasPermit := false
 
@@ -635,14 +753,12 @@ func buildCedarRequest(context map[string]interface{}) map[string]interface{} {
 }
 
 func parseCedarStatements(content string) []cedarStatement {
-	pattern := regexp.MustCompile(`(?s)(permit|forbid)\s*\((.*?)\)\s*;`)
-	actionPattern := regexp.MustCompile(`action\s*==\s*Action::"([^"]+)"`)
-	matches := pattern.FindAllStringSubmatch(content, -1)
+	matches := cedarStatementPattern.FindAllStringSubmatch(content, -1)
 	statements := make([]cedarStatement, 0, len(matches))
 
 	for _, match := range matches {
 		constraint := ""
-		if actionMatch := actionPattern.FindStringSubmatch(match[2]); len(actionMatch) == 2 {
+		if actionMatch := cedarActionPattern.FindStringSubmatch(match[2]); len(actionMatch) == 2 {
 			constraint = fmt.Sprintf(`Action::"%s"`, actionMatch[1])
 		}
 		statements = append(statements, cedarStatement{
@@ -656,8 +772,7 @@ func parseCedarStatements(content string) []cedarStatement {
 }
 
 func toolToCedarAction(toolName string) string {
-	splitter := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	parts := splitter.Split(toolName, -1)
+	parts := cedarActionTokenSplit.Split(toolName, -1)
 	builder := strings.Builder{}
 	for _, part := range parts {
 		if part == "" {

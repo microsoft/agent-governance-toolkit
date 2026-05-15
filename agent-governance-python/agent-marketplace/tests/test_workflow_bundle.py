@@ -149,6 +149,51 @@ class TestValidateBundle:
         errors = reg.validate_bundle(bundle)
         assert any("Duplicate" in e for e in errors)
 
+    def test_three_components_same_name_emit_two_duplicates(self) -> None:
+        """Each repeated occurrence after the first must produce its own error.
+
+        Regression for an earlier formulation that always re-added the name
+        to ``seen_names``: that path was a no-op on a ``set``, so it didn't
+        change the observable error list — but the logic was muddled, and
+        gating the add behind ``name not in seen_names`` keeps the loop's
+        intent (``seen_names`` = canonical/first-seen identifiers) explicit
+        rather than implicit.
+        """
+        reg = BundleRegistry()
+        bundle = WorkflowBundle(
+            "dup3", "1.0.0",
+            components=[
+                BundleComponent(ComponentType.AGENT, "x", "1.0.0"),
+                BundleComponent(ComponentType.TOOL, "x", "1.0.0"),
+                BundleComponent(ComponentType.SKILL, "x", "1.0.0"),
+            ],
+        )
+        errors = reg.validate_bundle(bundle)
+        duplicate_errors = [e for e in errors if "Duplicate" in e]
+        # Two duplicates: the second and the third occurrences of "x".
+        assert len(duplicate_errors) == 2
+
+    def test_unnamed_components_do_not_cross_collide_as_duplicates(self) -> None:
+        """Two components with empty names must each report 'name is required',
+
+        but the second must NOT additionally be reported as a "Duplicate component
+        name: ''" (which would happen if the empty string were recorded in
+        ``seen_names`` after the first unnamed component).
+        """
+        reg = BundleRegistry()
+        bundle = WorkflowBundle(
+            "unnamed", "1.0.0",
+            components=[
+                BundleComponent(ComponentType.AGENT, "", "1.0.0"),
+                BundleComponent(ComponentType.TOOL, "", "1.0.0"),
+            ],
+        )
+        errors = reg.validate_bundle(bundle)
+        name_required = [e for e in errors if e == "Component name is required"]
+        duplicate_errors = [e for e in errors if "Duplicate" in e]
+        assert len(name_required) == 2
+        assert duplicate_errors == []
+
     def test_empty_bundle_rejected(self) -> None:
         reg = BundleRegistry()
         bundle = WorkflowBundle("empty", "1.0.0", components=[])

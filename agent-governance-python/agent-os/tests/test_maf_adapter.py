@@ -14,7 +14,11 @@ pytest.importorskip("agent_sre", reason="agent_sre not installed")
 
 from agentmesh.governance import AuditLog
 from agent_os.policies import PolicyDecision, PolicyEvaluator
-from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+
+try:
+    from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+except ImportError:
+    pytest.skip("agent_sre.anomaly.rogue_detector not available", allow_module_level=True)
 
 from agent_os.integrations.maf_adapter import (
     AuditTrailMiddleware,

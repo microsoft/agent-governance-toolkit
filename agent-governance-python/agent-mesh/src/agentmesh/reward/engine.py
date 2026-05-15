@@ -6,7 +6,7 @@ Reward Engine
 Single-dimension trust scoring with per-agent reward signals.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Callable
 from pydantic import BaseModel, Field
 import asyncio
@@ -69,7 +69,7 @@ class AgentRewardState(BaseModel):
     max_history: int = Field(default=100)
 
     # Status
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     revoked: bool = False
     revoked_at: Optional[datetime] = None
     revocation_reason: Optional[str] = None
@@ -84,7 +84,7 @@ class AgentRewardState(BaseModel):
 
     def record_score(self, score: int) -> None:
         """Record score in history."""
-        self.score_history.append((datetime.utcnow(), score))
+        self.score_history.append((datetime.now(timezone.utc), score))
 
         if len(self.score_history) > self.max_history:
             self.score_history = self.score_history[-self.max_history:]
@@ -295,7 +295,7 @@ class RewardEngine:
             dimensions=state.dimensions,
         )
         state.record_score(total_score)
-        state.last_updated = datetime.utcnow()
+        state.last_updated = datetime.now(timezone.utc)
 
         # Check for revocation
         if total_score < self.config.revocation_threshold and not state.revoked:
@@ -310,7 +310,7 @@ class RewardEngine:
             return
 
         state.revoked = True
-        state.revoked_at = datetime.utcnow()
+        state.revoked_at = datetime.now(timezone.utc)
         state.revocation_reason = reason
 
         # Notify callbacks
@@ -435,7 +435,7 @@ class RewardEngine:
 
     def get_health_report(self, days: int = 7) -> dict[str, Any]:
         """Get longitudinal health report."""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         report = {
             "period_days": days,

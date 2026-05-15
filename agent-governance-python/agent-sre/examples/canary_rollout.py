@@ -90,7 +90,10 @@ while rollout.current_step is not None:
         rollout.rollback(reason="Canary metrics breached rollback thresholds")
         print()
         print(f"  🛑 ROLLBACK triggered!")
-        print(f"     Reason: hallucination_rate {metrics['hallucination_rate']:.1%} >= 8% threshold")
+        for cond in rollout.rollback_conditions:
+            val = metrics.get(cond.metric)
+            if val is not None and val >= cond.threshold:
+                print(f"     {cond.metric} {val:.1%} >= {cond.threshold:.0%} threshold")
         break
 
     # Advance to next stage

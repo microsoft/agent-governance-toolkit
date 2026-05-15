@@ -33,7 +33,7 @@ let signer = McpMessageSigner::new(
 let signed: McpSignedMessage = signer.sign("hello from mcp")?;
 signer.verify(&signed)?;
 
-let redactor = CredentialRedactor::new()?;
+let redactor = CredentialRedactor::new();
 let result = redactor.redact("Authorization: Bearer super-secret-token");
 assert!(result.sanitized.contains("[REDACTED_BEARER_TOKEN]"));
 # Ok::<(), agentmesh_mcp::McpError>(())
@@ -55,7 +55,7 @@ use agentmesh_mcp::{
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-let redactor = CredentialRedactor::new()?;
+let redactor = CredentialRedactor::new();
 let audit = Arc::new(InMemoryAuditSink::new(redactor.clone()));
 let metrics = McpMetricsCollector::default();
 let scanner = McpResponseScanner::new(

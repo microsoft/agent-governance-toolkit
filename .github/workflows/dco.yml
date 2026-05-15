@@ -1,0 +1,55 @@
+name: DCO Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  dco:
+    name: Developer Certificate of Origin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check DCO sign-off on commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          MISSING=()
+
+          for SHA in $(git rev-list "$BASE_SHA".."$HEAD_SHA"); do
+            # Skip merge commits (commits with more than one parent)
+            PARENT_COUNT=$(git cat-file -p "$SHA" | grep -c '^parent ')
+            if [ "$PARENT_COUNT" -gt 1 ]; then
+              continue
+            fi
+
+            # Check for Signed-off-by trailer
+            if ! git log -1 --format='%B' "$SHA" | grep -qiE '^Signed-off-by: .+ <.+>'; then
+              AUTHOR=$(git log -1 --format='%an <%ae>' "$SHA")
+              SHORT=$(git log -1 --format='%h' "$SHA")
+              MISSING+=("$SHORT by $AUTHOR")
+            fi
+          done
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::The following commits are missing a DCO sign-off (Signed-off-by trailer):"
+            for M in "${MISSING[@]}"; do
+              echo "  - $M"
+            done
+            echo ""
+            echo "To fix, amend your commits with: git commit --amend --signoff"
+            echo "Or for all commits: git rebase --signoff HEAD~N"
+            echo ""
+            echo "See https://developercertificate.org for details."
+            exit 1
+          fi
+
+          echo "All commits have valid DCO sign-off."
+

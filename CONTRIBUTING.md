@@ -8,17 +8,106 @@ When you submit a pull request, a CLA bot will automatically determine whether y
 CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
 provided by the bot. You will only need to do this once across all repos using our CLA.
 
+### Developer Certificate of Origin (DCO)
+
+In addition to the CLA, all commits must include a `Signed-off-by` trailer certifying that you
+wrote the code or have the right to submit it under the project's license. This is the
+[Developer Certificate of Origin](https://developercertificate.org) (DCO).
+
+To sign off on a commit, use the `-s` flag:
+
+```bash
+git commit -s -m "feat: add new policy engine"
+```
+
+This adds a line like `Signed-off-by: Your Name <your.email@example.com>` to the commit message.
+A CI check will verify that all commits in a pull request include this trailer.
+
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
 ## How to Contribute
 
+### Development Environment Setup
+
+**Prerequisites:** Git, Python 3.10+, and optionally Node.js 18+, .NET 8+, Rust 1.75+, or Go 1.21+ depending on what you are working on.
+
+```bash
+# Clone and enter the repo
+git clone https://github.com/microsoft/agent-governance-toolkit.git
+cd agent-governance-toolkit
+```
+
+**Python packages** (most common):
+
+```bash
+cd agent-governance-python
+python -m venv .venv
+source .venv/bin/activate        # Linux/macOS
+# .venv\Scripts\activate         # Windows
+
+# Install the package you are working on in editable mode
+pip install -e agent-os/[dev]       # Policy engine
+pip install -e agent-mesh/[dev]     # Identity/trust layer
+pip install -e agent-compliance/[dev]  # Compliance tooling
+
+# Run tests for that package
+cd agent-os && pytest
+```
+
+**TypeScript/Node.js:**
+
+```bash
+cd agent-governance-python/agent-mesh/sdks/typescript
+npm install && npm test
+```
+
+**.NET:**
+
+```bash
+cd agent-governance-dotnet
+dotnet build && dotnet test
+```
+
+**Rust:**
+
+```bash
+cd agent-governance-rust
+cargo build && cargo test
+```
+
+**Go:**
+
+```bash
+cd agent-governance-golang
+go build ./... && go test ./...
+```
+
+**Linting:** The CI runs `ruff check` for Python. Run it locally before submitting:
+
+```bash
+ruff check --fix .
+```
+
 ### Reporting Issues
 
 - Search [existing issues](https://github.com/microsoft/agent-governance-toolkit/issues) before creating a new one
 - Use the provided issue templates when available
 - Include reproduction steps, expected behavior, and actual behavior
+
+**Automated and AI-assisted audit findings:**
+
+If you are filing issues from an automated scanner, LLM-assisted code review, or bulk audit
+(e.g. running a tool across the whole repo), please consolidate low-severity findings into a
+single tracking issue with a summary table. One well-prioritized issue is more useful to
+maintainers than a dozen separate filings that each need individual triage.
+
+For high-severity findings (security bugs, data loss risks, correctness issues), individual
+issues are fine and encouraged.
+
+This helps maintainers focus review time on the findings that actually matter and avoids
+burying genuine bugs under a pile of style nits.
 
 ### Pull Requests
 
@@ -139,7 +228,9 @@ A human using an AI tool to *draft* any of the above, then reviewing, editing, a
 the output themselves, is an AI-assisted contribution and is acceptable.
 
 Authorized bots (Dependabot, Scorecard, CI bots) that predate this policy are governed by their
-own approval processes and are not subject to these restrictions.
+own approval processes and are not subject to these restrictions. For the full list of authorized
+bots and how to request authorization for new ones, see
+[docs/policies/autonomous-contributions.md](docs/policies/autonomous-contributions.md).
 
 **Do not use AI tools to generate synthetic community activity**: filing coordinated issues across
 repos, creating competing projects from existing issue descriptions, or manufacturing the appearance

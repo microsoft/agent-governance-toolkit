@@ -7,13 +7,15 @@ Current maintainers of the Agent Governance Toolkit.
 | Name | GitHub | Role | Scope |
 |------|--------|------|-------|
 | Imran Siddique | [@imran-siddique](https://github.com/imran-siddique) | Project Lead | All packages |
+| Jack Batzner | [@jackbatzner](https://github.com/jackbatzner) | Maintainer | CI/CD, documentation |
+| Elton Carr | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | Maintainer | CI workflows, security tooling |
 
 ## Maintainer Responsibilities
 
 - Review and approve pull requests within 5 business days
 - Triage and respond to security vulnerabilities (MSRC coordination)
 - Manage releases, signing (ESRP), and package publishing
-- Enforce the [Governance](GOVERNANCE.md) and [Contributing](CONTRIBUTING.md) policies
+- Enforce the [Governance](GOVERNANCE.md) and [Contributing](../CONTRIBUTING.md) policies
 - Maintain CI/CD pipelines and infrastructure
 
 ## Becoming a Maintainer

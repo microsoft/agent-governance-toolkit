@@ -262,7 +262,7 @@ Certificates are short-lived (15 minutes). Rotate before expiry:
 
 ```python
 # Check expiry
-time_remaining = (expires_at - datetime.utcnow()).total_seconds()
+time_remaining = (expires_at - datetime.now(timezone.utc)).total_seconds()
 if time_remaining < 300:  # Less than 5 minutes
     rotate_credentials()
 ```

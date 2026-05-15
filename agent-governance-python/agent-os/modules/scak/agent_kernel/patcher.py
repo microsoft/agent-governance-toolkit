@@ -8,7 +8,7 @@ Agent patcher that applies corrections to agents.
 import logging
 import uuid
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models import (
     FailureAnalysis, SimulationResult, CorrectionPatch, AgentState,
@@ -116,7 +116,7 @@ class AgentPatcher:
             
             # Mark as applied
             patch.applied = True
-            patch.applied_at = datetime.utcnow()
+            patch.applied_at = datetime.now(timezone.utc)
             
             # Update agent state
             self._update_agent_state(patch.agent_id, patch)
@@ -154,7 +154,7 @@ class AgentPatcher:
         """
         memory = {
             "agent_id": patch.agent_id,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "failure_context": patch.patch_content.get("failure_context", ""),
             "correct_logic": patch.patch_content.get("correct_logic", ""),
             "patch_id": patch.patch_id,
@@ -470,7 +470,7 @@ class AgentPatcher:
             "correct_logic": shadow_result.output if shadow_result else analysis.suggested_fixes[0] if analysis.suggested_fixes else "Unknown",
             "cognitive_glitch": diagnosis.cognitive_glitch.value if diagnosis else "unknown",
             "negative_constraint": negative_constraint,  # New field for hallucinations
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "verified_by_shadow": shadow_result.verified if shadow_result else False
         }
     

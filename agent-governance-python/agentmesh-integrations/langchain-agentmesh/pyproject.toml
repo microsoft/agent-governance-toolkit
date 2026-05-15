@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_langchain"
-version = "3.3.0"
+version = "3.6.0"
 description = "AgentMesh trust layer integration for LangChain - cryptographic identity and trust-gated tool execution"
 readme = "README.md"
 license = {text = "MIT"}
@@ -35,7 +35,7 @@ classifiers = [
 ]
 dependencies = [
     "langchain-core>=1.2.28",
-    "cryptography>=45.0.3,<47.0",
+    "cryptography>=46.0.7,<47.0",
 ]
 
 [project.optional-dependencies]

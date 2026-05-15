@@ -77,16 +77,24 @@ impl LifecycleManager {
         &self.events
     }
 
+    /// Return the most recently recorded lifecycle event, or `None` if the
+    /// manager has not transitioned yet.
+    pub fn last_event(&self) -> Option<&LifecycleEvent> {
+        self.events.last()
+    }
+
     /// Attempt to transition the agent to `to`.
     ///
-    /// Returns the resulting [`LifecycleEvent`] on success, or an error
-    /// message describing why the transition is not allowed.
+    /// On success the new [`LifecycleEvent`] is appended to the event log
+    /// and can be retrieved via [`Self::last_event`] or [`Self::events`].
+    /// Returns an error message describing why the transition is not
+    /// allowed otherwise.
     pub fn transition(
         &mut self,
         to: LifecycleState,
         reason: &str,
         initiated_by: &str,
-    ) -> Result<&LifecycleEvent, String> {
+    ) -> Result<(), String> {
         if !self.can_transition(to) {
             return Err(format!(
                 "invalid transition from {:?} to {:?}",
@@ -103,7 +111,7 @@ impl LifecycleManager {
         };
         self.state = to;
         self.events.push(event);
-        Ok(self.events.last().expect("just pushed"))
+        Ok(())
     }
 
     /// Check whether transitioning from the current state to `to` is valid.
@@ -112,22 +120,22 @@ impl LifecycleManager {
     }
 
     /// Convenience: transition to [`LifecycleState::Active`].
-    pub fn activate(&mut self, reason: &str) -> Result<&LifecycleEvent, String> {
+    pub fn activate(&mut self, reason: &str) -> Result<(), String> {
         self.transition(LifecycleState::Active, reason, "system")
     }
 
     /// Convenience: transition to [`LifecycleState::Suspended`].
-    pub fn suspend(&mut self, reason: &str) -> Result<&LifecycleEvent, String> {
+    pub fn suspend(&mut self, reason: &str) -> Result<(), String> {
         self.transition(LifecycleState::Suspended, reason, "system")
     }
 
     /// Convenience: transition to [`LifecycleState::Quarantined`].
-    pub fn quarantine(&mut self, reason: &str) -> Result<&LifecycleEvent, String> {
+    pub fn quarantine(&mut self, reason: &str) -> Result<(), String> {
         self.transition(LifecycleState::Quarantined, reason, "system")
     }
 
     /// Convenience: transition to [`LifecycleState::Decommissioning`].
-    pub fn decommission(&mut self, reason: &str) -> Result<&LifecycleEvent, String> {
+    pub fn decommission(&mut self, reason: &str) -> Result<(), String> {
         self.transition(LifecycleState::Decommissioning, reason, "system")
     }
 }
@@ -169,7 +177,8 @@ mod tests {
     #[test]
     fn test_activate_from_provisioning() {
         let mut mgr = LifecycleManager::new("agent-1");
-        let event = mgr.activate("initial activation").unwrap();
+        mgr.activate("initial activation").unwrap();
+        let event = mgr.last_event().expect("activate recorded an event");
         assert_eq!(event.from, LifecycleState::Provisioning);
         assert_eq!(event.to, LifecycleState::Active);
         assert_eq!(event.reason, "initial activation");
@@ -180,7 +189,8 @@ mod tests {
     fn test_suspend_from_active() {
         let mut mgr = LifecycleManager::new("agent-1");
         mgr.activate("boot").unwrap();
-        let event = mgr.suspend("maintenance window").unwrap();
+        mgr.suspend("maintenance window").unwrap();
+        let event = mgr.last_event().expect("suspend recorded an event");
         assert_eq!(event.from, LifecycleState::Active);
         assert_eq!(event.to, LifecycleState::Suspended);
         assert_eq!(mgr.state(), LifecycleState::Suspended);
@@ -191,7 +201,8 @@ mod tests {
         let mut mgr = LifecycleManager::new("agent-1");
         mgr.activate("boot").unwrap();
         mgr.suspend("pause").unwrap();
-        let event = mgr.activate("resume").unwrap();
+        mgr.activate("resume").unwrap();
+        let event = mgr.last_event().expect("activate recorded an event");
         assert_eq!(event.from, LifecycleState::Suspended);
         assert_eq!(event.to, LifecycleState::Active);
     }
@@ -202,9 +213,16 @@ mod tests {
         mgr.activate("boot").unwrap();
         mgr.transition(LifecycleState::Degraded, "high error rate", "monitor")
             .unwrap();
-        let event = mgr.quarantine("policy violation detected").unwrap();
+        mgr.quarantine("policy violation detected").unwrap();
+        let event = mgr.last_event().expect("quarantine recorded an event");
         assert_eq!(event.from, LifecycleState::Degraded);
         assert_eq!(event.to, LifecycleState::Quarantined);
+    }
+
+    #[test]
+    fn test_last_event_is_none_before_any_transition() {
+        let mgr = LifecycleManager::new("agent-1");
+        assert!(mgr.last_event().is_none());
     }
 
     #[test]

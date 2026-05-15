@@ -5,6 +5,8 @@ package agentmesh
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -22,10 +24,24 @@ type AuditEntry struct {
 	PreviousHash string         `json:"previous_hash"`
 }
 
+// Clone returns a value-copy of the entry. Used at the AuditLogger
+// API boundary so callers cannot mutate the in-store record (and
+// thereby break the hash chain) through the returned pointer.
+// AuditEntry contains only value types, so a struct copy is a deep
+// copy.
+func (ae *AuditEntry) Clone() *AuditEntry {
+	if ae == nil {
+		return nil
+	}
+	c := *ae
+	return &c
+}
+
 // AuditLogger maintains an append-only hash-chained audit log.
 type AuditLogger struct {
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	entries    []*AuditEntry
+	seamHash   string
 	MaxEntries int
 }
 
@@ -35,16 +51,25 @@ func NewAuditLogger() *AuditLogger {
 }
 
 // Log appends a new entry to the audit chain.
-// When MaxEntries is set and exceeded, the oldest entries are evicted.
+// When MaxEntries is set and exceeded, the oldest entries are evicted and
+// their final hash is retained as a seam so Verify() can re-anchor the
+// surviving chain.
 func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *AuditEntry {
 	al.mu.Lock()
 	defer al.mu.Unlock()
 
 	if al.MaxEntries > 0 && len(al.entries) >= al.MaxEntries {
-		al.entries = al.entries[len(al.entries)-al.MaxEntries+1:]
+		sliceFrom := len(al.entries) - al.MaxEntries + 1
+		al.seamHash = al.entries[sliceFrom-1].Hash
+		// Allocate a fresh slice so the original backing array (and
+		// evicted *AuditEntry pointers in the dropped prefix) can be
+		// garbage-collected. A plain reslice keeps the old array alive.
+		retained := make([]*AuditEntry, len(al.entries)-sliceFrom)
+		copy(retained, al.entries[sliceFrom:])
+		al.entries = retained
 	}
 
-	prevHash := ""
+	prevHash := al.seamHash
 	if len(al.entries) > 0 {
 		prevHash = al.entries[len(al.entries)-1].Hash
 	}
@@ -58,22 +83,25 @@ func (al *AuditLogger) Log(agentID, action string, decision PolicyDecision) *Aud
 	}
 	entry.Hash = computeHash(entry)
 	al.entries = append(al.entries, entry)
-	return entry
+	// Return a clone so callers cannot mutate the in-store entry
+	// (and break the chain) through the returned pointer.
+	return entry.Clone()
 }
 
-// Verify checks the integrity of the entire hash chain.
+// Verify checks the integrity of the entire hash chain. After rollover
+// eviction, the surviving head's PreviousHash is checked against the seam
+// hash recorded at eviction time, so tampering with it is still detected.
 func (al *AuditLogger) Verify() bool {
-	al.mu.Lock()
-	defer al.mu.Unlock()
+	al.mu.RLock()
+	defer al.mu.RUnlock()
 
 	for i, entry := range al.entries {
 		expected := computeHash(entry)
-		if entry.Hash != expected {
+		if subtle.ConstantTimeCompare([]byte(entry.Hash), []byte(expected)) != 1 {
 			return false
 		}
 		if i == 0 {
-			// Allow non-empty PreviousHash when retention eviction is active
-			if al.MaxEntries == 0 && entry.PreviousHash != "" {
+			if entry.PreviousHash != al.seamHash {
 				return false
 			}
 		} else {
@@ -87,8 +115,8 @@ func (al *AuditLogger) Verify() bool {
 
 // GetEntries returns entries matching the given filter.
 func (al *AuditLogger) GetEntries(filter AuditFilter) []*AuditEntry {
-	al.mu.Lock()
-	defer al.mu.Unlock()
+	al.mu.RLock()
+	defer al.mu.RUnlock()
 
 	var result []*AuditEntry
 	for _, e := range al.entries {
@@ -107,19 +135,46 @@ func (al *AuditLogger) GetEntries(filter AuditFilter) []*AuditEntry {
 		if filter.EndTime != nil && e.Timestamp.After(*filter.EndTime) {
 			continue
 		}
-		result = append(result, e)
+		result = append(result, e.Clone())
 	}
 	return result
 }
 
+// auditHashVersion identifies the wire format of the hash input. Bumping
+// this invalidates any persisted hashes and is required when the field
+// layout below changes.
+const auditHashVersion byte = 1
+
+// computeHash returns the SHA-256 hash of a length-prefixed encoding of the
+// entry's fields. Each variable-length field is encoded as a 4-byte
+// big-endian length followed by the raw bytes, with a fixed-position
+// version byte at the start. The encoding is unambiguous regardless of the
+// field contents, which closes the forgery seam in the previous
+// "|"-separated format (where e.g. AgentID="a", Action="b|c" hashed
+// identically to AgentID="a|b", Action="c").
 func computeHash(e *AuditEntry) string {
-	data := e.Timestamp.Format(time.RFC3339Nano) + "|" +
-		e.AgentID + "|" +
-		e.Action + "|" +
-		string(e.Decision) + "|" +
-		e.PreviousHash
-	h := sha256.Sum256([]byte(data))
+	timestamp := e.Timestamp.Format(time.RFC3339Nano)
+
+	// 1 byte version + 5 fields, each prefixed by a 4-byte length.
+	size := 1 + 5*4 + len(timestamp) + len(e.AgentID) + len(e.Action) + len(e.Decision) + len(e.PreviousHash)
+	buf := make([]byte, 0, size)
+	buf = append(buf, auditHashVersion)
+	buf = appendLengthPrefixed(buf, timestamp)
+	buf = appendLengthPrefixed(buf, e.AgentID)
+	buf = appendLengthPrefixed(buf, e.Action)
+	buf = appendLengthPrefixed(buf, string(e.Decision))
+	buf = appendLengthPrefixed(buf, e.PreviousHash)
+
+	h := sha256.Sum256(buf)
 	return hex.EncodeToString(h[:])
+}
+
+func appendLengthPrefixed(buf []byte, s string) []byte {
+	var lenBytes [4]byte
+	binary.BigEndian.PutUint32(lenBytes[:], uint32(len(s)))
+	buf = append(buf, lenBytes[:]...)
+	buf = append(buf, s...)
+	return buf
 }
 
 // ExportJSON serialises all audit entries to a JSON string.

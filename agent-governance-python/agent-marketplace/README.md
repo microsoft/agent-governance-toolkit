@@ -28,6 +28,19 @@ Agent Marketplace provides **governed plugin lifecycle management** for AI agent
 - **Manifest Validation** — Declarative plugin manifests with schema validation (capabilities, permissions, dependencies)
 - **Registry Management** — Register, update, and deprecate plugins with version tracking
 
+### Artifact distribution vs. manifest-registration
+
+`PluginInstaller.install()` operates in one of two modes depending on the manifest:
+
+| Mode | When | What happens on disk |
+|------|------|----------------------|
+| **Full artifact install** | `manifest.artifact_url` is set | Downloads the `.zip` artifact, verifies its SHA-256 against `manifest.artifact_sha256`, unpacks plugin code under `plugins_dir/<name>/`, and stores `.artifact.zip` for on-load re-verification. |
+| **Manifest-registration only** | `artifact_url` is absent | Writes only the signed manifest (`agent-plugin.yaml`). No plugin code is placed on disk. |
+
+The Ed25519 signature covers both the manifest metadata **and** `artifact_sha256`, so a valid
+signature cryptographically binds the manifest to the artifact. `list_installed()` re-verifies
+the manifest signature **and** the stored artifact hash on every call.
+
 ## Quick Start
 
 ```bash

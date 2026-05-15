@@ -12,6 +12,7 @@ Addresses OWASP ASI02 (Tool Misuse & Exploitation) by providing:
 - Per-agent rate limiting / call budget enforcement
 - Structured audit logging of every tool invocation
 - Human-in-the-loop approval for sensitive tools
+- Response scanning for prompt injection, credential/PII leaks, and exfiltration
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import logging
 import re
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
@@ -34,6 +35,7 @@ from agent_os.mcp_protocols import (
     MCPAuditSink,
     MCPRateLimitStore,
 )
+from agent_os.mcp_response_scanner import MCPResponseScanner
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,30 @@ class ApprovalStatus(Enum):
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
+
+
+class ResponsePolicy(Enum):
+    """How the gateway handles threats detected in tool responses.
+
+    - ``BLOCK``: deny the response entirely when any threat is found.
+    - ``SANITIZE``: strip injection tags but still block credential/PII leaks.
+    - ``LOG``: allow the response through but record all detected threats.
+    """
+
+    BLOCK = "block"
+    SANITIZE = "sanitize"
+    LOG = "log"
+
+
+@dataclass
+class MCPResponseDecision:
+    """Result of scanning a tool response through the gateway."""
+
+    allowed: bool
+    reason: str
+    content: str | None = None
+    threats: list[dict[str, Any]] = field(default_factory=list)
+    action: str = "allowed"
 
 
 @dataclass
@@ -118,6 +144,8 @@ class MCPGateway:
         rate_limit_store: MCPRateLimitStore | None = None,
         audit_sink: MCPAuditSink | None = None,
         clock: Callable[[], float] = time.time,
+        response_scanner: MCPResponseScanner | None = None,
+        response_policy: ResponsePolicy = ResponsePolicy.BLOCK,
     ) -> None:
         """
         Args:
@@ -133,6 +161,12 @@ class MCPGateway:
                 counts.
             audit_sink: Optional sink for persisted audit records.
             clock: Clock used when recording audit timestamps.
+            response_scanner: Scanner for tool response content. Pass ``None``
+                to disable response scanning, or omit to use the default
+                ``MCPResponseScanner``.
+            response_policy: How to handle threats found in tool responses.
+                ``BLOCK`` denies the response, ``SANITIZE`` strips injection
+                tags but blocks credential/PII leaks, ``LOG`` allows but logs.
         """
         self.policy = policy
         self.denied_tools: list[str] = denied_tools or []
@@ -154,6 +188,10 @@ class MCPGateway:
         if enable_builtin_sanitization:
             for pat_str, _ in _BUILTIN_DANGEROUS_PATTERNS:
                 self._builtin_compiled.append((pat_str, re.compile(pat_str, re.IGNORECASE)))
+
+        # Response scanning
+        self._response_scanner = response_scanner if response_scanner is not None else MCPResponseScanner()
+        self._response_policy = response_policy
 
     # ── Core interception ────────────────────────────────────────────────
 
@@ -225,6 +263,151 @@ class MCPGateway:
 
         return allowed, reason
 
+    # ── Response interception ────────────────────────────────────────────
+
+    def intercept_tool_response(
+        self,
+        agent_id: str,
+        tool_name: str,
+        response_content: str | Any,
+    ) -> MCPResponseDecision:
+        """Scan a tool response for threats before it reaches the LLM.
+
+        Runs the ``MCPResponseScanner`` against the response content and
+        applies the gateway's ``response_policy``:
+
+        - **BLOCK**: deny the response if any threat is found.
+        - **SANITIZE**: strip injection tags but block credential/PII leaks.
+        - **LOG**: allow the response but record all threats in the audit log.
+
+        Args:
+            agent_id: Agent identity receiving the response.
+            tool_name: Tool that produced the response.
+            response_content: Raw tool output (string or structured data).
+
+        Returns:
+            An ``MCPResponseDecision`` with the allow/deny verdict, the
+            (possibly sanitized) content, and any detected threats.
+        """
+        # Normalize structured responses to string for scanning
+        if not isinstance(response_content, str):
+            try:
+                text = json.dumps(response_content, default=str)
+            except (TypeError, ValueError):
+                text = str(response_content)
+        else:
+            text = response_content
+
+        try:
+            scan_result = self._response_scanner.scan_response(text, tool_name)
+        except Exception:
+            logger.error(
+                "Response scanner error — failing closed | agent=%s tool=%s",
+                agent_id, tool_name, exc_info=True,
+            )
+            decision = MCPResponseDecision(
+                allowed=False,
+                reason="Response scanner error — blocked (fail closed)",
+                content=None,
+                action="error",
+            )
+            self._record_response_audit(agent_id, tool_name, decision)
+            return decision
+
+        threat_dicts = [
+            {"category": t.category, "description": t.description}
+            for t in scan_result.threats
+        ]
+
+        if scan_result.is_safe:
+            decision = MCPResponseDecision(
+                allowed=True,
+                reason="Response clean",
+                content=text,
+                threats=[],
+                action="allowed",
+            )
+            self._record_response_audit(agent_id, tool_name, decision)
+            return decision
+
+        # Threats found: apply response_policy
+        if self._response_policy == ResponsePolicy.LOG:
+            decision = MCPResponseDecision(
+                allowed=True,
+                reason=f"Response has {len(scan_result.threats)} threat(s) — logged",
+                content=text,
+                threats=threat_dicts,
+                action="logged",
+            )
+        elif self._response_policy == ResponsePolicy.SANITIZE:
+            # Sanitize strips injection tags only. Credential and PII leaks
+            # are still blocked because sanitize_response cannot safely
+            # remove arbitrary secret/PII spans from prose.
+            hard_block_categories = {"credential_leak", "pii_leak", "data_exfiltration"}
+            has_hard_block = any(
+                t.category in hard_block_categories for t in scan_result.threats
+            )
+            if has_hard_block:
+                categories = {t.category for t in scan_result.threats if t.category in hard_block_categories}
+                decision = MCPResponseDecision(
+                    allowed=False,
+                    reason=f"Response blocked — {', '.join(sorted(categories))} cannot be sanitized",
+                    content=None,
+                    threats=threat_dicts,
+                    action="blocked",
+                )
+            else:
+                sanitized, _ = self._response_scanner.sanitize_response(text, tool_name)
+                decision = MCPResponseDecision(
+                    allowed=True,
+                    reason=f"Response sanitized — {len(scan_result.threats)} threat(s) stripped",
+                    content=sanitized,
+                    threats=threat_dicts,
+                    action="sanitized",
+                )
+        else:
+            # BLOCK (default)
+            categories = {t.category for t in scan_result.threats}
+            decision = MCPResponseDecision(
+                allowed=False,
+                reason=f"Response blocked — {', '.join(sorted(categories))} detected",
+                content=None,
+                threats=threat_dicts,
+                action="blocked",
+            )
+
+        self._record_response_audit(agent_id, tool_name, decision)
+        return decision
+
+    def _record_response_audit(
+        self,
+        agent_id: str,
+        tool_name: str,
+        decision: MCPResponseDecision,
+    ) -> None:
+        """Record a response-scan decision in the audit log.
+
+        Threat descriptions are logged but raw response content is redacted
+        to avoid persisting the sensitive data we are trying to protect.
+        """
+        entry = AuditEntry(
+            timestamp=self._clock(),
+            agent_id=agent_id,
+            tool_name=tool_name,
+            parameters={"direction": "response", "action": decision.action,
+                        "threats": [t["category"] for t in decision.threats]},
+            allowed=decision.allowed,
+            reason=decision.reason,
+        )
+        self._audit_log.append(entry)
+        self._audit_sink.record(entry.to_dict())
+
+        if self.policy.log_all_calls:
+            logger.info(
+                "MCP Gateway response audit | agent=%s tool=%s allowed=%s reason=%s",
+                agent_id, tool_name, decision.allowed, decision.reason,
+            )
+
     # ── Policy evaluation pipeline ───────────────────────────────────────
 
     def _evaluate(
@@ -265,7 +448,7 @@ class MCPGateway:
                         "builtin_pattern",
                     )
 
-        # 4. Rate limiting
+        # 4. Rate limiting (check only — do not consume budget yet)
         with self._rate_limit_lock:
             count = int(self._rate_limit_store.get_bucket(agent_id) or 0)
             if count >= self.policy.max_tool_calls:
@@ -275,10 +458,6 @@ class MCPGateway:
                     None,
                     "rate_limit",
                 )
-
-            # Increment call counter (only on successful evaluation past this point)
-            self._tracked_agents.add(agent_id)
-            self._rate_limit_store.set_bucket(agent_id, count + 1)
 
         # 5. Human approval
         if self.policy.require_human_approval or tool_name in self.sensitive_tools:
@@ -305,10 +484,42 @@ class MCPGateway:
                 return False, "Human approval denied", status, "approval_denied"
             if status == ApprovalStatus.PENDING:
                 return False, "Awaiting human approval", status, "approval_pending"
-            # APPROVED — fall through
+            # APPROVED — consume budget and return success
+            if not self._consume_budget(agent_id):
+                return (
+                    False,
+                    f"Agent '{agent_id}' exceeded call budget ({self.policy.max_tool_calls})",
+                    None,
+                    "rate_limit",
+                )
             return True, "Approved by human reviewer", status, "approval_granted"
 
+        # No approval required — consume budget and return success
+        if not self._consume_budget(agent_id):
+            return (
+                False,
+                f"Agent '{agent_id}' exceeded call budget ({self.policy.max_tool_calls})",
+                None,
+                "rate_limit",
+            )
         return True, "Allowed by policy", None, "allowed"
+
+    def _consume_budget(self, agent_id: str) -> bool:
+        """Atomically reserve one call slot from the agent's rate-limit budget.
+
+        Returns False if the bucket is at or above ``max_tool_calls`` — callers
+        should map this to a rate-limit failure rather than letting the call
+        proceed. Reserving the slot atomically (rather than checking earlier
+        and incrementing here) prevents two concurrent callers from racing
+        the read-modify-write of the bucket.
+        """
+        with self._rate_limit_lock:
+            count = int(self._rate_limit_store.get_bucket(agent_id) or 0)
+            if count >= self.policy.max_tool_calls:
+                return False
+            self._tracked_agents.add(agent_id)
+            self._rate_limit_store.set_bucket(agent_id, count + 1)
+            return True
 
     # ── Server wrapping ──────────────────────────────────────────────────
 

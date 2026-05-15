@@ -62,6 +62,113 @@ class TestTransportBase:
         cfg = TransportConfig(host="example.com", port=443)
         assert cfg.uri == "example.com:443"
 
+    def test_transport_config_ssl_context_default_none(self) -> None:
+        """TransportConfig.ssl_context defaults to None (use library default)."""
+        cfg = TransportConfig()
+        assert cfg.ssl_context is None
+
+    def test_transport_config_accepts_ssl_context(self) -> None:
+        """TransportConfig stores a caller-supplied ssl.SSLContext."""
+        import ssl
+
+        ctx = ssl.create_default_context()
+        cfg = TransportConfig(use_tls=True, ssl_context=ctx)
+        assert cfg.ssl_context is ctx
+
+
+class TestWebSocketTLSContext:
+    """Tests for TLS context plumbing on WebSocketTransport.connect().
+
+    Uses a local AsyncMock ws instead of the shared ``mock_ws_connection``
+    fixture, because that fixture calls ``asyncio.get_event_loop()``
+    eagerly at collection time, which is unreliable on Python 3.14.
+    """
+
+    @staticmethod
+    def _local_ws_mock() -> AsyncMock:
+        ws = AsyncMock()
+        ws.close = AsyncMock()
+        return ws
+
+    @pytest.mark.asyncio
+    async def test_connect_passes_ssl_context_when_tls(self) -> None:
+        """When use_tls=True and an ssl_context is set, it is forwarded
+        to the websockets `connect()` call as the `ssl` kwarg."""
+        import ssl
+
+        ctx = ssl.create_default_context()
+        cfg = TransportConfig(
+            host="mesh.example.com",
+            port=443,
+            use_tls=True,
+            ssl_context=ctx,
+        )
+        transport = WebSocketTransport(cfg, heartbeat_interval=0)
+        ws = self._local_ws_mock()
+
+        mock_connect = AsyncMock(return_value=ws)
+        with patch("agentmesh.transport.websocket.connect", mock_connect):
+            with patch.object(transport, "_listen", return_value=None):
+                await transport.connect()
+            await transport.disconnect()
+
+        mock_connect.assert_awaited_once()
+        _, kwargs = mock_connect.call_args
+        assert kwargs.get("ssl") is ctx, (
+            "ssl_context must be forwarded to the websockets connect()"
+        )
+
+    @pytest.mark.asyncio
+    async def test_connect_omits_ssl_kwarg_when_no_context(self) -> None:
+        """When ssl_context is None, the `ssl` kwarg is not passed --
+        the websockets library uses its own default context."""
+        cfg = TransportConfig(
+            host="mesh.example.com",
+            port=443,
+            use_tls=True,
+            ssl_context=None,
+        )
+        transport = WebSocketTransport(cfg, heartbeat_interval=0)
+        ws = self._local_ws_mock()
+
+        mock_connect = AsyncMock(return_value=ws)
+        with patch("agentmesh.transport.websocket.connect", mock_connect):
+            with patch.object(transport, "_listen", return_value=None):
+                await transport.connect()
+            await transport.disconnect()
+
+        mock_connect.assert_awaited_once()
+        _, kwargs = mock_connect.call_args
+        assert "ssl" not in kwargs
+
+    @pytest.mark.asyncio
+    async def test_connect_omits_ssl_kwarg_when_tls_disabled(self) -> None:
+        """When use_tls=False, the ssl kwarg is not forwarded even if a
+        context is set (plain ws:// URI)."""
+        import ssl
+
+        ctx = ssl.create_default_context()
+        cfg = TransportConfig(
+            host="mesh.example.com",
+            port=8080,
+            use_tls=False,
+            ssl_context=ctx,
+        )
+        transport = WebSocketTransport(cfg, heartbeat_interval=0)
+        ws = self._local_ws_mock()
+
+        mock_connect = AsyncMock(return_value=ws)
+        with patch("agentmesh.transport.websocket.connect", mock_connect):
+            with patch.object(transport, "_listen", return_value=None):
+                await transport.connect()
+            await transport.disconnect()
+
+        mock_connect.assert_awaited_once()
+        args, kwargs = mock_connect.call_args
+        # ws:// scheme is used because use_tls is False
+        assert args[0].startswith("ws://"), args[0]
+        assert "ssl" not in kwargs
+
 
 # ---------------------------------------------------------------------------
 # Test: WebSocketTransport

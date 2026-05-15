@@ -196,4 +196,46 @@ public class LifecycleManagerTests
 
         Assert.Equal(LifecycleState.Active, mgr.State);
     }
+
+    [Fact]
+    public async Task ConcurrentTransitions_PreserveTransitionCoherence()
+    {
+        // Without locking, two threads can both observe State=Active, both
+        // pass CanTransition, and both write State / append to _events — the
+        // resulting events log contains two transitions FROM the same state,
+        // which is impossible in any sequential interleaving. Under the lock,
+        // every event's FromState must equal the previous event's ToState.
+        for (var trial = 0; trial < 50; trial++)
+        {
+            var mgr = new LifecycleManager(AgentId);
+            mgr.Activate();
+
+            var targets = new[]
+            {
+                LifecycleState.Suspended,
+                LifecycleState.Quarantined,
+                LifecycleState.Decommissioning
+            };
+
+            var tasks = targets.Select(target => Task.Run(() =>
+            {
+                try
+                {
+                    mgr.Transition(target, "concurrent", "test");
+                }
+                catch (InvalidOperationException)
+                {
+                    // Some interleavings invalidate later transitions — fine.
+                }
+            })).ToArray();
+
+            await Task.WhenAll(tasks);
+
+            var events = mgr.Events;
+            for (var i = 1; i < events.Count; i++)
+            {
+                Assert.Equal(events[i - 1].ToState, events[i].FromState);
+            }
+        }
+    }
 }

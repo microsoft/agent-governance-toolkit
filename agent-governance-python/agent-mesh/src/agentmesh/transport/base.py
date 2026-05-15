@@ -8,6 +8,7 @@ Defines the contract that all transport backends (WebSocket, gRPC, etc.)
 must implement to exchange trust data between agents.
 """
 
+import ssl
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -35,6 +36,14 @@ class TransportConfig:
         max_retries: Maximum reconnection attempts.
         retry_delay_seconds: Base delay between reconnection attempts.
         metadata: Additional transport-specific configuration.
+        ssl_context: Optional ``ssl.SSLContext`` used when ``use_tls`` is
+            true. When ``None``, the underlying transport falls back to
+            its default context (``ssl.create_default_context()`` or the
+            equivalent for that backend). Supply a custom context to
+            pin a private CA bundle, require client certificates for
+            mTLS, or restrict cipher suites. Required for any
+            production deployment where the server certificate is not
+            chained to a public root.
     """
 
     host: str = "localhost"
@@ -44,6 +53,7 @@ class TransportConfig:
     max_retries: int = 5
     retry_delay_seconds: float = 1.0
     metadata: dict[str, str] = field(default_factory=dict)
+    ssl_context: Optional[ssl.SSLContext] = None
 
     @property
     def uri(self) -> str:

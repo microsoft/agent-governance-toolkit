@@ -1,5 +1,106 @@
 # Copilot Instructions for agent-governance-toolkit
 
+## Architecture
+
+Multi-language monorepo for runtime governance of AI agents. Core is Python, with SDKs in TypeScript, Rust, .NET, and Go.
+
+**Core Python packages** live under `packages/`:
+
+| Package | Purpose |
+|---------|---------|
+| `agent-compliance` (`agent_governance_toolkit`) | Unified installer, `agt` CLI, runtime policy enforcement |
+| `agent-os` (`agent_os_kernel`) | Kernel: policy evaluator, identity, trust, audit |
+| `agent-mesh` (`agentmesh_platform`) | Multi-agent networking: Wire Protocol, registry, relay, E2E encryption |
+| `agent-hypervisor` | Execution sandboxing and resource isolation |
+| `agent-sre` | SRE: health checks, circuit breakers, observability |
+| `agent-runtime` | Runtime orchestration layer |
+| `agent-mcp-governance` | MCP (Model Context Protocol) governance primitives |
+| `agent-discovery` | Agent discovery and capability advertisement |
+| `agent-lightning` | Lightweight/fast-path policy evaluation |
+| `agent-marketplace` | Agent marketplace and registry |
+| `agentmesh-integrations` | Framework adapters (LangChain, CrewAI, AutoGen, etc.) |
+
+**Language SDKs:**
+
+| Language | Path | Package name |
+|----------|------|--------------|
+| TypeScript | `packages/agent-mesh/sdks/typescript/` | `@microsoft/agent-governance-sdk` |
+| Rust | `packages/agent-mesh/sdks/rust/` | `agent-governance`, `agent-governance-mcp` |
+| .NET | `agent-governance-dotnet/` | `Microsoft.AgentGovernance` |
+| Go | `agent-governance-golang/` | (standalone top-level) |
+
+**Other top-level directories:** `docs/` (MkDocs site), `examples/` (runnable integrations), `demo/` (live dashboards), `pipelines/` (ESRP release automation), `benchmarks/`, `fuzz/` (ClusterFuzzLite), `notebooks/`.
+
+Each subdirectory with an `AGENTS.md` has area-specific commands and boundaries: read it before changing code there.
+
+## Build, Test, and Lint
+
+### Python
+
+```bash
+# Install (editable, all extras)
+pip install -e ".[full]"
+
+# Lint
+ruff check --select E,F,W --ignore E501
+
+# Test (full suite)
+pytest
+
+# Test (single file)
+pytest tests/test_policy.py
+
+# Test (single test by name)
+pytest -k "test_policy_deny_dangerous_tools"
+
+# Build
+python -m build
+```
+
+### TypeScript (`packages/agent-mesh/sdks/typescript/`)
+
+```bash
+npm run build
+npm test           # runs jest
+npm run lint
+```
+
+### Rust (`packages/agent-mesh/sdks/rust/`)
+
+```bash
+cargo build --release --workspace
+cargo test --release --workspace
+
+# Single test
+cargo test --release test_name
+```
+
+### .NET (`agent-governance-dotnet/`)
+
+```bash
+dotnet build AgentGovernance.sln
+dotnet test AgentGovernance.sln
+
+# Single test
+dotnet test --filter "FullyQualifiedName~TestClassName.TestMethodName"
+```
+
+### MCP Server (`packages/agent-os/extensions/mcp-server/`)
+
+```bash
+npm run build
+npm test           # runs vitest
+npm run test:coverage
+```
+
+### Docs (`docs/`)
+
+```bash
+pip install -r requirements/docs.txt
+mkdocs serve       # local preview
+mkdocs build       # build static site
+```
+
 ## Decision Escalation
 
 For major design changes, always ask the maintainer (@imran-siddique) before proceeding:
@@ -11,6 +112,46 @@ For major design changes, always ask the maintainer (@imran-siddique) before pro
 - Changes to CI/CD pipeline architecture
 
 Do NOT auto-merge large feature PRs without maintainer review.
+
+## PR Description Standards
+
+Every PR must have a well-structured, properly formatted description. Lightweight or mangled descriptions are not acceptable.
+
+### Required sections
+
+1. **Summary** (1-2 sentences): What this PR does and why.
+2. **Problem** (optional for trivial fixes): What was broken, missing, or suboptimal.
+3. **Changes**: A table or bullet list of files changed and what changed in each. Use a markdown table for 3+ files.
+4. **Testing**: How the changes were verified (test results, manual validation, docs-only note).
+
+### Formatting rules
+
+- Use proper markdown: headings (`##`), backtick code spans, tables, blank lines between sections.
+- Never pass PR body text through PowerShell inline strings. Always write the body to a temp file with Python (to preserve backticks and special characters) and use `gh pr create --body-file`.
+- Verify the rendered PR description on GitHub after creation. If formatting is broken, fix it immediately with `gh pr edit --body-file`.
+- No escaped backslashes where backticks should be. No missing blank lines between paragraphs. No corrupted characters.
+
+### Template
+
+```markdown
+## Summary
+
+<What and why, 1-2 sentences.>
+
+## Problem
+
+<What was broken or missing. Skip for trivial changes.>
+
+## Changes
+
+| File | What changed |
+|------|-------------|
+| `path/to/file.py` | Description of change |
+
+## Testing
+
+<How verified: "All N tests pass", "Docs-only, verified links", etc.>
+```
 
 ## External Contribution Quality Gate
 
@@ -151,8 +292,9 @@ saves time.
   ```
 
 **Python Code Quality (CodeQL):**
-- Never use `timedelta(days=365)` to represent "one year" — use `timedelta(days=366)`
-  or `dateutil.relativedelta(years=1)` for leap-year safety
+- Never use `timedelta(days=365)` or `timedelta(days=366)` to represent "one year" in
+  production code. Use `dateutil.relativedelta(years=1)` for leap-year safety. In tests
+  where approximate durations suffice, use `timedelta(days=400)` to avoid CodeQL flags.
 - Never use `is True` / `is False` for boolean comparison — use `== True` / `== False`
   (or just `if value:` / `if not value:`)
 - Never use mutable default arguments (`def f(x=[])`) — use `None` with body initialization:

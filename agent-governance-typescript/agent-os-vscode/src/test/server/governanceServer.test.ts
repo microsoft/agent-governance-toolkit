@@ -69,7 +69,7 @@ suite('Server Security', () => {
     test('browser template loads D3 from local vendor (no CDN)', () => {
         const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
-            !html.includes('://cdn.jsdelivr.net'),
+            !/https?:\/\/cdn\.jsdelivr\.net/i.test(html),
             'Should not reference CDN — D3 is vendored locally'
         );
         assert.ok(
@@ -242,7 +242,7 @@ suite('Local Vendor Security', () => {
     test('D3.js inlined from local vendor file', () => {
         const html = renderBrowserDashboard(9845, 'test-token', 'test-nonce', EXTENSION_ROOT);
         assert.ok(
-            !html.includes('://cdn.jsdelivr.net'),
+            !/https?:\/\/cdn\.jsdelivr\.net/i.test(html),
             'Should not reference any CDN'
         );
     });

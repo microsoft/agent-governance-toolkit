@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any
 
@@ -96,7 +96,7 @@ class Endorsement:
         try:
             expiry = datetime.fromisoformat(self.expires_at)
             if expiry.tzinfo is None:
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
             else:
                 now = datetime.now(UTC)
             return now > expiry

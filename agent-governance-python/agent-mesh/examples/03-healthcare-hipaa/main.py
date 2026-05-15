@@ -12,7 +12,7 @@ Demonstrates:
 
 import asyncio
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 
 from agentmesh import (
@@ -154,7 +154,7 @@ class HealthcareAgent:
     def _audit_phi_access(self, patient_id: str, result: str, reason: str):
         """Log PHI access to audit chain."""
         entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "agent": self.identity.did,
             "action": "phi_access",
             "patient_id": f"[ENCRYPTED:{patient_id}]",  # Never log actual patient ID
@@ -170,7 +170,7 @@ class HealthcareAgent:
     def _audit_analysis(self, analysis_type: str, results: Dict[str, Any]):
         """Log data analysis to audit chain."""
         entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "agent": self.identity.did,
             "action": "data_analysis",
             "analysis_type": analysis_type,

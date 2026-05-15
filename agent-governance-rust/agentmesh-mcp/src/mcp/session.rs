@@ -213,6 +213,15 @@ impl McpSessionAuthenticator {
                 reason: "session metadata mismatch".to_string(),
             });
         }
+        // Bind the presented token to the stored session record: even with a
+        // valid HMAC signature and matching payload metadata, the token bytes
+        // must hash to the digest captured at issue time. Compared in constant
+        // time so the failure path doesn't leak digest bytes via timing.
+        if !constant_time_eq(sha256_hex(token).as_bytes(), session.token_digest.as_bytes()) {
+            return Err(McpError::AccessDenied {
+                reason: "session token digest mismatch".to_string(),
+            });
+        }
         Ok(session)
     }
 
@@ -248,6 +257,23 @@ fn sha256_hex(input: &str) -> String {
         .collect()
 }
 
+/// Constant-time byte comparison.
+///
+/// Returns `false` immediately on length mismatch (the length of a session
+/// digest is fixed and public — 64 hex characters — so this leaks nothing),
+/// and otherwise compares every byte via XOR accumulation so the timing
+/// signal carries no information about which byte differed.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 fn unix_secs(time: SystemTime) -> Result<u64, McpError> {
     Ok(time
         .duration_since(UNIX_EPOCH)
@@ -281,6 +307,49 @@ mod tests {
             .authenticate(&issued.token, "did:agentmesh:test")
             .unwrap();
         assert_eq!(session.id, "session-1");
+    }
+
+    #[test]
+    fn rejects_session_with_mismatched_token_digest() {
+        // The stored `token_digest` is the issue-time SHA-256 of the issued
+        // token. If a valid-looking token presents against a session record
+        // whose digest differs (e.g. tampered store, regenerated token under
+        // the same session id), authenticate() must refuse it.
+        let store = Arc::new(InMemorySessionStore::default());
+        let auth = McpSessionAuthenticator::new(
+            b"session-secret".to_vec(),
+            Arc::new(FixedClock::new(SystemTime::UNIX_EPOCH)),
+            Arc::new(DeterministicNonceGenerator::from_values(vec![
+                "session-1".into(),
+            ])),
+            Arc::clone(&store) as Arc<dyn McpSessionStore>,
+            Duration::from_secs(60),
+            1,
+        )
+        .unwrap();
+        let issued = auth.issue_session("did:agentmesh:test").unwrap();
+
+        // Tamper: replace the stored digest with a different valid SHA-256.
+        let mut tampered = issued.session.clone();
+        tampered.token_digest =
+            "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        store.set(tampered).unwrap();
+
+        let result = auth.authenticate(&issued.token, "did:agentmesh:test");
+        assert!(matches!(
+            result,
+            Err(McpError::AccessDenied { ref reason }) if reason == "session token digest mismatch"
+        ));
+    }
+
+    #[test]
+    fn constant_time_eq_matches_regular_eq() {
+        assert!(constant_time_eq(b"", b""));
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(!constant_time_eq(b"abc", b"abd"));
+        assert!(!constant_time_eq(b"abc", b"abcd"));
+        assert!(!constant_time_eq(b"abcd", b"abc"));
+        assert!(!constant_time_eq(b"", b"a"));
     }
 
     #[test]

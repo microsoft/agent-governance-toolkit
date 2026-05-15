@@ -1,0 +1,30 @@
+apiVersion: governance.toolkit/v1
+version: "1.0"
+name: aspnet-middleware-policy
+description: |
+  Sample governance policy for the ASP.NET Core middleware example.
+  The HTTP middleware maps every inbound request to a synthetic "tool call"
+  (HTTP_<METHOD>_<route>) and feeds it to the policy engine.
+default_action: allow
+
+rules:
+  # Block delete operations against the protected /api/items resource.
+  - name: deny-item-delete
+    condition: "tool_name == 'HTTP_DELETE_/api/items/{id}'"
+    action: deny
+    priority: 100
+
+  # Rate-limit writes (POST + PUT) against /api/items.
+  - name: rate-limit-item-writes
+    condition: "tool_name == 'HTTP_POST_/api/items'"
+    action: rate_limit
+    limit: "5/minute"
+    priority: 50
+
+  # Force human approval on /admin/* operations.
+  - name: require-approval-admin
+    condition: "route == '/admin/reset'"
+    action: require_approval
+    approvers:
+      - "security-officer@contoso.com"
+    priority: 75

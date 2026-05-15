@@ -4,7 +4,8 @@
 Agent-SRE Quickstart — Monitor an AI agent in 30 lines.
 
 Run:
-    pip install agent-sre
+    cd agent-governance-python/agent-sre
+    pip install -e ".[dev]"
     python examples/quickstart.py
 """
 
@@ -78,8 +79,12 @@ print("Indicators:")
 for ind in slo.indicators:
     val = ind.current_value()
     comp = ind.compliance()
-    label = "✅" if comp and comp >= ind.target else "❌"
-    print(f"  {label} {ind.name}: {val:.3f} (target: {ind.target:.3f}, compliance: {comp:.1%})")
+    if comp is not None and comp >= ind.target:
+        label = "✅"
+    else:
+        label = "❌"
+    comp_str = f"{comp:.1%}" if comp is not None else "N/A"
+    print(f"  {label} {ind.name}: {val:.3f} (target: {ind.target:.3f}, compliance: {comp_str})")
 
 print()
 

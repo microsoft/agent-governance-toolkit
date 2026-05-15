@@ -6,7 +6,7 @@ Capability Scoping
 Simple string-based capability scope checking.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 import uuid
@@ -47,7 +47,7 @@ class CapabilityGrant(BaseModel):
     )
 
     # Timing
-    granted_at: datetime = Field(default_factory=datetime.utcnow)
+    granted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = Field(None)
 
     # Status
@@ -94,7 +94,7 @@ class CapabilityGrant(BaseModel):
         """Check if the grant is currently active and not expired."""
         if not self.active:
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 
@@ -121,8 +121,15 @@ class CapabilityGrant(BaseModel):
         elif self.capability == requested:
             pass
         else:
-            # Fall back to component matching
-            req_action, req_resource, req_qualifier = self.parse_capability(requested)
+            # Fall back to component matching. parse_capability raises
+            # ValueError on inputs that don't contain a colon (e.g.
+            # bare verbs like "read") — fail-closed for those rather
+            # than crashing the caller. The grant simply doesn't match
+            # a malformed request.
+            try:
+                req_action, req_resource, req_qualifier = self.parse_capability(requested)
+            except ValueError:
+                return False
             if self.action != "*" and self.action != req_action:
                 return False
             if self.resource != "*" and self.resource != req_resource:
@@ -141,7 +148,7 @@ class CapabilityGrant(BaseModel):
     def revoke(self) -> None:
         """Revoke this grant immediately."""
         self.active = False
-        self.revoked_at = datetime.utcnow()
+        self.revoked_at = datetime.now(timezone.utc)
 
 
 class CapabilityScope(BaseModel):

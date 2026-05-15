@@ -50,16 +50,18 @@ public sealed class AgentFrameworkGovernanceAdapter
         ArgumentNullException.ThrowIfNull(messages);
         ArgumentNullException.ThrowIfNull(innerAgent);
 
+        var materializedMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+
         var agentId = ResolveAgentId(innerAgent, session);
         var agentName = ResolveAgentName(innerAgent);
-        var inputText = ResolveInputText(messages);
+        var inputText = ResolveInputText(materializedMessages);
         var sessionId = ResolveSessionId(session);
 
         var context = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["message"] = inputText,
             ["agent_name"] = agentName,
-            ["message_count"] = messages.Count(),
+            ["message_count"] = materializedMessages.Count,
             ["has_session"] = session is not null
         };
 
@@ -78,7 +80,7 @@ public sealed class AgentFrameworkGovernanceAdapter
                 ?? CreateBlockedRunResponse(decision);
         }
 
-        return await innerAgent.RunAsync(messages, session, options, cancellationToken).ConfigureAwait(false);
+        return await innerAgent.RunAsync(materializedMessages, session, options, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -169,7 +171,7 @@ public sealed class AgentFrameworkGovernanceAdapter
         return nameProperty?.GetValue(agent) as string ?? "unknown-agent";
     }
 
-    private string ResolveInputText(IEnumerable<ChatMessage> messages)
+    private string ResolveInputText(IReadOnlyList<ChatMessage> messages)
     {
         var resolved = Options.InputTextResolver?.Invoke(messages);
         if (!string.IsNullOrWhiteSpace(resolved))
@@ -177,8 +179,9 @@ public sealed class AgentFrameworkGovernanceAdapter
             return resolved;
         }
 
-        foreach (var message in messages.Reverse())
+        for (var i = messages.Count - 1; i >= 0; i--)
         {
+            var message = messages[i];
             if (!string.IsNullOrWhiteSpace(message.Text))
             {
                 return message.Text;

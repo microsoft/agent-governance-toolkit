@@ -226,8 +226,51 @@ class TestRelayServer:
             # Receive pending message
             msg = ws.receive_json()
             assert msg["id"] == "ack-test"
+            # Recipient explicitly acks — only then is it removed.
+            ws.send_json({"v": 1, "type": "ack", "id": "ack-test"})
 
-        # Message should be acknowledged (delivered removes from inbox)
+        assert inbox.message_count == 0
+
+    def test_pending_message_survives_disconnect_before_ack(self):
+        """Regression: previously _deliver_pending acknowledged immediately
+        after send_json, so a recipient that received the frame but
+        disconnected before processing it lost the message permanently.
+        Now the message stays in the inbox until an explicit ack frame
+        is received, and a reconnect re-delivers it.
+        """
+        server = RelayServer()
+        inbox = server._inbox
+
+        inbox.store(StoredMessage(
+            message_id="survives-001",
+            sender_did="alice",
+            recipient_did="did:agentmesh:bob",
+            payload=json.dumps({
+                "v": 1, "type": "message",
+                "from": "alice", "to": "did:agentmesh:bob",
+                "id": "survives-001", "ciphertext": "important",
+            }),
+        ))
+        assert inbox.message_count == 1
+
+        client = TestClient(server.app)
+        # First connect: receive frame, disconnect WITHOUT acking.
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            msg = ws.receive_json()
+            assert msg["id"] == "survives-001"
+            # Drop the connection without sending an ack.
+
+        # Inbox must still contain the message.
+        assert inbox.message_count == 1
+
+        # Reconnect: message must be re-delivered.
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            msg = ws.receive_json()
+            assert msg["id"] == "survives-001"
+            ws.send_json({"v": 1, "type": "ack", "id": "survives-001"})
+
         assert inbox.message_count == 0
 
 
@@ -237,3 +280,49 @@ class TestRelayStats:
         assert server.stats["messages_routed"] == 0
         assert server.stats["messages_stored"] == 0
         assert server.stats["messages_delivered"] == 0
+
+
+# ── Ghost-Connection Cleanup (Gap G5) ────────────────────────────────
+
+
+class TestGhostConnectionCleanup:
+    """Vendored relay patch #2 equivalent: when an agent reconnects with
+    the same DID, the previous ("ghost") socket is closed eagerly instead
+    of relying on the 90-second heartbeat-eviction timer. Verifies that
+    after a rebind, only the freshest connection routes messages."""
+
+    def test_rebind_replaces_ghost_connection(self):
+        server = RelayServer()
+        client = TestClient(server.app)
+
+        # First connection registers
+        with client.websocket_connect("/ws") as ws_old:
+            ws_old.send_json({
+                "v": 1, "type": "connect", "from": "did:agentmesh:rebind",
+            })
+            # Second connection with same DID triggers ghost close on old.
+            with client.websocket_connect("/ws") as ws_new:
+                ws_new.send_json({
+                    "v": 1, "type": "connect", "from": "did:agentmesh:rebind",
+                })
+                # Send a message to the rebinding DID from another agent.
+                with client.websocket_connect("/ws") as ws_sender:
+                    ws_sender.send_json({
+                        "v": 1, "type": "connect", "from": "did:agentmesh:sender",
+                    })
+                    ws_sender.send_json({
+                        "v": 1, "type": "message",
+                        "from": "did:agentmesh:sender",
+                        "to": "did:agentmesh:rebind",
+                        "id": "post-rebind",
+                        "ciphertext": "data",
+                    })
+                    # The NEW socket must receive it (ghost old socket is closed).
+                    msg = ws_new.receive_json()
+                    assert msg["id"] == "post-rebind"
+                    assert msg["from"] == "did:agentmesh:sender"
+
+        # Active connection count returns to 0 after both rebind sockets
+        # leave their `with` blocks (sender already left).
+        assert len(server._connections) == 0
+

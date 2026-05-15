@@ -116,7 +116,15 @@ def _redact_secrets(text: str) -> str:
 
 
 def _get_processes_windows() -> list[dict[str, str]]:
-    """Get process info on Windows using WMIC."""
+    """Get process info on Windows using WMIC.
+
+    WMIC's /format:csv emits `Node,CommandLine,ProcessId`. Command
+    lines routinely contain commas (e.g. `python script.py --csv=a,b`)
+    so the field separator is ambiguous. The PID, however, is always
+    the LAST field of the row — split from the right and trust that
+    invariant. Falls back to the bare `Node + CommandLine` slice for
+    the redaction text.
+    """
     try:
         result = subprocess.run(
             ["wmic", "process", "get", "ProcessId,CommandLine", "/format:csv"],  # noqa: S607 — known CLI tool path in process scanner
@@ -126,12 +134,22 @@ def _get_processes_windows() -> list[dict[str, str]]:
         )
         processes = []
         for line in result.stdout.strip().splitlines()[1:]:
-            parts = line.strip().split(",", 2)
-            if len(parts) >= 3:
-                cmdline = _redact_secrets(parts[1])
-                pid = parts[2].strip()
-                if cmdline and pid.isdigit():
-                    processes.append({"pid": pid, "cmdline": cmdline})
+            line = line.strip()
+            if not line:
+                continue
+            # rsplit on the rightmost comma to isolate the PID from a
+            # command line that may itself contain commas.
+            head, _, pid = line.rpartition(",")
+            pid = pid.strip()
+            if not pid.isdigit():
+                continue
+            # Drop the leading Node field (first column). Anything
+            # between the first comma and the rightmost comma is the
+            # command line.
+            _node, _, cmdline_raw = head.partition(",")
+            cmdline = _redact_secrets(cmdline_raw)
+            if cmdline:
+                processes.append({"pid": pid, "cmdline": cmdline})
         return processes
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return []

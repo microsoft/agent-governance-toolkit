@@ -245,6 +245,22 @@ sequenceDiagram
 
 ## Quick Start
 
+### Install, Configure, Run
+
+```bash
+pip install agentmesh-platform
+```
+
+```python
+from agentmesh import AgentMeshClient
+
+client = AgentMeshClient("orders-agent", capabilities=["orders.read"])
+result = client.execute_with_governance("orders.read", {"resource": "orders"})
+print(result.decision, result.trust_score)
+```
+
+For the full registration flow, see the [Registration Hello World tutorial](./examples/00-registration-hello-world/).
+
 ### Option 1: Secure Claude Desktop (Recommended)
 
 ```bash
@@ -560,11 +576,11 @@ violations = compliance.check_compliance(
 )
 
 # Generate compliance report
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 report = compliance.generate_report(
     framework=ComplianceFramework.SOC2,
-    period_start=datetime.utcnow() - timedelta(days=30),
-    period_end=datetime.utcnow(),
+    period_start=datetime.now(timezone.utc) - timedelta(days=30),
+    period_end=datetime.now(timezone.utc),
 )
 ```
 

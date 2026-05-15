@@ -122,3 +122,55 @@ class TestReadOnlyOutputDirectory:
             assert "Traceback" not in captured.out
         finally:
             readonly_dir.chmod(stat.S_IRWXU)
+
+
+class TestHandleErrorEchoesDetail:
+    """`handle_error` must echo the underlying error for known classes."""
+
+    def test_known_error_includes_detail_plain(self, capsys):
+        from agent_compliance.cli.main import handle_error
+
+        handle_error(ValueError("policy.yaml: missing required field 'rules'"))
+        captured = capsys.readouterr()
+        assert "missing required field 'rules'" in captured.err
+        assert "Error:" in captured.err
+
+    def test_known_error_includes_detail_json(self, capsys):
+        import json as _json
+
+        from agent_compliance.cli.main import handle_error
+
+        handle_error(FileNotFoundError("/nope/manifest.json"), output_json=True)
+        data = _json.loads(capsys.readouterr().out)
+        assert data["type"] == "ValidationError"
+        assert "/nope/manifest.json" in data["message"]
+
+    def test_unknown_error_sanitized_plain(self, capsys):
+        from agent_compliance.cli.main import handle_error
+
+        handle_error(RuntimeError("secret-internal-state-do-not-leak"))
+        captured = capsys.readouterr()
+        assert "secret-internal-state-do-not-leak" not in captured.err
+        assert "internal error" in captured.err.lower()
+
+    def test_unknown_error_sanitized_json(self, capsys):
+        import json as _json
+
+        from agent_compliance.cli.main import handle_error
+
+        handle_error(
+            RuntimeError("secret-internal-state-do-not-leak"), output_json=True
+        )
+        data = _json.loads(capsys.readouterr().out)
+        assert data["type"] == "InternalError"
+        assert "secret-internal-state-do-not-leak" not in data["message"]
+        assert "internal error" in data["message"].lower()
+
+    def test_unknown_error_debug_env_reveals_detail(self, capsys, monkeypatch):
+        from agent_compliance.cli.main import handle_error
+
+        monkeypatch.setenv("AGENTOS_DEBUG", "1")
+        handle_error(RuntimeError("low-level-detail"))
+        captured = capsys.readouterr()
+        assert "low-level-detail" in captured.err
+        assert "RuntimeError" in captured.err

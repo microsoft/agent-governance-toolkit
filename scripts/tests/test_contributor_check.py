@@ -27,6 +27,7 @@ from contributor_check import (
     _check_fork_burst,
     _check_batch_naming,
     _check_self_promotion,
+    _fork_has_outgoing_pr,
 )
 
 
@@ -268,6 +269,42 @@ class TestForkBurst:
         signals = _check_fork_burst(repos)
         assert len(signals) == 0
 
+    @patch("contributor_check._fork_has_outgoing_pr", return_value=True)
+    def test_awesome_forks_with_prs_excluded(self, mock_pr):
+        """Forks that have outgoing PRs are legitimate and should not trigger."""
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(5)
+        ]
+        signals = _check_fork_burst(repos, username="testuser")
+        names = [s.name for s in signals]
+        assert "awesome_fork_burst" not in names
+
+    @patch("contributor_check._fork_has_outgoing_pr", side_effect=lambda u, n: n == "awesome-list-0")
+    def test_mixed_forks_partial_prs(self, mock_pr):
+        """Only forks without PRs count toward the burst."""
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(4)
+        ]
+        # 4 forks, 1 has PR -> 3 remain, which hits >= 3 threshold
+        signals = _check_fork_burst(repos, username="testuser")
+        names = [s.name for s in signals]
+        assert "awesome_fork_burst" in names
+
+    def test_no_username_skips_pr_check(self):
+        """Without username, PR check is skipped (backward compat)."""
+        now = datetime.now(timezone.utc)
+        repos = [
+            {"name": f"awesome-list-{i}", "fork": True, "description": "curated list", "created_at": (now - timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(5)
+        ]
+        signals = _check_fork_burst(repos)
+        names = [s.name for s in signals]
+        assert "awesome_fork_burst" in names
+
 
 # ---------------------------------------------------------------------------
 # Feature overlap tests
@@ -445,11 +482,13 @@ class TestBatchNaming:
 class TestSelfPromotion:
     def test_promoting_own_repos_high(self):
         user_repos = [
-            {"name": "buywhere-mcp", "fork": False, "full_name": "spammer/buywhere-mcp"},
-            {"name": "buywhere", "fork": False, "full_name": "spammer/buywhere"},
+            {"name": "buywhere-mcp", "fork": False, "full_name": "spammer/buywhere-mcp",
+             "stargazers_count": 0, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
+            {"name": "buywhere", "fork": False, "full_name": "spammer/buywhere",
+             "stargazers_count": 0, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
         ]
         issues = [
-            {"title": f"Add buywhere-mcp support", "body": "buywhere-mcp is great for shopping",
+            {"title": f"Add spammer/buywhere-mcp support", "body": "spammer/buywhere-mcp is great for shopping",
              "repository_url": f"https://api.github.com/repos/org{i}/repo",
              "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
             for i in range(6)
@@ -459,7 +498,8 @@ class TestSelfPromotion:
 
     def test_no_self_references_clean(self):
         user_repos = [
-            {"name": "my-project", "fork": False, "full_name": "dev/my-project"},
+            {"name": "my-project", "fork": False, "full_name": "dev/my-project",
+             "stargazers_count": 0, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
         ]
         issues = [
             {"title": "Bug in auth flow", "body": "The auth flow crashes when...",
@@ -472,9 +512,12 @@ class TestSelfPromotion:
 
     def test_generic_names_not_matched(self):
         user_repos = [
-            {"name": "app", "fork": False, "full_name": "dev/app"},
-            {"name": "api", "fork": False, "full_name": "dev/api"},
-            {"name": "web", "fork": False, "full_name": "dev/web"},
+            {"name": "app", "fork": False, "full_name": "dev/app",
+             "stargazers_count": 0, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
+            {"name": "api", "fork": False, "full_name": "dev/api",
+             "stargazers_count": 0, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
+            {"name": "web", "fork": False, "full_name": "dev/web",
+             "stargazers_count": 0, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
         ]
         issues = [
             {"title": "App crashes on load", "body": "The web api returns 500...",
@@ -487,7 +530,8 @@ class TestSelfPromotion:
 
     def test_issues_in_own_org_excluded(self):
         user_repos = [
-            {"name": "my-tool", "fork": False, "full_name": "myorg/my-tool"},
+            {"name": "my-tool", "fork": False, "full_name": "myorg/my-tool",
+             "stargazers_count": 0, "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
         ]
         issues = [
             {"title": "Update my-tool docs", "body": "my-tool needs better docs",
@@ -497,6 +541,43 @@ class TestSelfPromotion:
         ]
         signals = _check_self_promotion("myorg", issues, user_repos)
         assert len(signals) == 0
+
+    def test_established_repos_not_flagged_as_spam(self):
+        """Promoting a well-known project (>50 stars) should not trigger self_promotion_spray."""
+        user_repos = [
+            {"name": "popular-toolkit", "fork": False, "full_name": "maintainer/popular-toolkit",
+             "stargazers_count": 1400,
+             "created_at": (datetime.now(timezone.utc) - timedelta(days=800)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+        ]
+        issues = [
+            {"title": f"Integrate maintainer/popular-toolkit", "body": "maintainer/popular-toolkit can help here",
+             "repository_url": f"https://api.github.com/repos/org{i}/repo",
+             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(8)
+        ]
+        signals = _check_self_promotion("maintainer", issues, user_repos)
+        assert not any(s.name == "self_promotion_spray" for s in signals)
+        assert any(s.name == "established_project_reference" and s.severity == "LOW" for s in signals)
+
+    def test_mixed_thin_and_established_repos(self):
+        """When both thin and established repos are promoted, thin-repo spam still fires."""
+        now = datetime.now(timezone.utc)
+        user_repos = [
+            {"name": "good-project", "fork": False, "full_name": "user/good-project",
+             "stargazers_count": 200,
+             "created_at": (now - timedelta(days=500)).strftime("%Y-%m-%dT%H:%M:%SZ")},
+            {"name": "thin-project", "fork": False, "full_name": "user/thin-project",
+             "stargazers_count": 0,
+             "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")},
+        ]
+        issues = [
+            {"title": f"Add user/thin-project", "body": "user/thin-project is useful",
+             "repository_url": f"https://api.github.com/repos/org{i}/repo",
+             "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in range(6)
+        ]
+        signals = _check_self_promotion("user", issues, user_repos)
+        assert any(s.name == "self_promotion_spray" for s in signals)
 
 
 # ---------------------------------------------------------------------------

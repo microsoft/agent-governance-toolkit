@@ -5,6 +5,52 @@ using System.Diagnostics.Metrics;
 namespace AgentGovernance.Telemetry;
 
 /// <summary>
+/// Configures tag emission for <see cref="GovernanceMetrics"/>.
+/// </summary>
+/// <remarks>
+/// In production deployments the raw <c>agent_id</c> and <c>tool_name</c> tag
+/// dimensions can blow up the cardinality of the underlying meter aggregation
+/// tables — Prometheus and similar exporters allocate a distinct time-series
+/// per unique tag combination, so an environment with thousands of agents and
+/// dozens of tools produces tens of thousands of series per counter.
+///
+/// The safe defaults are: do NOT emit <c>agent_id</c> or <c>tool_name</c> as
+/// tags. Opt in to either dimension explicitly, and prefer the
+/// <see cref="AgentIdBucket"/> / <see cref="ToolNameBucket"/> hooks so that
+/// raw identifiers are reduced to a bounded label set before becoming a tag.
+/// </remarks>
+public sealed class GovernanceMetricsOptions
+{
+    /// <summary>
+    /// When <c>true</c>, includes an <c>agent_id</c> tag on per-decision metrics.
+    /// Default: <c>false</c> (raw <c>agent_id</c> is unbounded in cardinality).
+    /// </summary>
+    public bool IncludeAgentIdTag { get; init; }
+
+    /// <summary>
+    /// When <c>true</c>, includes a <c>tool_name</c> tag on per-decision metrics.
+    /// Default: <c>false</c> (tool registries are typically bounded, but
+    /// dynamically-named MCP tools can still grow without limit).
+    /// </summary>
+    public bool IncludeToolNameTag { get; init; }
+
+    /// <summary>
+    /// Optional bucketing function applied to <c>agent_id</c> before it is
+    /// emitted as a tag (only consulted when <see cref="IncludeAgentIdTag"/>
+    /// is <c>true</c>). Use this to map raw agent identifiers to a small,
+    /// bounded label set (e.g. tenant prefix, hash mod N).
+    /// </summary>
+    public Func<string, string>? AgentIdBucket { get; init; }
+
+    /// <summary>
+    /// Optional bucketing function applied to <c>tool_name</c> before it is
+    /// emitted as a tag (only consulted when <see cref="IncludeToolNameTag"/>
+    /// is <c>true</c>).
+    /// </summary>
+    public Func<string, string>? ToolNameBucket { get; init; }
+}
+
+/// <summary>
 /// OpenTelemetry-compatible metrics for governance operations using
 /// <see cref="System.Diagnostics.Metrics"/>. Consumers can collect these
 /// metrics with any OTEL-compatible exporter (Prometheus, Azure Monitor, etc.).
@@ -17,6 +63,11 @@ namespace AgentGovernance.Telemetry;
 ///     .AddPrometheusExporter()
 ///     .Build();
 /// </code>
+///
+/// <b>Tag cardinality:</b> by default only the <c>decision</c> tag is emitted
+/// on per-call metrics. Pass a <see cref="GovernanceMetricsOptions"/> to opt
+/// into <c>agent_id</c> and / or <c>tool_name</c>, and supply bucketing
+/// functions if the raw values would exceed the exporter's cardinality budget.
 /// </remarks>
 public sealed class GovernanceMetrics : IDisposable
 {
@@ -27,6 +78,7 @@ public sealed class GovernanceMetrics : IDisposable
     public const string MeterName = "AgentGovernance";
 
     private readonly Meter _meter;
+    private readonly GovernanceMetricsOptions _options;
 
     /// <summary>Total policy evaluation decisions (allowed + denied).</summary>
     public Counter<long> PolicyDecisions { get; }
@@ -53,10 +105,20 @@ public sealed class GovernanceMetrics : IDisposable
     public Counter<long> AuditEvents { get; }
 
     /// <summary>
-    /// Initializes a new <see cref="GovernanceMetrics"/> instance with the default meter.
+    /// Initializes a new <see cref="GovernanceMetrics"/> instance with the
+    /// default low-cardinality tag policy (only <c>decision</c> is emitted).
     /// </summary>
-    public GovernanceMetrics()
+    public GovernanceMetrics() : this(new GovernanceMetricsOptions()) { }
+
+    /// <summary>
+    /// Initializes a new <see cref="GovernanceMetrics"/> instance with explicit
+    /// tag-emission options.
+    /// </summary>
+    /// <param name="options">Controls which high-cardinality fields are emitted as tags.</param>
+    public GovernanceMetrics(GovernanceMetricsOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
         _meter = new Meter(MeterName, "1.0.0");
 
         PolicyDecisions = _meter.CreateCounter<long>(
@@ -122,12 +184,7 @@ public sealed class GovernanceMetrics : IDisposable
     /// <param name="rateLimited">Whether the request was rate-limited.</param>
     public void RecordDecision(bool allowed, string agentId, string toolName, double evaluationMs, bool rateLimited = false)
     {
-        var tags = new KeyValuePair<string, object?>[]
-        {
-            new("agent_id", agentId),
-            new("tool_name", toolName),
-            new("decision", allowed ? "allow" : "deny")
-        };
+        var tags = BuildDecisionTags(allowed, agentId, toolName);
 
         PolicyDecisions.Add(1, tags);
 
@@ -140,6 +197,27 @@ public sealed class GovernanceMetrics : IDisposable
             RateLimitHits.Add(1, tags);
 
         EvaluationLatency.Record(evaluationMs, tags);
+    }
+
+    private KeyValuePair<string, object?>[] BuildDecisionTags(bool allowed, string agentId, string toolName)
+    {
+        var capacity = 1
+            + (_options.IncludeAgentIdTag ? 1 : 0)
+            + (_options.IncludeToolNameTag ? 1 : 0);
+        var tags = new KeyValuePair<string, object?>[capacity];
+        var idx = 0;
+        tags[idx++] = new KeyValuePair<string, object?>("decision", allowed ? "allow" : "deny");
+        if (_options.IncludeAgentIdTag)
+        {
+            var value = _options.AgentIdBucket is null ? agentId : _options.AgentIdBucket(agentId);
+            tags[idx++] = new KeyValuePair<string, object?>("agent_id", value);
+        }
+        if (_options.IncludeToolNameTag)
+        {
+            var value = _options.ToolNameBucket is null ? toolName : _options.ToolNameBucket(toolName);
+            tags[idx++] = new KeyValuePair<string, object?>("tool_name", value);
+        }
+        return tags;
     }
 
     /// <inheritdoc />

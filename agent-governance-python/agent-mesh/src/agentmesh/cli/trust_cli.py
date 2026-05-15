@@ -13,36 +13,24 @@ Commands for inspecting and managing the trust network:
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import click
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
 from agentmesh.trust.bridge import PeerInfo
-from agentmesh.constants import (
-    TIER_VERIFIED_PARTNER_THRESHOLD,
-    TIER_TRUSTED_THRESHOLD,
-    TIER_STANDARD_THRESHOLD,
-    TIER_PROBATIONARY_THRESHOLD,
-)
+from agentmesh.trust.levels import trust_level_for_score
 
 console = Console()
 
 
-def _trust_level_label(score: int) -> str:
-    """Return a human-readable trust level label for a numeric score."""
-    if score >= TIER_VERIFIED_PARTNER_THRESHOLD:
-        return "verified_partner"
-    elif score >= TIER_TRUSTED_THRESHOLD:
-        return "trusted"
-    elif score >= TIER_STANDARD_THRESHOLD:
-        return "standard"
-    elif score >= TIER_PROBATIONARY_THRESHOLD:
-        return "probationary"
-    return "untrusted"
+# Backwards-compatible alias for the canonical helper in agentmesh.trust.levels;
+# kept so internal callers and the existing test suite (test_trust_cli.py) work
+# without changes.
+_trust_level_label = trust_level_for_score
 
 
 def _trust_level_style(level: str) -> str:
@@ -66,7 +54,7 @@ def _format_datetime(dt: Optional[datetime]) -> str:
 
 def _get_demo_peers() -> dict[str, PeerInfo]:
     """Return demo peer data for display when no live data is available."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return {
         "did:mesh:agent-alpha-001": PeerInfo(
             peer_did="did:mesh:agent-alpha-001",
@@ -117,7 +105,7 @@ def _get_demo_peers() -> dict[str, PeerInfo]:
 
 def _get_demo_history(agent_id: str) -> list[dict]:
     """Return demo trust score history for an agent."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     base_scores = {
         "did:mesh:agent-alpha-001": [800, 820, 850, 870, 900, 920],
         "did:mesh:agent-beta-002": [600, 650, 700, 720, 740, 750],
@@ -498,7 +486,7 @@ def revoke(agent_id: str, reason: str, force: bool, fmt: str, json_flag: bool):
         "reason": reason,
         "previous_score": peer.trust_score,
         "new_score": 0,
-        "revoked_at": _format_datetime(datetime.utcnow()),
+        "revoked_at": _format_datetime(datetime.now(timezone.utc)),
     }
 
     if fmt in ("json", "yaml"):
@@ -554,7 +542,7 @@ def attest(agent_id: str, note: str, score_boost: int, fmt: str, json_flag: bool
         "score_boost": score_boost,
         "new_score": new_score,
         "new_level": _trust_level_label(new_score),
-        "attested_at": _format_datetime(datetime.utcnow()),
+        "attested_at": _format_datetime(datetime.now(timezone.utc)),
     }
 
     if fmt in ("json", "yaml"):

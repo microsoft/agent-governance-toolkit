@@ -118,6 +118,74 @@ class TestDiscoverPolicies:
         result = discover_policies(action_dir, tmp_path)
         assert len(result) == 1
 
+    # -- Path-traversal hardening ------------------------------------------
+
+    def test_action_path_outside_root_returns_empty(self, tmp_path):
+        """If ``action_path`` resolves outside ``root`` the walk must NOT
+        traverse upward to the filesystem root, picking up
+        ``governance.yaml`` files from arbitrary locations on disk.
+        """
+        root = tmp_path / "workspace"
+        root.mkdir()
+        _write_policy(root / "governance.yaml", _make_policy("root", []))
+
+        # Plant a "hostile" governance.yaml above the workspace.
+        hostile_dir = tmp_path / "outside"
+        hostile_dir.mkdir()
+        _write_policy(hostile_dir / "governance.yaml", _make_policy("hostile", []))
+
+        action = hostile_dir / "evil.py"
+        action.touch()
+
+        result = discover_policies(action, root)
+        assert result == [], (
+            "discover_policies must refuse to load policies for an action "
+            "outside the configured root; otherwise an attacker who can "
+            "influence the action path can plant a governance.yaml anywhere "
+            "above their target and have it loaded."
+        )
+
+    def test_symlink_escape_does_not_load_outside_root(self, tmp_path):
+        """A symlink inside ``root`` that points outside resolves outside
+        and must be rejected.
+        """
+        root = tmp_path / "workspace"
+        root.mkdir()
+        _write_policy(root / "governance.yaml", _make_policy("root", []))
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _write_policy(outside / "governance.yaml", _make_policy("hostile", []))
+
+        link = root / "escape"
+        try:
+            link.symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlink creation not supported on this platform")
+
+        action = link / "evil.py"
+        # File doesn't exist through the symlink, but resolve() still works
+        # to compute the resolved target directory.
+        result = discover_policies(action, root)
+        assert result == []
+
+    def test_relative_dot_dot_in_action_path_is_resolved_and_checked(self, tmp_path):
+        """``..`` segments are resolved, and an action_path that resolves
+        outside root via ``..`` is rejected.
+        """
+        root = tmp_path / "workspace"
+        root.mkdir()
+        _write_policy(root / "governance.yaml", _make_policy("root", []))
+
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        _write_policy(outside / "governance.yaml", _make_policy("hostile", []))
+
+        # action_path uses .. to escape the workspace.
+        action = root / ".." / "outside" / "evil.py"
+        result = discover_policies(action, root)
+        assert result == []
+
 
 # =============================================================================
 # Merge tests
@@ -168,10 +236,25 @@ class TestMergePolicies:
             PolicyRule(name="block-shell", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.ALLOW, priority=1000, override=True),
         ])
         result = merge_policies([root, child])
-        # Both rules present — parent deny kept, child allow also added
-        assert len(result) == 2
-        deny_rules = [r for r in result if r.action == PolicyAction.DENY]
-        assert len(deny_rules) == 1  # Parent deny preserved
+        # Child override is dropped entirely — only the parent deny remains.
+        assert len(result) == 1
+        assert result[0].action == PolicyAction.DENY
+        assert result[0].name == "block-shell"
+
+    def test_higher_priority_child_cannot_defeat_parent_deny(self):
+        # Regression: previously the child rule was appended despite the
+        # "ignored" warning, so a higher-priority child ALLOW would sort
+        # above the parent DENY and win at evaluation time.
+        root = PolicyDocument(name="root", rules=[
+            PolicyRule(name="block-shell", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.DENY, priority=100),
+        ])
+        child = PolicyDocument(name="child", rules=[
+            PolicyRule(name="block-shell", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.ALLOW, priority=9999, override=True),
+        ])
+        result = merge_policies([root, child])
+        assert len(result) == 1
+        assert result[0].action == PolicyAction.DENY
+        assert all(r.action != PolicyAction.ALLOW for r in result)
 
     def test_empty_chain(self):
         assert merge_policies([]) == []

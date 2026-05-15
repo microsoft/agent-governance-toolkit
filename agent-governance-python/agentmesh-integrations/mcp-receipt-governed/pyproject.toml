@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_mcp_receipts"
-version = "3.3.0"
+version = "3.6.0"
 description = "MCP tool-call receipt signing — Cedar policy decisions linked to governance receipts"
 readme = "README.md"
 license = {text = "MIT"}
@@ -22,8 +22,8 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-crypto = ["cryptography>=41.0,<45.0"]
-dev = ["pytest>=7.0", "cryptography>=41.0,<45.0"]
+crypto = ["cryptography>=46.0.7,<48.0"]
+dev = ["pytest>=7.0", "cryptography>=46.0.7,<48.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

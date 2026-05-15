@@ -11,7 +11,7 @@ Supports schema versioning via ``apiVersion`` (e.g.,
 warnings; unknown versions raise ``ValueError``.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Literal, Any
 from pydantic import BaseModel, Field
 import logging
@@ -238,8 +238,8 @@ class Policy(BaseModel):
     default_action: Literal["allow", "deny"] = Field(default="deny")
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def from_yaml(cls, yaml_content: str, base_dir: str = "") -> "Policy":
@@ -333,6 +333,16 @@ class Policy(BaseModel):
                 if os.path.isabs(parent_ref)
                 else os.path.join(base_dir, parent_ref)
             )
+
+            # Prevent path traversal: resolved path must stay within base_dir
+            real_parent = os.path.realpath(parent_path)
+            real_base = os.path.realpath(base_dir)
+            if not real_parent.startswith(real_base + os.sep) and real_parent != real_base:
+                raise ValueError(
+                    f"Policy extends '{parent_ref}' resolves to '{real_parent}' "
+                    f"which is outside the policy directory '{real_base}'"
+                )
+
             if not os.path.exists(parent_path):
                 raise FileNotFoundError(
                     f"Policy extends '{parent_ref}' not found at {parent_path}"
@@ -456,7 +466,7 @@ class PolicyDecision(BaseModel):
     rate_limit_reset: Optional[datetime] = None
 
     # Timing
-    evaluated_at: datetime = Field(default_factory=datetime.utcnow)
+    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     evaluation_ms: Optional[float] = None
 
     # Extension metadata (e.g., authority resolver details)
@@ -648,7 +658,7 @@ class PolicyEngine:
             return False
 
         # Check if reset time passed
-        if datetime.utcnow() > limit_data["reset_at"]:
+        if datetime.now(timezone.utc) > limit_data["reset_at"]:
             self._rate_limits[limit_key] = None
             return False
 
@@ -669,7 +679,7 @@ class PolicyEngine:
             from datetime import timedelta
             self._rate_limits[limit_key] = {
                 "count": 0,
-                "reset_at": datetime.utcnow() + timedelta(seconds=period),
+                "reset_at": datetime.now(timezone.utc) + timedelta(seconds=period),
             }
 
         self._rate_limits[limit_key]["count"] += 1
@@ -813,7 +823,7 @@ class PolicyEngine:
             PolicyScope,
         )
 
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
 
         # 1. Check YAML/JSON policies first
         applicable = [p for p in self._policies.values() if p.applies_to(agent_did)]
@@ -844,7 +854,7 @@ class PolicyEngine:
             if candidates:
                 result = self._resolver.resolve(candidates)
                 winner = result.winning_decision
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
 
                 # Apply rate limiting for the winning rule
                 matched_rule = None
@@ -911,7 +921,7 @@ class PolicyEngine:
             )
             authority_decision = self._authority_resolver.resolve(authority_req)
             if authority_decision.decision == "deny":
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
                 return PolicyDecision(
                     allowed=False,
                     action="deny",
@@ -920,7 +930,7 @@ class PolicyEngine:
                     evaluation_ms=elapsed,
                 )
             if authority_decision.decision == "allow_narrowed":
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
                 return PolicyDecision(
                     allowed=True,
                     action="allow",
@@ -939,7 +949,7 @@ class PolicyEngine:
             query = f"data.{package}.allow"
             opa_result = evaluator.evaluate(query, context)
             if opa_result.error is None:
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
                 return PolicyDecision(
                     allowed=opa_result.allowed,
                     action="allow" if opa_result.allowed else "deny",
@@ -955,7 +965,7 @@ class PolicyEngine:
             cedar_action = f'Action::"{action_name}"' if "::" not in action_name else action_name
             cedar_result = cedar_eval.evaluate(cedar_action, context)
             if cedar_result.error is None:
-                elapsed = (datetime.utcnow() - start).total_seconds() * 1000
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
                 return PolicyDecision(
                     allowed=cedar_result.allowed,
                     action="allow" if cedar_result.allowed else "deny",
@@ -972,7 +982,7 @@ class PolicyEngine:
             # Operators must explicitly load an allow policy.
             default = "deny"
 
-        elapsed = (datetime.utcnow() - start).total_seconds() * 1000
+        elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
         return PolicyDecision(
             allowed=(default == "allow"),
             action=default,

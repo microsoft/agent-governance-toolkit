@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_control_plane"
-version = "3.3.0"
+version = "3.6.0"
 description = "Layer 3: The Framework - A deterministic kernel for zero-violation governance in agentic AI systems with POSIX-style signals, VFS, and kernel/user space separation"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -64,7 +64,7 @@ Repository = "https://github.com/microsoft/agent-governance-toolkit"
 dev = [
     "pytest>=7.0.0,<8.0",
     "pytest-cov>=4.0.0,<5.0",
-    "black>=25.1.0,<26.0",
+    "black>=26.3.1,<27.0",
     "flake8>=6.0.0,<7.0",
     "mypy>=1.0.0,<2.0",
     "pre-commit>=3.0.0,<4.0",

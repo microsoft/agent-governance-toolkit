@@ -1,5 +1,9 @@
 # AgentMesh Go module
 
+[![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/microsoft/agent-governance-toolkit/agent-governance-golang.svg)](https://pkg.go.dev/github.com/microsoft/agent-governance-toolkit/agent-governance-golang)
+
 Go module for the AgentMesh governance framework — identity, trust scoring, policy evaluation, tamper-evident audit logging, MCP security scanning, execution privilege rings, kill switches, agent lifecycle management, SLO tracking, shadow discovery, prompt defense, and native Go integrations.
 
 ## Install
@@ -8,7 +12,16 @@ Go module for the AgentMesh governance framework — identity, trust scoring, po
 go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang
 ```
 
+Verify the module is available:
+
+```bash
+go list -m github.com/microsoft/agent-governance-toolkit/agent-governance-golang
+```
+
 ## Quick Start
+
+> See [`examples/quickstart/`](./examples/quickstart/) for a runnable,
+> compile-checked version of the snippet below.
 
 ```go
 package main
@@ -17,7 +30,7 @@ import (
 	"fmt"
 	"log"
 
-	agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang"
+	agentmesh "github.com/microsoft/agent-governance-toolkit/agent-governance-golang/packages/agentmesh"
 )
 
 func main() {
@@ -75,7 +88,8 @@ Rule-based policy engine with wildcard and condition matching.
 |---|---|
 | `NewPolicyEngine(rules)` | Create a policy engine |
 | `(*PolicyEngine).Evaluate(action, context)` | Evaluate an action |
-| `(*PolicyEngine).LoadFromYAML(path)` | Load rules from YAML file |
+| `(*PolicyEngine).LoadFromYAML(path)` | Replace rules from YAML file |
+| `(*PolicyEngine).MergeFromYAML(path)` | Append rules from a YAML file to the existing rule set |
 | `(*PolicyEngine).AddBackend(backend)` | Register an external policy backend |
 | `(*PolicyEngine).LoadRego(options)` | Register an OPA/Rego backend |
 | `(*PolicyEngine).LoadCedar(options)` | Register a Cedar backend |

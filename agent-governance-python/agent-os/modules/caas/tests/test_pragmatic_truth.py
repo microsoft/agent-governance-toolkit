@@ -12,7 +12,7 @@ Tests that the system can:
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from caas.models import (
     ContentFormat,
@@ -48,7 +48,7 @@ def test_source_detection():
             )
         ],
         metadata={"source_type": "official_docs"},
-        ingestion_timestamp=datetime.utcnow().isoformat()
+        ingestion_timestamp=datetime.now(timezone.utc).isoformat()
     )
     
     doc_id_chat = str(uuid.uuid4())
@@ -65,7 +65,7 @@ def test_source_detection():
             )
         ],
         metadata={"source_type": "team_chat", "url": "slack://channel/engineering/msg123"},
-        ingestion_timestamp=datetime.utcnow().isoformat()
+        ingestion_timestamp=datetime.now(timezone.utc).isoformat()
     )
     
     detector = SourceDetector()
@@ -263,7 +263,7 @@ def test_conflict_detection_in_extraction():
             ),
         ],
         metadata={},
-        ingestion_timestamp=datetime.utcnow().isoformat()
+        ingestion_timestamp=datetime.now(timezone.utc).isoformat()
     )
     
     store.add(doc)

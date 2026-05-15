@@ -1,0 +1,46 @@
+apiVersion: governance.toolkit/v1
+version: "1.0"
+name: quickstart-policy
+description: |
+  Sample governance policy for the .NET Quickstart example.
+  Demonstrates allow / deny / require_approval / rate_limit actions.
+default_action: deny
+
+rules:
+  # Read-only tools are always allowed.
+  - name: allow-safe-reads
+    condition: "tool_name == 'web_search'"
+    action: allow
+    priority: 10
+
+  - name: allow-file-read
+    condition: "tool_name == 'file_read'"
+    action: allow
+    priority: 10
+
+  # Sensitive paths cannot be written, even if file_write is otherwise allowed.
+  - name: block-system-paths
+    condition: "path == '/etc/passwd'"
+    action: deny
+    priority: 100
+
+  # Sending email needs human approval.
+  - name: require-approval-for-email
+    condition: "tool_name == 'send_email'"
+    action: require_approval
+    approvers:
+      - "security-officer@contoso.com"
+    priority: 50
+
+  # Outbound HTTP is rate-limited.
+  - name: rate-limit-http
+    condition: "tool_name == 'http_request'"
+    action: rate_limit
+    limit: "3/minute"
+    priority: 20
+
+  # Catch-all: any explicit dangerous tool is denied.
+  - name: block-dangerous
+    condition: "tool_name == 'execute_shell'"
+    action: deny
+    priority: 100

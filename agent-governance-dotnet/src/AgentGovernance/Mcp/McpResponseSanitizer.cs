@@ -37,16 +37,23 @@ public sealed class McpResponseFinding
 public sealed class McpSanitizedResponse
 {
     /// <summary>The sanitized text with threats neutralized.</summary>
-    public required string Sanitized { get; init; }
+    public string Sanitized { get; }
 
     /// <summary>Findings detected during sanitization.</summary>
-    public required IReadOnlyList<McpResponseFinding> Findings { get; init; }
+    public IReadOnlyList<McpResponseFinding> Findings { get; }
 
     /// <summary>Whether the text was modified during sanitization.</summary>
-    public bool Modified => Sanitized != _original;
+    public bool Modified { get; }
 
-    private readonly string _original;
-    internal McpSanitizedResponse(string original) => _original = original;
+    internal McpSanitizedResponse(
+        string original,
+        string sanitized,
+        IReadOnlyList<McpResponseFinding> findings)
+    {
+        Sanitized = sanitized;
+        Findings = findings;
+        Modified = !string.Equals(original, sanitized, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>
@@ -145,10 +152,6 @@ public sealed class McpResponseSanitizer
             sanitized = redaction.Sanitized;
         }
 
-        return new McpSanitizedResponse(text)
-        {
-            Sanitized = sanitized,
-            Findings = findings.AsReadOnly()
-        };
+        return new McpSanitizedResponse(text, sanitized, findings.AsReadOnly());
     }
 }

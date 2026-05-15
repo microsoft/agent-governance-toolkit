@@ -2,10 +2,14 @@
 
 cd $SRC/agent-governance-toolkit
 
-# Install the governance packages (paths updated after mono-repo reorg)
-pip3 install ./agent-governance-python/agent-os 2>/dev/null || true
-pip3 install ./agent-governance-python/agent-mesh 2>/dev/null || true
-pip3 install ./agent-governance-python/agent-compliance 2>/dev/null || true
+# Install the governance packages (paths updated after mono-repo reorg).
+# Fail loudly if any install fails — silently building fuzzers without
+# their target packages produces fuzzers that exercise none of the code
+# under test. The script already runs with `bash -eu`, so an unswallowed
+# failure here aborts the build instead of producing empty harnesses.
+pip3 install ./agent-governance-python/agent-os
+pip3 install ./agent-governance-python/agent-mesh
+pip3 install ./agent-governance-python/agent-compliance
 pip3 install atheris==2.3.0
 
 # Build fuzz targets

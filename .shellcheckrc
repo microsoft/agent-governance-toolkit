@@ -1,0 +1,28 @@
+# Shellcheck configuration for GitHub Actions workflow scripts
+#
+# SC2129: "Consider using { cmd1; cmd2; } >> file instead of individual
+#         redirects" — style preference; individual redirects are clearer
+#         in workflow scripts where each echo is a distinct logical step.
+#
+# SC2001: "See if you can use ${variable//search/replace} instead" — sed
+#         is preferred for per-line substitution on multiline strings.
+#
+# SC2317: "Command appears to be unreachable" — false positive caused by
+#         extract_workflow_shell.py concatenating independent run: blocks
+#         into a single script for analysis.
+
+# SC2050: "This expression is constant" — false positive from GHA expression
+#         placeholders (__GHA_EXPR__) replacing ${{ }} in extracted scripts.
+#
+# SC2086: "Double quote to prevent globbing and word splitting" — intentional
+#         word splitting in find-to-argument pipelines where each result is a
+#         separate positional argument.
+
+# SC2016: "Expressions don't expand in single quotes" — intentional use of
+#         single-quoted strings for literal grep patterns and markdown fences.
+
+# SC2153: "Possible misspelling: VAR may not be assigned" — false positive
+#         from GHA env: variables (e.g. CHANGED, PKG) that shellcheck cannot
+#         see are set by the workflow runner.
+
+disable=SC2129,SC2001,SC2317,SC2050,SC2086,SC2016,SC2153

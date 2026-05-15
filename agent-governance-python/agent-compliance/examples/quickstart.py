@@ -7,7 +7,7 @@ Boot the full governance stack and execute a governed action.
 
 Usage:
     pip install agent-governance-toolkit
-    python examples/quickstart.py
+    python quickstart.py
 """
 
 import asyncio
@@ -53,4 +53,9 @@ async def main():
     print("\n🎉 Governance stack is running! Your agent is now governed.")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        raise

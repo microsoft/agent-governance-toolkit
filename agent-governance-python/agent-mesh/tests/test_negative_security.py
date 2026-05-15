@@ -360,7 +360,7 @@ class TestIdentityLifecycleAttacks:
 
     def test_expired_identity_not_active(self):
         agent = _create_agent("test")
-        agent.expires_at = datetime.utcnow() - timedelta(hours=1)
+        agent.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
         assert agent.is_active() is False
 
     def test_revoked_identity_cannot_sign(self):
@@ -487,7 +487,7 @@ class TestHandshakeChallengeDoS:
             public_key=agent_b.public_key,
         )
         # Now expire the challenge
-        challenge.timestamp = datetime.utcnow() - timedelta(seconds=60)
+        challenge.timestamp = datetime.now(timezone.utc) - timedelta(seconds=60)
         assert challenge.is_expired() is True
         # Verify with expired challenge should fail
         result = await handshake._verify_response(

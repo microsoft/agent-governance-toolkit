@@ -46,9 +46,11 @@ jobs:
           "
             fi
           done
-          echo "structure<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$STRUCTURE" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "structure<<EOF"
+            echo "$STRUCTURE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           echo "Package structure collected."
 
       - name: Run OWASP compliance audit

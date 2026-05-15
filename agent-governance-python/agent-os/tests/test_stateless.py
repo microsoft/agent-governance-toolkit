@@ -305,12 +305,20 @@ class TestRedisConfig:
         cfg = RedisConfig(host="myhost", port=6380, db=3)
         assert cfg.to_url() == "redis://myhost:6380/3"
 
-    def test_to_url_with_password(self):
-        """Test URL generation with password."""
+    def test_to_url_omits_password(self):
+        """to_url() must NOT embed the password into the URL.
+
+        The password is passed separately to the redis client via the
+        keyword argument so it cannot leak into tracebacks, structured
+        logs at the connection layer, or any consumer that round-trips
+        the URL string.
+        """
         from agent_os.stateless import RedisConfig
 
         cfg = RedisConfig(host="myhost", port=6380, db=1, password="s3cret")
-        assert cfg.to_url() == "redis://:s3cret@myhost:6380/1"
+        url = cfg.to_url()
+        assert url == "redis://myhost:6380/1"
+        assert "s3cret" not in url
 
     def test_backend_uses_config_url(self):
         """Test that RedisBackend.url is derived from RedisConfig."""

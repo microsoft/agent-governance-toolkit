@@ -25,7 +25,7 @@ for the current list.
 ### Contributors
 
 Anyone who submits a pull request, files an issue, or participates in discussions.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 ### Community Extension Authors
 

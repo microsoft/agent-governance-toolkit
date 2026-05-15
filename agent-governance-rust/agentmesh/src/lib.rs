@@ -25,10 +25,27 @@ pub mod identity;
 pub mod identity_support;
 pub mod integration_support;
 pub mod lifecycle;
+/// Deprecated: use the [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) crate directly.
+///
+/// `agentmesh::mcp` is a verbatim copy of `agentmesh_mcp::mcp` and will be
+/// removed in the next major release. The two paths resolve to *distinct*
+/// types in the Rust type system, so consumers that mix imports from
+/// `agentmesh::mcp::...` and `agentmesh_mcp::mcp::...` will hit confusing
+/// type-mismatch errors. Standardize on the `agentmesh-mcp` crate.
+///
+/// Tracking issues:
+/// <https://github.com/microsoft/agent-governance-toolkit/issues/2013> and
+/// <https://github.com/microsoft/agent-governance-toolkit/issues/2088>.
+#[deprecated(
+    since = "3.5.0",
+    note = "use the `agentmesh-mcp` crate directly; `agentmesh::mcp` will be removed in the next major release (see issue #2013)"
+)]
 pub mod mcp;
 pub mod policy;
+pub(crate) mod regex_cache;
 pub mod reward_support;
 pub mod rings;
+pub mod sandbox;
 pub mod trust;
 pub mod trust_support;
 pub mod types;
@@ -74,6 +91,7 @@ pub use integration_support::{
     ShadowAgent,
 };
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
+#[allow(deprecated)]
 pub use mcp::*;
 pub use policy::{PolicyEngine, PolicyError};
 pub use reward_support::{
@@ -346,6 +364,38 @@ policies:
             result.decision,
             PolicyDecision::RequiresApproval(_)
         ));
+    }
+
+    #[test]
+    fn test_approval_required_action_preserves_trust_and_audits_label() {
+        let yaml = r#"
+version: "1.0"
+agent: test
+policies:
+  - name: deploy-gate
+    type: approval
+    actions:
+      - "deploy.*"
+    min_approvals: 2
+"#;
+        let opts = ClientOptions {
+            policy_yaml: Some(yaml.to_string()),
+            ..Default::default()
+        };
+        let client = AgentMeshClient::with_options("approval-audit", opts).unwrap();
+        let did = client.identity.did.clone();
+        let before = client.trust.get_trust_score(&did).score;
+
+        let result = client.execute_with_governance("deploy.production", None);
+        let after = client.trust.get_trust_score(&did).score;
+
+        assert!(!result.allowed);
+        assert!(matches!(
+            result.decision,
+            PolicyDecision::RequiresApproval(_)
+        ));
+        assert_eq!(result.audit_entry.decision, "requires_approval");
+        assert_eq!(after, before);
     }
 
     #[test]

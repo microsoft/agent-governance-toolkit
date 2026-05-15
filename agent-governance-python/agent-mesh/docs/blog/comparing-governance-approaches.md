@@ -200,4 +200,4 @@ The goal is not to implement all four approaches simultaneously. The goal is to 
 
 ---
 
-*This article is part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) community resources. For implementation details, see the [getting started guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/QUICKSTART.md).*
+*This article is part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) community resources. For implementation details, see the [getting started guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/quickstart.md).*

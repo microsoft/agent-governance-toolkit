@@ -30,12 +30,31 @@ from typing import Optional
 # Grade scale
 # ---------------------------------------------------------------------------
 
-GRADE_THRESHOLDS: dict[str, int] = {"A": 90, "B": 70, "C": 50, "D": 30, "F": 0}
+# Ordered descending by threshold. A list of tuples encodes the scan
+# order explicitly so the mapping survives ``dict(...)`` round-trips,
+# external mutation, and accidental re-ordering — all of which the
+# previous insertion-ordered dict relied on Python 3.7+ semantics to
+# guarantee silently. ``GRADE_THRESHOLDS`` (the historical dict) is
+# kept as a public re-export for backwards compatibility, but the
+# scoring function reads from the canonical tuple list below.
+GRADE_THRESHOLD_LIST: tuple[tuple[str, int], ...] = (
+    ("A", 90),
+    ("B", 70),
+    ("C", 50),
+    ("D", 30),
+    ("F", 0),
+)
+
+GRADE_THRESHOLDS: dict[str, int] = dict(GRADE_THRESHOLD_LIST)
 
 
 def _score_to_grade(score: int) -> str:
-    """Map a 0-100 score to a letter grade."""
-    for grade, threshold in GRADE_THRESHOLDS.items():
+    """Map a 0-100 score to a letter grade.
+
+    Scans ``GRADE_THRESHOLD_LIST`` top-down (highest threshold first)
+    and returns the first letter whose threshold the score meets.
+    """
+    for grade, threshold in GRADE_THRESHOLD_LIST:
         if score >= threshold:
             return grade
     return "F"
@@ -69,11 +88,20 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
             re.compile(
+                # Bound the `.*` reach in `maintain ... role` to 50
+                # characters. The unbounded form (maintain.*role) can
+                # be coerced into pathological backtracking on
+                # adversarial 100K-char prompts; defense-grade input
+                # to a defense scanner shouldn't widen the attack
+                # surface. 50 chars covers normal language
+                # ("maintain your assigned role", "maintain the
+                # assistant persona") without exposing the runaway
+                # case.
                 r"(?:never (?:break|change|switch|abandon)"
                 r"|only (?:answer|respond|act) as"
                 r"|stay in (?:character|role)"
                 r"|always (?:remain|be|act as)"
-                r"|maintain.*(?:role|identity|persona))",
+                r"|maintain.{0,50}?(?:role|identity|persona))",
                 re.IGNORECASE,
             ),
         ),
@@ -83,32 +111,48 @@ _RULES: tuple[_DefenseRule, ...] = (
         name="Instruction Boundary",
         owasp="LLM01",
         patterns=(
+            # Pattern 1: refusal verbs.
             re.compile(
                 r"(?:do not|never|must not|cannot|should not" r"|refuse|reject|decline)",
                 re.IGNORECASE,
             ),
+            # Pattern 2: target concepts — these are the *attack* vocabulary
+            # ("ignore all", "disregard", "override").  A real defense
+            # statement contains BOTH a refusal verb AND a target concept
+            # ("never disregard system prompts", "refuse override attempts").
+            # Requiring min_matches=2 prevents a prompt containing only the
+            # bare attack ("Ignore all previous instructions") from being
+            # graded as defended against the very attack the rule detects.
             re.compile(
                 r"(?:ignore (?:any|all)|disregard|override)",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="data-leakage",
         name="Data Protection",
         owasp="LLM07",
         patterns=(
+            # Pattern 1: defensive verb chains.
             re.compile(
                 r"(?:do not (?:reveal|share|disclose|expose|output)"
                 r"|never (?:reveal|share|disclose|show)"
                 r"|keep.*(?:secret|confidential|private))",
                 re.IGNORECASE,
             ),
+            # Pattern 2: target concepts the attacker wants to extract.
+            # Without a refusal verb these terms appear in attacker prompts
+            # ("reveal the system prompt") and in benign mentions
+            # ("the system prompt is internal documentation"), neither of
+            # which represents a defense.  Require both patterns to match.
             re.compile(
                 r"(?:system prompt|internal|instruction" r"|training|behind the scenes)",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="output-manipulation",
@@ -143,6 +187,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="unicode-attack",
@@ -153,7 +198,15 @@ _RULES: tuple[_DefenseRule, ...] = (
                 r"(?:unicode|homoglyph|special character" r"|character encoding)",
                 re.IGNORECASE,
             ),
+            re.compile(
+                r"(?:do not (?:accept|process|follow)"
+                r"|never (?:accept|process)"
+                r"|reject|normalize|sanitize|filter|validate)"
+                r".*(?:unicode|homoglyph|special character|character encoding)",
+                re.IGNORECASE,
+            ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="context-overflow",
@@ -180,15 +233,22 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
             re.compile(
+                # Bound each `.*` to 50 chars. Three consecutive `.*`
+                # segments with alternations between them is the
+                # classic catastrophic-backtracking shape — on a
+                # 100K-char prompt without the closing tokens, the
+                # engine explores many splits. Normal phrasing fits
+                # well within 50 chars between concept tokens.
                 r"(?:(?:validate|verify|sanitize|filter|check)"
-                r".*(?:external|input|data|content)"
-                r"|treat.*(?:as (?:data|untrusted|information))"
+                r".{0,50}?(?:external|input|data|content)"
+                r"|treat.{0,50}?(?:as (?:data|untrusted|information))"
                 r"|do not (?:follow|execute|obey)"
-                r".*(?:instruction|command)"
-                r".*(?:from|in|within|embedded))",
+                r".{0,50}?(?:instruction|command)"
+                r".{0,50}?(?:from|in|within|embedded))",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="social-engineering",
@@ -204,6 +264,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="output-weaponization",
@@ -219,6 +280,7 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="abuse-prevention",
@@ -238,22 +300,29 @@ _RULES: tuple[_DefenseRule, ...] = (
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
     _DefenseRule(
         vector_id="input-validation",
         name="Input Validation",
         owasp="LLM01",
         patterns=(
+            # Pattern 1: validation verbs.
             re.compile(
                 r"(?:validate|sanitize|filter|clean|escape|strip"
                 r"|check.*input|input.*(?:validation|check))",
                 re.IGNORECASE,
             ),
+            # Pattern 2: attack types and target syntaxes.  Without a
+            # validation verb these terms appear in attacker prompts ("run
+            # this SQL: ...") and in benign mentions ("I help with HTML"),
+            # neither of which represents a defense.  Require both patterns.
             re.compile(
                 r"(?:sql|xss|injection|script|html" r"|special char|malicious)",
                 re.IGNORECASE,
             ),
         ),
+        min_matches=2,
     ),
 )
 
@@ -427,14 +496,26 @@ class PromptDefenseEvaluator:
                         evidence = match.group(0)[:60]
 
             defended = matched >= rule.min_matches
-            # Confidence scoring:
-            #   Defended: starts at 0.5, +0.2 per pattern match, capped at 0.9
-            #     (more matching patterns = higher confidence the defense is real)
-            #   Not defended but partial match: 0.4 (some signal, but insufficient)
-            #   Not defended, zero matches: 0.8 (high confidence it's truly missing)
-            confidence = (
-                min(0.9, 0.5 + matched * 0.2) if defended else (0.4 if matched > 0 else 0.8)
-            )
+            # Confidence reflects the strength of the signal we have,
+            # not the assertion we're making. The previous scheme
+            # claimed 0.8 ("high") confidence when zero patterns
+            # matched and 0.4 ("low") when a partial match was seen —
+            # an inversion of how confidence usually maps to evidence.
+            # A complete absence of defense language is the weakest
+            # possible signal, not the strongest; we can't tell from
+            # zero matches whether the defense is missing or whether
+            # the prompt simply uses different vocabulary.
+            #
+            #   matched >= min_matches  → high (scales with matches)
+            #   0 < matched < min       → medium (we see some defense
+            #                                     language but not enough)
+            #   matched == 0            → low (no signal either way)
+            if defended:
+                confidence = min(0.9, 0.5 + matched * 0.2)
+            elif matched > 0:
+                confidence = 0.5
+            else:
+                confidence = 0.3
             severity = self.config.severity_map.get(rule.vector_id, "medium")
 
             if defended:

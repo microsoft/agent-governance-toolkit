@@ -1,0 +1,49 @@
+<!--
+    Sample Citadel Access Contract product policy with AGT governance metadata.
+    
+    This is a complete APIM product policy that combines Citadel's standard
+    controls (model validation, token limits) with AGT governance metadata
+    passthrough. Use this as a template for your Access Contract policies.
+    
+    To use:
+    1. Deploy the agt-governance-metadata fragment to your APIM instance
+    2. Reference this policy in your Access Contract's service config:
+       { code: "OAI", policyXmlPath: "policies/agt-governed-product-policy.xml" }
+-->
+<policies>
+    <inbound>
+        <base />
+        
+        <!-- Standard Citadel controls -->
+        <include-fragment fragment-id="set-llm-requested-model" />
+        
+        <!-- Set allowed models for this use case -->
+        <set-variable name="allowedModels" value="gpt-4o,gpt-5.4-mini" />
+        
+        <!-- Token rate limiting (per-subscription) -->
+        <llm-token-limit 
+            counter-key="@(context.Subscription.Id)" 
+            tokens-per-minute="5000" 
+            estimate-prompt-tokens="false" 
+            token-quota="500000" 
+            token-quota-period="Monthly" />
+        
+        <!-- AGT governance metadata: read trust score, risk label, policy info -->
+        <include-fragment fragment-id="agt-governance-metadata" />
+        
+        <!-- Enable response headers -->
+        <set-variable name="enableResponseHeaders" value="@(true)" />
+    </inbound>
+    
+    <backend>
+        <base />
+    </backend>
+    
+    <outbound>
+        <base />
+    </outbound>
+    
+    <on-error>
+        <base />
+    </on-error>
+</policies>

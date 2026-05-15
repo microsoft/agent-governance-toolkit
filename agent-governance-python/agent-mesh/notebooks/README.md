@@ -10,14 +10,15 @@ Interactive Jupyter notebooks for exploring agent-mesh concepts.
 
 ## Getting Started
 
-1. Install dependencies:
+1. Install dependencies (from the `agent-mesh` package root):
 
    ```bash
+   cd agent-governance-python/agent-mesh
    pip install -e ".[dev]"
    pip install jupyter matplotlib
    ```
 
-2. Launch Jupyter:
+2. Launch Jupyter from the `agent-mesh` directory:
 
    ```bash
    jupyter notebook notebooks/

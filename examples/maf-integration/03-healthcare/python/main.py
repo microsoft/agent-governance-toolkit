@@ -34,7 +34,14 @@ from agent_os.integrations.maf_adapter import (
     RogueDetectionMiddleware,
 )
 from agent_os.policies import PolicyEvaluator
-from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+
+try:
+    from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
+except ImportError:
+    from agent_sre.anomaly import AnomalyDetector as RogueAgentDetector  # type: ignore[assignment]
+    RiskLevel = None  # type: ignore[assignment]
+    RogueDetectorConfig = None  # type: ignore[assignment]
+
 from agentmesh.governance import AuditLog
 from pydantic import Field
 

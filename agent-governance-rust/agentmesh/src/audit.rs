@@ -13,16 +13,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Each entry's hash covers `seq|timestamp|agent_id|action|decision|prev_hash`,
 /// creating a tamper-evident chain from the genesis entry.
 pub struct AuditLogger {
-    entries: Mutex<Vec<AuditEntry>>,
+    state: Mutex<AuditState>,
     max_entries: Option<usize>,
 }
 
+struct AuditState {
+    entries: Vec<AuditEntry>,
+    seam_hash: Option<String>,
+}
+
 impl AuditLogger {
-    /// Create an empty audit logger with no entry limit.
+    /// Default maximum entries when no explicit limit is provided.
+    const DEFAULT_MAX_ENTRIES: usize = 100_000;
+
+    /// Create an empty audit logger with a default entry limit.
     pub fn new() -> Self {
         Self {
-            entries: Mutex::new(Vec::new()),
-            max_entries: None,
+            state: Mutex::new(AuditState {
+                entries: Vec::new(),
+                seam_hash: None,
+            }),
+            max_entries: Some(Self::DEFAULT_MAX_ENTRIES),
         }
     }
 
@@ -30,16 +41,24 @@ impl AuditLogger {
     /// evicting the oldest when the limit is exceeded.
     pub fn with_max_entries(max: usize) -> Self {
         Self {
-            entries: Mutex::new(Vec::new()),
+            state: Mutex::new(AuditState {
+                entries: Vec::new(),
+                seam_hash: None,
+            }),
             max_entries: Some(max),
         }
     }
 
     /// Append a new entry to the audit chain and return it.
     pub fn log(&self, agent_id: &str, action: &str, decision: &str) -> AuditEntry {
-        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
-        let seq = entries.len() as u64;
-        let prev_hash = entries.last().map(|e| e.hash.clone()).unwrap_or_default();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let seq = state.entries.len() as u64;
+        let prev_hash = state
+            .entries
+            .last()
+            .map(|e| e.hash.clone())
+            .or_else(|| state.seam_hash.clone())
+            .unwrap_or_default();
         let timestamp = iso8601_now();
 
         let hash_input = format!(
@@ -58,13 +77,16 @@ impl AuditLogger {
             hash,
         };
 
-        entries.push(entry.clone());
+        state.entries.push(entry.clone());
 
-        // Evict oldest entries when the retention limit is exceeded.
+        // Evict oldest entries when the retention limit is exceeded, retaining
+        // the last evicted entry's hash as the seam so verify() can re-anchor
+        // the surviving chain.
         if let Some(max) = self.max_entries {
-            if entries.len() > max {
-                let overflow = entries.len() - max;
-                entries.drain(..overflow);
+            if state.entries.len() > max {
+                let overflow = state.entries.len() - max;
+                state.seam_hash = Some(state.entries[overflow - 1].hash.clone());
+                state.entries.drain(..overflow);
             }
         }
 
@@ -76,29 +98,31 @@ impl AuditLogger {
     /// Returns `true` if every entry's hash is correct and linked to the
     /// previous entry's hash.
     pub fn verify(&self) -> bool {
-        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
-        verify_audit_entries(&entries)
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        verify_audit_entries(&state.entries, state.seam_hash.as_deref())
     }
 
     /// Return all audit entries.
     pub fn entries(&self) -> Vec<AuditEntry> {
-        self.entries
+        self.state
             .lock()
             .unwrap_or_else(|e| e.into_inner())
+            .entries
             .clone()
     }
 
     /// Serialise all audit entries to a JSON string.
     pub fn export_json(&self) -> String {
-        let entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
-        serde_json::to_string(&*entries).unwrap_or_else(|_| "[]".to_string())
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        serde_json::to_string(&state.entries).unwrap_or_else(|_| "[]".to_string())
     }
 
     /// Return entries matching the given filter.
     pub fn get_entries(&self, filter: &AuditFilter) -> Vec<AuditEntry> {
-        self.entries
+        self.state
             .lock()
             .unwrap_or_else(|e| e.into_inner())
+            .entries
             .iter()
             .filter(|e| {
                 if let Some(ref id) = filter.agent_id {
@@ -129,10 +153,10 @@ impl Default for AuditLogger {
     }
 }
 
-pub(crate) fn verify_audit_entries(entries: &[AuditEntry]) -> bool {
+pub(crate) fn verify_audit_entries(entries: &[AuditEntry], seam_hash: Option<&str>) -> bool {
     for (i, entry) in entries.iter().enumerate() {
         let expected_prev = if i == 0 {
-            String::new()
+            seam_hash.map(str::to_owned).unwrap_or_default()
         } else {
             entries[i - 1].hash.clone()
         };
@@ -167,10 +191,19 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 fn iso8601_now() -> String {
-    let d = SystemTime::now()
+    let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = d.as_secs();
+        .unwrap_or_default()
+        .as_secs();
+    iso8601_from_unix_secs(secs)
+}
+
+/// Format `secs` (seconds since the Unix epoch) as an ISO-8601 UTC timestamp
+/// (`YYYY-MM-DDTHH:MM:SSZ`).
+///
+/// Split out from [`iso8601_now`] so the civil-date conversion can be tested
+/// with fixed inputs.
+fn iso8601_from_unix_secs(secs: u64) -> String {
     let days = secs / 86400;
     let time_of_day = secs % 86400;
     let hours = time_of_day / 3600;
@@ -232,8 +265,8 @@ mod tests {
 
         // Tamper with the first entry
         {
-            let mut entries = logger.entries.lock().unwrap();
-            entries[0].action = "tampered".to_string();
+            let mut state = logger.state.lock().unwrap();
+            state.entries[0].action = "tampered".to_string();
         }
         assert!(!logger.verify());
     }
@@ -344,8 +377,8 @@ mod tests {
             logger.log("agent", &format!("action.{}", i), "allow");
         }
         {
-            let mut entries = logger.entries.lock().unwrap();
-            entries[2].action = "tampered".to_string();
+            let mut state = logger.state.lock().unwrap();
+            state.entries[2].action = "tampered".to_string();
         }
         assert!(!logger.verify());
     }
@@ -357,8 +390,34 @@ mod tests {
         logger.log("agent", "b", "allow");
         logger.log("agent", "c", "allow");
         {
-            let mut entries = logger.entries.lock().unwrap();
-            entries[1].previous_hash =
+            let mut state = logger.state.lock().unwrap();
+            state.entries[1].previous_hash =
+                "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        }
+        assert!(!logger.verify());
+    }
+
+    #[test]
+    fn test_verify_after_rollover_eviction() {
+        let logger = AuditLogger::with_max_entries(3);
+        for i in 0..10 {
+            logger.log("agent", &format!("action-{}", i), "allow");
+        }
+        assert_eq!(logger.entries().len(), 3);
+        assert!(logger.verify());
+    }
+
+    #[test]
+    fn test_tamper_head_after_rollover_eviction() {
+        let logger = AuditLogger::with_max_entries(3);
+        for i in 0..10 {
+            logger.log("agent", &format!("action-{}", i), "allow");
+        }
+        // Replace the surviving head's previous_hash with a bogus value — the
+        // seam from the evicted prefix should still be checked.
+        {
+            let mut state = logger.state.lock().unwrap();
+            state.entries[0].previous_hash =
                 "0000000000000000000000000000000000000000000000000000000000000000".to_string();
         }
         assert!(!logger.verify());
@@ -455,6 +514,41 @@ mod tests {
         assert_eq!(&ts[13..14], ":");
         assert_eq!(&ts[16..17], ":");
         assert_eq!(&ts[19..20], "Z");
+    }
+
+    #[test]
+    fn test_iso8601_from_unix_secs_known_values() {
+        // Unix epoch.
+        assert_eq!(iso8601_from_unix_secs(0), "1970-01-01T00:00:00Z");
+        // 2000-01-01T00:00:00Z — century start, divisible-by-400 leap year.
+        assert_eq!(iso8601_from_unix_secs(946_684_800), "2000-01-01T00:00:00Z");
+        // 2000-02-29T00:00:00Z — leap day in a divisible-by-400 century year.
+        assert_eq!(iso8601_from_unix_secs(951_782_400), "2000-02-29T00:00:00Z");
+        // 2001-09-09T01:46:40Z — common reference timestamp (1e9 seconds).
+        assert_eq!(
+            iso8601_from_unix_secs(1_000_000_000),
+            "2001-09-09T01:46:40Z"
+        );
+        // 2023-11-14T22:13:20Z (1.7e9 seconds) — sanity check in current era.
+        assert_eq!(
+            iso8601_from_unix_secs(1_700_000_000),
+            "2023-11-14T22:13:20Z"
+        );
+        // 2024-02-29T00:00:00Z — leap day in an ordinary (divisible-by-4) leap year.
+        assert_eq!(
+            iso8601_from_unix_secs(1_709_164_800),
+            "2024-02-29T00:00:00Z"
+        );
+        // 2024-03-01T00:00:00Z — day after the leap day, guards off-by-one.
+        assert_eq!(
+            iso8601_from_unix_secs(1_709_251_200),
+            "2024-03-01T00:00:00Z"
+        );
+        // 2024-12-31T23:59:59Z — last second of a leap year.
+        assert_eq!(
+            iso8601_from_unix_secs(1_735_689_599),
+            "2024-12-31T23:59:59Z"
+        );
     }
 
     #[test]

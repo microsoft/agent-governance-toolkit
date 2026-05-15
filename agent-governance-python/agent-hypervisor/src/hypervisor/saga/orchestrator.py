@@ -90,6 +90,18 @@ class SagaOrchestrator:
         """
         Execute a single saga step with timeout and retry support.
 
+        Cancellation semantics on timeout:
+            ``asyncio.wait_for`` cancels the wrapped coroutine on timeout
+            *and* awaits the cancellation before raising ``TimeoutError``,
+            so a cooperative executor (one with ``await`` points)
+            receives ``CancelledError`` and has a chance to release
+            resources before this method moves on to FAILED. An executor
+            with no ``await`` points (synchronous CPU work inside an
+            ``async def``) is not cancellable by Python — the timeout
+            will only fire once the executor yields control.
+            Callers needing hard-kill semantics must run such executors
+            in a process or thread pool and arrange external termination.
+
         Args:
             saga_id: Saga identifier
             step_id: Step identifier
@@ -127,9 +139,11 @@ class SagaOrchestrator:
                 step.error = str(last_error)
                 step.transition(StepState.FAILED)
                 if attempt < attempts - 1:
-                    # Reset to PENDING for retry
-                    step.state = StepState.PENDING
-                    step.error = None
+                    # Move FAILED → PENDING through the state table,
+                    # not by direct mutation. Bypassing transition()
+                    # would skip the validity check and the timestamp
+                    # bookkeeping.
+                    step.reset_for_retry()
                     await asyncio.sleep(
                         self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1)
                     )
@@ -138,8 +152,7 @@ class SagaOrchestrator:
                 step.error = str(e)
                 step.transition(StepState.FAILED)
                 if attempt < attempts - 1:
-                    step.state = StepState.PENDING
-                    step.error = None
+                    step.reset_for_retry()
                     await asyncio.sleep(
                         self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1)
                     )
@@ -156,6 +169,9 @@ class SagaOrchestrator:
     ) -> list[SagaStep]:
         """
         Run compensation (rollback) for all committed steps in reverse order.
+
+        Cancellation semantics on timeout match ``execute_step``: see that
+        method's docstring for the cooperative-cancel contract.
 
         Args:
             saga_id: Saga identifier

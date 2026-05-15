@@ -14,7 +14,7 @@ your agent can act on a compromised tool definition.
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|

@@ -3,7 +3,7 @@ members = ["agentmesh", "agentmesh-mcp"]
 resolver = "2"
 
 [workspace.package]
-version = "3.3.0"
+version = "3.6.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/microsoft/agent-governance-toolkit"
@@ -16,7 +16,7 @@ ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }
 hmac = "=0.12.1"
 rand = "=0.8.6"
 regex = "=1.12.3"
-regorus = { version = "=0.9.1", default-features = false, features = ["regex"] }
+regorus = { version = "=0.10.0", default-features = false, features = ["regex"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
 serde_yaml = "=0.9.34"

@@ -253,4 +253,72 @@ public class PolicyRuleTests
     {
         Assert.Throws<ArgumentException>(() => PolicyRule.ParseAction("invalid"));
     }
+
+    [Fact]
+    public void Evaluate_UnexpectedException_Propagates_NotSilentlyFalse()
+    {
+        // Regression: Evaluate used to catch every exception and return false.
+        // Under DefaultAction=Allow, a buggy DENY rule that threw would silently
+        // fail open. Unexpected exception types (NRE, NotSupportedException,
+        // etc.) must now propagate so the engine fails closed.
+        var rule = new PolicyRule
+        {
+            Name = "broken-equality",
+            Condition = "tool_name == 'file_write'",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["tool_name"] = new ThrowingToString()
+        };
+
+        Assert.Throws<NotSupportedException>(() => rule.Evaluate(context));
+    }
+
+    private sealed class ThrowingToString
+    {
+        public override string ToString() =>
+            throw new NotSupportedException("simulated rule-data bug");
+    }
+
+    [Fact]
+    public void Evaluate_NestedDotNotation_WinsOverFlatDottedKey()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "nested-wins",
+            Condition = "data.classification == 'secret'",
+            Action = PolicyAction.Deny
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["data"] = new Dictionary<string, object>
+            {
+                ["classification"] = "secret",
+            },
+            ["data.classification"] = "public",
+        };
+
+        Assert.True(rule.Evaluate(context));
+    }
+
+    [Fact]
+    public void Evaluate_FallsBackToFlatDottedKey_WhenNoNestedShape()
+    {
+        var rule = new PolicyRule
+        {
+            Name = "flat-fallback",
+            Condition = "data.classification == 'public'",
+            Action = PolicyAction.Allow
+        };
+
+        var context = new Dictionary<string, object>
+        {
+            ["data.classification"] = "public",
+        };
+
+        Assert.True(rule.Evaluate(context));
+    }
 }

@@ -14,6 +14,7 @@ from agent_runtime.deploy import (
     DockerDeployer,
     GovernanceConfig,
     KubernetesDeployer,
+    _validate_agent_id,
 )
 
 
@@ -355,3 +356,111 @@ class TestKubernetesDeployer:
         mock_run.return_value = MagicMock(stdout="k8s log line\n", stderr="", returncode=0)
         deployer = KubernetesDeployer()
         assert "k8s log line" in deployer.logs("agent-1")
+
+
+# ---------------------------------------------------------------------------
+# agent_id validation
+# ---------------------------------------------------------------------------
+
+class TestValidateAgentId:
+    """`_validate_agent_id` is the single guard for any string interpolated
+    into a Docker container name, kubectl pod name, or label value. The
+    regex pins the conservative shape that survives every downstream
+    consumer: alphanumeric start, alphanumerics + ``_-`` thereafter,
+    63 chars max.
+    """
+
+    @pytest.mark.parametrize("agent_id", [
+        "a",
+        "analyst-001",
+        "agent_42",
+        "A",
+        "9-already-leading-digit",
+        "x" * 63,  # max length
+    ])
+    def test_accepts_well_formed_ids(self, agent_id: str) -> None:
+        assert _validate_agent_id(agent_id) == agent_id
+
+    @pytest.mark.parametrize("agent_id,reason", [
+        ("", "empty"),
+        ("-rm", "leading dash would reparse as docker CLI flag"),
+        ("--privileged", "leading dash, looks like a flag"),
+        ("a b", "whitespace"),
+        ("a;rm -rf /", "shell metachars"),
+        ("a$(id)", "command substitution"),
+        ("a`id`", "backtick substitution"),
+        ("a.b", "dot — RFC-1123 allows but conservative regex does not"),
+        ("a/b", "path separator"),
+        ("a:b", "colon — would break docker label syntax"),
+        ("agent\nname", "newline injection"),
+        ("agent\x00name", "NUL byte"),
+        ("_leading_underscore", "underscore start — keep alphanumeric-only first char"),
+        ("x" * 64, "one over the 63-char cap"),
+    ])
+    def test_rejects_malformed_ids(self, agent_id: str, reason: str) -> None:
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            _validate_agent_id(agent_id)
+
+    def test_rejects_non_str(self) -> None:
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            _validate_agent_id(None)  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            _validate_agent_id(42)  # type: ignore[arg-type]
+
+
+class TestDockerDeployerAgentIdValidation:
+    """Every `DockerDeployer` public entry point must validate `agent_id`
+    before interpolating it into a docker command-line. The previous
+    behaviour silently forwarded `agent_id="-rm"` etc., where the leading
+    dash would be reparsed as a CLI flag depending on Docker version.
+    """
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_deploy_rejects_leading_dash(self, mock_which: MagicMock) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.deploy("-rm", "img:latest", GovernanceConfig())
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_stop_rejects_leading_dash(self, mock_which: MagicMock) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.stop("-rm")
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_status_rejects_shell_metachars(self, mock_which: MagicMock) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.status("a;rm -rf /")
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/docker")
+    def test_logs_rejects_empty(self, mock_which: MagicMock) -> None:
+        deployer = DockerDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.logs("")
+
+
+class TestKubernetesDeployerAgentIdValidation:
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/kubectl")
+    def test_deploy_rejects_overlong(self, mock_which: MagicMock) -> None:
+        deployer = KubernetesDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.deploy("x" * 64, "img:latest", GovernanceConfig())
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/kubectl")
+    def test_stop_rejects_leading_dash(self, mock_which: MagicMock) -> None:
+        deployer = KubernetesDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.stop("-rm")
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/kubectl")
+    def test_status_rejects_dot(self, mock_which: MagicMock) -> None:
+        deployer = KubernetesDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.status("a.b")
+
+    @patch("agent_runtime.deploy.shutil.which", return_value="/usr/bin/kubectl")
+    def test_logs_rejects_newline(self, mock_which: MagicMock) -> None:
+        deployer = KubernetesDeployer()
+        with pytest.raises(ValueError, match="invalid agent_id"):
+            deployer.logs("agent\nname")

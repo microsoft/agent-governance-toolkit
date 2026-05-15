@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_mcp_trust"
-version = "3.3.0"
+version = "3.6.0"
 description = "MCP server exposing AgentMesh trust management tools for Claude, GPT, and other AI agents"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -35,7 +35,7 @@ classifiers = [
 dependencies = [
     "mcp>=1.0.0,<2.0",
     "pydantic>=2.5.0,<3.0",
-    "cryptography>=46.0.5,<47.0",
+    "cryptography>=46.0.7,<47.0",
 ]
 
 [project.optional-dependencies]

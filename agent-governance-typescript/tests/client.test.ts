@@ -28,6 +28,14 @@ describe('AgentMeshClient', () => {
       expect(client.audit).toBeDefined();
       expect(client.lifecycle).toBeDefined();
     });
+
+    it('honors disabled kill switch configuration', () => {
+      const killSwitchDisabledClient = AgentMeshClient.create('no-kill-switch-agent', {
+        killSwitch: { enabled: false },
+      });
+
+      expect(killSwitchDisabledClient.killSwitch).toBeUndefined();
+    });
   });
 
   describe('executeWithGovernance()', () => {
@@ -76,6 +84,20 @@ describe('AgentMeshClient', () => {
     it('returns execution time', async () => {
       const result = await client.executeWithGovernance('data.read');
       expect(typeof result.executionTime).toBe('number');
+    });
+
+    it('returns review decisions without changing trust', async () => {
+      const reviewClient = AgentMeshClient.create('review-agent', {
+        policyRules: [{ action: 'deploy.production', effect: 'review' }],
+      });
+      const before = reviewClient.trust.getTrustScore(reviewClient.identity.did);
+
+      const result = await reviewClient.executeWithGovernance('deploy.production');
+      const after = reviewClient.trust.getTrustScore(reviewClient.identity.did);
+
+      expect(result.decision).toBe('review');
+      expect(result.auditEntry.decision).toBe('review');
+      expect(after.overall).toBe(before.overall);
     });
 
     it('activates lifecycle on first governance execution', async () => {

@@ -126,16 +126,54 @@ class RelayServer:
                         await ws.close(code=4003)
                         return
 
-                # Register connection
+                # Register connection.
+                #
+                # Gap G5 (vendored agentmesh-relay patch #2): if a stale
+                # connection already exists for this DID, close it eagerly
+                # before the dict overwrite. Without this, the old socket
+                # lingers as a "ghost" until the 90s heartbeat-eviction
+                # timer fires, during which time messages can be routed to
+                # a dead connection. Code 1000 is used instead of a custom
+                # 4xxx so the client treats this as a clean close and does
+                # NOT trigger its auto-reconnect loop (which would just
+                # race the new socket the same client just opened).
+                existing = self._connections.get(agent_did)
+                if existing is not None:
+                    logger.info(
+                        "Closing ghost connection for %s (session replaced)",
+                        agent_did,
+                    )
+                    try:
+                        await existing.ws.close(
+                            code=1000, reason="session_replaced"
+                        )
+                    except Exception:  # noqa: BLE001 - best-effort cleanup
+                        pass
+
                 self._connections[agent_did] = ConnectedAgent(agent_did, ws)
                 logger.info("Agent connected: %s", agent_did)
 
                 # Deliver pending messages
                 await self._deliver_pending(agent_did, ws)
 
-                # Message loop
+                # Message loop. Each receive is bounded by an idle
+                # timeout — without it, a connected agent that never
+                # sends a frame can hold its slot in self._connections
+                # indefinitely. 90s is generous for typical heartbeat
+                # cadences (~30s) and lets a stalled peer be reaped.
+                _IDLE_TIMEOUT = 90.0
                 while True:
-                    raw = await ws.receive_text()
+                    try:
+                        raw = await asyncio.wait_for(
+                            ws.receive_text(), timeout=_IDLE_TIMEOUT
+                        )
+                    except asyncio.TimeoutError:
+                        logger.info(
+                            "Idle timeout for %s after %ss; closing",
+                            agent_did, _IDLE_TIMEOUT,
+                        )
+                        await ws.close(code=4004)
+                        return
                     frame = json.loads(raw)
                     await self._handle_frame(agent_did, frame, ws)
 
@@ -148,8 +186,13 @@ class RelayServer:
             except Exception as e:
                 logger.error("Relay error for %s: %s", agent_did, e)
             finally:
-                if agent_did and agent_did in self._connections:
-                    del self._connections[agent_did]
+                # Only remove if the current dict entry still references
+                # OUR ws — protects against ghost-cleanup races where this
+                # finally is for an old socket that was already replaced.
+                if agent_did:
+                    current = self._connections.get(agent_did)
+                    if current is not None and current.ws is ws:
+                        del self._connections[agent_did]
 
         return app
 
@@ -216,13 +259,20 @@ class RelayServer:
             logger.debug("Stored offline message %s for %s", message_id, recipient_did)
 
     async def _deliver_pending(self, agent_did: str, ws: WebSocket) -> None:
-        """Push all pending messages to a newly connected agent."""
+        """Push all pending messages to a newly connected agent.
+
+        Messages stay in the inbox until the recipient explicitly sends
+        an ``ack`` frame for them — see the ``ack`` branch in
+        :meth:`_handle_frame`. Acknowledging on send (the previous
+        behaviour) silently dropped messages whenever the recipient
+        disconnected after ``send_json`` returned but before the frame
+        actually reached them.
+        """
         pending = self._inbox.fetch_pending(agent_did)
         for msg in pending:
             try:
                 frame = json.loads(msg.payload)
                 await ws.send_json(frame)
-                self._inbox.acknowledge(msg.message_id)
                 self._stats["messages_delivered"] += 1
             except Exception as e:
                 logger.warning("Failed to deliver pending %s: %s", msg.message_id, e)

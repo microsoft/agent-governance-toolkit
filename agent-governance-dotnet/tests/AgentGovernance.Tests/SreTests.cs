@@ -91,6 +91,89 @@ public class CircuitBreakerTests
         Assert.Equal(30, ex.RetryAfter.TotalSeconds);
         Assert.Contains("30", ex.Message);
     }
+
+    [Fact]
+    public async Task ExecuteAsync_OperationCanceledException_DoesNotRecordFailure()
+    {
+        // Regression: ExecuteAsync<T> previously caught all exceptions and
+        // recorded them as failures before re-throwing. That treated caller
+        // cancellation as a service failure -- a burst of cancelled requests
+        // (e.g. a downstream request timeout, a shutdown signal, an upstream
+        // client disconnect) would trip the breaker open against a perfectly
+        // healthy dependency. Cancellation should propagate without touching
+        // the failure counter.
+
+        var cb = new CircuitBreaker(new CircuitBreakerConfig { FailureThreshold = 3 });
+
+        for (var i = 0; i < 5; i++)
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            {
+                await cb.ExecuteAsync<int>(() => throw new OperationCanceledException());
+            });
+        }
+
+        Assert.Equal(CircuitState.Closed, cb.State);
+        Assert.Equal(0, cb.FailureCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_Void_OperationCanceledException_DoesNotRecordFailure()
+    {
+        // Same property as the generic overload, exercising the void Task path.
+        var cb = new CircuitBreaker(new CircuitBreakerConfig { FailureThreshold = 3 });
+
+        for (var i = 0; i < 5; i++)
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            {
+                await cb.ExecuteAsync(() => throw new OperationCanceledException());
+            });
+        }
+
+        Assert.Equal(CircuitState.Closed, cb.State);
+        Assert.Equal(0, cb.FailureCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_TaskCanceledException_DoesNotRecordFailure()
+    {
+        // TaskCanceledException inherits from OperationCanceledException -- the
+        // same flow-through must apply (it's what HttpClient + CancellationToken
+        // throw when an HTTP call is cancelled).
+        var cb = new CircuitBreaker(new CircuitBreakerConfig { FailureThreshold = 3 });
+
+        for (var i = 0; i < 5; i++)
+        {
+            await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            {
+                await cb.ExecuteAsync<int>(() => throw new TaskCanceledException());
+            });
+        }
+
+        Assert.Equal(CircuitState.Closed, cb.State);
+        Assert.Equal(0, cb.FailureCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NonCancellationException_StillRecordsFailure()
+    {
+        // Sanity check: the OperationCanceledException carve-out must not
+        // swallow real exceptions. InvalidOperationException etc. should still
+        // count against the breaker.
+        var cb = new CircuitBreaker(new CircuitBreakerConfig { FailureThreshold = 3 });
+
+        for (var i = 0; i < 3; i++)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            {
+                await cb.ExecuteAsync<int>(() => throw new InvalidOperationException("downstream failure"));
+            });
+        }
+
+        Assert.Equal(CircuitState.Open, cb.State);
+        Assert.Equal(3, cb.FailureCount);
+    }
 }
 
 public class SloEngineTests

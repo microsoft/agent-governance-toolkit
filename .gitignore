@@ -465,3 +465,4 @@ _site/
 
 # Code Security Assessment artifacts
 .security-assessment/
+*.tgz

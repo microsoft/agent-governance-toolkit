@@ -1,4 +1,4 @@
-🌍 [English](/README.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md)
+🌍 [English](/README.md) | [日本語](./docs/i18n/README.ja.md) | [简体中文](./docs/i18n/README.zh-CN.md) | [한국어](./docs/i18n/README.ko.md)
 
 ![Agent Governance Toolkit](docs/assets/readme-banner.svg)
 
@@ -14,11 +14,15 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-microsoft.github.io%2Fagent--governance--toolkit-blue?logo=github)](https://microsoft.github.io/agent-governance-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
+[![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
+[![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
+[![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
+[![GitHub stars](https://img.shields.io/github/stars/microsoft/agent-governance-toolkit?style=flat&label=Stars)](https://github.com/microsoft/agent-governance-toolkit)
+[![Contributors](https://img.shields.io/github/contributors/microsoft/agent-governance-toolkit?label=Contributors)](https://github.com/microsoft/agent-governance-toolkit/graphs/contributors)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
 > [!IMPORTANT]
@@ -26,7 +30,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.3.0 is out!** Contributor Reputation Check (reusable GitHub Action for any OSS repo), repo reorganization under language-specific SDK dirs, Sentry integration, shift-left governance tutorial, policy composition, multi-stage pipelines, and 80+ other improvements. [Changelog →](CHANGELOG.md)
+> **v3.5.0 is out!** Latest stable release with Bedrock adapter, prompt defense improvements, and governance hardening. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** -- deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **13,000+ tests**.
 
@@ -65,6 +69,9 @@ agt verify --evidence ./agt-evidence.json
 
 # 5. Fail CI on weak runtime evidence
 agt verify --evidence ./agt-evidence.json --strict
+
+# 6. Red-team your agent's security posture
+agt red-team scan ./prompts/ --min-grade B --strict
 ```
 
 Then govern your first action:
@@ -157,8 +164,8 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 </details>
 
-> **Full walkthrough:** [QUICKSTART.md](docs/QUICKSTART.md) — zero to governed agents in 10 minutes with YAML policies, OPA/Rego, and Cedar support.
-> 🌍 Also available in: [日本語](docs/i18n/QUICKSTART.ja.md) | [简体中文](docs/i18n/QUICKSTART.zh-CN.md)
+> **Full walkthrough:** [quickstart.md](docs/quickstart.md) — zero to governed agents in 10 minutes with YAML policies, OPA/Rego, and Cedar support.
+> 🌍 Also available in: [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md) | [한국어](docs/i18n/quickstart.ko.md)]
 
 ---
 
@@ -175,7 +182,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | **Shadow AI Discovery** | Find unregistered agents across processes, configs, and repos | [Agent Discovery](agent-governance-python/agent-discovery/) |
 | **Agent Lifecycle** | Provisioning → credential rotation → orphan detection → decommissioning | [Lifecycle](agent-governance-python/agent-mesh/src/agentmesh/lifecycle/) |
 | **Governance Dashboard** | Real-time fleet visibility — health, trust, compliance, audit events | [Dashboard](examples/demos/governance-dashboard/) |
-| **Unified CLI** | `agt verify`, `agt doctor`, `agt lint-policy` — one command for everything | [CLI](agent-governance-python/agent-compliance/src/agent_compliance/cli/agt.py) |
+| **Unified CLI** | `agt verify`, `agt red-team`, `agt doctor`, `agt lint-policy` — one command for everything | [CLI](agent-governance-python/agent-compliance/src/agent_compliance/cli/agt.py) |
 | **PromptDefense Evaluator** | 12-vector prompt injection audit for compliance testing | [Evaluator](agent-governance-python/agent-compliance/src/agent_compliance/prompt_defense.py) |
 
 ---
@@ -275,7 +282,7 @@ See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed p
 ## Documentation
 
 **Getting Started**
-- [Quick Start](docs/QUICKSTART.md) — Zero to governed agents in 10 minutes
+- [Quick Start](docs/quickstart.md) — Zero to governed agents in 10 minutes
 - [Tutorials](docs/tutorials/) — 40+ numbered tutorials + 7-chapter Policy-as-Code deep dive
 - [FAQ](docs/FAQ.md) — Technical Q&A for customers, partners, and evaluators
 
@@ -319,7 +326,24 @@ This toolkit provides **application-level governance** (Python middleware), not 
 
 - [Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-**Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md) — it helps the project gain momentum and helps others discover real-world use cases.
+**Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md), it helps the project gain momentum and helps others discover real-world use cases.
+
+## Governance & Standards
+
+AGT follows open governance practices aligned with foundation incubation requirements:
+
+| Document | Purpose |
+|----------|---------|
+| [GOVERNANCE.md](GOVERNANCE.md) | Decision-making, roles, contributor ladder |
+| [CHARTER.md](CHARTER.md) | Technical charter (LF Projects format) |
+| [MAINTAINERS.md](MAINTAINERS.md) | 6 maintainers from 4 organizations |
+| [RELEASE.md](RELEASE.md) | Release process, versioning, registries |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting and response SLAs |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Microsoft Open Source Code of Conduct |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | DCO, attribution policy, AI-assisted contribution rules |
+| [ADOPTERS.md](docs/ADOPTERS.md) | 9 adopters across production, pilot, and research |
+
+**Standards alignment:** [OWASP Agentic Top 10](docs/OWASP-COMPLIANCE.md) (10/10) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](docs/compliance/) · [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) (100%)
 
 ## Important Notes
 

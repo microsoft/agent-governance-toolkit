@@ -13,7 +13,7 @@ branch protection — everything you need to secure a production agent system.
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|

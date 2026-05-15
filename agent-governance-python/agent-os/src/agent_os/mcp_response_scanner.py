@@ -119,6 +119,7 @@ class MCPResponseScanner:
                 )
             )
             threats.extend(self._scan_credential_leaks(response_content))
+            threats.extend(self._scan_pii_leaks(response_content))
             threats.extend(self._scan_exfiltration_urls(response_content))
 
             if not threats:
@@ -211,6 +212,20 @@ class MCPResponseScanner:
                     description=f"{credential_match.name} detected in tool response.",
                     matched_pattern=credential_match.name,
                     details={"credential_type": credential_match.name},
+                )
+            )
+        return threats
+
+    @staticmethod
+    def _scan_pii_leaks(content: str) -> list[MCPResponseThreat]:
+        threats: list[MCPResponseThreat] = []
+        for pii_match in CredentialRedactor.find_pii_matches(content):
+            threats.append(
+                MCPResponseThreat(
+                    category="pii_leak",
+                    description=f"{pii_match.name} detected in tool response.",
+                    matched_pattern=pii_match.name,
+                    details={"pii_type": pii_match.name},
                 )
             )
         return threats

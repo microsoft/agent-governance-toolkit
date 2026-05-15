@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -254,15 +255,41 @@ class PluginTrustStore:
     # -- persistence -------------------------------------------------------
 
     def _load(self) -> dict:
-        if self._store_path.exists():
-            try:
-                with open(self._store_path) as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                logger.warning("Corrupt trust store at %s — starting fresh", self._store_path)
-        return {"scores": {}, "events": {}}
+        if not self._store_path.exists():
+            return {"scores": {}, "events": {}}
+        try:
+            with open(self._store_path) as f:
+                return json.load(f)
+        except json.JSONDecodeError as exc:
+            # A corrupt trust store is a security-relevant signal — silently
+            # zeroing all scores would re-promote previously-untrusted
+            # plugins. Surface the error and let the operator quarantine
+            # or repair the file before the registry is brought back up.
+            raise RuntimeError(
+                f"Trust store at {self._store_path} is corrupt and cannot "
+                "be parsed; refusing to start with empty scores. Inspect or "
+                "restore from backup before retrying."
+            ) from exc
+        except OSError as exc:
+            raise RuntimeError(
+                f"Failed to read trust store at {self._store_path}: {exc}"
+            ) from exc
 
     def _persist(self) -> None:
         self._store_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._store_path, "w") as f:
+        # Write to a sibling tmp file in the same directory (so `os.replace`
+        # stays cross-device atomic) and rename over the target. A crash
+        # mid-write leaves the *.tmp file behind but the canonical store
+        # remains the last fully-written copy.
+        tmp_path = self._store_path.with_name(self._store_path.name + ".tmp")
+        with open(tmp_path, "w") as f:
             json.dump(self._data, f, indent=2)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except OSError:
+                # fsync is best-effort; some filesystems / handles don't
+                # support it (e.g. tmpfs in containers). The os.replace
+                # below still provides atomic visibility.
+                pass
+        os.replace(tmp_path, self._store_path)

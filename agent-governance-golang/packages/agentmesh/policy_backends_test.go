@@ -302,3 +302,39 @@ func TestCedarBackendAutoUsesBuiltinWhenFallbackExplicitlyEnabled(t *testing.T) 
 		t.Fatalf("reason = %q, want explicit fallback marker", result.Reason)
 	}
 }
+
+func TestCedarDecisionFromCLIOutput(t *testing.T) {
+	tests := []struct {
+		name        string
+		stdout      string
+		wantAllowed bool
+		wantParsed  bool
+	}{
+		{name: "bare allow", stdout: "ALLOW\n", wantAllowed: true, wantParsed: true},
+		{name: "bare deny", stdout: "DENY\n", wantAllowed: false, wantParsed: true},
+		{name: "lowercase allow", stdout: "allow", wantAllowed: true, wantParsed: true},
+		{name: "lowercase deny", stdout: "deny", wantAllowed: false, wantParsed: true},
+		{name: "allow with trailing whitespace", stdout: "  ALLOW  \n", wantAllowed: true, wantParsed: true},
+		{name: "leading blank lines then deny", stdout: "\n\nDENY\n", wantAllowed: false, wantParsed: true},
+		// The substring approach this PR removes would have mis-classified
+		// the following outputs. The first-line parse refuses them rather
+		// than guessing.
+		{name: "deny with allow inside reason — must not coincide", stdout: "DENY (request disallowed by policy)\n", wantParsed: false},
+		{name: "allow with deny mentioned in caveat — must not coincide", stdout: "ALLOW: caveats reference the deny-list scoping\n", wantParsed: false},
+		// Genuine garbage.
+		{name: "garbage", stdout: "I am not a Cedar decision\n", wantParsed: false},
+		{name: "empty", stdout: "", wantParsed: false},
+		{name: "only whitespace", stdout: "   \n\n", wantParsed: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			allowed, parsed := cedarDecisionFromCLIOutput(tt.stdout)
+			if parsed != tt.wantParsed {
+				t.Fatalf("parsed = %v, want %v (stdout = %q)", parsed, tt.wantParsed, tt.stdout)
+			}
+			if parsed && allowed != tt.wantAllowed {
+				t.Fatalf("allowed = %v, want %v", allowed, tt.wantAllowed)
+			}
+		})
+	}
+}

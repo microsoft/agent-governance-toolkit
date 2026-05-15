@@ -7,7 +7,7 @@ Every agent identity is linked to a human sponsor who is accountable.
 The sponsor's credentials are cryptographically linked to the scope chain.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field, EmailStr
 import uuid
@@ -49,7 +49,7 @@ class HumanSponsor(BaseModel):
     agent_dids: list[str] = Field(default_factory=list, description="DIDs of sponsored agents")
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_activity_at: Optional[datetime] = Field(None)
 
     @classmethod
@@ -89,7 +89,7 @@ class HumanSponsor(BaseModel):
             method: Verification method used (e.g. "email", "sso", "manual").
         """
         self.verified = True
-        self.verified_at = datetime.utcnow()
+        self.verified_at = datetime.now(timezone.utc)
         self.verification_method = method
 
     def can_sponsor_agent(self) -> bool:
@@ -138,7 +138,7 @@ class HumanSponsor(BaseModel):
         """
         if agent_did not in self.agent_dids:
             self.agent_dids.append(agent_did)
-            self.last_activity_at = datetime.utcnow()
+            self.last_activity_at = datetime.now(timezone.utc)
 
     def remove_agent(self, agent_did: str) -> None:
         """Remove an agent from sponsorship.

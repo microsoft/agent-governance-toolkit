@@ -36,6 +36,7 @@ import base64
 import hashlib
 import json
 import logging
+from collections import deque
 import os
 import re
 import time
@@ -341,20 +342,89 @@ class MCPSecurityScanner:
         *,
         audit_sink: MCPAuditSink | None = None,
         clock: Callable[[], float] = time.time,
+        config: MCPSecurityConfig | None = None,
     ) -> None:
-        warnings.warn(
-            "MCPSecurityScanner() uses built-in sample rules that may not "
-            "cover all MCP tool poisoning techniques. For production use, load an "
-            "explicit config with load_mcp_security_config(). "
-            "See examples/policies/mcp-security.yaml for a sample configuration.",
-            stacklevel=2,
-        )
+        """Initialize the scanner.
+
+        Args:
+            metrics: Optional metrics recorder.
+            audit_sink: Optional audit sink for tool-scan events.
+            clock: Clock function used for fingerprint timestamps.
+            config: Pattern-set configuration loaded from YAML via
+                ``load_mcp_security_config()``. When provided, the scanner
+                iterates these pattern lists rather than the module-level
+                defaults; this is the supported path for customising the
+                scan rule set.
+        """
+        if config is None:
+            warnings.warn(
+                "MCPSecurityScanner() uses built-in sample rules that may not "
+                "cover all MCP tool poisoning techniques. For production use, load an "
+                "explicit config with load_mcp_security_config() and pass it as "
+                "config=. "
+                "See examples/policies/mcp-security.yaml for a sample configuration.",
+                stacklevel=2,
+            )
         self._tool_registry: dict[str, ToolFingerprint] = {}
-        self._audit_log: list[dict[str, Any]] = []
+        # Secondary index from `tool_name` to the list of `ToolFingerprint`
+        # records registered under that name (one per server). Used by
+        # `_check_cross_server` so exact-name impersonation detection is
+        # O(1) on registry size instead of O(N): the previous code scanned
+        # the entire `_tool_registry` for every `scan_tool` call, so a
+        # deployment registering K tools across S servers paid O(K*S) on
+        # each scan.
+        self._tool_by_name: dict[str, list[ToolFingerprint]] = {}
+        # Bounded ring buffer — unbounded list grew without limit on
+        # long-running deployments.
+        self._audit_log: deque[dict[str, Any]] = deque(maxlen=10_000)
         self._injection_detector = PromptInjectionDetector()
         self._metrics = metrics or MCPMetrics()
         self._audit_sink = audit_sink or InMemoryAuditSink()
         self._clock = clock
+        self._config = config or MCPSecurityConfig()
+        self._compile_patterns()
+
+    def _compile_patterns(self) -> None:
+        """Compile pattern strings from ``self._config`` into ``re.Pattern``
+        objects stored on the instance. Detection methods iterate these
+        instance attributes rather than the module-level defaults so a
+        YAML-loaded config actually takes effect.
+        """
+        cfg = self._config
+        # Defaults use a mix of IGNORECASE and DOTALL flags; round-tripping
+        # through pattern.pattern loses inline flags, so re-compile with
+        # both set. Patterns that don't use ``.`` or letters are unaffected.
+        flags = re.IGNORECASE | re.DOTALL
+
+        def _compile(pats: list[str]) -> list[re.Pattern[str]]:
+            compiled: list[re.Pattern[str]] = []
+            for raw in pats:
+                try:
+                    compiled.append(re.compile(raw, flags))
+                except re.error:
+                    logger.warning(
+                        "Skipping invalid regex in MCP security config: %r", raw,
+                    )
+            return compiled
+
+        self._invisible_unicode_patterns = _compile(cfg.invisible_unicode_patterns)
+        self._hidden_comment_patterns = _compile(cfg.hidden_comment_patterns)
+        self._hidden_instruction_patterns = _compile(cfg.hidden_instruction_patterns)
+        self._encoded_payload_patterns = _compile(cfg.encoded_payload_patterns)
+        self._exfiltration_patterns = _compile(cfg.exfiltration_patterns)
+        self._privilege_escalation_patterns = _compile(cfg.privilege_escalation_patterns)
+        self._role_override_patterns = _compile(cfg.role_override_patterns)
+        try:
+            self._excessive_whitespace_pattern: re.Pattern[str] = re.compile(
+                cfg.excessive_whitespace_pattern, flags,
+            )
+        except re.error:
+            logger.warning(
+                "Invalid excessive_whitespace regex in MCP security config; "
+                "falling back to default",
+            )
+            self._excessive_whitespace_pattern = _EXCESSIVE_WHITESPACE_PATTERN
+        self._suspicious_decoded_keywords = list(cfg.suspicious_decoded_keywords)
 
     # -- public API ---------------------------------------------------------
 
@@ -500,6 +570,11 @@ class MCPSecurityScanner:
             version=1,
         )
         self._tool_registry[key] = fp
+        # Mirror the new fingerprint into the by-name index for O(1)
+        # cross-server lookups. Append since multiple servers may register
+        # the same tool name (which is precisely what cross-server attack
+        # detection cares about).
+        self._tool_by_name.setdefault(tool_name, []).append(fp)
         return fp
 
     def check_rug_pull(
@@ -561,7 +636,7 @@ class MCPSecurityScanner:
         threats: list[MCPThreat] = []
 
         # 1. Invisible unicode characters
-        for pattern in _INVISIBLE_UNICODE_PATTERNS:
+        for pattern in self._invisible_unicode_patterns:
             match = pattern.search(description)
             if match:
                 threats.append(
@@ -578,7 +653,7 @@ class MCPSecurityScanner:
                 break  # one finding per category is enough
 
         # 2. Markdown/HTML comments hiding text
-        for pattern in _HIDDEN_COMMENT_PATTERNS:
+        for pattern in self._hidden_comment_patterns:
             match = pattern.search(description)
             if match:
                 threats.append(
@@ -594,7 +669,7 @@ class MCPSecurityScanner:
                 )
 
         # 3. Encoded instructions (base64, hex)
-        for pattern in _ENCODED_PAYLOAD_PATTERNS:
+        for pattern in self._encoded_payload_patterns:
             match = pattern.search(description)
             if match:
                 candidate = match.group()
@@ -604,7 +679,7 @@ class MCPSecurityScanner:
                     try:
                         decoded = base64.b64decode(candidate).decode("utf-8", errors="ignore")
                         decoded_lower = decoded.lower()
-                        for keyword in _SUSPICIOUS_DECODED_KEYWORDS:
+                        for keyword in self._suspicious_decoded_keywords:
                             if keyword in decoded_lower:
                                 is_suspicious = True
                                 break
@@ -627,7 +702,7 @@ class MCPSecurityScanner:
                     )
 
         # 4. Hidden instructions after excessive whitespace/newlines
-        if _EXCESSIVE_WHITESPACE_PATTERN.search(description):
+        if self._excessive_whitespace_pattern.search(description):
             threats.append(
                 MCPThreat(
                     threat_type=MCPThreatType.HIDDEN_INSTRUCTION,
@@ -635,12 +710,12 @@ class MCPSecurityScanner:
                     tool_name=tool_name,
                     server_name=server_name,
                     message="Instructions hidden after excessive whitespace",
-                    matched_pattern=_EXCESSIVE_WHITESPACE_PATTERN.pattern,
+                    matched_pattern=self._excessive_whitespace_pattern.pattern,
                 )
             )
 
         # 5. Instruction-like patterns
-        for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
+        for pattern in self._hidden_instruction_patterns:
             if pattern.search(description):
                 threats.append(
                     MCPThreat(
@@ -686,7 +761,7 @@ class MCPSecurityScanner:
             )
 
         # Role assignment patterns
-        for pattern in _ROLE_OVERRIDE_PATTERNS:
+        for pattern in self._role_override_patterns:
             if pattern.search(description):
                 threats.append(
                     MCPThreat(
@@ -700,7 +775,7 @@ class MCPSecurityScanner:
                 )
 
         # Data exfiltration patterns
-        for pattern in _EXFILTRATION_PATTERNS:
+        for pattern in self._exfiltration_patterns:
             if pattern.search(description):
                 threats.append(
                     MCPThreat(
@@ -773,7 +848,7 @@ class MCPSecurityScanner:
             # 3. Default values containing instructions
             default_val = prop_def.get("default")
             if isinstance(default_val, str) and len(default_val) > 10:
-                for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
+                for pattern in self._hidden_instruction_patterns:
                     if pattern.search(default_val):
                         threats.append(
                             MCPThreat(
@@ -791,7 +866,7 @@ class MCPSecurityScanner:
             # 4. Hidden instructions in property descriptions
             prop_desc = prop_def.get("description", "")
             if isinstance(prop_desc, str):
-                for pattern in _HIDDEN_INSTRUCTION_PATTERNS:
+                for pattern in self._hidden_instruction_patterns:
                     if pattern.search(prop_desc):
                         threats.append(
                             MCPThreat(
@@ -813,46 +888,70 @@ class MCPSecurityScanner:
         tool_name: str,
         server_name: str,
     ) -> list[MCPThreat]:
-        """Check for cross-server attack patterns."""
+        """Check for cross-server attack patterns.
+
+        Two patterns are detected:
+
+          1. **Impersonation** — same `tool_name` registered from a
+             different `server_name`. The `_tool_by_name` secondary index
+             gives O(1) lookup of all fingerprints sharing `tool_name`,
+             replacing the previous O(N) full-registry scan.
+
+          2. **Typosquatting** — a name that differs by ≤ 2 edits from an
+             already-registered tool name on a different server. This
+             still requires iterating over distinct tool names (since
+             edit distance has no general index), but we iterate the
+             keys of `_tool_by_name` rather than every fingerprint,
+             which collapses S registrations of the same tool name into
+             a single comparison.
+        """
         threats: list[MCPThreat] = []
 
-        for _key, fp in self._tool_registry.items():
-            # Same tool name from a different server
-            if fp.tool_name == tool_name and fp.server_name != server_name:
+        # 1. Exact-name impersonation — O(1) lookup via secondary index.
+        for fp in self._tool_by_name.get(tool_name, ()):
+            if fp.server_name == server_name:
+                continue
+            threats.append(
+                MCPThreat(
+                    threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
+                    severity=MCPSeverity.CRITICAL,
+                    tool_name=tool_name,
+                    server_name=server_name,
+                    message=(
+                        f"Tool '{tool_name}' already registered from server "
+                        f"'{fp.server_name}' — potential impersonation"
+                    ),
+                    details={"original_server": fp.server_name},
+                )
+            )
+
+        # 2. Typosquatting — iterate distinct names from the by-name index,
+        #    skipping the exact match (handled above) and same-server hits.
+        for other_name, fps in self._tool_by_name.items():
+            if other_name == tool_name:
+                continue
+            if not self._is_typosquat(tool_name, other_name):
+                continue
+            for fp in fps:
+                if fp.server_name == server_name:
+                    continue
                 threats.append(
                     MCPThreat(
                         threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
-                        severity=MCPSeverity.CRITICAL,
+                        severity=MCPSeverity.WARNING,
                         tool_name=tool_name,
                         server_name=server_name,
                         message=(
-                            f"Tool '{tool_name}' already registered from server "
-                            f"'{fp.server_name}' — potential impersonation"
+                            f"Tool name '{tool_name}' resembles "
+                            f"'{fp.tool_name}' from server '{fp.server_name}' "
+                            f"— potential typosquatting"
                         ),
-                        details={"original_server": fp.server_name},
+                        details={
+                            "similar_tool": fp.tool_name,
+                            "similar_server": fp.server_name,
+                        },
                     )
                 )
-
-            # Typosquatting: similar name from a different server
-            if fp.server_name != server_name and fp.tool_name != tool_name:
-                if self._is_typosquat(tool_name, fp.tool_name):
-                    threats.append(
-                        MCPThreat(
-                            threat_type=MCPThreatType.CROSS_SERVER_ATTACK,
-                            severity=MCPSeverity.WARNING,
-                            tool_name=tool_name,
-                            server_name=server_name,
-                            message=(
-                                f"Tool name '{tool_name}' resembles "
-                                f"'{fp.tool_name}' from server '{fp.server_name}' "
-                                f"— potential typosquatting"
-                            ),
-                            details={
-                                "similar_tool": fp.tool_name,
-                                "similar_server": fp.server_name,
-                            },
-                        )
-                    )
 
         return threats
 

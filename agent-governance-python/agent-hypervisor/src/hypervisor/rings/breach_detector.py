@@ -127,8 +127,24 @@ class RingBreachDetector:
             window.popleft()
 
         # --- 3. Compute actual rate (calls / second) ---
+        # Dividing by the full ``window_seconds`` underestimates the rate
+        # when the window has just begun — 10 calls in the first 2s of a
+        # 60s window would read as 0.16/s instead of 5/s, missing real
+        # bursts. Use the shorter of (window, time_since_first_event)
+        # as the denominator so early bursts surface accurately. A single
+        # call has no rate to measure (need ≥2 samples for an interval),
+        # so fall back to the conservative full-window divisor.
         call_count = len(window)
-        actual_rate = call_count / self.window_seconds if self.window_seconds > 0 else 0.0
+        if self.window_seconds <= 0 or call_count == 0:
+            actual_rate = 0.0
+        elif call_count < 2:
+            actual_rate = call_count / self.window_seconds
+        else:
+            time_since_first = max(now - window[0], 0.0)
+            # Floor at 1ms: prevents divide-by-zero for ultra-tight
+            # bursts while still surfacing them with a high rate.
+            denominator = max(min(self.window_seconds, time_since_first), 1e-3)
+            actual_rate = call_count / denominator
 
         # --- 4. Ring-distance amplifier ---
         #   Upward calls (low value = higher privilege) are escalations.

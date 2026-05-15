@@ -31,26 +31,25 @@ from pathlib import Path
 # (The sys.path lines below are only needed when running from the repo
 # checkout. With a pip install, just `from agent_os...` works directly.)
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-os" / "src"))
-sys.path.insert(0, str(_REPO_ROOT / "packages" / "agent-mesh" / "src"))
+
+
+def _resolve_repo_path(*segments: str) -> Path:
+    """Resolve a path for both current and legacy monorepo layouts."""
+    current = _REPO_ROOT.joinpath("agent-governance-python", *segments)
+    if current.exists():
+        return current
+    return _REPO_ROOT.joinpath("packages", *segments)
+
+
+sys.path.insert(0, str(_resolve_repo_path("agent-os", "src")))
+sys.path.insert(0, str(_resolve_repo_path("agent-mesh", "src")))
 sys.path.insert(
     0,
-    str(
-        _REPO_ROOT
-        / "packages"
-        / "agentmesh-integrations"
-        / "openai-agents-trust"
-        / "src"
-    ),
+    str(_resolve_repo_path("agentmesh-integrations", "openai-agents-trust", "src")),
 )
 sys.path.insert(
     0,
-    str(
-        _REPO_ROOT
-        / "packages"
-        / "agentmesh-integrations"
-        / "openai-agents-agentmesh"
-    ),
+    str(_resolve_repo_path("agentmesh-integrations", "openai-agents-agentmesh")),
 )
 
 from agent_os.policies.evaluator import PolicyEvaluator
@@ -79,10 +78,7 @@ def _load_submodule(pkg_dir: str, name: str):
     return mod
 
 _OAT_DIR = (
-    _REPO_ROOT
-    / "packages"
-    / "agentmesh-integrations"
-    / "openai-agents-trust"
+    _resolve_repo_path("agentmesh-integrations", "openai-agents-trust")
     / "src"
     / "openai_agents_trust"
 )

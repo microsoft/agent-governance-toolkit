@@ -45,6 +45,26 @@ jobs:
           subject-path: sbom.spdx.json
           sbom-path: sbom.spdx.json
 
+      - name: Download source archive
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release download "$RELEASE_TAG" --archive=tar.gz --output source.tar.gz
+
+      - name: Attest source provenance
+        if: github.event_name == 'release'
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: source.tar.gz
+
+      - name: Attest SBOM provenance (CycloneDX)
+        if: github.event_name == 'release'
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: sbom.cdx.json
+
       - name: Upload SBOMs to release
         if: github.event_name == 'release'
         env:

@@ -1,7 +1,9 @@
 # Tutorial 44 — A2A Conversation Policy & Feedback Loop Prevention
 
-> Govern agent-to-agent (A2A) protocol interactions with skill-level access
-> control, trust scoring, and automatic feedback loop detection.
+> **Package:** `agentmesh-platform` · **Time:** 20 minutes · **Level:** Advanced
+
+Govern agent-to-agent (A2A) protocol interactions with skill-level access
+control, trust scoring, and automatic feedback loop detection.
 
 ## What You'll Build
 

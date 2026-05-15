@@ -11,7 +11,7 @@ the agent's DID identity.
 import base64
 import hashlib
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -87,7 +87,7 @@ class KeyRotationManager:
             {
                 "public_key": old_public_key_b64,
                 "verification_key_id": self._identity.verification_key_id,
-                "rotated_at": datetime.utcnow().isoformat(),
+                "rotated_at": datetime.now(timezone.utc).isoformat(),
                 "rotation_proof": proof,
             }
         )
@@ -101,7 +101,7 @@ class KeyRotationManager:
         self._identity.public_key = new_public_key_b64
         self._identity.verification_key_id = new_key_id
         self._identity._private_key = new_private_key
-        self._identity.updated_at = datetime.utcnow()
+        self._identity.updated_at = datetime.now(timezone.utc)
 
         self._last_rotation_time = time.monotonic()
 
@@ -193,5 +193,5 @@ class KeyRotationManager:
             "new_public_key": new_public_key_b64,
             "message": message,
             "signature": base64.b64encode(signature).decode(),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }

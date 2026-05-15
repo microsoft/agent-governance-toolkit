@@ -101,17 +101,20 @@ Analysis complete: Summarize Q4 sales data
 
 ## Add an LLM (Optional)
 
+> **Requires:** `pip install openai` and the `OPENAI_API_KEY` environment variable set.
+
 ```python
+import os
 from agent_os import KernelSpace
 from openai import OpenAI
 
 kernel = KernelSpace(policy="strict")
-client = OpenAI()
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 @kernel.register
 async def smart_agent(task: str):
     response = client.chat.completions.create(
-        model="gpt-4",
+        model=os.environ.get("OPENAI_MODEL", "gpt-4"),
         messages=[{"role": "user", "content": task}]
     )
     return response.choices[0].message.content
@@ -154,7 +157,7 @@ The kernel blocked the action **before** it executed.
 |------|----------|-------------------|
 | 10 min | [30-Minute Deep Dive](30-minute-deep-dive.md) | Policies, signals, VFS |
 | 15 min | [Episodic Memory](../../notebooks/02-episodic-memory-demo.ipynb) | Agent memory that persists |
-| 15 min | [Verification](../../notebooks/04-verification.ipynb) | Detect hallucinations |
+| 15 min | [Verification](../../notebooks/04-cross-model-verification.ipynb) | Detect hallucinations |
 | 20 min | [Time-Travel Debugging](../../notebooks/03-time-travel-debugging.ipynb) | Replay and debug decisions |
 
 ---

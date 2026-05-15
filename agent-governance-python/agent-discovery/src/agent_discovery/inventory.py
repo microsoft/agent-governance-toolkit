@@ -10,11 +10,14 @@ the same agent appears in GitHub, as a process, and in config files.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .models import AgentStatus, DiscoveredAgent, ScanResult
+
+logger = logging.getLogger(__name__)
 
 
 class AgentInventory:
@@ -136,8 +139,17 @@ class AgentInventory:
             for item in data:
                 agent = DiscoveredAgent.model_validate(item)
                 self._agents[agent.fingerprint] = agent
-        except Exception:  # noqa: S110
-            pass  # start fresh if corrupt
+        except Exception as exc:
+            # Corrupt or unreadable inventory file -- start fresh, but
+            # surface the path and reason so an operator can recover the
+            # data. Previously this silently swallowed every failure,
+            # including transient IO errors and schema mismatches after
+            # a model change.
+            logger.warning(
+                "Failed to load inventory from %s: %s; starting fresh.",
+                self._storage_path,
+                exc,
+            )
 
     def summary(self) -> dict[str, Any]:
         """Generate inventory summary statistics."""

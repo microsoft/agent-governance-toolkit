@@ -6,7 +6,7 @@ Reward Scoring
 Multi-dimensional scoring with trust scores and reward signals.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
@@ -50,7 +50,7 @@ class RewardSignal(BaseModel):
     trace_id: Optional[str] = None
 
     # Timing
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Weight (for importance)
     weight: float = Field(default=1.0, ge=0.0)
@@ -72,7 +72,7 @@ class RewardDimension(BaseModel):
     trend: str = "stable"  # improving, degrading, stable
 
     # Last update
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def add_signal(self, signal: RewardSignal) -> None:
         """Add a signal and update score."""
@@ -98,7 +98,7 @@ class RewardDimension(BaseModel):
             else:
                 self.trend = "stable"
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
 
 class TrustScore(BaseModel):
@@ -120,7 +120,7 @@ class TrustScore(BaseModel):
     dimensions: dict[str, RewardDimension] = Field(default_factory=dict)
 
     # Timestamps
-    calculated_at: datetime = Field(default_factory=datetime.utcnow)
+    calculated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # History
     previous_score: Optional[int] = None
@@ -162,7 +162,7 @@ class TrustScore(BaseModel):
         self.total_score = max(0, min(TRUST_SCORE_MAX, new_score))
         self.score_change = self.total_score - (self.previous_score or 0)
         self.dimensions = dimensions
-        self.calculated_at = datetime.utcnow()
+        self.calculated_at = datetime.now(timezone.utc)
         self._update_tier()
 
     def meets_threshold(self, threshold: int) -> bool:

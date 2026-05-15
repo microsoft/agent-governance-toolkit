@@ -306,6 +306,23 @@ class Hypervisor:
         return [self._sessions[sid] for sid in self._active_ids
                 if sid in self._sessions]
 
+    @property
+    def sessions(self) -> list[ManagedSession]:
+        """All managed sessions, including archived/terminating ones.
+
+        ``active_sessions`` filters via ``_active_ids``; this property
+        exposes the full registry for callers (admin APIs, monitoring,
+        stats) that need a count or iterator over every session the
+        Hypervisor is still tracking. Returns a snapshot list so callers
+        can iterate without holding any internal reference.
+        """
+        return list(self._sessions.values())
+
+    @property
+    def session_count(self) -> int:
+        """Total number of managed sessions, including archived/terminating."""
+        return len(self._sessions)
+
     def _get_session(self, session_id: str) -> ManagedSession:
         managed = self._sessions.get(session_id)
         if not managed:

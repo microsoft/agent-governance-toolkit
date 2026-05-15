@@ -16,7 +16,7 @@ smaller standalone dependency.
 
 ---
 
-## What you'll learn
+## What You'll Learn
 
 | Section | Topic |
 |---------|-------|
@@ -565,8 +565,6 @@ let filter = AuditFilter {
     agent_id: Some("agent-1".into()),
     action: None,
     decision: None,
-    start_time: None,
-    end_time: None,
 };
 
 let filtered = logger.get_entries(&filter);
@@ -632,7 +630,11 @@ Share a `PublicIdentity` when you need verification without the private key:
 ```rust
 use agentmesh::PublicIdentity;
 
-let pub_id = identity.public_identity();
+let pub_id = PublicIdentity {
+    did: identity.did.clone(),
+    public_key: identity.public_key.to_bytes().to_vec(),
+    capabilities: identity.capabilities.clone(),
+};
 assert!(pub_id.verify(b"important message", &signature));
 ```
 
@@ -767,7 +769,7 @@ Agent DID: did:agentmesh:research-agent
   data.read   → ✅ allowed (trust: 510, tier: Trusted)
   search.web  → ✅ allowed (trust: 520, tier: Trusted)
   data.delete → ❌ denied  (trust: 445, tier: Neutral)
-  shell:ls    → ❌ denied  (trust: 370, tier: Provisional)
+  shell:ls    → ❌ denied  (trust: 370, tier: Probationary)
 
 Audit trail: 4 entries
 Chain valid: true

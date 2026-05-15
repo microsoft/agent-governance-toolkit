@@ -138,6 +138,69 @@ class TestHashHelpers:
 
         assert _hash_function_bytecode(func_a) != _hash_function_bytecode(func_b)
 
+    def test_hash_distinguishes_renamed_global_lookup(self):
+        """Regression: previously the hash used only co_code +
+        str(co_consts), so a function whose only difference was a
+        renamed name reference (co_names) hashed identically to the
+        original — letting an attacker swap a benign call for a
+        dangerous one without tripping the integrity check.
+        """
+        # Both compile to identical opcode sequences (LOAD_GLOBAL,
+        # CALL, RETURN_VALUE), differing only in co_names.
+        ns: dict = {}
+        exec("def f():\n    return safe_helper()", ns)
+        func_safe = ns["f"]
+        ns2: dict = {}
+        exec("def f():\n    return os_system()", ns2)
+        func_evil = ns2["f"]
+
+        # Same opcode bytes — confirm we're testing the real failure mode
+        assert func_safe.__code__.co_code == func_evil.__code__.co_code
+
+        assert _hash_function_bytecode(func_safe) != _hash_function_bytecode(func_evil)
+
+    def test_hash_distinguishes_nested_code_objects(self):
+        """A function whose nested function (e.g. a closure or inner
+        helper) was swapped should produce a different hash. The
+        previous implementation never descended into co_consts that
+        held nested code objects.
+        """
+        ns: dict = {}
+        exec(
+            "def outer():\n"
+            "    def inner():\n"
+            "        return 1\n"
+            "    return inner()\n",
+            ns,
+        )
+        func_orig = ns["outer"]
+        ns2: dict = {}
+        exec(
+            "def outer():\n"
+            "    def inner():\n"
+            "        return 999\n"
+            "    return inner()\n",
+            ns2,
+        )
+        func_tampered = ns2["outer"]
+
+        assert _hash_function_bytecode(func_orig) != _hash_function_bytecode(func_tampered)
+
+    def test_hash_distinguishes_argument_signatures(self):
+        """A function with a different argument list (different
+        co_varnames / co_argcount) but same body should hash
+        differently — a renamed parameter changes meaning at call
+        sites.
+        """
+        ns: dict = {}
+        exec("def f(a, b):\n    return a", ns)
+        f_ab = ns["f"]
+        ns2: dict = {}
+        exec("def f(a, c):\n    return a", ns2)
+        f_ac = ns2["f"]
+
+        assert _hash_function_bytecode(f_ab) != _hash_function_bytecode(f_ac)
+
 
 class TestIntegrityVerifier:
     def test_verify_without_manifest_passes(self):
@@ -189,6 +252,96 @@ class TestIntegrityVerifier:
         report = verifier.verify()
 
         assert "nonexistent.module.xyz" in report.modules_missing
+
+    def test_corrupt_manifest_raises_on_construction(self, tmp_path: Path):
+        """Regression: a corrupt manifest used to be caught silently and
+        the verifier proceeded with self._manifest = None, which made
+        every "missing entry" check pass — so a deliberately-broken
+        manifest unlocked the same default-pass path as having no
+        manifest at all. Now construction raises ValueError.
+        """
+        import pytest
+
+        manifest_path = tmp_path / "integrity.json"
+        manifest_path.write_text("{not valid json", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="corrupt"):
+            IntegrityVerifier(
+                manifest_path=str(manifest_path),
+                modules=["agent_compliance.integrity"],
+            )
+
+    def test_missing_manifest_entry_fails_closed(self, tmp_path: Path):
+        """Regression: when a manifest is configured, modules whose
+        entry was deleted from the manifest used to pass (``expected
+        is None`` short-circuited the comparison to True). An attacker
+        who could write to the manifest could simply delete the entry
+        for the module they had tampered with. Now: missing entry =
+        failure when a manifest is in use.
+        """
+        manifest_path = str(tmp_path / "integrity.json")
+        IntegrityVerifier(
+            modules=["agent_compliance.integrity"],
+        ).generate_manifest(manifest_path)
+
+        # Delete the entry an attacker would have tampered with.
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        manifest["files"] = {}
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f)
+
+        verifier = IntegrityVerifier(
+            manifest_path=manifest_path,
+            modules=["agent_compliance.integrity"],
+        )
+        report = verifier.verify()
+
+        assert report.passed is False
+        failures = [r for r in report.file_results if not r.passed]
+        assert any(r.error == "missing manifest entry" for r in failures)
+
+    def test_missing_function_entry_fails_closed(self, tmp_path: Path):
+        """Same fail-closed rule for the critical-function bytecode
+        check: a manifest that omits a covered function's entry
+        must fail rather than default-pass.
+        """
+        manifest_path = str(tmp_path / "integrity.json")
+        # Pick a real function from the integrity module itself so we
+        # can resolve and hash it without dragging in extra modules.
+        critical = [("agent_compliance.integrity", "_hash_function_bytecode")]
+
+        IntegrityVerifier(
+            modules=["agent_compliance.integrity"],
+            critical_functions=critical,
+        ).generate_manifest(manifest_path)
+
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        manifest["functions"] = {}
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest, f)
+
+        verifier = IntegrityVerifier(
+            manifest_path=manifest_path,
+            modules=["agent_compliance.integrity"],
+            critical_functions=critical,
+        )
+        report = verifier.verify()
+
+        assert report.passed is False
+        function_failures = [r for r in report.function_results if not r.passed]
+        assert any(r.error == "missing manifest entry" for r in function_failures)
+
+    def test_no_manifest_keeps_baseline_mode(self):
+        """Without any manifest configured, verification should still
+        produce a passing baseline report (no expected hashes to
+        compare against). The fail-closed change applies only when a
+        manifest IS supplied.
+        """
+        verifier = IntegrityVerifier(modules=["agent_compliance.integrity"])
+        report = verifier.verify()
+        assert report.passed is True
 
     def test_generate_manifest(self, tmp_path: Path):
         manifest_path = str(tmp_path / "integrity.json")
@@ -312,6 +465,41 @@ class TestGovernanceVerifier:
         assert len(attestation.attestation_hash) == 64
         assert attestation.attestation_hash == attestation.attestation_hash
 
+    def test_attestation_hash_changes_when_passed_flipped(self):
+        """Regression: recalculate_hash previously omitted ``passed``,
+        ``controls_passed``, ``controls_total``, and control detail
+        fields. An attacker could flip passed=False to True in the JSON
+        without invalidating the hash.
+        """
+        verifier = GovernanceVerifier()
+        attestation = verifier.verify()
+        hash_original = attestation.attestation_hash
+
+        # Flip passed and recalculate
+        attestation.passed = not attestation.passed
+        attestation.recalculate_hash()
+        assert attestation.attestation_hash != hash_original
+
+    def test_attestation_hash_changes_when_controls_total_changed(self):
+        """controls_total was not hashed, so forging the count was free."""
+        verifier = GovernanceVerifier()
+        attestation = verifier.verify()
+        hash_original = attestation.attestation_hash
+
+        attestation.controls_total += 100
+        attestation.recalculate_hash()
+        assert attestation.attestation_hash != hash_original
+
+    def test_attestation_hash_changes_when_platform_changed(self):
+        """python_version and platform_info were not hashed."""
+        verifier = GovernanceVerifier()
+        attestation = verifier.verify()
+        hash_original = attestation.attestation_hash
+
+        attestation.python_version = "fake-3.99"
+        attestation.recalculate_hash()
+        assert attestation.attestation_hash != hash_original
+
     def test_custom_controls(self):
         verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
 
@@ -374,6 +562,89 @@ rules:
         assert attestation.passed is False
         assert any(
             check.check_id == "audit-sink" and check.status == "fail"
+            for check in attestation.evidence_checks
+        )
+
+    def test_verify_evidence_allow_default_with_deny_rule_is_not_deny_semantics(
+        self, tmp_path: Path,
+    ):
+        """Regression: previously _policy_has_deny_semantics returned
+        True for any policy that contained a single rule whose action
+        token was "deny", regardless of the default. An allow-default
+        policy with one targeted ``deny`` exception is NOT
+        deny-default — it allows everything except the one exception.
+        """
+        evidence_path = _write_runtime_evidence(
+            tmp_path,
+            policy_body="""
+defaults:
+  action: allow
+rules:
+  - name: block-shell
+    action: deny
+    tool: shell_exec
+  - name: allow-crm
+    action: allow
+    tool: crm_lookup
+""".strip(),
+        )
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+        attestation = verifier.verify_evidence(evidence_path, strict=True)
+
+        assert any(
+            check.check_id == "deny-semantics" and check.status == "fail"
+            for check in attestation.evidence_checks
+        ), (
+            "allow-default policy with a single deny rule should NOT be "
+            "classified as having deny semantics"
+        )
+
+    def test_verify_evidence_default_action_deny_passes(self, tmp_path: Path):
+        """A real default-deny policy still passes the deny-semantics
+        check after the fix.
+        """
+        evidence_path = _write_runtime_evidence(
+            tmp_path,
+            policy_body="""
+default_action: deny
+rules:
+  - name: allow-crm
+    action: allow
+    tool: crm_lookup
+""".strip(),
+        )
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+        attestation = verifier.verify_evidence(evidence_path, strict=True)
+
+        assert any(
+            check.check_id == "deny-semantics" and check.status == "pass"
+            for check in attestation.evidence_checks
+        )
+
+    def test_verify_evidence_deny_substring_in_default_action_value_does_not_match(
+        self, tmp_path: Path,
+    ):
+        """``default_action: "deny-list-loaded"`` is a non-standard
+        value that contains the substring "deny" but is not an actual
+        deny verdict. Equality (``==``) is the correct comparator;
+        substring (``in``) would over-match. Confirms the comparator
+        stays exact even if a future refactor reaches for str.lower().
+        """
+        evidence_path = _write_runtime_evidence(
+            tmp_path,
+            policy_body="""
+default_action: deny-list-loaded
+rules:
+  - name: allow-crm
+    action: allow
+    tool: crm_lookup
+""".strip(),
+        )
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+        attestation = verifier.verify_evidence(evidence_path, strict=True)
+
+        assert any(
+            check.check_id == "deny-semantics" and check.status == "fail"
             for check in attestation.evidence_checks
         )
 

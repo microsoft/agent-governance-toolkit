@@ -24,7 +24,7 @@ it will be the one the Enterprise trusts with the keys to the kingdom.
 
 from enum import Enum
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import uuid
 import json
@@ -57,7 +57,7 @@ class DataRetentionPolicy(BaseModel):
 class AuditLog(BaseModel):
     """Audit log entry for compliance and security monitoring."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     event_type: str  # e.g., "request_routed", "data_accessed", "policy_changed"
     user_id: Optional[str] = None
     request_id: Optional[str] = None
@@ -159,7 +159,7 @@ class TrustGateway:
             "data_retention_days": self.security_policy.data_retention.retention_days,
             "audit_enabled": self.audit_enabled,
             "compliance_mode": self.security_policy.compliance_mode,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     def validate_request(
@@ -263,7 +263,7 @@ class TrustGateway:
                 "request_id": request_id,
                 "reason": "Security policy violation",
                 "violations": validation["violations"],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         
         # Import here to avoid circular dependency
@@ -287,7 +287,7 @@ class TrustGateway:
                 "audited": self.audit_enabled
             },
             "warnings": validation["warnings"],
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         # Audit the routing decision
@@ -438,7 +438,7 @@ class TrustGateway:
         return {
             "status": "success",
             "message": "Security policy updated",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     def clear_audit_logs(self, user_id: Optional[str] = None) -> Dict[str, Any]:
@@ -470,5 +470,5 @@ class TrustGateway:
             "status": "success",
             "message": f"Cleared {logs_count} audit log entries",
             "remaining_logs": len(self.audit_logs),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }

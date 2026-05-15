@@ -21,6 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `pyproject.toml` with additional classifiers and keywords
 - Added Python 3.12 support
 
+### Fixed
+- `02-episodic-memory-demo.ipynb`: aligned all code cells with emk 3.2.2 / agent-os 3.2.2 API
+  - `episode.id` → `episode.episode_id` (correct field name)
+  - `store.list_all()` → `store.retrieve()` (method removed)
+  - `store.retrieve(query=str, k=n)` → `store.retrieve(limit=n)` (FileAdapter uses filter-based retrieval; use ChromaDBAdapter for semantic search)
+  - `len(store)` → `len(store.retrieve())` (FileAdapter has no `__len__`)
+  - `fail.failure_reason` → `fail.metadata.get('failure_reason')` (nested in metadata)
+  - `compressor` result keys aligned: `compressed_count`, `rules_created` (not `episodes_processed`, `rules_generated`)
+  - `result['rules']` → `compressor.retrieve_rules()` (method on compressor instance, returns `List[SemanticRule]`)
+  - `SemanticRule` attribute access: `.rule`, `.context`, `.confidence` (not `['pattern']`, `['insight']`)
+  - `from agent_os import KernelSpace` → conditional import with `ImportError` guard (requires `agent-control-plane`)
+  - Summary markdown Quick Reference updated to match actual API
 ## [0.1.0] - 2026-01-23
 
 ### Added

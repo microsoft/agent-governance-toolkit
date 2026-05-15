@@ -45,7 +45,11 @@ STEP_TRANSITIONS: dict[StepState, set[StepState]] = {
     StepState.COMPENSATING: {StepState.COMPENSATED, StepState.COMPENSATION_FAILED},
     StepState.COMPENSATED: set(),
     StepState.COMPENSATION_FAILED: set(),
-    StepState.FAILED: set(),
+    # FAILED → PENDING is allowed only via reset_for_retry, which is
+    # the documented retry path. The transition table mirrors that
+    # explicitly so reset_for_retry can call transition() instead of
+    # mutating state directly and bypassing the table.
+    StepState.FAILED: {StepState.PENDING},
 }
 
 SAGA_TRANSITIONS: dict[SagaState, set[SagaState]] = {
@@ -95,6 +99,22 @@ class SagaStep:
             StepState.FAILED,
         ):
             self.completed_at = now
+
+    def reset_for_retry(self) -> None:
+        """Move a FAILED step back to PENDING for another execution attempt.
+
+        Goes through ``transition()`` rather than mutating ``state``
+        directly so the move is recorded in the state table. Also
+        clears the per-attempt error and completion timestamp so the
+        next attempt starts from a clean slate.
+
+        Raises:
+            SagaStateError: If the step is not currently in FAILED
+                state. Retries are only valid from FAILED.
+        """
+        self.transition(StepState.PENDING)
+        self.error = None
+        self.completed_at = None
 
 
 @dataclass

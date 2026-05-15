@@ -4,7 +4,14 @@
 >
 > **Status:** ✅ Implemented — Middleware adapter with 18 passing tests. Joint integration with MAF team in progress.
 
-This tutorial shows how to add AGT governance to agents built with the [Microsoft Agent Framework](https://github.com/microsoft/agent-framework). You'll wire policy enforcement, capability guards, and audit logging into MAF's middleware pipeline so governance is transparent to the agent.
+---
+
+## What You'll Learn
+
+- Wiring AGT policy enforcement into MAF's middleware pipeline
+- Capability guards that restrict tool access per agent role
+- Audit logging for every governed MAF message
+- Three governance middleware layers (run, function, tool)
 
 ### Implementation Reference
 
