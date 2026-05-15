@@ -9,47 +9,37 @@ First-class agent identity with:
 - Ephemeral credentials (15-min TTL)
 - SPIFFE/SVID workload identity
 - Microsoft Entra Agent ID integration
+- External JWKS federation for cross-org identity (per ADR-0007)
 """
 
-from .agent_id import AgentDID, AgentIdentity
-from .attestation import (
-    AttestationClaims,
-    AttestationEvidence,
-    ConfidentialLevel,
-    ImageMatchPolicy,
-    KeyOrigin,
-    ReferenceValues,
-    compute_report_data_hash,
-    compute_report_data_hash_hex,
-    matches_report_data_binding,
-    public_key_hash_hex,
-)
-from .attestation_collector import (
-    AttestationCollector,
-    MockAttestationCollector,
-    NoopAttestationCollector,
-)
-from .attestation_verifier import AttestationVerifier, MockAttestationVerifier
-from .credentials import Credential, CredentialManager
-from .delegation import DelegationLink, ScopeChain, UserContext
-from .entra import EntraAgentBlueprint, EntraAgentIdentity, EntraAgentRegistry
+from .agent_id import AgentIdentity, AgentDID
+from .entra import EntraAgentIdentity, EntraAgentRegistry, EntraAgentBlueprint
 from .entra_agent_id import EntraAgentID
-from .jwk import from_jwk, from_jwks, to_jwk, to_jwks
-from .keystore import KeyStore, PKCS11KeyStore, SoftwareKeyStore
-from .managed_identity import (
-    AWSIAMIdentity,
-    EntraManagedIdentity,
-    GCPWorkloadIdentity,
-    ManagedIdentityAdapter,
+from .credentials import Credential, CredentialManager
+from .delegation import ScopeChain, DelegationLink, UserContext
+from .external_jwks import (
+    DelegationClaims,
+    ExternalIdentity,
+    ExternalJWKSProvider,
+    FederationPolicy,
+    TrustedEndpoint,
 )
-from .mtls import MTLSConfig, MTLSIdentityVerifier
+from .sponsor import HumanSponsor
+from .risk import RiskScorer, RiskScore
+from .spiffe import SPIFFEIdentity, SVID
 from .namespace import AgentNamespace, NamespaceRule
 from .namespace_manager import NamespaceManager
-from .revocation import RevocationEntry, RevocationList
-from .risk import RiskScore, RiskScorer
+from .revocation import RevocationList, RevocationEntry
 from .rotation import KeyRotationManager
-from .spiffe import SVID, SPIFFEIdentity
-from .sponsor import HumanSponsor
+from .jwk import to_jwk, from_jwk, to_jwks, from_jwks
+from .managed_identity import (
+    ManagedIdentityAdapter,
+    EntraManagedIdentity,
+    AWSIAMIdentity,
+    GCPWorkloadIdentity,
+)
+from .mtls import MTLSConfig, MTLSIdentityVerifier
+from .keystore import KeyStore, SoftwareKeyStore, PKCS11KeyStore
 
 __all__ = [
     "AgentIdentity",
@@ -79,21 +69,6 @@ __all__ = [
     "KeyStore",
     "SoftwareKeyStore",
     "PKCS11KeyStore",
-    "AttestationClaims",
-    "AttestationEvidence",
-    "ConfidentialLevel",
-    "ImageMatchPolicy",
-    "KeyOrigin",
-    "ReferenceValues",
-    "AttestationCollector",
-    "MockAttestationCollector",
-    "NoopAttestationCollector",
-    "AttestationVerifier",
-    "MockAttestationVerifier",
-    "compute_report_data_hash",
-    "compute_report_data_hash_hex",
-    "matches_report_data_binding",
-    "public_key_hash_hex",
     "EntraAgentIdentity",
     "EntraAgentRegistry",
     "EntraAgentBlueprint",
@@ -102,4 +77,10 @@ __all__ = [
     "EntraManagedIdentity",
     "AWSIAMIdentity",
     "GCPWorkloadIdentity",
+    # External JWKS federation (ADR-0007)
+    "DelegationClaims",
+    "ExternalIdentity",
+    "ExternalJWKSProvider",
+    "FederationPolicy",
+    "TrustedEndpoint",
 ]
