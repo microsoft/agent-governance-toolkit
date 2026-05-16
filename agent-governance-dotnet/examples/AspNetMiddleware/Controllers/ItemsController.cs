@@ -20,14 +20,14 @@ namespace AgentGovernance.Examples.AspNetMiddleware.Controllers;
 public sealed class ItemsController : ControllerBase
 {
     // An in-memory store for demo purposes.
-    private readonly Dictionary<int, Item> Store = new()
+    private static readonly Dictionary<int, Item> Store = new()
     {
         [1] = new Item(1, "alpha"),
         [2] = new Item(2, "bravo"),
     };
 
-    private int _nextId = 3;
-    private readonly object Sync = new();
+    private static int _nextId = 3;
+    private static readonly object Sync = new();
 
     [HttpGet]
     public ActionResult<IEnumerable<Item>> List()
