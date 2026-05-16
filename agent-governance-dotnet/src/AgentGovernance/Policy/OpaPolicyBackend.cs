@@ -102,7 +102,7 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             sw.Stop();
             return new ExternalPolicyDecision
@@ -153,7 +153,7 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             sw.Stop();
             return new ExternalPolicyDecision

@@ -1,0 +1,21 @@
+rules:
+  - action: data.read
+    effect: allow
+
+  - action: data.write
+    effect: review
+    conditions:
+      classification: internal
+
+  - action: data.write
+    effect: deny
+    conditions:
+      classification: confidential
+
+  - action: api.*
+    effect: allow
+    max_calls: 3
+    window: 1m
+
+  - action: "*"
+    effect: deny

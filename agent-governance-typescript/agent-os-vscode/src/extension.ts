@@ -652,7 +652,7 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     // Help Command
     // ========================================
 
-    const showHelpCmd = vscode.commands.registerCommand('agent-os.showHelp', () => {
+    const showHelpCmd = vscode.commands.registerCommand('agent-os.showHelp', async () => {
         const panel = vscode.window.createWebviewPanel(
             'agent-os.help', 'Agent OS Help', vscode.ViewColumn.Beside,
             { enableScripts: false, localResourceRoots: [] },
@@ -660,7 +660,20 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         const helpPath = path.join(context.extensionPath, 'HELP.md');
         let content = '';
         try { content = fs.readFileSync(helpPath, 'utf8'); } catch { content = '# Help\n\nHelp file not found.'; }
-        panel.webview.html = renderMarkdownHtml(content);
+
+        // Use VS Code's built-in renderer (zero deps); fall back for older hosts.
+        let body: string;
+        try {
+            const rendered = await vscode.commands.executeCommand<string>('markdown.api.render', content);
+            if (typeof rendered === 'string') {
+                body = `<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>${HELP_CSS}</style></head><body>${rendered}</body></html>`;
+            } else {
+                body = renderMarkdownHtml(content);
+            }
+        } catch {
+            body = renderMarkdownHtml(content);
+        }
+        panel.webview.html = body;
     });
 
     // ========================================
@@ -1110,7 +1123,11 @@ const HELP_CSS = [
     'ul{padding-left:20px;margin:8px 0} li{margin:4px 0}',
 ].join('\n');
 
-/** Convert Markdown text to a simple themed HTML document. */
+/**
+ * Fallback Markdown-to-HTML renderer for older VS Code hosts where
+ * `markdown.api.render` is unavailable. Supports headers, lists, tables,
+ * inline bold/code, and paragraphs only.
+ */
 function renderMarkdownHtml(md: string): string {
     const out: string[] = [];
     let inList = false, inTable = false;

@@ -205,7 +205,7 @@ public sealed class SagaOrchestrator
             {
                 lock (saga.SyncRoot) { step.Error = $"Step '{step.ActionId}' timed out after {step.Timeout.TotalSeconds}s."; }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 lock (saga.SyncRoot) { step.Error = $"Step '{step.ActionId}' failed — see server logs"; }
             }
@@ -253,7 +253,7 @@ public sealed class SagaOrchestrator
                 await step.Compensate(cts.Token).ConfigureAwait(false);
                 lock (saga.SyncRoot) { step.State = StepState.Compensated; }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 lock (saga.SyncRoot)
                 {

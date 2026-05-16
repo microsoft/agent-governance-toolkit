@@ -17,6 +17,7 @@ import time
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 
 COMPONENT = os.getenv("AGENTMESH_COMPONENT", "unknown")
 VERSION = "0.3.0"
@@ -45,13 +46,42 @@ def create_base_app(component: str, description: str) -> FastAPI:
         return {"status": "ready", "component": component}
 
     @app.get("/metrics", tags=["observability"])
-    async def metrics() -> dict[str, Any]:
-        uptime = time.monotonic() - _start_time
-        return {
-            "component": component,
-            "version": VERSION,
-            "uptime_seconds": round(uptime, 2),
-        }
+    async def metrics() -> PlainTextResponse:
+        """Prometheus exposition format metrics endpoint.
+
+        Returns all registered prometheus_client metrics plus AGT uptime.
+        Falls back to a minimal text response if prometheus_client is unavailable.
+        """
+        try:
+            from prometheus_client import generate_latest, REGISTRY
+
+            output = generate_latest(REGISTRY).decode("utf-8")
+
+            # Append uptime as a comment-style info line
+            uptime = time.monotonic() - _start_time
+            uptime_line = (
+                f"# HELP agt_uptime_seconds Component uptime in seconds\n"
+                f"# TYPE agt_uptime_seconds gauge\n"
+                f'agt_uptime_seconds{{component="{component}"}} {uptime:.2f}\n'
+            )
+            output += uptime_line
+
+            return PlainTextResponse(
+                content=output,
+                media_type="text/plain; version=0.0.4; charset=utf-8",
+            )
+        except ImportError:
+            # Fallback when prometheus_client is not installed
+            uptime = time.monotonic() - _start_time
+            fallback = (
+                f"# HELP agt_uptime_seconds Component uptime in seconds\n"
+                f"# TYPE agt_uptime_seconds gauge\n"
+                f'agt_uptime_seconds{{component="{component}"}} {uptime:.2f}\n'
+            )
+            return PlainTextResponse(
+                content=fallback,
+                media_type="text/plain; version=0.0.4; charset=utf-8",
+            )
 
     return app
 

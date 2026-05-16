@@ -77,6 +77,7 @@ class SandboxConfig:
     input_dir: str | None = None
     output_dir: str | None = None
     runtime: str | None = None
+    output_max_bytes: int = 1_048_576  # 1 MiB per stream
 
 
 @dataclass
