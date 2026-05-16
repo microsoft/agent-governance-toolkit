@@ -45,6 +45,75 @@ class _LowLevelExecUnavailable(Exception):
     trigger this fallback.
     """
 
+
+_OUTPUT_TRUNCATED_MARKER = "\n[...output truncated at byte limit]\n"
+
+
+def _consume_stream_capped(
+    stream: Any,
+    max_bytes: int,
+) -> tuple[bytes | None, bytes | None, bool]:
+    """Consume a demux ``exec_start(stream=True, demux=True)`` generator.
+
+    Reads chunks until *max_bytes* is reached per channel, then stops.
+    Returns ``(stdout_bytes, stderr_bytes, truncated)``.
+    """
+    stdout_parts: list[bytes] = []
+    stderr_parts: list[bytes] = []
+    stdout_len = 0
+    stderr_len = 0
+    truncated = False
+
+    for chunk in stream:
+        if not isinstance(chunk, tuple) or len(chunk) != 2:
+            continue
+        out_chunk, err_chunk = chunk
+
+        if out_chunk and stdout_len < max_bytes:
+            take = max_bytes - stdout_len
+            stdout_parts.append(out_chunk[:take])
+            stdout_len += min(len(out_chunk), take)
+
+        if err_chunk and stderr_len < max_bytes:
+            take = max_bytes - stderr_len
+            stderr_parts.append(err_chunk[:take])
+            stderr_len += min(len(err_chunk), take)
+
+        if stdout_len >= max_bytes and stderr_len >= max_bytes:
+            truncated = True
+            break
+
+    stdout = b"".join(stdout_parts) if stdout_parts else None
+    stderr = b"".join(stderr_parts) if stderr_parts else None
+    if truncated:
+        marker = _OUTPUT_TRUNCATED_MARKER.encode()
+        if stdout is not None:
+            stdout += marker
+        if stderr is not None:
+            stderr += marker
+    return stdout, stderr, truncated
+
+
+def _cap_output_bytes(
+    output: tuple[bytes | None, bytes | None] | None,
+    max_bytes: int,
+) -> tuple[bytes | None, bytes | None, bool]:
+    """Cap an already-buffered ``(stdout, stderr)`` tuple to *max_bytes*."""
+    if not output or not isinstance(output, tuple) or len(output) != 2:
+        return None, None, False
+
+    stdout, stderr = output
+    truncated = False
+
+    if stdout and len(stdout) > max_bytes:
+        stdout = stdout[:max_bytes] + _OUTPUT_TRUNCATED_MARKER.encode()
+        truncated = True
+    if stderr and len(stderr) > max_bytes:
+        stderr = stderr[:max_bytes] + _OUTPUT_TRUNCATED_MARKER.encode()
+        truncated = True
+
+    return stdout, stderr, truncated
+
 # Protected system directories that must never be bind-mounted.
 _PROTECTED_PATHS_UNIX = frozenset(
     {
@@ -679,6 +748,7 @@ class DockerSandboxProvider(SandboxProvider):
                     sanitized_env=sanitized_env,
                     timeout_seconds=cfg.timeout_seconds,
                     timed_out=timed_out,
+                    output_max_bytes=cfg.output_max_bytes,
                 )
             else:
                 # No timeout: use the high-level wrapper unchanged.
@@ -698,22 +768,23 @@ class DockerSandboxProvider(SandboxProvider):
             )
 
             duration = time.monotonic() - start
-            stdout_bytes, stderr_bytes = exec_result.output or (
-                None,
-                None,
+            # Cap output bytes before decoding to prevent memory
+            # exhaustion from adversarial container output.
+            raw_output = exec_result.output or (None, None)
+            stdout_bytes, stderr_bytes, _ = _cap_output_bytes(
+                raw_output, cfg.output_max_bytes,
             )
+            max_chars = cfg.output_max_bytes  # 1 char ≈ 1 byte for ASCII
             stdout = (
-                stdout_bytes.decode("utf-8", errors="replace")[:10000]
+                stdout_bytes.decode("utf-8", errors="replace")[:max_chars]
                 if stdout_bytes
                 else ""
             )
             stderr = (
-                stderr_bytes.decode("utf-8", errors="replace")[:10000]
+                stderr_bytes.decode("utf-8", errors="replace")[:max_chars]
                 if stderr_bytes
                 else ""
             )
-            # Both streams are truncated to prevent memory exhaustion
-            # from adversarial output
 
             return SandboxResult(
                 success=exec_result.exit_code == 0 and not killed,
@@ -745,6 +816,7 @@ class DockerSandboxProvider(SandboxProvider):
         sanitized_env: dict[str, str],
         timeout_seconds: float,
         timed_out: threading.Event,
+        output_max_bytes: int = 1_048_576,
     ) -> Any:
         """Run ``command`` in a thread with a timeout.
 
@@ -755,6 +827,9 @@ class DockerSandboxProvider(SandboxProvider):
         fails — which destroys guest state from prior execute_code
         calls in the same session, but is the only safe fallback when
         we can't address the runaway exec specifically.
+
+        Uses ``stream=True`` with a byte cap to prevent memory
+        exhaustion from adversarial container output.
         """
         from types import SimpleNamespace
 
@@ -778,11 +853,19 @@ class DockerSandboxProvider(SandboxProvider):
             if isinstance(create_result, dict):
                 exec_id = create_result.get("Id")
 
+            if exec_id is None:
+                raise _LowLevelExecUnavailable()
+
             def _stream() -> None:
                 try:
-                    result_holder["output"] = api.exec_start(
-                        exec_id, demux=True,
+                    gen = api.exec_start(
+                        exec_id, stream=True, demux=True,
                     )
+                    stdout, stderr, truncated = _consume_stream_capped(
+                        gen, output_max_bytes,
+                    )
+                    result_holder["output"] = (stdout, stderr)
+                    result_holder["truncated"] = truncated
                 except Exception as exc:  # pragma: no cover - defensive
                     result_holder["error"] = exc
 

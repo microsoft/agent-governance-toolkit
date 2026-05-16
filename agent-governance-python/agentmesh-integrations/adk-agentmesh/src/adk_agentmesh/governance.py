@@ -18,9 +18,23 @@ class DelegationScope:
     max_tool_calls: int = 50
     max_depth: int = 3
     read_only: bool = False
+    trust_ceiling: Optional[int] = None
 
     def narrow(self, **overrides) -> "DelegationScope":
-        """Create a narrower scope for sub-delegation."""
+        """Create a narrower scope for sub-delegation.
+
+        If trust_ceiling is provided in overrides, it is clamped to not
+        exceed the parent's ceiling (monotonic narrowing).
+        """
+        # Compute child ceiling: take the minimum of parent and requested
+        requested_ceiling = overrides.get("trust_ceiling", self.trust_ceiling)
+        if self.trust_ceiling is not None and requested_ceiling is not None:
+            child_ceiling = min(requested_ceiling, self.trust_ceiling)
+        elif self.trust_ceiling is not None:
+            child_ceiling = self.trust_ceiling
+        else:
+            child_ceiling = requested_ceiling
+
         child = DelegationScope(
             allowed_tools=overrides.get("allowed_tools", self.allowed_tools[:]),
             max_tool_calls=min(
@@ -32,6 +46,7 @@ class DelegationScope:
                 self.max_depth - 1,
             ),
             read_only=self.read_only or overrides.get("read_only", False),
+            trust_ceiling=child_ceiling,
         )
         # Monotonic narrowing: child tools must be subset of parent
         if self.allowed_tools:

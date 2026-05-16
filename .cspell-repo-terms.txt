@@ -275,3 +275,6 @@ rstrip
 scipy
 structlog
 uvicorn
+setext
+linkified
+CommonMark

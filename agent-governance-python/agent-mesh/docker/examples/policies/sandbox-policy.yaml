@@ -1,0 +1,20 @@
+# Example AGT governance policy for sidecar demo.
+# Allows file reads but denies shell execution and network access
+# for sandbox-level agents.
+name: demo-sandbox-policy
+version: "1.0"
+rules:
+  - name: allow-file-read
+    description: Allow reading files in /data
+    condition: "action == 'file.read'"
+    action: allow
+
+  - name: deny-shell-execute
+    description: Deny shell execution for sandboxed agents
+    condition: "action == 'shell.execute'"
+    action: deny
+
+  - name: deny-network-egress
+    description: Deny outbound network access
+    condition: "action == 'network.egress'"
+    action: deny

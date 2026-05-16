@@ -369,6 +369,65 @@ class OPAEvaluator:
 # ── Integration with PolicyEngine ─────────────────────────────────
 
 
+class OPAPolicyBackend:
+    """Adapter wrapping OPAEvaluator to satisfy ExternalPolicyBackend protocol.
+
+    Usage:
+        from agentmesh.governance.opa import OPAPolicyBackend
+        from agentmesh.governance.backend import BackendRegistry
+
+        backend = OPAPolicyBackend(rego_content=MY_REGO)
+        BackendRegistry.register(backend)
+    """
+
+    def __init__(
+        self,
+        evaluator: Optional["OPAEvaluator"] = None,
+        query_prefix: str = "data.agentmesh.allow",
+        **kwargs: Any,
+    ):
+        """Initialize the OPA policy backend.
+
+        Args:
+            evaluator: An existing OPAEvaluator instance. If not provided,
+                one is created from the remaining keyword arguments.
+            query_prefix: Default Rego query path used when evaluate() is called.
+            **kwargs: Passed to OPAEvaluator constructor if evaluator is None.
+        """
+        self._evaluator = evaluator or OPAEvaluator(**kwargs)
+        self._query_prefix = query_prefix
+
+    @property
+    def name(self) -> str:
+        return "opa"
+
+    def evaluate(self, action: str, context: dict) -> "PolicyDecisionResult":
+        from agentmesh.governance.backend import PolicyDecisionResult
+
+        decision = self._evaluator.evaluate(self._query_prefix, context)
+        return PolicyDecisionResult(
+            allowed=decision.allowed,
+            reason=decision.error or ("allowed" if decision.allowed else "denied by policy"),
+            backend="opa",
+            latency_ms=decision.evaluation_ms,
+            raw_response=decision.raw_result,
+        )
+
+    def healthy(self) -> bool:
+        if self._evaluator.mode == "remote":
+            try:
+                import urllib.request
+                req = urllib.request.Request(
+                    f"{self._evaluator.opa_url}/health",
+                    method="GET",
+                )
+                with urllib.request.urlopen(req, timeout=2) as resp:  # noqa: S310
+                    return resp.status == 200
+            except Exception:
+                return False
+        return self._evaluator._opa_available or self._evaluator.rego_content is not None
+
+
 def load_rego_into_engine(engine: Any, rego_path: str, package: str = "agentmesh") -> OPAEvaluator:
     """
     Register a .rego file with the existing PolicyEngine.
