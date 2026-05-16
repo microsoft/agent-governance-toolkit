@@ -278,3 +278,5 @@ uvicorn
 setext
 linkified
 CommonMark
+autobuild
+sarif
