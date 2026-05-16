@@ -1,0 +1,93 @@
+# AGT Governance Sidecar — Kubernetes Sidecar Container Spec
+#
+# Add this container to your agent Pod spec to enforce governance
+# policies on tool calls. The agent container communicates with
+# the sidecar over localhost:8081.
+#
+# Usage: Include the sidecar container in your Pod spec alongside
+# your agent container. Mount policies via ConfigMap or volume.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: governed-agent
+  labels:
+    app: governed-agent
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8081"
+    prometheus.io/path: "/metrics"
+spec:
+  containers:
+    # Your agent container
+    - name: agent
+      image: your-agent-image:latest
+      env:
+        - name: AGT_SIDECAR_URL
+          value: "http://localhost:8081"
+      ports:
+        - containerPort: 8080
+
+    # AGT governance sidecar
+    - name: governance-sidecar
+      image: ghcr.io/microsoft/agentmesh/governance-sidecar:0.3.0
+      ports:
+        - containerPort: 8081
+          name: governance
+      env:
+        - name: AGT_POLICY_DIR
+          value: /etc/agt/policies
+        - name: AGT_LOG_LEVEL
+          value: info
+        - name: AGT_SERVICE_NAME
+          value: agt-sidecar
+        # Optional: OTEL collector endpoint
+        # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        #   value: http://otel-collector:4317
+      volumeMounts:
+        - name: policies
+          mountPath: /etc/agt/policies
+          readOnly: true
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8081
+        initialDelaySeconds: 5
+        periodSeconds: 15
+      readinessProbe:
+        httpGet:
+          path: /ready
+          port: 8081
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "50m"
+        limits:
+          memory: "128Mi"
+          cpu: "200m"
+
+  volumes:
+    - name: policies
+      configMap:
+        name: agt-policies  # Create from your policy YAML files
+
+---
+# Create the ConfigMap from policy files:
+#   kubectl create configmap agt-policies --from-file=policies/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agt-policies
+data:
+  sandbox-policy.yaml: |
+    name: sandbox-policy
+    version: "1.0"
+    rules:
+      - name: allow-file-read
+        condition: "action == 'file.read'"
+        action: allow
+      - name: deny-shell-execute
+        condition: "action == 'shell.execute'"
+        action: deny

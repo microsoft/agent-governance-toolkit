@@ -1,0 +1,56 @@
+# AGT Governance Sidecar — Docker Compose Example
+#
+# Demonstrates an agent container governed by an AGT sidecar.
+# The sidecar evaluates policies for every tool call the agent makes.
+#
+# Usage:
+#   docker compose up
+#
+# Test policy evaluation:
+#   curl -X POST http://localhost:8081/api/v1/policy/evaluate \
+#     -H "Content-Type: application/json" \
+#     -d '{"agent_did":"did:mesh:agent-1","action":"shell.execute","resource":"/bin/bash"}'
+
+services:
+  # The governance sidecar — evaluates policies, serves metrics
+  governance-sidecar:
+    build:
+      context: ../../../..
+      dockerfile: agent-governance-python/agent-mesh/docker/Dockerfile.sidecar
+    ports:
+      - "8081:8081"
+      - "9090:8081"  # Prometheus scrape alias
+    volumes:
+      - ./policies:/etc/agt/policies:ro
+    environment:
+      AGT_LOG_LEVEL: info
+      AGT_PORT: "8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Example agent container — uses the sidecar for policy checks
+  agent:
+    image: python:3.11-slim
+    depends_on:
+      governance-sidecar:
+        condition: service_healthy
+    environment:
+      AGT_SIDECAR_URL: http://governance-sidecar:8081
+    command: >
+      python -c "
+      import json, urllib.request;
+      req = urllib.request.Request(
+          'http://governance-sidecar:8081/api/v1/policy/evaluate',
+          data=json.dumps({
+              'agent_did': 'did:mesh:demo-agent',
+              'action': 'file.read',
+              'resource': '/data/report.csv',
+          }).encode(),
+          headers={'Content-Type': 'application/json'},
+      );
+      resp = urllib.request.urlopen(req);
+      print('Policy decision:', json.loads(resp.read()));
+      "
