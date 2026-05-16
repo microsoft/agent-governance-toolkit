@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -322,9 +323,10 @@ class KubernetesDeployer:
         try:
             # Ensure namespace
             self._run(["create", "namespace", self._namespace], check=False)
-            tmp_dir = Path(tempfile.gettempdir())
-            manifest_path = tmp_dir / f"agt-{agent_id}-manifest.json"
+            fd, tmp_path = tempfile.mkstemp(prefix=f"agt-{agent_id}-", suffix=".json")
+            manifest_path = Path(tmp_path)
             try:
+                os.close(fd)
                 manifest_path.write_text(manifest_json, encoding="utf-8")
                 self._run(["apply", "-f", str(manifest_path)])
             finally:
