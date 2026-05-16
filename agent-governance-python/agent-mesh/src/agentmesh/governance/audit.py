@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 import hashlib
 import hmac
 import json
+import os
 import uuid
 
 if TYPE_CHECKING:
@@ -59,6 +60,31 @@ class AuditEntry(BaseModel):
     # Metadata
     trace_id: Optional[str] = None
     session_id: Optional[str] = None
+
+    # Sandbox/environment context (auto-populated from env vars when available)
+    sandbox_id: Optional[str] = Field(
+        default=None,
+        description="Sandbox or container ID. Reads SANDBOX_ID or OPENSHELL_SANDBOX_ID env var.",
+    )
+    environment: Optional[str] = Field(
+        default=None,
+        description="Deployment environment. Reads AGT_ENVIRONMENT env var.",
+    )
+    compute_driver: Optional[str] = Field(
+        default=None,
+        description="Compute driver (e.g., docker, openshell, aca). Reads OPENSHELL_COMPUTE_DRIVER env var.",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Auto-populate sandbox context fields from environment variables."""
+        if self.sandbox_id is None:
+            self.sandbox_id = os.environ.get(
+                "SANDBOX_ID", os.environ.get("OPENSHELL_SANDBOX_ID")
+            )
+        if self.environment is None:
+            self.environment = os.environ.get("AGT_ENVIRONMENT")
+        if self.compute_driver is None:
+            self.compute_driver = os.environ.get("OPENSHELL_COMPUTE_DRIVER")
 
     def compute_hash(self) -> str:
         """Compute the SHA-256 hash of this entry's canonical fields.

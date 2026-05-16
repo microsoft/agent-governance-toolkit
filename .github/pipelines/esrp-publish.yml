@@ -116,6 +116,9 @@ parameters:
       - name: agentmesh-discovery
         path: agent-governance-python/agent-discovery
         wave: 2
+      - name: agent-sandbox
+        path: agent-governance-python/agent-sandbox
+        wave: 2
       - name: agentmesh-primitives
         path: agent-governance-python/agent-primitives
         wave: 2
@@ -202,18 +205,28 @@ parameters:
     default:
       - name: agentmesh-copilot-governance
         path: agent-governance-python/agentmesh-integrations/copilot-governance
+        nodeVersion: '20'
       - name: agentmesh-mastra
         path: agent-governance-python/agentmesh-integrations/mastra-agentmesh
+        nodeVersion: '20'
       - name: agentmesh-api
         path: agent-governance-python/agent-mesh/services/api
+        nodeVersion: '20'
       - name: agentmesh-mcp-proxy
         path: agent-governance-python/agent-mesh/packages/mcp-proxy
+        nodeVersion: '20'
+      - name: agent-governance-copilot-cli
+        path: agent-governance-copilot-cli
+        nodeVersion: '22'
       - name: agent-governance-sdk
         path: agent-governance-typescript
+        nodeVersion: '20'
       - name: agent-os-copilot-extension
         path: agent-governance-python/agent-os/extensions/copilot
+        nodeVersion: '20'
       - name: agentos-mcp-server
         path: agent-governance-python/agent-os/extensions/mcp-server
+        nodeVersion: '20'
 
 # -------------------------------------------------------
 # ESRP Configuration
@@ -419,7 +432,7 @@ stages:
 
             - task: UseNode@1
               inputs:
-                version: '${{ parameters.nodeVersion }}'
+                version: '${{ coalesce(pkg.nodeVersion, parameters.nodeVersion) }}'
 
             - script: npm install --ignore-scripts --legacy-peer-deps
               workingDirectory: '${{ pkg.path }}'

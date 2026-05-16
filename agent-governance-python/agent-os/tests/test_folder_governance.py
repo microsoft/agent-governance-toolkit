@@ -256,6 +256,35 @@ class TestMergePolicies:
         assert result[0].action == PolicyAction.DENY
         assert all(r.action != PolicyAction.ALLOW for r in result)
 
+    def test_same_name_without_override_does_not_accumulate(self):
+        """Regression for #2276: same-name child rule without override=True
+        should NOT be appended — otherwise its higher priority defeats the
+        parent deny at evaluation time."""
+        root = PolicyDocument(name="root", rules=[
+            PolicyRule(name="block-exec", condition=PolicyCondition(field="tool", operator=PolicyOperator.EQ, value="shell"), action=PolicyAction.DENY, priority=100),
+        ])
+        child = PolicyDocument(name="child", rules=[
+            PolicyRule(name="block-exec", condition=PolicyCondition(field="tool", operator=PolicyOperator.EQ, value="shell"), action=PolicyAction.ALLOW, priority=9999, override=False),
+        ])
+        result = merge_policies([root, child])
+        # Child is dropped — only the parent deny remains.
+        assert len(result) == 1
+        assert result[0].action == PolicyAction.DENY
+        assert result[0].name == "block-exec"
+
+    def test_same_name_without_override_non_deny_parent_keeps_parent(self):
+        """When parent is non-deny, same-name child without override still
+        keeps only the parent version (no accumulation)."""
+        root = PolicyDocument(name="root", rules=[
+            PolicyRule(name="audit-rule", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.AUDIT, priority=50),
+        ])
+        child = PolicyDocument(name="child", rules=[
+            PolicyRule(name="audit-rule", condition=PolicyCondition(field="x", operator=PolicyOperator.EQ, value=1), action=PolicyAction.ALLOW, priority=200, override=False),
+        ])
+        result = merge_policies([root, child])
+        assert len(result) == 1
+        assert result[0].action == PolicyAction.AUDIT
+
     def test_empty_chain(self):
         assert merge_policies([]) == []
 

@@ -9,8 +9,8 @@ on:
     - cron: "0 6 * * *" # Daily at 06:00 UTC
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 permissions:
   contents: read
@@ -30,6 +30,7 @@ jobs:
       docs-only: ${{ steps.filter.outputs.docs-only }}
       docker: ${{ steps.filter.outputs.docker }}
       changed-py-pkgs: ${{ steps.py-pkgs.outputs.list }}
+      changed-ts-pkgs: ${{ steps.ts-pkgs.outputs.list }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -47,12 +48,15 @@ jobs:
               - 'agent-governance-python/agent-primitives/**'
               - 'agent-governance-python/agent-mcp-governance/**'
               - 'agent-governance-python/agent-marketplace/**'
+              - 'agent-governance-python/agent-discovery/**'
               - 'agent-governance-python/agent-rag-governance/**'
+              - 'agent-governance-python/agent-sandbox/**'
               - 'scripts/**'
               - 'agent-governance-python/requirements/**'
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
+              - 'agent-governance-copilot-cli/**'
               - 'agent-governance-typescript/**'
               - 'agent-governance-python/agent-os/extensions/**'
               - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
@@ -91,6 +95,30 @@ jobs:
               - 'agent-governance-python/agent-runtime/**'
             pkg-agent-lightning:
               - 'agent-governance-python/agent-lightning/**'
+            pkg-agent-primitives:
+              - 'agent-governance-python/agent-primitives/**'
+            pkg-agent-mcp-governance:
+              - 'agent-governance-python/agent-mcp-governance/**'
+            pkg-agent-marketplace:
+              - 'agent-governance-python/agent-marketplace/**'
+            pkg-agent-discovery:
+              - 'agent-governance-python/agent-discovery/**'
+            pkg-agent-rag-governance:
+              - 'agent-governance-python/agent-rag-governance/**'
+            pkg-agent-sandbox:
+              - 'agent-governance-python/agent-sandbox/**'
+            pkg-agentmesh-mcp-proxy:
+              - 'agent-governance-python/agent-mesh/packages/mcp-proxy/**'
+            pkg-agent-governance-copilot-cli:
+              - 'agent-governance-copilot-cli/**'
+            pkg-agent-governance-sdk:
+              - 'agent-governance-typescript/**'
+            pkg-agentmesh-api:
+              - 'agent-governance-python/agent-mesh/services/api/**'
+            pkg-agent-os-copilot-extension:
+              - 'agent-governance-python/agent-os/extensions/copilot/**'
+            pkg-agentos-mcp-server:
+              - 'agent-governance-python/agent-os/extensions/mcp-server/**'
       - name: Compose changed-py-pkgs JSON list
         id: py-pkgs
         env:
@@ -101,6 +129,12 @@ jobs:
           AC: ${{ steps.filter.outputs.pkg-agent-compliance }}
           AR: ${{ steps.filter.outputs.pkg-agent-runtime }}
           AL: ${{ steps.filter.outputs.pkg-agent-lightning }}
+          AP: ${{ steps.filter.outputs.pkg-agent-primitives }}
+          AMG: ${{ steps.filter.outputs.pkg-agent-mcp-governance }}
+          AMP: ${{ steps.filter.outputs.pkg-agent-marketplace }}
+          AD: ${{ steps.filter.outputs.pkg-agent-discovery }}
+          ARG: ${{ steps.filter.outputs.pkg-agent-rag-governance }}
+          ASB: ${{ steps.filter.outputs.pkg-agent-sandbox }}
         run: |
           set -euo pipefail
           pkgs=()
@@ -111,9 +145,36 @@ jobs:
           [ "$AC" = "true" ] && pkgs+=('"agent-compliance"')
           [ "$AR" = "true" ] && pkgs+=('"agent-runtime"')
           [ "$AL" = "true" ] && pkgs+=('"agent-lightning"')
+          [ "$AP" = "true" ] && pkgs+=('"agent-primitives"')
+          [ "$AMG" = "true" ] && pkgs+=('"agent-mcp-governance"')
+          [ "$AMP" = "true" ] && pkgs+=('"agent-marketplace"')
+          [ "$AD" = "true" ] && pkgs+=('"agent-discovery"')
+          [ "$ARG" = "true" ] && pkgs+=('"agent-rag-governance"')
+          [ "$ASB" = "true" ] && pkgs+=('"agent-sandbox"')
           ifs=$IFS; IFS=,; list="[${pkgs[*]:-}]"; IFS=$ifs
           echo "list=$list" >> "$GITHUB_OUTPUT"
           echo "Changed Python packages: $list"
+      - name: Compose changed-ts-pkgs JSON list
+        id: ts-pkgs
+        env:
+          MCP: ${{ steps.filter.outputs.pkg-agentmesh-mcp-proxy }}
+          COPILOT: ${{ steps.filter.outputs.pkg-agent-governance-copilot-cli }}
+          SDK: ${{ steps.filter.outputs.pkg-agent-governance-sdk }}
+          API: ${{ steps.filter.outputs.pkg-agentmesh-api }}
+          EXT: ${{ steps.filter.outputs.pkg-agent-os-copilot-extension }}
+          SERVER: ${{ steps.filter.outputs.pkg-agentos-mcp-server }}
+        run: |
+          set -euo pipefail
+          pkgs=()
+          [ "$MCP" = "true" ] && pkgs+=('"agentmesh-mcp-proxy"')
+          [ "$COPILOT" = "true" ] && pkgs+=('"agent-governance-copilot-cli"')
+          [ "$SDK" = "true" ] && pkgs+=('"agent-governance-sdk"')
+          [ "$API" = "true" ] && pkgs+=('"agentmesh-api"')
+          [ "$EXT" = "true" ] && pkgs+=('"agent-os-copilot-extension"')
+          [ "$SERVER" = "true" ] && pkgs+=('"agentos-mcp-server"')
+          ifs=$IFS; IFS=,; list="[${pkgs[*]:-}]"; IFS=$ifs
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Changed TypeScript packages: $list"
 
   # ── Python lint + test (only when Python files change) ────────────────
   lint:
@@ -131,7 +192,12 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-primitives,
+            agent-mcp-governance,
+            agent-marketplace,
+            agent-discovery,
             agent-rag-governance,
+            agent-sandbox,
           ]
     steps:
       - name: Determine if package changed
@@ -182,7 +248,12 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-primitives,
+            agent-mcp-governance,
+            agent-marketplace,
+            agent-discovery,
             agent-rag-governance,
+            agent-sandbox,
           ]
         python-version: [ "3.10", "3.11", "3.12", "3.13" ]
         exclude:
@@ -198,20 +269,44 @@ jobs:
             python-version: "3.10"
           - package: agent-lightning
             python-version: "3.10"
-    env:
-      RUN_TESTS: ${{ needs.changes.outputs.python == 'true' || github.event_name == 'schedule' }}
+          - package: agent-primitives
+            python-version: "3.10"
+          - package: agent-mcp-governance
+            python-version: "3.10"
+          - package: agent-marketplace
+            python-version: "3.10"
+          - package: agent-discovery
+            python-version: "3.10"
+          - package: agent-sandbox
+            python-version: "3.10"
     steps:
-      - name: Skip (no Python changes)
-        if: env.RUN_TESTS != 'true'
-        run: echo "No Python changes — skipping tests"
+      - name: Determine if package changed
+        id: gate
+        env:
+          CHANGED: ${{ needs.changes.outputs.changed-py-pkgs }}
+          PKG: ${{ matrix.package }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$CHANGED" | grep -q "\"$PKG\""; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Package $PKG unchanged on this PR — skipping tests."
+          fi
+      - name: Skip (unchanged package)
+        if: steps.gate.outputs.run != 'true'
+        run: echo "Package ${{ matrix.package }} unchanged — skipping tests"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        if: env.RUN_TESTS == 'true'
+        if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        if: env.RUN_TESTS == 'true'
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install local sibling dependencies
-        if: env.RUN_TESTS == 'true'
+        if: steps.gate.outputs.run == 'true'
         run: |
           # agent-os depends on agent_primitives (local, not on PyPI at >=3.x)
           # and agentmesh (test_cmd_sign.py imports agentmesh.marketplace)
@@ -220,15 +315,20 @@ jobs:
             pip install --no-cache-dir -e agent-governance-python/agent-mesh
           fi
       - name: Install ${{ matrix.package }}
-        if: env.RUN_TESTS == 'true'
+        if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
       - name: Test ${{ matrix.package }}
-        if: env.RUN_TESTS == 'true'
+        if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
-        run: pytest tests/ -q --tb=short
+        run: |
+          if [ -d tests ]; then
+            pytest tests/ -q --tb=short
+          else
+            echo "No tests/ directory — skipping package tests"
+          fi
 
   # ── PyPI package build (only when Python files change) ────────────────
   build-pypi:
@@ -247,19 +347,48 @@ jobs:
             agent-compliance,
             agent-runtime,
             agent-lightning,
+            agent-primitives,
+            agent-mcp-governance,
+            agent-marketplace,
+            agent-discovery,
             agent-rag-governance,
+            agent-sandbox,
           ]
     steps:
+      - name: Determine if package changed
+        id: gate
+        env:
+          CHANGED: ${{ needs.changes.outputs.changed-py-pkgs }}
+          PKG: ${{ matrix.package }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$CHANGED" | grep -q "\"$PKG\""; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Package $PKG unchanged on this PR — skipping build."
+          fi
+      - name: Skip (unchanged package)
+        if: steps.gate.outputs.run != 'true'
+        run: echo "Package ${{ matrix.package }} unchanged — skipping wheel build"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.11"
       - name: Install build tools
+        if: steps.gate.outputs.run == 'true'
         run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-build.txt
       - name: Build ${{ matrix.package }}
+        if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: python -m build
       - name: Verify wheel
+        if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: ls -la dist/*.whl
 
@@ -286,7 +415,7 @@ jobs:
           # Install each package. A failure here means safety would scan
           # against the wrong dependency set, so surface it instead of
           # silently `|| true`-ing past it.
-          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning; do
+          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning agent-primitives agent-mcp-governance agent-marketplace agent-discovery agent-rag-governance agent-sandbox; do
             echo "=== $pkg ==="
             (cd "agent-governance-python/$pkg" \
               && pip install --no-cache-dir -e .)
@@ -601,29 +730,71 @@ jobs:
         include:
           - name: agentmesh-mcp-proxy
             path: agent-governance-python/agent-mesh/packages/mcp-proxy
+            node-version: "20"
+          - name: agent-governance-copilot-cli
+            path: agent-governance-copilot-cli
+            node-version: "22"
           - name: agent-governance-sdk
             path: agent-governance-typescript
+            node-version: "20"
           - name: agentmesh-api
             path: agent-governance-python/agent-mesh/services/api
+            node-version: "20"
           - name: agent-os-copilot-extension
             path: agent-governance-python/agent-os/extensions/copilot
+            node-version: "20"
           - name: agentos-mcp-server
             path: agent-governance-python/agent-os/extensions/mcp-server
+            node-version: "20"
     steps:
+      - name: Determine if package changed
+        id: gate
+        env:
+          CHANGED: ${{ needs.changes.outputs.changed-ts-pkgs }}
+          PKG: ${{ matrix.name }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$CHANGED" | grep -q "\"$PKG\""; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Package $PKG unchanged on this PR — skipping npm build."
+          fi
+      - name: Skip (unchanged package)
+        if: steps.gate.outputs.run != 'true'
+        run: echo "Package ${{ matrix.name }} unchanged — skipping npm build"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: steps.gate.outputs.run == 'true'
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node-version }}
       - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
         run: npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
           --ignore-scripts
       - name: Build ${{ matrix.name }}
+        if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
         run: npm run build
       - name: Test ${{ matrix.name }}
+        if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
-        run: npm test 2>/dev/null || echo "No tests configured"
+        shell: bash
+        run: |
+          if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)"; then
+            if find . -type f \( -name "*.test.ts" -o -name "*.spec.ts" -o -name "*.test.tsx" -o -name "*.spec.tsx" -o -name "*.test.js" -o -name "*.spec.js" -o -name "*.test.mjs" -o -name "*.spec.mjs" -o -name "*.test.cjs" -o -name "*.spec.cjs" \) | grep -q .; then
+              npm test
+            else
+              echo "No test files found"
+            fi
+          else
+            echo "No tests configured"
+          fi
 
   # ── Rust build + test (only when Rust files change) ──────────────────
   build-rust:
@@ -799,4 +970,3 @@ jobs:
           fi
 
           echo "All required jobs succeeded."
-

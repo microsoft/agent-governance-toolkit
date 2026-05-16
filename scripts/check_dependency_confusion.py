@@ -124,6 +124,7 @@ REGISTERED_NPM_PACKAGES = {
     "@microsoft/agent-os-kernel", "@microsoft/agentmesh-mcp-proxy",
     "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
     "@microsoft/agentmesh-mastra", "@microsoft/agentmesh-copilot-governance",
+    "@microsoft/agent-governance-sdk", "@microsoft/agent-governance-copilot-cli",
     "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
     "@microsoft/agent-os-vscode",
     # Common deps

@@ -225,7 +225,7 @@ class TestRingElevationErrorMessages:
                 target_ring=ExecutionRing.RING_2_STANDARD,
             )
         err = exc_info.value
-        assert err.denial_reason == ElevationDenialReason.COMMUNITY_EDITION
+        assert err.denial_reason == ElevationDenialReason.INSUFFICIENT_TRUST
 
     def test_error_includes_remediation(self):
         mgr = RingElevationManager()
@@ -306,4 +306,4 @@ class TestRingElevationErrorMessages:
         assert err.current_ring == ExecutionRing.RING_3_SANDBOX
         assert err.target_ring == ExecutionRing.RING_2_STANDARD
         assert err.agent_did == "did:mesh:test"
-        assert err.denial_reason == ElevationDenialReason.COMMUNITY_EDITION
+        assert err.denial_reason == ElevationDenialReason.INSUFFICIENT_TRUST

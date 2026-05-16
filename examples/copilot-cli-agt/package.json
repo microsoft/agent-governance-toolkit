@@ -1,0 +1,13 @@
+{
+  "name": "copilot-cli-agt-example",
+  "private": true,
+  "type": "module",
+  "description": "Public Preview example Copilot CLI extension that uses the AGT TypeScript SDK for prompt, tool, and output governance.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node --check ./.github/extensions/agt-global-policy/extension.mjs && node --check ./.github/extensions/agt-global-policy/main.mjs && node --check ./.github/extensions/agt-global-policy/lib/policy.mjs && node --check ./.github/extensions/agt-global-policy/lib/poisoning.mjs && node --check ./.github/extensions/agt-global-policy/lib/sdk-loader.mjs && node --check ./test/policy-engine.test.mjs",
+    "test": "node --test ./test/*.test.mjs"
+  }
+}

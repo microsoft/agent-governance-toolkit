@@ -148,6 +148,10 @@ __all__ = [
     "AgentProfile",
     "TrustRecord",
     "TrustTracker",
+
+    # Telemetry
+    "bootstrap_otel",
+    "is_bootstrapped",
 ]
 
 # Trust types (shared across integrations)
@@ -156,3 +160,6 @@ from agentmesh.trust_types import (
     TrustRecord,
     TrustTracker,
 )
+
+# Telemetry bootstrap
+from agentmesh.telemetry import bootstrap_otel, is_bootstrapped

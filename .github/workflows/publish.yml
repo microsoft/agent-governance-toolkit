@@ -8,15 +8,14 @@ on:
       package:
         description: >
           Package to publish. Use "all" for everything, "all-python" for all
-          Python packages, or a specific name (e.g. "agent-os", "agentmesh-langchain").
+          Python packages, "all-npm" for all npm packages, or a specific name
+          (e.g. "agent-os", "agentmesh-langchain", "agent-governance-copilot-cli").
         required: true
         type: string
         default: "all"
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 jobs:
   # -------------------------------------------------------------------
@@ -88,6 +87,26 @@ jobs:
           ]'
           # Compact the JSON
           ALL=$(echo "$ALL" | jq -c '.')
+          NPM_INPUTS='[
+            "all-npm",
+            "agentmesh-copilot-governance",
+            "@microsoft/agentmesh-copilot-governance",
+            "agentmesh-mastra",
+            "@microsoft/agentmesh-mastra",
+            "agentmesh-api",
+            "@microsoft/agentmesh-api",
+            "agent-governance-copilot-cli",
+            "@microsoft/agent-governance-copilot-cli",
+            "agentmesh-sdk",
+            "agent-governance-sdk",
+            "@microsoft/agent-governance-sdk",
+            "agent-os-copilot-extension",
+            "@microsoft/agent-os-copilot-extension",
+            "agentos-mcp-server",
+            "@microsoft/agentos-mcp-server",
+            "npm-agentmesh-mcp-proxy",
+            "@microsoft/agentmesh-mcp-proxy"
+          ]'
 
           # $INPUT and $EVENT_NAME come from the step env block, not
           # from a GHA expression interpolated into the shell body, so
@@ -103,8 +122,12 @@ jobs:
           elif [ -n "$INPUT" ] && [ "$INPUT" != "agent-governance-dotnet" ]; then
             FILTERED=$(echo "$ALL" | jq -c --arg name "$INPUT" '[.[] | select(.name == $name)]')
             if [ "$FILTERED" = "[]" ]; then
-              echo "::error::Unknown package '$INPUT'. Run with 'all' to see available packages."
-              echo "any=false" >> "$GITHUB_OUTPUT"
+              if echo "$NPM_INPUTS" | jq -e --arg name "$INPUT" 'index($name)' >/dev/null; then
+                echo "any=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "::error::Unknown package '$INPUT'. Run with 'all' to see available packages."
+                echo "any=false" >> "$GITHUB_OUTPUT"
+              fi
             else
               echo "matrix={\"include\":$FILTERED}" >> "$GITHUB_OUTPUT"
               echo "any=true" >> "$GITHUB_OUTPUT"
@@ -117,6 +140,10 @@ jobs:
     needs: resolve-python-matrix
     if: needs.resolve-python-matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.resolve-python-matrix.outputs.matrix) }}
@@ -173,33 +200,72 @@ jobs:
   # is NOT compliant for Microsoft npm publishing.
   # See: PUBLISHING.md
   # -------------------------------------------------------------------
-  build-npm:
-    if: ${{ github.event_name == 'release' || github.event.inputs.package == 'all' }}
+  resolve-npm-matrix:
+    needs: resolve-python-matrix
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      any: ${{ steps.resolve.outputs.any }}
+    steps:
+      - name: Resolve npm package matrix
+        id: resolve
+        env:
+          INPUT: ${{ github.event.inputs.package }}
+          EVENT_NAME: ${{ github.event_name }}
+          PYTHON_MATCH: ${{ needs.resolve-python-matrix.outputs.any }}
+        run: |
+          ALL='[
+            {"name":"agentmesh-copilot-governance","path":"agent-governance-python/agentmesh-integrations/copilot-governance","nodeVersion":"20","selectors":["agentmesh-copilot-governance","@microsoft/agentmesh-copilot-governance"]},
+            {"name":"agentmesh-mastra","path":"agent-governance-python/agentmesh-integrations/mastra-agentmesh","nodeVersion":"20","selectors":["agentmesh-mastra","@microsoft/agentmesh-mastra"]},
+            {"name":"agentmesh-api","path":"agent-governance-python/agent-mesh/services/api","nodeVersion":"20","selectors":["agentmesh-api","@microsoft/agentmesh-api"]},
+            {"name":"npm-agentmesh-mcp-proxy","path":"agent-governance-python/agent-mesh/packages/mcp-proxy","nodeVersion":"20","selectors":["npm-agentmesh-mcp-proxy","@microsoft/agentmesh-mcp-proxy"]},
+            {"name":"agent-governance-copilot-cli","path":"agent-governance-copilot-cli","nodeVersion":"22","selectors":["agent-governance-copilot-cli","@microsoft/agent-governance-copilot-cli"]},
+            {"name":"agentmesh-sdk","path":"agent-governance-typescript","nodeVersion":"20","selectors":["agentmesh-sdk","agent-governance-sdk","@microsoft/agent-governance-sdk"]},
+            {"name":"agent-os-copilot-extension","path":"agent-governance-python/agent-os/extensions/copilot","nodeVersion":"20","selectors":["agent-os-copilot-extension","@microsoft/agent-os-copilot-extension"]},
+            {"name":"agentos-mcp-server","path":"agent-governance-python/agent-os/extensions/mcp-server","nodeVersion":"20","selectors":["agentos-mcp-server","@microsoft/agentos-mcp-server"]}
+          ]'
+          ALL=$(echo "$ALL" | jq -c '.')
+          AMBIGUOUS_PYTHON_NAMES='["agentmesh-mcp-proxy"]'
+
+          if [ "$EVENT_NAME" = "release" ] || [ "$INPUT" = "all" ] || [ "$INPUT" = "all-npm" ]; then
+            echo "matrix={\"include\":$ALL}" >> "$GITHUB_OUTPUT"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$INPUT" ] && [ "$INPUT" != "agent-governance-dotnet" ] && [ "$INPUT" != "all-python" ]; then
+            FILTERED=$(echo "$ALL" | jq -c --arg name "$INPUT" '[.[] | select((.selectors // []) | index($name))]')
+            if [ "$FILTERED" = "[]" ]; then
+              if [ "$PYTHON_MATCH" != "true" ]; then
+                echo "::error::Unknown package '$INPUT'. Use all, all-python, all-npm, or a supported package name."
+                exit 1
+              fi
+              if echo "$AMBIGUOUS_PYTHON_NAMES" | jq -e --arg name "$INPUT" 'index($name)' >/dev/null; then
+                echo "::notice::'$INPUT' resolves to the Python package. Use 'npm-agentmesh-mcp-proxy' or '@microsoft/agentmesh-mcp-proxy' to select the npm package."
+              fi
+              echo "any=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "matrix={\"include\":$FILTERED}" >> "$GITHUB_OUTPUT"
+              echo "any=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-npm:
+    needs: resolve-npm-matrix
+    if: needs.resolve-npm-matrix.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: agentmesh-copilot-governance
-            path: agent-governance-python/agentmesh-integrations/copilot-governance
-          - name: agentmesh-mastra
-            path: agent-governance-python/agentmesh-integrations/mastra-agentmesh
-          - name: agentmesh-api
-            path: agent-governance-python/agent-mesh/services/api
-          - name: agentmesh-mcp-proxy
-            path: agent-governance-python/agent-mesh/packages/mcp-proxy
-          - name: agentmesh-sdk
-            path: agent-governance-typescript
-          - name: agent-os-copilot-extension
-            path: agent-governance-python/agent-os/extensions/copilot
-          - name: agentos-mcp-server
-            path: agent-governance-python/agent-os/extensions/mcp-server
+      matrix: ${{ fromJson(needs.resolve-npm-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: "20"
+          node-version: ${{ matrix.nodeVersion }}
 
       - name: Install dependencies
         working-directory: ${{ matrix.path }}
