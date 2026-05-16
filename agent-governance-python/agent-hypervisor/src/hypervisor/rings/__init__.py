@@ -4,18 +4,34 @@
 
 from hypervisor.rings.breach_detector import BreachEvent, BreachSeverity, RingBreachDetector
 from hypervisor.rings.elevation import (
+    ChildRegistration,
     ElevationDenialReason,
+    ELEVATION_TRUST_THRESHOLDS,
     RingElevation,
     RingElevationError,
     RingElevationManager,
 )
+from hypervisor.rings.enforcer import (
+    ResourceConstraints,
+    ResourceType,
+    RING_CONSTRAINTS,
+    RingCheckResult,
+    RingEnforcer,
+)
 
 __all__ = [
-    "RingElevationManager",
+    "ChildRegistration",
+    "ElevationDenialReason",
+    "ELEVATION_TRUST_THRESHOLDS",
+    "ResourceConstraints",
+    "ResourceType",
+    "RING_CONSTRAINTS",
+    "RingBreachDetector",
+    "RingCheckResult",
     "RingElevation",
     "RingElevationError",
-    "ElevationDenialReason",
-    "RingBreachDetector",
+    "RingElevationManager",
+    "RingEnforcer",
     "BreachEvent",
     "BreachSeverity",
 ]
