@@ -8,10 +8,10 @@ Identity · Trust · Reward · Governance
 AgentMesh is the platform built for the Governed Agent Mesh - the cloud-native,
 multi-vendor network of AI agents that will define enterprise operations.
 
-Version: 1.0.0-alpha
+Version: 3.6.0
 """
 
-__version__ = "3.2.2"
+__version__ = "3.6.0"
 
 # Layer 1: Identity & Zero-Trust Core
 from .identity import (

@@ -9,7 +9,7 @@ focused package.
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "3.6.0"
 
 from agent_os.governance.middleware import GovernanceMiddleware
 from agent_os.audit.middleware import AuditMiddleware
