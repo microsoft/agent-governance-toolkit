@@ -74,7 +74,7 @@ public sealed class CedarPolicyBackend : IExternalPolicyBackend
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             sw.Stop();
             return new ExternalPolicyDecision

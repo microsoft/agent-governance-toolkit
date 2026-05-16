@@ -50,8 +50,9 @@ from .audit_backends import (
     HashChainVerifier,
 )
 from .shadow import ShadowMode, ShadowResult
-from .opa import OPAEvaluator, OPADecision, load_rego_into_engine
-from .cedar import CedarEvaluator, CedarDecision, load_cedar_into_engine
+from .backend import ExternalPolicyBackend, PolicyDecisionResult, BackendRegistry
+from .opa import OPAEvaluator, OPADecision, OPAPolicyBackend, load_rego_into_engine
+from .cedar import CedarEvaluator, CedarDecision, CedarPolicyBackend, load_cedar_into_engine
 from .authority import (
     AuthorityDecision,
     AuthorityRequest,
@@ -155,10 +156,16 @@ __all__ = [
     "ShadowResult",
     "OPAEvaluator",
     "OPADecision",
+    "OPAPolicyBackend",
     "load_rego_into_engine",
     "CedarEvaluator",
     "CedarDecision",
+    "CedarPolicyBackend",
     "load_cedar_into_engine",
+    # External policy backend protocol (issue #2280)
+    "ExternalPolicyBackend",
+    "PolicyDecisionResult",
+    "BackendRegistry",
     "AuthorityDecision",
     "AuthorityRequest",
     "AuthorityResolver",

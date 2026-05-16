@@ -59,6 +59,7 @@ func main() {
 ### Identity (`identity.go`)
 
 Ed25519-based agent identities with DID support.
+**Example:** [`examples/identity-sign-verify/`](./examples/identity-sign-verify/)
 
 | Function / Method | Description |
 |---|---|
@@ -71,6 +72,7 @@ Ed25519-based agent identities with DID support.
 ### Trust (`trust.go`)
 
 Decay-based trust scoring with asymmetric reward/penalty.
+**Example:** [`examples/trust-scoring/`](./examples/trust-scoring/)
 
 | Function / Method | Description |
 |---|---|
@@ -83,6 +85,7 @@ Decay-based trust scoring with asymmetric reward/penalty.
 ### Policy (`policy.go`)
 
 Rule-based policy engine with wildcard and condition matching.
+**Example:** [`examples/policy-yaml/`](./examples/policy-yaml/)
 
 | Function / Method | Description |
 |---|---|
@@ -97,6 +100,7 @@ Rule-based policy engine with wildcard and condition matching.
 ### External Policy Backends (`policy_backends.go`)
 
 OPA/Rego and Cedar support with fail-closed evaluation paths.
+**Example:** [`examples/policy-opa-cedar/`](./examples/policy-opa-cedar/)
 
 | Type / Function | Description |
 |---|---|
@@ -108,6 +112,7 @@ OPA/Rego and Cedar support with fail-closed evaluation paths.
 ### Audit (`audit.go`)
 
 SHA-256 hash-chained audit log for tamper detection.
+**Example:** [`examples/audit-chain/`](./examples/audit-chain/)
 
 | Function / Method | Description |
 |---|---|
@@ -119,6 +124,7 @@ SHA-256 hash-chained audit log for tamper detection.
 ### Client (`client.go`)
 
 Unified governance client combining all modules.
+**Example:** [`examples/quickstart/`](./examples/quickstart/)
 
 | Function / Method | Description |
 |---|---|
@@ -128,6 +134,7 @@ Unified governance client combining all modules.
 ### MCP Security (`mcp.go`)
 
 Detects tool poisoning, typosquatting, hidden instructions, and rug-pull patterns in MCP tool definitions.
+**Example:** [`examples/mcp-scan/`](./examples/mcp-scan/)
 
 | Function / Method | Description |
 |---|---|
@@ -147,6 +154,7 @@ fmt.Printf("Safe: %v, Risk: %d\n", result.Safe, result.RiskScore)
 ### Execution Rings (`rings.go`)
 
 Privilege ring model for agent access control (Ring 0 = Admin … Ring 3 = Sandboxed).
+**Example:** [`examples/execution-rings/`](./examples/execution-rings/)
 
 | Function / Method | Description |
 |---|---|
@@ -166,6 +174,7 @@ fmt.Println(enforcer.CheckAccess("agent-1", "data.read")) // true
 ### Kill Switch (`kill_switch.go`)
 
 Scoped execution stop controls for global, agent, and capability-level containment.
+**Example:** [`examples/kill-switch-scopes/`](./examples/kill-switch-scopes/)
 
 | Type / Function | Description |
 |---|---|
@@ -194,6 +203,7 @@ fmt.Printf("Allowed: %v\n", decision.Allowed) // false
 ### Lifecycle (`lifecycle.go`)
 
 Eight-state lifecycle model with validated transitions.
+**Example:** [`examples/lifecycle-transitions/`](./examples/lifecycle-transitions/)
 
 States: `provisioning` → `active` → `suspended` / `rotating` / `degraded` / `quarantined` → `decommissioning` → `decommissioned`
 
@@ -220,6 +230,7 @@ fmt.Println(lm.State()) // active
 ### SRE / SLOs (`slo.go`)
 
 Minimal service-level objective tracking for Go applications.
+**Example:** [`examples/slo-tracking/`](./examples/slo-tracking/)
 
 | Type / Function | Description |
 |---|---|
@@ -231,6 +242,7 @@ Minimal service-level objective tracking for Go applications.
 ### Framework Integrations (`middleware.go`)
 
 Go-native integration helpers built around a composable governance middleware stack.
+**Examples:** [`examples/http-middleware/`](./examples/http-middleware/) · [`examples/http-middleware-fail-closed/`](./examples/http-middleware-fail-closed/) · [`examples/full-stack/`](./examples/full-stack/)
 
 | Type / Function | Description |
 |---|---|
@@ -263,6 +275,7 @@ away from caller-asserted headers.
 ### Shadow Discovery (`discovery.go`)
 
 Structured SDK discovery for likely unregistered agent tooling across text, processes, config paths, and GitHub repositories.
+**Example:** [`examples/shadow-discovery/`](./examples/shadow-discovery/)
 
 | Type / Function | Description |
 |---|---|
@@ -279,6 +292,7 @@ Structured SDK discovery for likely unregistered agent tooling across text, proc
 ### Prompt Defense (`promptdefense.go`)
 
 Structured prompt risk evaluation for injection and exfiltration patterns.
+**Example:** [`examples/prompt-defense/`](./examples/prompt-defense/)
 
 | Type / Function | Description |
 |---|---|

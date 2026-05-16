@@ -741,8 +741,9 @@ class TestDockerRun:
         c.exec_run.return_value = MagicMock(
             exit_code=0, output=(b"x" * 20000, b""),
         )
+        cfg = SandboxConfig(output_max_bytes=10000)
         r = docker_provider.run(
-            "a1", ["echo"], session_id=h.session_id,
+            "a1", ["echo"], session_id=h.session_id, config=cfg,
         )
         assert len(r.stdout) == 10000
 
@@ -1339,7 +1340,7 @@ class TestGetExecutionStatus:
 
 
 class TestOutputTruncation:
-    """Both stdout and stderr are truncated to 10000 chars."""
+    """Both stdout and stderr are capped to output_max_bytes."""
 
     def test_stderr_truncated(self, docker_provider):
         h = docker_provider.create_session("a1")
@@ -1347,8 +1348,9 @@ class TestOutputTruncation:
         c.exec_run.return_value = MagicMock(
             exit_code=1, output=(b"", b"e" * 20000),
         )
+        cfg = SandboxConfig(output_max_bytes=10000)
         r = docker_provider.run(
-            "a1", ["bad"], session_id=h.session_id,
+            "a1", ["bad"], session_id=h.session_id, config=cfg,
         )
         assert len(r.stderr) == 10000
 
@@ -1358,11 +1360,86 @@ class TestOutputTruncation:
         c.exec_run.return_value = MagicMock(
             exit_code=0, output=(b"o" * 20000, b"e" * 20000),
         )
+        cfg = SandboxConfig(output_max_bytes=10000)
         r = docker_provider.run(
-            "a1", ["cmd"], session_id=h.session_id,
+            "a1", ["cmd"], session_id=h.session_id, config=cfg,
         )
         assert len(r.stdout) == 10000
         assert len(r.stderr) == 10000
+
+    def test_default_cap_allows_normal_output(self, docker_provider):
+        """Default output_max_bytes (1 MiB) doesn't truncate normal output."""
+        h = docker_provider.create_session("a1")
+        c = docker_provider._containers[(h.agent_id, h.session_id)]
+        c.exec_run.return_value = MagicMock(
+            exit_code=0, output=(b"x" * 500, b"y" * 300),
+        )
+        r = docker_provider.run(
+            "a1", ["echo"], session_id=h.session_id,
+        )
+        assert len(r.stdout) == 500
+        assert len(r.stderr) == 300
+
+
+class TestStreamCappedConsumer:
+    """Unit tests for _consume_stream_capped and _cap_output_bytes."""
+
+    def test_stream_under_cap(self):
+        from agent_sandbox.docker_provider.provider import _consume_stream_capped
+        stream = iter([(b"hello", b"world"), (b" more", None)])
+        stdout, stderr, truncated = _consume_stream_capped(stream, 1024)
+        assert stdout == b"hello more"
+        assert stderr == b"world"
+        assert not truncated
+
+    def test_stream_over_cap(self):
+        from agent_sandbox.docker_provider.provider import (
+            _consume_stream_capped,
+            _OUTPUT_TRUNCATED_MARKER,
+        )
+        stream = iter([(b"a" * 100, b"b" * 100), (b"a" * 100, b"b" * 100)])
+        stdout, stderr, truncated = _consume_stream_capped(stream, 50)
+        marker = _OUTPUT_TRUNCATED_MARKER.encode()
+        assert stdout == b"a" * 50 + marker
+        assert stderr == b"b" * 50 + marker
+        assert truncated
+
+    def test_stream_empty(self):
+        from agent_sandbox.docker_provider.provider import _consume_stream_capped
+        stream = iter([])
+        stdout, stderr, truncated = _consume_stream_capped(stream, 1024)
+        assert stdout is None
+        assert stderr is None
+        assert not truncated
+
+    def test_cap_output_bytes_under_limit(self):
+        from agent_sandbox.docker_provider.provider import _cap_output_bytes
+        stdout, stderr, truncated = _cap_output_bytes(
+            (b"hello", b"world"), 1024,
+        )
+        assert stdout == b"hello"
+        assert stderr == b"world"
+        assert not truncated
+
+    def test_cap_output_bytes_over_limit(self):
+        from agent_sandbox.docker_provider.provider import (
+            _cap_output_bytes,
+            _OUTPUT_TRUNCATED_MARKER,
+        )
+        stdout, stderr, truncated = _cap_output_bytes(
+            (b"x" * 2000, b"y" * 2000), 1000,
+        )
+        marker = _OUTPUT_TRUNCATED_MARKER.encode()
+        assert stdout == b"x" * 1000 + marker
+        assert stderr == b"y" * 1000 + marker
+        assert truncated
+
+    def test_cap_output_bytes_none_input(self):
+        from agent_sandbox.docker_provider.provider import _cap_output_bytes
+        stdout, stderr, truncated = _cap_output_bytes(None, 1024)
+        assert stdout is None
+        assert stderr is None
+        assert not truncated
 
 
 # =========================================================================
@@ -1709,7 +1786,12 @@ class TestTimeoutWatchdog:
         api = docker_provider._client.api
         api.exec_create.return_value = {"Id": "exec-abc"}
 
-        def slow_exec_start(exec_id, demux=True):
+        def slow_exec_start(exec_id, stream=False, demux=True):
+            if stream:
+                def _gen():
+                    _time.sleep(0.5)
+                    yield (None, b"killed")
+                return _gen()
             _time.sleep(0.5)
             return (None, b"killed")
 

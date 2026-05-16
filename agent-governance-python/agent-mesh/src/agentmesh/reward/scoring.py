@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
+import os
 
 from agentmesh.constants import (
     TIER_PROBATIONARY_THRESHOLD,
@@ -126,6 +127,14 @@ class TrustScore(BaseModel):
     previous_score: Optional[int] = None
     score_change: int = 0
 
+    # Trust ceiling for delegated agents (0-1000, None = no ceiling)
+    trust_ceiling: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=1000,
+        description="Maximum trust score this agent can reach. Set by parent at delegation time.",
+    )
+
     model_config = {"validate_assignment": True}
 
     @field_validator("agent_did")
@@ -141,6 +150,17 @@ class TrustScore(BaseModel):
 
     def __init__(self, **data):
         super().__init__(**data)
+        # Read ceiling from environment if not explicitly set
+        if self.trust_ceiling is None:
+            env_ceiling = os.environ.get("AGT_TRUST_CEILING")
+            if env_ceiling is not None:
+                try:
+                    self.trust_ceiling = max(0, min(TRUST_SCORE_MAX, int(env_ceiling)))
+                except ValueError:
+                    pass
+        # Clamp initial score to ceiling
+        if self.trust_ceiling is not None:
+            self.total_score = min(self.total_score, self.trust_ceiling)
         self._update_tier()
 
     def _update_tier(self) -> None:
@@ -157,9 +177,12 @@ class TrustScore(BaseModel):
             self.tier = "untrusted"
 
     def update(self, new_score: int, dimensions: dict[str, RewardDimension]) -> None:
-        """Update the trust score."""
+        """Update the trust score, respecting ceiling if set."""
         self.previous_score = self.total_score
-        self.total_score = max(0, min(TRUST_SCORE_MAX, new_score))
+        clamped = max(0, min(TRUST_SCORE_MAX, new_score))
+        if self.trust_ceiling is not None:
+            clamped = min(clamped, self.trust_ceiling)
+        self.total_score = clamped
         self.score_change = self.total_score - (self.previous_score or 0)
         self.dimensions = dimensions
         self.calculated_at = datetime.now(timezone.utc)
