@@ -16,7 +16,7 @@ export async function loadAgentGovernanceSdk({
   extensionRoot = import.meta.dirname,
 } = {}) {
   const extensionRootPath = realpathSync(resolve(extensionRoot));
-  const vendoredSdkPath = realpathSync(resolve(extensionRootPath, VENDORED_SDK_RELATIVE_PATH));
+  const vendoredSdkPath = resolve(extensionRootPath, VENDORED_SDK_RELATIVE_PATH);
   const candidates = [
     {
       path: vendoredSdkPath,
@@ -49,9 +49,10 @@ export async function loadAgentGovernanceSdk({
       continue;
     }
 
-    const loaded = await import(pathToFileURL(candidate.path).href);
+    const canonicalCandidatePath = realpathSync(candidate.path);
+    const loaded = await import(pathToFileURL(canonicalCandidatePath).href);
     return {
-      path: candidate.path,
+      path: canonicalCandidatePath,
       sdk: loaded.default ?? loaded,
       source: candidate.source,
     };

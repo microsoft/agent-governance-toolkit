@@ -104,6 +104,7 @@ jobs:
             "@microsoft/agent-os-copilot-extension",
             "agentos-mcp-server",
             "@microsoft/agentos-mcp-server",
+            "npm-agentmesh-mcp-proxy",
             "@microsoft/agentmesh-mcp-proxy"
           ]'
 
