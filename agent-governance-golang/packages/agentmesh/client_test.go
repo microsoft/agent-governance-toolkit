@@ -377,3 +377,14 @@ func TestGovernanceAuditChainIntegrityAfterMixedActions(t *testing.T) {
 		t.Errorf("audit entries = %d, want 5", len(entries))
 	}
 }
+
+func TestExecuteWithGovernanceNilFieldsReturnsError(t *testing.T) {
+	// Manually construct a client with nil fields to simulate
+	// struct-literal construction bypassing NewClient.
+	client := &AgentMeshClient{}
+
+	_, err := client.ExecuteWithGovernance("any.action", nil)
+	if err == nil {
+		t.Fatal("expected error when client fields are nil")
+	}
+}

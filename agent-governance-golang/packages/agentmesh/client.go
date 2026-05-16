@@ -42,6 +42,10 @@ func NewClient(agentID string, opts ...Option) (*AgentMeshClient, error) {
 
 // ExecuteWithGovernance evaluates the action through the governance pipeline.
 func (c *AgentMeshClient) ExecuteWithGovernance(action string, params map[string]interface{}) (*GovernanceResult, error) {
+	if c.Policy == nil || c.Audit == nil || c.Identity == nil || c.Trust == nil {
+		return nil, fmt.Errorf("AgentMeshClient is not fully initialised: ensure NewClient was used")
+	}
+
 	decision := c.Policy.Evaluate(action, params)
 	entry := c.Audit.Log(c.Identity.DID, action, decision)
 	score := c.Trust.GetTrustScore(c.Identity.DID)
