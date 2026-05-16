@@ -399,3 +399,102 @@ class HashChainVerifier:
             previous_hash = entry.content_hash
 
         return (len(errors) == 0), errors
+
+
+# ---------------------------------------------------------------------------
+# StdoutAuditSink
+# ---------------------------------------------------------------------------
+
+
+class StdoutAuditSink:
+    """Audit sink that writes JSON lines to stdout.
+
+    Designed for containerized and sidecar deployments where audit logs
+    are collected by a container log driver (Docker, Kubernetes,
+    OpenShell). Each entry is written as a single JSON line and flushed
+    immediately for reliable delivery.
+
+    Args:
+        stream: Output stream. Defaults to ``sys.stdout``.
+        include_context: Whether to include sandbox context fields in
+            the output. Defaults to ``True``.
+    """
+
+    def __init__(
+        self,
+        stream: Any = None,
+        *,
+        include_context: bool = True,
+    ) -> None:
+        import sys
+        self._stream = stream or sys.stdout
+        self._include_context = include_context
+        self._lock = threading.Lock()
+        self._closed = False
+
+    def write(self, entry: AuditEntry) -> None:
+        """Write a single audit entry as one JSON line to stdout."""
+        if self._closed:
+            return
+        line = self._serialize(entry)
+        with self._lock:
+            self._stream.write(line + "\n")
+            self._stream.flush()
+
+    def write_batch(self, entries: list[AuditEntry]) -> None:
+        """Write a batch of audit entries, one JSON line per entry."""
+        if self._closed:
+            return
+        with self._lock:
+            for entry in entries:
+                line = self._serialize(entry)
+                self._stream.write(line + "\n")
+            self._stream.flush()
+
+    def verify_integrity(self) -> tuple[bool, str | None]:
+        """Stdout sink does not support integrity verification.
+
+        Returns:
+            Always returns (True, None) since stdout is write-only.
+        """
+        return True, None
+
+    def close(self) -> None:
+        """Mark the sink as closed."""
+        self._closed = True
+
+    def _serialize(self, entry: AuditEntry) -> str:
+        """Serialize an AuditEntry to a JSON line."""
+        data: dict[str, Any] = {
+            "entry_id": entry.entry_id,
+            "timestamp": entry.timestamp.isoformat().replace("+00:00", "Z"),
+            "event_type": entry.event_type,
+            "agent_did": entry.agent_did,
+            "action": entry.action,
+            "outcome": entry.outcome,
+        }
+
+        if entry.resource is not None:
+            data["resource"] = entry.resource
+        if entry.target_did is not None:
+            data["target_did"] = entry.target_did
+        if entry.data:
+            data["data"] = entry.data
+        if entry.policy_decision is not None:
+            data["policy_decision"] = entry.policy_decision
+        if entry.matched_rule is not None:
+            data["matched_rule"] = entry.matched_rule
+        if entry.trace_id is not None:
+            data["trace_id"] = entry.trace_id
+        if entry.session_id is not None:
+            data["session_id"] = entry.session_id
+
+        if self._include_context:
+            if entry.sandbox_id is not None:
+                data["sandbox_id"] = entry.sandbox_id
+            if entry.environment is not None:
+                data["environment"] = entry.environment
+            if entry.compute_driver is not None:
+                data["compute_driver"] = entry.compute_driver
+
+        return json.dumps(data, sort_keys=True, default=str)
