@@ -126,6 +126,7 @@ Permissioned
 pids
 plotly
 pmcrepo
+pipefail
 popen
 Printf
 Println
