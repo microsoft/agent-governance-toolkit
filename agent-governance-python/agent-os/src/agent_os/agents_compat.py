@@ -10,6 +10,7 @@ Also provides generation utilities for producing AGENTS.md files
 from AgentMdConfig dataclasses (GitHub Copilot / Cursor / Codex format).
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +19,8 @@ from typing import Any, Optional
 import yaml
 
 from agent_os.integrations.base import GovernancePolicy
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -210,7 +213,11 @@ class AgentsParser:
         try:
             return yaml.safe_load(content) or {}
         except yaml.YAMLError:
-            pass
+            logger.warning(
+                "Failed to parse security config as YAML in %s; "
+                "returning empty config",
+                path,
+            )
 
         return {}
 

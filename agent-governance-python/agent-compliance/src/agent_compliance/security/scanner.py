@@ -16,12 +16,15 @@ Integrates with sync-marketplace.py validation flow.
 """
 
 import json
+import logging
 import re
 import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _glob_to_regex(pattern: str) -> re.Pattern[str]:
@@ -496,8 +499,8 @@ class SecurityScanner:
                 if result.stdout:
                     data = json.loads(result.stdout)
                     self._parse_pip_audit_json(data, req_file.name)
-            except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
-                pass
+            except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError) as exc:
+                logger.warning("pip-audit scan failed for %s: %s", req_file, exc)
 
     def _parse_pip_audit_json(self, data: dict, filename: str) -> None:
         """Parse pip-audit JSON output and create findings."""
@@ -558,8 +561,8 @@ class SecurityScanner:
             if result.stdout:
                 data = json.loads(result.stdout)
                 self._parse_npm_audit_json(data)
-        except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
-            pass
+        except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError) as exc:
+            logger.warning("npm audit scan failed: %s", exc)
 
     def _parse_npm_audit_json(self, data: dict) -> None:
         """Parse npm audit JSON output and create findings."""
@@ -620,8 +623,8 @@ class SecurityScanner:
             if result.stdout:
                 data = json.loads(result.stdout)
                 self._parse_bandit_json(data)
-        except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
-            pass
+        except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError) as exc:
+            logger.warning("bandit scan failed: %s", exc)
 
     def _parse_bandit_json(self, data: dict) -> None:
         """Parse bandit JSON output and create findings."""
