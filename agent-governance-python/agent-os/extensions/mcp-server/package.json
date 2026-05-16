@@ -42,7 +42,7 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "uuid": "14.0.0",
     "winston": "3.19.0",
-    "yaml": "2.8.3",
+    "yaml": "2.9.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
