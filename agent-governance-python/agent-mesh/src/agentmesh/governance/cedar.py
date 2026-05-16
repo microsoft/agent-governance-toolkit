@@ -351,6 +351,55 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
     return statements
 
 
+class CedarPolicyBackend:
+    """Adapter wrapping CedarEvaluator to satisfy ExternalPolicyBackend protocol.
+
+    Usage:
+        from agentmesh.governance.cedar import CedarPolicyBackend
+        from agentmesh.governance.backend import BackendRegistry
+
+        backend = CedarPolicyBackend(policy_content=MY_CEDAR_POLICY)
+        BackendRegistry.register(backend)
+    """
+
+    def __init__(
+        self,
+        evaluator: Optional["CedarEvaluator"] = None,
+        **kwargs: Any,
+    ):
+        """Initialize the Cedar policy backend.
+
+        Args:
+            evaluator: An existing CedarEvaluator instance. If not provided,
+                one is created from the remaining keyword arguments.
+            **kwargs: Passed to CedarEvaluator constructor if evaluator is None.
+        """
+        self._evaluator = evaluator or CedarEvaluator(**kwargs)
+
+    @property
+    def name(self) -> str:
+        return "cedar"
+
+    def evaluate(self, action: str, context: dict) -> "PolicyDecisionResult":
+        from agentmesh.governance.backend import PolicyDecisionResult
+
+        decision = self._evaluator.evaluate(action, context)
+        return PolicyDecisionResult(
+            allowed=decision.allowed,
+            reason=decision.error or ("allowed" if decision.allowed else "denied by policy"),
+            backend="cedar",
+            latency_ms=decision.evaluation_ms,
+            raw_response=decision.raw_result,
+        )
+
+    def healthy(self) -> bool:
+        return (
+            self._evaluator._cedarpy_available
+            or self._evaluator._cli_available
+            or self._evaluator.policy_content is not None
+        )
+
+
 def load_cedar_into_engine(
     engine: Any,
     cedar_path: str,
