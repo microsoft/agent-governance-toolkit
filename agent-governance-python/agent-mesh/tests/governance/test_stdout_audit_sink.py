@@ -269,7 +269,11 @@ class TestStdoutAuditSinkProtocol:
 
 
 class TestStdoutAuditSinkThreadSafety:
-    """Verify concurrent writes produce one record per entry."""
+    """Verify concurrent writes produce one valid JSONL record per entry.
+
+    StdoutAuditSink uses a class-level lock so that separate instances
+    cannot interleave their writes on the process-global stdout.
+    """
 
     def test_concurrent_writes_produce_correct_line_count(self):
         sink = StdoutAuditSink()
@@ -289,6 +293,40 @@ class TestStdoutAuditSinkThreadSafety:
         lines = [ln for ln in buf.getvalue().splitlines() if ln.strip()]
         assert len(lines) == n
         # Every line must be valid JSON
+        for line in lines:
+            json.loads(line)
+
+    def test_lock_is_shared_across_instances(self):
+        """All StdoutAuditSink instances must share the same lock object."""
+        sink_a = StdoutAuditSink()
+        sink_b = StdoutAuditSink()
+        assert sink_a._stdout_lock is sink_b._stdout_lock
+
+    def test_concurrent_writes_from_two_instances_produce_correct_line_count(self):
+        """Two separate sink instances writing concurrently must not corrupt JSONL."""
+        sink_a = StdoutAuditSink()
+        sink_b = StdoutAuditSink()
+        buf = io.StringIO()
+        n = 25
+
+        def _write_a(i: int) -> None:
+            sink_a.write(_make_entry(entry_id=f"inst-a-{i}"))
+
+        def _write_b(i: int) -> None:
+            sink_b.write(_make_entry(entry_id=f"inst-b-{i}"))
+
+        with patch("sys.stdout", buf):
+            threads = (
+                [threading.Thread(target=_write_a, args=(i,)) for i in range(n)]
+                + [threading.Thread(target=_write_b, args=(i,)) for i in range(n)]
+            )
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        lines = [ln for ln in buf.getvalue().splitlines() if ln.strip()]
+        assert len(lines) == n * 2
         for line in lines:
             json.loads(line)
 

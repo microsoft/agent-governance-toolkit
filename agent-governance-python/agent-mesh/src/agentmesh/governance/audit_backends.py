@@ -431,7 +431,9 @@ class StdoutAuditSink:
     * One valid JSON object per line — never split across lines.
     * UTF-8 safe: non-ASCII characters are included verbatim (not escaped).
     * Flushed after every :meth:`write` and after every :meth:`write_batch`.
-    * Thread-safe: a per-instance lock serialises concurrent writes.
+    * Thread-safe: a **class-level** lock serialises all stdout writes
+      across every :class:`StdoutAuditSink` instance in the process.
+      Multiple instances therefore cannot interleave their output.
     * No ANSI formatting, no pretty-printing, no extra timestamps.
     * No signing or chain verification — use :class:`FileAuditSink` when
       cryptographic integrity is required.
@@ -448,8 +450,13 @@ class StdoutAuditSink:
         log.log(event_type="tool_invocation", agent_did="did:web:a1", action="read")
     """
 
+    # Class-level lock — shared across all instances so that concurrent
+    # writes from separate StdoutAuditSink objects cannot interleave on
+    # the process-global sys.stdout.
+    _stdout_lock: threading.Lock = threading.Lock()
+
     def __init__(self) -> None:
-        self._lock = threading.Lock()
+        pass  # No per-instance state; lock lives at class level.
 
     def write(self, entry: AuditEntry) -> None:
         """Serialise *entry* to JSONL and write it to stdout.
@@ -458,7 +465,7 @@ class StdoutAuditSink:
         container log drivers observe the line without buffering delay.
         """
         line = self._serialise(entry)
-        with self._lock:
+        with self._stdout_lock:
             sys.stdout.write(line + "\n")
             sys.stdout.flush()
 
@@ -473,7 +480,7 @@ class StdoutAuditSink:
             return
         # Serialise outside the lock — pure CPU work, no I/O.
         block = "".join(self._serialise(e) + "\n" for e in entries)
-        with self._lock:
+        with self._stdout_lock:
             sys.stdout.write(block)
             sys.stdout.flush()
 
@@ -488,7 +495,7 @@ class StdoutAuditSink:
 
     def close(self) -> None:
         """Flush stdout.  Does NOT close the underlying stream."""
-        with self._lock:
+        with self._stdout_lock:
             sys.stdout.flush()
 
     # ------------------------------------------------------------------
