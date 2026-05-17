@@ -86,18 +86,19 @@ runs:
         fi
         
         # Run the security scanner
-        python -c "
+        AGT_PATHS="$PATHS" AGT_PLUGIN="$PLUGIN_NAME" AGT_VERBOSE="${{ inputs.verbose }}" python -c "
         from pathlib import Path
         from agent_compliance.security import scan_plugin_security
         import json
         import sys
+        import os
 
-        paths = '$PATHS'.split()
-        verbose = '${{ inputs.verbose }}' == 'true'
+        paths = os.environ['AGT_PATHS'].split()
+        verbose = os.environ.get('AGT_VERBOSE', '') == 'true'
 
         # Scan first path (primary plugin directory)
         plugin_dir = Path(paths[0])
-        plugin_name = '$PLUGIN_NAME'
+        plugin_name = os.environ.get('AGT_PLUGIN', '')
 
         exit_code, error_msg = scan_plugin_security(
             plugin_dir=plugin_dir,

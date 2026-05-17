@@ -8,7 +8,7 @@
  */
 
 import * as http from 'http';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 
 /** Default host for the governance server — bound to loopback only. */
 export const DEFAULT_HOST = '127.0.0.1';
@@ -149,7 +149,23 @@ export function validateWebSocketToken(
         // Header value is comma-separated: "governance-v1, <token>"
         const protocols = (typeof protocolHeader === 'string' ? protocolHeader : protocolHeader[0] ?? '')
             .split(',').map(s => s.trim());
-        return protocols.includes(expectedToken);
+        // `Array.prototype.includes` short-circuits on first match and uses
+        // V8's per-byte `===` for each comparison, which leaks a timing
+        // signal proportional to the longest matching prefix between an
+        // attacker's guess and the real token. Compare with
+        // `crypto.timingSafeEqual` and iterate every protocol unconditionally
+        // so neither the matching position nor the match-prefix length is
+        // observable from response time.
+        const expectedBuf = Buffer.from(expectedToken, 'utf8');
+        let matched = false;
+        for (const protocol of protocols) {
+            const candidateBuf = Buffer.from(protocol, 'utf8');
+            if (candidateBuf.length !== expectedBuf.length) { continue; }
+            if (timingSafeEqual(candidateBuf, expectedBuf)) {
+                matched = true;
+            }
+        }
+        return matched;
     } catch {
         return false;
     }

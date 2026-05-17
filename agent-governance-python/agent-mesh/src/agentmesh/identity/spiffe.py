@@ -12,7 +12,7 @@ SPIFFE/SVID provides:
 - Standard workload identity
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
@@ -37,7 +37,7 @@ class SVID(BaseModel):
 
     # Metadata
     trust_domain: str = Field(..., description="SPIFFE trust domain")
-    issued_at: datetime = Field(default_factory=datetime.utcnow)
+    issued_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime = Field(...)
 
     # Agent binding
@@ -73,7 +73,7 @@ class SVID(BaseModel):
         Returns:
             True if the current time is within the issued/expiry window.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return self.issued_at <= now < self.expires_at
 
     def time_remaining(self) -> timedelta:
@@ -82,7 +82,7 @@ class SVID(BaseModel):
         Returns:
             A non-negative timedelta; zero if already expired.
         """
-        return max(timedelta(0), self.expires_at - datetime.utcnow())
+        return max(timedelta(0), self.expires_at - datetime.now(timezone.utc))
 
 
 class SPIFFEIdentity(BaseModel):
@@ -106,7 +106,7 @@ class SPIFFEIdentity(BaseModel):
     current_svid: Optional[SVID] = Field(None)
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def create(
@@ -159,7 +159,7 @@ class SPIFFEIdentity(BaseModel):
         Returns:
             The newly issued SVID, also stored as ``current_svid``.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         svid = SVID(
             spiffe_id=self.spiffe_id,

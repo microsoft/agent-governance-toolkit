@@ -231,6 +231,18 @@ export class ShadowDiscovery {
     }
 
     for (const entry of entries) {
+      // Skip symlinks entirely. `Dirent.isDirectory()` and `isFile()`
+      // describe the directory entry itself (not the symlink target), so
+      // the directory recursion below is already safe, but the downstream
+      // `readFileSync` calls in `scanConfigFile` / `scanContainerFile` /
+      // `scanSourceFile` follow symlinks. A symlink named (e.g.)
+      // `agentmesh.yaml` pointing at `/etc/passwd` would be opened and
+      // read; a symlink loop or a symlink to a large file would inflate the
+      // discovery cost without bound.
+      if (entry.isSymbolicLink()) {
+        continue;
+      }
+
       const fullPath = path.join(currentPath, entry.name);
       if (entry.isDirectory()) {
         if (!SKIP_DIRS.has(entry.name)) {

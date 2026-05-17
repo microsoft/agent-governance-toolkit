@@ -359,6 +359,145 @@ class TestCrossServerAttacks:
         threats = self.scanner._check_cross_server("search", "server-a")
         assert len(threats) == 0
 
+    def test_by_name_index_populated_on_register(self):
+        """Registration must mirror into the secondary `_tool_by_name`
+        index so `_check_cross_server` can hit O(1) on exact-name match.
+        """
+        self.scanner.register_tool("search", "Search A", None, "server-a")
+        self.scanner.register_tool("search", "Search B", None, "server-b")
+        self.scanner.register_tool("other", "Other tool", None, "server-a")
+
+        # Same tool name → both fingerprints share an index entry.
+        assert len(self.scanner._tool_by_name["search"]) == 2
+        servers = {fp.server_name for fp in self.scanner._tool_by_name["search"]}
+        assert servers == {"server-a", "server-b"}
+
+        # Unrelated name → separate entry.
+        assert len(self.scanner._tool_by_name["other"]) == 1
+
+    def test_exact_match_lookup_does_not_iterate_unrelated_entries(self):
+        """Regression: previously `_check_cross_server` iterated every
+        entry in `_tool_registry` on every call, so adding K unrelated
+        tools to the registry made every subsequent scan K-times slower.
+
+        We pin the new behaviour by spying on `_is_typosquat` (the only
+        per-name work the new loop does) and asserting that registering
+        unrelated tools does not increase the comparison count for an
+        exact-name lookup beyond what's needed for typosquat checks
+        against the *distinct* tool names.
+        """
+        from unittest.mock import patch
+
+        # Register an exact-name impersonation case plus 50 distinct
+        # other tool names. The exact-match path should not call
+        # `_is_typosquat` for the impersonation hit itself.
+        self.scanner.register_tool("search", "Search A", None, "server-a")
+        for i in range(50):
+            self.scanner.register_tool(f"unrelated_tool_{i}", "x", None, "server-x")
+
+        with patch.object(
+            self.scanner, "_is_typosquat", wraps=self.scanner._is_typosquat,
+        ) as spy:
+            threats = self.scanner._check_cross_server("search", "server-b")
+
+        # The CRITICAL impersonation threat is found via the by-name
+        # index — no `_is_typosquat` call needed for that case.
+        crit = [t for t in threats if t.severity == MCPSeverity.CRITICAL]
+        assert len(crit) == 1
+        assert crit[0].details["original_server"] == "server-a"
+
+        # `_is_typosquat` was called only for the *distinct* other tool
+        # names, not once per fingerprint. With 50 unrelated names + the
+        # one matched name (which is skipped via `other_name == tool_name`),
+        # we expect exactly 50 typosquat comparisons.
+        assert spy.call_count == 50
+
+    def test_typosquat_index_iterates_distinct_names_only(self):
+        """When multiple servers register the same tool name, the typosquat
+        loop should compare against that name *once*, not once per server.
+        """
+        from unittest.mock import patch
+
+        # 5 servers each register the same `legitimate-tool` name.
+        for i in range(5):
+            self.scanner.register_tool(
+                "legitimate-tool", "Legit", None, f"server-{i}",
+            )
+
+        with patch.object(
+            self.scanner, "_is_typosquat", wraps=self.scanner._is_typosquat,
+        ) as spy:
+            # `legitimate-tooll` differs by 1 edit; should match all 5
+            # different-server fingerprints as typosquat warnings.
+            threats = self.scanner._check_cross_server(
+                "legitimate-tooll", "server-attacker",
+            )
+
+        # Five typosquat warnings (one per server), but only ONE call to
+        # `_is_typosquat` (one distinct name in `_tool_by_name`).
+        warnings_emitted = [
+            t for t in threats if t.severity == MCPSeverity.WARNING
+        ]
+        assert len(warnings_emitted) == 5
+        assert spy.call_count == 1
+
+    def test_index_equivalence_with_legacy_scan(self):
+        """The new index-based `_check_cross_server` must return the same
+        threat set as a linear-scan reference implementation for arbitrary
+        registry shapes.
+        """
+        # Populate a non-trivial registry shape.
+        registrations = [
+            ("search", "Search v1", "server-a"),
+            ("search", "Search v2", "server-b"),
+            ("seaarch", "Almost search", "server-c"),  # typosquat
+            ("calculator", "Math", "server-a"),
+            ("calc", "Math short", "server-b"),
+            ("totally-unrelated", "x", "server-d"),
+        ]
+        for name, desc, srv in registrations:
+            self.scanner.register_tool(name, desc, None, srv)
+
+        def linear_scan(tool_name: str, server_name: str):
+            """Mirror of the pre-PR linear-scan logic."""
+            out = []
+            for fp in self.scanner._tool_registry.values():
+                if fp.tool_name == tool_name and fp.server_name != server_name:
+                    out.append(("impersonation", fp.server_name, fp.tool_name))
+                if fp.server_name != server_name and fp.tool_name != tool_name:
+                    if self.scanner._is_typosquat(tool_name, fp.tool_name):
+                        out.append(("typosquat", fp.server_name, fp.tool_name))
+            return sorted(out)
+
+        def index_scan(tool_name: str, server_name: str):
+            """Same shape, drawn from the new index-based output."""
+            out = []
+            for t in self.scanner._check_cross_server(tool_name, server_name):
+                if t.severity == MCPSeverity.CRITICAL:
+                    out.append((
+                        "impersonation",
+                        t.details["original_server"],
+                        t.tool_name,
+                    ))
+                else:
+                    out.append((
+                        "typosquat",
+                        t.details["similar_server"],
+                        t.details["similar_tool"],
+                    ))
+            return sorted(out)
+
+        for (probe_name, probe_srv) in [
+            ("search", "server-z"),
+            ("search", "server-a"),  # same server: should suppress impersonation
+            ("seaarch", "server-z"),
+            ("calculator", "server-z"),
+            ("unknown", "server-z"),
+        ]:
+            assert linear_scan(probe_name, probe_srv) == index_scan(probe_name, probe_srv), (
+                f"linear vs index scan diverged for {probe_name!r} from {probe_srv!r}"
+            )
+
 
 # ============================================================================
 # TestScanTool — full scan of clean and poisoned tools

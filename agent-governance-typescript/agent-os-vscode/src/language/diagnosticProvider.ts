@@ -22,6 +22,24 @@ interface DiagnosticRule {
     };
 }
 
+interface QuickFixInfo {
+    title: string;
+    replacement: string;
+}
+
+// Side-table that associates a rule's quick-fix metadata with the
+// `vscode.Diagnostic` object the provider creates for it. The previous
+// implementation stashed the info as `(diagnostic as any).quickFix`, which
+// mutates a VS Code public type with an undeclared property — brittle, and
+// would collide with any future VS Code-internal property of the same name.
+// A WeakMap keyed by the Diagnostic reference fixes both: the entry vanishes
+// when the diagnostic itself is garbage-collected, and the public type stays
+// untouched. The map is module-level so the diagnostic producer
+// (`AgentOSDiagnosticProvider`) and the code-action consumer
+// (`AgentOSCodeActionProvider`) can share it without an additional
+// constructor wiring.
+const QUICK_FIX_TABLE = new WeakMap<vscode.Diagnostic, QuickFixInfo>();
+
 export class AgentOSDiagnosticProvider {
     private diagnosticCollection: vscode.DiagnosticCollection;
     private disposables: vscode.Disposable[] = [];
@@ -288,9 +306,9 @@ export class AgentOSDiagnosticProvider {
                 diagnostic.tags = rule.tags;
             }
 
-            // Store quick fix info in the diagnostic
+            // Store quick fix info in the side-table keyed by diagnostic.
             if (rule.quickFix) {
-                (diagnostic as any).quickFix = rule.quickFix;
+                QUICK_FIX_TABLE.set(diagnostic, rule.quickFix);
             }
 
             diagnostics.push(diagnostic);
@@ -315,7 +333,7 @@ class AgentOSCodeActionProvider implements vscode.CodeActionProvider {
         for (const diagnostic of context.diagnostics) {
             if (diagnostic.source?.startsWith('Agent OS')) {
                 // Check for quick fix
-                const quickFix = (diagnostic as any).quickFix;
+                const quickFix = QUICK_FIX_TABLE.get(diagnostic);
                 if (quickFix) {
                     const action = new vscode.CodeAction(
                         quickFix.title,

@@ -429,14 +429,29 @@ export class IdentityRegistry {
 
   /** Revoke an identity and all its delegates. */
   revoke(did: string, reason: string): boolean {
+    return this.revokeRecursive(did, reason, new Set<string>());
+  }
+
+  /**
+   * Recurse through the parent→child delegation graph, revoking each
+   * reachable identity exactly once. `visited` is shared across the whole
+   * traversal so a cycle in the `parentDid` relation (which should not
+   * arise via the public `delegate()` API, but could be constructed from a
+   * corrupted store, a custom builder, or a bug elsewhere) terminates
+   * after each node is processed once instead of recursing forever and
+   * eventually overflowing the JS call stack.
+   */
+  private revokeRecursive(did: string, reason: string, visited: Set<string>): boolean {
+    if (visited.has(did)) return false;
+    visited.add(did);
+
     const identity = this._identities.get(did);
     if (!identity) return false;
     identity.revoke(reason);
 
-    // Revoke children
     for (const [childDid, child] of this._identities) {
       if (child.parentDid === did) {
-        this.revoke(childDid, `Parent revoked: ${reason}`);
+        this.revokeRecursive(childDid, `Parent revoked: ${reason}`, visited);
       }
     }
     return true;
@@ -476,10 +491,10 @@ export function stripKeyPrefix(keyStr: string, expectedPrefix: string): string {
   if (keyStr.startsWith(expectedPrefix)) {
     return keyStr.slice(expectedPrefix.length);
   }
-  if (keyStr.includes(':')) {
-    const [, rest] = keyStr.split(':', 2);
+  const colonIdx = keyStr.indexOf(':');
+  if (colonIdx !== -1) {
     console.warn(`Key has unexpected prefix, expected '${expectedPrefix}'`);
-    return rest ?? keyStr;
+    return keyStr.slice(colonIdx + 1);
   }
   // No prefix at all — still valid, just not prefixed
   return keyStr;

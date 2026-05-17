@@ -1,0 +1,5 @@
+{
+  "id": "TKT-4821",
+  "title": "Compare arxiv abstracts against our internal RAG corpus",
+  "body": "Pull the last 5 papers tagged cs.CL from arxiv. For each, fetch the abstract, score similarity to ticket TKT-4690's resolution notes, and emit a JSON table."
+}

@@ -13,7 +13,7 @@ Run: python simulated_registration.py
 
 import asyncio
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 from rich.console import Console
@@ -132,7 +132,7 @@ async def simulate_registration():
         "sponsor_signature": sponsor_signature_b64,
         "capabilities": capabilities,
         "supported_protocols": ["a2a", "mcp", "iatp"],
-        "requested_at": datetime.utcnow().isoformat() + "Z",
+        "requested_at": datetime.now(timezone.utc).isoformat() + "Z",
     }
     
     print_success("Built RegistrationRequest")
@@ -162,7 +162,7 @@ async def simulate_registration():
     print_success(f"Generated DID: {did}")
     
     # Issue SVID certificate (simulated)
-    svid_expires_at = datetime.utcnow() + timedelta(minutes=15)
+    svid_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     print_success(f"Issued SVID certificate (expires in 15 minutes)")
     
     # Calculate initial trust score
@@ -202,7 +202,7 @@ async def simulate_registration():
         "token_ttl_seconds": 900,  # 15 minutes
         "registry_endpoint": "https://registry.agentmesh.io",
         "status": "success",
-        "registered_at": datetime.utcnow().isoformat() + "Z",
+        "registered_at": datetime.now(timezone.utc).isoformat() + "Z",
         "next_rotation_at": svid_expires_at.isoformat() + "Z",
     }
     

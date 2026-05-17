@@ -103,35 +103,35 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 ## Packages
 
 <div class="agt-cards">
-<a class="agt-card" href="packages/agent-os/">
+<a class="agt-card" href="packages/agent-os.md">
 <span class="agt-card-title">⚙️ Agent OS</span>
 <span class="agt-card-desc">Policy engine, agent lifecycle, governance gate</span>
 </a>
-<a class="agt-card" href="packages/agent-mesh/">
+<a class="agt-card" href="packages/agent-mesh.md">
 <span class="agt-card-title">🔗 Agent Mesh</span>
 <span class="agt-card-desc">Agent discovery, routing, and trust mesh</span>
 </a>
-<a class="agt-card" href="packages/agent-runtime/">
+<a class="agt-card" href="packages/agent-runtime.md">
 <span class="agt-card-title">🛡️ Agent Runtime</span>
 <span class="agt-card-desc">Execution sandboxing with four privilege rings</span>
 </a>
-<a class="agt-card" href="packages/agent-sre/">
+<a class="agt-card" href="packages/agent-sre.md">
 <span class="agt-card-title">📊 Agent SRE</span>
 <span class="agt-card-desc">Kill switch, SLO monitoring, chaos testing</span>
 </a>
-<a class="agt-card" href="packages/agent-compliance/">
+<a class="agt-card" href="packages/agent-compliance.md">
 <span class="agt-card-title">✅ Agent Compliance</span>
 <span class="agt-card-desc">Audit logging, compliance frameworks</span>
 </a>
-<a class="agt-card" href="packages/agent-marketplace/">
+<a class="agt-card" href="packages/agent-marketplace.md">
 <span class="agt-card-title">🏪 Agent Marketplace</span>
 <span class="agt-card-desc">Plugin governance and trust scoring</span>
 </a>
-<a class="agt-card" href="packages/agent-lightning/">
+<a class="agt-card" href="packages/agent-lightning.md">
 <span class="agt-card-title">⚡ Agent Lightning</span>
 <span class="agt-card-desc">High-performance agent orchestration</span>
 </a>
-<a class="agt-card" href="packages/agent-hypervisor/">
+<a class="agt-card" href="packages/agent-hypervisor.md">
 <span class="agt-card-title">🔒 Agent Hypervisor</span>
 <span class="agt-card-desc">Hardware-level workload isolation</span>
 </a>
@@ -144,11 +144,11 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 
 | SDK | Install |
 |-----|---------|
-| 🐍 [Python](packages/agent-os/) | `pip install agent-governance-toolkit` |
-| 📘 [TypeScript](packages/typescript-sdk/) | `npm install @agent-governance/sdk` |
-| 🔷 [.NET](packages/dotnet-sdk/) | `dotnet add package Microsoft.AgentGovernance` |
-| 🦀 [Rust](packages/rust-sdk/) | `cargo add agentmesh` |
-| 🐹 [Go](packages/go-sdk/) | `go get github.com/microsoft/agent-governance-toolkit` |
+| 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit` |
+| 📘 TypeScript | `npm install @microsoft/agent-governance-sdk` |
+| 🔷 [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
+| 🦀 Rust | `cargo add agentmesh` |
+| 🐹 Go | `go get github.com/microsoft/agent-governance-toolkit` |
 
 </div>
 

@@ -65,7 +65,7 @@ class InMemoryTrustStore:
 
     def record_interaction(self, agent_did: str, *, success: bool) -> None:
         from datetime import datetime as _dt
-        now = _dt.utcnow()
+        now = _dt.now(timezone.utc)
         # V33: Enforce rate limit on score updates
         times = self._update_times.setdefault(agent_did, [])
         cutoff = now.timestamp() - 60

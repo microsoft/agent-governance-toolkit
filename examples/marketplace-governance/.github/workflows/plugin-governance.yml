@@ -16,9 +16,13 @@ on:
       - 'plugins/**'
       - 'policies/**'
 
+# Workflow-level permissions are read-only. Each job below sets the
+# narrowest write scope it actually needs (principle of least privilege —
+# https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token).
+# Downstream consumers copy this file as a starting point, so per-job
+# scoping is important even though the example itself doesn't run here.
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   # ------------------------------------------------------------------
@@ -27,15 +31,19 @@ jobs:
   validate-manifest:
     name: Validate Plugin Manifests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Detect changed plugins
         id: changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          PLUGINS=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+          PLUGINS=$(git diff --name-only "origin/${BASE_REF}...HEAD" \
             | grep '^plugins/' \
             | cut -d'/' -f1-2 \
             | sort -u)
@@ -59,10 +67,12 @@ jobs:
     name: Evaluate Marketplace Policy
     runs-on: ubuntu-latest
     needs: validate-manifest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # Option A: Use the GitHub Action (recommended)
       - name: Run governance action
@@ -74,7 +84,7 @@ jobs:
 
       # Option B: Direct CLI usage (alternative)
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
 
@@ -90,7 +100,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: governance-report
           path: governance-report.md
@@ -102,10 +112,12 @@ jobs:
     name: Governance Verification
     runs-on: ubuntu-latest
     needs: evaluate-policy
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run governance verification
         id: verify

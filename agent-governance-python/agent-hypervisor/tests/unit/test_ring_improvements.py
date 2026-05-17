@@ -4,6 +4,7 @@
 
 
 import pytest
+from unittest.mock import patch
 
 from hypervisor.models import ExecutionRing
 from hypervisor.rings.breach_detector import (
@@ -119,12 +120,19 @@ class TestRingInheritance:
 class TestBreachDetector:
     def test_no_breach_with_normal_pattern(self):
         detector = RingBreachDetector()
-        for _ in range(10):
-            result = detector.record_call(
-                "a1", "s1",
-                ExecutionRing.RING_2_STANDARD,
-                ExecutionRing.RING_2_STANDARD,
-            )
+        # Space calls at 200ms intervals (5/s), well under the default
+        # baseline of 10/s. Without mocking, back-to-back calls appear
+        # as a 10000/s burst and trigger a false breach.
+        times = iter([i * 0.2 for i in range(10)])
+        with patch("hypervisor.rings.breach_detector.time") as mock_time:
+            mock_time.monotonic = lambda: next(times)
+            for _ in range(10):
+                result = detector.record_call(
+                    "a1", "s1",
+                    ExecutionRing.RING_2_STANDARD,
+                    ExecutionRing.RING_2_STANDARD,
+                )
+        assert result is None
         assert result is None
 
     @pytest.mark.skip("Feature not available in Public Preview")
@@ -137,12 +145,15 @@ class TestBreachDetector:
 
     def test_breaker_not_tripped_for_normal(self):
         detector = RingBreachDetector()
-        for _ in range(10):
-            detector.record_call(
-                "a1", "s1",
-                ExecutionRing.RING_2_STANDARD,
-                ExecutionRing.RING_2_STANDARD,
-            )
+        times = iter([i * 0.2 for i in range(10)])
+        with patch("hypervisor.rings.breach_detector.time") as mock_time:
+            mock_time.monotonic = lambda: next(times)
+            for _ in range(10):
+                detector.record_call(
+                    "a1", "s1",
+                    ExecutionRing.RING_2_STANDARD,
+                    ExecutionRing.RING_2_STANDARD,
+                )
         assert not detector.is_breaker_tripped("a1", "s1")
 
     def test_reset_breaker(self):
@@ -214,7 +225,7 @@ class TestRingElevationErrorMessages:
                 target_ring=ExecutionRing.RING_2_STANDARD,
             )
         err = exc_info.value
-        assert err.denial_reason == ElevationDenialReason.COMMUNITY_EDITION
+        assert err.denial_reason == ElevationDenialReason.INSUFFICIENT_TRUST
 
     def test_error_includes_remediation(self):
         mgr = RingElevationManager()
@@ -295,4 +306,4 @@ class TestRingElevationErrorMessages:
         assert err.current_ring == ExecutionRing.RING_3_SANDBOX
         assert err.target_ring == ExecutionRing.RING_2_STANDARD
         assert err.agent_did == "did:mesh:test"
-        assert err.denial_reason == ElevationDenialReason.COMMUNITY_EDITION
+        assert err.denial_reason == ElevationDenialReason.INSUFFICIENT_TRUST

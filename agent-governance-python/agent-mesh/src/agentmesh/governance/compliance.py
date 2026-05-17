@@ -12,7 +12,7 @@ Automated compliance mapping for:
 Every action is mapped to relevant controls automatically.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from enum import Enum
@@ -95,7 +95,7 @@ class ComplianceViolation(BaseModel):
     """
 
     violation_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # What happened
     agent_did: str
@@ -140,7 +140,7 @@ class ComplianceReport(BaseModel):
     """
 
     report_id: str
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Scope
     framework: ComplianceFramework
@@ -526,7 +526,7 @@ class ComplianceEngine:
         for v in self._violations:
             if v.violation_id == violation_id:
                 v.remediated = True
-                v.remediated_at = datetime.utcnow()
+                v.remediated_at = datetime.now(timezone.utc)
                 v.remediation_notes = notes
                 return True
         return False

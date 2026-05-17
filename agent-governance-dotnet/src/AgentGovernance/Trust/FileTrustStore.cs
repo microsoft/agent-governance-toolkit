@@ -39,18 +39,51 @@ public sealed class FileTrustStore : IDisposable
     /// Optional callback invoked when the trust store file is corrupted.
     /// Receives the exception and file path. When null, corruption is handled silently.
     /// </param>
-    public FileTrustStore(string filePath, double defaultScore = 500.0, double decayRate = 10.0, Action<Exception, string>? loadErrorHandler = null)
+    /// <param name="allowedBaseDirectory">
+    /// Optional containment directory. When provided, the resolved
+    /// <paramref name="filePath"/> must sit under this directory or the
+    /// constructor throws <see cref="ArgumentException"/>. Callers that
+    /// accept the file path from untrusted input (config files, request
+    /// bodies, environment) should set this to the directory where trust
+    /// stores are allowed to live.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="filePath"/> is null/whitespace, or when
+    /// <paramref name="allowedBaseDirectory"/> is provided and the resolved
+    /// <paramref name="filePath"/> escapes it.
+    /// </exception>
+    public FileTrustStore(
+        string filePath,
+        double defaultScore = 500.0,
+        double decayRate = 10.0,
+        Action<Exception, string>? loadErrorHandler = null,
+        string? allowedBaseDirectory = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-        // CWE-22: Validate path to prevent directory traversal attacks.
-        // Resolve the full path and reject any path containing ".." segments.
+        // CWE-22: validate containment instead of a substring check against
+        // "..". The substring check had both false positives (a filename
+        // legitimately containing ".." was rejected) and false negatives
+        // (absolute paths, symlinks, or "%2e%2e" style inputs bypassed it
+        // entirely). The reliable answer is "the resolved path must sit
+        // under an allowed base directory", and that requires the caller
+        // to declare what that base is.
         var resolvedPath = Path.GetFullPath(filePath);
-        if (filePath.Contains("..", StringComparison.Ordinal))
+        if (!string.IsNullOrEmpty(allowedBaseDirectory))
         {
-            throw new ArgumentException(
-                $"Path traversal detected: trust store path must not contain '..' segments. Resolved: {resolvedPath}",
-                nameof(filePath));
+            var resolvedBase = Path.GetFullPath(allowedBaseDirectory);
+            // Append the platform separator so a base of "/var/trust"
+            // doesn't allow "/var/trust-elsewhere/x.json" through.
+            var baseWithSep = resolvedBase.TrimEnd(Path.DirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            if (!resolvedPath.StartsWith(baseWithSep, StringComparison.Ordinal)
+                && !string.Equals(resolvedPath, resolvedBase, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Path traversal blocked: resolved trust store path '{resolvedPath}' "
+                        + $"is not under allowed base '{resolvedBase}'.",
+                    nameof(filePath));
+            }
         }
 
         _filePath = resolvedPath;

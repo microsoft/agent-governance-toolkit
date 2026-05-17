@@ -89,9 +89,10 @@ class BundleRegistry:
                 errors.append("Component name is required")
             if not comp.version:
                 errors.append(f"Component '{comp.name}' is missing a version")
-            if comp.name in seen_names:
+            if comp.name and comp.name in seen_names:
                 errors.append(f"Duplicate component name: '{comp.name}'")
-            seen_names.add(comp.name)
+            elif comp.name:
+                seen_names.add(comp.name)
         return errors
 
     def search(self, component_type: ComponentType | None = None) -> list[WorkflowBundle]:

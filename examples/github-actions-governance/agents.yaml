@@ -1,0 +1,18 @@
+agents:
+  - name: sales-summarizer
+    version: "1.2.0"
+    model: gpt-4o
+    policy: .agents/security.yaml
+    tools:
+      - web_search
+      - query_database
+    description: Summarizes sales data from the data warehouse.
+
+  - name: support-triage
+    version: "0.9.1"
+    model: claude-sonnet-4-6
+    policy: .agents/security.yaml
+    tools:
+      - read_file
+      - web_search
+    description: Triages incoming support tickets.

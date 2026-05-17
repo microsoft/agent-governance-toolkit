@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -63,12 +63,40 @@ class PolicyRule(BaseModel):
 
 
 class PolicyDefaults(BaseModel):
-    """Default settings applied when no rule matches."""
+    """Default settings applied when no rule matches.
+
+    The first four fields are language/runtime budgets evaluated by the
+    rule engine. The remaining fields are **sandbox resource constraints**
+    consumed by sandbox providers (Azure, Docker, Hyperlight) and are
+    ignored by the rule engine itself.
+    """
 
     action: PolicyAction = PolicyAction.ALLOW
     max_tokens: int = 4096
     max_tool_calls: int = 10
     confidence_threshold: float = 0.8
+
+    # ---- Sandbox resource constraints (provider-consumed) -------------
+    max_cpu: float | None = Field(
+        default=None,
+        description="Sandbox CPU limit in vCPUs (e.g. 0.5, 1.0). None = provider default.",
+    )
+    max_memory_mb: int | None = Field(
+        default=None,
+        description="Sandbox memory limit in MiB. None = provider default.",
+    )
+    timeout_seconds: int | None = Field(
+        default=None,
+        description="Per-execute_code wall-clock cap. None = provider default.",
+    )
+    network_default: Literal["allow", "deny"] = Field(
+        default="deny",
+        description=(
+            "Default sandbox egress action when a host is not on "
+            "network_allowlist. 'deny' is fail-closed and is the default. "
+            "Set to 'allow' only for trusted dev/research workloads."
+        ),
+    )
 
 
 class PolicyDocument(BaseModel):
@@ -86,6 +114,26 @@ class PolicyDocument(BaseModel):
     scope: str | None = Field(
         default=None,
         description="Glob pattern — policy only applies when action path matches",
+    )
+
+    # ---- Sandbox extension fields (provider-consumed) -----------------
+    # Read by ACASandboxProvider / DockerSandboxProvider / etc.; the
+    # rule engine itself ignores them. Defined natively here so callers
+    # do not need SimpleNamespace wrappers.
+    network_allowlist: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Host patterns the sandbox may reach (e.g. 'pypi.org', "
+            "'*.github.com'). Combined with defaults.network_default to "
+            "form the sandbox egress policy."
+        ),
+    )
+    tool_allowlist: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Tool names the agent may invoke. Enforced host-side by the "
+            "PolicyEvaluator before any sandbox call."
+        ),
     )
 
     @classmethod

@@ -14,7 +14,7 @@ import hashlib
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -258,7 +258,7 @@ class TestCredentialRenewal:
         mgr = CredentialManager(default_ttl=5)
         cred = mgr.issue(agent_did="did:mesh:renew", capabilities=["read"])
         # Force near-expiry
-        cred.expires_at = datetime.utcnow() + timedelta(seconds=2)
+        cred.expires_at = datetime.now(timezone.utc) + timedelta(seconds=2)
         new_cred = mgr.rotate_if_needed(cred.credential_id)
         assert new_cred is not None
         assert new_cred.credential_id != cred.credential_id

@@ -103,12 +103,34 @@ class EntraAgentID:
     def validate_token(self, token: str) -> dict:
         """Validate a JWT token issued by Entra ID for this agent.
 
+        .. warning::
+
+            This method does **not** verify the cryptographic signature.
+            Call :meth:`validate_token_with_signature` or verify the
+            signature yourself via JWKS before trusting the claims.
+
         Performs structural and claim-level validation (expiry, issuer,
         audience).  Cryptographic signature verification requires the
         Entra JWKS and is intentionally left to callers with
         ``azure-identity`` or equivalent.
         """
+        import warnings
+
+        warnings.warn(
+            "validate_token() does not verify the JWT signature. "
+            "Use validate_token_with_signature() or verify the signature "
+            "via JWKS before trusting these claims.",
+            stacklevel=2,
+        )
         claims = self._decode_jwt_claims(token)
+
+        # Reject unsigned tokens (alg: none)
+        header = self._decode_jwt_header(token)
+        alg = header.get("alg", "")
+        if not alg or alg.lower() == "none":
+            raise ValueError(
+                "Token uses algorithm 'none' — unsigned tokens are not accepted"
+            )
 
         # Expiry
         exp = claims.get("exp")
@@ -196,6 +218,19 @@ class EntraAgentID:
         if padding != 4:
             payload += "=" * padding
         decoded = base64.urlsafe_b64decode(payload)
+        return json.loads(decoded)
+
+    @staticmethod
+    def _decode_jwt_header(token: str) -> dict:
+        """Decode the header section of a JWT."""
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise ValueError("Invalid JWT: expected 3 dot-separated parts")
+        header = parts[0]
+        padding = 4 - len(header) % 4
+        if padding != 4:
+            header += "=" * padding
+        decoded = base64.urlsafe_b64decode(header)
         return json.loads(decoded)
 
     def __repr__(self) -> str:

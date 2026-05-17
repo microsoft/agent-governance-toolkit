@@ -6,7 +6,7 @@ Scope Chains
 Simple scope passing: sub-agent gets parent's scopes minus any denied ones.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import ClassVar, Optional
 from pydantic import BaseModel, Field, field_validator
 import hashlib
@@ -30,13 +30,13 @@ class UserContext(BaseModel):
     user_email: Optional[str] = Field(None, description="User email for audit trails")
     roles: list[str] = Field(default_factory=list, description="User roles for RBAC")
     permissions: list[str] = Field(default_factory=list, description="Fine-grained permissions")
-    issued_at: datetime = Field(default_factory=datetime.utcnow)
+    issued_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = Field(None, description="OBO context expiration")
     metadata: dict = Field(default_factory=dict, description="Additional user attributes")
 
     def is_valid(self) -> bool:
         """Check if the user context is still valid."""
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 
@@ -60,7 +60,7 @@ class UserContext(BaseModel):
         ttl_seconds: int = 3600,
     ) -> "UserContext":
         """Create a new user context with TTL."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         return cls(
             user_id=user_id,
             user_email=user_email,
@@ -93,24 +93,32 @@ class DelegationLink(BaseModel):
     delegated_capabilities: list[str] = Field(..., description="Capabilities granted to child")
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = Field(None)
 
     # User context for OBO flows
     user_context: Optional[UserContext] = Field(None, description="End-user context for OBO flows")
 
-    # Kept for API compatibility (not cryptographically enforced)
+    # Compatibility field only: ScopeChain performs optional best-effort checks.
     parent_signature: str = Field(..., description="Parent's signature on this delegation")
     link_hash: str = Field(..., description="Hash of this link for chain verification")
     previous_link_hash: Optional[str] = Field(None, description="Hash of previous link in chain")
 
     def verify_capability_narrowing(self) -> bool:
-        """Verify that delegated capabilities are a subset of parent's."""
-        for cap in self.delegated_capabilities:
-            if cap not in self.parent_capabilities:
-                if not self._is_narrower_capability(cap, self.parent_capabilities):
-                    return False
-        return True
+        """Verify that every delegated capability is a subset of the parent's.
+
+        A capability is considered narrowed when it appears literally
+        in the parent set or matches a parent wildcard via
+        ``_is_narrower_capability``. The previous early-return form
+        fanned the same predicate across two nested ``if`` blocks; the
+        ``all(...)`` form is shorter, has one predicate, and short-
+        circuits identically.
+        """
+        return all(
+            cap in self.parent_capabilities
+            or self._is_narrower_capability(cap, self.parent_capabilities)
+            for cap in self.delegated_capabilities
+        )
 
     def _is_narrower_capability(self, cap: str, parent_caps: list[str]) -> bool:
         """Check if a capability is a narrowed version of a parent capability."""
@@ -140,7 +148,7 @@ class DelegationLink(BaseModel):
 
     def is_valid(self) -> bool:
         """Check if this link is valid (expiration and capability narrowing only)."""
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
 
         if not self.verify_capability_narrowing():
@@ -154,7 +162,9 @@ class ScopeChain(BaseModel):
     Simple scope chain from root sponsor to current agent.
 
     Sub-agent gets parent's scopes minus any denied ones.
-    No cryptographic chain verification.
+    Structural checks are always enforced (scope narrowing + hash chain).
+    Signature checks are optional best-effort only when ``known_identities``
+    contains the parent identity for a link.
     """
 
     DEFAULT_MAX_DEPTH: ClassVar[int] = DEFAULT_DELEGATION_MAX_DEPTH
@@ -167,7 +177,8 @@ class ScopeChain(BaseModel):
     root_sponsor_verified: bool = Field(default=False)
     root_capabilities: list[str] = Field(..., description="Capabilities granted by sponsor")
 
-    # Known agent identities (kept for API compatibility)
+    # Optional registry for compatibility-mode signature checks.
+    # If missing for a link parent, signature verification is skipped.
     known_identities: dict[str, AgentIdentity] = Field(default_factory=dict)
 
     # Chain links
@@ -212,7 +223,7 @@ class ScopeChain(BaseModel):
         return v
 
     # Chain metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     total_depth: int = Field(default=0)
 
     # Verification
@@ -251,16 +262,19 @@ class ScopeChain(BaseModel):
         self._update_chain_hash()
 
     def _verify_link_signature(self, link: DelegationLink) -> bool:
-        """Verify the Ed25519 signature on a delegation link."""
+        """Best-effort signature check for compatibility mode only."""
         identity = self.known_identities.get(link.parent_did)
         if identity is None:
-            return True  # Graceful fallback — can't verify without identity
+            return True  # Compatibility fallback: skip when parent identity is unknown.
         signable_data = f"{link.parent_did}:{link.child_did}:{','.join(sorted(link.delegated_capabilities))}"
         return identity.verify_signature(signable_data.encode(), link.parent_signature)
 
     def verify(self) -> tuple[bool, Optional[str]]:
         """
-        Verify the chain — scope narrowing, hash integrity, and signatures.
+        Verify the chain.
+
+        Always enforces scope narrowing and hash integrity.
+        Signature checks are compatibility-mode, best-effort only.
         """
         if not self.links:
             return True, None
@@ -285,7 +299,7 @@ class ScopeChain(BaseModel):
             if link.link_hash != link.compute_hash():
                 return False, f"Invalid link hash at link {i}"
 
-            # Verify Ed25519 signature
+            # Compatibility-mode signature check (best effort)
             if not self._verify_link_signature(link):
                 return False, f"Invalid signature at link {i}"
 

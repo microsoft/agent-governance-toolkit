@@ -13,7 +13,7 @@ import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
-import { webcrypto } from "node:crypto";
+import { timingSafeEqual, webcrypto } from "node:crypto";
 
 const randomBytes = (n: number): Uint8Array => {
   const buf = new Uint8Array(n);
@@ -25,6 +25,16 @@ const KDF_INFO_RATCHET = new TextEncoder().encode("AgentMesh_Ratchet_v1");
 const NONCE_LEN = 12;
 const KEY_LEN = 32;
 const MAX_SKIP = 100;
+/**
+ * Aggregate cap on cached skipped keys across all DH rotations.
+ *
+ * The per-call cap (`maxSkip`) bounds a single skip burst within one
+ * receive chain; this cap bounds the lifetime accumulation. Without it,
+ * a session that survives many DH ratchet steps with persistent out-of-
+ * order tails grows `skippedKeys` without limit. Mirrors the Python
+ * core implementation (`_MAX_SKIPPED_KEYS_TOTAL`).
+ */
+const MAX_SKIPPED_KEYS_TOTAL = 2000;
 
 export interface MessageHeader {
   dhPublicKey: Uint8Array;
@@ -98,13 +108,19 @@ function skippedKeyId(dhPub: Uint8Array, n: number): string {
   return `${Buffer.from(dhPub).toString("hex")}:${n}`;
 }
 
+// Used to detect a DH ratchet step by comparing the locally-cached
+// `dhRemotePublic` against the attacker-controlled header's `dhPublicKey`.
+// The per-byte early-return loop leaked match-prefix length via timing; the
+// X25519 public keys involved are exchanged in the clear over the wire so
+// the leak yields no new information in the current protocol, but
+// `crypto.timingSafeEqual` is the right primitive for key-shaped material
+// and protects against the same comparison being lifted into a future caller
+// that does treat the public key as sensitive (e.g. an unpublished one-time
+// pre-key the recipient committed to but never broadcast).
 function arraysEqual(a: Uint8Array | null, b: Uint8Array | null): boolean {
   if (a === null || b === null) return a === b;
   if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
+  return timingSafeEqual(a, b);
 }
 
 export class DoubleRatchet {
@@ -250,6 +266,15 @@ export class DoubleRatchet {
       s.skippedKeys.set(skippedKeyId(s.dhRemotePublic!, s.recvMessageNumber), mk);
       s.chainKeyRecv = next;
       s.recvMessageNumber++;
+      // Evict the oldest skipped key once the aggregate cap is exceeded.
+      // ES2015+ `Map` iteration order is insertion order, so the first
+      // key returned is the oldest insertion that survived all prior
+      // evictions. Mirrors the Python core implementation.
+      while (s.skippedKeys.size > MAX_SKIPPED_KEYS_TOTAL) {
+        const oldest = s.skippedKeys.keys().next();
+        if (oldest.done) break;
+        s.skippedKeys.delete(oldest.value);
+      }
     }
   }
 

@@ -49,7 +49,16 @@ type identityJSON struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 }
 
-// ToJSON serialises the public portion of the identity.
+// ToJSON serialises the public portion of the identity (DID, public key,
+// capabilities). The private key is deliberately excluded so the output is
+// safe to share with peers, store in registries, or transmit over untrusted
+// channels.
+//
+// There is intentionally no symmetric ToPrivateJSON: private keys live only
+// in-process and should be persisted via a key management system, not by
+// round-tripping through this package. An identity rehydrated via FromJSON
+// can Verify peer signatures but cannot Sign — calling Sign on such an
+// identity returns an error.
 func (a *AgentIdentity) ToJSON() ([]byte, error) {
 	return json.Marshal(identityJSON{
 		DID:          a.DID,
@@ -58,7 +67,11 @@ func (a *AgentIdentity) ToJSON() ([]byte, error) {
 	})
 }
 
-// FromJSON deserialises an identity from JSON (public fields only).
+// FromJSON deserialises an identity from the public-only JSON format produced
+// by ToJSON. The resulting identity has no private key, so it can Verify
+// signatures from the original agent but cannot Sign new data. To obtain a
+// signing-capable identity, call GenerateIdentity or load the private key
+// from a key management system separately.
 func FromJSON(data []byte) (*AgentIdentity, error) {
 	var j identityJSON
 	if err := json.Unmarshal(data, &j); err != nil {

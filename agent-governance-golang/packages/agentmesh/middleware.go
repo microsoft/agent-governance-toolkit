@@ -6,6 +6,7 @@ package agentmesh
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -89,6 +90,20 @@ type HTTPResolvedAgentIdentity struct {
 type HTTPAgentIDResolver func(*http.Request) (HTTPResolvedAgentIdentity, error)
 
 // LegacyTrustedHeaderAgentIDResolver explicitly trusts a caller-supplied header for short-lived migrations.
+//
+// SECURITY: This resolver sets Verified=true based solely on an
+// attacker-controllable HTTP header. ANY caller that can reach the
+// endpoint can claim to be any agent. The "verified" flag downstream
+// callers see is meaningless. Production deployments MUST replace
+// this with a resolver that validates a cryptographic credential:
+// signed JWT, mTLS client cert, or an HMAC-of-(agent_id || timestamp)
+// over a shared secret.
+//
+// Deprecated: Use a signed-credential resolver in production. This
+// helper exists only to ease the migration of a service that has no
+// agent-identity story yet and to keep test fixtures concise; the
+// example in `examples/http-middleware/main.go` documents the
+// required production pattern.
 func LegacyTrustedHeaderAgentIDResolver(headerName string) HTTPAgentIDResolver {
 	if strings.TrimSpace(headerName) == "" {
 		headerName = "X-Agent-ID"
@@ -382,13 +397,27 @@ func NewHTTPGovernanceMiddleware(config HTTPMiddlewareConfig) (func(http.Handler
 			if recorder.WroteHeader() {
 				return
 			}
+			// Map governance errors to a stable client-facing message: the
+			// sentinel's `.Error()` for known cases (no wrapped detail
+			// leaked), `http.StatusText` for everything else. Wrapped
+			// errors can carry policy rule names, tool names, action
+			// identifiers, or risk-score numbers; the audit log already
+			// captures them server-side via the audit middleware.
 			statusCode := http.StatusForbidden
-			if !errors.Is(err, ErrPolicyDenied) &&
-				!errors.Is(err, ErrKillSwitchActive) &&
-				!errors.Is(err, ErrVerifiedAgentIdentityRequired) {
+			var clientMessage string
+			switch {
+			case errors.Is(err, ErrPolicyDenied):
+				clientMessage = ErrPolicyDenied.Error()
+			case errors.Is(err, ErrKillSwitchActive):
+				clientMessage = ErrKillSwitchActive.Error()
+			case errors.Is(err, ErrVerifiedAgentIdentityRequired):
+				clientMessage = ErrVerifiedAgentIdentityRequired.Error()
+			default:
 				statusCode = http.StatusInternalServerError
+				clientMessage = http.StatusText(http.StatusInternalServerError)
+				log.Printf("agentmesh: governance middleware unexpected error: %v", err)
 			}
-			http.Error(w, err.Error(), statusCode)
+			http.Error(w, clientMessage, statusCode)
 		})
 	}, nil
 }

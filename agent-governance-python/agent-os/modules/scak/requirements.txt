@@ -39,7 +39,7 @@ streamlit>=1.54.0,<2.0  # For telemetry dashboard (>= 1.54.0 fixes SSRF CVE)
 jupyter==1.1.1  # For interactive notebooks
 
 # LangChain Integration
-langchain==0.3.14  # For LangChain integration
+langchain==0.3.30  # For LangChain integration
 langchain-core==1.2.28  # CVE fix: SSRF, path traversal, f-string validation
 
 # Distributed Computing (uncomment as needed)

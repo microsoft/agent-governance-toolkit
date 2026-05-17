@@ -30,6 +30,23 @@ describe('stripKeyPrefix', () => {
   it('handles empty string', () => {
     expect(stripKeyPrefix('', 'ed25519:')).toBe('');
   });
+
+  it('preserves content after the first colon when the rest contains colons', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    // Prior bug: split(':', 2) destructured `[, rest]` returns only "abc",
+    // silently dropping ":def". The full remainder should round-trip.
+    expect(stripKeyPrefix('ed25519:abc:def', 'x25519:')).toBe('abc:def');
+    warnSpy.mockRestore();
+  });
+
+  it('preserves the full remainder when the expected prefix appears mid-string', () => {
+    // No expected-prefix match → unexpected-prefix branch. The remainder
+    // after the first colon must be returned verbatim, including any
+    // further colons.
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    expect(stripKeyPrefix('unknown:a:b:c', 'ed25519:')).toBe('a:b:c');
+    warnSpy.mockRestore();
+  });
 });
 
 describe('safeBase64Decode', () => {

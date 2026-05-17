@@ -25,6 +25,15 @@ public sealed class Policy
         AllowTrailingCommas = true
     };
 
+    // YamlDotNet's IDeserializer is documented as thread-safe once built, and
+    // constructing one is non-trivial (it resolves type inspectors, converters,
+    // and naming conventions). Cache a single instance so policy loading does
+    // not pay that cost on every FromYaml / FromYamlFile call.
+    private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
+        .WithNamingConvention(UnderscoredNamingConvention.Instance)
+        .IgnoreUnmatchedProperties()
+        .Build();
+
     /// <summary>
     /// The API version of the policy schema (e.g., "governance.toolkit/v1").
     /// </summary>
@@ -67,12 +76,7 @@ public sealed class Policy
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(yaml);
 
-        var deserializer = new DeserializerBuilder()
-            .WithNamingConvention(UnderscoredNamingConvention.Instance)
-            .IgnoreUnmatchedProperties()
-            .Build();
-
-        var raw = deserializer.Deserialize<PolicyDocument>(yaml)
+        var raw = YamlDeserializer.Deserialize<PolicyDocument>(yaml)
             ?? throw new ArgumentException("Failed to parse YAML policy document.");
         return FromDocument(raw);
     }

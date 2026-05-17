@@ -1,0 +1,68 @@
+# AGT Governance Sidecar Dockerfile
+#
+# Unified governance sidecar for deployment alongside agent containers.
+# Provides policy evaluation, trust verification, and Prometheus metrics
+# in a single lightweight container.
+#
+# Build (from repo root):
+#   docker build -t ghcr.io/microsoft/agentmesh/governance-sidecar:0.3.0 \
+#     -f agent-governance-python/agent-mesh/docker/Dockerfile.sidecar .
+#
+# Run:
+#   docker run -p 8081:8081 \
+#     -v /path/to/policies:/etc/agt/policies:ro \
+#     ghcr.io/microsoft/agentmesh/governance-sidecar:0.3.0
+#
+# Environment variables:
+#   AGT_POLICY_DIR   — Path to YAML policy files (default: /etc/agt/policies)
+#   AGT_PORT         — Server port (default: 8081)
+#   AGT_HOST         — Bind address (default: 0.0.0.0)
+#   AGT_LOG_LEVEL    — Logging level (default: info)
+#   AGT_SERVICE_NAME — OTEL service name (default: agt-sidecar)
+
+ARG PYTHON_VERSION=3.11
+
+FROM python:${PYTHON_VERSION}-slim AS base
+
+LABEL maintainer="Microsoft Corporation"
+LABEL org.opencontainers.image.source="https://github.com/microsoft/agent-governance-toolkit"
+LABEL org.opencontainers.image.description="AGT Governance Sidecar - policy enforcement and trust verification"
+LABEL org.opencontainers.image.licenses="MIT"
+
+WORKDIR /app
+
+# Install tini for proper signal handling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package source from repo root context
+COPY agent-governance-python/agent-mesh/pyproject.toml ./
+COPY agent-governance-python/agent-mesh/README.md ./
+COPY agent-governance-python/agent-mesh/src/ ./src/
+
+# Install with server extras
+RUN pip install --no-cache-dir ".[server]" && \
+    pip cache purge 2>/dev/null; true
+
+# Create non-root user and policy directory
+RUN useradd -m -s /bin/bash -u 1000 agt && \
+    mkdir -p /etc/agt/policies && \
+    chown agt:agt /etc/agt/policies
+
+USER agt
+
+# Environment defaults
+ENV PYTHONUNBUFFERED=1
+ENV AGT_PORT=8081
+ENV AGT_HOST=0.0.0.0
+ENV AGT_LOG_LEVEL=info
+ENV AGT_POLICY_DIR=/etc/agt/policies
+
+EXPOSE 8081
+
+ENTRYPOINT ["tini", "--"]
+CMD ["python", "-m", "agentmesh.server.sidecar"]
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" || exit 1

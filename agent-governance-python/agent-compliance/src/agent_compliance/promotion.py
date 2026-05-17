@@ -343,11 +343,24 @@ class PromotionChecker:
             try:
                 passed, reason = gate.check_fn(context)
             except Exception as exc:  # noqa: BLE001
+                # The full exception (including any message that may
+                # contain secrets pulled from env vars, config files,
+                # or callable closures) goes to internal logging
+                # only. The user-facing `reason` reports the
+                # exception TYPE and the gate name — enough to debug
+                # a misbehaving gate without surfacing arbitrary
+                # string content downstream (where it may flow into
+                # UI, audit logs, or CI summaries shared more widely
+                # than the original gate's logging scope).
                 logger.warning(
-                    "Gate %s raised an exception: %s", gate.name, exc
+                    "Gate %s raised %s: %s",
+                    gate.name, type(exc).__name__, exc,
                 )
                 passed = False
-                reason = f"Gate raised exception: {exc}"
+                reason = (
+                    f"Gate {gate.name!r} raised {type(exc).__name__}; "
+                    "see server logs for details"
+                )
 
             result = PromotionResult(
                 gate_name=gate.name,

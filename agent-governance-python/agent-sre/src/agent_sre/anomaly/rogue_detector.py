@@ -11,6 +11,7 @@ assessment with optional auto-quarantine recommendations.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 import math
@@ -429,7 +430,7 @@ class RogueAgentDetector:
                     f"previous_hash mismatch",
                 )
             expected = assessment.compute_hash(prev_hash)
-            if assessment.entry_hash != expected:
+            if not hmac.compare_digest(assessment.entry_hash, expected):
                 return (
                     False,
                     f"Assessment {idx} (agent={assessment.agent_id}): "

@@ -34,6 +34,9 @@ pub struct InMemoryRateLimitStore {
     windows: Mutex<HashMap<String, Vec<u64>>>,
 }
 
+/// Maximum number of distinct rate-limit keys to track.
+const MAX_RATE_LIMIT_KEYS: usize = 50_000;
+
 impl McpRateLimitStore for InMemoryRateLimitStore {
     fn check_and_record(
         &self,
@@ -46,6 +49,14 @@ impl McpRateLimitStore for InMemoryRateLimitStore {
             .windows
             .lock()
             .map_err(|_| McpError::store("rate_limit", "rate-limit store lock poisoned"))?;
+
+        // Evict stale keys when the map grows too large.
+        if windows.len() >= MAX_RATE_LIMIT_KEYS && !windows.contains_key(key) {
+            windows.retain(|_, events| {
+                events.last().map_or(false, |&t| now_secs.saturating_sub(t) < window_secs)
+            });
+        }
+
         let events = windows.entry(key.to_string()).or_default();
         events.retain(|event_secs| now_secs.saturating_sub(*event_secs) < window_secs);
         if events.len() >= max_requests {

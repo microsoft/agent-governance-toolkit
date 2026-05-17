@@ -198,7 +198,17 @@ export function buildClientScript(wsPort: number, sessionToken: string): string 
             return;
         }
         list.innerHTML = filtered.map(function(r) {
-            var cls = 'badge-' + r.action.toLowerCase().replace(/[^a-z0-9-]/g, '');
+            // Whitelist the four badge variants defined in browserStyles.ts
+            // (badge-allow / badge-deny / badge-block / badge-audit). Any
+            // other r.action (corrupt data, a future enum addition, or a
+            // typo) falls back to a generic `badge-unknown` class — that
+            // gives an unstyled but visible chip instead of silently
+            // collapsing the action token to a class that doesn't exist.
+            // The displayed label is still esc(r.action) so the raw value
+            // is observable and consistent with the surrounding cells.
+            var BADGE_ACTIONS = { allow: 1, deny: 1, block: 1, audit: 1 };
+            var normalized = String(r.action || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
+            var cls = Object.prototype.hasOwnProperty.call(BADGE_ACTIONS, normalized) ? 'badge-' + normalized : 'badge-unknown';
             return '<div class="policy-row">' +
                 '<span class="action-badge ' + cls + '">' + esc(r.action) + '</span>' +
                 '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-bright);">' + esc(r.name) + '</span>' +

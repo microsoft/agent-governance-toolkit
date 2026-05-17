@@ -9,22 +9,36 @@ class RAGGovernanceError(Exception):
     """Base class for all agent-rag-governance errors."""
 
 
+# Maps the machine-readable ``reason`` codes returned by
+# ``RAGPolicy.is_collection_allowed`` to the human-readable phrase used
+# in the exception message. The ``reason`` codes themselves are kept on
+# the attribute (and forwarded to ``policy_triggered`` in audit entries)
+# so callers can still pattern-match on them.
+_REASON_PHRASES: dict[str, str] = {
+    "denied": "explicitly denied",
+    "not_allowed": "not in the allow list",
+    "cedar_denied": "denied by Cedar policy",
+}
+
+
 class CollectionDeniedError(RAGGovernanceError):
     """Raised when an agent attempts to query a denied or unlisted collection.
 
     Attributes:
         collection: The collection name that was blocked.
         agent_id: The agent that attempted the retrieval.
-        reason: Either ``"denied"`` (explicit deny list) or ``"not_allowed"``
-            (allow list is set and collection is absent).
+        reason: One of ``"denied"`` (explicit deny list), ``"not_allowed"``
+            (allow list is set and collection is absent), or
+            ``"cedar_denied"`` (rejected by the Cedar policy engine).
     """
 
     def __init__(self, collection: str, agent_id: str, reason: str = "denied") -> None:
         self.collection = collection
         self.agent_id = agent_id
         self.reason = reason
+        phrase = _REASON_PHRASES.get(reason, reason)
         super().__init__(
-            f"Collection '{collection}' access {reason} for agent '{agent_id}'"
+            f"Collection '{collection}' is {phrase} for agent '{agent_id}'"
         )
 
 

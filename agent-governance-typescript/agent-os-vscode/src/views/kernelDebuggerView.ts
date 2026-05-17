@@ -72,8 +72,19 @@ export class KernelDebuggerProvider implements vscode.TreeDataProvider<DebuggerI
     }
 
     private startPolling(): void {
+        // `updateKernelState` is async and returns a Promise; `setInterval`
+        // discards the return value, so any rejection from the kernel-state
+        // refresh (network failure once the simulated body is replaced with a
+        // real client, transient kernel access error, etc.) would be a
+        // floating unhandled rejection and either crash the extension host on
+        // recent Node defaults or, more often, vanish silently. Attach a
+        // `.catch` that surfaces the failure via `console.error` so the
+        // refresh keeps running on the next tick without losing the
+        // diagnostic.
         this._refreshInterval = setInterval(() => {
-            this.updateKernelState();
+            this.updateKernelState().catch((err) => {
+                console.error('KernelDebuggerProvider: updateKernelState failed', err);
+            });
             this._onDidChangeTreeData.fire();
         }, 1000);
     }

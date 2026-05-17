@@ -525,3 +525,59 @@ End.
         result = validate_attestation(pr_body, required_sections=custom_sections)
         assert result.valid is False
         assert any("Missing section" in e for e in result.errors)
+
+
+class TestFencedCodeBlockSafety:
+    """Section headings and checkboxes inside fenced code blocks must not affect parsing."""
+
+    def test_fenced_pseudo_heading_does_not_truncate_section(self):
+        """A `## ...` inside a code fence must not terminate the enclosing section."""
+        pr_body = """
+## 1) Security review
+
+Example template the user might paste:
+
+```markdown
+## 99) Not a real heading
+- [ ] sample
+```
+
+- [x] ✅ Yes
+"""
+        custom_sections = ["1) Security review"]
+        result = validate_attestation(pr_body, required_sections=custom_sections)
+        assert result.valid is True, result.errors
+        assert result.sections_found["1) Security review"] == 1
+
+    def test_checkbox_inside_fence_does_not_count(self):
+        """A `[x]` inside a fenced block must not satisfy the section requirement."""
+        pr_body = """
+## 1) Security review
+
+Example users paste:
+
+```markdown
+- [x] would be checked
+```
+"""
+        custom_sections = ["1) Security review"]
+        result = validate_attestation(pr_body, required_sections=custom_sections)
+        assert result.valid is False
+        assert any("found 0" in e for e in result.errors)
+
+    def test_unclosed_fence_does_not_crash(self):
+        """An unterminated code fence runs to end-of-body without raising."""
+        pr_body = """
+## 1) Security review
+- [x] ✅ Yes
+
+```python
+# unclosed fence, no closing backticks
+print("oops")
+"""
+        custom_sections = ["1) Security review"]
+        # Must not raise; the section before the fence is intact and the
+        # box outside the fence is counted.
+        result = validate_attestation(pr_body, required_sections=custom_sections)
+        assert result.valid is True, result.errors
+        assert result.sections_found["1) Security review"] == 1

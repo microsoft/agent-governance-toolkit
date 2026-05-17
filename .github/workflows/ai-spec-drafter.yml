@@ -82,7 +82,17 @@ jobs:
           # prevent interpretation of backslash escapes and special chars
           # (CWE-77: ISSUE_TITLE is untrusted user input)
           SAFE_TITLE=$(printf '%s' "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' \
-            | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | head -c 50)
+            | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | head -c 50)
+
+          # If the title contained no [a-z0-9] characters, SAFE_TITLE is now
+          # empty and would produce malformed paths like `docs/spec-123-`
+          # (trailing dash) or even a directory traversal in pathological
+          # cases. Abort cleanly with a workflow warning instead.
+          if [ -z "$SAFE_TITLE" ]; then
+            echo "::warning::Issue title contains no usable characters after sanitization; cannot derive branch/filename"
+            exit 0
+          fi
+
           BRANCH="docs/spec-${ISSUE_NUMBER}-${SAFE_TITLE}"
           SPEC_FILE="docs/specs/issue-${ISSUE_NUMBER}-${SAFE_TITLE}.md"
 

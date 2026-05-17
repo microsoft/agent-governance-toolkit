@@ -4,11 +4,25 @@
 Plugin Installer
 
 Download, verify, install, and uninstall AgentMesh plugins with dependency
-resolution and basic plugin sandboxing (restricted imports).
+resolution and install-time restricted-import scanning.
+
+Security contract
+-----------------
+* **Install time** — :meth:`PluginInstaller.install` calls
+  :meth:`PluginInstaller.scan_source_files` on every ``*.py`` file that
+  lands in the plugin directory and raises
+  :class:`~agentmesh.marketplace.manifest.MarketplaceError` if any file
+  imports a module from :data:`RESTRICTED_MODULES`.
+* **Runtime** — full subprocess isolation with import blocking is provided
+  by :class:`~agentmesh.marketplace.sandbox.PluginSandbox`.
+
+:func:`check_sandbox` is a **policy predicate** — it returns ``True``/``False``
+for a single module name but does *not* block any import by itself.
 """
 
 from __future__ import annotations
 
+import ast
 import logging
 import shutil
 from pathlib import Path
@@ -141,6 +155,18 @@ class PluginInstaller:
         with open(manifest_file, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=True)
 
+        # Scan any bundled Python source files for restricted imports.
+        violations = self.scan_source_files(dest)
+        if violations:
+            try:
+                shutil.rmtree(dest)
+            except OSError:
+                pass
+            raise MarketplaceError(
+                f"Plugin {name}@{manifest.version} imports restricted modules: "
+                + "; ".join(violations)
+            )
+
         logger.info("Installed plugin %s@%s to %s", name, manifest.version, dest)
         return dest
 
@@ -213,16 +239,76 @@ class PluginInstaller:
 
     @staticmethod
     def check_sandbox(module_name: str) -> bool:
-        """Check whether a module import is allowed under sandboxing rules.
+        """Return whether *module_name* is permitted under the sandbox policy.
+
+        This is a **policy predicate** — it answers "is this module on the
+        restricted list?" but does *not* block any import by itself.
+        Install-time enforcement is performed by :meth:`scan_source_files`,
+        which :meth:`install` calls automatically.  Full runtime enforcement
+        (including dynamic imports) requires
+        :class:`~agentmesh.marketplace.sandbox.PluginSandbox`.
 
         Args:
-            module_name: Fully-qualified module name.
+            module_name: Fully-qualified module name (e.g. ``"os.path"``).
 
         Returns:
-            ``True`` if the import is allowed, ``False`` otherwise.
+            ``True`` if the module is **allowed**, ``False`` if it is
+            **restricted**.
         """
         top_level = module_name.split(".")[0]
         return top_level not in RESTRICTED_MODULES
+
+    @staticmethod
+    def scan_source_files(plugin_dir: Path) -> list[str]:
+        """Scan Python source files in *plugin_dir* for restricted imports.
+
+        Parses every ``*.py`` file under *plugin_dir* with :mod:`ast` and
+        reports any ``import X`` or ``from X import ...`` statements that
+        reference a top-level module in :data:`RESTRICTED_MODULES`.
+
+        .. note::
+
+            Dynamic import calls such as ``__import__("subprocess")`` or
+            ``importlib.import_module("os")`` are **not** detected by this
+            scan.  For full runtime enforcement use
+            :class:`~agentmesh.marketplace.sandbox.PluginSandbox`.
+
+        Args:
+            plugin_dir: Directory containing the installed plugin files.
+
+        Returns:
+            List of human-readable violation strings (one per offending
+            import statement).  An empty list means no restricted imports
+            were found.
+        """
+        violations: list[str] = []
+        for py_file in sorted(plugin_dir.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8")
+            except OSError as exc:
+                logger.warning("Could not read %s for sandbox scan: %s", py_file, exc)
+                continue
+            try:
+                tree = ast.parse(source, filename=str(py_file))
+            except SyntaxError as exc:
+                logger.warning("Could not parse %s for sandbox scan: %s", py_file, exc)
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = alias.name.split(".")[0]
+                        if top in RESTRICTED_MODULES:
+                            violations.append(
+                                f"{py_file}: imports '{alias.name}'"
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        top = node.module.split(".")[0]
+                        if top in RESTRICTED_MODULES:
+                            violations.append(
+                                f"{py_file}: imports from '{node.module}'"
+                            )
+        return violations
 
 
 def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:

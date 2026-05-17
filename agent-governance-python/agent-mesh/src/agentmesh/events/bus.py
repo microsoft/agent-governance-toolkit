@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import asyncio
 import fnmatch
+import logging
 import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 
 # Standard event types
@@ -128,7 +131,11 @@ class AsyncEventBus(EventBus):
         try:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
-            pass  # drop events when queue is full
+            logger.warning(
+                "Event bus queue full (max %d); dropping event type=%s",
+                self._queue.maxsize,
+                event.type,
+            )
 
     def subscribe(self, pattern: str, handler: EventHandler) -> None:
         self._subscriptions.append((pattern, handler))

@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { PolicyEngine } from './policyEngine';
-import { CMVKClient } from './cmvkClient';
+import { CMVKClient, type CMVKResult, type ModelResult } from './cmvkClient';
 import { AuditLogger } from './auditLogger';
 import { AuditLogProvider } from './views/auditLogView';
 import { PoliciesProvider } from './views/policiesView';
@@ -103,6 +103,9 @@ export async function activate(context: vscode.ExtensionContext) {
         // Initialize enterprise components
         console.log('Initializing enterprise components...');
         authProvider = new EnterpriseAuthProvider(context);
+        // Await persisted-state restore so consumers cannot observe
+        // isAuthenticated=true while currentUser.token is still undefined.
+        await authProvider.init();
         rbacManager = new RBACManager(authProvider);
         cicdIntegration = new CICDIntegration();
         complianceManager = new ComplianceManager();
@@ -618,7 +621,7 @@ safe_query = "SELECT * FROM users WHERE id = ?"
             const auditEntries = auditLogger.getAll().map(e => ({
                 timestamp: new Date(),
                 type: 'audit',
-                details: e as unknown as Record<string, unknown>
+                details: { ...e } as Record<string, unknown>
             }));
 
             const report = reportGenerator.generate({
@@ -649,7 +652,7 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     // Help Command
     // ========================================
 
-    const showHelpCmd = vscode.commands.registerCommand('agent-os.showHelp', () => {
+    const showHelpCmd = vscode.commands.registerCommand('agent-os.showHelp', async () => {
         const panel = vscode.window.createWebviewPanel(
             'agent-os.help', 'Agent OS Help', vscode.ViewColumn.Beside,
             { enableScripts: false, localResourceRoots: [] },
@@ -657,7 +660,20 @@ safe_query = "SELECT * FROM users WHERE id = ?"
         const helpPath = path.join(context.extensionPath, 'HELP.md');
         let content = '';
         try { content = fs.readFileSync(helpPath, 'utf8'); } catch { content = '# Help\n\nHelp file not found.'; }
-        panel.webview.html = renderMarkdownHtml(content);
+
+        // Use VS Code's built-in renderer (zero deps); fall back for older hosts.
+        let body: string;
+        try {
+            const rendered = await vscode.commands.executeCommand<string>('markdown.api.render', content);
+            if (typeof rendered === 'string') {
+                body = `<!DOCTYPE html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"><style>${HELP_CSS}</style></head><body>${rendered}</body></html>`;
+            } else {
+                body = renderMarkdownHtml(content);
+            }
+        } catch {
+            body = renderMarkdownHtml(content);
+        }
+        panel.webview.html = body;
     });
 
     // ========================================
@@ -665,28 +681,48 @@ safe_query = "SELECT * FROM users WHERE id = ?"
     // ========================================
 
     // SSO Sign In
-    const signInCmd = vscode.commands.registerCommand('agent-os.signIn', () => {
-        authProvider.signIn();
+    const signInCmd = vscode.commands.registerCommand('agent-os.signIn', async () => {
+        try {
+            await authProvider.signIn();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Sign-in failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // SSO Sign Out
-    const signOutCmd = vscode.commands.registerCommand('agent-os.signOut', () => {
-        authProvider.signOut();
+    const signOutCmd = vscode.commands.registerCommand('agent-os.signOut', async () => {
+        try {
+            await authProvider.signOut();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Sign-out failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // CI/CD Integration
-    const setupCICDCmd = vscode.commands.registerCommand('agent-os.setupCICD', () => {
-        cicdIntegration.showConfigWizard();
+    const setupCICDCmd = vscode.commands.registerCommand('agent-os.setupCICD', async () => {
+        try {
+            await cicdIntegration.showConfigWizard();
+        } catch (error) {
+            vscode.window.showErrorMessage(`CI/CD setup failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // Pre-commit Hook
-    const installHooksCmd = vscode.commands.registerCommand('agent-os.installHooks', () => {
-        cicdIntegration.installPreCommitHook();
+    const installHooksCmd = vscode.commands.registerCommand('agent-os.installHooks', async () => {
+        try {
+            await cicdIntegration.installPreCommitHook();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Pre-commit hook install failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // Compliance Check
-    const checkComplianceCmd = vscode.commands.registerCommand('agent-os.checkCompliance', () => {
-        complianceManager.showComplianceWizard();
+    const checkComplianceCmd = vscode.commands.registerCommand('agent-os.checkCompliance', async () => {
+        try {
+            await complianceManager.showComplianceWizard();
+        } catch (error) {
+            vscode.window.showErrorMessage(`Compliance check failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     });
 
     // Register configuration change listener
@@ -913,24 +949,50 @@ async function reviewCodeWithCMVK(code: string, language: string): Promise<void>
     });
 }
 
-function generateCMVKResultsHTML(result: any, webview: vscode.Webview): string {
+function isValidCMVKResult(value: unknown): value is CMVKResult {
+    if (typeof value !== 'object' || value === null) return false;
+    const v = value as Record<string, unknown>;
+    if (typeof v.consensus !== 'number' || !Number.isFinite(v.consensus)) return false;
+    if (!Array.isArray(v.modelResults)) return false;
+    for (const m of v.modelResults) {
+        if (typeof m !== 'object' || m === null) return false;
+        const mr = m as Record<string, unknown>;
+        if (typeof mr.passed !== 'boolean') return false;
+        if (typeof mr.model !== 'string') return false;
+        if (typeof mr.summary !== 'string') return false;
+    }
+    if (!Array.isArray(v.issues)) return false;
+    if (v.recommendations !== undefined && typeof v.recommendations !== 'string') return false;
+    return true;
+}
+
+function generateCMVKResultsHTML(result: unknown, webview: vscode.Webview): string {
     const nonce = crypto.randomBytes(16).toString('base64');
     const cspSource = webview.cspSource;
 
+    if (!isValidCMVKResult(result)) {
+        return `<!DOCTYPE html><html><head>
+            <meta charset="UTF-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline';">
+            </head><body><h1>Agent OS Code Review</h1>
+            <p>The CMVK service returned a response that does not match the expected schema. Review aborted.</p>
+            </body></html>`;
+    }
+
     const consensusColor = result.consensus >= 0.8 ? '#28a745'
-        : result.consensus >= 0.5 ? '#ffc107' 
+        : result.consensus >= 0.5 ? '#ffc107'
         : '#dc3545';
 
-    const modelRows = result.modelResults.map((m: any) => `
+    const modelRows = result.modelResults.map((m: ModelResult) => `
         <tr>
             <td>${m.passed ? '✅' : '⚠️'}</td>
-            <td><strong>${escHtml(String(m.model))}</strong></td>
-            <td>${escHtml(String(m.summary))}</td>
+            <td><strong>${escHtml(m.model)}</strong></td>
+            <td>${escHtml(m.summary)}</td>
         </tr>
     `).join('');
 
     const issuesList = result.issues.length > 0
-        ? `<ul>${result.issues.map((i: string) => `<li>${escHtml(i)}</li>`).join('')}</ul>`
+        ? `<ul>${result.issues.map((i: string) => `<li>${escHtml(String(i))}</li>`).join('')}</ul>`
         : '<p>No issues detected</p>';
 
     return `
@@ -1061,7 +1123,11 @@ const HELP_CSS = [
     'ul{padding-left:20px;margin:8px 0} li{margin:4px 0}',
 ].join('\n');
 
-/** Convert Markdown text to a simple themed HTML document. */
+/**
+ * Fallback Markdown-to-HTML renderer for older VS Code hosts where
+ * `markdown.api.render` is unavailable. Supports headers, lists, tables,
+ * inline bold/code, and paragraphs only.
+ */
 function renderMarkdownHtml(md: string): string {
     const out: string[] = [];
     let inList = false, inTable = false;
@@ -1102,5 +1168,12 @@ function showWelcomeMessage(): void {
         } else if (selection === 'Learn More') {
             vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/agent-governance-toolkit'));
         }
+    }, (err) => {
+        // Surface rejection rather than letting it float — VS Code's
+        // showInformationMessage Thenable can reject if the host is
+        // shutting down or the dialog is dismissed by an extension-host
+        // crash. Floating rejections fail noisily on recent Node defaults
+        // and silently elsewhere.
+        console.error('Agent OS: showWelcomeMessage failed', err);
     });
 }

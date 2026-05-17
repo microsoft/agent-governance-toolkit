@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any, List
 
 import pytest
+
+# Cedar policy evaluation requires agent-os (for CedarBackend).
+# Skip the entire module when agent-os is not installed so the
+# builtin list-based fallback does not silently mask test failures.
+pytest.importorskip("agent_os", reason="agent-os required for Cedar policy tests")
+
 from agent_rag_governance import (
     RAGGovernor,
     RAGPolicy,

@@ -16,6 +16,7 @@ from .attestation import (
     AttestationClaims,
     AttestationEvidence,
     ConfidentialLevel,
+    ImageMatchPolicy,
     KeyOrigin,
     ReferenceValues,
     compute_report_data_hash,
@@ -23,6 +24,12 @@ from .attestation import (
     matches_report_data_binding,
     public_key_hash_hex,
 )
+from .attestation_collector import (
+    AttestationCollector,
+    MockAttestationCollector,
+    NoopAttestationCollector,
+)
+from .attestation_verifier import AttestationVerifier, MockAttestationVerifier
 from .credentials import Credential, CredentialManager
 from .delegation import DelegationLink, ScopeChain, UserContext
 from .entra import EntraAgentBlueprint, EntraAgentIdentity, EntraAgentRegistry
@@ -75,8 +82,14 @@ __all__ = [
     "AttestationClaims",
     "AttestationEvidence",
     "ConfidentialLevel",
+    "ImageMatchPolicy",
     "KeyOrigin",
     "ReferenceValues",
+    "AttestationCollector",
+    "MockAttestationCollector",
+    "NoopAttestationCollector",
+    "AttestationVerifier",
+    "MockAttestationVerifier",
     "compute_report_data_hash",
     "compute_report_data_hash_hex",
     "matches_report_data_binding",

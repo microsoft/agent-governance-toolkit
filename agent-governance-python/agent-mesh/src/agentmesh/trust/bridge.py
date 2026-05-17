@@ -7,7 +7,7 @@ Direct passthrough bridge.
 Maintains the same API surface for compatibility.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
 from pydantic import BaseModel, Field
 import hashlib
@@ -103,17 +103,40 @@ class TrustBridge(BaseModel):
             identity=identity,
             registry=registry,
         )
-        # P06: HMAC key for peer record integrity
+        # P06: In-process integrity check on peer records.
+        # NOTE: This is NOT a security primitive against an attacker
+        # with write access to TrustBridge state. The HMAC key
+        # (_peer_hmac_key), the data being protected (self.peers),
+        # and the signatures (_peer_signatures) all live in the same
+        # process memory. Any attacker who can write _peer_signatures
+        # can also read _peer_hmac_key and recompute valid signatures
+        # for forged peer records. The check guards only against
+        # accidental in-process corruption (bit flips, programmer
+        # error writing to peer records without going through the
+        # accessor). For real tamper-resistance against an adversary
+        # with code execution, move the HMAC key and signature store
+        # off-process — to a sidecar with restricted IPC, to a TEE
+        # like SGX/SEV, or to a remote signing service.
         self._peer_hmac_key = os.urandom(32)
         self._peer_signatures: dict[str, str] = {}
 
     def _sign_peer(self, peer: PeerInfo) -> str:
-        """Compute HMAC over peer's critical fields."""
+        """Compute HMAC over peer's critical fields.
+
+        See class docstring on `_peer_hmac_key` — this HMAC is an
+        in-process integrity check, not protection against an
+        attacker with TrustBridge write access.
+        """
         payload = f"{peer.peer_did}:{peer.trust_score}:{peer.trust_verified}:{','.join(peer.capabilities)}"
         return hmac.new(self._peer_hmac_key, payload.encode(), hashlib.sha256).hexdigest()
 
     def _verify_peer_integrity(self, peer_did: str) -> bool:
-        """Verify that a stored peer record has not been tampered with."""
+        """Verify that a stored peer record has not been tampered with.
+
+        Detects accidental in-process corruption only. An adversary
+        with read+write access to TrustBridge memory can forge valid
+        signatures (see `_peer_hmac_key` docstring).
+        """
         peer = self.peers.get(peer_did)
         if not peer:
             return False
@@ -149,7 +172,7 @@ class TrustBridge(BaseModel):
                 protocol=protocol,
                 trust_score=result.trust_score,
                 trust_verified=True,
-                last_verified=datetime.utcnow(),
+                last_verified=datetime.now(timezone.utc),
                 capabilities=result.capabilities,
             )
             self.peers[peer_did] = peer
@@ -371,7 +394,7 @@ class A2AAdapter:
             raise PermissionError("Peer not trusted")
 
         return {
-            "task_id": f"task_{peer_did}_{datetime.utcnow().timestamp()}",
+            "task_id": f"task_{peer_did}_{datetime.now(timezone.utc).timestamp()}",
             "status": "created",
             "type": task_type,
         }

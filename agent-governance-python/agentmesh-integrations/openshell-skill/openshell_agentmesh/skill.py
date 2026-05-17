@@ -57,6 +57,11 @@ class GovernanceSkill:
         context = context or {}
         agent_did = context.get("agent_did", "unknown")
         trust = self.get_trust_score(agent_did)
+        if trust < self._trust_threshold:
+            reason = f"Trust score {trust:.2f} below threshold {self._trust_threshold:.2f}"
+            decision = PolicyDecision(allowed=False, action=action, reason=reason, trust_score=trust)
+            self.log_action(action, "deny", agent_did, context)
+            return decision
         for rule in self._rules:
             target = action if rule.field == "action" else context.get(rule.field, "")
             if self._match(rule.operator, target, rule.value):

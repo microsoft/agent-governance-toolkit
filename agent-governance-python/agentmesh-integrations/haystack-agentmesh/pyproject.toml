@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "haystack_agentmesh"
-version = "3.5.0"
+version = "3.6.0"
 description = "AgentMesh governance components for Haystack pipelines — policy enforcement, trust scoring, and tamper-evident audit trails"
 readme = "README.md"
 license = {text = "Apache-2.0"}

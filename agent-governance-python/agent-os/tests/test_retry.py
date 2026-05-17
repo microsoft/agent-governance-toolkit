@@ -100,7 +100,7 @@ class TestSyncRetry:
     @patch("agent_os.retry.time.sleep")
     def test_backoff_increases_exponentially(self, mock_sleep):
         """Sleep durations double each retry with backoff_base=1.0."""
-        @retry(max_attempts=4, backoff_base=1.0, exceptions=(IOError,))
+        @retry(max_attempts=4, backoff_base=1.0, exceptions=(IOError,), jitter=False)
         def always_fail():
             raise IOError("fail")
 
@@ -114,7 +114,7 @@ class TestSyncRetry:
     @patch("agent_os.retry.time.sleep")
     def test_custom_backoff_base(self, mock_sleep):
         """Custom backoff_base scales the delay series."""
-        @retry(max_attempts=3, backoff_base=0.5, exceptions=(IOError,))
+        @retry(max_attempts=3, backoff_base=0.5, exceptions=(IOError,), jitter=False)
         def always_fail():
             raise IOError("fail")
 
@@ -123,6 +123,59 @@ class TestSyncRetry:
 
         delays = [call.args[0] for call in mock_sleep.call_args_list]
         assert delays == [0.5, 1.0]
+
+    @patch("agent_os.retry.time.sleep")
+    def test_jitter_perturbs_delays_within_half_to_one_and_a_half_window(self, mock_sleep):
+        """With jitter=True (default), each delay is in [0.5x, 1.5x] of the
+        un-jittered exponential value.
+
+        Regression guard against the original no-jitter behaviour: every retry
+        slept the *exact* exponential backoff, so N independent callers
+        reacting to the same upstream incident would wake simultaneously and
+        re-hammer the upstream ("thundering herd").
+        """
+        @retry(max_attempts=5, backoff_base=1.0, exceptions=(IOError,))
+        def always_fail():
+            raise IOError("fail")
+
+        with pytest.raises(IOError):
+            always_fail()
+
+        delays = [call.args[0] for call in mock_sleep.call_args_list]
+        # 4 sleeps for 5 attempts; base exponential is [1, 2, 4, 8]
+        assert len(delays) == 4
+        for actual, base in zip(delays, [1.0, 2.0, 4.0, 8.0]):
+            assert 0.5 * base <= actual < 1.5 * base, (
+                f"jittered delay {actual} outside [0.5x, 1.5x) of {base}"
+            )
+
+    @patch("agent_os.retry.time.sleep")
+    @patch("agent_os.retry.random.random", return_value=0.0)
+    def test_jitter_lower_bound_at_random_zero(self, mock_random, mock_sleep):
+        """random.random() == 0.0 ⇒ multiplier == 0.5 (lower bound)."""
+        @retry(max_attempts=2, backoff_base=4.0, exceptions=(IOError,))
+        def always_fail():
+            raise IOError("fail")
+
+        with pytest.raises(IOError):
+            always_fail()
+
+        assert mock_sleep.call_args_list[0].args[0] == pytest.approx(2.0)
+
+    @patch("agent_os.retry.time.sleep")
+    @patch("agent_os.retry.random.random", return_value=0.999_999)
+    def test_jitter_upper_bound_just_below_one_point_five(self, mock_random, mock_sleep):
+        """random.random() ≈ 1.0 ⇒ multiplier just under 1.5 (open upper bound)."""
+        @retry(max_attempts=2, backoff_base=4.0, exceptions=(IOError,))
+        def always_fail():
+            raise IOError("fail")
+
+        with pytest.raises(IOError):
+            always_fail()
+
+        actual = mock_sleep.call_args_list[0].args[0]
+        assert actual < 6.0
+        assert actual == pytest.approx(4.0 * (0.5 + 0.999_999))
 
     def test_preserves_return_value(self):
         """Return value is passed through unchanged."""

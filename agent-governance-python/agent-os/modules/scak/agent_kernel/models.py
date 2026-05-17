@@ -8,7 +8,7 @@ are imported from agent-primitives (Layer 1) and re-exported here for backward c
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -299,7 +299,7 @@ class AgentOutcome(BaseModel):
     
     agent_id: str
     outcome_type: OutcomeType
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     user_prompt: str
     agent_response: str
     give_up_signal: Optional[GiveUpSignal] = None
@@ -337,7 +337,7 @@ class CompletenessAudit(BaseModel):
     gap_analysis: str = Field(..., description="What the agent missed")
     competence_patch: str = Field(..., description="Lesson to prevent future laziness")
     confidence: float = Field(..., ge=0.0, le=1.0)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     model_config = ConfigDict(
         json_schema_extra={

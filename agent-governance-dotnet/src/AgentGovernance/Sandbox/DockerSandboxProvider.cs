@@ -67,10 +67,11 @@ public sealed class DockerSandboxProvider : ISandboxProvider
         args.Append($" --cpus {cfg.CpuLimit:F1}");
         args.Append(" --pids-limit 256");
 
-        // Environment variables
+        // Environment variables — quote values to prevent argument injection
         foreach (var kvp in cfg.EnvVars)
         {
-            args.Append($" -e {kvp.Key}={kvp.Value}");
+            ValidateResourceName(kvp.Key, "EnvVars key");
+            args.Append($" -e \"{kvp.Key}={kvp.Value.Replace("\"", "\\\"")}\"");
         }
 
         // Keep container alive with a blocking process
@@ -118,11 +119,12 @@ public sealed class DockerSandboxProvider : ISandboxProvider
         var timeout = cfg?.TimeoutSeconds ?? 60.0;
 
         var executionId = Guid.NewGuid().ToString("N")[..8];
-        var escapedCode = code.Replace("\"", "\\\"");
 
+        // Avoid shell interpolation: pipe code via stdin instead of python -c.
         var sw = Stopwatch.StartNew();
-        var (exitCode, stdout, stderr) = await RunDockerAsync(
-            $"exec {containerId} python -c \"{escapedCode}\"",
+        var (exitCode, stdout, stderr) = await RunDockerWithStdinAsync(
+            $"exec -i {containerId} python",
+            code,
             timeoutSeconds: timeout).ConfigureAwait(false);
         sw.Stop();
 
@@ -207,6 +209,45 @@ public sealed class DockerSandboxProvider : ISandboxProvider
         };
 
         process.Start();
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        var timeoutMs = (int)(timeoutSeconds * 1000);
+        var exited = await Task.Run(() => process.WaitForExit(timeoutMs)).ConfigureAwait(false);
+
+        if (!exited)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+            var partialStdout = await stdoutTask.ConfigureAwait(false);
+            var partialStderr = await stderrTask.ConfigureAwait(false);
+            return (-1, partialStdout, partialStderr);
+        }
+
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
+        return (process.ExitCode, stdout, stderr);
+    }
+
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunDockerWithStdinAsync(
+        string arguments, string stdinContent, double timeoutSeconds = 30.0)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            Arguments = arguments,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        process.Start();
+
+        await process.StandardInput.WriteAsync(stdinContent).ConfigureAwait(false);
+        process.StandardInput.Close();
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();

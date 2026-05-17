@@ -110,6 +110,39 @@ function runPipInstall(pythonPath: string): Promise<boolean> {
     });
 }
 
+/** Minimal contract on the spawned ChildProcess that we exercise from {@link wireExitListeners}. */
+export interface ProcessExitTarget {
+    once(event: 'error' | 'exit', listener: (...args: unknown[]) => void): unknown;
+    removeListener(event: 'error' | 'exit', listener: (...args: unknown[]) => void): unknown;
+}
+
+/**
+ * Wire mutually-removing one-shot `'error'` and `'exit'` handlers on a child
+ * process and invoke `onTerminated` exactly once when either fires.
+ *
+ * Node's child_process may emit `'error'` then `'exit'`, or `'exit'` alone.
+ * Registering both with plain `.on()` leaks the orphan handler on the dead
+ * ChildProcess, which pins the closure (and anything it captures) until the
+ * ChildProcess itself is garbage-collected. Using `.once()` removes the
+ * fired handler but leaves the sibling waiting forever. Mutually removing
+ * one another guarantees the listener set is empty after the first event,
+ * regardless of which one fires.
+ */
+export function wireExitListeners(proc: ProcessExitTarget, onTerminated: () => void): void {
+    let terminated = false;
+    const fire = (): void => {
+        if (terminated) { return; }
+        terminated = true;
+        proc.removeListener('error', onError);
+        proc.removeListener('exit', onExit);
+        onTerminated();
+    };
+    const onError = (): void => { fire(); };
+    const onExit = (): void => { fire(); };
+    proc.once('error', onError);
+    proc.once('exit', onExit);
+}
+
 /**
  * Manages the lifecycle of a local agent-failsafe REST server.
  *
@@ -149,8 +182,7 @@ export class SREServerManager {
             detached: false,
         });
 
-        this._proc.on('error', () => { this._proc = undefined; });
-        this._proc.on('exit', () => { this._proc = undefined; });
+        wireExitListeners(this._proc, () => { this._proc = undefined; });
 
         // Wait for health check
         for (let i = 0; i < HEALTH_RETRIES; i++) {

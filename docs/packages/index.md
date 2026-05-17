@@ -40,10 +40,11 @@ graph TB
 
 | Package | Language | Install |
 |---------|---------|---------|
-| [TypeScript SDK](typescript-sdk.md) | TypeScript | `npm install @agent-governance/sdk` |
+| TypeScript SDK | TypeScript | `npm install @microsoft/agent-governance-sdk` |
+| [Copilot CLI governance package](copilot-cli-governance.md) | Copilot CLI / Node.js | `npx @microsoft/agent-governance-copilot-cli install` |
 | [.NET package](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
-| [Rust crate](rust-sdk.md) | Rust | `cargo add agentmesh` |
-| [Go module](go-sdk.md) | Go | `go get github.com/microsoft/agent-governance-toolkit` |
+| Rust crate | Rust | `cargo add agentmesh` |
+| Go module | Go | `go get github.com/microsoft/agent-governance-toolkit` |
 | [VS Code Extension](agent-os-vscode.md) | VS Code | Install from marketplace |
 
 ## Framework Integrations (19)
@@ -64,7 +65,7 @@ graph TB
 | pydantic-ai-governance | Pydantic AI | `pip install pydantic-ai-governance` |
 | a2a-protocol | A2A Protocol | `pip install a2a-protocol` |
 | mcp-trust-proxy | MCP | `pip install mcp-trust-proxy` |
-| openshell-skill | NVIDIA OpenShell | `pip install openshell-skill` |
+| openshell-skill | NVIDIA OpenShell | `pip install openshell-agentmesh` |
 | agentmesh-avp | Amazon Verified Permissions | `pip install agentmesh-avp` |
 | structural-authz-agentmesh | Structural Authorization | `pip install structural-authz-agentmesh` |
 | nostr-wot | Nostr Web-of-Trust | `pip install nostr-wot` |

@@ -289,7 +289,7 @@ mod tests {
         config: McpGatewayConfig,
         max_requests: usize,
     ) -> (McpGateway, String, Arc<InMemoryAuditSink>) {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let audit = Arc::new(InMemoryAuditSink::new(redactor.clone()));
         let metrics = McpMetricsCollector::default();
         let scanner = McpResponseScanner::new(
@@ -326,7 +326,7 @@ mod tests {
     }
 
     fn unauthenticated_gateway(config: McpGatewayConfig) -> McpGateway {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let audit = Arc::new(InMemoryAuditSink::new(redactor.clone()));
         let metrics = McpMetricsCollector::default();
         let scanner = McpResponseScanner::new(

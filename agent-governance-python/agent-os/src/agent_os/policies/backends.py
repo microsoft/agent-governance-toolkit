@@ -377,6 +377,55 @@ class OPABackend:
 # ── Cedar Backend ─────────────────────────────────────────────
 
 
+def _cedar_decision_from_cli_output(stdout: str) -> tuple[bool, bool]:
+    """Parse the decision token from a ``cedar authorize`` invocation.
+
+    Returns ``(allowed, parsed)``:
+
+      - ``(True, True)`` if the first non-empty line is ALLOW (any case)
+      - ``(False, True)`` if the first non-empty line is DENY (any case)
+      - ``(False, False)`` if the first non-empty line is anything else
+        (caller should treat as fail-closed)
+
+    Why not "allow" in stdout?
+        The previous parser was ``"allow" in output and "deny" not in output``
+        on the lowercased stdout. That is a substring sniff, not a token
+        match: it misclassifies adjective phrases that future Cedar CLI
+        versions may plausibly emit as diagnostic context, e.g.
+        ``"DENY (request disallowed by policy)"`` classifies as DENY only by
+        coincidence (both substrings present), and
+        ``"ALLOW: caveats reference the deny-list scoping"`` flips to DENY
+        for the same reason. A single character difference between the
+        decision token and the rest of the diagnostic output flips the
+        verdict.
+
+    Why not ``--json``?
+        REVIEW.md proposed switching to ``cedar authorize --json``. Cedar
+        CLI 4.x supports structured output, but this project does not pin
+        a minimum Cedar CLI version, and older releases reject the flag
+        with ``unknown argument``. The first-line token parse keeps
+        backward compatibility with every Cedar CLI version while
+        eliminating the substring trap; a future PR can switch to JSON
+        once a minimum is pinned.
+
+        The Go sibling (`agent-governance-golang/.../policy_backends.go`)
+        took the same first-line-token approach in
+        microsoft/agent-governance-toolkit#2127.
+    """
+    for line in stdout.split("\n"):
+        token = line.strip().lower()
+        if not token:
+            continue
+        if token == "allow":
+            return True, True
+        if token == "deny":
+            return False, True
+        # First non-empty line was neither bare ALLOW nor bare DENY; refuse
+        # to guess. The caller's fail-closed path takes over.
+        return False, False
+    return False, False
+
+
 class CedarBackend:
     """Evaluate Cedar policies for Agent-OS.
 
@@ -574,8 +623,25 @@ class CedarBackend:
                     text=True,
                     timeout=self._timeout,
                 )
-                output = proc.stdout.strip().lower()
-                allowed = "allow" in output and "deny" not in output
+                allowed, parsed = _cedar_decision_from_cli_output(proc.stdout)
+                if not parsed:
+                    # Cedar CLI emitted something other than a clean
+                    # ALLOW/DENY token on the first non-empty line. Fail
+                    # closed rather than guessing.
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            f"Cedar CLI: unrecognised output "
+                            f"{proc.stdout.strip()!r}"
+                        ),
+                        backend="cedar",
+                        raw_result={
+                            "stdout": proc.stdout,
+                            "stderr": proc.stderr,
+                        },
+                        error="unrecognised cedar CLI output",
+                    )
                 return BackendDecision(
                     allowed=allowed,
                     action="allow" if allowed else "deny",

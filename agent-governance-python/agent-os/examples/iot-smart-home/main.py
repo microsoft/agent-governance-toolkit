@@ -54,7 +54,7 @@ class Device:
     room: str
     state: DeviceState = DeviceState.OFF
     value: float = None  # For thermostats, dimmers
-    last_changed: datetime = field(default_factory=datetime.utcnow)
+    last_changed: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Safety flags
     is_safety_critical: bool = False

@@ -18,12 +18,15 @@ Plugin subcommands from other AGT packages are discovered via the
 
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Any, Dict, Optional
 
 import click
 
 from agent_compliance.cli.red_team import red_team
+
+_logger = logging.getLogger(__name__)
 
 try:
     from rich import box as _rich_box
@@ -59,7 +62,14 @@ def _get_package_version(package_name: str) -> Optional[str]:
 
 
 def _discover_plugins() -> Dict[str, click.Command]:
-    """Discover plugin commands from the ``agt.commands`` entry-point group."""
+    """Discover plugin commands from the ``agt.commands`` entry-point group.
+
+    Plugin discovery failures must not block the host CLI, but they should
+    be surfaced at WARNING — a broken plugin that silently disappears makes
+    misconfiguration impossible to diagnose. Individual entry-point load
+    failures and the outer discovery failure are both logged with the
+    entry-point name (or group) and the exception class.
+    """
     plugins: Dict[str, click.Command] = {}
 
     try:
@@ -82,10 +92,19 @@ def _discover_plugins() -> Dict[str, click.Command]:
                     result = obj()
                     if isinstance(result, click.Command):
                         plugins[ep.name] = result
-            except Exception:  # noqa: S110 — plugin load failures are non-critical
-                pass
-    except Exception:  # noqa: S110 — plugin discovery failures are non-critical
-        pass
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(
+                    "agt: failed to load plugin entry-point %r (%s: %s)",
+                    ep.name,
+                    type(exc).__name__,
+                    exc,
+                )
+    except Exception as exc:  # noqa: BLE001
+        _logger.warning(
+            "agt: plugin discovery failed for group 'agt.commands' (%s: %s)",
+            type(exc).__name__,
+            exc,
+        )
 
     return plugins
 

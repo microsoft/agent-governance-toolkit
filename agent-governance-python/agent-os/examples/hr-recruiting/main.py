@@ -57,7 +57,7 @@ class Candidate:
     _protected_data: dict = field(default_factory=dict, repr=False)
     
     # Metadata
-    applied_date: datetime = field(default_factory=datetime.utcnow)
+    applied_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     data_consent: bool = False
     retention_until: datetime = None
 

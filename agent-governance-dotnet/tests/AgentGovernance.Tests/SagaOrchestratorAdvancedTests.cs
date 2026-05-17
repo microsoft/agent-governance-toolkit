@@ -190,7 +190,7 @@ public class SagaOrchestratorAdvancedTests
         });
         await orchestrator.ExecuteAsync(saga);
         Assert.Equal(StepState.Failed, saga.Steps[0].State);
-        Assert.Contains("Something went wrong", saga.Steps[0].Error!);
+        Assert.Contains("see server logs", saga.Steps[0].Error!);
     }
 
     [Fact]

@@ -1,0 +1,18 @@
+audit:
+  enabled: true
+  log_level: info
+  retention_days: 90
+
+pii_scanning:
+  enabled: true
+  patterns: [ssn, email, credit_card]
+
+allowed_tools:
+  - web_search
+  - read_file
+  - query_database
+
+max_tool_calls: 20
+
+require_human_approval: false
+confidence_threshold: 0.8

@@ -307,6 +307,7 @@ class TestBlockingScenarios:
         assert not result.allowed
         assert result.action == ShieldAction.BLOCK
         assert "Jailbreak" in result.reason
+        assert result.metadata["source"] == "policy_denial"
 
     def test_output_blocked(self, blocking_kernel: AgentShieldKernel) -> None:
         result = blocking_kernel.validate_output("SSN: 123-45-6789")
@@ -383,12 +384,15 @@ class TestErrorHandling:
         result = kernel.validate_input("test")
         assert not result.allowed
         assert "error" in result.reason.lower()
+        assert result.metadata["source"] == "sdk_error"
+        assert "error" in result.metadata
 
     def test_fail_open_allows_on_error(self) -> None:
         kernel = AgentShieldKernel(_ErrorRuntime(), fail_closed=False)
         result = kernel.validate_input("test")
         assert result.allowed
         assert result.action == ShieldAction.WARN
+        assert result.metadata["source"] == "sdk_error"
 
     def test_tool_call_error_fail_closed(self) -> None:
         kernel = AgentShieldKernel(_ErrorRuntime(), fail_closed=True)

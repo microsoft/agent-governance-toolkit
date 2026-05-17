@@ -15,6 +15,7 @@ from agent_marketplace.batch import (
     BatchResult,
     PluginResult,
     Violation,
+    _discover_manifests,
     evaluate_batch,
     evaluate_batch_command,
     format_report,
@@ -336,3 +337,53 @@ class TestCLICommand:
         assert out_file.exists()
         parsed = json.loads(out_file.read_text())
         assert parsed["total"] == 1
+
+
+class TestDiscoverManifestsDedupe:
+    """Regression: a symlink loop must not surface the same manifest twice."""
+
+    def test_root_only_layout(self, tmp_path: Path):
+        # Manifest at root, no subdirectories -> one entry.
+        _write_manifest(tmp_path, "plugin-a")
+        # Promote the subdirectory's manifest to root, mimicking a
+        # single-plugin layout.
+        root_manifest = tmp_path / "agent-plugin.yaml"
+        root_manifest.write_text((tmp_path / "plugin-a" / "agent-plugin.yaml").read_text())
+        # Discover at root only.
+        single_root = tmp_path / "only-root"
+        single_root.mkdir()
+        (single_root / "agent-plugin.yaml").write_text(root_manifest.read_text())
+        manifests = _discover_manifests(single_root)
+        assert len(manifests) == 1
+
+    def test_subdirectory_layout(self, tmp_path: Path):
+        _write_manifest(tmp_path, "plugin-a")
+        _write_manifest(tmp_path, "plugin-b")
+        manifests = _discover_manifests(tmp_path)
+        # Two distinct plugins, two distinct paths.
+        assert len(manifests) == 2
+        assert len({m.resolve() for m in manifests}) == 2
+
+    def test_symlink_loop_does_not_double_report(self, tmp_path: Path):
+        """A subdirectory symlinked to its parent must not cause the
+        root manifest to be reported twice."""
+        import os
+
+        _write_manifest(tmp_path, "plugin-a")
+        # Add a root manifest too (so both root and subdir would be found).
+        root_manifest = tmp_path / "agent-plugin.yaml"
+        root_manifest.write_text((tmp_path / "plugin-a" / "agent-plugin.yaml").read_text())
+
+        # Create a symlink-to-parent inside the directory; on platforms
+        # where symlinks aren't permitted (Windows without dev mode),
+        # skip the test rather than masking the dedupe behavior.
+        loop = tmp_path / "loop-child"
+        try:
+            os.symlink(tmp_path, loop, target_is_directory=True)
+        except (OSError, NotImplementedError, AttributeError):
+            pytest.skip("symlinks not permitted in this test environment")
+
+        manifests = _discover_manifests(tmp_path)
+        # The root manifest must appear exactly once after dedupe.
+        resolved = [m.resolve() for m in manifests]
+        assert resolved.count(root_manifest.resolve()) == 1

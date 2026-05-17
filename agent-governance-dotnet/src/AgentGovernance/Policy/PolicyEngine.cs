@@ -13,9 +13,13 @@ namespace AgentGovernance.Policy;
 public sealed class PolicyEngine
 {
     private readonly List<Policy> _policies = new();
-    private readonly object _policyLock = new();
+    // Single lock protecting both _policies and _externalBackends.
+    // Evaluate() snapshots both, and ClearPolicies() clears both -- they must
+    // be observed atomically, otherwise a concurrent ClearPolicies between the
+    // two snapshots would let Evaluate run with mismatched state (e.g. cleared
+    // internal policies but still-live external backends, or vice versa).
+    private readonly object _snapshotLock = new();
     private readonly object _rateLimitLock = new();
-    private readonly object _externalBackendLock = new();
     private readonly Dictionary<string, RateLimitWindow> _rateLimits = new(StringComparer.Ordinal);
     private readonly List<IExternalPolicyBackend> _externalBackends = new();
 
@@ -33,7 +37,7 @@ public sealed class PolicyEngine
     {
         ArgumentNullException.ThrowIfNull(policy);
 
-        lock (_policyLock)
+        lock (_snapshotLock)
         {
             _policies.Add(policy);
         }
@@ -78,7 +82,7 @@ public sealed class PolicyEngine
     {
         ArgumentNullException.ThrowIfNull(backend);
 
-        lock (_externalBackendLock)
+        lock (_snapshotLock)
         {
             _externalBackends.Add(backend);
         }
@@ -113,7 +117,7 @@ public sealed class PolicyEngine
     /// </summary>
     public IReadOnlyList<string> ListExternalBackends()
     {
-        lock (_externalBackendLock)
+        lock (_snapshotLock)
         {
             return _externalBackends.Select(backend => backend.Name).ToList().AsReadOnly();
         }
@@ -124,7 +128,7 @@ public sealed class PolicyEngine
     /// </summary>
     public IReadOnlyList<Policy> ListPolicies()
     {
-        lock (_policyLock)
+        lock (_snapshotLock)
         {
             return _policies.ToList().AsReadOnly();
         }
@@ -135,13 +139,11 @@ public sealed class PolicyEngine
     /// </summary>
     public void ClearPolicies()
     {
-        lock (_policyLock)
+        // Clear both collections under a single critical section so a
+        // concurrent Evaluate cannot observe one cleared and the other live.
+        lock (_snapshotLock)
         {
             _policies.Clear();
-        }
-
-        lock (_externalBackendLock)
-        {
             _externalBackends.Clear();
         }
 
@@ -163,10 +165,15 @@ public sealed class PolicyEngine
         var evaluatedAt = DateTime.UtcNow;
         var sw = Stopwatch.StartNew();
 
+        // Snapshot both _policies and _externalBackends under a single lock so
+        // a concurrent ClearPolicies (which clears both) cannot land between
+        // the two reads and leave us evaluating with a half-cleared world.
         List<Policy> snapshot;
-        lock (_policyLock)
+        List<IExternalPolicyBackend> externalSnapshot;
+        lock (_snapshotLock)
         {
             snapshot = _policies.ToList();
+            externalSnapshot = _externalBackends.ToList();
         }
 
         var evalContext = new Dictionary<string, object>(context, StringComparer.OrdinalIgnoreCase)
@@ -175,7 +182,6 @@ public sealed class PolicyEngine
         };
 
         var internalEvaluation = EvaluateInternalPolicies(snapshot, evalContext, evaluatedAt, sw);
-        var externalSnapshot = GetExternalBackendsSnapshot();
         sw.Stop();
 
         if (externalSnapshot.Count == 0)
@@ -426,11 +432,4 @@ public sealed class PolicyEngine
         };
     }
 
-    private List<IExternalPolicyBackend> GetExternalBackendsSnapshot()
-    {
-        lock (_externalBackendLock)
-        {
-            return _externalBackends.ToList();
-        }
-    }
 }

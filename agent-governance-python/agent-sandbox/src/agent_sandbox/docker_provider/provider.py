@@ -36,6 +36,84 @@ from agent_sandbox.docker_provider.state import SandboxCheckpoint, SandboxStateM
 
 logger = logging.getLogger(__name__)
 
+
+class _LowLevelExecUnavailable(Exception):
+    """Raised internally when the low-level Docker exec API doesn't
+    produce a usable result and we should fall back to the high-level
+    ``container.exec_run`` path. Surfaces in tests that mock only the
+    high-level API; real Docker daemons return tuple output and never
+    trigger this fallback.
+    """
+
+
+_OUTPUT_TRUNCATED_MARKER = "\n[...output truncated at byte limit]\n"
+
+
+def _consume_stream_capped(
+    stream: Any,
+    max_bytes: int,
+) -> tuple[bytes | None, bytes | None, bool]:
+    """Consume a demux ``exec_start(stream=True, demux=True)`` generator.
+
+    Reads chunks until *max_bytes* is reached per channel, then stops.
+    Returns ``(stdout_bytes, stderr_bytes, truncated)``.
+    """
+    stdout_parts: list[bytes] = []
+    stderr_parts: list[bytes] = []
+    stdout_len = 0
+    stderr_len = 0
+    truncated = False
+
+    for chunk in stream:
+        if not isinstance(chunk, tuple) or len(chunk) != 2:
+            continue
+        out_chunk, err_chunk = chunk
+
+        if out_chunk and stdout_len < max_bytes:
+            take = max_bytes - stdout_len
+            stdout_parts.append(out_chunk[:take])
+            stdout_len += min(len(out_chunk), take)
+
+        if err_chunk and stderr_len < max_bytes:
+            take = max_bytes - stderr_len
+            stderr_parts.append(err_chunk[:take])
+            stderr_len += min(len(err_chunk), take)
+
+        if stdout_len >= max_bytes and stderr_len >= max_bytes:
+            truncated = True
+            break
+
+    stdout = b"".join(stdout_parts) if stdout_parts else None
+    stderr = b"".join(stderr_parts) if stderr_parts else None
+    if truncated:
+        marker = _OUTPUT_TRUNCATED_MARKER.encode()
+        if stdout is not None:
+            stdout += marker
+        if stderr is not None:
+            stderr += marker
+    return stdout, stderr, truncated
+
+
+def _cap_output_bytes(
+    output: tuple[bytes | None, bytes | None] | None,
+    max_bytes: int,
+) -> tuple[bytes | None, bytes | None, bool]:
+    """Cap an already-buffered ``(stdout, stderr)`` tuple to *max_bytes*."""
+    if not output or not isinstance(output, tuple) or len(output) != 2:
+        return None, None, False
+
+    stdout, stderr = output
+    truncated = False
+
+    if stdout and len(stdout) > max_bytes:
+        stdout = stdout[:max_bytes] + _OUTPUT_TRUNCATED_MARKER.encode()
+        truncated = True
+    if stderr and len(stderr) > max_bytes:
+        stderr = stderr[:max_bytes] + _OUTPUT_TRUNCATED_MARKER.encode()
+        truncated = True
+
+    return stdout, stderr, truncated
+
 # Protected system directories that must never be bind-mounted.
 _PROTECTED_PATHS_UNIX = frozenset(
     {
@@ -55,6 +133,15 @@ _PROTECTED_PATHS_WINDOWS = frozenset(
         "C:\\ProgramData",
         "C:\\System Volume Information",
     )
+)
+
+# Paths blocked only when mounted at their exact root — not their
+# subdirectories. Mounting ``C:\Users`` exposes every user's profile
+# (documents, browser data, SSH keys); mounting a specific subdir like
+# ``C:\Users\agent\workspace`` is a legitimate per-user pattern and
+# remains allowed.
+_PROTECTED_PATHS_WINDOWS_ROOT_ONLY = frozenset(
+    p.lower() for p in ("C:\\Users",)
 )
 
 # Docker resource-name pattern (containers, image repos, tags).
@@ -77,8 +164,12 @@ def _validate_resource_name(value: str, label: str) -> None:
 
 
 # Environment variables that could break container hardening.
+# Anything an interpreter/loader will source at startup belongs here:
+# each variable below redirects code execution before the sandbox's
+# entrypoint runs, defeating the cap_drop / no-new-privileges hardening.
 _BLOCKED_ENV_VARS = frozenset(
     {
+        # glibc dynamic linker
         "LD_PRELOAD",
         "LD_LIBRARY_PATH",
         "LD_AUDIT",
@@ -86,8 +177,23 @@ _BLOCKED_ENV_VARS = frozenset(
         "LD_PROFILE",
         "LD_SHOW_AUXV",
         "LD_DYNAMIC_WEAK",
+        # POSIX shell startup hooks (bash, dash, sh)
+        "BASH_ENV",
+        "ENV",
+        # Python
         "PYTHONSTARTUP",
         "PYTHONPATH",
+        "PYTHONHOME",
+        # Node.js
+        "NODE_OPTIONS",
+        # Ruby
+        "RUBYOPT",
+        # Perl
+        "PERL5LIB",
+        "PERL5OPT",
+        # Java
+        "JAVA_TOOL_OPTIONS",
+        "_JAVA_OPTIONS",
     }
 )
 
@@ -120,6 +226,8 @@ def _is_protected_path(path: str) -> bool:
             return True
         # Block well-known Windows system directories (case-insensitive).
         lowered = normalised.lower()
+        if lowered in _PROTECTED_PATHS_WINDOWS_ROOT_ONLY:
+            return True
         for protected in _PROTECTED_PATHS_WINDOWS:
             if lowered == protected or lowered.startswith(protected + "\\"):
                 return True
@@ -222,6 +330,11 @@ class DockerSandboxProvider(SandboxProvider):
         self._containers: dict[tuple[str, str], Any] = {}
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], SandboxConfig] = {}
+        # Per-container exec lock — serialises ``run`` calls against the
+        # same container so a timeout-on-exec-A cannot accidentally
+        # disrupt exec-B running concurrently in the same container.
+        # Map keyed on (agent_id, session_id), same as ``_containers``.
+        self._exec_locks: dict[tuple[str, str], threading.Lock] = {}
         self._tool_proxy: Any | None = None
         self._network_proxy: Any | None = None
         self._state_manager: SandboxStateManager | None = None
@@ -348,13 +461,29 @@ class DockerSandboxProvider(SandboxProvider):
 
         logger.info("Pulling image '%s' ...", target)
 
-        # Split image:tag for the pull API
-        if ":" in target and not target.startswith("sha256:"):
+        # Split image:tag for the pull API. We treat references that
+        # include neither an explicit tag nor a digest as unpinned and
+        # warn loudly: ``image:latest`` resolves differently on every
+        # pull and undermines reproducibility, which is precisely the
+        # property a sandbox image needs.
+        if "@sha256:" in target:
+            repo, tag = target, None
+        elif ":" in target and not target.startswith("sha256:"):
             repo, tag = target.rsplit(":", 1)
         else:
             repo, tag = target, "latest"
+            logger.warning(
+                "Image '%s' has no tag or digest; pulling '%s:latest'. "
+                "Pin to a digest (image@sha256:...) for reproducible "
+                "sandbox provisioning.",
+                target,
+                target,
+            )
 
-        self._client.images.pull(repo, tag=tag)
+        if tag is None:
+            self._client.images.pull(repo)
+        else:
+            self._client.images.pull(repo, tag=tag)
         logger.info("Pulled image '%s' successfully", target)
 
     # ------------------------------------------------------------------
@@ -513,6 +642,7 @@ class DockerSandboxProvider(SandboxProvider):
                 self._containers.pop(key, None)
                 self._evaluators.pop(key, None)
                 self._session_configs.pop(key, None)
+                self._exec_locks.pop(key, None)
         else:
             # remove() failed: the container is still alive in Docker
             # somewhere. Keep the entry so a follow-up
@@ -555,14 +685,26 @@ class DockerSandboxProvider(SandboxProvider):
         """Execute *command* inside the session's container."""
         # Find the container
         container = None
+        container_key: tuple[str, str] | None = None
         with self._state_lock:
             if session_id is not None:
-                container = self._containers.get((agent_id, session_id))
+                container_key = (agent_id, session_id)
+                container = self._containers.get(container_key)
             else:
-                for (aid, _sid), c in self._containers.items():
-                    if aid == agent_id:
+                for key, c in self._containers.items():
+                    if key[0] == agent_id:
+                        container_key = key
                         container = c
                         break
+            # Per-container exec lock so concurrent run() calls against
+            # the SAME container serialise. Without this, a timeout
+            # killing one exec could disrupt another exec running in
+            # parallel inside the same container.
+            exec_lock = (
+                self._exec_locks.setdefault(container_key, threading.Lock())
+                if container_key is not None
+                else None
+            )
 
         if container is None:
             return SandboxResult(
@@ -575,47 +717,47 @@ class DockerSandboxProvider(SandboxProvider):
         start = time.monotonic()
         timed_out = threading.Event()
 
+        # Acquire the per-container exec lock for the whole exec
+        # lifecycle. Blocking acquire is fine — the caller already
+        # signed up for blocking semantics by calling run().
+        if exec_lock is not None:
+            exec_lock.acquire()
         try:
             # Refresh container state
             container.reload()
             if container.status != "running":
                 container.start()
 
-            # Timeout watchdog: kills the exec process if it exceeds
-            # the configured timeout.
-            timer: threading.Timer | None = None
+            sanitized_env = (
+                _sanitize_env_vars(cfg.env_vars)
+                if cfg.env_vars
+                else {}
+            )
+
             if cfg.timeout_seconds and cfg.timeout_seconds > 0:
-                def _on_timeout() -> None:
-                    timed_out.set()
-                    try:
-                        container.kill()
-                    except Exception as exc:
-                        logger.warning(
-                            "Failed to kill container on timeout for "
-                            "agent '%s': %s",
-                            agent_id,
-                            exc,
-                        )
-
-                timer = threading.Timer(cfg.timeout_seconds, _on_timeout)
-                timer.daemon = True
-                timer.start()
-
-            try:
-                sanitized_env = (
-                    _sanitize_env_vars(cfg.env_vars)
-                    if cfg.env_vars
-                    else {}
+                # Timeout path: drive exec_create + exec_start through
+                # the low-level API so we hold the exec_id and can
+                # kill the specific PID on timeout instead of
+                # ``container.kill()``ing the whole container — which
+                # would destroy guest state shared across multiple
+                # execute_code calls in the same session.
+                exec_result = self._run_with_exec_timeout(
+                    container=container,
+                    agent_id=agent_id,
+                    command=command,
+                    sanitized_env=sanitized_env,
+                    timeout_seconds=cfg.timeout_seconds,
+                    timed_out=timed_out,
+                    output_max_bytes=cfg.output_max_bytes,
                 )
+            else:
+                # No timeout: use the high-level wrapper unchanged.
                 exec_result = container.exec_run(
                     cmd=command,
                     environment=sanitized_env,
                     workdir="/workspace",
                     demux=True,
                 )
-            finally:
-                if timer is not None:
-                    timer.cancel()
 
             killed = timed_out.is_set()
             kill_reason = (
@@ -626,22 +768,23 @@ class DockerSandboxProvider(SandboxProvider):
             )
 
             duration = time.monotonic() - start
-            stdout_bytes, stderr_bytes = exec_result.output or (
-                None,
-                None,
+            # Cap output bytes before decoding to prevent memory
+            # exhaustion from adversarial container output.
+            raw_output = exec_result.output or (None, None)
+            stdout_bytes, stderr_bytes, _ = _cap_output_bytes(
+                raw_output, cfg.output_max_bytes,
             )
+            max_chars = cfg.output_max_bytes  # 1 char ≈ 1 byte for ASCII
             stdout = (
-                stdout_bytes.decode("utf-8", errors="replace")[:10000]
+                stdout_bytes.decode("utf-8", errors="replace")[:max_chars]
                 if stdout_bytes
                 else ""
             )
             stderr = (
-                stderr_bytes.decode("utf-8", errors="replace")[:10000]
+                stderr_bytes.decode("utf-8", errors="replace")[:max_chars]
                 if stderr_bytes
                 else ""
             )
-            # Both streams are truncated to prevent memory exhaustion
-            # from adversarial output
 
             return SandboxResult(
                 success=exec_result.exit_code == 0 and not killed,
@@ -661,6 +804,217 @@ class DockerSandboxProvider(SandboxProvider):
                 stderr=str(exc),
                 duration_seconds=round(duration, 3),
             )
+        finally:
+            if exec_lock is not None:
+                exec_lock.release()
+
+    def _run_with_exec_timeout(
+        self,
+        container: Any,
+        agent_id: str,
+        command: list[str],
+        sanitized_env: dict[str, str],
+        timeout_seconds: float,
+        timed_out: threading.Event,
+        output_max_bytes: int = 1_048_576,
+    ) -> Any:
+        """Run ``command`` in a thread with a timeout.
+
+        On timeout, attempt to kill only the offending exec process by
+        looking up its PID via the low-level Docker exec API and
+        sending SIGKILL via ``container.exec_run(['kill', '-9', pid])``.
+        Falls back to ``container.kill()`` only if PID-targeted kill
+        fails — which destroys guest state from prior execute_code
+        calls in the same session, but is the only safe fallback when
+        we can't address the runaway exec specifically.
+
+        Uses ``stream=True`` with a byte cap to prevent memory
+        exhaustion from adversarial container output.
+        """
+        from types import SimpleNamespace
+
+        result_holder: dict[str, Any] = {}
+        # Best-effort: look up the exec_id via the low-level API
+        # *before* starting the run so we can target it on timeout.
+        # Real Docker returns ``{"Id": "..."}``; tests using MagicMock
+        # may return a Mock — in that case ``exec_id`` is a Mock too
+        # but we'll fall back to container.kill() if PID lookup fails.
+        exec_id: Any = None
+        try:
+            api = self._client.api
+            create_result = api.exec_create(
+                container.id,
+                command,
+                environment=sanitized_env,
+                workdir="/workspace",
+                stdout=True,
+                stderr=True,
+            )
+            if isinstance(create_result, dict):
+                exec_id = create_result.get("Id")
+
+            if exec_id is None:
+                raise _LowLevelExecUnavailable()
+
+            def _stream() -> None:
+                try:
+                    gen = api.exec_start(
+                        exec_id, stream=True, demux=True,
+                    )
+                    stdout, stderr, truncated = _consume_stream_capped(
+                        gen, output_max_bytes,
+                    )
+                    result_holder["output"] = (stdout, stderr)
+                    result_holder["truncated"] = truncated
+                except Exception as exc:  # pragma: no cover - defensive
+                    result_holder["error"] = exc
+
+            thread = threading.Thread(target=_stream, daemon=True)
+            thread.start()
+            thread.join(timeout=timeout_seconds)
+
+            if thread.is_alive():
+                timed_out.set()
+                self._kill_timed_out_exec(
+                    container=container,
+                    api=api,
+                    exec_id=exec_id,
+                    agent_id=agent_id,
+                )
+                thread.join(timeout=2.0)
+
+            output = result_holder.get("output")
+            # Validate the output shape — must be a (stdout, stderr)
+            # tuple of bytes-or-None. Anything else (e.g. a MagicMock
+            # that some tests don't bother to configure) means the
+            # low-level API isn't actually wired up in this
+            # environment; fall back to container.exec_run so the
+            # caller still gets a real result.
+            if not (isinstance(output, tuple) and len(output) == 2):
+                raise _LowLevelExecUnavailable()
+
+            try:
+                inspect_after = api.exec_inspect(exec_id) or {}
+            except Exception:
+                inspect_after = {}
+            if isinstance(inspect_after, dict):
+                exit_code = inspect_after.get("ExitCode")
+            else:
+                exit_code = None
+            if exit_code is None:
+                exit_code = -1 if timed_out.is_set() else 0
+
+            return SimpleNamespace(exit_code=exit_code, output=output)
+
+        except _LowLevelExecUnavailable:
+            # Low-level API didn't produce a usable result (typical in
+            # tests that only mock container.exec_run). Run the
+            # high-level wrapper in a thread so we still honour the
+            # timeout — but without exec-id-scoped kill, we can only
+            # signal ``timed_out`` and let the watchdog kill the
+            # container as the prior implementation did. Real
+            # production deployments hit the low-level path above.
+            return self._run_with_legacy_timeout(
+                container=container,
+                agent_id=agent_id,
+                command=command,
+                sanitized_env=sanitized_env,
+                timeout_seconds=timeout_seconds,
+                timed_out=timed_out,
+            )
+
+    def _kill_timed_out_exec(
+        self,
+        container: Any,
+        api: Any,
+        exec_id: Any,
+        agent_id: str,
+    ) -> None:
+        """Best-effort kill of a timed-out exec process by PID."""
+        try:
+            info = api.exec_inspect(exec_id) or {}
+            pid = info.get("Pid", 0) if isinstance(info, dict) else 0
+            if isinstance(pid, int) and pid > 0:
+                # Send SIGKILL to the specific exec process from
+                # inside the container. Doesn't touch any other exec
+                # or the container's main process.
+                container.exec_run(["kill", "-9", str(pid)])
+                return
+            logger.warning(
+                "Timed-out exec for agent '%s' had no addressable PID; "
+                "falling back to container.kill() — guest state in this "
+                "session will be lost.",
+                agent_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to PID-kill timed-out exec for agent '%s': %s. "
+                "Falling back to container.kill().",
+                agent_id,
+                exc,
+            )
+        try:
+            container.kill()
+        except Exception:
+            pass
+
+    def _run_with_legacy_timeout(
+        self,
+        container: Any,
+        agent_id: str,
+        command: list[str],
+        sanitized_env: dict[str, str],
+        timeout_seconds: float,
+        timed_out: threading.Event,
+    ) -> Any:
+        """Fallback path when the low-level API isn't available.
+
+        Mirrors the prior watchdog behaviour: run ``container.exec_run``
+        in a thread, ``container.kill()`` on timeout. Used only when
+        the low-level exec API didn't produce a usable result.
+        """
+        result_holder: dict[str, Any] = {}
+
+        def _run_high_level() -> None:
+            try:
+                result_holder["result"] = container.exec_run(
+                    cmd=command,
+                    environment=sanitized_env,
+                    workdir="/workspace",
+                    demux=True,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                result_holder["error"] = exc
+
+        thread = threading.Thread(target=_run_high_level, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout_seconds)
+
+        if thread.is_alive():
+            timed_out.set()
+            try:
+                container.kill()
+            except Exception as exc:
+                logger.warning(
+                    "Failed to kill container on timeout for agent '%s': %s",
+                    agent_id,
+                    exc,
+                )
+            thread.join(timeout=2.0)
+
+        result = result_holder.get("result")
+        if result is not None:
+            return result
+
+        # Re-raise any exception captured by the worker thread so the
+        # caller's except-handler can surface it in the SandboxResult.
+        captured = result_holder.get("error")
+        if captured is not None:
+            raise captured
+
+        # Thread is alive past the timeout — synthesize a killed result.
+        from types import SimpleNamespace
+        return SimpleNamespace(exit_code=-1, output=(None, None))
 
     # ------------------------------------------------------------------
     # Container creation
@@ -734,11 +1088,22 @@ class DockerSandboxProvider(SandboxProvider):
             "network_disabled": not config.network_enabled,
             "read_only": config.read_only_fs,
             "tmpfs": tmpfs,
-            "security_opt": ["no-new-privileges"],
+            # Be explicit about seccomp and apparmor so that hosts which
+            # have customized the Docker daemon defaults to weaker policies
+            # do not silently weaken the sandbox. `default` resolves to
+            # Docker's built-in profile on hosts that ship one.
+            "security_opt": [
+                "no-new-privileges",
+                "seccomp=default",
+                "apparmor=docker-default",
+            ],
             "cap_drop": ["ALL"],
             "user": "65534:65534",
             "working_dir": "/workspace",
-            "pids_limit": 256,
+            # 128 covers Python interpreters with thread pools and modest
+            # subprocess fan-out; 256 was generous enough to mask fork-bomb
+            # style misbehavior in tests.
+            "pids_limit": 128,
             # Resolve host.docker.internal on native Linux Docker
             # (Docker Desktop on macOS/Windows does this automatically)
             "extra_hosts": {"host.docker.internal": "host-gateway"},

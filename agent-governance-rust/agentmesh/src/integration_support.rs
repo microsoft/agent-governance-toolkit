@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn integration_now() -> u64 {
@@ -29,7 +29,18 @@ fn sha256_hex(input: &str) -> String {
         .collect()
 }
 
-fn token_jaccard(left: &str, right: &str) -> f64 {
+/// Tokenised Jaccard *distance* on whitespace-split, lowercased terms.
+///
+/// Returns `1 - |A ∩ B| / |A ∪ B|`, so:
+///
+/// * identical inputs → `0.0` (no drift)
+/// * completely disjoint inputs → `1.0` (maximum drift)
+/// * both inputs empty → `0.0` (treated as identical rather than NaN)
+///
+/// Named for distance (not similarity) because the only caller —
+/// `DriftResult::compare` — treats higher scores as "more drift" and
+/// flags `exceeded` when the score crosses an upper-bound threshold.
+fn token_jaccard_distance(left: &str, right: &str) -> f64 {
     let left_tokens = left
         .split_whitespace()
         .map(|token| token.to_ascii_lowercase())
@@ -104,10 +115,10 @@ impl GovernancePattern {
             PatternType::Substring => text
                 .to_ascii_lowercase()
                 .contains(&self.pattern.to_ascii_lowercase()),
-            PatternType::Regex => Regex::new(&self.pattern)
+            PatternType::Regex => crate::regex_cache::compiled_regex(&self.pattern)
                 .map(|regex| regex.is_match(text))
                 .unwrap_or(false),
-            PatternType::Glob => Regex::new(&glob_to_regex(&self.pattern))
+            PatternType::Glob => crate::regex_cache::compiled_regex(&glob_to_regex(&self.pattern))
                 .map(|regex| regex.is_match(text))
                 .unwrap_or(false),
         }
@@ -216,7 +227,7 @@ pub struct DriftResult {
 
 impl DriftResult {
     pub fn compare(baseline: &str, current: &str, threshold: f64) -> Self {
-        let score = token_jaccard(baseline, current);
+        let score = token_jaccard_distance(baseline, current);
         Self {
             score,
             exceeded: score > threshold,
@@ -663,39 +674,52 @@ impl PromptDefenseEvaluator {
                 });
             }
         }
-        for (pattern, vector, severity, message, recommendation) in [
+        // The three regex patterns below are static; compile each one
+        // exactly once and share the compiled Regex across all calls.
+        // Previously `Regex::new(pattern)` ran inside the loop on every
+        // evaluate_internal invocation, re-parsing the pattern per call.
+        static INSTRUCTION_OVERRIDE_RE: OnceLock<Regex> = OnceLock::new();
+        static SECRET_EXFILTRATION_RE: OnceLock<Regex> = OnceLock::new();
+        static CHANNEL_CONFUSION_RE: OnceLock<Regex> = OnceLock::new();
+
+        let instruction_override = INSTRUCTION_OVERRIDE_RE
+            .get_or_init(|| Regex::new(r"(?i)ignore\s+all\s+previous").unwrap());
+        let secret_exfiltration = SECRET_EXFILTRATION_RE
+            .get_or_init(|| Regex::new(r"(?i)api[_ -]?key|token|secret").unwrap());
+        let channel_confusion = CHANNEL_CONFUSION_RE
+            .get_or_init(|| Regex::new(r"(?i)<\/?(system|developer|assistant)>").unwrap());
+
+        for (regex, vector, severity, message, recommendation) in [
             (
-                r"(?i)ignore\s+all\s+previous",
+                instruction_override,
                 "instruction_override",
                 PromptRiskLevel::High,
                 "prompt attempts to discard prior governance context",
                 "reject prompts that attempt to discard prior governance context",
             ),
             (
-                r"(?i)api[_ -]?key|token|secret",
+                secret_exfiltration,
                 "secret_exfiltration",
                 PromptRiskLevel::High,
                 "prompt references secret-bearing material",
                 "refuse access to secrets and redact sensitive output",
             ),
             (
-                r"(?i)<\/?(system|developer|assistant)>",
+                channel_confusion,
                 "channel_confusion",
                 PromptRiskLevel::Medium,
                 "prompt includes channel-like tags",
                 "treat system/developer channel tags as suspicious input",
             ),
         ] {
-            if let Ok(regex) = Regex::new(pattern) {
-                if let Some(matched) = regex.find(prompt) {
-                    findings.push(PromptDefenseFinding {
-                        vector: vector.to_string(),
-                        severity,
-                        message: message.to_string(),
-                        evidence: Some(matched.as_str().to_string()),
-                        recommendation: Some(recommendation.to_string()),
-                    });
-                }
+            if let Some(matched) = regex.find(prompt) {
+                findings.push(PromptDefenseFinding {
+                    vector: vector.to_string(),
+                    severity,
+                    message: message.to_string(),
+                    evidence: Some(matched.as_str().to_string()),
+                    recommendation: Some(recommendation.to_string()),
+                });
             }
         }
         findings
@@ -1687,5 +1711,56 @@ mod tests {
         let agent = inventory.agents().pop().unwrap();
         assert_eq!(agent.status, DiscoveryStatus::Registered);
         assert_eq!(agent.did.as_deref(), Some("did:mesh:prod-assistant"));
+    }
+
+    #[test]
+    fn token_jaccard_distance_returns_zero_for_identical_inputs() {
+        // Identical token sets must have Jaccard distance 0 — pins the
+        // distance-not-similarity contract for `DriftResult::compare`.
+        let s = "the quick brown fox";
+        let dist = token_jaccard_distance(s, s);
+        assert!(dist.abs() < f64::EPSILON, "expected 0.0 got {dist}");
+    }
+
+    #[test]
+    fn token_jaccard_distance_returns_one_for_disjoint_inputs() {
+        // Completely disjoint token sets must have Jaccard distance 1 —
+        // confirms the function does not flip into similarity when the
+        // intersection is empty.
+        let dist = token_jaccard_distance("alpha beta gamma", "delta epsilon zeta");
+        assert!((dist - 1.0).abs() < f64::EPSILON, "expected 1.0 got {dist}");
+    }
+
+    #[test]
+    fn token_jaccard_distance_increases_with_drift() {
+        // Quarter-overlap should score around 0.6–0.7 distance — well
+        // above the typical 0.10–0.15 drift threshold used in
+        // GovernancePolicy::default().
+        let dist = token_jaccard_distance(
+            "alpha beta gamma delta",
+            "alpha epsilon zeta theta",
+        );
+        assert!(dist > 0.5, "expected drift > 0.5, got {dist}");
+        assert!(dist < 1.0, "expected drift < 1.0, got {dist}");
+    }
+
+    #[test]
+    fn drift_result_compare_exceeds_threshold_when_inputs_diverge() {
+        // `DriftResult::compare` -> exceeded uses distance > threshold;
+        // pin that semantic so a future rename or sign-flip is caught.
+        let drift = DriftResult::compare(
+            "the quick brown fox",
+            "completely unrelated content",
+            0.5,
+        );
+        assert!(drift.exceeded);
+        assert!(drift.score > 0.5);
+    }
+
+    #[test]
+    fn drift_result_compare_does_not_exceed_for_identical_inputs() {
+        let drift = DriftResult::compare("same text here", "same text here", 0.1);
+        assert!(!drift.exceeded);
+        assert!(drift.score.abs() < f64::EPSILON);
     }
 }

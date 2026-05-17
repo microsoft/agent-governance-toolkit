@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import json
 
-from agentmesh.identity.agent_id import AgentIdentity
+from agentmesh.identity.agent_id import AgentIdentity, IdentityRegistry
 from agentmesh.identity.revocation import RevocationList
 
 
@@ -73,13 +73,33 @@ class TrustedAgentCard(BaseModel):
         self.card_signature = identity.sign(signable.encode())
         self.signature_timestamp = datetime.now(timezone.utc)
 
-    def verify_signature(self, identity: Optional[AgentIdentity] = None) -> bool:
+    def verify_signature(
+        self,
+        identity: Optional[AgentIdentity] = None,
+        identity_registry: Optional["IdentityRegistry"] = None,
+    ) -> bool:
         """
         Verify the card's signature is valid.
 
+        Verification authority precedence (highest first):
+
+        1. Explicit ``identity`` -- authoritative; signature checked
+           against the supplied identity's public key.
+        2. ``identity_registry`` -- looked up by ``agent_did``; the
+           registry's stored public key is authoritative. If the DID
+           is not registered, verification fails (the embedded key is
+           NOT consulted).
+        3. Embedded ``public_key`` on the card -- self-attesting and
+           trust-on-first-use only. An attacker can mint a card with
+           their own key and a matching signature, so this path proves
+           only that the bearer signed the card, not ownership of the
+           claimed identity.
+
         Args:
-            identity: Optional identity to verify against. If not provided,
-                     uses the public key embedded in the card.
+            identity: Optional authoritative identity to verify against.
+            identity_registry: Optional registry; when provided and
+                the card's ``agent_did`` is registered, the registry's
+                public key is used and the embedded key is ignored.
 
         Returns:
             True if signature is valid, False otherwise
@@ -92,8 +112,18 @@ class TrustedAgentCard(BaseModel):
         if identity:
             return identity.verify_signature(signable.encode(), self.card_signature)
 
-        # Verify using embedded public key
-        # This requires reconstructing a minimal identity for verification
+        if identity_registry is not None and self.agent_did:
+            registered = identity_registry.get(self.agent_did)
+            if registered is None:
+                # Registry is authoritative: an unregistered DID cannot
+                # be verified by falling back to the card's own key.
+                return False
+            return registered.verify_signature(
+                signable.encode(), self.card_signature
+            )
+
+        # Self-attesting fallback: verify using the embedded public key.
+        # Trust-on-first-use only -- see method docstring.
         from cryptography.hazmat.primitives.asymmetric import ed25519
         import base64
 
@@ -195,6 +225,7 @@ class CardRegistry:
         self,
         cache_ttl_seconds: int = 900,
         revocation_list: Optional["RevocationList"] = None,
+        identity_registry: Optional["IdentityRegistry"] = None,
     ):
         """Initialise the card registry.
 
@@ -204,11 +235,36 @@ class CardRegistry:
             revocation_list: Optional revocation list to check during
                 verification. When set, revoked agent DIDs fail
                 ``is_verified()`` even if their signatures are valid.
+            identity_registry: Optional authoritative identity registry.
+                When set, card verification looks up the agent's
+                registered identity by DID and verifies against that
+                key rather than the card's self-attested embedded key.
         """
         self._cards: Dict[str, TrustedAgentCard] = {}
-        self._verified_cache: Dict[str, tuple[bool, datetime]] = {}
+        # Cache entry: (verified, timestamp, signed_content_hash). The
+        # hash pins the cached verdict to the exact signable content
+        # that was verified, so any in-place mutation of the stored
+        # card (capabilities, trust score, etc.) invalidates the entry
+        # on the next read.
+        self._verified_cache: Dict[str, tuple[bool, datetime, str]] = {}
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         self._revocation_list = revocation_list
+        self._identity_registry = identity_registry
+
+    @staticmethod
+    def _card_content_hash(card: TrustedAgentCard) -> str:
+        """Stable hash of the card's signable content + signature.
+
+        Used as a cache key suffix so any mutation of the signed fields
+        or the signature itself produces a new hash and the cached
+        verdict is discarded.
+        """
+        import hashlib
+
+        signable = card._get_signable_content()
+        signature = card.card_signature or ""
+        material = f"{signable}|{signature}".encode()
+        return hashlib.sha256(material).hexdigest()
 
     def register(self, card: TrustedAgentCard) -> bool:
         """
@@ -220,12 +276,16 @@ class CardRegistry:
         Returns:
             True if registered successfully, False if verification failed
         """
-        if not card.verify_signature():
+        if not card.verify_signature(identity_registry=self._identity_registry):
             return False
 
         if card.agent_did:
             self._cards[card.agent_did] = card
-            self._verified_cache[card.agent_did] = (True, datetime.now(timezone.utc))
+            self._verified_cache[card.agent_did] = (
+                True,
+                datetime.now(timezone.utc),
+                self._card_content_hash(card),
+            )
 
         return True
 
@@ -263,17 +323,29 @@ class CardRegistry:
             self._verified_cache.pop(agent_did, None)
             return False
 
-        if agent_did in self._verified_cache:
-            verified, timestamp = self._verified_cache[agent_did]
-            if datetime.now(timezone.utc) - timestamp < self._cache_ttl:
-                return verified
-
         card = self._cards.get(agent_did)
         if not card:
             return False
 
-        verified = card.verify_signature()
-        self._verified_cache[agent_did] = (verified, datetime.now(timezone.utc))
+        current_hash = self._card_content_hash(card)
+
+        if agent_did in self._verified_cache:
+            verified, timestamp, cached_hash = self._verified_cache[agent_did]
+            if (
+                cached_hash == current_hash
+                and datetime.now(timezone.utc) - timestamp < self._cache_ttl
+            ):
+                return verified
+            # Mutation detected (or TTL expired) -- drop the entry and
+            # re-verify from scratch below.
+            self._verified_cache.pop(agent_did, None)
+
+        verified = card.verify_signature(identity_registry=self._identity_registry)
+        self._verified_cache[agent_did] = (
+            verified,
+            datetime.now(timezone.utc),
+            current_hash,
+        )
         return verified
 
     def clear_cache(self) -> None:

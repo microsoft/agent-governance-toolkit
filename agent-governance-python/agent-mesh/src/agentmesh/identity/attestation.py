@@ -42,6 +42,14 @@ class KeyOrigin(StrEnum):
         return self in {KeyOrigin.SKR, KeyOrigin.TEE_GENERATED}
 
 
+class ImageMatchPolicy(StrEnum):
+    """How verifier reference values match measured agent images."""
+
+    EXACT_HASH = "exact_hash"
+    SIGNING_IDENTITY = "signing_identity"
+    STABLE_CLAIMS = "stable_claims"
+
+
 def public_key_hash_hex(public_key: bytes) -> str:
     """Return the SHA-256 hash of a raw Ed25519 public key as lowercase hex."""
     if len(public_key) != ED25519_PUBLIC_KEY_SIZE:
@@ -237,6 +245,8 @@ class ReferenceValues(BaseModel):
     required_claims: dict[str, str] = Field(default_factory=dict)
     allowed_tcb_statuses: list[str] = Field(default_factory=lambda: ["up_to_date"])
     require_debug_disabled: bool = True
+    image_match_policy: ImageMatchPolicy = ImageMatchPolicy.EXACT_HASH
+    allowed_image_signers: list[str] = Field(default_factory=list)
 
 
 def _length_prefixed_utf8(value: str, *, field_name: str) -> bytes:

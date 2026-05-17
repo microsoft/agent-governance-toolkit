@@ -17,7 +17,7 @@ import asyncio
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
 import subprocess
 
@@ -388,7 +388,7 @@ rules: []
     ):
         """Log tool call to audit trail."""
         entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "agent": str(self.identity.did),
             "action": "mcp_tool_call",
             "tool": tool_name,

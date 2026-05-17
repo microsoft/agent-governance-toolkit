@@ -168,7 +168,7 @@ async def verify_handshake(req: VerifyRequest) -> VerifyResponse:
         )
     except Exception as exc:
         logger.warning("Handshake verification failed: %s", exc)
-        return VerifyResponse(verified=False, rejection_reason=str(exc))
+        return VerifyResponse(verified=False, rejection_reason="Verification failed")
 
 
 @app.post("/api/v1/capabilities/grant", tags=["capabilities"])

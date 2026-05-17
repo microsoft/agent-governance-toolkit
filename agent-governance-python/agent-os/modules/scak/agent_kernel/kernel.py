@@ -11,7 +11,7 @@ Implements the Dual-Loop Architecture:
 
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models import (
     AgentFailure, FailureAnalysis, SimulationResult, CorrectionPatch, AgentState,
@@ -175,7 +175,7 @@ class SelfCorrectingAgentKernel:
                     "user_prompt": user_prompt,
                     "chain_of_thought": chain_of_thought,
                     "failed_action": failed_action,
-                    "timestamp": datetime.utcnow()
+                    "timestamp": datetime.now(timezone.utc)
                 })
                 
                 return {
@@ -472,7 +472,7 @@ class SelfCorrectingAgentKernel:
         Competence patches teach the agent to avoid giving up too early.
         """
         import uuid
-        from datetime import datetime
+        from datetime import datetime, timezone
         from .models import FailureAnalysis, SimulationResult, AgentFailure, FailureType, FailureSeverity
         
         # Create a synthetic failure for the audit

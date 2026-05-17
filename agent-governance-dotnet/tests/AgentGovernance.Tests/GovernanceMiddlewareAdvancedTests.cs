@@ -266,4 +266,76 @@ rules:
         Assert.True(mw.EvaluateToolCall("did:agentmesh:a", "file_read").Allowed);
         Assert.False(mw.EvaluateToolCall("did:agentmesh:a", "file_write").Allowed);
     }
+
+    // ── Concurrency ─────────────────────────────────────────────────
+
+    [Fact]
+    public void EvaluateToolCall_ConcurrentRateLimitedCalls_NoTornCache()
+    {
+        // Hammer FindMatchingRule (via the rate-limit branch) from many threads
+        // while concurrently invalidating its cache by adding a new policy.
+        // The (rule-table, policy-count) pair must always be observed as a unit;
+        // a torn pair would surface as a missed rule lookup that drops the
+        // request into the "no rate limiter configured" fallback path or
+        // produces a NullReferenceException inside the dictionary.
+        var yaml = @"
+name: rate-test
+default_action: allow
+rules:
+  - name: limit-http
+    condition: ""tool_name == 'http_request'""
+    action: rate_limit
+    limit: ""1000000/minute""
+";
+        var engine = new PolicyEngine();
+        engine.LoadYaml(yaml);
+        var mw = new GovernanceMiddleware(engine, new AuditEmitter(), new RateLimiter());
+
+        const int threadCount = 16;
+        const int iterations = 200;
+        var errors = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+        var threads = new Thread[threadCount];
+        var started = new ManualResetEventSlim(false);
+
+        for (int t = 0; t < threadCount; t++)
+        {
+            int tid = t;
+            threads[t] = new Thread(() =>
+            {
+                started.Wait();
+                try
+                {
+                    for (int i = 0; i < iterations; i++)
+                    {
+                        // Periodically invalidate the cache by loading a new policy.
+                        if (tid == 0 && i % 25 == 0 && i > 0)
+                        {
+                            engine.LoadYaml($@"
+name: extra-policy-{i}
+default_action: allow
+rules:
+  - name: extra-rule-{i}
+    condition: ""tool_name == 'noop'""
+    action: allow
+");
+                        }
+                        var result = mw.EvaluateToolCall($"did:agentmesh:t{tid}", "http_request");
+                        // Reason must indicate the rate-limit rule fired with the
+                        // configured limit, not the lenient "no limiter" fallback.
+                        Assert.Contains("rate limit", result.Reason, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex);
+                }
+            });
+            threads[t].Start();
+        }
+
+        started.Set();
+        foreach (var th in threads) th.Join();
+
+        Assert.Empty(errors);
+    }
 }

@@ -211,6 +211,9 @@ class WebhookApproval(ApprovalHandler):
         timeout_seconds: float = 300,
         headers: Optional[dict[str, str]] = None,
     ):
+        from agentmesh.governance.advisory import _validate_webhook_url
+
+        _validate_webhook_url(url)
         self._url = url
         self._timeout = timeout_seconds
         self._headers = headers or {}

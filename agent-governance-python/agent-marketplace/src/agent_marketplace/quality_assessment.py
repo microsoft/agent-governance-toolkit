@@ -120,9 +120,6 @@ class QualityAssessmentReport:
 class QualityAssessor:
     """Runs multi-dimensional quality assessments."""
 
-    def __init__(self) -> None:
-        self._evaluators: dict[AssessmentDimension, Any] = {}
-
     def assess_security(
         self,
         has_owasp: bool,

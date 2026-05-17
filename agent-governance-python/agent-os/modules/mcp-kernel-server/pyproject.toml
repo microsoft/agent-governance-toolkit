@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_mcp_server"
-version = "3.5.0"
+version = "3.6.0"
 description = "MCP Server for Claude Desktop - Agent OS kernel primitives including code safety verification, CMVK multi-model review, and IATP trust"
 readme = "README.md"
 license = {text = "MIT"}

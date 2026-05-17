@@ -7,7 +7,7 @@ correctly rejected, including edge cases around clock skew and boundary times.
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -74,7 +74,7 @@ class TestCredentialExpiry:
     def test_far_expired_one_year_ago(self):
         """Credential expired 1 year ago is invalid."""
         cred = Credential.issue(agent_did="did:mesh:test", ttl_seconds=1)
-        cred.expires_at = datetime.utcnow() - timedelta(days=400)
+        cred.expires_at = datetime.now(timezone.utc) - timedelta(days=400)
         assert not cred.is_valid()
 
     def test_valid_credential(self):
@@ -93,7 +93,7 @@ class TestCredentialExpiry:
         by is_valid (which only checks status + expires_at). The issued_at field
         is informational; applications should check it separately if needed."""
         cred = Credential.issue(agent_did="did:mesh:test", ttl_seconds=7200)
-        cred.issued_at = datetime.utcnow() + timedelta(hours=1)
+        cred.issued_at = datetime.now(timezone.utc) + timedelta(hours=1)
         # is_valid only checks status + expires_at
         assert cred.is_valid()
 
@@ -112,14 +112,14 @@ class TestCredentialManagerExpiry:
         mgr = CredentialManager()
         cred = mgr.issue("did:mesh:test", ttl_seconds=1)
         # Force expiry
-        cred.expires_at = datetime.utcnow() - timedelta(seconds=10)
+        cred.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
         assert mgr.validate(cred.token) is None
 
     def test_cleanup_removes_expired(self):
         """cleanup_expired removes non-active expired credentials."""
         mgr = CredentialManager()
         cred = mgr.issue("did:mesh:test", ttl_seconds=1)
-        cred.expires_at = datetime.utcnow() - timedelta(seconds=10)
+        cred.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
         cred.status = "expired"
         removed = mgr.cleanup_expired()
         assert removed >= 1
@@ -135,21 +135,21 @@ class TestDelegationLinkExpiry:
     def test_expired_link_invalid(self):
         """Link with past expires_at is invalid."""
         _, link = _chain_with_expiring_link(
-            expires_at=datetime.utcnow() - timedelta(seconds=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
         )
         assert not link.is_valid()
 
     def test_far_expired_link(self):
         """Link expired 1 year ago is invalid."""
         _, link = _chain_with_expiring_link(
-            expires_at=datetime.utcnow() - timedelta(days=400),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=400),
         )
         assert not link.is_valid()
 
     def test_valid_link_future_expiry(self):
         """Link with future expiry is valid."""
         _, link = _chain_with_expiring_link(
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         )
         assert link.is_valid()
 
@@ -162,7 +162,7 @@ class TestDelegationLinkExpiry:
         """Link whose expires_at just passed is invalid."""
         # Set expiry to just barely in the past
         _, link = _chain_with_expiring_link(
-            expires_at=datetime.utcnow() - timedelta(milliseconds=100),
+            expires_at=datetime.now(timezone.utc) - timedelta(milliseconds=100),
         )
         assert not link.is_valid()
 
@@ -176,7 +176,7 @@ class TestScopeChainWithExpiredLinks:
         This test documents current behaviour: verify() does NOT reject
         expired links automatically."""
         chain, link = _chain_with_expiring_link(
-            expires_at=datetime.utcnow() - timedelta(days=1),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
         # Structural verification still passes
         is_valid, error = chain.verify()
@@ -188,7 +188,7 @@ class TestScopeChainWithExpiredLinks:
     def test_application_checks_link_validity(self):
         """Applications should iterate links and check is_valid for expiry."""
         chain, _ = _chain_with_expiring_link(
-            expires_at=datetime.utcnow() - timedelta(seconds=30),
+            expires_at=datetime.now(timezone.utc) - timedelta(seconds=30),
         )
         expired_links = [lnk for lnk in chain.links if not lnk.is_valid()]
         assert len(expired_links) >= 1
@@ -229,13 +229,13 @@ class TestAgentIdentityExpiry:
     def test_expired_identity_not_active(self):
         """Identity with past expires_at is not active."""
         identity = _make_identity()
-        identity.expires_at = datetime.utcnow() - timedelta(seconds=1)
+        identity.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
         assert not identity.is_active()
 
     def test_identity_not_yet_expired(self):
         """Identity with future expires_at is active."""
         identity = _make_identity()
-        identity.expires_at = datetime.utcnow() + timedelta(hours=1)
+        identity.expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         assert identity.is_active()
 
     def test_identity_no_expiry_active(self):
@@ -247,6 +247,6 @@ class TestAgentIdentityExpiry:
     def test_revoked_identity_not_active(self):
         """Revoked identity is not active even if not expired."""
         identity = _make_identity()
-        identity.expires_at = datetime.utcnow() + timedelta(hours=1)
+        identity.expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         identity.revoke("test")
         assert not identity.is_active()

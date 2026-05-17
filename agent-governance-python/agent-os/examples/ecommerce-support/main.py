@@ -42,7 +42,7 @@ class Customer:
     email: str
     name: str
     verified: bool = False
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Payment methods (masked)
     payment_methods: list[dict] = field(default_factory=list)
@@ -61,7 +61,7 @@ class Order:
     amount: float
     status: str
     items: list[dict] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Payment info (PCI-DSS: only store masked data)
     card_last_four: str = ""

@@ -3,7 +3,7 @@
 """Tests for AgentMesh Identity module."""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from agentmesh.identity import (
@@ -97,12 +97,35 @@ class TestAgentIdentity:
     def test_sign_and_verify(self):
         """Test signing and verification."""
         identity = AgentIdentity.create("signer", "s@e.com")
-        
+
         message = b"Hello, AgentMesh!"
         signature = identity.sign(message)
-        
+
         assert identity.verify_signature(message, signature)
         assert not identity.verify_signature(b"Modified message", signature)
+
+    def test_bad_signature_does_not_log_at_warning(self, caplog):
+        """Verifying a bad signature must NOT log at WARNING.
+
+        Attacker-controllable failures at WARNING enable log flooding;
+        all verification failures are routed to DEBUG instead.
+        """
+        import logging
+        identity = AgentIdentity.create("signer", "s@e.com")
+        message = b"Hello, AgentMesh!"
+        signature = identity.sign(message)
+
+        with caplog.at_level(logging.DEBUG, logger="agentmesh.identity.agent_id"):
+            assert not identity.verify_signature(b"Modified message", signature)
+
+        warning_records = [
+            r for r in caplog.records
+            if r.levelno >= logging.WARNING
+            and r.name == "agentmesh.identity.agent_id"
+        ]
+        assert warning_records == [], (
+            f"verify_signature must not log at WARNING; got: {warning_records}"
+        )
     
     def test_delegate_creates_child(self):
         """Test delegating to create sub-agent."""
@@ -154,7 +177,7 @@ class TestCredentials:
         cred = Credential.issue(agent_did="did:mesh:test")
         
         # Should expire in approximately 15 minutes
-        time_diff = cred.expires_at - datetime.utcnow()
+        time_diff = cred.expires_at - datetime.now(timezone.utc)
         assert 14 * 60 < time_diff.total_seconds() < 16 * 60
     
     def test_credential_expiry(self):
@@ -317,6 +340,71 @@ class TestDelegation:
         
         is_valid, error = chain.verify()
         assert is_valid
+
+    def test_verify_chain_signature_is_optional_without_known_identity(self):
+        """Test verify() remains fail-open for signatures without known identities."""
+        chain, root_link = ScopeChain.create_root(
+            sponsor_email="sponsor@example.com",
+            root_agent_did="did:mesh:root",
+            capabilities=["read", "write"],
+        )
+
+        chain.add_link(root_link)
+
+        import uuid
+        child_link = DelegationLink(
+            link_id=f"link_{uuid.uuid4().hex[:12]}",
+            depth=1,
+            parent_did="did:mesh:root",
+            child_did="did:mesh:child",
+            parent_capabilities=["read", "write"],
+            delegated_capabilities=["read"],
+            parent_signature="not_a_real_signature",
+            link_hash="",
+            previous_link_hash=root_link.link_hash,
+        )
+        child_link.link_hash = child_link.compute_hash()
+        chain.add_link(child_link)
+
+        is_valid, error = chain.verify()
+        assert is_valid
+        assert error is None
+
+    def test_verify_chain_rejects_invalid_signature_with_known_identity(self):
+        """Test verify() rejects bad signatures when parent identity is available."""
+        parent_identity = AgentIdentity.create(
+            name="root-agent",
+            sponsor="sponsor@example.com",
+            capabilities=["read", "write"],
+        )
+        root_did = str(parent_identity.did)
+        chain, root_link = ScopeChain.create_root(
+            sponsor_email="sponsor@example.com",
+            root_agent_did=root_did,
+            capabilities=["read", "write"],
+        )
+
+        chain.add_link(root_link)
+        chain.known_identities[root_did] = parent_identity
+
+        import uuid
+        child_link = DelegationLink(
+            link_id=f"link_{uuid.uuid4().hex[:12]}",
+            depth=1,
+            parent_did=root_did,
+            child_did="did:mesh:child",
+            parent_capabilities=["read", "write"],
+            delegated_capabilities=["read"],
+            parent_signature="invalid_signature",
+            link_hash="",
+            previous_link_hash=root_link.link_hash,
+        )
+        child_link.link_hash = child_link.compute_hash()
+        chain.add_link(child_link)
+
+        is_valid, error = chain.verify()
+        assert not is_valid
+        assert error == "Invalid signature at link 1"
 
 
 class TestSponsor:

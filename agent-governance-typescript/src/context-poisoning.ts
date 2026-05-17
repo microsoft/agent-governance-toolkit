@@ -89,6 +89,9 @@ export class ContextPoisoningDetector {
   private readonly contextStore = new Map<string, ContextEntry[]>();
   private readonly integrityHashes = new Map<string, string>();
 
+  private static readonly MAX_CONTEXT_KEYS = 10_000;
+  private static readonly MAX_ENTRIES_PER_KEY = 1_000;
+
   constructor(config?: ContextPoisoningConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.patterns = [...DEFAULT_PATTERNS, ...(config?.knownPatterns ?? [])];
@@ -108,7 +111,18 @@ export class ContextPoisoningDetector {
   addEntry(entry: ContextEntry): void {
     const key = `${entry.agentId}:${entry.sessionId}`;
     const entries = this.contextStore.get(key) ?? [];
+    if (entries.length >= ContextPoisoningDetector.MAX_ENTRIES_PER_KEY) {
+      entries.shift();
+    }
     entries.push(entry);
+
+    if (!this.contextStore.has(key) && this.contextStore.size >= ContextPoisoningDetector.MAX_CONTEXT_KEYS) {
+      // Evict oldest key (first inserted).
+      const oldest = this.contextStore.keys().next().value;
+      if (oldest !== undefined) {
+        this.contextStore.delete(oldest);
+      }
+    }
     this.contextStore.set(key, entries);
 
     const hash = this.computeHash(entry);
