@@ -1,0 +1,36 @@
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+name: License Headers
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "**.ts"
+      - "**.cs"
+      - "**.rs"
+      - "**.go"
+
+permissions:
+  contents: read
+
+jobs:
+  check-headers:
+    name: Check license headers (changed files)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Check license headers on changed files
+        run: |
+          # Get list of changed source files in this PR
+          changed=$(git diff --name-only --diff-filter=ACM origin/main...HEAD -- '*.py' '*.ts' '*.cs' '*.rs' '*.go' || true)
+          if [ -z "$changed" ]; then
+            echo "No source files changed."
+            exit 0
+          fi
+          python scripts/check_license_headers.py "$changed"

@@ -154,6 +154,7 @@ Printf
 Println
 privatelink
 promptdefense
+pycache
 Pydantic
 pypdf
 pyproject
@@ -170,6 +171,7 @@ requireapproval
 reqwest
 returncode
 rfind
+rglob
 Rootfs
 rrdatas
 rstrip
@@ -222,6 +224,7 @@ urllib
 urlopen
 USERPROFILE
 uvicorn
+venv
 vnet
 westus
 workflow
