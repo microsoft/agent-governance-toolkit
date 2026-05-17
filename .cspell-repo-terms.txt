@@ -83,6 +83,7 @@ HEALTHCHECK
 healthz
 héllo
 hexdigest
+HMAC
 htek
 httpx
 hypercall
@@ -126,6 +127,7 @@ Molty
 monkeypatch
 monkeypatching
 MSHV
+mTLS
 msinternal
 mypy
 nameof
@@ -220,6 +222,7 @@ textwrap
 timedelta
 tmpfs
 TOCTOU
+TOFU
 toolkits
 ufeff
 uncallable
