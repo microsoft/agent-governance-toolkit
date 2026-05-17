@@ -19,6 +19,15 @@ import {
 
 export type PolicyDecision = LegacyPolicyDecision;
 
+const VALID_POLICY_ACTIONS = new Set<string>(['allow', 'deny', 'warn', 'require_approval', 'log']);
+
+function asPolicyAction(value: unknown): PolicyAction | undefined {
+  if (typeof value === 'string' && VALID_POLICY_ACTIONS.has(value)) {
+    return value as PolicyAction;
+  }
+  return undefined;
+}
+
 // ΓöÇΓöÇ Conflict Resolution ΓöÇΓöÇ
 
 const SCOPE_SPECIFICITY: Record<PolicyScope, number> = {
@@ -457,7 +466,7 @@ export class PolicyEngine {
 
         for (const rule of policy.rules) {
           if (rule.enabled === false) continue;
-          const ruleAction = rule.ruleAction ?? (rule.effect as PolicyAction | undefined) ?? 'deny';
+          const ruleAction = rule.ruleAction ?? asPolicyAction(rule.effect) ?? 'deny';
           if (evaluateRuleCondition(rule, context)) {
             candidates.push({
               action: ruleAction,
@@ -795,7 +804,7 @@ function dataToPolicy(data: Record<string, unknown>): Policy {
         condition: r.condition as string | Record<string, unknown> | undefined,
         action: r.action as string | undefined,
         effect: r.effect as LegacyPolicyDecision | undefined,
-        ruleAction: r.ruleAction as PolicyAction | undefined,
+        ruleAction: asPolicyAction(r.ruleAction),
         limit: r.limit as string | undefined,
         approvers: r.approvers as string[] | undefined,
         priority: r.priority as number | undefined,
