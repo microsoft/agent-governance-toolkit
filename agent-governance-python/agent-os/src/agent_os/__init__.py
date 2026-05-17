@@ -386,6 +386,15 @@ __all__ = [
     # Audit Logger + OTel Backend
     "GovernanceAuditLogger",
     "OTelLogsBackend",
+
+    # GovernanceEventSink SPI
+    "GovernanceEvent",
+    "GovernanceEventKind",
+    "GovernanceEventSink",
+    "GovernanceEventSinkBase",
+    "GovernanceEventProcessor",
+    "SinkExportResult",
+    "AuditBackendSinkAdapter",
 ]
 
 # ============================================================================
@@ -436,4 +445,15 @@ try:
     from agent_os.otel_audit_backend import OTelLogsBackend
 except ImportError:
     pass
+
+# GovernanceEventSink SPI (v3.7+)
+from agent_os.event_sink import (
+    AuditBackendSinkAdapter,
+    GovernanceEvent,
+    GovernanceEventKind,
+    GovernanceEventProcessor,
+    GovernanceEventSink,
+    GovernanceEventSinkBase,
+    SinkExportResult,
+)
 
