@@ -27,7 +27,7 @@ class VectorClock:
     """
 
     clocks: dict[str, int] = field(default_factory=dict)
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def tick(self, agent_did: str) -> None:
         """Increment the clock for an agent."""
@@ -53,10 +53,32 @@ class VectorClock:
         return VectorClock(clocks=merged_clocks)
 
     def happens_before(self, other: VectorClock) -> bool:
-        return False
+        """Return True if this clock causally precedes *other*.
+
+        A happens-before B when every component of A is <= the corresponding
+        component of B, and at least one component is strictly less. Locks are
+        acquired in deterministic id() order to avoid deadlocks on distinct
+        objects; a fast identity check handles the reflexive case.
+        """
+        if self is other:
+            return False
+        first, second = sorted([self, other], key=id)
+        with first._lock:
+            with second._lock:
+                all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
+                leq = all(
+                    self.clocks.get(a, 0) <= other.clocks.get(a, 0)
+                    for a in all_agents
+                )
+                strictly_less = any(
+                    self.clocks.get(a, 0) < other.clocks.get(a, 0)
+                    for a in all_agents
+                )
+                return leq and strictly_less
 
     def is_concurrent(self, other: VectorClock) -> bool:
-        return False
+        """Return True if neither clock causally precedes the other."""
+        return not self.happens_before(other) and not other.happens_before(self)
 
     def copy(self) -> VectorClock:
         with self._lock:

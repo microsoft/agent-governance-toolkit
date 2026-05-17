@@ -10,11 +10,14 @@ sessions' data requires explicit capability grants.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePosixPath
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class IsolationLevel(str, Enum):
@@ -161,7 +164,11 @@ class SessionIsolationManager:
         """
         scope = self._scopes.get(session_id)
         if scope is None:
-            return True  # No scope = no enforcement (backward compat)
+            logger.warning(
+                "No isolation scope found for session %s; denying path access",
+                session_id,
+            )
+            return False
         return scope.is_path_allowed(path)
 
     def grant_cross_session_access(
