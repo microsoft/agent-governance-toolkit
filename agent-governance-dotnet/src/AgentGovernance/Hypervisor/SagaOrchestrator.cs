@@ -69,8 +69,12 @@ public sealed class SagaStep
     public int MaxAttempts { get => _maxAttempts; init => _maxAttempts = value; }
 
     /// <summary>
-    /// Obsolete: use <see cref="MaxAttempts"/> instead. This property controlled total
-    /// attempts (not retry count), which was confusing. It now maps to <see cref="MaxAttempts"/>.
+    /// Obsolete: use <see cref="MaxAttempts"/> instead.
+    /// This legacy property is preserved for backward compatibility and maps 1:1
+    /// to total attempts (including the first try), not retry count.
+    ///
+    /// Migration: replace <c>MaxRetries = N</c> with <c>MaxAttempts = N</c> for the
+    /// same runtime behavior.
     /// </summary>
     [Obsolete("Use MaxAttempts instead. MaxRetries controlled total attempts, not retry count.")]
     public int MaxRetries { get => _maxAttempts; init => _maxAttempts = value; }
