@@ -11,7 +11,6 @@ sessions' data requires explicit capability grants.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePosixPath
