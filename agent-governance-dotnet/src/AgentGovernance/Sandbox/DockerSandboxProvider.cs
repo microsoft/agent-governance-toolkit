@@ -2,7 +2,6 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace AgentGovernance.Sandbox;
@@ -48,36 +47,46 @@ public sealed class DockerSandboxProvider : ISandboxProvider
         var sessionId = Guid.NewGuid().ToString("N")[..8];
         var containerName = $"agt-{agentId}-{sessionId}";
 
-        var args = new StringBuilder();
-        args.Append("run -d");
-        args.Append($" --name {containerName}");
-
-        // Security hardening
-        args.Append(" --cap-drop ALL");
-        args.Append(" --security-opt no-new-privileges");
+        var dockerArgs = new List<string>
+        {
+            "run", "-d",
+            "--name", containerName,
+            "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges"
+        };
 
         if (cfg.ReadOnlyFs)
-            args.Append(" --read-only");
+            dockerArgs.Add("--read-only");
 
         if (!cfg.NetworkEnabled)
-            args.Append(" --network none");
+        {
+            dockerArgs.Add("--network");
+            dockerArgs.Add("none");
+        }
 
         // Resource limits
-        args.Append($" --memory {cfg.MemoryMb}m");
-        args.Append($" --cpus {cfg.CpuLimit:F1}");
-        args.Append(" --pids-limit 256");
+        dockerArgs.Add("--memory");
+        dockerArgs.Add($"{cfg.MemoryMb}m");
+        dockerArgs.Add("--cpus");
+        dockerArgs.Add(cfg.CpuLimit.ToString("F1"));
+        dockerArgs.Add("--pids-limit");
+        dockerArgs.Add("256");
 
-        // Environment variables — quote values to prevent argument injection
+        // Environment variables via ArgumentList (no shell quoting needed)
         foreach (var kvp in cfg.EnvVars)
         {
             ValidateResourceName(kvp.Key, "EnvVars key");
-            args.Append($" -e \"{kvp.Key}={kvp.Value.Replace("\"", "\\\"")}\"");
+            dockerArgs.Add("-e");
+            dockerArgs.Add($"{kvp.Key}={kvp.Value}");
         }
 
-        // Keep container alive with a blocking process
-        args.Append($" {_image} tail -f /dev/null");
+        // Image and entrypoint
+        dockerArgs.Add(_image);
+        dockerArgs.Add("tail");
+        dockerArgs.Add("-f");
+        dockerArgs.Add("/dev/null");
 
-        var (exitCode, stdout, stderr) = await RunDockerAsync(args.ToString()).ConfigureAwait(false);
+        var (exitCode, stdout, stderr) = await RunDockerAsync(dockerArgs).ConfigureAwait(false);
 
         if (exitCode != 0)
         {
@@ -123,7 +132,7 @@ public sealed class DockerSandboxProvider : ISandboxProvider
         // Avoid shell interpolation: pipe code via stdin instead of python -c.
         var sw = Stopwatch.StartNew();
         var (exitCode, stdout, stderr) = await RunDockerWithStdinAsync(
-            $"exec -i {containerId} python",
+            new[] { "exec", "-i", containerId, "python" },
             code,
             timeoutSeconds: timeout).ConfigureAwait(false);
         sw.Stop();
@@ -163,7 +172,7 @@ public sealed class DockerSandboxProvider : ISandboxProvider
 
         _configs.TryRemove(key, out _);
 
-        await RunDockerAsync($"rm -f {containerId}").ConfigureAwait(false);
+        await RunDockerAsync(new[] { "rm", "-f", containerId }).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -171,7 +180,7 @@ public sealed class DockerSandboxProvider : ISandboxProvider
     {
         try
         {
-            var (exitCode, _, _) = await RunDockerAsync("info").ConfigureAwait(false);
+            var (exitCode, _, _) = await RunDockerAsync(new[] { "info" }).ConfigureAwait(false);
             return exitCode == 0;
         }
         catch
@@ -195,18 +204,20 @@ public sealed class DockerSandboxProvider : ISandboxProvider
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunDockerAsync(
-        string arguments, double timeoutSeconds = 30.0)
+        IEnumerable<string> arguments, double timeoutSeconds = 30.0)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = "docker",
-            Arguments = arguments,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        foreach (var arg in arguments)
+            process.StartInfo.ArgumentList.Add(arg);
 
         process.Start();
 
@@ -230,19 +241,21 @@ public sealed class DockerSandboxProvider : ISandboxProvider
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunDockerWithStdinAsync(
-        string arguments, string stdinContent, double timeoutSeconds = 30.0)
+        IEnumerable<string> arguments, string stdinContent, double timeoutSeconds = 30.0)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = "docker",
-            Arguments = arguments,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        foreach (var arg in arguments)
+            process.StartInfo.ArgumentList.Add(arg);
 
         process.Start();
 

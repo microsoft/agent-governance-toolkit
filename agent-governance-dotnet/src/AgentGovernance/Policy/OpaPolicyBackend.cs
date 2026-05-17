@@ -560,8 +560,12 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
 
     private static readonly HashSet<string> BlockedHosts = new(StringComparer.OrdinalIgnoreCase)
     {
-        "169.254.169.254",
+        "169.254.169.254",        // AWS/Azure IMDS
+        "169.254.170.2",          // ECS task metadata
+        "168.63.129.16",          // Azure Wire Server
         "metadata.google.internal",
+        "metadata.google",
+        "100.100.100.200",        // Alibaba Cloud IMDS
     };
 
     private static void ValidateOpaUrl(string opaUrl)
