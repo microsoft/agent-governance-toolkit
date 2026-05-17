@@ -41,6 +41,10 @@ export class TrustManager {
     };
     this.persistPath = config?.persistPath;
     if (this.persistPath) {
+      // Reject paths containing traversal components
+      if (this.persistPath.includes('..')) {
+        throw new Error('persistPath must not contain path traversal components');
+      }
       this.loadFromDisk();
     }
   }
@@ -82,7 +86,7 @@ export class TrustManager {
     const state = this.getOrCreateState(agentId);
     this.applyDecay(state);
     state.successes += 1;
-    state.score = Math.min(1, state.score + reward);
+    state.score = Math.min(1, state.score + Math.max(0, Math.min(1, reward)));
     state.lastUpdate = Date.now();
     this.saveToDisk();
   }
@@ -92,7 +96,7 @@ export class TrustManager {
     const state = this.getOrCreateState(agentId);
     this.applyDecay(state);
     state.failures += 1;
-    state.score = Math.max(0, state.score - penalty);
+    state.score = Math.max(0, state.score - Math.max(0, Math.min(1, penalty)));
     state.lastUpdate = Date.now();
     this.saveToDisk();
   }
@@ -189,6 +193,10 @@ export class TrustManager {
       const raw = fs.readFileSync(this.persistPath, 'utf-8');
       const data = JSON.parse(raw) as Record<string, AgentTrustState>;
       for (const [key, value] of Object.entries(data)) {
+        // Clamp deserialized scores to valid [0, 1] range
+        if (typeof value.score === 'number') {
+          value.score = Math.max(0, Math.min(1, value.score));
+        }
         this.agents.set(key, value);
       }
     } catch {

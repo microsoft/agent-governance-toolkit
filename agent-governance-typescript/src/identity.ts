@@ -341,12 +341,11 @@ export class AgentIdentity {
 
   // ── Serialization ──
 
-  /** Serialize to a plain JSON-safe object. */
-  toJSON(): AgentIdentityJSON {
+  /** Serialize to a plain JSON-safe object (private key excluded). */
+  toJSON(): Omit<AgentIdentityJSON, 'privateKey'> {
     return {
       did: this.did,
       publicKey: Buffer.from(this.publicKey).toString('base64'),
-      privateKey: Buffer.from(this._privateKey).toString('base64'),
       capabilities: [...this._capabilities],
       name: this.name || undefined,
       description: this.description || undefined,
@@ -357,6 +356,14 @@ export class AgentIdentity {
       delegationDepth: this._delegationDepth > 0 ? this._delegationDepth : undefined,
       createdAt: this.createdAt.toISOString(),
       expiresAt: this.expiresAt ? this.expiresAt.toISOString() : undefined,
+    };
+  }
+
+  /** Serialize including the private key. Use only for secure key storage. */
+  exportJSON(): AgentIdentityJSON {
+    return {
+      ...this.toJSON(),
+      privateKey: Buffer.from(this._privateKey).toString('base64'),
     };
   }
 

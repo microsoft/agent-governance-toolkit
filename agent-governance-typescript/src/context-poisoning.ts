@@ -98,9 +98,17 @@ export class ContextPoisoningDetector {
 
     for (const p of this.patterns) {
       if (p.detector === 'regex' && p.pattern) {
-        this.compiledRegex.set(p.id, new RegExp(p.pattern, 'i'));
+        try {
+          this.compiledRegex.set(p.id, new RegExp(p.pattern, 'i'));
+        } catch {
+          // Skip patterns that fail to compile
+        }
       } else if (p.detector === 'injection' && p.pattern) {
-        this.compiledRegex.set(p.id, new RegExp(p.pattern, 'i'));
+        try {
+          this.compiledRegex.set(p.id, new RegExp(p.pattern, 'i'));
+        } catch {
+          // Skip patterns that fail to compile
+        }
       }
     }
   }

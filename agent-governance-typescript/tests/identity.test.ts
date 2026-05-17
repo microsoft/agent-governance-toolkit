@@ -69,17 +69,25 @@ describe('AgentIdentity', () => {
       expect(restored.capabilities).toEqual(identity.capabilities);
     });
 
-    it('produces valid JSON fields', () => {
+    it('produces valid JSON fields (private key excluded by default)', () => {
       const json = identity.toJSON();
       expect(json).toHaveProperty('did');
       expect(json).toHaveProperty('publicKey');
-      expect(json).toHaveProperty('privateKey');
+      expect(json).not.toHaveProperty('privateKey');
       expect(json).toHaveProperty('capabilities');
       expect(typeof json.publicKey).toBe('string');
     });
 
+    it('exportJSON includes private key for secure storage', () => {
+      const json = identity.exportJSON();
+      expect(json).toHaveProperty('did');
+      expect(json).toHaveProperty('publicKey');
+      expect(json).toHaveProperty('privateKey');
+      expect(typeof json.privateKey).toBe('string');
+    });
+
     it('restored identity can sign and verify', () => {
-      const json = identity.toJSON();
+      const json = identity.exportJSON();
       const restored = AgentIdentity.fromJSON(json);
       const data = new TextEncoder().encode('roundtrip test');
       const sig = restored.sign(data);
