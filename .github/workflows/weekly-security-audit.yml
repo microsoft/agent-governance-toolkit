@@ -168,7 +168,7 @@ jobs:
           if [ "$FAIL" -eq 0 ]; then
             echo "✅ All pull_request_target workflows are safe" >> "$GITHUB_STEP_SUMMARY"
           fi
-          exit $FAIL
+          exit "$FAIL"
 
   # ── CI injection check ────────────────────────────────────────────────
   # Detects github.event.* expressions injected directly into run: blocks

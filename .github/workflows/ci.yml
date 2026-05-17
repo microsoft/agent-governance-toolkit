@@ -696,7 +696,7 @@ jobs:
               fi
             fi
           done
-          if [ $UNSAFE -eq 1 ]; then exit 1; fi
+          if [ "$UNSAFE" -eq 1 ]; then exit 1; fi
 
   # ── TypeScript integration tests (only when TS files change) ─────────
   test-integrations-ts:

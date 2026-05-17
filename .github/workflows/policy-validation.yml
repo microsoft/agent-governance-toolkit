@@ -58,7 +58,7 @@ jobs:
             python -m agent_os.policies.cli validate "$f" || EXIT_CODE=1
           done
           echo "::endgroup::"
-          exit $EXIT_CODE
+          exit "$EXIT_CODE"
 
   test-policies:
     runs-on: ubuntu-latest
