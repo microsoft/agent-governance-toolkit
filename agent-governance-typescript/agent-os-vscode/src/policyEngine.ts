@@ -49,7 +49,9 @@ interface PolicyRule {
 }
 
 export class PolicyEngine {
-    private allowedOnce: Set<string> = new Set();
+    private allowedOnceByFingerprint: Map<string, Set<string>> = new Map();
+    private fallbackAllowedOnceRules: Set<string> = new Set();
+    private lastObservedMatchFingerprints: Map<string, string> = new Map();
     private rules: PolicyRule[] = [];
 
     constructor() {
@@ -317,6 +319,9 @@ export class PolicyEngine {
         let blockReason = '';
         let blockViolation = '';
         let suggestion: string | undefined;
+        const observedFingerprints = new Map<string, string>();
+        const fallbackForCycle = this.fallbackAllowedOnceRules;
+        this.fallbackAllowedOnceRules = new Set();
 
         for (const rule of this.rules) {
             // Skip if language doesn't match
@@ -324,13 +329,15 @@ export class PolicyEngine {
                 continue;
             }
 
-            // Skip if allowed once
-            if (this.allowedOnce.has(rule.name)) {
-                this.allowedOnce.delete(rule.name);  // Remove after one use
-                continue;
-            }
-
             if (rule.pattern.test(code)) {
+                const fingerprint = this.computeAllowOnceFingerprint(rule.name, language, code);
+                observedFingerprints.set(rule.name, fingerprint);
+
+                // Consume allow-once only when this rule is actually matched.
+                if (this.consumeAllowOnce(rule.name, fingerprint, fallbackForCycle)) {
+                    continue;
+                }
+
                 if (rule.severity === 'critical' || rule.severity === 'high') {
                     blocked = true;
                     blockReason = rule.message;
@@ -341,6 +348,8 @@ export class PolicyEngine {
                 }
             }
         }
+
+        this.lastObservedMatchFingerprints = observedFingerprints;
 
         return {
             blocked,
@@ -355,7 +364,43 @@ export class PolicyEngine {
      * Allow a specific violation once
      */
     allowOnce(violation: string): void {
-        this.allowedOnce.add(violation);
+        const fingerprint = this.lastObservedMatchFingerprints.get(violation);
+        if (fingerprint) {
+            if (!this.allowedOnceByFingerprint.has(violation)) {
+                this.allowedOnceByFingerprint.set(violation, new Set());
+            }
+            this.allowedOnceByFingerprint.get(violation)?.add(fingerprint);
+            return;
+        }
+
+        // Backward-compatible fallback for command invocations without preceding analysis context.
+        this.fallbackAllowedOnceRules.add(violation);
+    }
+
+    private computeAllowOnceFingerprint(ruleName: string, language: string, code: string): string {
+        const input = `${ruleName}|${language}|${code}`;
+        let hash = 2166136261;
+        for (let i = 0; i < input.length; i++) {
+            hash ^= input.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(16);
+    }
+
+    private consumeAllowOnce(ruleName: string, fingerprint: string, fallbackForCycle: Set<string>): boolean {
+        const fingerprints = this.allowedOnceByFingerprint.get(ruleName);
+        if (fingerprints && fingerprints.delete(fingerprint)) {
+            if (fingerprints.size === 0) {
+                this.allowedOnceByFingerprint.delete(ruleName);
+            }
+            return true;
+        }
+
+        if (fallbackForCycle.has(ruleName)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
