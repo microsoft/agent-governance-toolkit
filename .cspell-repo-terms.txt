@@ -48,6 +48,7 @@ demux
 deprioritized
 Deserialise
 Diffable
+dids
 Dify
 Dockerfiles
 Docstrings
@@ -92,9 +93,11 @@ imran
 IPFS
 isinstance
 isort
+jwkjwks
 kanish
 kata
 kevinkaylie
+keypair
 keyrings
 kwarg
 kwargs
@@ -166,6 +169,7 @@ pyupgrade
 Ravande
 Rego
 relativedelta
+removeprefix
 repudiable
 requireapproval
 reqwest
@@ -196,6 +200,8 @@ skipif
 Slidev
 SLSA
 spacy
+SPIFFE
+spiffe
 spellcheck
 spellchecking
 splitlines
@@ -206,6 +212,7 @@ streamlit
 strftime
 structlog
 subpro
+SVID
 sybil
 syscall
 syscalls
@@ -219,6 +226,7 @@ uncallable
 unconfigured
 Ungated
 Unregisters
+unrevoke
 unsets
 urllib
 urlopen
