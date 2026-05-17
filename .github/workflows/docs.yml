@@ -43,7 +43,13 @@ jobs:
           python-version: '3.12'
 
       - name: Install MkDocs Material
-        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-docs.txt
+        run: |
+          # Install top-level packages with hash verification (--no-deps
+          # because transitive deps cannot all be hash-pinned portably).
+          pip install --no-cache-dir --require-hashes --no-deps \
+            -r agent-governance-python/requirements/ci-docs.txt
+          # Install transitive dependencies normally.
+          pip install --no-cache-dir mkdocs-material==9.7.6 mkdocs-minify-plugin==0.8.0
 
       - name: Build docs
         run: mkdocs build --config-file mkdocs.yml --site-dir _site
