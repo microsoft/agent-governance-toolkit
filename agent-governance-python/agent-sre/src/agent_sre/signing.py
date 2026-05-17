@@ -82,7 +82,10 @@ class ArtifactSigner:
                 "Install it with: pip install cryptography"
             )
         if private_key_path is not None:
-            pem_bytes = Path(private_key_path).read_bytes()
+            key_path = Path(private_key_path).resolve()
+            if ".." in str(Path(private_key_path).parts):
+                raise ValueError(f"Path traversal detected in private_key_path: {private_key_path!r}")
+            pem_bytes = key_path.read_bytes()
             key = load_pem_private_key(pem_bytes, password=None)
             if not isinstance(key, Ed25519PrivateKey):
                 raise TypeError("Only Ed25519 private keys are supported")

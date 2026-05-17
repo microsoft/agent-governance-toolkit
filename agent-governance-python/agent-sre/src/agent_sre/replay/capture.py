@@ -295,20 +295,30 @@ class TraceStore:
     """
 
     def __init__(self, storage_dir: str | Path = ".agent-governance-python/agent-sre/traces") -> None:
-        self.storage_dir = Path(storage_dir)
+        self.storage_dir = Path(storage_dir).resolve()
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+
+    def _safe_trace_path(self, trace_id: str) -> Path:
+        """Resolve a trace file path, rejecting traversal attempts."""
+        # Strip path separators and parent-dir components from trace_id
+        safe_id = trace_id.replace("/", "").replace("\\", "").replace("..", "")
+        if not safe_id or safe_id != trace_id:
+            raise ValueError(f"Invalid trace_id: {trace_id!r}")
+        filepath = (self.storage_dir / f"{safe_id}.json").resolve()
+        if not str(filepath).startswith(str(self.storage_dir)):
+            raise ValueError(f"Path traversal detected in trace_id: {trace_id!r}")
+        return filepath
 
     def save(self, trace: Trace, redact: bool = True) -> Path:
         """Save a trace to storage."""
-        filename = f"{trace.trace_id}.json"
-        filepath = self.storage_dir / filename
+        filepath = self._safe_trace_path(trace.trace_id)
         with open(filepath, "w") as f:
             json.dump(trace.to_dict(redact=redact), f, indent=2)
         return filepath
 
     def load(self, trace_id: str) -> Trace | None:
         """Load a trace by ID."""
-        filepath = self.storage_dir / f"{trace_id}.json"
+        filepath = self._safe_trace_path(trace_id)
         if not filepath.exists():
             return None
         with open(filepath) as f:
@@ -337,7 +347,7 @@ class TraceStore:
 
     def delete(self, trace_id: str) -> bool:
         """Delete a trace."""
-        filepath = self.storage_dir / f"{trace_id}.json"
+        filepath = self._safe_trace_path(trace_id)
         if filepath.exists():
             filepath.unlink()
             return True
