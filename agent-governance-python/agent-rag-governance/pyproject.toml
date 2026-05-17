@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-rag-governance"
-version = "0.1.0"
+version = "3.6.0"
 description = "Retrieval access control and vector store policy enforcement for RAG pipelines"
 readme = "README.md"
 license = {text = "MIT"}

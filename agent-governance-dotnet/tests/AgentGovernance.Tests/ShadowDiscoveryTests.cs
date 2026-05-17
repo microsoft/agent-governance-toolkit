@@ -150,4 +150,20 @@ public class ShadowDiscoveryTests
         Assert.DoesNotContain("hunter2", redacted);
         Assert.Contains("<redacted>", redacted);
     }
+
+    [Fact]
+    public void ProcessScanner_RedactsSecretsInsideLongPayload()
+    {
+        // 1MiB of junk with a secret-shaped fragment in the middle. The
+        // compiled regex with a 250ms match timeout should still find and
+        // redact the secret without stalling.
+        var prefix = new string('x', 512 * 1024);
+        var suffix = new string('y', 512 * 1024);
+        var payload = $"{prefix} api_key=topsecret {suffix}";
+
+        var redacted = ProcessScanner.RedactSensitiveText(payload);
+
+        Assert.DoesNotContain("topsecret", redacted);
+        Assert.Contains("api_key=<redacted>", redacted);
+    }
 }

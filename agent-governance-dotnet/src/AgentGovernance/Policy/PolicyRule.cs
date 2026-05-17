@@ -112,9 +112,19 @@ public sealed class PolicyRule
         {
             return EvaluateExpression(Condition.Trim(), context);
         }
-        catch
+        catch (Exception ex) when (
+            ex is FormatException
+            or InvalidCastException
+            or OverflowException
+            or RegexMatchTimeoutException)
         {
-            // Safe-fail: if evaluation errors, the rule does not match.
+            // Context-shape mismatch: a value couldn't be parsed, cast, or
+            // overflowed during comparison. The rule semantically can't match,
+            // so return false. Unexpected exceptions (NullReferenceException,
+            // ArgumentException, etc.) indicate a bug in the rule wiring and
+            // are intentionally allowed to propagate so the engine fails closed
+            // instead of silently masking a broken DENY rule under
+            // DefaultAction=Allow.
             return false;
         }
     }
@@ -288,43 +298,51 @@ public sealed class PolicyRule
     internal static object? ResolveField(string path, IReadOnlyDictionary<string, object> context)
     {
         var segments = path.Split('.');
-        object? current = null;
 
-        // Try the full key first (some contexts use dotted keys directly).
+        // Walk nested dictionaries first — that's the documented dot-notation
+        // behaviour. The flat full-key lookup runs as a fallback only when the
+        // nested walk cannot resolve, so a caller injecting a flat dotted entry
+        // cannot bypass nested-walk semantics.
+        if (context.TryGetValue(segments[0], out object? current))
+        {
+            bool walkComplete = true;
+            for (int i = 1; i < segments.Length; i++)
+            {
+                if (current is IReadOnlyDictionary<string, object> roDict)
+                {
+                    if (!roDict.TryGetValue(segments[i], out current))
+                    {
+                        walkComplete = false;
+                        break;
+                    }
+                }
+                else if (current is IDictionary<string, object> dict)
+                {
+                    if (!dict.TryGetValue(segments[i], out current))
+                    {
+                        walkComplete = false;
+                        break;
+                    }
+                }
+                else
+                {
+                    walkComplete = false;
+                    break;
+                }
+            }
+            if (walkComplete)
+            {
+                return current;
+            }
+        }
+
+        // Fallback: legacy contexts that use the dotted name as a flat key.
         if (context.TryGetValue(path, out var directValue))
         {
             return directValue;
         }
 
-        // Walk nested dictionaries.
-        if (!context.TryGetValue(segments[0], out current))
-        {
-            return null;
-        }
-
-        for (int i = 1; i < segments.Length; i++)
-        {
-            if (current is IReadOnlyDictionary<string, object> roDict)
-            {
-                if (!roDict.TryGetValue(segments[i], out current))
-                {
-                    return null;
-                }
-            }
-            else if (current is IDictionary<string, object> dict)
-            {
-                if (!dict.TryGetValue(segments[i], out current))
-                {
-                    return null;
-                }
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        return current;
+        return null;
     }
 
     /// <summary>

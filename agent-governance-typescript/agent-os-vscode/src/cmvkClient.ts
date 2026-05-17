@@ -215,7 +215,7 @@ export class CMVKClient {
         } else if (issue.includes('Synchronous')) {
             return 'Use fs.promises or async versions to avoid blocking the event loop';
         } else if (issue.includes('eval')) {
-            return 'Remove eval() and use safer alternatives like JSON.parse or Function constructor';
+            return 'Remove eval() and use safer alternatives like JSON.parse for data, or a small, purpose-built parser for expressions. The Function constructor is not a safe alternative — it executes arbitrary code with the same capability as eval().';
         } else if (issue.includes('innerHTML')) {
             return 'Use textContent or a sanitization library to prevent XSS';
         }

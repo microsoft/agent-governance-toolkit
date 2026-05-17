@@ -1,0 +1,432 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# OWASP ASI Starter Policy: Financial Services (SOX / PCI DSS / AML)
+# Maps to OWASP Agentic Security Initiatives (ASI) Top 10
+# See: docs/owasp-asi-mapping.md
+#
+# ⚠️  IMPORTANT: This is a STARTER policy provided as a production-ready
+# baseline. You MUST review and customize these rules for your specific
+# regulatory obligations, threat model, and deployment context before use.
+#
+# Prior art: Extends patterns from examples/policies/production/financial.yaml
+# and examples/policies/prompt-injection-safety.yaml in this repository.
+
+version: "1.0"
+name: financial-services-asi-starter
+description: >
+  OWASP ASI-mapped governance starter pack for financial services.
+  Enforces SOX/PCI DSS/AML-aligned controls with explicit traceability
+  to ASI-01 through ASI-10. Deny-all default follows the Least Agency
+  principle.
+
+rules:
+  # =========================================================================
+  # ASI-01: Agent Goal Hijack
+  # Attackers manipulate the agent's objectives via indirect prompt injection
+  # or poisoned inputs.
+  # =========================================================================
+
+  - name: asi01-prompt-injection-override
+    condition: {field: output, operator: matches, value: "(?i)ignore\\s+(all\\s+)?previous\\s+instructions"}
+    action: deny
+    priority: 100
+    message: "ASI-01: Prompt injection — instruction override attempt detected"
+
+  - name: asi01-prompt-injection-role-hijack
+    condition: {field: output, operator: matches, value: "(?i)(you\\s+are\\s+now|new\\s+role\\s*:|forget\\s+(everything|all|your))"}
+    action: deny
+    priority: 100
+    message: "ASI-01: Prompt injection — role hijack attempt detected"
+
+  - name: asi01-prompt-injection-delimiter
+    condition: {field: output, operator: matches, value: "(\\<\\|im_start\\|\\>|\\<\\|im_end\\|\\>|\\[INST\\]|\\<\\<SYS\\>\\>)"}
+    action: deny
+    priority: 100
+    message: "ASI-01: Prompt injection — chat template delimiter injection detected"
+
+  # =========================================================================
+  # ASI-02: Tool Misuse & Exploitation
+  # An agent's authorized tools are abused in unintended ways.
+  # =========================================================================
+
+  - name: asi02-block-shell-execution
+    condition: {field: action, operator: matches, value: "^(run_shell|execute_command|exec|eval|os_system)$"}
+    action: deny
+    priority: 100
+    message: "ASI-02: Shell/code execution tools are prohibited"
+
+  - name: asi02-block-network-exfiltration
+    condition: {field: action, operator: matches, value: "^(http_post|http_put|upload_file|send_data|ftp_upload)$"}
+    action: deny
+    priority: 100
+    message: "ASI-02: Outbound data transfer tools are prohibited without explicit allowlisting"
+
+  - name: asi02-block-destructive-operations
+    condition: {field: action, operator: matches, value: "^(delete_|remove_|drop_|truncate_)"}
+    action: deny
+    priority: 95
+    message: "ASI-02: Destructive data operations are prohibited"
+
+  - name: financial-asi02-obfuscation-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(U3RhcnQgdGhpcyBwcm9jZXNz|0x[a-fA-F0-9]{32,}|eval\\(base64\\.b64decode|__import__\\(\\s*['\"]os['\"]\\s*\\))"
+    action: deny
+    priority: 100
+    message: "ASI-02: Tool Misuse — detected obfuscated binary payload or base64 command"
+
+  # =========================================================================
+  # ASI-03: Identity & Privilege Abuse
+  # Agents escalate privileges by abusing identities or inheriting
+  # excessive credentials.
+  # =========================================================================
+
+  - name: asi03-block-privilege-escalation
+    condition: {field: action, operator: matches, value: "^(grant_|elevate_|assume_role|change_permissions|chmod|chown|sudo)"}
+    action: deny
+    priority: 100
+    message: "ASI-03: Privilege escalation operations are prohibited"
+
+  - name: asi03-block-credential-access
+    condition: {field: action, operator: matches, value: "^(get_credentials|read_secrets|access_vault|decrypt_key)"}
+    action: deny
+    priority: 100
+    message: "ASI-03: Direct credential access is prohibited — use scoped delegation"
+
+  - name: financial-asi03-identity-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(I\\s+am\\s+now\\s+the\\s+(admin|user|manager|owner)|assume\\s+identity\\s+of|act\\s+as\\s+user\\s+\\d+|inherit\\s+permissions\\s+from)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Identity Abuse — detected attempt to assume unauthorized persona or permissions"
+
+  - name: asi03-account-mfa-bypass
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(remove|disable|bypass|waive)\\s+(mfa|2fa|multi-factor|lockout|authentication)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized attempt to disable MFA or authentication lockouts"
+
+  - name: asi03-account-admin-promotion
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(add|promote|assign|grant).*(admin|superuser|api\\s+access|billing|owner)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized attempt to promote user to admin or privileged role"
+
+  - name: asi03-account-password-reset
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)reset\\s+password.*(for|to|send)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized semantic password reset attempt"
+
+  - name: asi03-account-audit-tampering
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(delete|clear|wipe|remove).*(audit\\s+log|security\\s+log|event\\s+log)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Account Integrity — unauthorized attempt to clear security or audit logs"
+
+  # =========================================================================
+  # ASI-04: Supply Chain Risk
+  # Agents are tricked into using untrusted tools, registries, or MCP servers.
+  # =========================================================================
+
+  - name: asi04-supply-chain-tool-enumeration
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(list\\s+all\\s+tools|what\\s+plugins\\s+are\\s+installed|dump\\s+(environment\\s+)?variables|show\\s+mcp\\s+servers|enumerate\\s+capabilities)"
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — detected pre-attack tool enumeration or capability reconnaissance"
+
+  - name: asi04-supply-chain-dependency-poisoning
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)((pip|npm|yarn|gem|cargo|apt|apt-get|apk|brew)\\s+(install|add|update)|(curl|wget)\\s+.*(-O|\\|))"
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — detected unauthorized dependency installation or remote payload execution"
+
+  - name: asi04-supply-chain-plugin-hijack
+    condition: {field: action, operator: matches, value: "^(install_tool|register_mcp|add_plugin|load_extension)$"}
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — unauthorized tool registry or MCP plugin modification detected"
+
+  - name: asi04-supply-chain-config-mutation
+    condition: {field: action, operator: matches, value: "^(update_config|edit_env|set_env|modify_registry)$"}
+    action: deny
+    priority: 100
+    message: "ASI-04: Supply Chain — unauthorized configuration or environment state mutation detected"
+
+  # =========================================================================
+  # ASI-05: Unexpected Code Execution
+  # Agents trigger remote code execution through tools, interpreters,
+  # or APIs.
+  # =========================================================================
+
+  - name: asi05-block-code-execution
+    condition: {field: action, operator: eq, value: execute_code}
+    action: deny
+    priority: 100
+    message: "ASI-05: Code execution is prohibited — use sandboxed execution rings"
+
+  - name: asi05-block-dynamic-eval
+    condition: {field: output, operator: matches, value: "(?i)(\\beval\\s*\\(|\\bexec\\s*\\(|\\bcompile\\s*\\(|__import__)"}
+    action: deny
+    priority: 100
+    message: "ASI-05: Dynamic code evaluation patterns detected in output"
+
+  - name: asi05-sandbox-anti-pattern-detection
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(subprocess\\.Popen\\(.*,\\s*shell\\s*=\\s*True|os\\.system\\(|os\\.popen\\(|shlex\\.quote.*\\+.*|pathlib.*\\.joinpath.*\\+.*)"
+    action: deny
+    priority: 100
+    message: "ASI-05: Code Anti-Pattern Detected — Unsafe execution or path manipulation"
+
+  # =========================================================================
+  # ASI-06: Memory & Context Poisoning
+  # Persistent memory or long-running context is poisoned with malicious
+  # instructions.
+  # =========================================================================
+
+  - name: asi06-context-budget-limit
+    condition: {field: token_count, operator: gt, value: 8192}
+    action: deny
+    priority: 90
+    message: "ASI-06: Context budget exceeded — limit enforced to prevent memory poisoning"
+
+  - name: asi06-block-context-manipulation
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(starting\\s+now|from\\s+this\\s+point|ignore\\s+all\\s+past|your\\s+real\\s+instructions|the\\s+above\\s+instructions\\s+are\\s+wrong|actually\\s+your\\s+real\\s+instructions|disregard\\s+(all\\s+)?(above|prior|previous)|(\\[VERIFIED:\\s*Always\\s*allow|\\[TRUSTED\\s*CONTEXT\\]|\\[SECURITY\\s*BYPASS\\]))"
+    action: deny
+    priority: 100
+    message: "ASI-06: Context Integrity — detected attempt to manipulate agent memory or override system instructions"
+
+  # =========================================================================
+  # ASI-07: Communication Manipulation
+  # Agents coordinate using hidden channels or secret handshakes to bypass filters.
+  # =========================================================================
+
+  - name: asi07-hidden-channel-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(coord\\.[a-zA-Z0-9]{8,}|SIG_SYNC_[a-fA-F0-9]{4,}|\\{\\{HANDSHAKE\\}\\}|SECRET_CHANNEL)"
+    action: deny
+    priority: 100
+    message: "ASI-07: Communication Manipulation — detected hidden channel signaling or secret handshake"
+
+  # =========================================================================
+  # ASI-08: Cascading Failures
+  # An initial error or compromise triggers multi-step compound failures
+  # across chained agents.
+  # =========================================================================
+
+  - name: asi08-session-tool-call-limit
+    condition: {field: tool_call_count, operator: gt, value: 30}
+    action: deny
+    priority: 85
+    message: "ASI-08: Session tool call limit exceeded — circuit breaker engaged"
+
+  - name: asi08-swarm-heat-guardrail
+    condition: {field: tool_call_depth, operator: gt, value: 4}
+    action: audit
+    priority: 90
+    message: "ASI-08: Cascading Failure — swarm heat threshold reached; coordination depth auditing engaged"
+
+  # =========================================================================
+  # ASI-09: Trust Exploitation
+  # Deceiving users or agents into providing sensitive info or risky actions.
+  # =========================================================================
+
+  - name: asi09-trust-payment-redirection
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(refund|payment|transfer|invoice).*(wire|crypto|bitcoin|wallet|gateway|manual\\s+refund)"
+    action: deny
+    priority: 100
+    message: "ASI-09: Trust Exploitation — detected unauthorized payment redirection attempt"
+
+  - name: asi09-trust-vip-impersonation
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(VIP|CFO|CEO|CTO|legal\\s+department|executive|board\\s+of\\s+directors|official\\s+request)"
+    action: deny
+    priority: 100
+    message: "ASI-09: Trust Exploitation — VIP impersonation or false authority pretext detected"
+
+  - name: asi09-trust-urgency-pretext
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(\\burgent\\b|\\bimmediate\\b|act\\s+now|deadline|expire\\s+(soon|in)|last\\s+chance)"
+    action: deny
+    priority: 95
+    message: "ASI-09: Trust Exploitation — manufactured urgency pretext detected"
+
+  - name: asi09-trust-phishing-link
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(verify|login|authenticate|secure\\s+link).*https?:\\/\\/[^\\s]+"
+    action: deny
+    priority: 100
+    message: "ASI-09: Trust Exploitation — suspected off-platform phishing or credential harvesting link"
+
+  # =========================================================================
+  # ASI-10: Rogue Agents
+  # Agents acting autonomously without oversight or outside their charter.
+  # =========================================================================
+
+  - name: asi10-charter-roleplay-block
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)act\\s+as\\s+(an?\\s+)?(Linux|Windows|bash|Powershell|CLI|terminal|interpreter|unfiltered\\s+AI|penetration\\s+tester|security\\s+researcher)"
+    action: deny
+    priority: 100
+    message: "ASI-10: Rogue Agent — detected attempt to assume unauthorized technical or adversarial role"
+
+  - name: asi10-charter-purpose-override
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(ignore\\s+your\\s+purpose|redefine\\s+charter|act\\s+outside\\s+scope|new\\s+operational\\s+constraints|no\\s+longer\\s+bound\\s+by|disregard\\s+core\\s+directive)"
+    action: deny
+    priority: 100
+    message: "ASI-10: Rogue Agent — detected attempt to override the agent's core operational charter"
+
+  - name: asi10-charter-autonomous-loop
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(run\\s+indefinitely|loop\\s+forever|do\\s+not\\s+stop\\s+until|autonomous\\s+mode|without\\s+asking\\s+for\\s+permission|bypass\\s+human\\s+approval)"
+    action: deny
+    priority: 100
+    message: "ASI-10: Rogue Agent — detected attempt to instantiate an unbounded autonomous loop"
+
+  # =========================================================================
+  # Financial Services Domain: PCI DSS / SOX / AML / DORA
+  # =========================================================================
+
+  - name: financial-block-pci-credit-card
+    condition: {field: output, operator: matches, value: "\\b(?:\\d[ -]*?){13,16}\\b"}
+    action: deny
+    priority: 100
+    message: "ASI-01/06: PCI DSS: Credit card number pattern detected in output"
+
+  - name: financial-block-pci-cvv
+    condition: {field: output, operator: matches, value: "(?i)(cvv|cvc|security\\s*code)[:\\s]*\\d{3,4}"}
+    action: deny
+    priority: 100
+    message: "ASI-01/06: PCI DSS: CVV/CVC pattern detected in output"
+
+  - name: asi06-block-pii-ssn
+    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    action: deny
+    priority: 100
+    message: "ASI-01/06: PII: Social Security Number pattern detected in output"
+
+  - name: financial-block-iban
+    condition: {field: output, operator: matches, value: "\\b[A-Z]{2}\\d{2}[A-Z0-9]{11,30}\\b"}
+    action: deny
+    priority: 100
+    message: "ASI-01/06: AML: IBAN pattern detected in output"
+
+  - name: financial-audit-swift-bic
+    condition: {field: output, operator: matches, value: "\\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\\b"}
+    action: audit
+    priority: 80
+    message: "ASI-01/06: AML: Possible SWIFT/BIC code detected. Subject to SOC 2 (365d+) retention."
+
+  - name: asi03-block-credentials-in-output
+    condition: {field: output, operator: matches, value: "(?i)(api[_-]?key|password|secret|token|bearer)[:\\s=]+\\S{8,}"}
+    action: deny
+    priority: 100
+    message: "ASI-02/03: Security: Credential pattern detected in output"
+
+  # =========================================================================
+  # Business Integrity (Arcanum-Sec)
+  # =========================================================================
+
+  - name: asi01-integrity-shipping-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(free\\s+shipping|shipping\\s+(cost|policy|method)|customs\\s+fee|delivery\\s+window|expedite\\s+delivery|waive\\s+shipping)"
+    action: deny
+    priority: 100
+    message: "ASI-01/02: Business Integrity — unauthorized shipping policy override attempt detected"
+
+  - name: asi01-integrity-fraud-guardrail
+    condition: 
+      field: output
+      operator: matches
+      value: "(?i)(waive\\s+fee|late\\s+fee|restocking\\s+fee|shipping\\s+(cost|policy)|return\\s+window|override\\s+policy|bypass\\s+receipt|secret\\s+(discount|promo)|promo\\s+code|coupon\\s+code|manual\\s+refund|void\\s+payment|goodwill\\s+gesture|loyalty\\s+recovery)"
+    action: deny
+    priority: 100
+    message: "ASI-01/02: Business Integrity — unauthorized policy override or fraud pretext detected"
+
+  - name: financial-sox-sod-block
+    condition: {field: action, operator: matches, value: "^(approve_)"}
+    action: deny
+    priority: 95
+    message: "ASI-03: SOX: Segregation of Duties. Agent cannot self-approve transactions."
+
+  - name: financial-dora-incident-escalation
+    condition: {field: action, operator: matches, value: "^(disable_security|reset_firewall|bypass_)"}
+    action: block
+    priority: 98
+    message: "ASI-08: DORA: Critical security incident pattern. High-severity escalation."
+
+  - name: financial-cost-ceiling
+    condition: {field: token_count, operator: gt, value: 5000}
+    action: audit
+    priority: 85
+    message: "ASI-08: FinOps: Approaching cost ceiling threshold."
+
+  - name: financial-audit-transaction-actions
+    condition: {field: action, operator: matches, value: "^(transfer_|payment_|trade_|wire_|settle_)"}
+    action: audit
+    priority: 85
+    message: "ASI-08: SOX: Financial transaction action. Subject to SOC 2 (365d+) audit retention."
+
+  - name: financial-block-bulk-transactions
+    condition: {field: action, operator: matches, value: "^(batch_transfer|bulk_payment|mass_trade)"}
+    action: deny
+    priority: 95
+    message: "ASI-01/06: AML: Bulk transaction operations require explicit authorization"
+
+  - name: financial-allow-read-operations
+    condition: {field: action, operator: matches, value: "^(read_|search_|lookup_|list_|get_|calculate_|analyze_)"}
+    action: allow
+    priority: 50
+
+defaults:
+  action: deny
+  max_tokens: 6000
+  max_tool_calls: 20
+  confidence_threshold: 0.95

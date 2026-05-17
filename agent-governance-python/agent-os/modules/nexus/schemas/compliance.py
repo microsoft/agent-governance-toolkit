@@ -7,7 +7,7 @@ Defines data structures for compliance auditing and reporting.
 Supports SOC2, HIPAA, and other regulatory frameworks.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional, Any
 from pydantic import BaseModel, Field
 import hashlib
@@ -42,7 +42,7 @@ class ComplianceRecord(BaseModel):
         description="Type of compliance event"
     )
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When the event occurred"
     )
     
@@ -174,7 +174,7 @@ class ComplianceAuditReport(BaseModel):
         description="Compliance framework"
     )
     generated_at: datetime = Field(
-        default_factory=datetime.utcnow
+        default_factory=lambda: datetime.now(timezone.utc)
     )
     
     # Scope

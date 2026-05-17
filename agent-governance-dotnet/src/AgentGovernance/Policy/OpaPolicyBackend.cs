@@ -2,10 +2,13 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AgentGovernance.Policy;
 
@@ -30,7 +33,20 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
     private static readonly Regex AllowBlockRegex = new(@"allow\s*\{(?<body>.*?)\}", RegexOptions.Singleline | RegexOptions.CultureInvariant);
     private static readonly Regex EqualityRegex = new(@"^input\.(?<field>[A-Za-z0-9_]+)\s*(?<op>==|!=)\s*(?<value>true|false|""[^""]*"")$", RegexOptions.CultureInvariant);
     private static readonly Regex NotRegex = new(@"^not\s+input\.(?<field>[A-Za-z0-9_]+)$", RegexOptions.CultureInvariant);
-    private static readonly HttpClient HttpClient = new();
+
+    // Static HttpClient backed by a SocketsHttpHandler with a bounded
+    // PooledConnectionLifetime so long-running processes recycle the
+    // connection (and re-resolve DNS) every two minutes. Without this, a
+    // process-lifetime singleton HttpClient holds the original DNS answer
+    // forever and ignores rolling-deploy / scale-out / blue-green moves of
+    // the OPA endpoint. Per-request deadlines are enforced via CancellationToken
+    // (CancellationTokenSource.CancelAfter(_timeout)); HttpClient.Timeout is
+    // left at its default and not used as the primary deadline.
+    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1)
+    });
 
     private readonly string? _regoContent;
     private readonly string? _regoPath;
@@ -50,6 +66,7 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
         OpaEvaluationMode mode = OpaEvaluationMode.Auto,
         TimeSpan? timeout = null)
     {
+        ValidateOpaUrl(opaUrl);
         _regoContent = regoContent;
         _regoPath = regoPath;
         _query = query;
@@ -85,15 +102,66 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             sw.Stop();
             return new ExternalPolicyDecision
             {
                 Backend = Name,
                 Allowed = false,
-                Reason = $"OPA evaluation failed: {ex.Message}",
-                Error = ex.Message,
+                Reason = "OPA evaluation failed — see server logs for details",
+                Error = "INTERNAL_ERROR",
+                EvaluationMs = sw.Elapsed.TotalMilliseconds
+            };
+        }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Overrides the default <see cref="IExternalPolicyBackend.EvaluateAsync"/>
+    /// to use genuine async I/O for the Remote path
+    /// (<see cref="HttpClient.SendAsync(HttpRequestMessage, CancellationToken)"/> +
+    /// <see cref="HttpContent.ReadAsStringAsync(CancellationToken)"/>) so callers
+    /// in async contexts (ASP.NET handlers, agent loops, background workers) do
+    /// not block a thread-pool thread on HTTP I/O. The Local path (CLI /
+    /// builtin) remains synchronous because it waits on a subprocess or a
+    /// regex match, neither of which has a meaningful async surface.
+    /// </remarks>
+    public async Task<ExternalPolicyDecision> EvaluateAsync(
+        IReadOnlyDictionary<string, object> context,
+        CancellationToken cancellationToken = default)
+    {
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            var decision = ResolveMode() switch
+            {
+                OpaEvaluationMode.Remote
+                    => await EvaluateRemoteAsync(context, cancellationToken).ConfigureAwait(false),
+                _ => EvaluateLocal(context)
+            };
+
+            sw.Stop();
+            return new ExternalPolicyDecision
+            {
+                Backend = decision.Backend,
+                Allowed = decision.Allowed,
+                Reason = decision.Reason,
+                Error = decision.Error,
+                Metadata = decision.Metadata,
+                EvaluationMs = sw.Elapsed.TotalMilliseconds
+            };
+        }
+        catch (Exception)
+        {
+            sw.Stop();
+            return new ExternalPolicyDecision
+            {
+                Backend = Name,
+                Allowed = false,
+                Reason = "OPA evaluation failed — see server logs for details",
+                Error = "INTERNAL_ERROR",
                 EvaluationMs = sw.Elapsed.TotalMilliseconds
             };
         }
@@ -113,49 +181,91 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
 
     private ExternalPolicyDecision EvaluateRemote(IReadOnlyDictionary<string, object> context)
     {
-        if (!Regex.IsMatch(_query, @"^[a-zA-Z0-9._\-]+$"))
+        var validationFailure = ValidateRemoteQuery();
+        if (validationFailure is not null)
         {
-            return new ExternalPolicyDecision
-            {
-                Backend = Name,
-                Allowed = false,
-                Reason = $"Invalid OPA query path '{_query}'.",
-                Error = "invalid_query"
-            };
+            return validationFailure;
         }
 
+        using var request = BuildRemoteRequest(context);
+        using var cts = new CancellationTokenSource(_timeout);
+        using var response = HttpClient.Send(request, cts.Token);
+        // Read the body via the synchronous ``HttpContent.ReadAsStream`` API
+        // rather than ``ReadAsStringAsync(...).GetAwaiter().GetResult()`` —
+        // the latter blocks a thread-pool thread on an async operation and
+        // exhausts the pool under load. Callers in async contexts should
+        // use ``EvaluateAsync`` instead, which awaits the real async path.
+        using var stream = response.Content.ReadAsStream(cts.Token);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var content = reader.ReadToEnd();
+        return InterpretRemoteResponse(response.StatusCode, content);
+    }
+
+    private async Task<ExternalPolicyDecision> EvaluateRemoteAsync(
+        IReadOnlyDictionary<string, object> context,
+        CancellationToken cancellationToken)
+    {
+        var validationFailure = ValidateRemoteQuery();
+        if (validationFailure is not null)
+        {
+            return validationFailure;
+        }
+
+        using var request = BuildRemoteRequest(context);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_timeout);
+        using var response = await HttpClient.SendAsync(request, cts.Token).ConfigureAwait(false);
+        var content = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+        return InterpretRemoteResponse(response.StatusCode, content);
+    }
+
+    private ExternalPolicyDecision? ValidateRemoteQuery()
+    {
+        if (Regex.IsMatch(_query, @"^[a-zA-Z0-9._\-]+$"))
+        {
+            return null;
+        }
+        return new ExternalPolicyDecision
+        {
+            Backend = Name,
+            Allowed = false,
+            Reason = $"Invalid OPA query path '{_query}'.",
+            Error = "invalid_query"
+        };
+    }
+
+    private HttpRequestMessage BuildRemoteRequest(IReadOnlyDictionary<string, object> context)
+    {
         var path = _query.StartsWith("data.", StringComparison.Ordinal)
             ? _query["data.".Length..]
             : _query;
-
         var payload = JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["input"] = context
         });
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_opaUrl}/v1/data/{path.Replace('.', '/')}")
+        return new HttpRequestMessage(HttpMethod.Post, $"{_opaUrl}/v1/data/{path.Replace('.', '/')}")
         {
             Content = new StringContent(payload, Encoding.UTF8, "application/json")
         };
+    }
 
-        using var cts = new CancellationTokenSource(_timeout);
-        using var response = HttpClient.Send(request, cts.Token);
-        var content = response.Content.ReadAsStringAsync(cts.Token).GetAwaiter().GetResult();
-
-        if (!response.IsSuccessStatusCode)
+    private ExternalPolicyDecision InterpretRemoteResponse(
+        System.Net.HttpStatusCode statusCode,
+        string content)
+    {
+        if ((int)statusCode < 200 || (int)statusCode >= 300)
         {
             return new ExternalPolicyDecision
             {
                 Backend = Name,
                 Allowed = false,
-                Reason = $"OPA server returned {(int)response.StatusCode}.",
+                Reason = $"OPA server returned {(int)statusCode}.",
                 Error = content
             };
         }
 
         using var document = JsonDocument.Parse(content);
         var allowed = document.RootElement.TryGetProperty("result", out var result) && EvaluateJsonTruthiness(result);
-
         return new ExternalPolicyDecision
         {
             Backend = Name,
@@ -209,23 +319,14 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
     private ExternalPolicyDecision? TryEvaluateWithCli(IReadOnlyDictionary<string, object> context)
     {
         var opaExecutable = OperatingSystem.IsWindows() ? "opa.exe" : "opa";
-        if (!CommandExists(opaExecutable))
+        if (!ExternalBackendUtilities.CommandExists(opaExecutable))
         {
             return null;
         }
 
         var regoPath = _regoPath!;
         var inputJson = JsonSerializer.Serialize(context);
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = opaExecutable,
-            Arguments = $"eval --format json --stdin-input --data \"{regoPath}\" \"{_query}\"",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var startInfo = BuildOpaStartInfo(opaExecutable, regoPath, _query);
 
         using var process = Process.Start(startInfo);
         if (process is null)
@@ -401,24 +502,48 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
         _ => false
     };
 
-    private static bool CommandExists(string executable)
+    /// <summary>
+    /// Builds the <see cref="ProcessStartInfo"/> for the OPA CLI using
+    /// <see cref="ProcessStartInfo.ArgumentList"/> so the rego file path
+    /// (caller-supplied via <c>_regoPath</c>) and the query string
+    /// (caller-supplied via <c>_query</c>) cannot break out of quoting. The
+    /// naive <c>Arguments = $"...\"{regoPath}\" \"{_query}\""</c> form would
+    /// mis-tokenize any input containing a double-quote (legal on Linux
+    /// paths) or shell metacharacters that the underlying
+    /// CommandLineToArgvW-style parser re-splits on.
+    /// </summary>
+    /// <remarks>
+    /// This helper is intentionally <c>public</c> rather than <c>internal</c>
+    /// + <c>InternalsVisibleTo</c>. Strong-name signing on this assembly is
+    /// identity, not a security boundary, so <c>InternalsVisibleTo</c> would
+    /// be API hygiene rather than real isolation; the helper is a pure
+    /// argv-builder with no state or I/O, so public exposure adds no
+    /// practical attack surface. Maintainers who prefer the smaller public
+    /// surface can demote to <c>internal</c> + signed
+    /// <c>InternalsVisibleTo, PublicKey=...</c> without behavioural change.
+    /// </remarks>
+    public static ProcessStartInfo BuildOpaStartInfo(
+        string executable,
+        string regoPath,
+        string query)
     {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(path))
+        var startInfo = new ProcessStartInfo
         {
-            return false;
-        }
-
-        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var candidate = Path.Combine(directory, executable);
-            if (File.Exists(candidate))
-            {
-                return true;
-            }
-        }
-
-        return false;
+            FileName = executable,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("eval");
+        startInfo.ArgumentList.Add("--format");
+        startInfo.ArgumentList.Add("json");
+        startInfo.ArgumentList.Add("--stdin-input");
+        startInfo.ArgumentList.Add("--data");
+        startInfo.ArgumentList.Add(regoPath);
+        startInfo.ArgumentList.Add(query);
+        return startInfo;
     }
 
     private string? ResolveRegoContent()
@@ -431,5 +556,27 @@ public sealed class OpaPolicyBackend : IExternalPolicyBackend
         return !string.IsNullOrWhiteSpace(_regoPath) && File.Exists(_regoPath)
             ? File.ReadAllText(_regoPath, Encoding.UTF8)
             : null;
+    }
+
+    private static readonly HashSet<string> BlockedHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "169.254.169.254",
+        "metadata.google.internal",
+    };
+
+    private static void ValidateOpaUrl(string opaUrl)
+    {
+        if (!Uri.TryCreate(opaUrl, UriKind.Absolute, out var uri))
+            throw new ArgumentException($"Invalid OPA URL: {opaUrl}", nameof(opaUrl));
+
+        if (uri.Scheme != "http" && uri.Scheme != "https")
+            throw new ArgumentException(
+                $"Unsupported OPA URL scheme '{uri.Scheme}': only http and https are allowed",
+                nameof(opaUrl));
+
+        if (BlockedHosts.Contains(uri.Host))
+            throw new ArgumentException(
+                $"OPA URL host '{uri.Host}' is blocked to prevent SSRF",
+                nameof(opaUrl));
     }
 }

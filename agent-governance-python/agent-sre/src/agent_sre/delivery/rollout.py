@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -117,7 +117,7 @@ class SimulatedAction:
 
     def __post_init__(self) -> None:
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(timezone.utc)
 
 
 @dataclass
@@ -170,7 +170,7 @@ class ShadowResult:
     production_rule: str | None = None
     diverged: bool = False
     divergence_reason: str | None = None
-    evaluated_at: datetime = field(default_factory=datetime.utcnow)
+    evaluated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     shadow_latency_ms: float | None = None
     production_latency_ms: float | None = None
 
@@ -252,7 +252,7 @@ class ShadowSession:
     """A governance shadow-mode evaluation session."""
 
     session_id: str = field(default_factory=lambda: f"shadow_{uuid.uuid4().hex[:12]}")
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     agent_dids: list[str] = field(default_factory=list)
     policy_names: list[str] = field(default_factory=list)
     total_evaluated: int = 0
@@ -391,12 +391,12 @@ class ShadowMode:
         if self.policy_engine is None:
             raise RuntimeError("A policy_engine is required for governance shadow evaluation")
 
-        start = datetime.utcnow()
+        start = datetime.now(timezone.utc)
         shadow_decision = self.policy_engine.evaluate(
             agent_did=action.agent_did,
             context=action.context,
         )
-        shadow_latency = (datetime.utcnow() - start).total_seconds() * 1000
+        shadow_latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
 
         result = ShadowResult(
             action_id=action.action_id,
@@ -459,7 +459,7 @@ class ShadowMode:
 
         session = self._sessions[sid]
         session.active = False
-        session.ended_at = datetime.utcnow()
+        session.ended_at = datetime.now(timezone.utc)
 
         if sid == self._active_session:
             self._active_session = None

@@ -33,6 +33,17 @@ fn hex_sha256(input: &str) -> String {
         .collect()
 }
 
+/// Constant-time byte comparison to prevent timing side-channels.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
+}
+
 fn parse_agent_name_from_did(did: &str) -> Result<&str, IdentityError> {
     did.strip_prefix("did:agentmesh:")
         .filter(|name| !name.is_empty())
@@ -152,7 +163,13 @@ impl Credential {
         issued_for: Option<String>,
     ) -> Self {
         let issued_at_secs = unix_secs_now();
-        let expires_at_secs = issued_at_secs + ttl_seconds.max(1);
+        // `saturating_add` is preferred over the raw `+`: a caller passing
+        // `u64::MAX` (or any value large enough to wrap when added to
+        // `issued_at_secs`) used to panic in debug or silently wrap in
+        // release. Saturating to `u64::MAX` keeps the credential "expires
+        // effectively never" — semantically the same as what the caller
+        // appears to have asked for — without invoking arithmetic UB.
+        let expires_at_secs = issued_at_secs.saturating_add(ttl_seconds.max(1));
         let signing_key = SigningKey::generate(&mut OsRng);
         let token = URL_SAFE_NO_PAD.encode(signing_key.to_bytes());
         Self {
@@ -184,7 +201,7 @@ impl Credential {
     }
 
     pub fn verify_token(&self, token: &str) -> bool {
-        self.token_hash == hex_sha256(token)
+        constant_time_eq(self.token_hash.as_bytes(), hex_sha256(token).as_bytes())
     }
 
     pub fn revoke(&mut self, reason: &str) {
@@ -380,6 +397,7 @@ pub struct DelegationLink {
     pub created_at_secs: u64,
     pub expires_at_secs: Option<u64>,
     pub user_context: Option<UserContext>,
+    // Compatibility marker only; not cryptographically validated by ScopeChain.
     pub parent_signature: String,
     pub link_hash: String,
     pub previous_link_hash: Option<String>,
@@ -415,6 +433,7 @@ impl DelegationLink {
             created_at_secs,
             expires_at_secs: None,
             user_context: None,
+            // Compatibility marker only (deterministic digest, not a digital signature).
             parent_signature: hex_sha256(&signable),
             link_hash: String::new(),
             previous_link_hash,
@@ -556,7 +575,7 @@ impl ScopeChain {
             }
             previous_hash = Some(link.link_hash.as_str());
         }
-        self.chain_hash == self.compute_hash()
+        constant_time_eq(self.chain_hash.as_bytes(), self.compute_hash().as_bytes())
     }
 }
 
@@ -1336,6 +1355,25 @@ mod tests {
             AgentDID::parse(did.as_str()).unwrap().agent_name(),
             "analyst"
         );
+    }
+
+    #[test]
+    fn credential_issue_saturates_on_ttl_overflow() {
+        // Previously this triggered an arithmetic overflow on
+        // `issued_at_secs + ttl_seconds` — a panic in debug builds and a
+        // silent wrap in release. Now the addition saturates at
+        // `u64::MAX` so the call returns a usable credential whose
+        // `expires_at_secs` cannot have wrapped.
+        let credential = Credential::issue(
+            "did:agentmesh:test",
+            vec!["data.read".into()],
+            vec!["reports".into()],
+            u64::MAX,
+            None,
+        );
+        assert_eq!(credential.expires_at_secs, u64::MAX);
+        assert!(credential.expires_at_secs > credential.issued_at_secs);
+        assert!(credential.is_valid());
     }
 
     #[test]

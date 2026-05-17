@@ -319,7 +319,15 @@ class BaseAgent(ABC):
         metadata = {**self._config.metadata, **extra_metadata}
         max_size = self._config.max_metadata_size_bytes
         for key, value in metadata.items():
-            size = sys.getsizeof(value)
+            # sys.getsizeof reports only the immediate object header — a
+            # dict containing a large nested list reports ~232 bytes and
+            # slips through. Use serialized JSON size for a meaningful
+            # bound on what the metadata actually contributes to wire
+            # payloads, on-disk audit lines, and downstream storage.
+            try:
+                size = len(json.dumps(value, default=str).encode())
+            except (TypeError, ValueError):
+                size = sys.getsizeof(value)  # fall back for non-serializable
             if size > max_size:
                 raise ValueError(
                     f"Metadata key {key!r} value size ({size} bytes) "

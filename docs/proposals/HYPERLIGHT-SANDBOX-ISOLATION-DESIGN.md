@@ -48,7 +48,7 @@ Rebuilding what upstream already ships would duplicate effort and fall
 behind on security fixes.
 
 `HyperLightSandboxProvider` implements the same `SandboxProvider` ABC as
-`DockerSandboxProvider` and `AzureSandboxProvider`, so callers can swap
+`DockerSandboxProvider` and `ACASandboxProvider`, so callers can swap
 backends without changing application code.
 
 ## Generic SandboxProvider Interface (Recap)
@@ -602,12 +602,12 @@ provider.execute_code_async(agent_id="a1", session_id="abc12345",
         └─ truncate stdout/stderr to 10 KiB
 ```
 
-## Comparison to the Azure Sandbox provider
+## Comparison to the ACA Sandbox provider
 
-`HyperLightSandboxProvider` and `AzureSandboxProvider` solve different
+`HyperLightSandboxProvider` and `ACASandboxProvider` solve different
 points in the deployment matrix:
 
-| Concern | Azure | Hyperlight |
+| Concern | ACA | Hyperlight |
 |---------|-------|------------|
 | Where the sandbox runs | Azure Container Apps (managed) | The agent's host machine |
 | Who provisions the VM | Microsoft | The agent runtime |

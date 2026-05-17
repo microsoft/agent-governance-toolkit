@@ -184,7 +184,7 @@ jobs:
           agent-type: ${{ matrix.agent-type }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           model: gpt-4o
-          fallback-model: gpt-4o-mini
+          fallback-model: gpt-4o
           max-tokens: ${{ matrix.max-tokens }}
           context-mode: pr-diff
           output-mode: pr-comment

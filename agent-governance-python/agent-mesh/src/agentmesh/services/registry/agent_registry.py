@@ -56,9 +56,9 @@ class AgentRegistryEntry(BaseModel):
     current_credential_expires_at: datetime
 
     # Timestamps
-    registered_at: datetime = Field(default_factory=datetime.utcnow)
+    registered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_seen_at: datetime | None = None
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Delegation
     parent_did: str | None = None

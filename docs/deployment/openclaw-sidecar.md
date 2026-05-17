@@ -5,10 +5,10 @@ Deploy OpenClaw as an autonomous agent with the Agent Governance Toolkit as a si
 > [!WARNING]
 > **Known limitations — read before deploying:**
 > - OpenClaw does **not** natively call the governance sidecar. Your orchestration layer must call the sidecar HTTP API explicitly before executing tools.
-> - The docker-compose example in this doc is for illustration. For a working local demo, use [`examples/demos/openclaw-governed/`](../../demo/openclaw-governed/).
+> - The docker-compose example in this doc is for illustration. For a working local demo, use [`examples/demos/openclaw-governed/`](../../examples/demos/openclaw-governed/).
 > - See [Roadmap](#roadmap) for the full list of unimplemented features.
 
-> **Container images** are published to `ghcr.io/microsoft/agentmesh/`. See [Container Images](../../agent-governance-python/agent-mesh/docs/deployment/azure.md#container-images) for the full list.
+> **Container images** are not yet published to a public registry. Build from source and push to your own registry (see [Build the Sidecar Image](#1-build-the-governance-sidecar-image)).
 
 > **See also:** [Deployment Overview](README.md) | [AKS Deployment](../../agent-governance-python/agent-mesh/docs/deployment/azure.md) | [OpenShell Integration](../integrations/openshell.md)
 
@@ -79,7 +79,7 @@ OpenClaw is a powerful autonomous agent capable of executing code, calling APIs,
 
 ## Quick Start with Docker Compose
 
-A working local demo is available at [`examples/demos/openclaw-governed/`](../../demo/openclaw-governed/):
+A working local demo is available at [`examples/demos/openclaw-governed/`](../../examples/demos/openclaw-governed/):
 
 ```bash
 cd examples/demos/openclaw-governed
@@ -383,7 +383,7 @@ pip install agent-os-kernel
 python -m agent_os.server --host 127.0.0.1 --port 8081
 ```
 
-A smoke test script is available at [`examples/demos/openclaw-governed/test-sidecar.sh`](../../demo/openclaw-governed/test-sidecar.sh) — it tests all 8 API endpoints.
+A smoke test script is available at [`examples/demos/openclaw-governed/test-sidecar.sh`](../../examples/demos/openclaw-governed/test-sidecar.sh) — it tests all 8 API endpoints.
 
 ---
 
@@ -412,7 +412,7 @@ Features we're actively working on:
 - [ ] **Transparent tool-call proxy** — Intercept agent → tool calls without agent modification
 - [ ] **YAML policy loading from mounted volume** — Load `PolicyDocument` files from `/policies`
 - [ ] **Prometheus `/metrics` endpoint** — Standard Prometheus format alongside the JSON API
-- [ ] **Published container images** — Pre-built images on GHCR (currently build-from-source)
+- [ ] **Published container images** — Pre-built images on a public registry (currently build-from-source)
 - [ ] **Helm chart sidecar injection** — First-class sidecar support in the AgentMesh Helm chart
 - [ ] **Trust score persistence** — Shared trust state across sidecar restarts
 - [ ] **OpenClaw native integration** — `GOVERNANCE_PROXY` env var support in OpenClaw upstream

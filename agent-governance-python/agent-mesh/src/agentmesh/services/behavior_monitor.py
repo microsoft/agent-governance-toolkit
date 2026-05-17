@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class AgentBehaviorMonitor:
     ) -> None:
         """Record a tool invocation and check for anomalies."""
         m = self._get_metrics(agent_did)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         m.total_calls += 1
         m.last_activity = now
 
@@ -146,7 +146,7 @@ class AgentBehaviorMonitor:
             return  # already quarantined
         m.quarantined = True
         m.quarantine_reason = reason
-        m.quarantined_at = datetime.utcnow()
+        m.quarantined_at = datetime.now(timezone.utc)
         logger.warning("QUARANTINE agent %s: %s", agent_did, reason)
 
     def is_quarantined(self, agent_did: str) -> bool:
@@ -155,7 +155,7 @@ class AgentBehaviorMonitor:
         if not m or not m.quarantined:
             return False
         # Auto-release after quarantine duration
-        if m.quarantined_at and datetime.utcnow() - m.quarantined_at > self._quarantine_duration:
+        if m.quarantined_at and datetime.now(timezone.utc) - m.quarantined_at > self._quarantine_duration:
             self.release_quarantine(agent_did)
             return False
         return True

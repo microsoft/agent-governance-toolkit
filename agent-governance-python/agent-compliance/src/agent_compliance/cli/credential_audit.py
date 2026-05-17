@@ -18,13 +18,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -59,6 +61,25 @@ def _get_token() -> str:
     return token
 
 
+# Retry configuration. Three attempts plus the original request was
+# already the contract; the previous code retried only on HTTP 403 and
+# let every URLError (DNS hiccups, TLS resets, connection refused)
+# propagate immediately even though those failure modes are the most
+# common transient errors in a long-running scan. Exponential backoff
+# with full jitter spreads concurrent CLI invocations across the wake
+# window and prevents the thundering-herd retry pattern.
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BASE_SECONDS = 1.0
+_RETRY_MAX_SLEEP_SECONDS = 60.0
+
+
+def _retry_sleep_seconds(attempt: int) -> float:
+    """Full-jitter exponential backoff: random in [0, base * 2**attempt)."""
+    upper = _RETRY_BASE_SECONDS * (2 ** attempt)
+    upper = min(upper, _RETRY_MAX_SLEEP_SECONDS)
+    return random.uniform(0, upper)
+
+
 def _api(path: str, params: dict[str, str] | None = None) -> Any:
     url = f"https://api.github.com{path}"
     if params:
@@ -70,21 +91,58 @@ def _api(path: str, params: dict[str, str] | None = None) -> Any:
     req.add_header("Accept", "application/vnd.github+json")
     req.add_header("X-GitHub-Api-Version", "2022-11-28")
 
-    for attempt in range(3):
+    last_exc: Exception | None = None
+    for attempt in range(_RETRY_MAX_ATTEMPTS):
         try:
             with urlopen(req, timeout=15) as resp:
                 return json.loads(resp.read())
         except HTTPError as exc:
-            if exc.code == 403 and attempt < 2:
+            last_exc = exc
+            # GitHub's documented rate-limit envelope: 403 with a
+            # Retry-After header. Honour it verbatim (clamped to a
+            # sane band) when present.
+            if exc.code == 403 and attempt < _RETRY_MAX_ATTEMPTS - 1:
                 wait = int(exc.headers.get("Retry-After", "10"))
                 wait = min(max(wait, 5), 60)
                 print(f"  Rate limited, waiting {wait}s...", file=sys.stderr)
-                import time
+                time.sleep(wait)
+                continue
+            # 5xx is transient on GitHub's side — also worth retrying
+            # with backoff rather than crashing the whole audit.
+            if 500 <= exc.code < 600 and attempt < _RETRY_MAX_ATTEMPTS - 1:
+                wait = _retry_sleep_seconds(attempt)
+                print(
+                    f"  Server error {exc.code}, retrying in {wait:.1f}s...",
+                    file=sys.stderr,
+                )
                 time.sleep(wait)
                 continue
             if exc.code in (404, 422):
                 return None
             raise
+        except URLError as exc:
+            # Network-layer failures: DNS resolution, TCP reset, TLS
+            # handshake aborts, socket timeout. The previous code let
+            # these propagate on the first occurrence even though
+            # they're typically the most retryable failure shape.
+            last_exc = exc
+            if attempt < _RETRY_MAX_ATTEMPTS - 1:
+                wait = _retry_sleep_seconds(attempt)
+                print(
+                    f"  Network error ({exc.reason}), retrying in "
+                    f"{wait:.1f}s...",
+                    file=sys.stderr,
+                )
+                time.sleep(wait)
+                continue
+            raise
+
+    # Defensive: the loop exits via return/raise; this only fires if
+    # the retry counter ran out without a final raise (shouldn't
+    # happen, but better than returning None silently).
+    if last_exc is not None:
+        raise last_exc
+    return None
 
 
 def _search(endpoint: str, query: str, per_page: int = 100) -> list[dict]:

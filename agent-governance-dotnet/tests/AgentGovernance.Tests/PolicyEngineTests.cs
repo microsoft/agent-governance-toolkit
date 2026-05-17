@@ -193,6 +193,97 @@ rules:
     }
 
     [Fact]
+    public async Task Evaluate_ConcurrentWithClearPolicies_DoesNotThrow_AndDecisionsRemainShaped()
+    {
+        // Regression: Evaluate() previously snapshotted _policies and
+        // _externalBackends under two separate lock acquisitions, and
+        // ClearPolicies() cleared them under two separate acquisitions too --
+        // so a Clear could land between the two snapshots and let Evaluate
+        // run with one collection cleared and the other still populated.
+        // (The two lock objects are now a single _snapshotLock guarding both
+        // collections, and ClearPolicies clears both inside that lock.)
+        //
+        // The torn-read itself is subtle and not directly externally
+        // observable as a "wrong" decision -- the engine still self-
+        // consistently routes through whichever pair of snapshots it got.
+        // What this test pins is the strict load-bearing property of the
+        // single-lock consolidation: under heavy concurrent
+        // ClearPolicies / LoadYaml / AddExternalBackend / Evaluate, no call
+        // throws (the underlying List<T> mutations are safely serialized)
+        // and every returned PolicyDecision is well-shaped (non-null
+        // Action). If the lock consolidation regressed to two locks (or
+        // worse, dropped a lock around mutation), a List<T> resize during
+        // concurrent enumeration would surface as
+        // InvalidOperationException here.
+
+        var engine = new PolicyEngine();
+        engine.LoadYaml(DenyPolicy);
+        var backend = new AllowBackend();
+        engine.AddExternalBackend(backend);
+
+        var ctx = new Dictionary<string, object> { ["tool_name"] = "rm" };
+        var stopAt = DateTime.UtcNow.AddSeconds(2);
+        var exceptions = 0;
+        var malformedDecisions = 0;
+
+        var clearTask = Task.Run(() =>
+        {
+            while (DateTime.UtcNow < stopAt)
+            {
+                try
+                {
+                    engine.ClearPolicies();
+                    engine.LoadYaml(DenyPolicy);
+                    engine.AddExternalBackend(backend);
+                }
+                catch
+                {
+                    Interlocked.Increment(ref exceptions);
+                }
+            }
+        });
+
+        var evalTasks = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+        {
+            while (DateTime.UtcNow < stopAt)
+            {
+                try
+                {
+                    var decision = engine.Evaluate("did:mesh:test", ctx);
+                    if (string.IsNullOrEmpty(decision.Action))
+                    {
+                        Interlocked.Increment(ref malformedDecisions);
+                    }
+                }
+                catch
+                {
+                    Interlocked.Increment(ref exceptions);
+                }
+            }
+        })).ToArray();
+
+        await Task.WhenAll(evalTasks.Append(clearTask));
+
+        Assert.Equal(0, exceptions);
+        Assert.Equal(0, malformedDecisions);
+    }
+
+    private sealed class AllowBackend : IExternalPolicyBackend
+    {
+        public string Name => "allow-backend";
+
+        public ExternalPolicyDecision Evaluate(IReadOnlyDictionary<string, object> context)
+        {
+            return new ExternalPolicyDecision
+            {
+                Backend = Name,
+                Allowed = true,
+                Reason = "always-allow"
+            };
+        }
+    }
+
+    [Fact]
     public void Evaluate_RecordsEvaluationMetadata()
     {
         var engine = new PolicyEngine();

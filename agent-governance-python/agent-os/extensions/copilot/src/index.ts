@@ -251,7 +251,9 @@ app.post('/api/webhook', async (req: Request, res: Response) => {
                 .update(rawBody)
                 .digest('hex');
             
-            if (signature !== expectedSignature) {
+            const expected = Buffer.from(expectedSignature, 'utf8');
+            const actual = Buffer.from(signature, 'utf8');
+            if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
                 logger.warn('Invalid webhook signature');
                 return res.status(401).json({ error: 'Invalid signature' });
             }

@@ -203,26 +203,17 @@ pub trait SandboxProvider {
 /// Container name prefix used to namespace sandbox containers.
 const CONTAINER_PREFIX: &str = "agentmesh-sandbox";
 
-/// Generate a simple unique ID (hex string) without external crates.
+/// Generate a unique 16-hex-char session/execution ID.
+///
+/// Uses `rand::random::<u64>()` (OS-seeded thread RNG) rather than mixing
+/// the current nanosecond timestamp with `ThreadId` via FNV-1a — that older
+/// approach could collide when two threads called within the same nanosecond
+/// happened to produce the same FNV mix of `nanos || ThreadId`. The IDs are
+/// not security-sensitive (they're used to namespace Docker container names
+/// and reference in-process session state), so a non-CSPRNG `random::<u64>()`
+/// is sufficient for the uniqueness guarantee.
 fn generate_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let hash = {
-        // Mix in thread ID for uniqueness across threads
-        let tid = format!("{:?}", std::thread::current().id());
-        let combined = format!("{}{}", nanos, tid);
-        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-        for b in combined.as_bytes() {
-            h ^= *b as u64;
-            h = h.wrapping_mul(0x0100_0000_01b3);
-        }
-        h
-    };
-    format!("{:016x}", hash)
+    format!("{:016x}", rand::random::<u64>())
 }
 
 /// Format a Docker-safe container name from agent and session IDs.
@@ -239,7 +230,6 @@ pub struct DockerSandboxProvider {
     available: bool,
     /// Maps `(agent_id, session_id)` → Docker container name.
     containers: HashMap<(String, String), String>,
-    runtime: String,
 }
 
 impl DockerSandboxProvider {
@@ -257,18 +247,12 @@ impl DockerSandboxProvider {
             image: image.to_string(),
             available,
             containers: HashMap::new(),
-            runtime: String::from("runc"),
         }
     }
 
     /// Return the configured Docker image.
     pub fn image(&self) -> &str {
         &self.image
-    }
-
-    /// Return the OCI runtime name.
-    pub fn runtime(&self) -> &str {
-        &self.runtime
     }
 }
 
@@ -360,9 +344,21 @@ impl SandboxProvider for DockerSandboxProvider {
         let execution_id = generate_id();
         let start = Instant::now();
 
+        // Avoid shell interpolation: pipe code via stdin instead of sh -c.
         let output = Command::new("docker")
-            .args(["exec", &name, "sh", "-c", code])
-            .output()
+            .args(["exec", "-i", &name, "sh"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .and_then(|mut child| {
+                use std::io::Write;
+                if let Some(ref mut stdin) = child.stdin {
+                    stdin.write_all(code.as_bytes())?;
+                }
+                drop(child.stdin.take());
+                child.wait_with_output()
+            })
             .map_err(|e| format!("Failed to run docker exec: {}", e))?;
 
         let duration = start.elapsed().as_secs_f64();

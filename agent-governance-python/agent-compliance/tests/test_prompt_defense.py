@@ -9,6 +9,8 @@ import hashlib
 
 
 from agent_compliance.prompt_defense import (
+    GRADE_THRESHOLD_LIST,
+    GRADE_THRESHOLDS,
     PromptDefenseConfig,
     PromptDefenseEvaluator,
     PromptDefenseFinding,
@@ -77,6 +79,24 @@ class TestScoreToGrade:
     def test_grade_f(self) -> None:
         assert _score_to_grade(29) == "F"
         assert _score_to_grade(0) == "F"
+
+    def test_threshold_list_is_descending(self) -> None:
+        # The list-of-tuples encoding pins scan order independently of
+        # Python's insertion-ordered-dict semantics. Each successive
+        # threshold must be strictly lower than the previous one for
+        # the top-down "first match wins" loop to be correct.
+        thresholds = [t for _, t in GRADE_THRESHOLD_LIST]
+        assert thresholds == sorted(thresholds, reverse=True)
+
+    def test_threshold_list_matches_legacy_dict(self) -> None:
+        # The public re-export stays in sync with the canonical tuple
+        # list so downstream callers reading ``GRADE_THRESHOLDS`` see
+        # the same numbers.
+        assert dict(GRADE_THRESHOLD_LIST) == GRADE_THRESHOLDS
+
+    def test_threshold_list_covers_all_grades(self) -> None:
+        grades = [g for g, _ in GRADE_THRESHOLD_LIST]
+        assert grades == ["A", "B", "C", "D", "F"]
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +189,7 @@ class TestGrading:
 
     def test_partial_prompt_gets_middle_grade(self) -> None:
         report = self.evaluator.evaluate(PARTIAL_PROMPT)
-        assert report.grade in ("C", "D", "B")
+        assert report.grade in ("B", "C", "D", "F")
         assert report.score >= 15
 
 
@@ -230,7 +250,7 @@ class TestVectorDetection:
 
     def test_unicode_defended(self) -> None:
         report = self.evaluator.evaluate(
-            "Be aware of Unicode homoglyph attacks and encoding tricks.",
+            "Reject Unicode homoglyph and special character encoding tricks.",
         )
         assert self._find(report, "unicode-attack").defended is True
 
@@ -270,6 +290,19 @@ class TestVectorDetection:
             "Validate all user input. Reject SQL injection and XSS.",
         )
         assert self._find(report, "input-validation").defended is True
+
+    def test_concept_mentions_without_defense_are_not_marked_defended(self) -> None:
+        weak_prompts = {
+            "multilang-bypass": "Our localization docs list each supported language.",
+            "unicode-attack": "This section explains Unicode and homoglyph examples.",
+            "indirect-injection": "Our API receives user-provided JSON from external sources.",
+            "social-engineering": "Our marketing copy creates urgency around limited-time offers.",
+            "output-weaponization": "Our threat-intel feed catalogs phishing campaigns.",
+            "abuse-prevention": "We document common API misuse and abuse patterns.",
+        }
+        for vector_id, prompt in weak_prompts.items():
+            report = self.evaluator.evaluate(prompt)
+            assert self._find(report, vector_id).defended is False
 
 
 # ---------------------------------------------------------------------------

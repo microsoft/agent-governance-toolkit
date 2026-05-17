@@ -46,7 +46,7 @@ export class AuditLogger {
             this.logs = this.logs.slice(0, this.maxLogs);
         }
 
-        this.saveLogs();
+        void this.saveLogs();
         this._onDidChange.fire();
     }
 
@@ -118,7 +118,7 @@ export class AuditLogger {
      */
     clear(): void {
         this.logs = [];
-        this.saveLogs();
+        void this.saveLogs();
         this._onDidChange.fire();
     }
 
@@ -134,10 +134,18 @@ export class AuditLogger {
     }
 
     /**
-     * Save logs to storage
+     * Persist the in-memory log buffer to globalState.
+     *
+     * `globalState.update` writes synchronously to its in-memory map and
+     * returns a Thenable that resolves once the value reaches durable
+     * storage. The Memento serializes successive updates internally, so
+     * call ordering is preserved; the only loss window is host death
+     * between the call and the Thenable resolving. Callers that don't
+     * need to await persistence should explicitly fire-and-forget with
+     * `void this.saveLogs()`.
      */
-    private saveLogs(): void {
-        this.context.globalState.update(this.storageKey, this.logs);
+    private saveLogs(): Thenable<void> {
+        return this.context.globalState.update(this.storageKey, this.logs);
     }
 
     /**
@@ -154,7 +162,7 @@ export class AuditLogger {
         this.logs = this.logs.filter(log => new Date(log.timestamp) >= cutoff);
 
         if (this.logs.length !== originalCount) {
-            this.saveLogs();
+            void this.saveLogs();
             this._onDidChange.fire();
         }
     }

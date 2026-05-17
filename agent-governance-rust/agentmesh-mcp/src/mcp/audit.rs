@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn in_memory_audit_sink_redacts_secrets() {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let sink = InMemoryAuditSink::new(redactor);
         sink.record(McpAuditEntry {
             event_type: "test".into(),

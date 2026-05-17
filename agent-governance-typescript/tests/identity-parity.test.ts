@@ -305,6 +305,23 @@ describe('IdentityRegistry', () => {
     expect(child.status).toBe('revoked');
   });
 
+  it('terminates revocation even when parentDid forms a cycle', () => {
+    // A legitimate `delegate()` call cannot create a parentDid cycle, but a
+    // corrupted persistence store, a custom builder, or a future bug could.
+    // The cascade walks all reachable children, so without a visited-set
+    // guard a cycle would recurse forever and overflow the JS call stack.
+    const child = id1.delegate('child', ['read']);
+    registry.register(id1);
+    registry.register(child);
+
+    // Force the cycle: id1.parentDid -> child.did, child.parentDid -> id1.did.
+    (id1 as unknown as { _parentDid: string | null })._parentDid = child.did;
+
+    expect(registry.revoke(id1.did, 'cycle test')).toBe(true);
+    expect(id1.status).toBe('revoked');
+    expect(child.status).toBe('revoked');
+  });
+
   it('returns false revoking unknown DID', () => {
     expect(registry.revoke('did:nonexistent', 'reason')).toBe(false);
   });

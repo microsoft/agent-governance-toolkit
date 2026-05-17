@@ -1,4 +1,24 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+#
+# Enables GitHub's auto-merge for Dependabot patch/minor updates.
+#
+# This workflow does NOT auto-approve. `gh pr merge --auto` only flips
+# the PR into "merge when all required checks pass and required
+# approvals are met" state — branch protection still gates the actual
+# merge on:
+#   * all required status checks passing
+#   * the required number of maintainer approvals
+#
+# A maintainer (or CODEOWNER) must explicitly approve the PR before
+# GitHub will complete the auto-merge. This matches REVIEW.md's
+# guidance: do not auto-approve without a CI-passed precondition;
+# require code-owner reviews via branch protection.
+#
+# Previously this workflow ran `gh pr review --approve` unconditionally
+# on PR open, which satisfied the approval requirement before CI had
+# a chance to run. With branch protection that required approvals but
+# not status checks (a misconfiguration that is easy to overlook),
+# the combination of auto-approve + auto-merge would race past CI.
 name: Auto-merge Dependabot PRs
 on: pull_request
 permissions:
@@ -13,12 +33,6 @@ jobs:
     steps:
       - uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         id: metadata
-      - name: Auto-approve patch and minor updates
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
-        run: gh pr review --approve "$PR_URL"
-        env:
-          PR_URL: "${{ github.event.pull_request.html_url }}"
-          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
       - name: Enable auto-merge for patch and minor
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
         run: gh pr merge --auto --squash "$PR_URL"

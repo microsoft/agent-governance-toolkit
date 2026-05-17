@@ -5,12 +5,31 @@ package agentmesh
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
+
+// randomHex returns 2*n hex characters drawn from crypto/rand.
+//
+// A failure from crypto/rand indicates a broken entropy source (e.g.
+// /dev/urandom is unreachable) — the sandbox cannot safely produce
+// unique session identifiers in that state, so we panic rather than
+// return a degraded fallback. This is the same convention Go uses for
+// `rand.Read` in security-critical contexts (`crypto/rsa.GenerateKey`
+// etc.).
+func randomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("sandbox: crypto/rand failed: %v", err))
+	}
+	return hex.EncodeToString(b)
+}
 
 // Docker subprocess deadlines. ``docker exec`` runs user-supplied code so
 // it falls back to SandboxConfig.TimeoutSeconds when set; the others are
@@ -20,6 +39,7 @@ const (
 	dockerStartTimeout   = 30 * time.Second
 	dockerExecTimeout    = 60 * time.Second
 	dockerRemoveTimeout  = 15 * time.Second
+	maxTrackedContainers = 10_000
 )
 
 // SessionStatus represents the lifecycle state of a sandbox session.
@@ -104,30 +124,40 @@ type SandboxProvider interface {
 
 // DockerSandboxProvider implements SandboxProvider using the Docker CLI.
 type DockerSandboxProvider struct {
-	image      string
-	available  bool
-	containers map[string]string // key: "agentID:sessionID", value: container name
-	mu         sync.Mutex
+	image          string
+	containers     map[string]string // key: "agentID:sessionID", value: container name
+	mu             sync.Mutex
+	availableOnce  sync.Once
+	available      bool
 }
 
 // NewDockerSandboxProvider creates a DockerSandboxProvider with the given base image.
-// It probes for Docker availability via `docker info` (bounded by
-// dockerInfoTimeout so a stalled daemon does not block initialisation).
+//
+// The constructor is non-blocking: Docker daemon reachability is probed
+// lazily on the first call to [DockerSandboxProvider.IsAvailable] (or
+// equivalently on the first [DockerSandboxProvider.CreateSession]).
+// Callers that never invoke a sandbox method — for example, unit tests
+// that exercise other code paths — never pay the `docker info` cost.
 func NewDockerSandboxProvider(image string) *DockerSandboxProvider {
-	p := &DockerSandboxProvider{
+	return &DockerSandboxProvider{
 		image:      image,
 		containers: make(map[string]string),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), dockerInfoTimeout)
-	defer cancel()
-	if err := exec.CommandContext(ctx, "docker", "info").Run(); err == nil {
-		p.available = true
-	}
-	return p
 }
 
-// IsAvailable reports whether the Docker daemon is reachable.
+// IsAvailable reports whether the Docker daemon is reachable. The
+// underlying `docker info` probe runs at most once per provider; the
+// result is cached for the lifetime of the receiver. A provider whose
+// first probe fails will not retry — construct a new provider if the
+// daemon becomes available later.
 func (p *DockerSandboxProvider) IsAvailable() bool {
+	p.availableOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), dockerInfoTimeout)
+		defer cancel()
+		if err := exec.CommandContext(ctx, "docker", "info").Run(); err == nil {
+			p.available = true
+		}
+	})
 	return p.available
 }
 
@@ -139,16 +169,32 @@ func containerName(agentID, sessionID string) string {
 	return fmt.Sprintf("agt-sandbox-%s-%s", agentID, sessionID)
 }
 
+// containerIDPattern is the character set Docker accepts in `--name`
+// values (alphanumeric, `_`, `.`, `-`). agentID values that contain
+// anything outside this set get rejected at the sandbox-provider
+// boundary so they cannot land in a `docker run --name` argument where
+// Docker would either reject them, truncate them, or — for a few
+// characters like `$` — produce a name whose collisions cause
+// surprising race conditions across concurrent sessions.
+var containerIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
 // CreateSession starts a hardened Docker container for the given agent.
 func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxConfig) (*SessionHandle, error) {
-	if !p.available {
+	if !p.IsAvailable() {
 		return nil, fmt.Errorf("docker is not available")
+	}
+	if !containerIDPattern.MatchString(agentID) {
+		return nil, fmt.Errorf("invalid agentID %q: must match %s", agentID, containerIDPattern)
 	}
 	if config == nil {
 		config = DefaultSandboxConfig()
 	}
 
-	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
+	// `time.Now().UnixNano()` alone collides on low-resolution clocks
+	// (Windows commonly resolves to ~100ns) and on closely-spaced
+	// concurrent calls; append a crypto/rand suffix so two sessions
+	// created in the same nanosecond cannot map to the same container.
+	sessionID := fmt.Sprintf("%d-%s", time.Now().UnixNano(), randomHex(8))
 	name := containerName(agentID, sessionID)
 
 	args := []string{
@@ -183,6 +229,16 @@ func (p *DockerSandboxProvider) CreateSession(agentID string, config *SandboxCon
 	}
 
 	p.mu.Lock()
+	if p.containers == nil {
+		p.containers = make(map[string]string)
+	}
+	// Evict oldest tracked container if at capacity
+	if len(p.containers) >= maxTrackedContainers {
+		for k := range p.containers {
+			delete(p.containers, k)
+			break
+		}
+	}
 	p.containers[containerKey(agentID, sessionID)] = name
 	p.mu.Unlock()
 
@@ -202,12 +258,16 @@ func (p *DockerSandboxProvider) ExecuteCode(agentID, sessionID, code string) (*E
 		return nil, fmt.Errorf("session %s:%s not found", agentID, sessionID)
 	}
 
-	execID := fmt.Sprintf("exec-%d", time.Now().UnixNano())
+	// Same collision concern as sessionID — keep the nanosecond prefix
+	// for human-readable ordering and append a random suffix.
+	execID := fmt.Sprintf("exec-%d-%s", time.Now().UnixNano(), randomHex(4))
 	start := time.Now()
 
 	ctx, cancel := context.WithTimeout(context.Background(), dockerExecTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "docker", "exec", name, "sh", "-c", code)
+	// Avoid shell interpolation: pipe code via stdin instead of sh -c.
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", name, "sh")
+	cmd.Stdin = strings.NewReader(code)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

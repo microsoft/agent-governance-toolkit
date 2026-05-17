@@ -9,7 +9,7 @@ credentials).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -510,14 +510,14 @@ class TestVerifyClient:
     @pytest.mark.asyncio
     async def test_cache_hit_within_ttl(self, server: TrustGatedMCPServer) -> None:
         """A recently verified client should be served from cache."""
-        server._verified_clients["did:mesh:cached"] = datetime.utcnow()
+        server._verified_clients["did:mesh:cached"] = datetime.now(timezone.utc)
         result = await server.verify_client("did:mesh:cached")
         assert result is True
 
     @pytest.mark.asyncio
     async def test_cache_miss_expired_ttl(self, server: TrustGatedMCPServer) -> None:
         """An expired cache entry should not pass without bridge or card."""
-        expired_time = datetime.utcnow() - timedelta(minutes=15)
+        expired_time = datetime.now(timezone.utc) - timedelta(minutes=15)
         server._verified_clients["did:mesh:old"] = expired_time
         result = await server.verify_client("did:mesh:old")
         assert result is False
@@ -601,7 +601,7 @@ class TestVerifyClient:
         bridge = AsyncMock()
         bridge.verify_peer = AsyncMock(return_value=True)
         server = TrustGatedMCPServer(server_identity, trust_bridge=bridge)
-        server._verified_clients["did:mesh:cached"] = datetime.utcnow()
+        server._verified_clients["did:mesh:cached"] = datetime.now(timezone.utc)
 
         result = await server.verify_client("did:mesh:cached")
         assert result is True

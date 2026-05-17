@@ -418,15 +418,20 @@ class SecureCodeTemplate:
                     return response
         """),
         "file_read": textwrap.dedent("""\
-            import os
             from pathlib import Path
 
             def safe_read(filepath: str, *, base_dir: str = {base_dir}) -> str:
                 \"\"\"Read a file, preventing path-traversal attacks.\"\"\"
                 base = Path(base_dir).resolve()
                 target = (base / filepath).resolve()
-                if not str(target).startswith(str(base)):
-                    raise ValueError("Path traversal detected")
+                # Path.is_relative_to is component-aware. The previous
+                # str(target).startswith(str(base)) check passed for
+                # /foobar/x when base was /foo, because the substring
+                # match doesn't know about path separators.
+                try:
+                    target.relative_to(base)
+                except ValueError as exc:
+                    raise ValueError("Path traversal detected") from exc
                 if not target.is_file():
                     raise FileNotFoundError(f"{{target}} does not exist")
                 return target.read_text(encoding="utf-8")

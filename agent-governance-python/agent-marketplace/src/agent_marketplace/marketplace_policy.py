@@ -66,7 +66,6 @@ class OrgMarketplacePolicy:
 
     organization: str
     additional_allowed_plugin_types: list[str] = field(default_factory=list)
-    additional_blocked_plugins: list[str] = field(default_factory=list)
     mcp_server_overrides: MCPServerPolicy | None = None
 
 

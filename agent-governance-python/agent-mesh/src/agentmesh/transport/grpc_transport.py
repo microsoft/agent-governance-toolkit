@@ -286,49 +286,50 @@ class GRPCTransport(Transport):
     # -- Typed RPC helpers -----------------------------------------------------
 
     async def request_trust(self, request: TrustRequest) -> TrustResponse:
-        """Send a TrustRequest and receive a TrustResponse.
+        """Send a TrustRequest. Not yet wired to a real gRPC stub.
 
-        Args:
-            request: Trust query request.
-
-        Returns:
-            Trust response with scores.
+        Raises NotImplementedError. The previous body synthesized a
+        success-shaped response without ever calling a remote stub —
+        callers that branched on the result believed they had a real
+        trust assertion. That is worse than no answer because it
+        produces a security-positive answer regardless of the peer's
+        actual trust state.
         """
         await self.send("trust.query", _dataclass_to_dict(request))
-        # In a full implementation this would await the server response.
-        return TrustResponse(
-            agent_did=request.agent_did,
-            request_id=request.request_id,
+        raise NotImplementedError(
+            "grpc_transport.request_trust does not yet round-trip to a "
+            "real trust service — wire a gRPC stub before calling, or "
+            "use a transport that implements the request/response shape"
         )
 
     async def initiate_handshake(self, request: HandshakeRequest) -> HandshakeResponse:
-        """Send a HandshakeRequest and receive a HandshakeResponse.
+        """Send a HandshakeRequest. Not yet wired to a real gRPC stub.
 
-        Args:
-            request: Handshake initiation request.
-
-        Returns:
-            Handshake response.
+        Raises NotImplementedError. The previous body synthesized
+        `accepted=True` without ever calling a remote stub. See
+        request_trust above for the same rationale.
         """
         await self.send("trust.handshake", _dataclass_to_dict(request))
-        return HandshakeResponse(
-            accepted=True,
-            session_id=f"session-{request.initiator_did}-{request.target_did}",
+        raise NotImplementedError(
+            "grpc_transport.initiate_handshake does not yet round-trip "
+            "to a real handshake service — wire a gRPC stub before "
+            "calling, or use a transport that implements the "
+            "request/response shape"
         )
 
     async def check_policy(self, request: PolicyCheckRequest) -> PolicyCheckResponse:
-        """Send a PolicyCheckRequest and receive a PolicyCheckResponse.
+        """Send a PolicyCheckRequest. Not yet wired to a real gRPC stub.
 
-        Args:
-            request: Policy check request.
-
-        Returns:
-            Policy check response.
+        Raises NotImplementedError. The previous body synthesized
+        `allowed=True` without ever calling a remote stub — every
+        policy check trivially returned allow regardless of the
+        request's content.
         """
         await self.send("governance.policy_check", _dataclass_to_dict(request))
-        return PolicyCheckResponse(
-            allowed=True,
-            request_id=request.request_id,
+        raise NotImplementedError(
+            "grpc_transport.check_policy does not yet round-trip to a "
+            "real policy service — wire a gRPC stub before calling, or "
+            "use a transport that implements the request/response shape"
         )
 
     # -- Handler registration --------------------------------------------------

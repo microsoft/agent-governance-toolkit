@@ -125,9 +125,53 @@ class GovernedEnvironment(Generic[T_state, T_action]):
         logger.info("GovernedEnvironment initialized")
 
     def _setup_hooks(self) -> None:
-        """Set up hooks to capture violations."""
+        """Set up hooks to capture violations.
+
+        Sets ``self._hooks_wired = True`` only when the kernel actually
+        accepted the callback registration. ``step`` consults this flag
+        to decide whether it must additionally poll
+        ``kernel.get_recent_violations()`` — otherwise a kernel that only
+        exposes the pull API would silently produce zero recorded
+        violations and incorrectly award the success bonus.
+        """
+        self._hooks_wired = False
         if hasattr(self.kernel, 'on_policy_violation'):
             self.kernel.on_policy_violation(self._handle_violation)
+            self._hooks_wired = True
+
+    def _pull_kernel_violations(self) -> None:
+        """Poll the kernel for violations recorded during the current step.
+
+        Used when no ``on_policy_violation`` hook was wired. The kernel
+        is expected to expose ``get_recent_violations()`` returning a
+        sequence of violation records — each either a dict matching the
+        shape produced by :meth:`_handle_violation`, or an object with
+        ``policy_name`` / ``description`` / ``severity`` /
+        ``action_blocked`` attributes.
+        """
+        get_recent = getattr(self.kernel, "get_recent_violations", None)
+        if not callable(get_recent):
+            return
+        try:
+            recent = get_recent()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("kernel.get_recent_violations() raised: %s", exc)
+            return
+
+        for v in recent or ():
+            if isinstance(v, dict):
+                policy = v.get("policy") or v.get("policy_name", "")
+                description = v.get("description", "")
+                severity = v.get("severity", "low")
+                blocked = bool(v.get("blocked") or v.get("action_blocked"))
+            else:
+                policy = getattr(v, "policy_name", getattr(v, "policy", ""))
+                description = getattr(v, "description", "")
+                severity = getattr(v, "severity", "low")
+                blocked = bool(
+                    getattr(v, "action_blocked", getattr(v, "blocked", False))
+                )
+            self._handle_violation(policy, description, severity, blocked)
 
     def _handle_violation(
         self,
@@ -228,6 +272,11 @@ class GovernedEnvironment(Generic[T_state, T_action]):
             logger.error(f"Step failed: {e}")
             result = None
             success = False
+
+        # If no callback hook is wired, pull violations from the kernel
+        # so reward shaping and termination still see them.
+        if not getattr(self, "_hooks_wired", False):
+            self._pull_kernel_violations()
 
         # Calculate reward
         reward = self.reward_fn(self._current_task, action, result)

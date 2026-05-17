@@ -73,10 +73,20 @@ def merge_policies(policy_chain: list[PolicyDocument]) -> list[PolicyRule]:
                         rule.name,
                         level,
                     )
+            elif existing is not None:
+                # Same-name rule without override=True — drop it.
+                # The parent version stays; appending a duplicate would let
+                # the child's priority defeat the parent at evaluation time.
+                logger.debug(
+                    "Rule '%s' at level %d duplicates parent rule without "
+                    "override=True — dropped",
+                    rule.name,
+                    level,
+                )
             else:
+                # New rule name — append normally
                 merged.append(rule)
-                if rule.name not in rules_by_name:
-                    rules_by_name[rule.name] = (rule, level)
+                rules_by_name[rule.name] = (rule, level)
 
     merged.sort(key=lambda r: r.priority, reverse=True)
     return merged

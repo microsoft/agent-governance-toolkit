@@ -145,6 +145,50 @@ rules: []
     }
 
     [Fact]
+    public void FromYaml_CachedDeserializer_ProducesStableResultsAcrossCalls()
+    {
+        // FromYaml caches a single IDeserializer at type-init time. This test
+        // pins the contract that repeated calls (including concurrent calls
+        // across different inputs) parse independently and return equivalent
+        // results to a one-shot call.
+        var yamls = new[]
+        {
+            ValidYaml,
+            @"
+apiVersion: governance.toolkit/v1
+name: tenant-policy
+scope: tenant
+default_action: allow
+rules: []
+",
+            @"
+apiVersion: governance.toolkit/v1
+name: agent-policy
+scope: agent
+default_action: deny
+rules: []
+"
+        };
+
+        var first = yamls.Select(GovernancePolicy.FromYaml).ToList();
+
+        // Re-parse repeatedly, including in parallel, and confirm results
+        // match field-for-field. If the cached deserializer leaked state
+        // between calls, fields would drift.
+        for (var iter = 0; iter < 5; iter++)
+        {
+            var again = yamls.AsParallel().Select(GovernancePolicy.FromYaml).ToList();
+            for (var i = 0; i < first.Count; i++)
+            {
+                Assert.Equal(first[i].Name, again[i].Name);
+                Assert.Equal(first[i].Scope, again[i].Scope);
+                Assert.Equal(first[i].DefaultAction, again[i].DefaultAction);
+                Assert.Equal(first[i].Rules.Count, again[i].Rules.Count);
+            }
+        }
+    }
+
+    [Fact]
     public void FromYaml_DefaultsWhenFieldsMissing()
     {
         var yaml = @"

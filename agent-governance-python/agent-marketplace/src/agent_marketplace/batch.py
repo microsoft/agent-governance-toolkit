@@ -174,23 +174,40 @@ def _evaluate_manifest(
 
 
 def _discover_manifests(directory: Path) -> list[Path]:
-    """Find all plugin manifest files in immediate subdirectories."""
+    """Find all plugin manifest files in immediate subdirectories.
+
+    The directory root is also inspected so a single-plugin layout
+    (manifest at the top of ``directory`` rather than in a subdirectory)
+    still resolves. Symlink loops would otherwise cause the same
+    manifest to surface twice — once via the canonical subdirectory
+    walk and once via the root check — so we dedupe by the resolved
+    absolute path.
+    """
     if not directory.is_dir():
         raise MarketplaceError(f"Not a directory: {directory}")
 
     manifests: list[Path] = []
+    seen: set[Path] = set()
 
-    # Check each immediate subdirectory for a manifest
+    def _add(p: Path) -> None:
+        try:
+            canonical = p.resolve()
+        except OSError:
+            canonical = p.absolute()
+        if canonical in seen:
+            return
+        seen.add(canonical)
+        manifests.append(p)
+
     for child in sorted(directory.iterdir()):
         if child.is_dir():
             manifest_path = child / MANIFEST_FILENAME
             if manifest_path.exists():
-                manifests.append(manifest_path)
+                _add(manifest_path)
 
-    # Also check the directory root
     root_manifest = directory / MANIFEST_FILENAME
     if root_manifest.exists():
-        manifests.append(root_manifest)
+        _add(root_manifest)
 
     return manifests
 

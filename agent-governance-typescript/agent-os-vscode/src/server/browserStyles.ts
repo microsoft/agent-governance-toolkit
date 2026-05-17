@@ -342,6 +342,9 @@ export function buildBrowserStyles(): string {
     .badge-block { background: rgba(239,68,68,0.15); color: var(--error); }
     .badge-allow { background: rgba(34,197,94,0.15); color: var(--success); }
     .badge-audit { background: rgba(0,102,255,0.15); color: var(--accent); }
+    /* Fallback for any action that isn't in the whitelist (corrupt data
+       or a future enum addition that hasn't been styled yet). */
+    .badge-unknown { background: rgba(127,127,127,0.15); color: var(--text-muted); }
 
     /* === Audit list === */
     .audit-row {

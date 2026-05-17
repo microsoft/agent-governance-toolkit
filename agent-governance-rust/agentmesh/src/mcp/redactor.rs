@@ -3,7 +3,6 @@
 
 //! Credential redaction for audit-safe storage and display.
 
-use crate::mcp::error::McpError;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -51,33 +50,44 @@ pub struct CredentialRedactor {
 }
 
 impl CredentialRedactor {
-    pub fn new() -> Result<Self, McpError> {
-        Ok(Self {
+    /// Build a redactor with the built-in credential patterns.
+    ///
+    /// All patterns are static string literals compiled at this call site;
+    /// any compilation failure is a programmer bug, not a runtime
+    /// condition, so this constructor is infallible. The `.expect`
+    /// strings name the pattern that would have failed so a regression
+    /// points at the offending literal.
+    pub fn new() -> Self {
+        Self {
             patterns: vec![
                 (
                     CredentialKind::BearerToken,
-                    Regex::new(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}")?,
+                    Regex::new(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}")
+                        .expect("BearerToken regex literal must compile"),
                 ),
                 (
                     CredentialKind::ApiKey,
                     Regex::new(
                         r#"(?i)(?:api[_-]?key|x-api-key)\s*[:=]\s*["']?[a-z0-9_\-]{8,}["']?"#,
-                    )?,
+                    )
+                    .expect("ApiKey regex literal must compile"),
                 ),
                 (
                     CredentialKind::ConnectionString,
                     Regex::new(
                         r"(?i)\b(?:server|host|endpoint)=[^;]+;[^;\n]*(?:password|sharedaccesskey)=[^;\n]+",
-                    )?,
+                    )
+                    .expect("ConnectionString regex literal must compile"),
                 ),
                 (
                     CredentialKind::SecretAssignment,
                     Regex::new(
                         r#"(?i)\b(?:password|secret|token)\s*[:=]\s*["']?[^\s"';,]{4,}["']?"#,
-                    )?,
+                    )
+                    .expect("SecretAssignment regex literal must compile"),
                 ),
             ],
-        })
+        }
     }
 
     pub fn redact(&self, input: &str) -> RedactionResult {
@@ -130,6 +140,12 @@ impl CredentialRedactor {
     }
 }
 
+impl Default for CredentialRedactor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub(crate) fn key_hint(key: &str) -> Option<CredentialKind> {
     let lower = key.to_lowercase();
     if lower.contains("authorization") || lower.contains("bearer") {
@@ -156,7 +172,7 @@ mod tests {
 
     #[test]
     fn redacts_multiple_secret_types() {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let result = redactor
             .redact("Authorization: Bearer abcdefghijklmnop api_key=123456789012 secret=hunter2");
         assert!(result.sanitized.contains("[REDACTED_BEARER_TOKEN]"));
@@ -167,7 +183,7 @@ mod tests {
 
     #[test]
     fn redacts_nested_json_values() {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let value = serde_json::json!({
             "headers": {"authorization": "Bearer abcdefghi"},
             "password": "hunter2"
@@ -182,7 +198,7 @@ mod tests {
 
     #[test]
     fn redacts_x_api_key_fields() {
-        let redactor = CredentialRedactor::new().unwrap();
+        let redactor = CredentialRedactor::new();
         let value = serde_json::json!({
             "headers": {
                 "x-api-key": "abcd1234567890",

@@ -9,20 +9,62 @@ permissions:
   issues: write
   pull-requests: write
 # SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
+# This workflow reads contributor history via the GitHub API and posts a
+# welcome comment. No PR head code is checked out or executed.
 jobs:
   welcome:
     runs-on: ubuntu-latest
-    # SECURITY: pull_request_target — uses actions/first-interaction which only
-    # reads contributor history via API. No checkout of PR head code.
     steps:
-      - uses: actions/first-interaction@a1db7729b356323c7988c20ed6f0d33fe31297be # v1.3.0
+      # Implemented via actions/github-script rather than the historical
+      # actions/first-interaction action — first-interaction has had no
+      # commits since 2022 and is effectively unmaintained. Inlining the
+      # logic via github-script (already pinned in this repo) avoids a
+      # stale third-party dependency without adding a new one.
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          issue_message: |
-            Welcome to the Agent Governance Toolkit! Thanks for opening your first issue.
-            A maintainer will review this shortly. Check our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).
-            For security issues, use [private vulnerability reporting](https://github.com/microsoft/agent-governance-toolkit/security/advisories/new).
-          pr_message: |
-            Welcome to the Agent Governance Toolkit! Thanks for your first pull request.
-            Please ensure tests pass, code follows style (ruff check), and you have signed the [CLA](https://cla.opensource.microsoft.com/).
-            See our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const isIssue = context.eventName === 'issues';
+            const target = isIssue
+              ? context.payload.issue
+              : context.payload.pull_request;
+            const author = target.user.login;
+            const number = target.number;
+
+            // Skip bots — first-interaction historically did the same.
+            if (target.user.type === 'Bot' || author.endsWith('[bot]')) {
+              core.info(`Skipping bot author ${author}`);
+              return;
+            }
+
+            // First-contribution check: count this author's issues+PRs in
+            // the repo. Anything > 1 means this is not their first.
+            // `per_page: 2` keeps the query cheap.
+            const { data: search } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} author:${author}`,
+              per_page: 2,
+            });
+            if (search.total_count > 1) {
+              core.info(`${author} has ${search.total_count} prior issues/PRs — not first contribution`);
+              return;
+            }
+
+            const body = isIssue
+              ? [
+                  'Welcome to the Agent Governance Toolkit! Thanks for opening your first issue.',
+                  'A maintainer will review this shortly. Check our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).',
+                  'For security issues, use [private vulnerability reporting](https://github.com/microsoft/agent-governance-toolkit/security/advisories/new).',
+                ].join('\n')
+              : [
+                  'Welcome to the Agent Governance Toolkit! Thanks for your first pull request.',
+                  'Please ensure tests pass, code follows style (ruff check), and you have signed the [CLA](https://cla.opensource.microsoft.com/).',
+                  'See our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).',
+                ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              body,
+            });
+            core.info(`Posted welcome comment on #${number} for ${author}`);

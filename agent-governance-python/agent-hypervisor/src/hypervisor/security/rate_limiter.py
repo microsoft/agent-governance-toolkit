@@ -100,12 +100,29 @@ class AgentRateLimiter:
     def __init__(
         self,
         ring_limits: dict[ExecutionRing, tuple[float, float]] | None = None,
+        max_buckets: int = 100_000,
     ) -> None:
         self._limits = ring_limits or dict(DEFAULT_RING_LIMITS)
-        # (agent_did, session_id) -> TokenBucket
-        self._buckets: dict[str, TokenBucket] = {}
-        self._stats: dict[str, RateLimitStats] = {}
+        # (agent_did, session_id) -> TokenBucket. A tuple is used so that
+        # identifiers containing ``:`` cannot collide across distinct
+        # (agent, session) pairs — see ``_bucket_key`` for the rationale.
+        self._buckets: dict[tuple[str, str], TokenBucket] = {}
+        self._stats: dict[tuple[str, str], RateLimitStats] = {}
         self._lock = threading.Lock()
+        self._max_buckets = max_buckets
+
+    @staticmethod
+    def _bucket_key(agent_did: str, session_id: str) -> tuple[str, str]:
+        """Build the per-(agent, session) bucket key.
+
+        Using ``(agent_did, session_id)`` rather than the joined string
+        ``f"{agent_did}:{session_id}"`` keeps the identifiers
+        unambiguous: ``("a:b", "c")`` and ``("a", "b:c")`` would
+        otherwise hash to the same bucket and quietly share a rate
+        limit. ``agent_did`` is a DID (e.g. ``did:key:z6Mk...``) so the
+        colon collision is the realistic case, not the contrived one.
+        """
+        return (agent_did, session_id)
 
     def check(
         self,
@@ -119,7 +136,7 @@ class AgentRateLimiter:
 
         Returns True if allowed, raises RateLimitExceeded if not.
         """
-        key = f"{agent_did}:{session_id}"
+        key = self._bucket_key(agent_did, session_id)
         with self._lock:
             bucket = self._get_or_create_bucket_locked(key, ring)
             stats = self._stats.setdefault(
@@ -157,7 +174,7 @@ class AgentRateLimiter:
         new_ring: ExecutionRing,
     ) -> None:
         """Update an agent's rate limit when their ring changes."""
-        key = f"{agent_did}:{session_id}"
+        key = self._bucket_key(agent_did, session_id)
         rate, capacity = self._limits.get(
             new_ring, RATE_LIMIT_FALLBACK
         )
@@ -172,7 +189,7 @@ class AgentRateLimiter:
 
     def get_stats(self, agent_did: str, session_id: str) -> RateLimitStats | None:
         """Get rate limit stats for an agent."""
-        key = f"{agent_did}:{session_id}"
+        key = self._bucket_key(agent_did, session_id)
         with self._lock:
             stats = self._stats.get(key)
             if stats:
@@ -183,10 +200,14 @@ class AgentRateLimiter:
             return stats
 
     def _get_or_create_bucket_locked(
-        self, key: str, ring: ExecutionRing
+        self, key: tuple[str, str], ring: ExecutionRing
     ) -> TokenBucket:
         """Caller must hold ``self._lock``."""
         if key not in self._buckets:
+            if len(self._buckets) >= self._max_buckets:
+                oldest_key = next(iter(self._buckets))
+                del self._buckets[oldest_key]
+                self._stats.pop(oldest_key, None)
             rate, capacity = self._limits.get(ring, RATE_LIMIT_FALLBACK)
             self._buckets[key] = TokenBucket(
                 capacity=capacity,

@@ -208,6 +208,11 @@ func TestNewHTTPGovernanceMiddlewarePolicyDenialReturnsForbidden(t *testing.T) {
 	if !strings.Contains(response.Body.String(), ErrPolicyDenied.Error()) {
 		t.Fatalf("body = %q, want policy denial", response.Body.String())
 	}
+	// The wrapped detail (action name, tool name, etc.) must not leak.
+	body := strings.TrimSpace(response.Body.String())
+	if body != ErrPolicyDenied.Error() {
+		t.Fatalf("body = %q leaks wrapped detail; want exactly %q", body, ErrPolicyDenied.Error())
+	}
 }
 
 func TestNewHTTPGovernanceMiddlewareUsesCustomActionAndContext(t *testing.T) {
@@ -510,8 +515,15 @@ func TestNewHTTPGovernanceMiddlewarePromptDefenseMaxRiskScore(t *testing.T) {
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
 	}
-	if !strings.Contains(response.Body.String(), "prompt defense risk score") {
-		t.Fatalf("body = %q, want prompt defense denial", response.Body.String())
+	// Body should carry the stable sentinel message and must NOT leak
+	// the wrapped detail ("prompt defense risk score N exceeded max M")
+	// — that detail is captured in the audit log instead.
+	body := response.Body.String()
+	if !strings.Contains(body, ErrPolicyDenied.Error()) {
+		t.Fatalf("body = %q, want policy denial sentinel", body)
+	}
+	if strings.Contains(body, "risk score") {
+		t.Fatalf("body = %q leaks wrapped error detail", body)
 	}
 }
 

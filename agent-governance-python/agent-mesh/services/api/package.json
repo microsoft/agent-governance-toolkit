@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agentmesh-api",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Public Preview — AgentMesh Public API for trust verification and agent registration",
   "main": "dist/index.js",
   "scripts": {

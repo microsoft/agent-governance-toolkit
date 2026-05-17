@@ -91,7 +91,7 @@ class EscrowReceipt(BaseModel):
     
     # Timestamps
     created_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When escrow was created"
     )
     expires_at: datetime = Field(
@@ -241,7 +241,7 @@ class EscrowResolution(BaseModel):
         description="How resolution was triggered"
     )
     resolved_at: datetime = Field(
-        default_factory=datetime.utcnow
+        default_factory=lambda: datetime.now(timezone.utc)
     )
     
     # Nexus attestation

@@ -164,10 +164,18 @@ public sealed class McpSecurityScanner
 
     private static readonly Dictionary<char, char> HomoglyphMap = new()
     {
-        ['\u0430'] = 'a', ['\u0435'] = 'e', ['\u043E'] = 'o',
-        ['\u0440'] = 'p', ['\u0441'] = 'c', ['\u0443'] = 'y',
-        ['\u0445'] = 'x', ['\u0456'] = 'i', ['\u0458'] = 'j',
-        ['\u03B1'] = 'a', ['\u03BF'] = 'o', ['\u03C1'] = 'p'
+        ['\u0430'] = 'a',
+        ['\u0435'] = 'e',
+        ['\u043E'] = 'o',
+        ['\u0440'] = 'p',
+        ['\u0441'] = 'c',
+        ['\u0443'] = 'y',
+        ['\u0445'] = 'x',
+        ['\u0456'] = 'i',
+        ['\u0458'] = 'j',
+        ['\u03B1'] = 'a',
+        ['\u03BF'] = 'o',
+        ['\u03C1'] = 'p'
     };
 
     private static readonly Regex[] InstructionPatterns =

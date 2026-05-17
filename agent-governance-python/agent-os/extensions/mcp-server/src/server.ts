@@ -216,7 +216,7 @@ export class AgentOSMCPServer {
           content: [
             {
               type: 'text',
-              text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+              text: 'An internal error occurred while executing the tool.',
             },
           ],
           isError: true,

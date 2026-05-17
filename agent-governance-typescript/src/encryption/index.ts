@@ -32,3 +32,12 @@ export {
   type MeshSession,
   type WebSocketFactory,
 } from "./mesh-client";
+
+export {
+  RegistryClient,
+  RegistryError,
+  ed25519AuthSigner,
+  type RegistryClientOptions,
+  type AgentRecord,
+  type DiscoverResult,
+} from "./registry-client";

@@ -3,7 +3,7 @@
 """Tests for AgentMesh Governance module."""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import tempfile
 import json
 
@@ -138,7 +138,7 @@ class TestCompliance:
         """Test generating compliance report."""
         engine = ComplianceEngine([ComplianceFramework.SOC2])
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         report = engine.generate_report(
             framework=ComplianceFramework.SOC2,
             period_start=now - timedelta(days=30),

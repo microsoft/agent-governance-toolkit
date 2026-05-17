@@ -71,6 +71,14 @@ Use `agentmesh-mcp` when you only need the MCP-specific surface:
 message signing, session authentication, credential redaction, rate limiting,
 gateway decisions, and related MCP security helpers.
 
+`agentmesh-mcp` is the **canonical home** for MCP types. The `agentmesh::mcp`
+module is a verbatim copy that is now `#[deprecated]` and scheduled for removal
+in the next major release. New code should import from `agentmesh_mcp::mcp::...`
+directly — see
+[#2013](https://github.com/microsoft/agent-governance-toolkit/issues/2013)
+and
+[#2088](https://github.com/microsoft/agent-governance-toolkit/issues/2088).
+
 ## MCP gateway migration note
 
 The Rust MCP gateway now fails closed unless requests are processed through a

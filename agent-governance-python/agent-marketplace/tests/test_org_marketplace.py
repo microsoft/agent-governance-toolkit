@@ -132,7 +132,6 @@ class TestOrgMarketplacePolicy:
         org = OrgMarketplacePolicy(organization="contoso")
         assert org.organization == "contoso"
         assert org.additional_allowed_plugin_types == []
-        assert org.additional_blocked_plugins == []
         assert org.mcp_server_overrides is None
 
     def test_get_effective_policy_no_org(self) -> None:

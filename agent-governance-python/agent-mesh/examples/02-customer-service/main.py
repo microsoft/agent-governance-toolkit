@@ -12,7 +12,7 @@ Demonstrates:
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from enum import Enum
 
@@ -75,7 +75,7 @@ class GovernedAgent:
     def log_action(self, action: str, details: dict):
         """Log action to audit trail."""
         entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
             "agent": self.identity.did,
             "action": action,
             "details": details,

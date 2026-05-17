@@ -7,7 +7,7 @@ Updates trust score every ≤30s based on agent behavior.
 Score visible in dashboard; configurable alert thresholds.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional, Literal
 from pydantic import BaseModel, Field
 from dataclasses import dataclass, field
@@ -43,7 +43,7 @@ class RiskSignal:
     signal_type: str
     severity: Literal["critical", "high", "medium", "low", "info"]
     value: float  # 0.0 to 1.0
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     source: Optional[str] = None
     details: Optional[str] = None
 
@@ -85,8 +85,8 @@ class RiskScore(BaseModel):
     critical_signals: int = Field(default=0)
 
     # Timestamps
-    calculated_at: datetime = Field(default_factory=datetime.utcnow)
-    next_update_at: datetime = Field(default_factory=datetime.utcnow)
+    calculated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    next_update_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def get_risk_level(cls, score: int) -> str:
@@ -144,8 +144,8 @@ class RiskScore(BaseModel):
         self.risk_level = self.get_risk_level(self.total_score)
         self.active_signals = active_signals
         self.critical_signals = critical_signals
-        self.calculated_at = datetime.utcnow()
-        self.next_update_at = datetime.utcnow() + timedelta(seconds=RISK_UPDATE_INTERVAL_SECONDS)
+        self.calculated_at = datetime.now(timezone.utc)
+        self.next_update_at = datetime.now(timezone.utc) + timedelta(seconds=RISK_UPDATE_INTERVAL_SECONDS)
 
 
 class RiskScorer:
@@ -220,7 +220,7 @@ class RiskScorer:
         signals = self._signals.get(agent_did, [])
 
         # Filter to recent signals (last 24 hours)
-        cutoff = datetime.utcnow() - timedelta(hours=24)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         recent_signals = [s for s in signals if s.timestamp > cutoff]
 
         # Calculate component scores

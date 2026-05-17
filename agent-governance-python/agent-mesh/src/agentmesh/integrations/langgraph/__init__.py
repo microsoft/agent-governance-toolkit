@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Generic
 from enum import Enum
 
@@ -249,7 +249,7 @@ class TrustCheckpoint:
             trust_score=self.identity.trust_score if hasattr(self.identity, "trust_score") else 500,
             trust_level=TrustLevel.STANDARD,
             capabilities=list(self.identity.capabilities) if hasattr(self.identity, "capabilities") else [],
-            verified_at=datetime.utcnow(),
+            verified_at=datetime.now(timezone.utc),
             sponsor_id=self.identity.sponsor_id if hasattr(self.identity, "sponsor_id") else "",
         )
 
@@ -265,7 +265,7 @@ class TrustCheckpoint:
         self._checkpoints[checkpoint_id] = {
             "state": state,
             "trust_context": context.to_dict() if context else None,
-            "saved_at": datetime.utcnow().isoformat(),
+            "saved_at": datetime.now(timezone.utc).isoformat(),
         }
         logger.info(f"Saved trust checkpoint: {checkpoint_id}")
 

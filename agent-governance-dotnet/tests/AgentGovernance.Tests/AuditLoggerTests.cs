@@ -221,4 +221,63 @@ public class AuditLoggerTests
         Assert.True(logger.Verify());
         Assert.True(logger.Verify());
     }
+
+    [Fact]
+    public async Task Log_ConcurrentWritersWithConcurrentReaders_ProducesIntactChain()
+    {
+        // Regression for the hash-out-of-lock refactor. Log now performs
+        // SHA-256 outside the brief lock that guards _entries, but appends
+        // are still serialized via a separate _appendLock so each entry's
+        // hash deterministically chains off the previous entry's hash.
+        //
+        // Hammer with multiple concurrent writers plus concurrent readers
+        // (Count / Verify) and pin three invariants:
+        //   1) Every entry's Seq matches its position in the chain.
+        //   2) PreviousHash links form an unbroken chain (each entry's
+        //      PreviousHash equals the prior entry's Hash).
+        //   3) Verify() returns true at the end -- every recomputed hash
+        //      still matches the stored hash.
+        // A regression that dropped the writer serialization, or that
+        // captured Seq/PreviousHash inconsistently relative to the actual
+        // append order, would break (1) or (2) immediately.
+
+        const int writersCount = 4;
+        const int entriesPerWriter = 100;
+        var logger = new AuditLogger();
+        var stopReaders = new CancellationTokenSource();
+
+        var readers = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+        {
+            while (!stopReaders.IsCancellationRequested)
+            {
+                var unusedCount = logger.Count;
+                var unusedVerify = logger.Verify();
+                GC.KeepAlive((unusedCount, unusedVerify));
+            }
+        })).ToArray();
+
+        var writers = Enumerable.Range(0, writersCount).Select(w => Task.Run(() =>
+        {
+            for (var i = 0; i < entriesPerWriter; i++)
+            {
+                logger.Log($"did:agentmesh:w{w}", $"action{i}", i % 2 == 0 ? "allow" : "deny");
+            }
+        })).ToArray();
+
+        await Task.WhenAll(writers);
+        stopReaders.Cancel();
+        await Task.WhenAll(readers);
+
+        var entries = logger.GetEntries();
+        Assert.Equal(writersCount * entriesPerWriter, entries.Count);
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            Assert.Equal(i, entries[i].Seq);
+            var expectedPrev = i == 0 ? string.Empty : entries[i - 1].Hash;
+            Assert.Equal(expectedPrev, entries[i].PreviousHash);
+        }
+
+        Assert.True(logger.Verify());
+    }
 }

@@ -1,0 +1,67 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+# Policy file referenced by the Step 5 walkthrough in
+# docs/proposals/azure-aca-sandbox.md. Sandbox-only fields
+# (network_allowlist, tool_allowlist, defaults.max_cpu, etc.)
+# are attached in code via SimpleNamespace; this YAML only
+# contains keys that are part of PolicyDocument's pydantic schema.
+name: research-agent
+version: "2"
+
+defaults:
+  action: allow
+
+rules:
+  - name: deny-shell-out-subprocess
+    condition: { field: code, operator: contains, value: "subprocess" }
+    action: deny
+    priority: 100
+    message: "shell-out blocked by research-agent policy"
+
+  - name: deny-shell-out-os-system
+    condition: { field: code, operator: contains, value: "os.system(" }
+    action: deny
+    priority: 100
+    message: "shell-out blocked by research-agent policy"
+
+  - name: deny-shell-out-pty
+    condition: { field: code, operator: contains, value: "pty.spawn" }
+    action: deny
+    priority: 100
+    message: "shell-out blocked by research-agent policy"
+
+  - name: deny-shell-out-popen
+    condition: { field: code, operator: contains, value: "popen(" }
+    action: deny
+    priority: 100
+    message: "shell-out blocked by research-agent policy"
+
+  - name: deny-pip-install
+    condition: { field: code, operator: contains, value: "pip install" }
+    action: deny
+    priority: 100
+    message: "ad-hoc dependency installs are not permitted"
+
+  - name: deny-pip3-install
+    condition: { field: code, operator: contains, value: "pip3 install" }
+    action: deny
+    priority: 100
+    message: "ad-hoc dependency installs are not permitted"
+
+  - name: deny-ensurepip
+    condition: { field: code, operator: contains, value: "ensurepip" }
+    action: deny
+    priority: 100
+    message: "ad-hoc dependency installs are not permitted"
+
+  - name: deny-secret-azure
+    condition: { field: code, operator: contains, value: "AZURE_CLIENT_SECRET" }
+    action: deny
+    priority: 100
+    message: "agents may not read host credentials"
+
+  - name: deny-secret-openai
+    condition: { field: code, operator: contains, value: "OPENAI_API_KEY" }
+    action: deny
+    priority: 100
+    message: "agents may not read host credentials"

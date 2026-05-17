@@ -280,3 +280,49 @@ class TestRelayStats:
         assert server.stats["messages_routed"] == 0
         assert server.stats["messages_stored"] == 0
         assert server.stats["messages_delivered"] == 0
+
+
+# ── Ghost-Connection Cleanup (Gap G5) ────────────────────────────────
+
+
+class TestGhostConnectionCleanup:
+    """Vendored relay patch #2 equivalent: when an agent reconnects with
+    the same DID, the previous ("ghost") socket is closed eagerly instead
+    of relying on the 90-second heartbeat-eviction timer. Verifies that
+    after a rebind, only the freshest connection routes messages."""
+
+    def test_rebind_replaces_ghost_connection(self):
+        server = RelayServer()
+        client = TestClient(server.app)
+
+        # First connection registers
+        with client.websocket_connect("/ws") as ws_old:
+            ws_old.send_json({
+                "v": 1, "type": "connect", "from": "did:agentmesh:rebind",
+            })
+            # Second connection with same DID triggers ghost close on old.
+            with client.websocket_connect("/ws") as ws_new:
+                ws_new.send_json({
+                    "v": 1, "type": "connect", "from": "did:agentmesh:rebind",
+                })
+                # Send a message to the rebinding DID from another agent.
+                with client.websocket_connect("/ws") as ws_sender:
+                    ws_sender.send_json({
+                        "v": 1, "type": "connect", "from": "did:agentmesh:sender",
+                    })
+                    ws_sender.send_json({
+                        "v": 1, "type": "message",
+                        "from": "did:agentmesh:sender",
+                        "to": "did:agentmesh:rebind",
+                        "id": "post-rebind",
+                        "ciphertext": "data",
+                    })
+                    # The NEW socket must receive it (ghost old socket is closed).
+                    msg = ws_new.receive_json()
+                    assert msg["id"] == "post-rebind"
+                    assert msg["from"] == "did:agentmesh:sender"
+
+        # Active connection count returns to 0 after both rebind sockets
+        # leave their `with` blocks (sender already left).
+        assert len(server._connections) == 0
+

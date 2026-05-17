@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { AuditConfig, AuditEntry, LegacyPolicyDecision } from './types';
 
 type PolicyDecision = LegacyPolicyDecision;
@@ -81,7 +81,7 @@ export class AuditLogger {
       });
 
       const expectedHash = createHash('sha256').update(payload).digest('hex');
-      if (entry.hash !== expectedHash) return false;
+      if (!timingSafeEqual(Buffer.from(entry.hash, 'utf8'), Buffer.from(expectedHash, 'utf8'))) return false;
     }
     return true;
   }

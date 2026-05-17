@@ -1,0 +1,47 @@
+# Data Quality-Aware Governance Policy
+# Used by: examples/data-quality-aware-governance/example.py
+#
+# Defines:
+# - Which agents are authorized for which actions (AGT Layer 1)
+# - Data quality thresholds that must be met (Layer 2)
+#
+# In production: load this with PyYAML and pass thresholds
+# to your DataQualityRegistry at startup.
+
+agents:
+  analyst-agent-01:
+    allowed_tools:
+      - database_query
+      - report_generate
+    description: "Analyst agent authorized for querying and reporting"
+
+  report-agent-02:
+    allowed_tools:
+      - report_generate
+    description: "Reporting-only agent, no raw query access"
+
+data_quality:
+  global_defaults:
+    freshness_threshold_hours: 6.0
+    quality_score_threshold: 0.85
+    block_on_failed_tests: true
+    validation_status_required: "pass"  # pass | warn | fail
+
+  datasets:
+    user_events:
+      owner_did: "did:web:analytics.example.com"
+      freshness_threshold_hours: 6.0
+      quality_score_threshold: 0.85
+      description: "User interaction events — strict freshness required"
+
+    revenue_metrics:
+      owner_did: "did:web:finance.example.com"
+      freshness_threshold_hours: 12.0
+      quality_score_threshold: 0.90
+      description: "Revenue rollups — high quality threshold for financial reporting"
+
+audit:
+  log_all_decisions: true
+  include_data_state_snapshot: true
+  # The snapshot hash is what travels in CTEF source_version
+  # for cross-agent audit trail integrity

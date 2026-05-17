@@ -85,6 +85,7 @@ def evaluate_policy_cli() -> int:
 
     try:
         from agent_os.policies import PolicyEvaluator
+        from agent_os.policies.schema import PolicyDocument
     except ImportError:
         print(
             "agent-os-kernel is required for policy evaluation. "
@@ -97,8 +98,14 @@ def evaluate_policy_cli() -> int:
     policy_path = Path(args.policy)
     if policy_path.is_dir():
         evaluator.load_policies(str(policy_path))
+    elif policy_path.is_file():
+        # Load only the file the user pointed at — previously this
+        # delegated to ``load_policies(policy_path.parent)``, which
+        # silently pulled in every sibling ``*.yaml`` in that directory.
+        evaluator.policies.append(PolicyDocument.from_yaml(policy_path))
     else:
-        evaluator.load_policies(str(policy_path.parent))
+        print(f"Policy path not found: {policy_path}", file=sys.stderr)
+        return 1
 
     violations = 0
     for filepath in args.files:

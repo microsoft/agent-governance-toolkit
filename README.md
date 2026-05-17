@@ -197,6 +197,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | [LangGraph](https://github.com/langchain-ai/langgraph) / [LangChain](https://github.com/langchain-ai/langchain) | Adapter |
 | [CrewAI](https://github.com/crewAIInc/crewAI) | Adapter |
 | [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) | Middleware |
+| GitHub Copilot CLI | Governance installer package |
 | [pi-mono](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) | TypeScript SDK Integration |
 | [Google ADK](https://github.com/google/adk-python) | Adapter |
 | [LlamaIndex](https://github.com/run-llama/llama_index) | Middleware |
@@ -252,12 +253,13 @@ Full methodology: [BENCHMARKS.md](docs/BENCHMARKS.md)
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
+| **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
 | **Rust** | [`agent-governance`](https://crates.io/crates/agent-governance) | `cargo add agent-governance` |
 | **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
-All 5 language packages implement core governance (policy, identity, trust, audit). Python has the full stack.
+All five language packages implement core governance (policy, identity, trust, audit). Python has the full stack, and the Copilot CLI package is a first-party install surface built on the TypeScript SDK.
 See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
@@ -360,4 +362,3 @@ trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
-

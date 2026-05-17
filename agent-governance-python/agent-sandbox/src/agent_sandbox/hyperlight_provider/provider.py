@@ -564,48 +564,29 @@ class HyperLightSandboxProvider(SandboxProvider):
                     remaining[k] = v
             self._snapshots = remaining
         if worker is not None and sandbox is not None:
-            # The Sandbox's underlying Rust object is unsendable, so the
-            # final ``__del__`` decref MUST happen on the worker thread
-            # — otherwise the Python GC may reclaim it from whatever
-            # thread was last to hold a reference and PyO3 raises an
-            # unraisable ``RuntimeError`` at process exit.
-            #
-            # We wrap the sandbox (and any remaining session snapshots)
-            # in a list and hand that list to the worker; the worker
-            # clears the elements so the final decref happens inside
-            # its own frame. We drop our local references *before*
-            # submitting so the only live references belong to the
-            # worker frame.
-            box: list[Any] = [sandbox, *session_snapshots]
-            sandbox = None  # noqa: F841 - explicit decref on caller side
-            session_snapshots = []  # noqa: F841 - same
-            del sandbox
-            del session_snapshots
-
+            # The Sandbox's underlying Rust object is unsendable, so its
+            # explicit teardown must run on the worker thread — PyO3
+            # raises an unraisable ``RuntimeError`` if the destructor
+            # fires on a different thread. We hand the sandbox (and any
+            # session-scoped snapshots, which share the unsendable
+            # invariant) to the worker; the worker calls ``_safe_drop``
+            # which invokes ``close``/``shutdown``/``__exit__`` and
+            # releases the Rust resource. Once released, the Python
+            # wrapper's ``__del__`` is a no-op and safe to fire on any
+            # thread.
             def _drop_in_worker(items: list[Any]) -> None:
-                # Index 0 is the Sandbox; the rest are snapshot handles.
                 sb = items[0]
-                items[0] = None
                 self._safe_drop(sb)
-                del sb
-                # Snapshots have no documented teardown method; their
-                # ``__del__`` is enough — we just need it to fire on
-                # this thread.
-                for i in range(1, len(items)):
-                    items[i] = None
+                # Clear the list inside the worker so any reference
+                # cycles or weakref callbacks resolve on this thread.
+                items.clear()
 
             try:
-                worker.submit_and_wait(_drop_in_worker, box)
-            except Exception as exc:
-                logger.debug(
-                    "Sandbox drop on worker raised: %s", exc
+                worker.submit_and_wait(
+                    _drop_in_worker, [sandbox, *session_snapshots]
                 )
-            finally:
-                # ``box`` is still bound in this frame but its elements
-                # are now None; clearing it is belt-and-suspenders.
-                for i in range(len(box)):
-                    box[i] = None
-                del box
+            except Exception as exc:
+                logger.debug("Sandbox drop on worker raised: %s", exc)
         if worker is not None:
             worker.stop(join_timeout=10.0)
 

@@ -215,9 +215,20 @@ class AgentShieldSessionProtocol(Protocol):
 class _MockSession:
     """Mock Agent Shield session for testing without the real SDK.
 
-    Permits all validations unconditionally. Used when the real
-    Agent Shield runtime is unavailable or when ``AgentShieldKernel``
-    is instantiated with a ``_MockRuntime``.
+    Permits all validations unconditionally, returning ``_MockVerdict``
+    objects that evaluate to ``True``.  Used when the real Agent Shield
+    runtime is unavailable or when ``AgentShieldKernel`` is instantiated
+    via ``AgentShieldKernel.mock()``.
+
+    This class satisfies ``AgentShieldSessionProtocol`` so it can be
+    used as a drop-in replacement for a real SDK session during unit
+    tests, local development, and CI environments where the Agent
+    Shield SDK is not installed.
+
+    Attributes:
+        _variables: In-memory store for session variables (e.g. trust
+            score) set via ``set_variable``.
+        _turn_active: Whether a conversation turn is currently open.
     """
 
     def __init__(self) -> None:
@@ -255,7 +266,13 @@ class _MockSession:
 
 @dataclass
 class _MockVerdict:
-    """Mock verdict that mirrors Agent Shield's verdict structure."""
+    """Mock verdict that mirrors Agent Shield's verdict structure.
+
+    Provides the minimal attribute surface that ``_translate_verdict``
+    reads from an SDK verdict: ``allowed``, ``reason``, ``policy_name``,
+    and ``response``.  Truthiness delegates to ``allowed`` so the
+    ``bool(sdk_result)`` check in ``_translate_verdict`` works correctly.
+    """
 
     allowed: bool = True
     reason: str | None = None
@@ -272,7 +289,12 @@ class _MockVerdict:
 
 
 class _MockRuntime:
-    """Mock Agent Shield runtime for testing."""
+    """Mock Agent Shield runtime that produces ``_MockSession`` instances.
+
+    Acts as a stand-in for the real ``agent_shield.RuntimeBuilder`` when
+    the SDK is not installed.  Every call to ``new_session`` returns a
+    fresh ``_MockSession`` that unconditionally allows all validations.
+    """
 
     def new_session(self, **kwargs: Any) -> _MockSession:
         return _MockSession()
@@ -686,11 +708,25 @@ class AgentShieldKernel:
         stage: ValidationStage,
         elapsed_ms: float,
     ) -> ShieldVerdict:
-        """Translate an Agent Shield SDK verdict to AGT ShieldVerdict.
+        """Translate an Agent Shield SDK verdict to AGT ``ShieldVerdict``.
 
         Maps the SDK's boolean-truthy result and optional ``reason`` /
-        ``policy_name`` attributes to the standardized AGT verdict type.
+        ``policy_name`` attributes to the standardised AGT verdict type.
         A ``None`` result is treated as a denial (fail-closed).
+
+        When the policy denies the request the returned verdict carries
+        ``metadata["source"] == "policy_denial"`` so callers can
+        distinguish intentional policy blocks from SDK errors (which
+        carry ``metadata["source"] == "sdk_error"``).
+
+        Args:
+            sdk_result: The raw verdict object returned by the Agent
+                Shield SDK session method (or ``None``).
+            stage: The validation stage that produced this verdict.
+            elapsed_ms: Wall-clock time for the SDK call.
+
+        Returns:
+            A ``ShieldVerdict`` with ``source`` metadata on denials.
         """
         allowed = bool(sdk_result) if sdk_result is not None else False
         reason = getattr(sdk_result, "reason", None) or ""
@@ -701,6 +737,10 @@ class AgentShieldKernel:
         else:
             action = ShieldAction.BLOCK
 
+        metadata: dict[str, Any] = {}
+        if not allowed:
+            metadata["source"] = "policy_denial"
+
         return ShieldVerdict(
             allowed=allowed,
             stage=stage,
@@ -708,6 +748,7 @@ class AgentShieldKernel:
             reason=str(reason),
             policy_name=str(policy_name),
             elapsed_ms=elapsed_ms,
+            metadata=metadata,
         )
 
     def _error_verdict(
@@ -718,10 +759,24 @@ class AgentShieldKernel:
     ) -> ShieldVerdict:
         """Create a verdict for an Agent Shield SDK or runtime error.
 
-        Distinct from a policy denial: the ``metadata["error"]`` field
-        is populated so callers can distinguish infrastructure failures
-        from intentional blocks. Honors ``fail_closed`` to decide
-        whether the error results in BLOCK or WARN.
+        Distinct from a policy denial: the returned verdict carries
+        ``metadata["source"] == "sdk_error"`` (plus the raw error
+        string in ``metadata["error"]``) so callers can programmatically
+        distinguish infrastructure failures from intentional policy
+        blocks (which carry ``metadata["source"] == "policy_denial"``).
+
+        The ``fail_closed`` flag controls the outcome:
+
+        * ``True``  → BLOCK (denied, safe default).
+        * ``False`` → WARN  (allowed, but logged as degraded).
+
+        Args:
+            stage: The validation stage where the error occurred.
+            error: Human-readable error description.
+            elapsed_ms: Wall-clock time before the error was caught.
+
+        Returns:
+            A ``ShieldVerdict`` with ``source`` and ``error`` metadata.
         """
         allowed = not self._fail_closed
         action = ShieldAction.BLOCK if self._fail_closed else ShieldAction.WARN
@@ -737,7 +792,7 @@ class AgentShieldKernel:
             action=action,
             reason=f"Agent Shield error: {error}",
             elapsed_ms=elapsed_ms,
-            metadata={"error": error},
+            metadata={"source": "sdk_error", "error": error},
         )
 
     def _record(self, verdict: ShieldVerdict) -> None:

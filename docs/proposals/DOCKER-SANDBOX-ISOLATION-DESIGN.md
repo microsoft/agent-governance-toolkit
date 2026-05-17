@@ -101,7 +101,7 @@ class SandboxProvider(ABC):
 | Provider | Backend | Isolation Level | Design doc |
 |----------|---------|-----------------|------------|
 | `DockerSandboxProvider` | Docker containers | Container-level (shared kernel), optional gVisor/Kata kernel isolation | this document |
-| `AzureSandboxProvider` | Azure Container Apps sandboxes (managed) | Container-level on Azure-managed infrastructure with egress proxy | planned |
+| `ACASandboxProvider` | Azure Container Apps sandboxes (managed) | Container-level on Azure-managed infrastructure with egress proxy | planned |
 | `HyperLightSandboxProvider` | Hyperlight micro-VMs (via [`hyperlight-sandbox`](https://github.com/hyperlight-dev/hyperlight-sandbox)) | Hardware-level (own kernel via KVM/MSHV/WHP) | [HYPERLIGHT-SANDBOX-ISOLATION-DESIGN.md](./HYPERLIGHT-SANDBOX-ISOLATION-DESIGN.md) |
 
 ### Implementing a Custom Provider
@@ -405,13 +405,13 @@ up automatically via `SandboxSession`.
                               │            │    │             │
                               │ • AKS      │    │ Podman      │
                               │ • ACA      │    │ LXC / LXD   │
-                              │ • ADC      │    │ Nomad       │
-                              │ • EKS      │    │ Modal       │
-                              │ • ACI      │    │ E2B         │
+                              │ • EKS      │    │ Nomad       │
+                              │ • ACI      │    │ Modal       │
+                              │            │    │ E2B         │
                               └────────────┘    └─────────────┘
 ```
 
-The `CloudSandboxProvider` pattern targets managed cloud sandbox APIs (Azure Kubernetes Service, Azure Container Apps, Azure Dynamic Containers, Amazon EKS, Azure Container Instances) where provisioning and execution are async HTTP calls. The **BYO (Bring Your Own) Provider** pattern covers any custom backend —  Podman, LXC/LXD, HashiCorp Nomad, Modal, E2B, or proprietary infrastructure. Both implement the same `SandboxProvider` ABC.
+The `CloudSandboxProvider` pattern targets managed cloud sandbox APIs (Azure Kubernetes Service, Azure Container Apps, Amazon EKS, Azure Container Instances) where provisioning and execution are async HTTP calls. The **BYO (Bring Your Own) Provider** pattern covers any custom backend —  Podman, LXC/LXD, HashiCorp Nomad, Modal, E2B, or proprietary infrastructure. Both implement the same `SandboxProvider` ABC.
 
 ### Key Classes
 
@@ -1645,8 +1645,7 @@ sudo systemctl restart docker
 
 ### Cloud Sandbox Providers
 
-- **Azure Container Apps (ACA)** — async-first provider using ACA dynamic sessions for serverless sandboxes with auto-scaling. `create_session` provisions a session pool; `execute_code` submits code via REST API. No Docker daemon required.
-- **Azure Dynamic Containers (ADC)** — lightweight, ephemeral container instances optimized for short-lived agent tasks. Native async with sub-second cold starts.
+- **Azure Container Apps (ACA)** — async-first provider using ACA dynamic sessions for serverless sandboxes with auto-scaling. `create_session` provisions a session pool; `execute_code` submits code via REST API. No Docker daemon required. Supports both long-running and ephemeral container modes, the latter giving sub-second cold starts for short-lived agent tasks.
 - **Azure Container Instances (ACI)** — on-demand container groups for longer-running agent workloads. Supports GPU-backed sessions for ML agents.
 - **Azure Kubernetes Service (AKS)** — pod-per-session model with namespace isolation. `create_session` creates a pod; `destroy_session` deletes it. Supports network policies for domain-level enforcement without iptables.
 - **Amazon EKS** — same pod-per-session model as AKS, targeting AWS-hosted deployments.

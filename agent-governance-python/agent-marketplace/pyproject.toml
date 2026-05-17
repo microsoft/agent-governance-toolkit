@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_marketplace"
-version = "3.5.0"
+version = "3.6.0"
 description = "Plugin marketplace for the Agent Governance Toolkit — discover, install, verify, and manage plugins"
 readme = "README.md"
 license = {text = "MIT"}
@@ -32,6 +32,7 @@ dependencies = [
     "pydantic>=2.0,<3.0",
     "pyyaml>=6.0,<7.0",
     "cryptography>=46.0.7,<49.0",
+    "packaging>=21.0",
 ]
 
 [project.optional-dependencies]

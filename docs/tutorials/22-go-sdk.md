@@ -313,7 +313,9 @@ if err != nil {
 fmt.Println(engine.Evaluate("data.read", nil))  // allow
 ```
 
-Rules loaded from YAML are appended to any existing rules.
+`LoadFromYAML` replaces the engine's existing rule set; calling it again on a
+config reload won't double the rules. Use `MergeFromYAML` when composing rules
+from multiple files.
 
 ---
 

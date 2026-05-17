@@ -1,6 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace AgentGovernance.Policy;
 
 /// <summary>
@@ -50,7 +53,58 @@ public interface IExternalPolicyBackend
     string Name { get; }
 
     /// <summary>
-    /// Evaluate the request context.
+    /// Evaluate the request context synchronously.
     /// </summary>
     ExternalPolicyDecision Evaluate(IReadOnlyDictionary<string, object> context);
+
+    /// <summary>
+    /// Evaluate the request context asynchronously.
+    /// </summary>
+    /// <remarks>
+    /// Default implementation wraps <see cref="Evaluate"/> in a completed
+    /// <see cref="Task"/>. Backends whose evaluation involves real I/O
+    /// (HTTP, subprocess wait, etc.) should override this with a genuine
+    /// async path so callers in async contexts (ASP.NET handlers,
+    /// background workers, agent loops) can avoid blocking a thread on
+    /// the wait. Overrides must not call back into <see cref="Evaluate"/>
+    /// to produce their result — that re-introduces the very
+    /// sync-over-async pattern this method exists to escape.
+    /// </remarks>
+    /// <param name="context">Evaluation input.</param>
+    /// <param name="cancellationToken">Token to cancel the evaluation.</param>
+    Task<ExternalPolicyDecision> EvaluateAsync(
+        IReadOnlyDictionary<string, object> context,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(Evaluate(context));
+}
+
+/// <summary>
+/// Internal helpers shared by external policy backends.
+/// </summary>
+internal static class ExternalBackendUtilities
+{
+    /// <summary>
+    /// Checks whether <paramref name="executable"/> resolves to an existing file
+    /// on any directory of the PATH environment variable. Used by external
+    /// backends in Auto mode to decide between the CLI and the built-in
+    /// evaluator. Returns <c>false</c> when PATH is unset or empty.
+    /// </summary>
+    public static bool CommandExists(string executable)
+    {
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (File.Exists(Path.Combine(directory, executable)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

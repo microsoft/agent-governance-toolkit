@@ -57,6 +57,11 @@ class VouchingEngine:
         self._vouches: dict[str, VouchRecord] = {}
         self.max_exposure = max_exposure or self.DEFAULT_MAX_EXPOSURE
 
+    @property
+    def vouch_count(self) -> int:
+        """Total number of sponsorship records (active + released)."""
+        return len(self._vouches)
+
     def vouch(
         self,
         voucher_did: str,

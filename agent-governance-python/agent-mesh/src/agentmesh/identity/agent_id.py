@@ -7,14 +7,15 @@ Every agent gets a unique, cryptographically bound identity issued by AgentMesh 
 Identity persists across restarts; revocation propagates in ≤5s.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import ClassVar, Optional, Literal
 from pydantic import BaseModel, Field, field_validator
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 import hashlib
+import secrets
 import logging
-import uuid
+
 import base64
 
 from agentmesh.exceptions import IdentityError, HandshakeError
@@ -34,10 +35,16 @@ class AgentDID(BaseModel):
 
     @classmethod
     def generate(cls, name: str, org: Optional[str] = None) -> "AgentDID":
-        """Generate a new DID for an agent."""
-        # Create deterministic but unique ID
-        seed = f"{name}:{org or 'default'}:{uuid.uuid4().hex[:8]}"
-        unique_id = hashlib.sha256(seed.encode()).hexdigest()[:32]
+        """Generate a new DID for an agent.
+
+        Uses 128 bits of random hex directly rather than hashing a seed
+        that contained only 32 hex digits (8 bytes = 64 bits) of
+        entropy. The previous construction folded the agent name and
+        org into the seed, but those are attacker-knowable so they
+        contribute zero entropy to a unique-id guess; only the
+        uuid.uuid4().hex[:8] slice was random.
+        """
+        unique_id = secrets.token_hex(16)  # 128 bits = 32 hex chars
         return cls(unique_id=unique_id)
 
     @classmethod
@@ -86,8 +93,8 @@ class AgentIdentity(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = Field(None, description="Identity expiration")
 
     # Status
@@ -203,7 +210,14 @@ class AgentIdentity(BaseModel):
         return base64.b64encode(signature).decode()
 
     def verify_signature(self, data: bytes, signature: str) -> bool:
-        """Verify a signature against this agent's public key."""
+        """Verify a signature against this agent's public key.
+
+        All verification failures are logged at DEBUG. Bad signatures are
+        an expected, attacker-controllable signal -- logging them at
+        WARNING enables log flooding by any peer that can send messages.
+        Operators chasing forensic detail can enable DEBUG on this
+        logger explicitly.
+        """
         try:
             public_key_bytes = base64.b64decode(self.public_key)
             public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
@@ -214,7 +228,7 @@ class AgentIdentity(BaseModel):
             logger.debug("Malformed key or signature data: %s", exc)
             return False
         except Exception as exc:
-            logger.warning("Signature verification failed: %s", exc)
+            logger.debug("Signature verification failed: %s", exc)
             return False
 
     # Maximum delegation depth to prevent Sybil attacks via infinite chains.
@@ -291,13 +305,13 @@ class AgentIdentity(BaseModel):
         """Revoke this identity."""
         self.status = "revoked"
         self.revocation_reason = reason
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def suspend(self, reason: str) -> None:
         """Temporarily suspend this identity."""
         self.status = "suspended"
         self.revocation_reason = reason
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def reactivate(self, *, override_reason: bool = False) -> None:
         """Reactivate a suspended identity.
@@ -320,13 +334,13 @@ class AgentIdentity(BaseModel):
                 )
         self.status = "active"
         self.revocation_reason = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def is_active(self) -> bool:
         """Check if identity is active and not expired."""
         if self.status != "active":
             return False
-        if self.expires_at and datetime.utcnow() > self.expires_at:
+        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 

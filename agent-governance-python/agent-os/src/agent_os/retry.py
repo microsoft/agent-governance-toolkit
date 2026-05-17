@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import logging
+import random
 import time
 from typing import Any, Callable, Sequence, TypeVar
 
@@ -14,11 +15,29 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def _compute_delay(backoff_base: float, attempt: int, jitter: bool) -> float:
+    """Return the sleep duration before the next retry attempt.
+
+    Without jitter, returns the classic exponential ``backoff_base * 2^(n-1)``.
+
+    With jitter, multiplies the exponential by a uniform sample from
+    ``[0.5, 1.5)`` so concurrent retriers reacting to the same upstream
+    incident do not all wake at the same instant ("thundering herd"). This
+    keeps the *expected* wait equal to the un-jittered value but spreads the
+    actual wakes across a 1x-window centred on it.
+    """
+    delay = backoff_base * (2 ** (attempt - 1))
+    if jitter:
+        delay *= 0.5 + random.random()
+    return delay
+
+
 def retry(
     max_attempts: int = 3,
     backoff_base: float = 1.0,
     exceptions: Sequence[type[BaseException]] = (Exception,),
     on_retry: Callable[[int, BaseException], None] | None = None,
+    jitter: bool = True,
 ) -> Callable:
     """Decorator for retrying functions with exponential backoff.
 
@@ -29,6 +48,10 @@ def retry(
         backoff_base: Base delay in seconds (doubled each retry).
         exceptions: Tuple of exception types to catch and retry.
         on_retry: Optional callback(attempt, exception) called before each retry.
+        jitter: When True (default), multiply each delay by a uniform sample
+            from ``[0.5, 1.5)`` to avoid thundering-herd retries against a
+            shared upstream. Disable only for deterministic tests; production
+            callers should leave this on.
 
     Example:
         @retry(max_attempts=3, exceptions=(ConnectionError, TimeoutError))
@@ -47,7 +70,7 @@ def retry(
                         last_exc = exc
                         if attempt == max_attempts:
                             raise
-                        delay = backoff_base * (2 ** (attempt - 1))
+                        delay = _compute_delay(backoff_base, attempt, jitter)
                         if on_retry:
                             on_retry(attempt, exc)
                         logger.warning(
@@ -68,7 +91,7 @@ def retry(
                         last_exc = exc
                         if attempt == max_attempts:
                             raise
-                        delay = backoff_base * (2 ** (attempt - 1))
+                        delay = _compute_delay(backoff_base, attempt, jitter)
                         if on_retry:
                             on_retry(attempt, exc)
                         logger.warning(

@@ -7,7 +7,6 @@ Commands:
 - init: Scaffold a governed agent in 30 seconds
 - proxy: Start an MCP proxy with governance
 - register: Register an agent with AgentMesh
-- run: Run a governed agent
 - status: Check agent status and trust score
 - audit: View audit logs
 - policy: Manage policies
@@ -184,47 +183,34 @@ def init(name: str, sponsor: str, output: str, output_json: bool):
 This agent is secured by AgentMesh with:
 - Cryptographic identity
 - Trust scoring
-- Policy enforcement
+- Policy evaluation
 - Audit logging
 """
 
-from agentmesh import AgentMesh, AgentIdentity, PolicyEngine
+from agentmesh import AgentMeshClient
 
-# Initialize AgentMesh
-mesh = AgentMesh.from_config("agentmesh.yaml")
+client = AgentMeshClient(
+    "{name}",
+    capabilities=[
+        "text_processing",
+        "data_analysis",
+    ],
+)
 
-# Create identity
-identity = mesh.create_identity()
-print(f"Agent DID: {{identity.did}}")
+print(f"Agent DID: {{client.agent_did}}")
+print(f"Initial trust score: {{client.trust_score.total_score}}")
 
-# Load policies
-policies = mesh.load_policies()
-print(f"Loaded {{len(policies)}} policies")
+result = client.execute_with_governance(
+    "data_analysis",
+    context={{
+        "resource": "sample_dataset",
+        "purpose": "quickstart_verification",
+    }},
+)
 
-# Start the agent
-async def main():
-    """Main agent loop."""
-    async with mesh.run(identity) as agent:
-        # Your agent logic here
-        print(f"Agent {{identity.name}} is running with trust score: {{agent.trust_score}}")
-
-        # Example: Register capabilities
-        await agent.register_capabilities([
-            "text_processing",
-            "data_analysis",
-        ])
-
-        # Example: Handle incoming requests
-        async for request in agent.requests():
-            # Policy is automatically enforced
-            # Audit is automatically logged
-            response = await agent.process(request)
-            await agent.respond(response)
-
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+print(f"Decision: {{result.decision}}")
+print(f"Allowed: {{result.allowed}}")
+print(f"Updated trust score: {{result.trust_score}}")
 '''
 
     main_path = agent_dir / "src" / "main.py"
@@ -240,7 +226,7 @@ version = "0.1.0"
 description = "A governed agent secured by AgentMesh"
 requires-python = ">=3.11"
 dependencies = [
-    "agentmesh>=1.0.0",
+    "agentmesh-platform>=3.5.0",
 ]
 
 [build-system]
@@ -272,8 +258,7 @@ build-backend = "hatchling.build"
 
 [bold]Next steps:[/bold]
 1. cd {agent_dir}
-2. pip install -e .
-3. python src/main.py
+2. python src/main.py
 
 [bold]Configuration:[/bold]
 - Edit agentmesh.yaml for agent settings
