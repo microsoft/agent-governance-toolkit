@@ -8,6 +8,50 @@ namespace AgentGovernance.Tests;
 public class SagaOrchestratorAdvancedTests
 {
     [Fact]
+#pragma warning disable CS0618
+    public void SagaStep_MaxRetries_RemainsAliasOfTotalAttempts()
+    {
+        var step = new SagaStep
+        {
+            ActionId = "legacy",
+            AgentDid = "did:agentmesh:a",
+            MaxRetries = 4,
+            Execute = ct => Task.FromResult<object?>(null)
+        };
+
+        Assert.Equal(4, step.MaxAttempts);
+        Assert.Equal(4, step.MaxRetries);
+    }
+#pragma warning restore CS0618
+
+    [Fact]
+#pragma warning disable CS0618
+    public void SagaStep_MaxRetriesAndMaxAttempts_LastAssignmentWins()
+    {
+        var legacyLast = new SagaStep
+        {
+            ActionId = "legacy-last",
+            AgentDid = "did:agentmesh:a",
+            MaxAttempts = 2,
+            MaxRetries = 5,
+            Execute = ct => Task.FromResult<object?>(null)
+        };
+
+        var modernLast = new SagaStep
+        {
+            ActionId = "modern-last",
+            AgentDid = "did:agentmesh:a",
+            MaxRetries = 5,
+            MaxAttempts = 2,
+            Execute = ct => Task.FromResult<object?>(null)
+        };
+
+        Assert.Equal(5, legacyLast.MaxAttempts);
+        Assert.Equal(2, modernLast.MaxAttempts);
+    }
+#pragma warning restore CS0618
+
+    [Fact]
     public async Task Execute_StepRetries_SucceedsOnRetry()
     {
         var orchestrator = new SagaOrchestrator();

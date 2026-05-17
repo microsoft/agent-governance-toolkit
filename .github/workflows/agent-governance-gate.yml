@@ -98,7 +98,7 @@ jobs:
           EXIT_CODE=$?
           set -e
 
-          if [ $EXIT_CODE -eq 0 ]; then
+          if [ "$EXIT_CODE" -eq 0 ]; then
             echo "gate_result=passed" >> "$GITHUB_OUTPUT"
           else
             echo "gate_result=failed" >> "$GITHUB_OUTPUT"
@@ -110,7 +110,7 @@ jobs:
             echo "receipt_id=$RECEIPT_ID" >> "$GITHUB_OUTPUT"
           fi
 
-          exit $EXIT_CODE
+          exit "$EXIT_CODE"
 
       - name: Upload audit log
         if: always()

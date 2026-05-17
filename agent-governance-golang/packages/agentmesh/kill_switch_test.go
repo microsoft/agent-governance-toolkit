@@ -4,6 +4,7 @@
 package agentmesh
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -161,5 +162,86 @@ func TestKillSwitchMiddlewareDeniesOperation(t *testing.T) {
 	}
 	if handlerCalled {
 		t.Fatal("expected kill switch middleware to stop handler execution")
+	}
+}
+
+func TestKillSwitchMiddlewareAddsFlattenedMetadataWithoutBreakingDecisionShape(t *testing.T) {
+	registry := NewKillSwitchRegistry()
+	if _, err := registry.Activate(AgentKillSwitchScope("agent-9"), KillSwitchReasonSecurityIncident, "containment"); err != nil {
+		t.Fatalf("Activate agent scope: %v", err)
+	}
+
+	operation := &GovernedOperation{
+		AgentID: "agent-9",
+		Action:  "tool.run",
+	}
+	err := KillSwitchMiddleware(registry)(func(*GovernedOperation) error {
+		return nil
+	})(operation)
+	if err == nil {
+		t.Fatal("expected kill switch denial")
+	}
+
+	if operation.Metadata == nil {
+		t.Fatal("expected metadata to be populated")
+	}
+	if _, ok := operation.Metadata["kill_switch_decision"].(KillSwitchDecision); !ok {
+		t.Fatalf("expected kill_switch_decision to remain typed KillSwitchDecision, got %T", operation.Metadata["kill_switch_decision"])
+	}
+
+	allowed, ok := operation.Metadata["kill_switch_allowed"].(bool)
+	if !ok {
+		t.Fatalf("expected kill_switch_allowed bool, got %T", operation.Metadata["kill_switch_allowed"])
+	}
+	if allowed {
+		t.Fatal("expected kill_switch_allowed=false")
+	}
+
+	scope, ok := operation.Metadata["kill_switch_scope"].(string)
+	if !ok {
+		t.Fatalf("expected kill_switch_scope string, got %T", operation.Metadata["kill_switch_scope"])
+	}
+	if scope != "agent:agent-9" {
+		t.Fatalf("kill_switch_scope = %q, want %q", scope, "agent:agent-9")
+	}
+
+	reason, ok := operation.Metadata["kill_switch_reason"].(string)
+	if !ok {
+		t.Fatalf("expected kill_switch_reason string, got %T", operation.Metadata["kill_switch_reason"])
+	}
+	if reason != string(KillSwitchReasonSecurityIncident) {
+		t.Fatalf("kill_switch_reason = %q, want %q", reason, KillSwitchReasonSecurityIncident)
+	}
+
+	message, ok := operation.Metadata["kill_switch_message"].(string)
+	if !ok {
+		t.Fatalf("expected kill_switch_message string, got %T", operation.Metadata["kill_switch_message"])
+	}
+	if message != "containment" {
+		t.Fatalf("kill_switch_message = %q, want %q", message, "containment")
+	}
+
+	if _, ok := operation.Metadata["kill_switch_timestamp"]; !ok {
+		t.Fatal("expected kill_switch_timestamp to be present")
+	}
+
+	payload, err := json.Marshal(operation.Metadata)
+	if err != nil {
+		t.Fatalf("marshal metadata: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal metadata: %v", err)
+	}
+
+	if _, ok := decoded["kill_switch_decision"].(map[string]interface{}); !ok {
+		t.Fatalf("expected json kill_switch_decision object, got %T", decoded["kill_switch_decision"])
+	}
+	if decoded["kill_switch_scope"] != "agent:agent-9" {
+		t.Fatalf("decoded kill_switch_scope = %v, want %q", decoded["kill_switch_scope"], "agent:agent-9")
+	}
+	if decoded["kill_switch_reason"] != string(KillSwitchReasonSecurityIncident) {
+		t.Fatalf("decoded kill_switch_reason = %v, want %q", decoded["kill_switch_reason"], KillSwitchReasonSecurityIncident)
 	}
 }

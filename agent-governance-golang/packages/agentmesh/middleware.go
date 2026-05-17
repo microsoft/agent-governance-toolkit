@@ -163,6 +163,17 @@ func KillSwitchMiddleware(registry *KillSwitchRegistry) OperationMiddleware {
 			decision := registry.DecisionFor(operation.AgentID, capability)
 			ensureOperationMetadata(operation)
 			operation.Metadata["kill_switch_decision"] = decision
+			operation.Metadata["kill_switch_allowed"] = decision.Allowed
+			if decision.Scope != nil {
+				operation.Metadata["kill_switch_scope"] = decision.Scope.String()
+			}
+			if decision.Event != nil {
+				operation.Metadata["kill_switch_reason"] = string(decision.Event.Reason)
+				operation.Metadata["kill_switch_timestamp"] = decision.Event.Timestamp
+				if decision.Event.Message != "" {
+					operation.Metadata["kill_switch_message"] = decision.Event.Message
+				}
+			}
 			if err := killSwitchDecisionError(decision); err != nil {
 				return err
 			}

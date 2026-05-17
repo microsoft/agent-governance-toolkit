@@ -1,0 +1,38 @@
+# Gitleaks allowlist — test fixtures, documentation examples, and sample code.
+# Every entry below is a fake/placeholder credential used for testing redaction,
+# security scanning, or illustrating API usage in docs. None are real secrets.
+
+e61af025ec9c011b7cd4ad0734f471b0a69b2dff:agent-governance-python/agent-compliance/tests/test_security_scanner.py:aws-access-token:758
+8518157cafe37eff22b0727bfe26075e8b52b78d:agent-governance-python/agent-os/tests/test_asi_starter_packs.py:generic-api-key:311
+f9ef5ac3fa3123489c8ce17d63e19e0fa48ddbe3:site/tutorials/32-e2e-encrypted-messaging/index.html:generic-api-key:7
+442d252e3936eee158370def45f0b7c226765438:agent-governance-python/agent-os/tests/test_autogen_hooks.py:generic-api-key:310
+7f4cfb0f169b10f6b721f5389d27e47e1afb0c90:agent-os/tests/test_credential_redactor.py:generic-api-key:18
+695186ceffe66161ec107851de8b07cb24a8c4ec:docs/tutorials/19-dotnet-sdk.md:generic-api-key:807
+a0bfee741304548463c85252302720958772a192:docs/tutorials/32-e2e-encrypted-messaging.md:generic-api-key:63
+de392848c0fbfd2566789a8ddee41b35c8cdf798:packages/agentmesh-integrations/sb-runtime-skill/sb_runtime_agentmesh/receipts.py:generic-api-key:92
+3130880d08313227c792a6a3b5837dee0938e1c0:packages/agentmesh-integrations/agentmesh-avp/tests/test_provider.py:generic-api-key:13
+46b56f5d1af93ce62cd14b6fa67679af4d99bc80:examples/atr-community-rules/test_atr_policy.py:generic-api-key:82
+8144506882383949be2e09bb08b6a633e6a31827:packages/agent-os/tests/test_credential_redactor.py:generic-api-key:18
+970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh-mcp/src/mcp/response.rs:generic-api-key:326
+970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh-mcp/src/mcp/redactor.rs:generic-api-key:188
+970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh/src/mcp/redactor.rs:generic-api-key:188
+970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh/src/mcp/response.rs:generic-api-key:326
+626bda7741006418136446963c23bed65e99ea93:packages/agent-os-vscode/package.json:generic-api-key:231
+626bda7741006418136446963c23bed65e99ea93:packages/agent-os-vscode/src/server/browserPolicyEditor.ts:generic-api-key:325
+626bda7741006418136446963c23bed65e99ea93:packages/agent-os-vscode/src/test/server/governanceServer.test.ts:generic-api-key:111
+2ba4ec540b18f4265804dcb189944bc730ea5402:packages/agent-sre/src/agent_sre/signing.py:generic-api-key:89
+a5e0aea65771b2519b24a4cc95ef8f0e3a2868e6:packages/agent-mesh/tests/test_managed_identity.py:jwt:28
+2ba4ec540b18f4265804dcb189944bc730ea5402:packages/agent-os/tests/test_secure_codegen.py:stripe-access-token:294
+5decf507a91bb4f485d6a3c19a1f9c4143ddf7dd:packages/agent-compliance/tests/test_security_scanner.py:generic-api-key:71
+5decf507a91bb4f485d6a3c19a1f9c4143ddf7dd:packages/agent-compliance/tests/test_security_scanner.py:generic-api-key:83
+585e209479e1fa627dbf6aefb60e2fb0b6c56108:docs/tutorials/19-dotnet-sdk.md:generic-api-key:803
+7797f00ed2bdeabb780d17c30b27616e1cc970ad:examples/quickstart/autogen_governed.py:generic-api-key:43
+bd2e209cd4e1c1fbe49d8383fabd8bb8ba7203cb:packages/agentmesh-integrations/langgraph-trust/langgraph_trust/identity.py:generic-api-key:28
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-mesh/schemas/README.md:generic-api-key:84
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-mesh/src/agentmesh/core/identity/ca.py:generic-api-key:96
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-os/docs/use-cases.md:generic-api-key:76
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-os/extensions/vscode/src/extension.ts:generic-api-key:260
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-os/extensions/vscode/src/webviews/policyEditor/PolicyEditorPanel.ts:generic-api-key:478
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-os/tests/test_mute_agent.py:stripe-access-token:70
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-os/tests/test_mute_agent.py:stripe-access-token:72
+2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-sre/tests/unit/test_capture.py:generic-api-key:60

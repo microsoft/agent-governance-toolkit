@@ -39,7 +39,7 @@ jobs:
               fi
             fi
           done < <(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*')
-          if [ $VIOLATIONS -gt 0 ]; then
+          if [ "$VIOLATIONS" -gt 0 ]; then
             echo ""
             echo "Found $VIOLATIONS package.json files with ^ or ~ version ranges."
             echo "Pin to exact versions (e.g., \"1.2.3\" not \"^1.2.3\")."
