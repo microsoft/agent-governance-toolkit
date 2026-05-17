@@ -22,7 +22,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from agentmesh.governance.policy import PolicyEngine as _PolicyEngine
+from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
@@ -170,7 +171,6 @@ _policy_dir = os.getenv("AGT_POLICY_DIR", "/etc/agt/policies")
 _loaded_count = 0
 
 # Initialize engine eagerly so tests work without startup event
-from agentmesh.governance.policy import PolicyEngine as _PolicyEngine
 _engine = _PolicyEngine()
 
 

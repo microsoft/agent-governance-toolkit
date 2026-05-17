@@ -58,7 +58,10 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
+
+if TYPE_CHECKING:
+    from agentmesh.governance.backend import PolicyDecisionResult
 
 logger = logging.getLogger(__name__)
 

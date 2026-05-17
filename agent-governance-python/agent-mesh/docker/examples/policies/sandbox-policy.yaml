@@ -6,15 +6,24 @@ version: "1.0"
 rules:
   - name: allow-file-read
     description: Allow reading files in /data
-    condition: "action == 'file.read'"
+    condition:
+      field: action
+      operator: eq
+      value: file.read
     action: allow
 
   - name: deny-shell-execute
     description: Deny shell execution for sandboxed agents
-    condition: "action == 'shell.execute'"
+    condition:
+      field: action
+      operator: eq
+      value: shell.execute
     action: deny
 
   - name: deny-network-egress
     description: Deny outbound network access
-    condition: "action == 'network.egress'"
+    condition:
+      field: action
+      operator: eq
+      value: network.egress
     action: deny

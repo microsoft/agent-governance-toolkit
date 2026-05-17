@@ -1,0 +1,9 @@
+# Safety policy file — auto-discovered by safety >= 3.x
+# Mirrors the CI script's intent: only block on Critical severity (CVSS >= 7.0).
+# See: https://docs.safetycli.com/safety-docs/safety-policies
+
+version: "3.0"
+
+security:
+  ignore-cvss-severity-below: 7.0
+  ignore-unpinned-requirements: false

@@ -117,7 +117,6 @@ def bootstrap_otel(
     # Configure MeterProvider
     if enable_metrics:
         meter_provider = MeterProvider(resource=resource)
-        trace_configured = enable_tracing
         metrics.set_meter_provider(meter_provider)
         logger.info("OTel MeterProvider configured (endpoint=%s)", _endpoint)
 

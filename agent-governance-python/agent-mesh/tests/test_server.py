@@ -43,9 +43,9 @@ class TestTrustEngineServer:
     def test_metrics(self):
         resp = self.client.get("/metrics")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "uptime_seconds" in data
-        assert data["component"] == "trust-engine"
+        text = resp.text
+        assert "agt_uptime_seconds" in text
+        assert 'component="trust-engine"' in text
 
     def test_register_agent(self):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
