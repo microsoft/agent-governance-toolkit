@@ -1,0 +1,21 @@
+# Safety policy configuration for the agent-governance-toolkit.
+# See https://docs.pyup.io/docs/safety-20-policy-files for full schema.
+
+version: "3.0"
+
+# Scan behavior
+scan:
+  # Fail the build only on vulnerabilities with a CVSS score >= 7.0 (HIGH/CRITICAL).
+  # This lets the CI gate on real risk without breaking on low-severity advisories
+  # in dev or test-only dependencies.
+  fail_on_cvss: 7.0
+
+  # Include all dependency groups (main, dev, test, extras)
+  full_report: true
+
+# Vulnerabilities explicitly acknowledged and accepted pending upstream fixes.
+# Format:
+#   - id: <Safety-DB advisory ID>
+#     reason: <short explanation>
+#     expires: <YYYY-MM-DD>  # review date; remove or re-evaluate when reached
+ignore_vulns: []

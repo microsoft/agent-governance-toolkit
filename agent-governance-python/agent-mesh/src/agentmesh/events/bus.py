@@ -134,7 +134,7 @@ class AsyncEventBus(EventBus):
             logger.warning(
                 "Event bus queue full (max %d); dropping event type=%s",
                 self._queue.maxsize,
-                event.type,
+                event.event_type,
             )
 
     def subscribe(self, pattern: str, handler: EventHandler) -> None:
