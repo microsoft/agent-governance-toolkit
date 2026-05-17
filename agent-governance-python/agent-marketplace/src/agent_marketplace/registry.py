@@ -18,7 +18,6 @@ from typing import Optional
 from agent_marketplace.manifest import MarketplaceError, PluginManifest, PluginType
 from agent_marketplace.marketplace_policy import (
     MarketplacePolicy,
-    OrgMarketplacePolicy,
     evaluate_plugin_compliance,
 )
 

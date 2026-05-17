@@ -434,8 +434,11 @@ jobs:
           # Capture safety's exit code and stdout. The previous
           # invocation discarded stderr and `|| echo`-d a placeholder
           # message, so the step always exited 0 regardless of findings.
+          # Run safety check from a temp directory to avoid auto-discovery
+          # of .safety-policy.yml (v3.0), which safety check does not support.
+          # The pip environment is system-wide, so CWD does not matter.
           set +e
-          safety check --output json > safety-report.json
+          (cd /tmp && safety check --output json) > safety-report.json
           EXIT_CODE=$?
           set -e
 

@@ -34,15 +34,12 @@ from agent_marketplace import (
     load_manifest,
 )
 from agent_marketplace.marketplace_policy import (
-    MarketplacePolicy,
-    MCPServerPolicy,
     evaluate_plugin_compliance,
     load_marketplace_policy,
 )
 from agent_marketplace.schema_adapters import (
     adapt_to_canonical,
     detect_manifest_format,
-    extract_capabilities,
     extract_mcp_servers,
 )
 
