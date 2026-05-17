@@ -21,6 +21,7 @@ atexit
 autobuild
 aymenhmaidiwastaken
 backpressure
+behaviour
 bursty
 bypassable
 caas
@@ -167,6 +168,7 @@ Ravande
 Rego
 relativedelta
 repudiable
+repr
 requireapproval
 reqwest
 returncode
@@ -186,6 +188,7 @@ seccomp
 SemanticKernel
 serde
 Serialise
+sess
 setattr
 setext
 setitem
