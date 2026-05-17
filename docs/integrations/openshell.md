@@ -86,11 +86,10 @@ if not decision.allowed:
 
 See the [runnable example](../../examples/openshell-governed/) for a complete demo.
 
-### Option B: Governance Sidecar (Planned)
+### Option B: Governance Sidecar
 
-> **Status:** The sidecar deployment pattern is documented as a reference architecture.
-> The governance HTTP API is not yet packaged as a standalone server.
-> See the [OpenClaw sidecar deployment guide](../deployment/openclaw-sidecar.md) for progress and known limitations.
+> **Status:** The sidecar deployment pattern is available as a reference architecture with a working HTTP API.
+> See the [OpenClaw sidecar deployment guide](../deployment/openclaw-sidecar.md) for Docker Compose and AKS deployment instructions.
 
 Run the governance API server as a sidecar container. Your agent (or orchestration layer) calls the sidecar's HTTP API before executing actions:
 
@@ -164,13 +163,13 @@ Result: Action blocked before reaching OpenShell
 
 When running both layers, you get two complementary telemetry streams:
 
-**Governance Toolkit metrics** (planned, reference schema):
+**Governance Toolkit metrics** (JSON API available, Prometheus format planned):
 - `policy_decisions_total{result="allow|deny"}`
 - `trust_score_current{agent="did:mesh:..."}`
 - `audit_chain_entries_total`
 - `authority_resolutions_total{decision="allow|deny|narrowed"}`
 
-> These metric names are a reference design. The OpenShell governance skill currently provides in-memory audit logs via `get_audit_log()`. Prometheus/OpenTelemetry export is planned.
+> The sidecar exposes governance metrics via the JSON API at `/api/v1/metrics`. Prometheus/OpenTelemetry export format is planned. The OpenShell governance skill provides in-memory audit logs via `get_audit_log()`.
 
 **OpenShell metrics**:
 - Sandbox network egress logs
