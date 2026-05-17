@@ -875,30 +875,6 @@ agentos metrics
 # ...
 ```
 
-```bash
-# Compile Agent Threat Rules (ATR) YAML into per-category Agent OS policies
-agentos atr-import node_modules/agent-threat-rules/rules/
-# [atr-import] 419 rules compiled across 10 categories -> ./atr-policies
-
-# Pin the output directory and write a JSON manifest for CI pipelines
-agentos atr-import rules/ --out policies/ --manifest build/atr-manifest.json
-
-# Filter at compile time (category / severity / ID prefix)
-agentos atr-import rules/ --category prompt-injection --min-severity high
-agentos atr-import rules/ --id-prefix ATR-2026-
-
-# Watch the ATR source tree and recompile on changes (stdlib mtime polling)
-agentos atr-import rules/ --watch --watch-interval 2.0
-```
-
-The `atr-import` subcommand is the data-path companion to the cross-reference
-layer added in #908. Each ATR category emits one `PolicyDocument` that slots
-into AGT's folder-merge layout where each `governance.yaml` corresponds to one
-threat class. The conversion logic is single-sourced from #908's
-`sync_atr_rules.py` so schema drift is handled in exactly one place.
-[Agent Threat Rules](https://github.com/Agent-Threat-Rule/agent-threat-rules)
-is MIT-licensed.
-
 ---
 
 ## MCP Integration (Claude Desktop, GitHub Copilot, Cursor)

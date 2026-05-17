@@ -14,7 +14,6 @@ Usage:
     agentos install-hooks                  Install git pre-commit hooks
     agentos serve [--port PORT]            Start HTTP API server
     agentos metrics                        Output Prometheus metrics
-    agentos atr-import <atr_dir>           Compile ATR YAML rules into AGT YAML
 
 Environment variables:
     AGENTOS_CONFIG      Path to config file (overrides default .agents/)
@@ -618,10 +617,6 @@ def main() -> int:
     from agent_os.cli.cmd_sign import register_sign_subcommands
     register_sign_subcommands(subparsers)
 
-    # atr-import — compile ATR YAML rules into Agent OS YAML policies
-    from agent_os.cli.cmd_atr_import import register_atr_import_subcommand
-    register_atr_import_subcommand(subparsers)
-
     args = parser.parse_args()
 
     # Handle CI mode
@@ -649,12 +644,7 @@ def main() -> int:
         "metrics": cmd_metrics,
         "health": cmd_health,
         "sign": None,  # handled by sub-subcommands
-        "atr-import": None,  # imported lazily below
     }
-
-    if args.command == "atr-import":
-        from agent_os.cli.cmd_atr_import import cmd_atr_import
-        commands["atr-import"] = cmd_atr_import
 
     handler = commands.get(args.command)
     if handler is None and args.command == "sign":

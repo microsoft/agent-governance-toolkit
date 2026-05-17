@@ -1,28 +1,39 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for ``agentos atr-import``.
+"""Tests for the ``examples/atr-import/import_atr.py`` standalone example.
 
 Covers per-category compilation, severity / category filters, the watch
 loop's change detection, and integration with the PR #908 conversion
 helpers in ``examples/atr-community-rules/sync_atr_rules.py``.
+
+Run from repo root: ``pytest examples/atr-import/test_import_atr.py``
 """
 
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
 
-import argparse
-
-from agent_os.cli.cmd_atr_import import (
-    cmd_atr_import,
-    compile_per_category,
-    watch_and_recompile,
+# Load import_atr.py as a module from its file path. This example does
+# not live in the package tree, so a regular ``import`` will not find it.
+_HERE = Path(__file__).resolve().parent
+_spec = importlib.util.spec_from_file_location(
+    "import_atr_example", _HERE / "import_atr.py"
 )
+import_atr_example = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+sys.modules["import_atr_example"] = import_atr_example
+_spec.loader.exec_module(import_atr_example)  # type: ignore[union-attr]
+
+cmd_atr_import = import_atr_example.cmd_atr_import
+compile_per_category = import_atr_example.compile_per_category
+watch_and_recompile = import_atr_example.watch_and_recompile
 
 # ---------------------------------------------------------------------------
 # Fixtures: realistic miniature ATR rule samples (drawn from the public
@@ -134,19 +145,41 @@ class TestCompilePerCategory:
     def test_each_category_yaml_is_valid_policy_document(
         self, tmp_path: Path
     ) -> None:
-        from agent_os.policies.schema import PolicyDocument
+        """Structural validation of emitted PolicyDocument shape.
 
+        We deliberately do not import ``agent_os.policies.schema`` here so the
+        example stays runnable without installing the agent-os package. If
+        agent-os is available in the environment, the import below will use it
+        for stricter validation; otherwise we fall back to a structural check
+        against the same field set that AGT's loader expects.
+        """
         src = tmp_path / "atr"
         out = tmp_path / "out"
         _write_atr_tree(src)
         compile_per_category(src, out)
 
+        try:
+            from agent_os.policies.schema import PolicyDocument  # type: ignore
+        except ImportError:
+            PolicyDocument = None  # type: ignore
+
         for path in out.glob("*.yaml"):
             with open(path) as fh:
                 data = yaml.safe_load(fh)
-            # If this raises, the emit isn't schema-compatible with AGT.
-            document = PolicyDocument(**data)
-            assert document.rules, f"{path.name} emitted no rules"
+            if PolicyDocument is not None:
+                document = PolicyDocument(**data)
+                assert document.rules, f"{path.name} emitted no rules"
+            else:
+                # Structural shape: AGT PolicyDocument requires
+                # name + version + rules (list of dicts each with name + condition).
+                assert isinstance(data, dict)
+                assert "name" in data and isinstance(data["name"], str)
+                assert "version" in data
+                assert "rules" in data and isinstance(data["rules"], list)
+                assert data["rules"], f"{path.name} emitted no rules"
+                for rule in data["rules"]:
+                    assert "name" in rule
+                    assert "condition" in rule
 
     def test_min_severity_filter(self, tmp_path: Path) -> None:
         src = tmp_path / "atr"

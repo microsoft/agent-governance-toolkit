@@ -1,14 +1,20 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""``agentos atr-import`` command.
+"""Standalone example: compile Agent Threat Rules (ATR) YAML into per-category
+Agent OS PolicyDocument YAML files.
 
-Compiles Agent Threat Rules (ATR) YAML into per-category Agent OS
-PolicyDocument YAML files. Provides a real CLI surface on top of the
-example conversion logic added in PR #908 (``examples/atr-community-rules/
-sync_atr_rules.py``).
+This example lives under ``examples/atr-import/`` and is not part of agent-os
+core. It does not register a CLI subcommand on ``agentos``; run it directly:
 
-PR #908 emits a single bundled PolicyDocument with all rules merged. This
-command produces one PolicyDocument per ATR category, which lets operators:
+    python examples/atr-import/import_atr.py path/to/atr/rules/ --out ./atr-policies
+
+ATR (https://github.com/Agent-Threat-Rule/agent-threat-rules) is an external
+MIT-licensed community project. Keeping the integration in ``examples/`` means
+agent-os core takes no runtime dependency on it.
+
+This example builds on ``examples/atr-community-rules/sync_atr_rules.py`` from
+PR #908. PR #908 emits a single bundled PolicyDocument with all rules merged;
+this script produces one PolicyDocument per ATR category, which lets operators:
 
   * Drop the output directory into AGT's folder-merge policy layout where
     each ``governance.yaml`` corresponds to one threat class.
@@ -17,8 +23,6 @@ command produces one PolicyDocument per ATR category, which lets operators:
 
 A ``--watch`` mode polls the source tree for changes and re-emits on
 mtime drift, with no third-party dependency.
-
-ATR upstream: https://github.com/Agent-Threat-Rule/agent-threat-rules (MIT)
 """
 
 from __future__ import annotations
@@ -294,19 +298,15 @@ def watch_and_recompile(
 
 
 # ---------------------------------------------------------------------------
-# Argparse wiring
+# Argparse wiring (standalone script — not registered on agentos)
 # ---------------------------------------------------------------------------
 
 
-def register_atr_import_subcommand(subparsers: argparse._SubParsersAction) -> None:
-    """Register ``agentos atr-import`` on the main CLI parser.
-
-    Called from :func:`agent_os.cli.main` to keep the registration co-located
-    with the command implementation.
-    """
-    parser = subparsers.add_parser(
-        "atr-import",
-        help="Compile Agent Threat Rules (ATR) YAML into Agent OS YAML policies",
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the standalone argparse parser for this example."""
+    parser = argparse.ArgumentParser(
+        prog="import_atr.py",
+        description="Compile Agent Threat Rules (ATR) YAML into per-category Agent OS PolicyDocument YAML files.",
     )
     parser.add_argument(
         "atr_dir",
@@ -358,6 +358,7 @@ def register_atr_import_subcommand(subparsers: argparse._SubParsersAction) -> No
         default=2.0,
         help="Watch poll interval in seconds (default: 2.0).",
     )
+    return parser
 
 
 def _validate_cli_paths(
@@ -431,3 +432,18 @@ def cmd_atr_import(args: argparse.Namespace) -> int:
             return 0
 
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Standalone entry point
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    return cmd_atr_import(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

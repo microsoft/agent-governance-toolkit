@@ -22,14 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of running with a caller-supplied identity.
 
 ### Added
-- `agentos atr-import` CLI subcommand that compiles Agent Threat Rules (ATR)
-  YAML into per-category Agent OS `PolicyDocument` files. Follow-up to #908,
-  which added the cross-reference layer; this adds the data path. Supports
-  category / severity / ID-prefix filters, an optional JSON build manifest
-  for CI pipelines, and a `--watch` mode that recompiles on mtime drift with
-  no third-party dependency. Reuses #908's conversion helpers so the
-  ATR-to-AGT rule mapping stays single-sourced. Boundary path validation at
-  the CLI layer fails fast before any file work happens.
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.
