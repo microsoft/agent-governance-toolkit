@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 """Tests for VectorClock causal predicates (issue #2335) and
-SessionIsolationManager fail-closed behaviour (issue #2336)."""
+SessionIsolationManager fail-closed behavior (issue #2336)."""
 
 import logging
 
@@ -159,35 +159,35 @@ class TestCheckAccessFailClosed:
 
     def test_scoped_session_allows_own_path(self):
         mgr = SessionIsolationManager()
-        mgr.create_scope("sess-1", "did:mesh:agent-1", IsolationLevel.SNAPSHOT)
-        assert mgr.check_access("sess-1", "/var/agt/sessions/sess-1/work.txt")
+        mgr.create_scope("sid1", "did:mesh:agent-1", IsolationLevel.SNAPSHOT)
+        assert mgr.check_access("sid1", "/var/agt/sessions/sid1/work.txt")
 
     def test_scoped_session_denies_other_session_path(self):
         mgr = SessionIsolationManager()
-        mgr.create_scope("sess-1", "did:mesh:agent-1", IsolationLevel.SNAPSHOT)
-        mgr.create_scope("sess-2", "did:mesh:agent-2", IsolationLevel.SNAPSHOT)
+        mgr.create_scope("sid1", "did:mesh:agent-1", IsolationLevel.SNAPSHOT)
+        mgr.create_scope("sid2", "did:mesh:agent-2", IsolationLevel.SNAPSHOT)
         # SNAPSHOT cannot read across sessions
-        assert not mgr.check_access("sess-1", "/var/agt/sessions/sess-2/secret.txt")
+        assert not mgr.check_access("sid1", "/var/agt/sessions/sid2/secret.txt")
 
     def test_read_committed_grants_work(self):
         mgr = SessionIsolationManager()
-        mgr.create_scope("sess-1", "did:mesh:agent-1", IsolationLevel.READ_COMMITTED)
-        mgr.create_scope("sess-2", "did:mesh:agent-2", IsolationLevel.READ_COMMITTED)
-        granted = mgr.grant_cross_session_access("sess-1", "sess-2")
+        mgr.create_scope("sid1", "did:mesh:agent-1", IsolationLevel.READ_COMMITTED)
+        mgr.create_scope("sid2", "did:mesh:agent-2", IsolationLevel.READ_COMMITTED)
+        granted = mgr.grant_cross_session_access("sid1", "sid2")
         assert granted
-        assert mgr.check_access("sess-1", "/var/agt/sessions/sess-2/data")
+        assert mgr.check_access("sid1", "/var/agt/sessions/sid2/data")
 
     def test_scope_removed_then_access_denied(self):
         mgr = SessionIsolationManager()
-        mgr.create_scope("sess-1", "did:mesh:agent-1", IsolationLevel.SNAPSHOT)
-        mgr.remove_scope("sess-1")
+        mgr.create_scope("sid1", "did:mesh:agent-1", IsolationLevel.SNAPSHOT)
+        mgr.remove_scope("sid1")
         # After removal the session is unscoped and should be denied
-        assert mgr.check_access("sess-1", "/var/agt/sessions/sess-1/data") is False
+        assert mgr.check_access("sid1", "/var/agt/sessions/sid1/data") is False
 
     def test_active_sessions_count_after_removal(self):
         mgr = SessionIsolationManager()
-        mgr.create_scope("s1", "did:mesh:a1")
-        mgr.create_scope("s2", "did:mesh:a2")
+        mgr.create_scope("sid1", "did:mesh:a1")
+        mgr.create_scope("sid2", "did:mesh:a2")
         assert mgr.active_sessions == 2
-        mgr.remove_scope("s1")
+        mgr.remove_scope("sid1")
         assert mgr.active_sessions == 1
