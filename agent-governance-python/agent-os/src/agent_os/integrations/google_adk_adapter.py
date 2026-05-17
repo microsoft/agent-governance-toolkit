@@ -58,6 +58,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -264,16 +265,21 @@ class GoogleADKKernel(BaseIntegration):
         """
         Wrap an ADK agent with governance callbacks.
 
-        Injects before/after callbacks into the agent if it has the
-        expected ADK callback attributes. Otherwise returns a wrapper
-        object that delegates attribute access to the original agent.
-
-        Works without google-adk installed (for testing with mocks).
+        .. deprecated::
+            Use :meth:`as_plugin` instead.  ``wrap()`` will be removed
+            in v1.0.
         """
+        warnings.warn(
+            "GoogleADKKernel.wrap() is deprecated. Use kernel.as_plugin() "
+            "instead, which leverages ADK's native plugin lifecycle. "
+            "wrap() will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         agent_name = getattr(agent, "name", None) or str(id(agent))
 
         # Inject callbacks if the agent supports them
-        for attr, cb in self.get_callbacks().items():
+        for attr, cb in self._get_callbacks_internal().items():
             if hasattr(agent, attr):
                 setattr(agent, attr, cb)
 
@@ -285,10 +291,17 @@ class GoogleADKKernel(BaseIntegration):
     def unwrap(self, governed_agent: Any) -> Any:
         """Remove governance wrapper and return the original agent.
 
-        Since ``wrap`` modifies agents in-place (injecting callbacks),
-        ``unwrap`` clears the callbacks back to ``None``.
+        .. deprecated::
+            Use :meth:`as_plugin` instead.  ``unwrap()`` will be removed
+            in v1.0.
         """
-        for attr in self.get_callbacks():
+        warnings.warn(
+            "GoogleADKKernel.unwrap() is deprecated. Use kernel.as_plugin() "
+            "instead. unwrap() will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        for attr in self._get_callbacks_internal():
             if hasattr(governed_agent, attr):
                 setattr(governed_agent, attr, None)
         agent_name = getattr(governed_agent, "name", None) or str(id(governed_agent))
@@ -665,19 +678,31 @@ class GoogleADKKernel(BaseIntegration):
             },
         }
 
-    def get_callbacks(self) -> dict[str, Any]:
-        """
-        Return a dict of all callbacks suitable for unpacking into LlmAgent.
-
-        Usage:
-            agent = LlmAgent(..., **kernel.get_callbacks())
-        """
+    def _get_callbacks_internal(self) -> dict[str, Any]:
+        """Return callback dict without deprecation warning (internal use)."""
         return {
             "before_tool_callback": self.before_tool_callback,
             "after_tool_callback": self.after_tool_callback,
             "before_agent_callback": self.before_agent_callback,
             "after_agent_callback": self.after_agent_callback,
         }
+
+    def get_callbacks(self) -> dict[str, Any]:
+        """
+        Return a dict of all callbacks suitable for unpacking into LlmAgent.
+
+        .. deprecated::
+            Use :meth:`as_plugin` instead.  ``get_callbacks()`` will be
+            removed in v1.0.
+        """
+        warnings.warn(
+            "GoogleADKKernel.get_callbacks() is deprecated. Use "
+            "kernel.as_plugin() instead. get_callbacks() will be removed "
+            "in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._get_callbacks_internal()
 
     def health_check(self) -> dict[str, Any]:
         """Return adapter health status.
