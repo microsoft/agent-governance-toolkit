@@ -14,6 +14,7 @@ aioredis
 AKIA
 AKIA
 alnum
+amannn
 Amol
 Amol
 appsettings
