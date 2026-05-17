@@ -157,11 +157,11 @@ class SessionIsolationManager:
 
         Returns:
             True if access is allowed under the session's isolation scope.
-            True if no scope exists (permissive fallback for backward compat).
+            False if no scope exists (fail-closed: unscoped sessions are denied).
         """
         scope = self._scopes.get(session_id)
         if scope is None:
-            return True  # No scope = no enforcement (backward compat)
+            return False  # Fail-closed: no scope = no access
         return scope.is_path_allowed(path)
 
     def grant_cross_session_access(

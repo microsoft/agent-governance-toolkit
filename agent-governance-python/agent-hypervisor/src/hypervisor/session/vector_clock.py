@@ -2,10 +2,10 @@
 # Licensed under the MIT License.
 # Public Preview — basic implementation
 """
-Version Counters — stub implementation.
+Vector Clocks -- causal ordering for multi-agent writes.
 
-Public Preview: no causal consistency enforcement.
-VectorClock and VectorClockManager are retained for API compatibility.
+Implements standard component-wise vector clock comparison for
+detecting causal ordering and concurrency between agent operations.
 """
 
 from __future__ import annotations
@@ -53,10 +53,32 @@ class VectorClock:
         return VectorClock(clocks=merged_clocks)
 
     def happens_before(self, other: VectorClock) -> bool:
-        return False
+        """Return True if self causally precedes other.
+
+        Clock A happens-before clock B iff every component of A is <=
+        the corresponding component of B, and at least one is strictly <.
+        """
+        first, second = sorted([self, other], key=id)
+        with first._lock:
+            with second._lock:
+                all_agents = set(self.clocks.keys()) | set(other.clocks.keys())
+                at_least_one_less = False
+                for agent in all_agents:
+                    self_val = self.clocks.get(agent, 0)
+                    other_val = other.clocks.get(agent, 0)
+                    if self_val > other_val:
+                        return False
+                    if self_val < other_val:
+                        at_least_one_less = True
+                return at_least_one_less
 
     def is_concurrent(self, other: VectorClock) -> bool:
-        return False
+        """Return True if neither clock causally precedes the other."""
+        return (
+            not self.happens_before(other)
+            and not other.happens_before(self)
+            and self != other
+        )
 
     def copy(self) -> VectorClock:
         with self._lock:
