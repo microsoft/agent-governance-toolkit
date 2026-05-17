@@ -1,19 +1,9 @@
-# Safety CLI v3 policy file
-# https://docs.safetycli.com/safety-docs/safety-3/configuration/policy-file
-version: "3.0"
-
-scan:
-  max-depth: 10
-  exclude: []
-
-report:
-  auto-ignore-in-report:
-    python:
-      unpinned-specifications: "warn"
-
-fail-scan-with-exit-code:
-  dependency-vulnerabilities:
-    enabled: true
-    fail-on-any-of:
-      cvss-severity:
-        - critical
+# Safety CLI policy file (v2.0 for safety check compatibility)
+# safety check (legacy) only supports policy versions <= 2.0.
+# The CI workflow handles severity filtering in its own logic.
+version: "2.0"
+security:
+  ignore-cvss-severity-below: 0
+  ignore-cvss-unknown-severity: false
+  ignore-vulnerabilities: {}
+  continue-on-vulnerability-error: true
