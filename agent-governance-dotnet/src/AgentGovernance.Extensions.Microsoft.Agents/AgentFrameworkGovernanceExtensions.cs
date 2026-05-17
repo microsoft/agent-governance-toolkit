@@ -20,7 +20,7 @@ public static class AgentFrameworkGovernanceExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(adapter);
 
-        var governedBuilder = builder.Use(runFunc: adapter.RunAsync, runStreamingFunc: null);
+        var governedBuilder = builder.Use(runFunc: adapter.RunAsync, runStreamingFunc: adapter.RunStreamingAsync);
 
         return adapter.Options.EnableFunctionMiddleware
             ? governedBuilder.Use(adapter.InvokeFunctionAsync)

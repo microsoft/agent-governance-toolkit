@@ -84,6 +84,60 @@ public sealed class AgentFrameworkGovernanceAdapter
     }
 
     /// <summary>
+    /// Applies run-level governance before the inner agent streams a response.
+    /// </summary>
+    public async IAsyncEnumerable<AgentResponseUpdate> RunStreamingAsync(
+        IEnumerable<ChatMessage> messages,
+        AgentSession? session,
+        AgentRunOptions? options,
+        AIAgent innerAgent,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        ArgumentNullException.ThrowIfNull(innerAgent);
+
+        var materializedMessages = messages as IReadOnlyList<ChatMessage> ?? messages.ToList();
+
+        var agentId = ResolveAgentId(innerAgent, session);
+        var agentName = ResolveAgentName(innerAgent);
+        var inputText = ResolveInputText(materializedMessages);
+        var sessionId = ResolveSessionId(session);
+
+        var context = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["message"] = inputText,
+            ["agent_name"] = agentName,
+            ["message_count"] = materializedMessages.Count,
+            ["has_session"] = session is not null
+        };
+
+        var decision = Kernel.PolicyEngine.Evaluate(agentId, context);
+        EmitRunDecision(agentId, sessionId, inputText, decision);
+        Kernel.Metrics?.RecordDecision(
+            decision.Allowed,
+            agentId,
+            "agent_run_streaming",
+            decision.EvaluationMs,
+            decision.RateLimited);
+
+        if (!decision.Allowed)
+        {
+            var blockedResponse = Options.BlockedRunResponseFactory?.Invoke(decision)
+                ?? CreateBlockedRunResponse(decision);
+            foreach (var msg in blockedResponse.Messages)
+            {
+                yield return new AgentResponseUpdate(msg.Role, msg.Text);
+            }
+            yield break;
+        }
+
+        await foreach (var update in innerAgent.RunStreamingAsync(materializedMessages, session, options, cancellationToken).ConfigureAwait(false))
+        {
+            yield return update;
+        }
+    }
+
+    /// <summary>
     /// Applies function-call governance before the inner tool executes.
     /// </summary>
     public async ValueTask<object?> InvokeFunctionAsync(
