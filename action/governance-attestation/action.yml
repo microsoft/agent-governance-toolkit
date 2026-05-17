@@ -60,9 +60,11 @@ runs:
 
     - name: Install Agent Governance Toolkit
       shell: bash
+      env:
+        AGT_TOOLKIT_VERSION: ${{ inputs.toolkit-version }}
       run: |
-        if [ -n "${{ inputs.toolkit-version }}" ]; then
-          pip install --quiet "agent-governance-toolkit[governance]==${{ inputs.toolkit-version }}"
+        if [ -n "$AGT_TOOLKIT_VERSION" ]; then
+          pip install --quiet "agent-governance-toolkit[governance]==$AGT_TOOLKIT_VERSION"
         else
           pip install --quiet "agent-governance-toolkit[governance]"
         fi
