@@ -15,6 +15,10 @@ Key architectural decisions and their rationale. Each ADR follows the standard f
 | [ADR-0004](0004-keep-policy-evaluation-deterministic.md) | Keep policy evaluation deterministic | Policy |
 | [ADR-0009](0009-rfc-9334-rats-architecture-alignment.md) | RFC 9334 (RATS) architecture alignment | Standards |
 | [ADR-0012](0012-cost-governance-observability-policies.md) | Cost governance via observability policies | SRE |
+| [ADR-0013](0013-fail-closed-on-policy-evaluation-errors.md) | Fail closed on policy evaluation errors | Policy |
+| [ADR-0014](0014-parent-deny-rules-immutable-in-merge.md) | Parent deny rules are immutable in policy merge | Policy |
+| [ADR-0015](0015-pluggable-external-policy-backends.md) | Pluggable external policy backends via protocol interface | Policy |
+| [ADR-0016](0016-trust-ceiling-propagation-for-delegation.md) | Trust ceiling propagation for delegated agents | Trust |
 
 ## Proposed
 
