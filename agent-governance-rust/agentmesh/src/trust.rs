@@ -212,10 +212,15 @@ impl TrustManager {
     /// Best-effort load from persistence file.
     fn load_from_disk(&self) {
         if let Some(path) = &self.config.persist_path {
+            let path = std::path::Path::new(path);
+            if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                return;
+            }
             if let Ok(data) = std::fs::read_to_string(path) {
                 if let Ok(states) = serde_json::from_str::<Vec<AgentState>>(&data) {
                     let mut agents = self.agents.write().unwrap_or_else(|e| e.into_inner());
-                    for state in states {
+                    for mut state in states {
+                        state.score = state.score.min(1000);
                         agents.insert(state.agent_id.clone(), state);
                     }
                 }
@@ -226,6 +231,10 @@ impl TrustManager {
     /// Best-effort save to persistence file.
     fn save_to_disk(&self) {
         if let Some(path) = &self.config.persist_path {
+            let path = std::path::Path::new(path);
+            if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                return;
+            }
             let agents = self.agents.read().unwrap_or_else(|e| e.into_inner());
             let states: Vec<&AgentState> = agents.values().collect();
             if let Ok(json) = serde_json::to_string(&states) {
