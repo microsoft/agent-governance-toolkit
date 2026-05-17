@@ -1,0 +1,112 @@
+name: "RFC: Major Feature Proposal"
+description: Propose a significant architectural change or new capability
+title: "RFC: "
+labels: ["rfc", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## RFC Process
+
+        RFCs are required for changes that affect public API surfaces, introduce
+        new packages, change the security model, or add framework integrations.
+        Small bug fixes and documentation updates do not need an RFC.
+
+        **Lifecycle:** Draft → Under Review → Accepted / Rejected → Implemented
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One-paragraph explanation of the proposal.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this change needed? What problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Detailed Design
+      description: |
+        Explain the design in enough detail for someone familiar with AGT to
+        understand and implement it. Include API signatures, data models, and
+        interaction diagrams where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches were considered and why were they rejected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: security
+    attributes:
+      label: Security Implications
+      description: |
+        How does this change affect the trust model, cryptographic boundaries,
+        or attack surface? For governance framework changes this section is
+        mandatory.
+    validations:
+      required: true
+
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration / Backward Compatibility
+      description: |
+        Does this break existing APIs? If so, what is the deprecation and
+        migration path?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: How large is this change?
+      options:
+        - Single package
+        - Cross-package (2-3 packages)
+        - Architecture-wide
+    validations:
+      required: true
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target Placement
+      description: Where should this land?
+      options:
+        - Core (agent-os, agent-mesh, agent-hypervisor)
+        - Integration (integrations/ directory)
+        - Community / Examples
+        - New package
+    validations:
+      required: true
+
+  - type: textarea
+    id: prior_art
+    attributes:
+      label: Prior Art
+      description: |
+        Are there similar features in other governance/security frameworks?
+        Link to relevant specs, papers, or implementations.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and RFCs for duplicates
+          required: true
+        - label: I have read the ADR index (adr/index.md) for related decisions
+        - label: I am willing to implement this RFC or help review an implementation
