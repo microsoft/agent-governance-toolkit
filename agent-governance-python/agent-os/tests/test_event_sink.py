@@ -16,6 +16,8 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac as _hmac_test
 import json
 import sys
 from io import StringIO
@@ -29,8 +31,22 @@ from agent_os.event_sink import (
     OtlpEventSink,
     SignedGovernanceEvent,
     StdoutEventSink,
-    _hmac_sha256,
 )
+
+
+def _make_sign_fn(key: bytes):
+    """Return a sign_fn closure for use in tests."""
+    def sign(canonical: str) -> str:
+        return _hmac_test.new(key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+    return sign
+
+
+def _make_verify_fn(key: bytes):
+    """Return a verify_fn closure for use in tests."""
+    def verify(canonical: str, signature: str) -> bool:
+        expected = _hmac_test.new(key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+        return _hmac_test.compare_digest(signature, expected)
+    return verify
 
 # Detect whether the OTel SDK Logs API is available
 try:
@@ -182,7 +198,7 @@ class TestSignedGovernanceEventBuild:
         evt = SignedGovernanceEvent.build(
             GovernanceEventCategory.POLICY_DECISION,
             source="did:agentmesh:a",
-            signing_key=key,
+            sign_fn=_make_sign_fn(key),
         )
         assert len(evt.signature) == 64
         assert all(c in "0123456789abcdef" for c in evt.signature)
@@ -210,25 +226,25 @@ class TestSignedGovernanceEventVerify:
             source="did:agentmesh:agent-1",
             subject="tool:web_search",
             data={"query": "test"},
-            signing_key=key,
+            sign_fn=_make_sign_fn(key),
         )
-        assert evt.verify_signature(key) is True
+        assert evt.verify_signature(_make_verify_fn(key)) is True
 
     def test_verify_wrong_key_returns_false(self):
         key = b"correct-key-1234567890123456789"
         evt = SignedGovernanceEvent.build(
             GovernanceEventCategory.TOOL_INVOCATION,
             source="did:agentmesh:agent-1",
-            signing_key=key,
+            sign_fn=_make_sign_fn(key),
         )
-        wrong = b"wrong-key-xxxxxxxxxxxxxxxxxxxxxx"
-        assert evt.verify_signature(wrong) is False
+        wrong = b"wrong-key-bad-key-abcdefghijk123"
+        assert evt.verify_signature(_make_verify_fn(wrong)) is False
 
     def test_verify_unsigned_returns_false(self):
         evt = SignedGovernanceEvent.build(
             GovernanceEventCategory.AUDIT_CHAIN, source="did:agentmesh:a"
         )
-        assert evt.verify_signature(b"any-key") is False
+        assert evt.verify_signature(_make_verify_fn(b"any-key")) is False
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +383,7 @@ class TestOtlpEventSinkWithOtel:
         evt = SignedGovernanceEvent.build(
             GovernanceEventCategory.POLICY_DECISION,
             source="did:agentmesh:a",
-            signing_key=key,
+            sign_fn=_make_sign_fn(key),
         )
         _run(self.sink.emit(evt))
         records = self.exporter.get_finished_logs()

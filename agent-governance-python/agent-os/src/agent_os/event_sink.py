@@ -44,8 +44,6 @@ Usage::
 
 from __future__ import annotations
 
-import hashlib
-import hmac as _hmac
 import json
 import logging
 import sys
@@ -53,7 +51,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -107,21 +105,23 @@ class GovernanceEventCategory(str, Enum):
 # ---------------------------------------------------------------------------
 
 
-def _hmac_sha256(key: bytes, payload: str) -> str:
-    """Return hex-encoded HMAC-SHA256 of *payload* under *key*."""
-    return _hmac.new(key, payload.encode("utf-8"), hashlib.sha256).hexdigest()
-
-
 @dataclass
 class SignedGovernanceEvent:
-    """CloudEvents 1.0 envelope with HMAC-SHA256 tamper-evidence signature.
+    """CloudEvents 1.0 envelope with optional tamper-evidence signature.
 
     Fields follow the `CloudEvents specification <https://github.com/cloudevents/spec>`_.
-    The ``signature`` extension field is an HMAC-SHA256 of the canonical form::
+    The ``signature`` extension field is a caller-supplied MAC or digest over the
+    canonical form::
 
         "{type}\\n{source}\\n{time}\\n{id}\\n{data_json}"
 
-    When no signing key is supplied the ``signature`` field is left empty.
+    Signing is performed by the caller via the ``sign_fn`` parameter of
+    :meth:`build` — this module does not import any cryptographic primitives
+    directly.  To use HMAC-SHA256, supply a ``sign_fn`` that wraps your
+    preferred crypto library (e.g. ``hmac`` from the standard library or
+    ``agent_mesh.crypto``).
+
+    When no ``sign_fn`` is supplied the ``signature`` field is left empty.
 
     Attributes:
         specversion: Always ``"1.0"`` (CloudEvents version).
@@ -132,7 +132,7 @@ class SignedGovernanceEvent:
         datacontenttype: Always ``"application/json"``.
         subject: Tool name, resource, or other context-specific subject.
         data: Event-specific payload dictionary.
-        signature: HMAC-SHA256 of the canonical form (empty when unsigned).
+        signature: Caller-supplied signature (empty when unsigned).
     """
 
     specversion: str = "1.0"
@@ -154,7 +154,7 @@ class SignedGovernanceEvent:
         source: str,
         subject: str = "",
         data: dict[str, Any] | None = None,
-        signing_key: bytes | None = None,
+        sign_fn: Callable[[str], str] | None = None,
     ) -> "SignedGovernanceEvent":
         """Construct and optionally sign a :class:`SignedGovernanceEvent`.
 
@@ -163,9 +163,11 @@ class SignedGovernanceEvent:
             source: Agent DID or service URI (e.g. ``"did:agentmesh:agent-1"``).
             subject: Tool name, resource, or subject string.
             data: Arbitrary event payload.  Defaults to an empty dict.
-            signing_key: Raw bytes used as the HMAC-SHA256 signing key.
-                When ``None`` (or empty), the event is unsigned
-                (``signature`` is left empty).
+            sign_fn: Optional callable ``(canonical: str) -> str`` that returns
+                a hex-encoded signature for the canonical event string.  When
+                ``None`` (the default) the event is unsigned (``signature`` is
+                left empty).  Use standard-library ``hmac``/``hashlib`` or
+                the ``agent_mesh.crypto`` module to create this function.
 
         Returns:
             A fully constructed :class:`SignedGovernanceEvent`.
@@ -177,9 +179,9 @@ class SignedGovernanceEvent:
         data_json = json.dumps(payload_data, sort_keys=True, separators=(",", ":"))
 
         sig = ""
-        if signing_key:
+        if sign_fn is not None:
             canonical = f"{event_type}\n{source}\n{now}\n{event_id}\n{data_json}"
-            sig = _hmac_sha256(signing_key, canonical)
+            sig = sign_fn(canonical)
 
         return cls(
             id=event_id,
@@ -199,8 +201,14 @@ class SignedGovernanceEvent:
         """Serialise as a JSON string."""
         return json.dumps(self.to_dict(), default=str)
 
-    def verify_signature(self, signing_key: bytes) -> bool:
-        """Verify the HMAC-SHA256 signature against *signing_key*.
+    def verify_signature(self, verify_fn: Callable[[str, str], bool]) -> bool:
+        """Verify this event's signature using a caller-supplied function.
+
+        Args:
+            verify_fn: Callable ``(canonical: str, signature: str) -> bool``
+                that returns ``True`` when the signature is valid.  Use
+                ``hmac.compare_digest`` from the standard library (or
+                ``agent_mesh.crypto``) to build a constant-time comparison.
 
         Returns:
             ``True`` if the signature is valid, ``False`` otherwise.
@@ -210,8 +218,7 @@ class SignedGovernanceEvent:
             return False
         data_json = json.dumps(self.data, sort_keys=True, separators=(",", ":"))
         canonical = f"{self.type}\n{self.source}\n{self.time}\n{self.id}\n{data_json}"
-        expected = _hmac_sha256(signing_key, canonical)
-        return _hmac.compare_digest(self.signature, expected)
+        return verify_fn(canonical, self.signature)
 
 
 # ---------------------------------------------------------------------------

@@ -451,7 +451,7 @@ mod tests {
             serde_json::json!({}),
             Some(key),
         );
-        let wrong_key = b"wrong-key-xxxxxxxxxxxxxxxxxxxxxxx";
+        let wrong_key = b"wrong-signing-key-for-test-only";
         assert!(!evt.verify_signature(wrong_key));
     }
 
