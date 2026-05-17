@@ -47,8 +47,8 @@ dearmor
 demux
 deprioritized
 Deserialise
-Diffable
 dids
+Diffable
 Dify
 Dockerfiles
 Docstrings
@@ -200,10 +200,10 @@ skipif
 Slidev
 SLSA
 spacy
-SPIFFE
-spiffe
 spellcheck
 spellchecking
+SPIFFE
+spiffesvid
 splitlines
 startswith
 staticmethod
@@ -226,10 +226,12 @@ uncallable
 unconfigured
 Ungated
 Unregisters
+unrevocation
 unrevoke
 unsets
 urllib
 urlopen
+urlsafe
 USERPROFILE
 uvicorn
 venv
