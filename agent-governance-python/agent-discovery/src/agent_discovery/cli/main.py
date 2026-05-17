@@ -185,7 +185,7 @@ def inventory(storage: str, output: str) -> None:
         click.echo(inv.export_json())
     elif output == "summary":
         summary = inv.summary()
-        console.print(f"\n[bold]Agent Inventory Summary[/bold]")
+        console.print("\n[bold]Agent Inventory Summary[/bold]")
         console.print(f"  Total agents: {summary['total_agents']}")
         console.print(f"  By type: {json.dumps(summary['by_type'], indent=2)}")
         console.print(f"  By status: {json.dumps(summary['by_status'], indent=2)}")
@@ -254,7 +254,7 @@ def reconcile(storage: str, registry_file: str | None, output: str) -> None:
             )
         )
     elif shadow_agents:
-        console.print(f"\n[bold red]⚠ Shadow Agents Detected[/bold red]\n")
+        console.print("\n[bold red]⚠ Shadow Agents Detected[/bold red]\n")
         table = Table(show_header=True, header_style="bold red")
         table.add_column("Name", style="white", max_width=40)
         table.add_column("Type", style="cyan")
