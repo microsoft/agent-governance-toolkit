@@ -203,11 +203,9 @@ class MCPMessageSigner:
                 if self._nonce_store.has(envelope.nonce):
                     logger.warning("Duplicate MCP nonce detected: %s", envelope.nonce)
                     return MCPVerificationResult.failed("Duplicate nonce (replay detected).")
-                self._nonce_store.add(
-                    envelope.nonce,
-                    envelope.timestamp + self.replay_window,
-                )
 
+            # Verify HMAC before committing the nonce to prevent an
+            # attacker from burning valid nonces with forged signatures.
             expected_signature = self._compute_signature(
                 nonce=envelope.nonce,
                 timestamp=envelope.timestamp,
@@ -216,6 +214,12 @@ class MCPMessageSigner:
             )
             if not hmac.compare_digest(expected_signature, envelope.signature):
                 return MCPVerificationResult.failed("Invalid signature.")
+
+            with self._lock:
+                self._nonce_store.add(
+                    envelope.nonce,
+                    envelope.timestamp + self.replay_window,
+                )
 
             return MCPVerificationResult.success(envelope.payload, envelope.sender_id)
         except Exception as exc:
