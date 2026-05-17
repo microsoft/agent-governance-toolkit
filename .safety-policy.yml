@@ -1,0 +1,19 @@
+# Safety CLI v3 policy file
+# https://docs.safetycli.com/safety-docs/safety-3/configuration/policy-file
+version: "3.0"
+
+scan:
+  max-depth: 10
+  exclude: []
+
+report:
+  auto-ignore-in-report:
+    python:
+      unpinned-specifications: "warn"
+
+fail-scan-with-exit-code:
+  dependency-vulnerabilities:
+    enabled: true
+    fail-on-any-of:
+      cvss-severity:
+        - critical
