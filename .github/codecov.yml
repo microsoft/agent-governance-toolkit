@@ -1,0 +1,43 @@
+# Codecov configuration for Agent Governance Toolkit
+# https://docs.codecov.io/docs/codecov-yaml
+
+coverage:
+  status:
+    project:
+      default:
+        target: 60%
+        threshold: 2%
+    patch:
+      default:
+        target: 70%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+
+flags:
+  agent-os:
+    paths:
+      - agent-governance-python/agent-os/
+    carryforward: true
+  agent-mesh:
+    paths:
+      - agent-governance-python/agent-mesh/
+    carryforward: true
+  agent-compliance:
+    paths:
+      - agent-governance-python/agent-compliance/
+    carryforward: true
+  agent-sandbox:
+    paths:
+      - agent-governance-python/agent-sandbox/
+    carryforward: true
+
+ignore:
+  - "examples/**"
+  - "notebooks/**"
+  - "benchmarks/**"
+  - "docs/**"
+  - "scripts/**"
+  - "**/tests/**"

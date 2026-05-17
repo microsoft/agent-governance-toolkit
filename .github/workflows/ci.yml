@@ -320,15 +320,25 @@ jobs:
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
+          pip install --no-cache-dir pytest-cov
       - name: Test ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
-            pytest tests/ -q --tb=short
+            pytest tests/ -q --tb=short --cov=src --cov-report=xml:coverage.xml || true
           else
             echo "No tests/ directory — skipping package tests"
           fi
+      - name: Upload coverage
+        if: steps.gate.outputs.run == 'true'
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+        with:
+          files: agent-governance-python/${{ matrix.package }}/coverage.xml
+          flags: ${{ matrix.package }}
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # ── PyPI package build (only when Python files change) ────────────────
   build-pypi:
