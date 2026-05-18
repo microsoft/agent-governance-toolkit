@@ -1,88 +1,77 @@
 # Tutorials
 
-50+ step-by-step guides covering every aspect of AI agent governance.
+Step-by-step guides organized by what you're trying to accomplish.
 
 !!! tip "Where to start?"
-    **New here?** Start with [Tutorial 01: Policy Engine](01-policy-engine.md), then work through the Foundations section. For a quick taste, try [Tutorial 36: 2-Line Governance](36-govern-quickstart.md).
+    **New here?** Start with [2-Line Quickstart](36-govern-quickstart.md) to see AGT in action, then follow [Policy Engine Basics](01-policy-engine.md) for a full walkthrough.
 
-## Foundations
+---
 
-| #  | Tutorial  | What you'll learn   |
-|----|-----------|---------------------|
-| 01 | [Policy Engine](01-policy-engine.md) | Core policy evaluation, rule authoring |
-| 02 | [Trust & Identity](02-trust-and-identity.md) | Agent identity, trust tiers, verification |
-| 03 | [Framework Integrations](03-framework-integrations.md) | Connect AGT to LangChain, CrewAI, OpenAI, etc. |
-| 04 | [Audit & Compliance](04-audit-and-compliance.md) | Logging, evidence collection, compliance mapping |
-| 05 | [Agent Reliability](05-agent-reliability.md) | SLOs, monitoring, graceful degradation |
-| 36 | [2-Line Governance Quickstart](36-govern-quickstart.md) | Fastest path to governed agents |
+## Getting Started
+
+The essentials to get your first governed agent running in minutes.
+
+| Tutorial | What you'll accomplish |
+|----------|----------------------|
+| [2-Line Quickstart](36-govern-quickstart.md) | Add governance to any agent in 2 lines of code |
+| [Policy Engine Basics](01-policy-engine.md) | Write and evaluate your first policy rules |
+| [Framework Integrations](03-framework-integrations.md) | Connect AGT to LangChain, CrewAI, OpenAI, etc. |
+| [Progressive Governance](progressive-governance.md) | Start simple, add layers incrementally |
+
+---
+
+## End-to-End Scenarios
+
+Complete workflows from a customer perspective: pick the scenario closest to your use case.
+
+| Scenario | Description |
+|----------|-------------|
+| [Govern an AI Agent (Python)](04-audit-and-compliance.md) | Full audit trail with compliance mapping for a Python agent |
+| [Govern MCP Tool Servers](07-mcp-security-gateway.md) | Per-tool policy enforcement for MCP servers |
+| [.NET MAF Integration](34-maf-integration.md) | Govern agents built with Microsoft Agent Framework |
+| [.NET MAF Hook](43-dotnet-maf-hook-integration.md) | Add governance hooks to .NET MAF agents |
+| [Multi-Agent Fleet Policies](49-multi-agent-policies.md) | Collective policy enforcement across agent fleets |
+| [Multi-Stage Pipeline](37-multi-stage-pipeline.md) | Chained policy evaluation for complex workflows |
+| [Retrofit Existing Agents](retrofit-governance.md) | Add governance to agents already in production |
+| [Shift-Left CI/CD Gates](45-shift-left-governance.md) | Pre-commit hooks, CI gates, build-time enforcement |
+| [A2A Conversation Policy](44-a2a-conversation-policy.md) | Govern agent-to-agent conversations |
+| [Copilot CLI Governance](46-copilot-cli-governance.md) | Install governance policies for GitHub Copilot CLI |
+
+---
 
 ## Security
 
-| #  | Tutorial   | What you'll learn   |
-|----|------------|---------------------|
-| 06 | [Execution Sandboxing](06-execution-sandboxing.md) | Privilege rings, runtime isolation |
-| 07 | [MCP Security Gateway](07-mcp-security-gateway.md) | Per-tool policy enforcement for MCP servers |
-| 08 | [OPA / Rego / Cedar Policies](08-opa-rego-cedar-policies.md) | Policy engines comparison and integration |
-| 09 | [Prompt Injection Detection](09-prompt-injection-detection.md) | Detecting and preventing prompt injection |
-| 25 | [Security Hardening](25-security-hardening.md) | Production security best practices |
-| 26 | [SBOM & Signing](26-sbom-and-signing.md) | Software bill of materials, artifact signing |
-| 27 | [MCP Scan CLI](27-mcp-scan-cli.md) | Static analysis for MCP server security |
-| 39 | [DLP with Attribute Ratchets](39-dlp-attribute-ratchets.md) | Data loss prevention, sensitivity escalation |
-| 41 | [Defense-in-Depth](41-advisory-defense-in-depth.md) | Advisory classifiers, layered security |
-| 45 | [Shift-Left Governance](45-shift-left-governance.md) | Pre-commit hooks, CI gates, build-time enforcement |
-| 46 | [Contributor Governance](46-contributor-governance.md) | Contributor reputation, spam detection, cross-project scanning |
-| 47 | [Red-Team Testing](47-red-team-testing.md) | Adversarial security testing with `agt red-team` |
+Hardening, threat mitigation, and data protection.
 
-## Advanced Patterns
+| Tutorial | What you'll learn |
+|----------|-------------------|
+| [Execution Sandboxing](06-execution-sandboxing.md) | Privilege rings, runtime isolation |
+| [Prompt Injection Detection](09-prompt-injection-detection.md) | Detect and block prompt injection attacks |
+| [Security Hardening](25-security-hardening.md) | Production security best practices |
+| [DLP & Attribute Ratchets](39-dlp-attribute-ratchets.md) | Data loss prevention, sensitivity escalation |
+| [Defense-in-Depth](41-advisory-defense-in-depth.md) | Advisory classifiers, layered security |
+| [SBOM & Signing](26-sbom-and-signing.md) | Software bill of materials, artifact signing |
+| [MCP Scan CLI](27-mcp-scan-cli.md) | Static analysis for MCP server security |
+| [E2E Encrypted Messaging](32-e2e-encrypted-messaging.md) | End-to-end encrypted agent communication |
+| [Red-Team Testing](47-red-team-testing.md) | Adversarial security testing |
 
-| #  | Tutorial     | What you'll learn    |
-|----|--------------|----------------------|
-| 10 | [Plugin Marketplace](10-plugin-marketplace.md) | Marketplace governance, trust scoring |
-| 11 | [Saga Orchestration](11-saga-orchestration.md) | Multi-step agent workflows with rollback |
-| 12 | [Liability & Attribution](12-liability-and-attribution.md) | Decision tracing, blame assignment |
-| 13 | [Observability & Tracing](13-observability-and-tracing.md) | Distributed tracing for agent systems |
-| 14 | [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency controls, throttling |
-| 15 | [RL Training Governance](15-rl-training-governance.md) | Governing reinforcement learning agents |
-| 16 | [Protocol Bridges](16-protocol-bridges.md)     | Cross-protocol agent communication |
-| 17 | [Advanced Trust](17-advanced-trust-and-behavior.md) | Behavioral analysis, reputation systems |
-| 18 | [Compliance Verification](18-compliance-verification.md) | Automated compliance checks |
-| 23 | [Delegation Chains](23-delegation-chains.md)   | Agent-to-agent authorization |
-| 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Resource governance |
-| 35 | [Policy Composition](35-policy-composition.md) | Enterprise governance layers, policy merging |
-| 37 | [Multi-Stage Pipeline](37-multi-stage-pipeline.md) | Chained policy evaluation pipelines |
-| 38 | [Approval Workflows](38-approval-workflows.md) | Human-in-the-loop approval gates |
-| 40 | [OpenTelemetry Observability](40-otel-observability.md) | OTel integration for governance events |
-| 44 | [A2A Conversation Policy](44-a2a-conversation-policy.md) | Agent-to-agent conversation governance |
-| 48 | [Intent-Based Authorization](48-intent-based-authorization.md) | Authorize actions by declared intent |
-| 49 | [Multi-Agent Policies](49-multi-agent-policies.md) | Collective policy enforcement across agent fleets |
-| 50 | [Decision BOM](50-decision-bom.md) | Decision bill of materials, audit artifacts |
-| 51 | [Cost Governance](51-cost-governance.md) | Budget enforcement, cost attribution |
+---
 
-## Language Package Guides
+## Policy & Authorization
 
-| #  | Tutorial | What you'll learn |
-|----|----------|-------------------|
-| 19 | [.NET package](19-dotnet-sdk.md) | Agent governance in C# / .NET |
-| 42 | [C# MCP extension](42-csharp-mcp-extension.md) | Govern MCP servers built with the official C# SDK |
-| 43 | [.NET MAF Hook](43-dotnet-maf-hook-integration.md) | Integrate AGT with Microsoft Agent Framework in .NET |
-| 20 | [TypeScript package](20-typescript-sdk.md) | Agent governance in TypeScript |
-| 21 | [Rust crate](21-rust-sdk.md) | Agent governance in Rust |
-| 22 | [Go module](22-go-sdk.md) | Agent governance in Go |
+Writing, composing, and enforcing governance policies.
 
-## Enterprise & Operations
+| Tutorial | What you'll learn |
+|----------|-------------------|
+| [OPA / Rego / Cedar](08-opa-rego-cedar-policies.md) | Policy engines comparison and integration |
+| [Policy Composition](35-policy-composition.md) | Enterprise governance layers, policy merging |
+| [Approval Workflows](38-approval-workflows.md) | Human-in-the-loop approval gates |
+| [Intent-Based Authorization](48-intent-based-authorization.md) | Authorize actions by declared intent |
+| [Delegation Chains](23-delegation-chains.md) | Agent-to-agent authorization |
+| [Cost & Token Budgets](24-cost-and-token-budgets.md) | Resource governance and budget enforcement |
+| [Cost Governance](51-cost-governance.md) | Budget enforcement, cost attribution |
 
-| #  | Tutorial | What you'll learn |
-|----|----------|-------------------|
-| 28 | [Build Custom Integration](28-build-custom-integration.md) | Create your own governance adapter |
-| 29 | [Agent Discovery](29-agent-discovery.md) | Finding shadow AI in your organization |
-| 30 | [Agent Lifecycle](30-agent-lifecycle.md) | Agent lifecycle management, birth to retirement |
-| 31 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridging AGT identity with Microsoft Entra |
-| 32 | [Chaos Testing](32-chaos-testing-agents.md) | Chaos engineering for agent reliability |
-| 32b | [E2E Encrypted Messaging](32-e2e-encrypted-messaging.md) | End-to-end encrypted agent communication |
-| 33 | [Offline Verifiable Receipts](33-offline-verifiable-receipts.md) | Offline-verifiable decision receipts |
-| 34 | [MAF Integration](34-maf-integration.md) | Governing agents with Microsoft Agent Framework |
-
-## Policy-as-Code Series
+### Policy-as-Code Series
 
 A focused series on writing, testing, and versioning governance policies.
 
@@ -97,9 +86,54 @@ A focused series on writing, testing, and versioning governance policies.
 | 7 | [Policy Versioning](policy-as-code/07-policy-versioning.md) | Version control for policies |
 | - | [MCP Governance](policy-as-code/mcp-governance.md) | MCP-specific policy patterns |
 
-## Guides
+---
 
-| Guide | What you'll learn |
-|-------|-------------------|
-| [Progressive Governance](progressive-governance.md) | Start simple, add governance layers incrementally |
-| [Retrofit Governance](retrofit-governance.md) | Add governance to an existing agent |
+## Observability & Operations
+
+Monitoring, alerting, and operational management of governed agents.
+
+| Tutorial | What you'll learn |
+|----------|-------------------|
+| [Observability & Tracing](13-observability-and-tracing.md) | Distributed tracing for agent systems |
+| [OpenTelemetry Integration](40-otel-observability.md) | OTel integration for governance events |
+| [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency controls, throttling |
+| [Agent Discovery](29-agent-discovery.md) | Finding shadow AI in your organization |
+| [Agent Lifecycle](30-agent-lifecycle.md) | Birth-to-retirement management |
+| [Chaos Testing](32-chaos-testing-agents.md) | Chaos engineering for agent reliability |
+| [Agent Reliability](05-agent-reliability.md) | SLOs, monitoring, graceful degradation |
+
+---
+
+## Advanced Topics
+
+Deep dives into specialized governance patterns.
+
+| Tutorial | What you'll learn |
+|----------|-------------------|
+| [Trust & Identity Deep Dive](02-trust-and-identity.md) | Agent identity, trust tiers, verification |
+| [Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) | Behavioral analysis, reputation systems |
+| [Compliance Verification](18-compliance-verification.md) | Automated compliance checks |
+| [Saga Orchestration](11-saga-orchestration.md) | Multi-step workflows with rollback |
+| [Liability & Attribution](12-liability-and-attribution.md) | Decision tracing, blame assignment |
+| [Protocol Bridges](16-protocol-bridges.md) | Cross-protocol agent communication |
+| [Plugin Marketplace](10-plugin-marketplace.md) | Marketplace governance, trust scoring |
+| [RL Training Governance](15-rl-training-governance.md) | Governing reinforcement learning agents |
+| [Decision BOM](50-decision-bom.md) | Decision bill of materials, audit artifacts |
+| [Offline Verifiable Receipts](33-offline-verifiable-receipts.md) | Offline-verifiable decision receipts |
+| [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridging AGT identity with Microsoft Entra |
+| [Contributor Governance](46-contributor-governance.md) | Contributor reputation, spam detection |
+
+---
+
+## Language & Platform Guides
+
+SDK-specific guides for each supported language.
+
+| Tutorial | Language |
+|----------|----------|
+| [.NET SDK](19-dotnet-sdk.md) | C# / .NET |
+| [C# MCP Extension](42-csharp-mcp-extension.md) | C# (MCP servers) |
+| [TypeScript SDK](20-typescript-sdk.md) | TypeScript / Node.js |
+| [Rust Crate](21-rust-sdk.md) | Rust |
+| [Go Module](22-go-sdk.md) | Go |
+| [Build Custom Integration](28-build-custom-integration.md) | Any language |
