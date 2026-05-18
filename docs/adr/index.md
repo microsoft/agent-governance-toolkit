@@ -19,6 +19,15 @@ Key architectural decisions and their rationale. Each ADR follows the standard f
 | [ADR-0014](0014-parent-deny-rules-immutable-in-merge.md) | Parent deny rules are immutable in policy merge | Policy |
 | [ADR-0015](0015-pluggable-external-policy-backends.md) | Pluggable external policy backends via protocol interface | Policy |
 | [ADR-0016](0016-trust-ceiling-propagation-for-delegation.md) | Trust ceiling propagation for delegated agents | Trust |
+| [ADR-0017](0017-merkle-chain-for-audit-tamper-evidence.md) | Merkle chain for audit tamper evidence | Audit |
+| [ADR-0018](0018-reconstructible-decision-bom-over-prebuilt.md) | Reconstructible Decision BOM over pre-built | Audit |
+| [ADR-0019](0019-otel-batchspanprocessor-pattern-for-event-sink.md) | OTel BatchSpanProcessor pattern for event sink | Events |
+| [ADR-0020](0020-circuit-breaker-for-event-sink-delivery.md) | Circuit breaker for event sink delivery | Events |
+| [ADR-0021](0021-cloudevents-envelope-for-mesh-audit.md) | CloudEvents envelope for mesh audit | Audit |
+| [ADR-0022](0022-compliance-framework-auto-mapping.md) | Compliance framework auto-mapping | Compliance |
+| [ADR-0023](0023-append-only-delta-engine-for-hypervisor-audit.md) | Append-only delta engine for hypervisor audit | Audit |
+| [ADR-0024](0024-rl-training-governance-with-violation-penalties.md) | RL training governance with violation penalties | Lightning |
+| [ADR-0025](0025-structural-typing-for-sink-and-source-protocols.md) | Structural typing for sink and source protocols | Architecture |
 
 ## Proposed
 
