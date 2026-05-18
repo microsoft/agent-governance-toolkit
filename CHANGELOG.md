@@ -12,6 +12,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [3.6.0] - 2026-05-18
+
+### Highlights
+
+**Formal Specifications** - Six v1.0 specification documents published covering identity, trust, hypervisor, SRE, MCP security, framework adapters, and audit.
+
+**Security Hardening Sprint** - 319 fixes including path traversal guards, SSRF blocklist expansion, HMAC verification, shell injection prevention, and YAML deserialization hardening.
+
+**Cross-Org Agent Federation** - ExternalJWKSProvider (ADR-0007) enables federated identity verification across organizations.
+
+**Governance Sidecar Container** - Production-ready container image with OTEL bootstrap and Prometheus metrics endpoint.
+
+**Execution Ring Enforcement** - Privilege rings now enforce real isolation boundaries (previously stubs).
+
+### Added
+- **6 formal specifications** v1.0 - identity, trust, hypervisor, SRE, MCP security, adapters, audit (#2344, #2353, #2360, #2361, #2363, #2364, #2369, #2375)
+- **ExternalJWKSProvider** for cross-org agent federation (#2380)
+- **GovernanceEventSink SPI** for pluggable event routing (#2362)
+- **Governance sidecar container** with OTEL and Prometheus (#2307, #2312)
+- **Execution ring enforcement** beyond stubs (#2309)
+- **Trust ceiling propagation** for delegated child agents (#2306)
+- **StdoutAuditSink** with execution-context enrichment (#2302, #2305)
+- **Azure ACA sandbox provider** (#2236)
+- **AWS Bedrock Agent adapter** (#1833)
+- **RAG Governance** package with Cedar + LlamaIndex (#1754, #1820, #1975)
+- **Agent Shield** 5-stage guardrails integration (#1805)
+- **Copilot CLI governance package** (#2272)
+- **GitHub Actions governance gate** (#2102)
+- **NOT_IN operator** for policy evaluation (#2373)
+- **Presentation demos** - 6 self-contained offline scripts (#2390)
+- **25 retroactive ADRs** documenting prior decisions (#2329, #2377)
+
+### Fixed
+- **StdoutAuditSink syntax error** from overlapping merge (#2382)
+- **VectorClock** causal ordering and fail-closed SessionIsolation (#2346)
+- **Path traversal** guards in SRE, signing, and specs (#2352)
+- **HMAC verification** before nonce commit in MCP signer (#2354)
+- **SSRF blocklist** expanded for cloud metadata endpoints (#2358)
+- **YAML deserialization** hardened to JSON_SCHEMA (TypeScript) (#2333, #2334)
+- **Shell injection** prevention in Actions inputs (#2330)
+- **EU AI Act demo** Unicode encoding on Windows (#2388)
+
+### Changed
+- **Tutorials reorganized** into collapsible customer-centric categories (#2389)
+- **Repo structure simplified** with layout guide (#2391)
+- **ADK wrap/unwrap/get_callbacks** deprecated with runtime warnings (#2359)
+
+
 ## [3.5.0] - 2026-05-07
 
 ### Highlights
