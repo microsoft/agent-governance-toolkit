@@ -178,27 +178,24 @@ class TestIntentLocks:
 class TestIsolationLevels:
     def test_snapshot_properties(self):
         level = IsolationLevel.SNAPSHOT
-        # Public Preview: all isolation levels have same properties
         assert not level.requires_vector_clocks
         assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
-        assert level.coordination_cost == "none"
+        assert level.coordination_cost == "low"
 
     def test_read_committed_properties(self):
         level = IsolationLevel.READ_COMMITTED
-        # Public Preview: no enforcement, same as snapshot
         assert not level.requires_vector_clocks
         assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
-        assert level.coordination_cost == "none"
+        assert level.coordination_cost == "medium"
 
     def test_serializable_properties(self):
         level = IsolationLevel.SERIALIZABLE
-        # Public Preview: no enforcement, same as snapshot
-        assert not level.requires_vector_clocks
-        assert not level.requires_intent_locks
-        assert level.allows_concurrent_writes
-        assert level.coordination_cost == "none"
+        assert level.requires_vector_clocks
+        assert level.requires_intent_locks
+        assert not level.allows_concurrent_writes
+        assert level.coordination_cost == "high"
 
 
 # ── Rate Limiter Tests ──────────────────────────────────────────

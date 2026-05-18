@@ -484,10 +484,10 @@ class TestSessionIsolation:
         assert mgr.check_access("sess-1", "/var/agt/sessions/sess-1/out.txt") is True
         assert mgr.check_access("sess-1", "/var/agt/sessions/sess-2/out.txt") is False
 
-    def test_manager_no_scope_is_permissive(self):
+    def test_manager_no_scope_is_denied(self):
         mgr = SessionIsolationManager()
-        # No scope created = permissive (backward compat)
-        assert mgr.check_access("unknown-sess", "/anything") is True
+        # No scope created = fail-closed (unscoped sessions are denied)
+        assert mgr.check_access("unknown-sess", "/anything") is False
 
     def test_manager_grant_cross_session(self):
         mgr = SessionIsolationManager()
