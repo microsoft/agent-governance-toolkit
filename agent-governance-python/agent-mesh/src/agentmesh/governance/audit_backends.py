@@ -428,20 +428,26 @@ class StdoutAuditSink:
     consume structured JSON from process stdout.
 
     Properties:
-    * One valid JSON object per line — never split across lines.
+    * One valid JSON object per line -- never split across lines.
     * UTF-8 safe: non-ASCII characters are included verbatim (not escaped).
     * Flushed after every :meth:`write` and after every :meth:`write_batch`.
     * Thread-safe: a **class-level** lock serialises all stdout writes
       across every :class:`StdoutAuditSink` instance in the process.
       Multiple instances therefore cannot interleave their output.
     * No ANSI formatting, no pretty-printing, no extra timestamps.
-    * No signing or chain verification — use :class:`FileAuditSink` when
+    * No signing or chain verification -- use :class:`FileAuditSink` when
       cryptographic integrity is required.
 
     The JSON schema matches :class:`AuditEntry` (Pydantic ``model_dump``
     with ``mode="json"``), which includes the optional execution-context
     fields (``sandbox_id``, ``environment``, ``container_runtime``) when
     present.
+
+    Args:
+        stream: Output stream. Defaults to ``sys.stdout``.
+        include_context: Whether to include sandbox context fields
+            (sandbox_id, environment, compute_driver) in the output.
+            Defaults to ``True``.
 
     Example::
 
@@ -450,58 +456,10 @@ class StdoutAuditSink:
         log.log(event_type="tool_invocation", agent_did="did:web:a1", action="read")
     """
 
-    # Class-level lock — shared across all instances so that concurrent
+    # Class-level lock -- shared across all instances so that concurrent
     # writes from separate StdoutAuditSink objects cannot interleave on
     # the process-global sys.stdout.
     _stdout_lock: threading.Lock = threading.Lock()
-
-    def __init__(self) -> None:
-        pass  # No per-instance state; lock lives at class level.
-
-    def write(self, entry: AuditEntry) -> None:
-        """Serialise *entry* to JSONL and write it to stdout.
-
-        The output stream is flushed immediately after the write so that
-        container log drivers observe the line without buffering delay.
-        """
-        line = self._serialise(entry)
-        with self._stdout_lock:
-            sys.stdout.write(line + "\n")
-            sys.stdout.flush()
-
-    def write_batch(self, entries: list[AuditEntry]) -> None:
-        """Serialise all entries and write them to stdout under a single lock.
-
-        All lines are serialised before the lock is acquired, then
-        written in a single :meth:`str.write` call so the batch is as
-        atomic as possible, followed by one flush.
-        """
-        if not entries:
-            return
-        # Serialise outside the lock — pure CPU work, no I/O.
-        block = "".join(self._serialise(e) + "\n" for e in entries)
-        with self._stdout_lock:
-            sys.stdout.write(block)
-            sys.stdout.flush()
-
-    def verify_integrity(self) -> tuple[bool, str | None]:
-        """Stdout is a streaming sink; integrity verification is not supported.
-
-        Returns ``(True, None)`` — no integrity violations are known.
-        Callers that require verifiable audit trails should use
-        :class:`FileAuditSink`.
-    """Audit sink that writes JSON lines to stdout.
-
-    Designed for containerized and sidecar deployments where audit logs
-    are collected by a container log driver (Docker, Kubernetes,
-    OpenShell). Each entry is written as a single JSON line and flushed
-    immediately for reliable delivery.
-
-    Args:
-        stream: Output stream. Defaults to ``sys.stdout``.
-        include_context: Whether to include sandbox context fields in
-            the output. Defaults to ``True``.
-    """
 
     def __init__(
         self,
@@ -509,74 +467,71 @@ class StdoutAuditSink:
         *,
         include_context: bool = True,
     ) -> None:
-        import sys
-        self._stream = stream or sys.stdout
+        self._stream = stream  # None means use sys.stdout at write time
         self._include_context = include_context
-        self._lock = threading.Lock()
         self._closed = False
 
     def write(self, entry: AuditEntry) -> None:
-        """Write a single audit entry as one JSON line to stdout."""
+        """Serialise *entry* to JSONL and write it to the output stream.
+
+        The output stream is flushed immediately after the write so that
+        container log drivers observe the line without buffering delay.
+        """
         if self._closed:
             return
-        line = self._serialize(entry)
-        with self._lock:
-            self._stream.write(line + "\n")
-            self._stream.flush()
+        line = self._serialize_entry(entry)
+        with self._stdout_lock:
+            out = self._stream if self._stream is not None else sys.stdout
+            out.write(line + "\n")
+            out.flush()
 
     def write_batch(self, entries: list[AuditEntry]) -> None:
-        """Write a batch of audit entries, one JSON line per entry."""
-        if self._closed:
+        """Serialise all entries and write them under a single lock.
+
+        All lines are serialised before the lock is acquired, then
+        written in a single call so the batch is as atomic as possible,
+        followed by one flush.
+        """
+        if not entries or self._closed:
             return
-        with self._lock:
-            for entry in entries:
-                line = self._serialize(entry)
-                self._stream.write(line + "\n")
-            self._stream.flush()
+        block = "".join(self._serialize_entry(e) + "\n" for e in entries)
+        with self._stdout_lock:
+            out = self._stream if self._stream is not None else sys.stdout
+            out.write(block)
+            out.flush()
 
     def verify_integrity(self) -> tuple[bool, str | None]:
-        """Stdout sink does not support integrity verification.
+        """Stdout is a streaming sink; integrity verification is not supported.
 
-        Returns:
-            Always returns (True, None) since stdout is write-only.
+        Returns (True, None) since stdout is write-only.
         """
         return True, None
 
     def close(self) -> None:
-        """Flush stdout.  Does NOT close the underlying stream."""
+        """Flush the output stream. Does NOT close the underlying stream."""
+        self._closed = True
         with self._stdout_lock:
-            sys.stdout.flush()
+            out = self._stream if self._stream is not None else sys.stdout
+            out.flush()
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _serialise(entry: AuditEntry) -> str:
+    def _serialize_entry(self, entry: AuditEntry) -> str:
         """Return a compact, sorted JSON string for *entry*.
 
-        Uses Pydantic's ``model_dump(mode="json")`` so that datetime
-        values are rendered as ISO-8601 strings without needing a custom
-        ``default`` handler, matching the serialisation contract of the
-        rest of the audit subsystem.
-
-        ``ensure_ascii=False`` preserves non-ASCII characters verbatim
-        (e.g. CJK, emoji, accented characters) rather than escaping them
-        to ``\\uXXXX`` sequences, producing more compact and readable output
-        in container log aggregators.  Container runtimes expose UTF-8
-        stdout by default; callers in non-UTF-8 environments should set
-        ``PYTHONIOENCODING=utf-8`` or ``PYTHONUTF8=1``.
-
-        ``exclude_none=True`` omits optional fields whose value is ``None``
-        so that records without execution-context fields stay compact and
-        do not break downstream parsers with strict schemas.
+        When include_context is True, uses Pydantic model_dump for full
+        fidelity. When False, manually constructs the dict excluding
+        sandbox context fields.
         """
-        return json.dumps(entry.model_dump(mode="json", exclude_none=True), sort_keys=True, ensure_ascii=False)
-        """Mark the sink as closed."""
-        self._closed = True
-
-    def _serialize(self, entry: AuditEntry) -> str:
-        """Serialize an AuditEntry to a JSON line."""
+        if self._include_context:
+            return json.dumps(
+                entry.model_dump(mode="json", exclude_none=True),
+                sort_keys=True,
+                ensure_ascii=False,
+            )
+        # Exclude context fields when include_context=False
         data: dict[str, Any] = {
             "entry_id": entry.entry_id,
             "timestamp": entry.timestamp.isoformat().replace("+00:00", "Z"),
@@ -585,7 +540,6 @@ class StdoutAuditSink:
             "action": entry.action,
             "outcome": entry.outcome,
         }
-
         if entry.resource is not None:
             data["resource"] = entry.resource
         if entry.target_did is not None:
@@ -600,13 +554,13 @@ class StdoutAuditSink:
             data["trace_id"] = entry.trace_id
         if entry.session_id is not None:
             data["session_id"] = entry.session_id
-
-        if self._include_context:
-            if entry.sandbox_id is not None:
-                data["sandbox_id"] = entry.sandbox_id
-            if entry.environment is not None:
-                data["environment"] = entry.environment
-            if entry.compute_driver is not None:
-                data["compute_driver"] = entry.compute_driver
-
         return json.dumps(data, sort_keys=True, default=str)
+
+    @staticmethod
+    def _serialise(entry: AuditEntry) -> str:
+        """Return a compact, sorted JSON string (legacy static helper).
+
+        Uses Pydantic model_dump with exclude_none=True for full fidelity
+        serialisation including all context fields.
+        """
+        return json.dumps(entry.model_dump(mode="json", exclude_none=True), sort_keys=True, ensure_ascii=False)

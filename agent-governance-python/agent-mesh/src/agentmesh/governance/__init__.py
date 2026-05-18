@@ -152,6 +152,7 @@ __all__ = [
     "SignedAuditEntry",
     "FileAuditSink",
     "HashChainVerifier",
+    "StdoutAuditSink",
     "ShadowMode",
     "ShadowResult",
     "OPAEvaluator",

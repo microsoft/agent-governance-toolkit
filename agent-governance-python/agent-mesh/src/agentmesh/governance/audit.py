@@ -17,7 +17,6 @@ from pydantic import BaseModel, Field
 import hashlib
 import hmac
 import json
-import os
 import uuid
 
 if TYPE_CHECKING:
@@ -115,13 +114,13 @@ class AuditEntry(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Auto-populate sandbox context fields from environment variables."""
         if self.sandbox_id is None:
-            self.sandbox_id = os.environ.get(
-                "SANDBOX_ID", os.environ.get("OPENSHELL_SANDBOX_ID")
+            self.sandbox_id = (
+                os.environ.get("SANDBOX_ID") or os.environ.get("OPENSHELL_SANDBOX_ID") or None
             )
         if self.environment is None:
-            self.environment = os.environ.get("AGT_ENVIRONMENT")
+            self.environment = os.environ.get("AGT_ENVIRONMENT") or None
         if self.compute_driver is None:
-            self.compute_driver = os.environ.get("OPENSHELL_COMPUTE_DRIVER")
+            self.compute_driver = os.environ.get("OPENSHELL_COMPUTE_DRIVER") or None
 
     def compute_hash(self) -> str:
         """Compute the SHA-256 hash of this entry's canonical fields.
