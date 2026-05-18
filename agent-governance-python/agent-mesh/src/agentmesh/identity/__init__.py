@@ -9,6 +9,7 @@ First-class agent identity with:
 - Ephemeral credentials (15-min TTL)
 - SPIFFE/SVID workload identity
 - Microsoft Entra Agent ID integration
+- External JWKS federation for cross-org identity (per ADR-0007)
 """
 
 from .agent_id import AgentDID, AgentIdentity
@@ -34,6 +35,13 @@ from .credentials import Credential, CredentialManager
 from .delegation import DelegationLink, ScopeChain, UserContext
 from .entra import EntraAgentBlueprint, EntraAgentIdentity, EntraAgentRegistry
 from .entra_agent_id import EntraAgentID
+from .external_jwks import (
+    DelegationClaims,
+    ExternalIdentity,
+    ExternalJWKSProvider,
+    FederationPolicy,
+    TrustedEndpoint,
+)
 from .jwk import from_jwk, from_jwks, to_jwk, to_jwks
 from .keystore import KeyStore, PKCS11KeyStore, SoftwareKeyStore
 from .managed_identity import (
@@ -102,4 +110,10 @@ __all__ = [
     "EntraManagedIdentity",
     "AWSIAMIdentity",
     "GCPWorkloadIdentity",
+    # External JWKS federation (ADR-0007)
+    "DelegationClaims",
+    "ExternalIdentity",
+    "ExternalJWKSProvider",
+    "FederationPolicy",
+    "TrustedEndpoint",
 ]

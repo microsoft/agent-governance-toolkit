@@ -34,7 +34,7 @@ The two mechanisms are complementary, not competing:
 
 ## Decision
 
-Add an external JWKS federation layer to AGT's identity model as an opt-in identity provider, alongside the existing SPIFFE/SVID and Entra modules in `agentmesh/core/identity/`. The layer enables cross-org agent verification without requiring a shared registry or centralized authority.
+Add an external JWKS federation layer to AGT's identity model as an opt-in identity provider, alongside the existing SPIFFE/SVID and Entra modules in `agentmesh/identity/`. The layer enables cross-org agent verification without requiring a shared registry or centralized authority.
 
 ### Architecture: provider-based identity resolution
 
@@ -245,7 +245,7 @@ This aligns with ADR-0001 (Ed25519 for agent identity) — the same key type and
 
 **Follow-up work:**
 
-- **Implementation PR:** `ExternalJWKSProvider` in `agentmesh/core/identity/` alongside the existing SPIFFE and Entra modules.
+- **Implementation PR:** `ExternalJWKSProvider` in `agentmesh/identity/` alongside the existing SPIFFE and Entra modules.
 - **Federation policy configuration:** YAML/JSON schema for `FederationPolicy`, loadable from AGT's existing config system.
 - **Discovery registry:** Optional lightweight service for publishing and discovering federation endpoints across the ecosystem.
 - **DIF MCP-I alignment:** Map the provider interface to DIF's Mandatory DID + VC delegation chain (L2 standard) as that specification stabilizes.
