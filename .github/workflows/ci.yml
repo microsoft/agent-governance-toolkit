@@ -228,7 +228,12 @@ jobs:
       - if: steps.gate.outputs.run == 'true'
         name: Lint ${{ matrix.package }}
         working-directory: agent-governance-python/${{ matrix.package }}
-        run: ruff check src/ --select E,F,W --ignore E501
+        run: |
+          if [ -d src ]; then
+            ruff check src/ --select E,F,W --ignore E501
+          else
+            ruff check . --select E,F,W --ignore E501 --exclude '*.egg-info'
+          fi
 
   # ── Python test (only when Python files change) ───────────────────────
   test:
