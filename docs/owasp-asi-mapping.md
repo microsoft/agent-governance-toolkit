@@ -4,7 +4,7 @@
 <!-- Licensed under the MIT License. -->
 
 Cross-references every rule in the ASI starter policy packs
-(`templates/policies/starters/`) to the OWASP Agentic Security Initiative
+(`examples/policy-templates/`) to the OWASP Agentic Security Initiative
 (ASI) Top 10 risk it mitigates. Use this table during security audits.
 
 **References:** 

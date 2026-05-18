@@ -306,9 +306,27 @@ See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed p
 
 ---
 
-## Security
+## Repository Layout
 
-This toolkit provides **application-level governance** (Python middleware), not OS kernel-level isolation. The policy engine and agents run in the same process — the same trust boundary as every Python agent framework.
+```
+agent-governance-toolkit/
+├── agent-governance-python/     # Python SDK (14 packages: agent-os, agent-mesh, etc.)
+├── agent-governance-dotnet/     # .NET SDK (NuGet packages)
+├── agent-governance-typescript/ # TypeScript SDK (npm packages)
+├── agent-governance-rust/       # Rust SDK (crate)
+├── agent-governance-golang/     # Go SDK (module)
+├── agent-governance-copilot-cli/# Copilot CLI governance installer
+├── docs/                        # Documentation site (mkdocs-material)
+├── examples/                    # Runnable examples and policy templates
+├── action/                      # GitHub Actions (governance-attestation, security-scan)
+├── scripts/                     # CI/CD and build tooling
+├── tests/                       # Cross-package smoke and integration tests
+└── [standard files]             # README, LICENSE, CONTRIBUTING, SECURITY, etc.
+```
+
+---
+
+## Security (Python middleware), not OS kernel-level isolation. The policy engine and agents run in the same process — the same trust boundary as every Python agent framework.
 
 **Production recommendation:** Run each agent in a separate container for OS-level isolation. See [Architecture — Security Boundaries](docs/ARCHITECTURE.md).
 
@@ -337,9 +355,9 @@ AGT follows open governance practices aligned with foundation incubation require
 | Document | Purpose |
 |----------|---------|
 | [GOVERNANCE.md](GOVERNANCE.md) | Decision-making, roles, contributor ladder |
-| [CHARTER.md](CHARTER.md) | Technical charter (LF Projects format) |
+| [CHARTER.md](docs/CHARTER.md) | Technical charter (LF Projects format) |
 | [MAINTAINERS.md](MAINTAINERS.md) | 6 maintainers from 4 organizations |
-| [RELEASE.md](RELEASE.md) | Release process, versioning, registries |
+| [RELEASE.md](docs/RELEASE.md) | Release process, versioning, registries |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and response SLAs |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Microsoft Open Source Code of Conduct |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | DCO, attribution policy, AI-assisted contribution rules |

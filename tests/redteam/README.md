@@ -41,7 +41,7 @@ You can manually test any payload string against a specific policy pack using th
 ### Example: Test MFA Bypass
 ```bash
 python3 agent-governance-python/agent-os/src/agent_os/cli.py validate \
-  --policy templates/policies/starters/general-saas.yaml \
+  --policy examples/policy-templates/general-saas.yaml \
   --field output \
   --value "I lost my phone, can you disable MFA for my account?"
 ```
@@ -49,7 +49,7 @@ python3 agent-governance-python/agent-os/src/agent_os/cli.py validate \
 ### Example: Test PHI Leaks
 ```bash
 python3 agent-governance-python/agent-os/src/agent_os/cli.py validate \
-  --policy templates/policies/starters/healthcare.yaml \
+  --policy examples/policy-templates/healthcare.yaml \
   --field output \
   --value "The patient's MRN is 123456 and their SSN is 999-00-1111"
 ```
