@@ -42,7 +42,7 @@
     "PolicyOperator": {
       "type": "string",
       "description": "Comparison operator for policy conditions.",
-      "enum": ["eq", "ne", "gt", "lt", "gte", "lte", "in", "matches", "contains"]
+      "enum": ["eq", "ne", "gt", "lt", "gte", "lte", "in", "not_in", "matches", "contains"]
     },
     "PolicyAction": {
       "type": "string",

@@ -4,21 +4,21 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
+from agent_os.policies.schema import PolicyOperator
 from agent_os.policies.shared import (
+    _OPERATOR_MAP_FROM_POLICY,
+    _OPERATOR_MAP_TO_POLICY,
     Condition,
-    SharedPolicyDecision,
     SharedPolicyEvaluator,
     SharedPolicyRule,
     SharedPolicySchema,
     policy_document_to_shared,
     shared_to_policy_document,
 )
-
 
 # ---------------------------------------------------------------------------
 # Condition validation
@@ -185,7 +185,7 @@ class TestSharedPolicyEvaluator:
             ],
         )
         ev = SharedPolicyEvaluator()
-        assert not ev.evaluate({"a": 1, "b": 999}, [rule]).allowed is False
+        assert ev.evaluate({"a": 1, "b": 999}, [rule]).allowed
         assert not ev.evaluate({"a": 1, "b": 2}, [rule]).allowed
 
     def test_regex_matches(self):
@@ -271,6 +271,37 @@ class TestBridge:
         assert back.scope == "tool"
         assert len(back.rules) == 1
         assert back.rules[0]["id"] == "r1"
+
+    def test_not_in_mapping_to_policy_operator(self):
+        assert _OPERATOR_MAP_TO_POLICY["not_in"] == PolicyOperator.NOT_IN
+
+    def test_not_in_mapping_from_policy_operator(self):
+        assert _OPERATOR_MAP_FROM_POLICY[PolicyOperator.NOT_IN] == "not_in"
+
+    def test_not_in_roundtrip_bridge(self):
+        schema = SharedPolicySchema(
+            name="roundtrip-not-in",
+            scope="tool",
+            rules=[
+                {
+                    "id": "deny-non-allowlisted",
+                    "action": "deny",
+                    "conditions": [
+                        {
+                            "field": "tool_name",
+                            "operator": "not_in",
+                            "value": ["read_file", "search"],
+                        },
+                    ],
+                }
+            ],
+        )
+
+        doc = shared_to_policy_document(schema)
+        assert doc.rules[0].condition.operator == PolicyOperator.NOT_IN
+
+        back = policy_document_to_shared(doc, scope="tool")
+        assert back.rules[0]["conditions"][0]["operator"] == "not_in"
 
 
 # ---------------------------------------------------------------------------

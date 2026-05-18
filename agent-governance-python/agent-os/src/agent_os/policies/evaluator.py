@@ -335,6 +335,8 @@ def _match_condition(condition: Any, context: dict[str, Any]) -> bool:
         return ctx_value <= target
     if op == PolicyOperator.IN:
         return ctx_value in target
+    if op == PolicyOperator.NOT_IN:
+        return ctx_value not in target
     if op == PolicyOperator.CONTAINS:
         return target in ctx_value
     if op == PolicyOperator.MATCHES:

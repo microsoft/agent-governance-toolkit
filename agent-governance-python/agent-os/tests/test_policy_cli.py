@@ -185,6 +185,55 @@ class TestValidateCommand:
 # ---------------------------------------------------------------------------
 
 
+class TestNotInOperatorInCli:
+    def test_not_in_scenario_semantics(self, tmp_path, capsys):
+        policy_data = {
+            "version": "1.0",
+            "name": "not-in-policy",
+            "rules": [
+                {
+                    "name": "deny-unapproved-tool",
+                    "condition": {
+                        "field": "tool_name",
+                        "operator": "not_in",
+                        "value": ["read_file", "search"],
+                    },
+                    "action": "deny",
+                    "priority": 100,
+                }
+            ],
+            "defaults": {"action": "allow"},
+        }
+        policy_file = _write_yaml(tmp_path / "policy.yaml", policy_data)
+
+        scenarios = {
+            "scenarios": [
+                {
+                    "name": "approved tool",
+                    "context": {"tool_name": "search"},
+                    "expected_allowed": True,
+                    "expected_action": "allow",
+                },
+                {
+                    "name": "unapproved tool",
+                    "context": {"tool_name": "delete_file"},
+                    "expected_allowed": False,
+                    "expected_action": "deny",
+                },
+            ]
+        }
+        scenarios_file = _write_yaml(tmp_path / "scenarios.yaml", scenarios)
+
+        rc = main(["test", str(policy_file), str(scenarios_file)])
+        assert rc == 0
+        assert "2/2 scenarios passed" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# test command
+# ---------------------------------------------------------------------------
+
+
 class TestTestCommand:
     """Tests for the ``test`` subcommand."""
 

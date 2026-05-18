@@ -16,13 +16,12 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import yaml
 from pydantic import ValidationError
 
 from agent_os.policies.schema import PolicyDocument
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,6 +61,8 @@ def _evaluate_condition(condition: dict, context: dict) -> bool:
         return ctx_value <= value
     if operator == "in":
         return ctx_value in value
+    if operator == "not_in":
+        return ctx_value not in value
     if operator == "contains":
         return value in ctx_value
     if operator == "matches":
@@ -271,7 +272,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
     parser = build_parser()
     args = parser.parse_args(argv)

@@ -242,7 +242,7 @@ _OPERATOR_MAP_TO_POLICY: dict[str, PolicyOperator] = {
     "gt": PolicyOperator.GT,
     "lt": PolicyOperator.LT,
     "in": PolicyOperator.IN,
-    "not_in": PolicyOperator.NE,
+    "not_in": PolicyOperator.NOT_IN,
     "matches": PolicyOperator.MATCHES,
 }
 
@@ -261,6 +261,7 @@ _OPERATOR_MAP_FROM_POLICY: dict[PolicyOperator, str] = {
     PolicyOperator.GTE: "gt",
     PolicyOperator.LTE: "lt",
     PolicyOperator.IN: "in",
+    PolicyOperator.NOT_IN: "not_in",
     PolicyOperator.CONTAINS: "matches",
     PolicyOperator.MATCHES: "matches",
 }

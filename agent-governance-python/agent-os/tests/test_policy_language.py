@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for the declarative policy language, evaluator, and bridge."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,7 +19,6 @@ from agent_os.policies import (
     document_to_governance,
     governance_to_document,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -109,6 +107,26 @@ class TestYamlRoundtrip:
         assert loaded.name == doc.name
         assert len(loaded.rules) == len(doc.rules)
 
+    def test_not_in_operator_loads_from_yaml(self, tmp_path):
+        yaml_path = tmp_path / "not-in-policy.yaml"
+        yaml_path.write_text(
+            """
+version: "1.0"
+name: not-in-yaml
+rules:
+  - name: deny-non-allowlisted-tool
+    condition:
+      field: tool_name
+      operator: not_in
+      value: [read_file, search]
+    action: deny
+""".strip(),
+            encoding="utf-8",
+        )
+
+        loaded = PolicyDocument.from_yaml(yaml_path)
+        assert loaded.rules[0].condition.operator == PolicyOperator.NOT_IN
+
 
 # ---------------------------------------------------------------------------
 # Evaluator tests
@@ -183,6 +201,12 @@ class TestEvaluator:
             (PolicyOperator.LTE, 10, 10, True),
             (PolicyOperator.IN, "a", ["a", "b"], True),
             (PolicyOperator.IN, "c", ["a", "b"], False),
+            (PolicyOperator.NOT_IN, "c", ["a", "b"], True),
+            (PolicyOperator.NOT_IN, "a", ["a", "b"], False),
+            # String target: Python's `in` uses substring semantics, so
+            # `"a" not in "admin"` is False because "a" is a substring of
+            # "admin".  NOT_IN mirrors IN intentionally — pre-existing behaviour.
+            (PolicyOperator.NOT_IN, "a", "admin", False),
             (PolicyOperator.CONTAINS, "hello world", "world", True),
             (PolicyOperator.MATCHES, "abc123", r"\d+", True),
             (PolicyOperator.MATCHES, "abc", r"\d+", False),
@@ -211,6 +235,176 @@ class TestEvaluator:
         evaluator = PolicyEvaluator(policies=[_make_simple_doc()])
         decision = evaluator.evaluate({})
         assert decision.allowed
+
+    def test_not_in_inside_allowlist_does_not_match(self):
+        doc = PolicyDocument(
+            name="not-in-semantics",
+            rules=[
+                PolicyRule(
+                    name="deny-unapproved-tool",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.NOT_IN,
+                        value=["read_file", "search"],
+                    ),
+                    action=PolicyAction.DENY,
+                ),
+            ],
+        )
+        decision = PolicyEvaluator(policies=[doc]).evaluate({"tool_name": "read_file"})
+        assert decision.allowed
+
+    def test_not_in_outside_allowlist_matches(self):
+        doc = PolicyDocument(
+            name="not-in-semantics",
+            rules=[
+                PolicyRule(
+                    name="deny-unapproved-tool",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.NOT_IN,
+                        value=["read_file", "search"],
+                    ),
+                    action=PolicyAction.DENY,
+                ),
+            ],
+        )
+        decision = PolicyEvaluator(policies=[doc]).evaluate({"tool_name": "delete_file"})
+        assert not decision.allowed
+        assert decision.matched_rule == "deny-unapproved-tool"
+
+    def test_not_in_differs_from_ne(self):
+        value = "read_file"
+        not_in_doc = PolicyDocument(
+            name="not-in-vs-ne",
+            rules=[
+                PolicyRule(
+                    name="not-in-rule",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.NOT_IN,
+                        value=["read_file", "search"],
+                    ),
+                    action=PolicyAction.DENY,
+                ),
+            ],
+        )
+        ne_doc = PolicyDocument(
+            name="not-in-vs-ne",
+            rules=[
+                PolicyRule(
+                    name="ne-rule",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.NE,
+                        value=["read_file", "search"],
+                    ),
+                    action=PolicyAction.DENY,
+                ),
+            ],
+        )
+
+        not_in_decision = PolicyEvaluator(policies=[not_in_doc]).evaluate({"tool_name": value})
+        ne_decision = PolicyEvaluator(policies=[ne_doc]).evaluate({"tool_name": value})
+
+        assert not_in_decision.allowed
+        assert not ne_decision.allowed
+
+    def test_not_in_missing_field_no_match(self):
+        doc = PolicyDocument(
+            name="not-in-missing-field",
+            rules=[
+                PolicyRule(
+                    name="deny-unapproved-tool",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.NOT_IN,
+                        value=["read_file", "search"],
+                    ),
+                    action=PolicyAction.DENY,
+                ),
+            ],
+        )
+        decision = PolicyEvaluator(policies=[doc]).evaluate({})
+        assert decision.allowed
+
+    def test_not_in_malformed_target_fails_closed(self):
+        doc = PolicyDocument(
+            name="not-in-malformed",
+            rules=[
+                PolicyRule(
+                    name="deny-on-bad-policy",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.NOT_IN,
+                        value=5,
+                    ),
+                    action=PolicyAction.DENY,
+                ),
+            ],
+        )
+        decision = PolicyEvaluator(policies=[doc]).evaluate({"tool_name": "read_file"})
+        assert not decision.allowed
+        assert decision.reason == "Policy evaluation error — access denied (fail closed)"
+
+    def test_not_in_empty_allowlist_matches_everything(self):
+        # When value=[] the deny rule fires for *any* present ctx_value:
+        # `x not in []` is always True in Python.  This is intentional
+        # membership semantics — an empty approved-list approves nothing.
+        # The same reasoning applies to `IN, value=[]` which never matches.
+        doc = PolicyDocument(
+            name="not-in-empty-allowlist",
+            rules=[
+                PolicyRule(
+                    name="deny-all-tools",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.NOT_IN,
+                        value=[],
+                    ),
+                    action=PolicyAction.DENY,
+                ),
+            ],
+        )
+        evaluator = PolicyEvaluator(policies=[doc])
+
+        for tool in ("read_file", "search", "delete_file", "anything"):
+            decision = evaluator.evaluate({"tool_name": tool})
+            assert not decision.allowed, (
+                f"Expected deny for tool='{tool}' with empty allowlist, got allowed"
+            )
+            assert decision.matched_rule == "deny-all-tools"
+
+    def test_not_in_end_to_end_from_yaml(self, tmp_path):
+        path = tmp_path / "policy.yaml"
+        path.write_text(
+            """
+version: "1.0"
+name: end-to-end-not-in
+rules:
+  - name: deny-unapproved-tool
+    condition:
+      field: tool_name
+      operator: not_in
+      value:
+        - read_file
+        - search
+    action: deny
+defaults:
+  action: allow
+""".strip(),
+            encoding="utf-8",
+        )
+
+        doc = PolicyDocument.from_yaml(path)
+        evaluator = PolicyEvaluator(policies=[doc])
+
+        approved = evaluator.evaluate({"tool_name": "search"})
+        unapproved = evaluator.evaluate({"tool_name": "delete_file"})
+
+        assert approved.allowed
+        assert not unapproved.allowed
+        assert unapproved.matched_rule == "deny-unapproved-tool"
 
     def test_load_policies_from_directory(self, tmp_path):
         doc = _make_simple_doc()
