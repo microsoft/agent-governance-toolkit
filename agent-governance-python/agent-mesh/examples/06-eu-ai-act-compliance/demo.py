@@ -13,6 +13,11 @@ Demonstrates:
 Runs entirely offline — no API keys required.
 """
 
+import sys
+
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from compliance_checker import (
     AgentProfile,
     EUAIActComplianceChecker,
