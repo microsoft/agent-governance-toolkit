@@ -44,13 +44,13 @@ class FailureSeverity(str, Enum):
 
 class FailureTrace(BaseModel):
     """Full trace of an agent failure including reasoning chain."""
-    
+
     user_prompt: str = Field(..., description="Original user prompt that led to failure")
     chain_of_thought: List[str] = Field(default_factory=list, description="Agent's reasoning steps")
     failed_action: Dict[str, Any] = Field(..., description="The action that failed")
     error_details: str = Field(..., description="Detailed error information")
     timestamp: datetime = Field(default_factory=_utcnow)
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -72,7 +72,7 @@ class FailureTrace(BaseModel):
 
 class AgentFailure(BaseModel):
     """Represents a failure detected in an agent."""
-    
+
     agent_id: str = Field(..., description="Unique identifier for the agent")
     failure_type: FailureType = Field(..., description="Type of failure")
     severity: FailureSeverity = Field(default=FailureSeverity.MEDIUM)
@@ -81,7 +81,7 @@ class AgentFailure(BaseModel):
     context: Dict[str, Any] = Field(default_factory=dict, description="Additional context")
     stack_trace: Optional[str] = Field(None, description="Stack trace if available")
     failure_trace: Optional[FailureTrace] = Field(None, description="Full failure trace if available")
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
