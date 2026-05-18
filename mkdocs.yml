@@ -156,6 +156,17 @@ nav:
     - OWASP Compliance: security/owasp-compliance.md
     - Security Scanning: security/scanning.md
     - Tenant Isolation: security/tenant-isolation.md
+  - Specifications:
+    - "Agent OS Policy Engine": specs/AGENT-OS-POLICY-ENGINE-1.0.md
+    - "AgentMesh Identity & Trust": specs/AGENTMESH-IDENTITY-TRUST-1.0.md
+    - "Agent Hypervisor Execution Control": specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md
+    - "AgentMesh Trust & Coordination": specs/AGENTMESH-TRUST-COORDINATION-1.0.md
+    - "AgentMesh Wire Protocol": specs/AGENTMESH-WIRE-1.0.md
+    - "Agent SRE Governance": specs/AGENT-SRE-GOVERNANCE-1.0.md
+    - "MCP Security Gateway": specs/MCP-SECURITY-GATEWAY-1.0.md
+    - "Agent Lightning Fast-Path": specs/AGENT-LIGHTNING-FAST-PATH-1.0.md
+    - "Framework Adapter Contract": specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md
+    - "Audit & Compliance": specs/AUDIT-COMPLIANCE-1.0.md
   - Architecture Decisions:
     - Overview: adr/index.md
     - "ADR-0001: Ed25519 for Identity": adr/0001-use-ed25519-for-agent-identity.md
@@ -170,6 +181,19 @@ nav:
     - "ADR-0010: TEE Keystore SEV-SNP": adr/0010-tee-keystore-sevsnp-attestation.md
     - "ADR-0011: Additive Policy Contract": adr/0011-additive-policy-check-contract.md
     - "ADR-0012: Cost Governance": adr/0012-cost-governance-observability-policies.md
+    - "ADR-0013: Fail Closed on Errors": adr/0013-fail-closed-on-policy-evaluation-errors.md
+    - "ADR-0014: Parent Deny Immutable": adr/0014-parent-deny-rules-immutable-in-merge.md
+    - "ADR-0015: Pluggable Policy Backends": adr/0015-pluggable-external-policy-backends.md
+    - "ADR-0016: Trust Ceiling Propagation": adr/0016-trust-ceiling-propagation-for-delegation.md
+    - "ADR-0017: Merkle Audit Chain": adr/0017-merkle-chain-for-audit-tamper-evidence.md
+    - "ADR-0018: Reconstructible Decision BOM": adr/0018-reconstructible-decision-bom-over-prebuilt.md
+    - "ADR-0019: OTel Event Sink Pattern": adr/0019-otel-batchspanprocessor-pattern-for-event-sink.md
+    - "ADR-0020: Circuit Breaker for Sinks": adr/0020-circuit-breaker-for-event-sink-delivery.md
+    - "ADR-0021: CloudEvents Envelope": adr/0021-cloudevents-envelope-for-mesh-audit.md
+    - "ADR-0022: Compliance Auto-Mapping": adr/0022-compliance-framework-auto-mapping.md
+    - "ADR-0023: Hypervisor Delta Engine": adr/0023-append-only-delta-engine-for-hypervisor-audit.md
+    - "ADR-0024: RL Training Governance": adr/0024-rl-training-governance-with-violation-penalties.md
+    - "ADR-0025: Structural Typing Protocols": adr/0025-structural-typing-for-sink-and-source-protocols.md
   - Reference:
     - Benchmarks: reference/benchmarks.md
     - Comparison: reference/comparison.md
