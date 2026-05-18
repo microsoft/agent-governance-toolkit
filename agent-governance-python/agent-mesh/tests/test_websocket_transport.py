@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for the WebSocket transport implementation."""
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,14 +24,17 @@ def config() -> TransportConfig:
 
 @pytest.fixture
 def mock_ws_connection() -> AsyncMock:
-    """Mock websockets ClientConnection."""
+    """Mock websockets ClientConnection.
+
+    Avoids calling ``asyncio.get_event_loop()`` at collection time,
+    which raises on Python 3.12+ when no loop is running.  The ping
+    mock returns a coroutine that resolves to ``None`` instead.
+    """
     ws = AsyncMock()
     ws.close = AsyncMock()
     ws.send = AsyncMock()
     ws.recv = AsyncMock(return_value=json.dumps({"topic": "test", "payload": {"ok": True}}))
-    pong_future: asyncio.Future[None] = asyncio.get_event_loop().create_future()
-    pong_future.set_result(None)
-    ws.ping = AsyncMock(return_value=pong_future)
+    ws.ping = AsyncMock(return_value=None)
     return ws
 
 
