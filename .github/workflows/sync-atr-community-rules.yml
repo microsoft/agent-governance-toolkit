@@ -106,24 +106,21 @@ jobs:
           git commit -m "chore(examples/atr-community-rules): sync ATR v${{ steps.atr.outputs.version }}"
           git push -u origin "$BRANCH"
 
-          BODY=$(cat <<BODYEOF
-          Automated weekly sync of the ATR community detection-rule corpus.
+          BODY="Automated weekly sync of the ATR community detection-rule corpus.
 
-          - Source: \`agent-threat-rules@${{ steps.atr.outputs.version }}\` on npm
-          - Patterns in refreshed \`atr_community_policy_full.yaml\`: ${{ steps.regen.outputs.rule_count }}
-          - Patterns skipped (invalid Python regex, e.g. Unicode escape sequences): ${{ steps.regen.outputs.skipped_count }}
+          - Source: agent-threat-rules@${{ steps.atr.outputs.version }} on npm
+          - Patterns in refreshed atr_community_policy_full.yaml: ${{ steps.regen.outputs.rule_count }}
+          - Patterns skipped (invalid Python regex): ${{ steps.regen.outputs.skipped_count }}
 
-          This PR is opened for human review — the curated \`atr_security_policy.yaml\` is **not** modified.
+          This PR is opened for human review. The curated atr_security_policy.yaml is NOT modified."
 
-          Reviewer checklist:
-          - [ ] Glance at the diff; reject if any rule looks off-scope.
-          - [ ] If ATR upstream is compromised, close this PR without merging and rotate the sync workflow token.
-          - [ ] On merge, the new full policy is available as an opt-in resource; no AGT behaviour changes automatically.
-          BODYEOF
-          )
-
-          gh pr create \
+          if gh pr create \
             --title "chore(examples/atr-community-rules): sync ATR v${{ steps.atr.outputs.version }}" \
             --body "$BODY" \
             --base main \
-            --head "$BRANCH"
+            --head "$BRANCH"; then
+            echo "PR created successfully."
+          else
+            echo "::warning::Could not create PR automatically. Branch '$BRANCH' has been pushed."
+            echo "::warning::Create the PR manually: https://github.com/${{ github.repository }}/compare/main...$BRANCH"
+          fi
