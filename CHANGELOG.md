@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Mycelium Trails community plugin** - `EvidenceAnchor` SPI implementation backed by
+  Mycelium Trails on Arbitrum. Evidence hashes are written as append-only trail records
+  via `argentum.rgiskard.xyz`. `verify()` is independently callable without AGT runtime
+  state. `action_ref` derivation follows RFC 8785 JCS + SHA-256 per
+  [`action-ref.md v1.0`](https://github.com/giskard09/argentum-core/blob/main/docs/spec/action-ref.md).
+  19/19 tests. (#2381)
 
 ## [3.5.0] - 2026-05-07
 

@@ -60,17 +60,41 @@ class MyceliumAnchor(EvidenceAnchor):
         self.timeout = timeout
 
     def anchor(self, evidence_hash: str, metadata: dict[str, Any]) -> AnchorReceipt:
-        """
-        Writes evidence_hash to Mycelium Trails.
+        """Write evidence_hash to Mycelium Trails and return a receipt.
 
-        metadata keys (all optional):
-          - agent_id    (str)  overrides instance agent_id for this call
-          - action_type (str)  default: "agt:evidence_anchor"
-          - scope       (str)  default: "agt-evidence"
-          - parent_trail_id (str)
-          - root_trail_id   (str)
+        Derives an ``action_ref`` (RFC 8785 JCS + SHA-256) from the four
+        canonical preimage fields, then POSTs a trail record to
+        ``POST /trails`` on the Mycelium API. The record is append-only —
+        it cannot be modified or deleted after writing.
 
-        Raises RuntimeError if the Mycelium API is unreachable.
+        Args:
+            evidence_hash: SHA-256 hex digest of the artifact to anchor
+                (e.g. ``"sha256:abc123..."``).
+            metadata: Optional anchoring hints. Recognised keys:
+
+                - ``agent_id`` (str) — overrides the instance ``agent_id``
+                  for this call.
+                - ``action_type`` (str) — semantic label for the action;
+                  default ``"agt:evidence_anchor"``.
+                - ``scope`` (str) — declared authorization boundary;
+                  default ``"agt-evidence"``.
+                - ``parent_trail_id`` (str) — links this record to a parent
+                  trail in a chain.
+                - ``root_trail_id`` (str) — links this record to the root
+                  of a trail chain.
+
+                All other keys are forwarded as-is into ``claims``.
+
+        Returns:
+            ``AnchorReceipt`` with ``backend="mycelium-trails"``,
+            ``anchor_id=trail_id``, ``anchored_at`` (RFC 3339 UTC), and
+            ``metadata`` containing ``action_ref``, ``agent_id``, and
+            ``tx_hash``.
+
+        Raises:
+            RuntimeError: if the Mycelium API is unreachable or returns an
+                HTTP error. The AGT runtime applies mode semantics
+                (``enforce`` / ``queue`` / ``best_effort``) on this error.
         """
         agent_id = metadata.get("agent_id", self.agent_id)
         action_type = metadata.get("action_type", "agt:evidence_anchor")
@@ -137,17 +161,31 @@ class MyceliumAnchor(EvidenceAnchor):
         )
 
     def verify(self, evidence_hash: str, receipt: AnchorReceipt) -> AnchorVerifyResult:
-        """
-        Confirms evidence_hash is recorded at receipt.anchor_id (trail_id).
+        """Confirm evidence_hash is recorded at the position in receipt.
 
-        Uses GET /trails/verify?agent_id=X&action_ref=Y when action_ref is
-        present in receipt.metadata. Falls back to GET /trails/{trail_id}.
+        Calls ``GET /trails/verify?agent_id=X&action_ref=Y`` when
+        ``action_ref`` is present in ``receipt.metadata``. Falls back to
+        ``GET /trails/{trail_id}`` when it is absent.
 
-        Returns AnchorVerifyResult with:
-          VERIFIED           — hash confirmed, InclusionProof included
-          NOT_FOUND          — trail_id does not exist
-          HASH_MISMATCH      — trail exists but stored hash differs
-          BACKEND_UNAVAILABLE — network or API error
+        This method is independently callable — it does not require AGT
+        runtime state or any prior call to ``anchor()``.
+
+        Args:
+            evidence_hash: The SHA-256 hex digest to confirm.
+            receipt: The ``AnchorReceipt`` returned by a previous
+                ``anchor()`` call.
+
+        Returns:
+            ``AnchorVerifyResult`` with one of:
+
+            - ``VERIFIED`` — hash confirmed; ``inclusion_proof`` contains
+              the Arbitrum ``tx_hash`` and an Arbiscan explorer URL.
+            - ``NOT_FOUND`` — trail_id does not exist on Mycelium.
+            - ``HASH_MISMATCH`` — trail exists but the stored hash differs
+              from ``evidence_hash``; ``error_detail`` includes the stored
+              value.
+            - ``BACKEND_UNAVAILABLE`` — network or API error;
+              ``error_detail`` contains the exception message.
         """
         action_ref = receipt.metadata.get("action_ref")
         agent_id = receipt.metadata.get("agent_id", self.agent_id)
