@@ -1,6 +1,6 @@
 # Agent Governance Toolkit v3.6.0
 
-**Release Date:** 2026-05-18
+**Release Date:** 2026-05-12
 
 > [!IMPORTANT]
 > **Public Preview** - All packages published from this repository are
