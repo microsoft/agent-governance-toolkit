@@ -1,6 +1,6 @@
 # Agent Governance Toolkit v3.7.0
 
-**Release Date:** TBD
+**Release Date:** 2026-05-18
 
 > [!IMPORTANT]
 > **Public Preview** - All packages published from this repository are
@@ -9,31 +9,25 @@
 
 ## Highlights
 
+### Version Bump and Release Hygiene
+
+v3.7.0 opens the next development cycle with full release documentation for the
+v3.6.0 milestone that was previously undocumented.
+
 ### Tool Usage Policies (oracle/agent-spec)
 
-Contributed the `ToolPolicy` schema to the Agent Spec standard, enabling declarative
-rate-limit, approval, and justification guards on tool invocations. AGT will adopt
-the ratified schema once merged.
-
-### [Planned] Defense Cloak Enhancements
-
-_Tracking improvements to the defense posture system._
-
-### [Planned] OpenShell Governance Hardening
-
-_Tracking remaining gaps in OpenShell integration._
+Contributed the `ToolPolicy` schema to the Agent Spec standard (PR #191),
+enabling declarative rate-limit, approval, and justification guards on tool
+invocations. AGT will adopt the ratified schema once merged upstream.
 
 ## Added
 
-- _To be filled as features land_
-
-## Fixed
-
-- _To be filled as fixes land_
-
-## Changed
-
-- _To be filled as changes land_
+- **v3.6.0 release notes** documenting the full scope of the previous release
+- **Presentation demos** committed to `examples/demos/presentation/` (6 offline scripts)
+- **EU AI Act demo** Windows UTF-8 fix
+- **StdoutAuditSink** overlapping merge fix
+- **Repo structure** simplified with layout guide
+- **Tutorials** reorganized into customer-centric categories
 
 ## Packages
 
@@ -49,3 +43,13 @@ _Tracking remaining gaps in OpenShell integration._
 | `agent-hypervisor` | 3.7.0 |
 | `agent-lightning` | 3.7.0 |
 | `agentmesh-marketplace` | 3.7.0 |
+
+## Upgrade Guide
+
+```bash
+pip install --upgrade agent-governance-toolkit[full]
+agt doctor  # verify installation
+agt verify  # confirm OWASP ASI 2026 compliance
+```
+
+No breaking changes from v3.6.0.
