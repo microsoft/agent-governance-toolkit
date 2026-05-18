@@ -1,4 +1,5 @@
 {
   "private": true,
-  "type": "module"
+  "type": "module",
+  "version": "3.7.0"
 }
