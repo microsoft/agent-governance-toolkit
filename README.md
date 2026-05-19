@@ -30,7 +30,7 @@
 > [Open a GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) for feedback.
 
 > [!TIP]
-> **v3.5.0 is out!** Latest stable release with Bedrock adapter, prompt defense improvements, and governance hardening. [Changelog →](CHANGELOG.md)
+> **v3.7.0 is out!** Latest release with formal RFC 2119 specifications, 25 ADRs, Tool Usage Policies for agent-spec, and governance hardening. [Changelog →](CHANGELOG.md)
 
 **Runtime governance for AI agents** -- deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents. Covers all **10 OWASP Agentic risks** with **13,000+ tests**.
 
