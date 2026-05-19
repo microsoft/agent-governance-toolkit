@@ -19,6 +19,20 @@ It does **not** govern what agents *think* or *say*.
 an agent could read your customer list and post it to a public channel — both
 actions are individually permitted.
 
+**Cross-session variant.** The same gap extends across session boundaries when
+persistent memory or persistent tools (notes, files, calendar) carry attack state
+between sessions under permission isolation. A backdoored or prompt-injected model
+can write attack state in one session and resume from that state in a later session
+whose tool set permits the next phase — so each session's individual actions remain
+policy-permitted while the full attack chain only resolves across the session
+sequence. Dai et al. report 80–95% attack success rates across four base models
+under supply-chain SFT delivery, and demonstrate the attack generalises to
+alternative topologies (branch-and-merge) and alternative persistent components
+(note-tool in place of memory).
+
+*This cross-session variant was identified in external analysis by
+[Dai et al.](https://arxiv.org/abs/2605.06158) (preprint, May 2026).*
+
 **Mitigations available today:**
 - Use **content policies** with blocked patterns (regex) to catch PII in outputs
 - Use **PromptDefenseEvaluator** to test for prompt injection vulnerabilities
@@ -26,7 +40,8 @@ actions are individually permitted.
 - Use **max_tool_calls** limits to cap action sequences
 
 **What we're building:**
-- **Workflow-level policies** that evaluate action *sequences*, not just individual actions
+- **Workflow-level policies** that evaluate action *sequences*, including cross-session
+  sequences under persistent memory, not just individual actions
 - **Intent declaration** where agents declare what they plan to do before doing it,
   and the policy engine validates the plan
 
