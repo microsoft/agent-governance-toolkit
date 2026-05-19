@@ -70,7 +70,7 @@ evaluator.add_backend(
 evaluator.add_backend(
     CedarlingBackend(
         bootstrap_config={"application_name": "my-agent", "policy_store_uri": "..."},
-        tokens={"access_token": "eyJhbGciOiJSUzI1NiJ9..."},
+        tokens={"access_token": "<your-oidc-jwt>"},
     )
 )
 ```
