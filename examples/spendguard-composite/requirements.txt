@@ -1,0 +1,8 @@
+# Mock mode requires only AGT itself.
+agent-governance-toolkit>=3.4
+
+# Real mode requires the SpendGuard SDK with the [agt] extra,
+# which pulls in the protobuf bindings and the gRPC client.
+# Available on PyPI as an alpha — the --pre flag is required:
+#   pip install --pre 'spendguard-sdk[agt]>=0.4'
+spendguard-sdk[agt]>=0.4 ; extra == "real"
