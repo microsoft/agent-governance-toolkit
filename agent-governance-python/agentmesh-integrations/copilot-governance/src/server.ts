@@ -8,7 +8,7 @@
  *
  * Usage:
  * ```ts
- * import { createServer } from '@agentmesh/copilot-governance/server';
+ * import { createServer } from '@microsoft/agentmesh-copilot-governance/server';
  * const server = createServer({ port: 3000 });
  * server.listen();
  * ```
@@ -24,14 +24,29 @@ import type { AgentRequest } from "./types";
 
 /** Maximum request body size (1 MB). */
 const MAX_BODY_BYTES = 1024 * 1024;
+const DEFAULT_HOST = "127.0.0.1";
+const HOST_OVERRIDE_ENV = "COPILOT_GOVERNANCE_HOST";
 
 export interface ServerOptions {
   /** TCP port to listen on (default: 3000). */
   port?: number;
-  /** Host to bind (default: "0.0.0.0"). */
+  /** Host to bind (default: "127.0.0.1"; use "0.0.0.0" explicitly for containers/hosts). */
   host?: string;
   /** GitHub App webhook secret for request signature verification. */
   webhookSecret?: string;
+}
+
+function resolveHost(configuredHost?: string): string {
+  if (configuredHost?.trim()) {
+    return configuredHost.trim();
+  }
+
+  const envHost = process.env[HOST_OVERRIDE_ENV]?.trim();
+  if (envHost) {
+    return envHost;
+  }
+
+  return DEFAULT_HOST;
 }
 
 /**
@@ -43,7 +58,7 @@ export interface ServerOptions {
  */
 export function createServer(options: ServerOptions = {}) {
   const port = options.port ?? 3000;
-  const host = options.host ?? "0.0.0.0";
+  const host = resolveHost(options.host);
   const webhookSecret = options.webhookSecret ?? process.env.GITHUB_WEBHOOK_SECRET;
 
   function verifySignature(body: string, signature: string | undefined): boolean {

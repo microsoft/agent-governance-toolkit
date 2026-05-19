@@ -273,6 +273,7 @@ urlunparse
 utcfromtimestamp
 utcnow
 uvicorn
+vitest
 venv
 vnet
 westus
