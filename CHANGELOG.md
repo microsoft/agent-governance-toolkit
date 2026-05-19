@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **mycelium-agt** - standalone `agentmesh-integrations/mycelium-agt` package implementing AGT's `EvidenceAnchor` protocol via Mycelium Trails. Every agent action produces a tamper-evident TrailRecord with a deterministic `action_ref` (JCS RFC 8785 + SHA-256) and an optional on-chain anchor (`tx_hash`). Zero new runtime dependencies; live verify endpoint at `https://argentum-api.rgiskard.xyz/trails/verify`. (#2415)
+
 ### Changed
 - **Rust prompt guard** - added custom configuration and audit interpretation examples, tuned escaped-sequence detection to reduce benign `\x` / `\u` false positives, and switched file-backed audit/federation persistence to compact atomic writes.
 

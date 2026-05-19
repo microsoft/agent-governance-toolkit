@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pytest
 from unittest.mock import MagicMock, patch
 
 from mycelium_agt import MyceliumBackend
@@ -65,6 +66,22 @@ class TestActionRefDerivation:
         a = compute_action_ref("agent-1", "file:write", "audit", "2026-05-15T00:00:00.000Z")
         b = compute_action_ref("agent-2", "file:write", "audit", "2026-05-15T00:00:00.000Z")
         assert a != b
+
+    @pytest.mark.parametrize("bad_ts", [
+        "2026-05-15T10:00:00Z",          # missing ms
+        "2026-05-15T10:00:00.1Z",        # 1-digit ms
+        "2026-05-15 10:00:00.123Z",      # space instead of T
+        "2026-05-15T10:00:00.123",       # missing Z
+        "not-a-timestamp",
+    ])
+    def test_invalid_timestamp_raises(self, bad_ts):
+        with pytest.raises(ValueError, match="RFC 3339"):
+            compute_action_ref("agent", "op", "scope", bad_ts)
+
+    def test_empty_scope_is_valid(self):
+        """Empty scope is a legitimate value — must not raise."""
+        ref = compute_action_ref("agent", "op", "", "2026-01-01T00:00:00.000Z")
+        assert len(ref) == 64
 
 
 # =============================================================================
@@ -191,3 +208,33 @@ class TestHTTPAnchoring:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = b.verify("31ddbd9f" + "0" * 56)
         assert result["verified"] is True
+
+    def test_verify_http_404_returns_not_verified(self):
+        import urllib.error
+        b = MyceliumBackend(agent_id="test-agent")
+        err = urllib.error.HTTPError(url="u", code=404, msg="Not Found", hdrs={}, fp=None)
+        with patch("urllib.request.urlopen", side_effect=err):
+            result = b.verify("31ddbd9f" + "0" * 56)
+        assert result["verified"] is False
+        assert "404" in result["error"]
+
+    def test_anchor_uses_configured_timeout(self):
+        """MyceliumBackend must forward timeout_seconds to urlopen."""
+        captured: dict = {}
+
+        def _fake_urlopen(request, timeout):
+            captured["timeout"] = timeout
+            return _mock_urlopen_success()
+
+        b = MyceliumBackend(agent_id="test-agent", timeout_seconds=42.0)
+        with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+            b.anchor({"action_type": "op", "scope": ""})
+
+        assert captured["timeout"] == 42.0
+
+    def test_anchor_receipt_repr_contains_action_ref_prefix(self):
+        b = MyceliumBackend(agent_id="test-agent")
+        with patch("urllib.request.urlopen", side_effect=ConnectionError("offline")):
+            r = b.anchor({"action_type": "op", "scope": ""})
+        rep = repr(r)
+        assert r.action_ref[:16] in rep

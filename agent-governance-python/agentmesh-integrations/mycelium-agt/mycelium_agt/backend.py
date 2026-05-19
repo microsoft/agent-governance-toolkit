@@ -30,10 +30,13 @@ import datetime
 import hashlib
 import json
 import logging
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Optional
+
+_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +77,39 @@ def compute_action_ref(
 ) -> str:
     """Derive action_ref from the four canonical preimage fields.
 
-    ``timestamp`` must be RFC 3339 UTC with 3-digit ms precision
-    (e.g. ``"2026-05-15T10:00:00.123Z"``). Use ``_format_timestamp()``
-    to produce it from a datetime object.
+    Canonical derivation (JCS RFC 8785 + SHA-256):
 
-    Returns the SHA-256 hex digest (64 lowercase hex characters).
+    1. Build a dict of the four fields.
+    2. Serialize with JCS: keys in Unicode code-point order, no whitespace, UTF-8.
+    3. Return ``SHA-256(canonical_bytes)`` as 64 lowercase hex characters.
+
+    Args:
+        agent_id:    Stable agent identifier (DID, username, or opaque string).
+        action_type: Verb that describes the action (e.g. ``"file:write"``).
+        scope:       Resource or context the action targets (may be empty string).
+        timestamp:   RFC 3339 UTC with exactly 3 ms digits: ``"2026-05-15T10:00:00.123Z"``.
+                     Use :func:`_format_timestamp` to produce this from a datetime object.
+
+    Returns:
+        64-character lowercase hex SHA-256 digest.
+
+    Raises:
+        ValueError: If ``timestamp`` does not match the required RFC 3339 format.
+
+    Example::
+
+        ref = compute_action_ref(
+            agent_id="nobulex-gogani",
+            action_type="payment.send",
+            scope="payment:usdc:50",
+            timestamp="2025-05-18T10:00:00.000Z",
+        )
+        # "31ddbd9f89f0e54700744addc7fa23f41518cf8c9d63d206e6da5cc3669defdd"
     """
+    if not _TS_RE.match(timestamp):
+        raise ValueError(
+            f"timestamp must be RFC 3339 UTC with 3-digit ms (e.g. '2026-05-15T10:00:00.123Z'), got: {timestamp!r}"
+        )
     canonical = _jcs_encode({
         "action_type": action_type,
         "agent_id": agent_id,
@@ -94,19 +124,37 @@ def compute_action_ref(
 # ---------------------------------------------------------------------------
 
 class AnchorReceipt:
-    """Result of a Mycelium trail anchoring.
+    """Immutable result of a Mycelium trail anchoring attempt.
+
+    An ``AnchorReceipt`` is returned by :meth:`MyceliumBackend.anchor` for every
+    call, whether or not the HTTP submission succeeded.  Callers should always
+    check :attr:`anchored` before trusting :attr:`trail_id` or :attr:`tx_hash`.
+
+    Independent verification — without trusting this object — is possible because
+    :attr:`preimage` contains the four fields used to derive :attr:`action_ref`:
+
+    .. code-block:: python
+
+        recomputed = compute_action_ref(
+            r.preimage["agent_id"],
+            r.preimage["action_type"],
+            r.preimage["scope"],
+            r.preimage["timestamp"],
+        )
+        assert recomputed == r.action_ref
 
     Attributes:
-        anchored:    True if the trail was successfully recorded.
-        action_ref:  SHA-256 content-addressed identifier (independently verifiable).
-        trail_id:    UUID assigned by Mycelium (None on failure).
-        trail_status: "committed" | "pending" | "failed"
-        tx_hash:     On-chain anchor hash (None until anchored).
-        verify_url:  Public URL to verify this trail without authentication.
-        preimage:    The four fields used to derive action_ref — included
-                     so any verifier can independently recompute.
-        error:       Error message on failure (None on success).
-        evaluation_ms: Time taken for the backend call.
+        anchored:      ``True`` if the trail record was accepted by Mycelium.
+        action_ref:    SHA-256 hex digest of the JCS-canonical preimage (64 chars).
+                       Deterministic — recomputable from :attr:`preimage` fields.
+        trail_id:      UUID assigned by Mycelium; ``None`` on failure.
+        trail_status:  ``"committed"`` | ``"pending"`` | ``"failed"``.
+        tx_hash:       On-chain anchor transaction hash; ``None`` until committed.
+        verify_url:    Public URL to verify this trail without authentication.
+        preimage:      Dict with keys ``agent_id``, ``action_type``, ``scope``,
+                       ``timestamp`` — the four canonical fields.
+        error:         Error message string on failure; ``None`` on success.
+        evaluation_ms: Wall-clock time for the backend HTTP call (milliseconds).
     """
 
     def __init__(
@@ -146,26 +194,37 @@ class AnchorReceipt:
 class MyceliumBackend:
     """AGT evidence backend that anchors actions as Mycelium TrailRecords.
 
-    Implements the EvidenceAnchor protocol — exposes ``name`` and
-    ``anchor(context) -> AnchorReceipt`` — so it can be registered with
+    Implements the ``EvidenceAnchor`` protocol — exposes :attr:`name` and
+    :meth:`anchor` — so it can be registered with
     ``EvidenceCollector.add_backend()`` without any changes to AGT core.
 
     Every action produces a tamper-evident TrailRecord with:
+
     - A deterministic ``action_ref`` (JCS RFC 8785 + SHA-256) any party can
       independently recompute from the four preimage fields.
     - An on-chain anchor (``tx_hash``) on Base mainnet or Arbitrum One once
-      the trail transitions to COMMITTED.
+      the trail transitions to ``COMMITTED``.
 
     Trail states (per guarantee-model spec):
-    - ``committed``  — anchored on-chain. Independently verifiable via tx_hash.
-    - ``pending``    — anchor in progress. tx_hash present or null (degraded).
-    - ``failed``     — terminal. No anchor produced.
+
+    - ``committed`` — anchored on-chain. Independently verifiable via ``tx_hash``.
+    - ``pending``   — anchor in progress. ``tx_hash`` present or ``None`` (degraded).
+    - ``failed``    — terminal. No anchor produced.
+
+    Usage::
+
+        from agent_os.audit import EvidenceCollector
+        from mycelium_agt import MyceliumBackend
+
+        collector = EvidenceCollector()
+        collector.add_backend(MyceliumBackend(agent_id="my-agent-001"))
+        receipt = collector.record({"action_type": "file:write", "scope": "audit"})
 
     Args:
-        agent_id:      Stable agent identifier (DID, username, or opaque string).
-        mycelium_url:  Mycelium API base URL. Defaults to the public endpoint.
-        service:       Service label for the TrailRecord (default: "agentmesh").
-        timeout_seconds: HTTP timeout per request.
+        agent_id:        Stable agent identifier (DID, username, or opaque string).
+        mycelium_url:    Mycelium API base URL. Defaults to the public endpoint.
+        service:         Service label for the TrailRecord (default: ``"agentmesh"``).
+        timeout_seconds: HTTP timeout per request (seconds).
     """
 
     def __init__(
