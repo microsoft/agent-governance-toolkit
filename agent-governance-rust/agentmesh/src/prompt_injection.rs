@@ -8,7 +8,7 @@
 //! rule IDs or hashes only, never raw prompt excerpts, canary tokens,
 //! blocklist entries, or custom regex bodies.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::engine::general_purpose::STANDARD;
@@ -73,7 +73,11 @@ pub enum Sensitivity {
 }
 
 /// Detector configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `PartialEq` is derived but `Eq` is not, because [`ThresholdTuple`] carries
+/// an `f64` confidence value. See [`DetectionResult`] for the same precedent
+/// elsewhere in this module.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DetectionConfig {
     /// Detector sensitivity. `Balanced` is the default and aims to catch
     /// high-confidence injection attempts without flagging ordinary security
@@ -98,6 +102,19 @@ pub struct DetectionConfig {
     /// Maximum number of hash-only audit records retained in memory.
     #[serde(default = "default_audit_capacity")]
     pub audit_capacity: usize,
+    /// Optional overrides for the built-in rule corpora. Lets operators add
+    /// rules to a built-in family or disable a built-in rule by stable ID.
+    /// Defaults to empty. See [`BuiltInRuleOverrides`] for the safety
+    /// guarantees and validation rules.
+    #[serde(default)]
+    pub rule_overrides: BuiltInRuleOverrides,
+    /// Optional per-sensitivity threshold overrides. When a variant is
+    /// `Some(...)`, the override replaces the built-in `(min_threat_level,
+    /// min_confidence)` tuple for that sensitivity. Defaults to all `None`,
+    /// which preserves built-in behavior. Loosening these thresholds weakens
+    /// detection and is the operator's responsibility.
+    #[serde(default)]
+    pub threshold_overrides: ThresholdOverrides,
 }
 
 impl Default for DetectionConfig {
@@ -108,16 +125,135 @@ impl Default for DetectionConfig {
             blocklist: Vec::new(),
             allowlist: Vec::new(),
             audit_capacity: DEFAULT_AUDIT_CAPACITY,
+            rule_overrides: BuiltInRuleOverrides::default(),
+            threshold_overrides: ThresholdOverrides::default(),
         }
     }
 }
 
 /// Top-level prompt-injection config file shape.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `PartialEq` is derived but `Eq` is not; see [`DetectionConfig`].
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PromptInjectionConfig {
     /// Detection configuration used to build [`PromptInjectionDetector`].
     #[serde(default)]
     pub detection: DetectionConfig,
+}
+
+/// Family of built-in rule corpora that user-supplied additions can join.
+///
+/// Each variant maps to the rule-ID prefix already used by the built-in rules:
+/// `direct:`, `delimiter:`, `role_play:`, `context:`, `multi_turn:`.
+///
+/// The encoding family (`encoding:*` rule IDs) is intentionally not exposed
+/// here because its detection path is keyword-based rather than regex-based.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum RuleFamily {
+    /// Direct-override family. Rule-ID prefix: `direct:`.
+    Direct,
+    /// Delimiter-attack family. Rule-ID prefix: `delimiter:`.
+    Delimiter,
+    /// Role-play family. Rule-ID prefix: `role_play:`.
+    RolePlay,
+    /// Context-manipulation family. Rule-ID prefix: `context:`.
+    Context,
+    /// Multi-turn escalation family. Rule-ID prefix: `multi_turn:`.
+    MultiTurn,
+}
+
+impl RuleFamily {
+    fn prefix(self) -> &'static str {
+        match self {
+            RuleFamily::Direct => "direct",
+            RuleFamily::Delimiter => "delimiter",
+            RuleFamily::RolePlay => "role_play",
+            RuleFamily::Context => "context",
+            RuleFamily::MultiTurn => "multi_turn",
+        }
+    }
+}
+
+/// User-supplied rule added to a built-in family.
+///
+/// The detector validates each addition at construction:
+/// - `pattern` must compile as a [`Regex`]; otherwise
+///   [`PromptInjectionError::InvalidRuleOverridePattern`] is returned.
+/// - `confidence` must be finite and within `[0.0, 1.0]`; otherwise
+///   [`PromptInjectionError::InvalidRuleOverrideConfidence`] is returned.
+///
+/// Public findings emit `<family>:custom:sha256:<12-hex-chars>` as the rule
+/// ID; the raw `pattern` body and `name` label never appear in
+/// [`DetectionResult::matched_patterns`] or in [`AuditRecord`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BuiltInRuleAddition {
+    /// Built-in family this rule joins.
+    pub family: RuleFamily,
+    /// Optional local label. Never appears in public findings; useful only
+    /// for the operator's own bookkeeping.
+    #[serde(default)]
+    pub name: String,
+    /// Regex body. Validated and hashed at construction.
+    pub pattern: String,
+    /// Threat level emitted when the rule fires.
+    pub threat_level: ThreatLevel,
+    /// Confidence emitted when the rule fires. Must lie within `[0.0, 1.0]`.
+    pub confidence: f64,
+}
+
+/// Overrides for the built-in rule corpora.
+///
+/// `add` merges user-supplied rules into the named family. `disable`
+/// suppresses one or more built-in rules by their stable rule ID
+/// (e.g., `"direct:ignore_previous_instructions"`). Unknown rule IDs in
+/// `disable` are rejected with
+/// [`PromptInjectionError::UnknownBuiltInRuleId`] so that an operator
+/// cannot silently mistype an ID and assume the rule was suppressed.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BuiltInRuleOverrides {
+    /// Additional rules to merge into a built-in family. See
+    /// [`BuiltInRuleAddition`] for validation and the rule-ID shape.
+    #[serde(default)]
+    pub add: Vec<BuiltInRuleAddition>,
+    /// Built-in rule IDs to disable. Each entry must match an existing
+    /// rule ID in one of the [`RuleFamily`] variants.
+    #[serde(default)]
+    pub disable: Vec<String>,
+}
+
+/// Threshold tuple for one [`Sensitivity`] variant.
+///
+/// A finding is retained when its `threat_level >= min_threat_level` *and*
+/// its `confidence >= min_confidence`. The detector validates that
+/// `min_confidence` lies within `[0.0, 1.0]`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ThresholdTuple {
+    /// Minimum [`ThreatLevel`] required for a finding to be retained.
+    pub min_threat_level: ThreatLevel,
+    /// Minimum confidence required for a finding to be retained.
+    /// Must lie within `[0.0, 1.0]`; otherwise the detector returns
+    /// [`PromptInjectionError::InvalidThresholdOverride`].
+    pub min_confidence: f64,
+}
+
+/// Per-sensitivity threshold overrides.
+///
+/// Each `Some(...)` variant replaces the built-in tuple for that
+/// sensitivity; `None` preserves built-in behavior. Loosening a
+/// threshold weakens detection and is the operator's responsibility.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ThresholdOverrides {
+    /// Override for [`Sensitivity::Strict`].
+    #[serde(default)]
+    pub strict: Option<ThresholdTuple>,
+    /// Override for [`Sensitivity::Balanced`].
+    #[serde(default)]
+    pub balanced: Option<ThresholdTuple>,
+    /// Override for [`Sensitivity::Permissive`].
+    #[serde(default)]
+    pub permissive: Option<ThresholdTuple>,
 }
 
 /// Per-call detection options.
@@ -234,6 +370,24 @@ pub enum PromptInjectionError {
         name: &'static str,
         source: regex::Error,
     },
+    #[error(
+        "rule override pattern for family {family:?} (index {addition_index}) is invalid: {source}"
+    )]
+    InvalidRuleOverridePattern {
+        family: RuleFamily,
+        addition_index: usize,
+        source: regex::Error,
+    },
+    #[error("rule override confidence for family {family:?} (index {addition_index}) is out of range [0.0, 1.0]: {value}")]
+    InvalidRuleOverrideConfidence {
+        family: RuleFamily,
+        addition_index: usize,
+        value: f64,
+    },
+    #[error("threshold override for {variant} has confidence out of range [0.0, 1.0]: {value}")]
+    InvalidThresholdOverride { variant: &'static str, value: f64 },
+    #[error("unknown built-in rule id in disable list: {rule_id:?}")]
+    UnknownBuiltInRuleId { rule_id: String },
     #[error("failed to read prompt-injection config: {0}")]
     ConfigIo(#[from] std::io::Error),
     #[error("failed to parse prompt-injection config: {0}")]
@@ -262,11 +416,15 @@ impl PromptInjectionDetector {
 
     /// Construct a detector from explicit configuration.
     ///
-    /// Returns an error if custom regexes fail to compile or if allow/block
-    /// list entries are too short to avoid accidental one-character matches.
+    /// Returns an error if custom regexes fail to compile, allow/block list
+    /// entries are too short, an override rule has an invalid regex or
+    /// confidence, an override threshold has an invalid confidence, or a
+    /// disable list references an unknown built-in rule ID.
     pub fn with_config(config: DetectionConfig) -> Result<Self, PromptInjectionError> {
         validate_entries(&config.allowlist, EntryKind::Allowlist)?;
         validate_entries(&config.blocklist, EntryKind::Blocklist)?;
+        validate_threshold_overrides(&config.threshold_overrides)?;
+        let disable_set = validate_disable_list(&config.rule_overrides.disable)?;
 
         let custom_patterns = config
             .custom_patterns
@@ -286,12 +444,39 @@ impl PromptInjectionDetector {
             .collect::<Result<Vec<_>, _>>()?;
         let blocklist_entries = compile_list_entries(&config.blocklist, "blocklist");
 
+        let additions = &config.rule_overrides.add;
+
         Ok(Self {
-            direct_patterns: compile_rules("direct", DIRECT_RULES)?,
-            delimiter_patterns: compile_rules("delimiter", DELIMITER_RULES)?,
-            role_play_patterns: compile_rules("role_play", ROLE_PLAY_RULES)?,
-            context_patterns: compile_rules("context", CONTEXT_RULES)?,
-            multi_turn_patterns: compile_rules("multi_turn", MULTI_TURN_RULES)?,
+            direct_patterns: compile_rule_family(
+                RuleFamily::Direct,
+                DIRECT_RULES,
+                &disable_set,
+                additions,
+            )?,
+            delimiter_patterns: compile_rule_family(
+                RuleFamily::Delimiter,
+                DELIMITER_RULES,
+                &disable_set,
+                additions,
+            )?,
+            role_play_patterns: compile_rule_family(
+                RuleFamily::RolePlay,
+                ROLE_PLAY_RULES,
+                &disable_set,
+                additions,
+            )?,
+            context_patterns: compile_rule_family(
+                RuleFamily::Context,
+                CONTEXT_RULES,
+                &disable_set,
+                additions,
+            )?,
+            multi_turn_patterns: compile_rule_family(
+                RuleFamily::MultiTurn,
+                MULTI_TURN_RULES,
+                &disable_set,
+                additions,
+            )?,
             audit_log: VecDeque::with_capacity(config.audit_capacity.min(1024)),
             custom_patterns,
             blocklist_entries,
@@ -560,17 +745,22 @@ impl PromptInjectionDetector {
     }
 
     fn passes_sensitivity(&self, finding: &Finding) -> bool {
-        match self.config.sensitivity {
-            Sensitivity::Strict => {
-                finding.threat_level >= ThreatLevel::Low && finding.confidence >= 0.4
-            }
-            Sensitivity::Balanced => {
-                finding.threat_level >= ThreatLevel::Medium && finding.confidence >= 0.5
-            }
-            Sensitivity::Permissive => {
-                finding.threat_level >= ThreatLevel::High && finding.confidence >= 0.75
-            }
-        }
+        let threshold = self.effective_threshold();
+        finding.threat_level >= threshold.min_threat_level
+            && finding.confidence >= threshold.min_confidence
+    }
+
+    /// Resolve the active `(min_threat_level, min_confidence)` tuple for the
+    /// detector's current `Sensitivity`, applying any matching
+    /// [`ThresholdOverrides`] entry.
+    fn effective_threshold(&self) -> ThresholdTuple {
+        let default_tuple = default_threshold_for(self.config.sensitivity);
+        let override_tuple = match self.config.sensitivity {
+            Sensitivity::Strict => self.config.threshold_overrides.strict,
+            Sensitivity::Balanced => self.config.threshold_overrides.balanced,
+            Sensitivity::Permissive => self.config.threshold_overrides.permissive,
+        };
+        override_tuple.unwrap_or(default_tuple)
     }
 
     fn filter_allowlisted(
@@ -742,23 +932,133 @@ fn compile_list_entries(entries: &[String], prefix: &str) -> Vec<CompiledListEnt
         .collect()
 }
 
-fn compile_rules(
-    prefix: &'static str,
-    rules: &[(&'static str, ThreatLevel, f64, &'static str)],
+fn compile_rule_family(
+    family: RuleFamily,
+    built_in: &[(&'static str, ThreatLevel, f64, &'static str)],
+    disable: &HashSet<String>,
+    additions: &[BuiltInRuleAddition],
 ) -> Result<Vec<CompiledRule>, PromptInjectionError> {
+    let prefix = family.prefix();
+    let mut compiled = Vec::with_capacity(built_in.len() + additions.len());
+
+    for (pattern, threat_level, confidence, name) in built_in {
+        let rule_id = format!("{prefix}:{name}");
+        if disable.contains(&rule_id) {
+            continue;
+        }
+        let regex = Regex::new(pattern)
+            .map_err(|source| PromptInjectionError::InvalidBuiltInPattern { name, source })?;
+        compiled.push(CompiledRule {
+            regex,
+            rule_id,
+            threat_level: *threat_level,
+            confidence: *confidence,
+        });
+    }
+
+    for (idx, addition) in additions
+        .iter()
+        .enumerate()
+        .filter(|(_, addition)| addition.family == family)
+    {
+        if !is_valid_confidence(addition.confidence) {
+            return Err(PromptInjectionError::InvalidRuleOverrideConfidence {
+                family,
+                addition_index: idx,
+                value: addition.confidence,
+            });
+        }
+        let regex = Regex::new(&addition.pattern).map_err(|source| {
+            PromptInjectionError::InvalidRuleOverridePattern {
+                family,
+                addition_index: idx,
+                source,
+            }
+        })?;
+        compiled.push(CompiledRule {
+            regex,
+            rule_id: format!(
+                "{prefix}:custom:sha256:{}",
+                sha256_prefix(&addition.pattern)
+            ),
+            threat_level: addition.threat_level,
+            confidence: addition.confidence,
+        });
+    }
+
+    Ok(compiled)
+}
+
+fn validate_disable_list(disable: &[String]) -> Result<HashSet<String>, PromptInjectionError> {
+    let mut disable_set = HashSet::with_capacity(disable.len());
+    for rule_id in disable {
+        if !is_known_built_in_rule_id(rule_id) {
+            return Err(PromptInjectionError::UnknownBuiltInRuleId {
+                rule_id: rule_id.clone(),
+            });
+        }
+        disable_set.insert(rule_id.clone());
+    }
+    Ok(disable_set)
+}
+
+fn validate_threshold_overrides(
+    overrides: &ThresholdOverrides,
+) -> Result<(), PromptInjectionError> {
+    for (variant, tuple) in [
+        ("strict", overrides.strict),
+        ("balanced", overrides.balanced),
+        ("permissive", overrides.permissive),
+    ] {
+        if let Some(tuple) = tuple {
+            if !is_valid_confidence(tuple.min_confidence) {
+                return Err(PromptInjectionError::InvalidThresholdOverride {
+                    variant,
+                    value: tuple.min_confidence,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_valid_confidence(value: f64) -> bool {
+    value.is_finite() && (0.0..=1.0).contains(&value)
+}
+
+fn is_known_built_in_rule_id(rule_id: &str) -> bool {
+    family_contains_rule_id("direct", DIRECT_RULES, rule_id)
+        || family_contains_rule_id("delimiter", DELIMITER_RULES, rule_id)
+        || family_contains_rule_id("role_play", ROLE_PLAY_RULES, rule_id)
+        || family_contains_rule_id("context", CONTEXT_RULES, rule_id)
+        || family_contains_rule_id("multi_turn", MULTI_TURN_RULES, rule_id)
+}
+
+fn family_contains_rule_id(
+    prefix: &str,
+    rules: &[(&'static str, ThreatLevel, f64, &'static str)],
+    rule_id: &str,
+) -> bool {
     rules
         .iter()
-        .map(|(pattern, threat_level, confidence, name)| {
-            Regex::new(pattern)
-                .map(|regex| CompiledRule {
-                    regex,
-                    rule_id: format!("{prefix}:{name}"),
-                    threat_level: *threat_level,
-                    confidence: *confidence,
-                })
-                .map_err(|source| PromptInjectionError::InvalidBuiltInPattern { name, source })
-        })
-        .collect()
+        .any(|(_, _, _, name)| rule_id == format!("{prefix}:{name}"))
+}
+
+fn default_threshold_for(sensitivity: Sensitivity) -> ThresholdTuple {
+    match sensitivity {
+        Sensitivity::Strict => ThresholdTuple {
+            min_threat_level: ThreatLevel::Low,
+            min_confidence: 0.4,
+        },
+        Sensitivity::Balanced => ThresholdTuple {
+            min_threat_level: ThreatLevel::Medium,
+            min_confidence: 0.5,
+        },
+        Sensitivity::Permissive => ThresholdTuple {
+            min_threat_level: ThreatLevel::High,
+            min_confidence: 0.75,
+        },
+    }
 }
 
 fn entry_requires_intent_context(normalized_entry: &str) -> bool {

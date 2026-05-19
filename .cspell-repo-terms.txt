@@ -14,6 +14,7 @@ CuriousHet
 DOTALL
 DataQualityEvidence
 Deserialise
+Deque
 Diffable
 Dify
 Dockerfiles
@@ -263,6 +264,7 @@ unconfigured
 unrevocation
 unrevoke
 unsets
+usize
 urllib
 urlopen
 urlparse

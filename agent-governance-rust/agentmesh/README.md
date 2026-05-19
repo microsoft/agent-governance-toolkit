@@ -206,6 +206,89 @@ assert!(result
 # Ok::<(), agentmesh::PromptInjectionError>(())
 ```
 
+### Configuring built-in corpora and thresholds
+
+Two optional `DetectionConfig` fields let operators tune the detector without
+recompiling, while preserving secure defaults: `rule_overrides` and
+`threshold_overrides`. Both default to empty, so existing YAML configs and
+`DetectionConfig::default()` continue to behave exactly as before.
+
+```rust
+use agentmesh::prompt_injection::{
+    BuiltInRuleAddition, BuiltInRuleOverrides, DetectionConfig, PromptInjectionDetector,
+    RuleFamily, Sensitivity, ThreatLevel, ThresholdOverrides, ThresholdTuple,
+};
+
+let config = DetectionConfig {
+    sensitivity: Sensitivity::Balanced,
+    rule_overrides: BuiltInRuleOverrides {
+        add: vec![BuiltInRuleAddition {
+            family: RuleFamily::Direct,
+            name: "company-rule".into(),
+            pattern: r"(?i)leak\s+the\s+org\s+chart".into(),
+            threat_level: ThreatLevel::High,
+            confidence: 0.85,
+        }],
+        disable: vec!["direct:do_not_follow".into()],
+    },
+    threshold_overrides: ThresholdOverrides {
+        balanced: Some(ThresholdTuple {
+            min_threat_level: ThreatLevel::High,
+            min_confidence: 0.85,
+        }),
+        ..Default::default()
+    },
+    ..Default::default()
+};
+let mut detector = PromptInjectionDetector::with_config(config)?;
+# Ok::<(), agentmesh::PromptInjectionError>(())
+```
+
+The same overrides express equivalently in YAML and round-trip through
+`PromptInjectionDetector::from_yaml_str` / `from_yaml_file`:
+
+```yaml
+detection:
+  sensitivity: balanced
+  rule_overrides:
+    add:
+      - family: direct
+        name: company-rule
+        pattern: '(?i)leak\s+the\s+org\s+chart'
+        threat_level: high
+        confidence: 0.85
+    disable:
+      - direct:do_not_follow
+  threshold_overrides:
+    balanced:
+      min_threat_level: high
+      min_confidence: 0.85
+```
+
+**Safety guarantees and validation.** The detector fails closed on malformed
+input rather than silently dropping the override:
+
+- An override `pattern` that does not compile returns
+  `PromptInjectionError::InvalidRuleOverridePattern`.
+- An override `confidence` outside `[0.0, 1.0]` (or non-finite) returns
+  `PromptInjectionError::InvalidRuleOverrideConfidence`.
+- A `threshold_overrides` `min_confidence` outside `[0.0, 1.0]` returns
+  `PromptInjectionError::InvalidThresholdOverride`.
+- A `disable` entry that does not match a known built-in rule ID returns
+  `PromptInjectionError::UnknownBuiltInRuleId`, so a typo never silently
+  weakens detection.
+
+Public findings remain hash-only for user-supplied content: an addition emits a
+rule ID shaped like `<family>:custom:sha256:<12-hex-chars>`. The raw `pattern`
+body and the optional `name` label never appear in `DetectionResult`,
+`AuditRecord`, or any serialized form.
+
+**Operational warning.** Loosening a threshold (`Strict` → lower
+`min_confidence`, `Balanced` → lower `min_threat_level`, or `Permissive` →
+either) weakens detection and is the operator's responsibility. The same
+applies to disabling a built-in rule. Document any override in your repo's
+threat model alongside the reason it was applied.
+
 The detector audit log is bounded and intentionally hash-only. Use the hashes,
 lengths, sanitized source labels, rule IDs, and threat levels for correlation
 without storing raw prompts, canary values, blocklist entries, or unsafe source
