@@ -241,6 +241,20 @@ def test_baseline_key_uses_posix_separator(tmp_path):
     assert key.split("\t")[0] == "docs/nested/a.md"
 
 
+def test_inline_link_regex_no_catastrophic_backtracking():
+    # Regression for CodeQL py/redos finding. A pathological string of
+    # '[' followed by many backslashes used to cause exponential
+    # backtracking because both '[^\\[\\]]' and '\\.' could consume a
+    # backslash. With the disambiguated class the scan completes in
+    # linear time.
+    import time
+    pathological = "[" + "\\" * 2000
+    start = time.perf_counter()
+    list(check_links._INLINE_LINK_RE.finditer(pathological))
+    elapsed = time.perf_counter() - start
+    assert elapsed < 1.0, f"regex took {elapsed:.2f}s on pathological input"
+
+
 def test_target_escaping_repo_root_is_rejected(tmp_path):
     # A link that resolves outside the repo root must always fail,
     # even if the target file happens to exist on the host.

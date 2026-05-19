@@ -38,8 +38,12 @@ from urllib.parse import unquote, urlparse
 
 # Inline link:  [text](target "optional title")
 # Skips images by ensuring no preceding '!'. The optional title is dropped.
+# The character class in the text group deliberately excludes '\' so the
+# only branch that can consume a backslash is the explicit '\\.' escape.
+# This removes the alternation ambiguity that triggers CodeQL py/redos
+# (exponential backtracking on pathological input).
 _INLINE_LINK_RE = re.compile(
-    r"(?<!\!)\[(?P<text>(?:[^\[\]]|\\.)*?)\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)"
+    r"(?<!\!)\[(?P<text>(?:[^\[\]\\]|\\.)*?)\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)"
 )
 
 # Reference-style link definition:  [label]: target "optional title"
