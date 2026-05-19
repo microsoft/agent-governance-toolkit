@@ -30,8 +30,8 @@ under supply-chain SFT delivery, and demonstrate the attack generalises to
 alternative topologies (branch-and-merge) and alternative persistent components
 (note-tool in place of memory).
 
-*This cross-session variant was identified in external analysis by
-[Dai et al.](https://arxiv.org/abs/2605.06158) (preprint, May 2026).*
+> *This cross-session variant was identified in external analysis by
+> [Dai et al.](https://arxiv.org/abs/2605.06158) (preprint, May 2026).*
 
 **Mitigations available today:**
 - Use **content policies** with blocked patterns (regex) to catch PII in outputs
