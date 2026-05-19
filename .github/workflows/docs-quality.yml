@@ -1,0 +1,65 @@
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+name: Docs Quality
+
+# Runs lightweight link-validation and frontmatter checks on PRs that
+# touch markdown files. This is the safety net required before the
+# docs/ information-architecture consolidation work (tracked in
+# https://github.com/microsoft/agent-governance-toolkit/issues/2400).
+#
+# Link checking is strict for new findings: any broken relative link,
+# missing target, or unresolved anchor that is not already on the
+# pre-existing baseline (scripts/docs/.linkcheck-baseline.txt) fails
+# the job. The baseline is the existing-debt allowlist; subsequent
+# consolidation PRs will whittle it down and eventually delete it.
+#
+# Frontmatter checking runs in warn-only mode here. It is flipped to
+# strict in the capstone IA PR once existing pages have been updated.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - 'mkdocs.yml'
+      - 'scripts/docs/**'
+      - 'scripts/tests/test_docs_check_*.py'
+      - '.github/workflows/docs-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: Validate relative links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Run link checker
+        run: python scripts/docs/check_links.py --root .
+
+  frontmatter:
+    name: Validate docs frontmatter (warn)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Run frontmatter checker (warn-only)
+        run: python scripts/docs/check_frontmatter.py --root .
+
+  unit-tests:
+    name: Unit tests for docs tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install pytest
+        run: pip install pytest==8.3.3
+      - name: Run docs tooling tests
+        run: pytest scripts/tests/test_docs_check_links.py scripts/tests/test_docs_check_frontmatter.py -q

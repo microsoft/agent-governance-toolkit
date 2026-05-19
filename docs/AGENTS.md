@@ -48,3 +48,48 @@ package pages, and integration guides.
 
 - Check that links, file paths, and fenced code blocks are valid.
 - Keep headings and page titles stable unless a rename is intentional.
+
+## Docs Quality Tooling
+
+The `Docs Quality` workflow (`.github/workflows/docs-quality.yml`) runs on every
+PR that touches markdown. It enforces two checks:
+
+| Check | Script | Mode |
+|-------|--------|------|
+| Relative link validation | [scripts/docs/check_links.py](../scripts/docs/check_links.py) | **strict** — broken links fail CI |
+| Frontmatter validation | [scripts/docs/check_frontmatter.py](../scripts/docs/check_frontmatter.py) | **warn-only** for now; flipped to strict in the IA capstone PR |
+
+Run them locally before opening a PR:
+
+```bash
+python scripts/docs/check_links.py
+python scripts/docs/check_frontmatter.py
+```
+
+The link checker uses a baseline allowlist at
+[scripts/docs/.linkcheck-baseline.txt](../scripts/docs/.linkcheck-baseline.txt)
+recording broken links that pre-date this gate. New findings outside the
+baseline fail CI. As docs IA work fixes existing entries, remove the
+matching lines from the baseline — never add new entries by hand. To
+regenerate after a sanctioned bulk fix:
+
+```bash
+python scripts/docs/check_links.py --update-baseline
+```
+
+### Required frontmatter (target state)
+
+New and edited docs pages should include:
+
+```yaml
+---
+title: Page Title
+last_reviewed: 2026-05-19   # ISO date, YYYY-MM-DD
+owner: docs-team            # team or maintainer handle
+---
+```
+
+`last_reviewed` is a freshness signal — bump it whenever you meaningfully revise
+a page. The link checker resolves relative links, directory links (must contain
+`index.md`), URL-encoded paths, and heading anchors (GitHub-style slug). External
+URLs (`http`, `https`, `mailto`) are not network-validated.
