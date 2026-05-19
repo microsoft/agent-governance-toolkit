@@ -91,9 +91,9 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 
 <div class="agt-stats">
   <div class="agt-stat"><span class="agt-stat-value">13,000+</span><span class="agt-stat-label">Tests</span></div>
-  <div class="agt-stat"><span class="agt-stat-value">8</span><span class="agt-stat-label">Core packages</span></div>
+  <div class="agt-stat"><span class="agt-stat-value">10</span><span class="agt-stat-label">Formal Specs</span></div>
   <div class="agt-stat"><span class="agt-stat-value">5</span><span class="agt-stat-label">Languages</span></div>
-  <div class="agt-stat"><span class="agt-stat-value">19</span><span class="agt-stat-label">Integrations</span></div>
+  <div class="agt-stat"><span class="agt-stat-value">20+</span><span class="agt-stat-label">Integrations</span></div>
 </div>
 
 </div>
@@ -121,7 +121,7 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 </a>
 <a class="agt-card" href="packages/agent-compliance.md">
 <span class="agt-card-title">✅ Agent Compliance</span>
-<span class="agt-card-desc">Audit logging, compliance frameworks</span>
+<span class="agt-card-desc">OWASP verification, policy linting, integrity checks</span>
 </a>
 <a class="agt-card" href="packages/agent-marketplace.md">
 <span class="agt-card-title">🏪 Agent Marketplace</span>
@@ -129,11 +129,11 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 </a>
 <a class="agt-card" href="packages/agent-lightning.md">
 <span class="agt-card-title">⚡ Agent Lightning</span>
-<span class="agt-card-desc">High-performance agent orchestration</span>
+<span class="agt-card-desc">RL training governance with violation penalties</span>
 </a>
 <a class="agt-card" href="packages/agent-hypervisor.md">
 <span class="agt-card-title">🔒 Agent Hypervisor</span>
-<span class="agt-card-desc">Hardware-level workload isolation</span>
+<span class="agt-card-desc">Execution audit, delta engine, commitment anchoring</span>
 </a>
 </div>
 </div>
@@ -147,8 +147,8 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 | 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit` |
 | 📘 TypeScript | `npm install @microsoft/agent-governance-sdk` |
 | 🔷 [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
-| 🦀 Rust | `cargo add agentmesh` |
-| 🐹 Go | `go get github.com/microsoft/agent-governance-toolkit` |
+| 🦀 Rust | `cargo add agent-governance` |
+| 🐹 Go | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 </div>
 
@@ -176,13 +176,36 @@ Works with any agent framework: LangChain, CrewAI, AutoGen, Google ADK, OpenAI A
 
 <div class="agt-section" markdown>
 
+## Specifications
+
+Every major component has a formal RFC 2119 specification with conformance tests.
+
+| Specification | Tests |
+|---|---|
+| [Agent OS Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) | 68 |
+| [AgentMesh Identity and Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | 135 |
+| [Agent Hypervisor Execution Control](specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | 80 |
+| [AgentMesh Trust and Coordination](specs/AGENTMESH-TRUST-COORDINATION-1.0.md) | 62 |
+| [Agent SRE Governance](specs/AGENT-SRE-GOVERNANCE-1.0.md) | 111 |
+| [MCP Security Gateway](specs/MCP-SECURITY-GATEWAY-1.0.md) | 127 |
+| [Agent Lightning Fast-Path](specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) | 100 |
+| [Framework Adapter Contract](specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) | 152 |
+| [Audit and Compliance](specs/AUDIT-COMPLIANCE-1.0.md) | 157 |
+| [AgentMesh Wire Protocol](specs/AGENTMESH-WIRE-1.0.md) | -- |
+
+[25 Architecture Decision Records](adr/) document the reasoning behind key design choices.
+
+</div>
+
+<div class="agt-section" markdown>
+
 ## Standards Compliance
 
 | Standard | Coverage |
 |----------|----------|
 | [OWASP Agentic AI Top 10](security/owasp-compliance.md) | All 10 risks covered with deterministic controls |
 | [NIST AI RMF 1.0](reference/nist-rfi-mapping.md) | Full GOVERN, MAP, MEASURE, MANAGE alignment |
-| [Ed25519 (RFC 8032)](adr/0001-use-ed25519-for-agent-identity.md) | Agent identity signatures |
-| [RFC 9334 (RATS)](adr/0009-rfc-9334-rats-architecture-alignment.md) | Remote attestation alignment |
+| [EU AI Act](compliance/) | Compliance mapping with automated evidence |
+| [SOC 2](compliance/soc2-mapping.md) | Control mapping with audit trail export |
 
 </div>
