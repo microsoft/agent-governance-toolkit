@@ -9,9 +9,9 @@ Validates that each starter pack:
 4. Enforces deny-all default behavior
 
 Starter packs under test:
-- templates/policies/starters/healthcare.yaml
-- templates/policies/starters/financial-services.yaml
-- templates/policies/starters/general-saas.yaml
+- examples/policy-templates/healthcare.yaml
+- examples/policy-templates/financial-services.yaml
+- examples/policy-templates/general-saas.yaml
 
 Prior art: Pattern adapted from agent-governance-python/agent-os/tests/test_policy_cli.py
 """
@@ -45,7 +45,7 @@ def _repo_root() -> Path:
         return Path(__file__).resolve().parents[3]
 
 
-STARTERS_DIR = _repo_root() / "templates" / "policies" / "starters"
+STARTERS_DIR = _repo_root() / "examples" / "policy-templates"
 
 HEALTHCARE_YAML = STARTERS_DIR / "healthcare.yaml"
 FINANCIAL_YAML = STARTERS_DIR / "financial-services.yaml"
