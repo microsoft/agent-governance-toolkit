@@ -157,7 +157,11 @@ jobs:
       - name: Install build tools
         run: |
           # Require hash verification via requirements file (CWE-295)
-          printf 'build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4\n' > /tmp/build-req.txt
+          printf '%s\n' \
+            'build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4' \
+            'packaging==26.2 --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e' \
+            'pyproject_hooks==1.2.0 --hash=sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913' \
+            > /tmp/build-req.txt
           pip install --no-cache-dir --require-hashes -r /tmp/build-req.txt
 
       - name: Build ${{ matrix.name }}
@@ -298,6 +302,10 @@ jobs:
   publish-nuget:
     if: ${{ github.event_name == 'release' || github.event.inputs.package == 'agent-governance-dotnet' || github.event.inputs.package == 'all' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     environment: nuget
     env:
       ESRP_CONFIGURED: ${{ secrets.ESRP_AAD_ID != '' }}
