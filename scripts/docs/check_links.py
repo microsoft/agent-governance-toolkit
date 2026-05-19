@@ -287,6 +287,17 @@ def validate_link(
     else:
         candidate = (link.source.parent / path_part).resolve()
 
+    # Reject targets that escape the repository root. Without this a
+    # link like ``../../../etc/hosts`` could pass CI on any runner
+    # where the target file happens to exist.
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return Finding(
+            link.source, link.line, target,
+            "target resolves outside the repository root",
+        )
+
     # Directory targets: GitHub renders them as a folder view, so we
     # accept them as long as the directory exists. MkDocs-style pages
     # that require an index.md can opt in via ``require_directory_index``.

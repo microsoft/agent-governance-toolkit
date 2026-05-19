@@ -36,7 +36,7 @@ from typing import Iterable
 DEFAULT_REQUIRED = ("title", "last_reviewed", "owner")
 
 _FRONTMATTER_RE = re.compile(
-    r"\A---\s*\n(?P<body>.*?)\n---\s*(?:\n|\Z)",
+    r"\A\ufeff?---\s*\n(?P<body>.*?)\n---\s*(?:\n|\Z)",
     re.DOTALL,
 )
 

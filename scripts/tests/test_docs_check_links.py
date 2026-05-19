@@ -239,3 +239,18 @@ def test_baseline_key_uses_posix_separator(tmp_path):
     report = check_links.check(tmp_path)
     key = check_links._baseline_key(report.findings[0], tmp_path.resolve())
     assert key.split("\t")[0] == "docs/nested/a.md"
+
+
+def test_target_escaping_repo_root_is_rejected(tmp_path):
+    # A link that resolves outside the repo root must always fail,
+    # even if the target file happens to exist on the host.
+    outside = tmp_path.parent / "outside.md"
+    outside.write_text("# outside", encoding="utf-8")
+    try:
+        docs = tmp_path / "docs"
+        _write(docs / "a.md", "[escape](../../outside.md)")
+        report = check_links.check(tmp_path)
+        assert not report.ok
+        assert "outside the repository root" in report.findings[0].reason
+    finally:
+        outside.unlink(missing_ok=True)

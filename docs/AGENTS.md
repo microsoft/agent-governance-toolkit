@@ -90,6 +90,9 @@ owner: docs-team            # team or maintainer handle
 ```
 
 `last_reviewed` is a freshness signal — bump it whenever you meaningfully revise
-a page. The link checker resolves relative links, directory links (must contain
-`index.md`), URL-encoded paths, and heading anchors (GitHub-style slug). External
-URLs (`http`, `https`, `mailto`) are not network-validated.
+a page. The link checker resolves relative links, URL-encoded paths, and
+heading anchors (GitHub-style slug). Directory targets are accepted if the
+directory exists (matching GitHub's folder rendering); pass
+`--require-directory-index` for strict MkDocs-style validation. Targets that
+resolve outside the repository root are rejected. External URLs (`http`,
+`https`, `mailto`) are not network-validated.

@@ -135,3 +135,16 @@ def test_parse_frontmatter_ignores_comments_and_blanks():
         "---\n# a comment\n\ntitle: x\n---\n"
     )
     assert parsed == {"title": "x"}
+
+
+def test_parse_frontmatter_tolerates_utf8_bom():
+    parsed = check_frontmatter.parse_frontmatter(
+        "\ufeff---\ntitle: x\n---\n"
+    )
+    assert parsed == {"title": "x"}
+
+
+def test_check_file_with_bom_finds_frontmatter(tmp_path):
+    _write(tmp_path / "docs" / "a.md", "\ufeff" + VALID)
+    report = check_frontmatter.check(tmp_path, strict=True)
+    assert report.findings == []
