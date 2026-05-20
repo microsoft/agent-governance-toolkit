@@ -34,7 +34,19 @@ fn unix_secs_now() -> u64 {
 
 /// Replaces a file through a synced temp-file write and rename so readers do not observe partial JSON.
 fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    write_file_atomic_with_parent_sync(path, contents, sync_parent_directory)
+}
+
+fn write_file_atomic_with_parent_sync<F>(
+    path: &Path,
+    contents: &[u8],
+    sync_parent: F,
+) -> std::io::Result<()>
+where
+    F: FnOnce(&Path) -> std::io::Result<()>,
+{
     let temp_path = atomic_temp_path(path)?;
+    let parent = atomic_parent_path(path);
     let write_result = (|| {
         let mut temp = fs::OpenOptions::new()
             .write(true)
@@ -54,6 +66,25 @@ fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
         return Err(error);
     }
 
+    sync_parent(parent)
+}
+
+fn atomic_parent_path(path: &Path) -> &Path {
+    path.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+}
+
+#[cfg(unix)]
+fn sync_parent_directory(parent: &Path) -> std::io::Result<()> {
+    fs::File::open(parent)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_parent_directory(_parent: &Path) -> std::io::Result<()> {
+    // The Rust standard library does not expose a portable way to open and
+    // fsync a directory on non-Unix targets. Keep those platforms conservative
+    // and portable while Unix gets the stronger directory-entry durability.
     Ok(())
 }
 
@@ -64,10 +95,7 @@ fn atomic_temp_path(path: &Path) -> std::io::Result<PathBuf> {
             "atomic write target must include a file name",
         )
     })?;
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
+    let parent = atomic_parent_path(path);
     let counter = ATOMIC_WRITE_COUNTER.fetch_add(1, Ordering::Relaxed);
     let process_id = std::process::id();
     let temp_name = format!(
@@ -2223,6 +2251,51 @@ mod tests {
         assert!(
             leaked_temp_files.is_empty(),
             "atomic write leaked temp files after rename failure: {leaked_temp_files:?}"
+        );
+    }
+
+    #[test]
+    fn write_file_atomic_calls_parent_directory_sync_after_rename() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("audit.json");
+        let synced_parents = std::cell::RefCell::new(Vec::new());
+        let target_for_sync = target.clone();
+
+        write_file_atomic_with_parent_sync(&target, br#"{"ok":true}"#, |parent| {
+            assert_eq!(fs::read(&target_for_sync).unwrap(), br#"{"ok":true}"#);
+            synced_parents.borrow_mut().push(parent.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(synced_parents.into_inner(), vec![root.path().to_path_buf()]);
+    }
+
+    #[test]
+    fn write_file_atomic_surfaces_parent_directory_sync_error() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("audit.json");
+
+        let result = write_file_atomic_with_parent_sync(&target, b"durable", |_parent| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "directory sync failed",
+            ))
+        });
+
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::Other);
+        assert_eq!(error.to_string(), "directory sync failed");
+        assert_eq!(fs::read(&target).unwrap(), b"durable");
+
+        let leaked_temp_files = fs::read_dir(root.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with(".audit.json.") && name.ends_with(".tmp"))
+            .collect::<Vec<_>>();
+        assert!(
+            leaked_temp_files.is_empty(),
+            "atomic write leaked temp files after parent sync failure: {leaked_temp_files:?}"
         );
     }
 
