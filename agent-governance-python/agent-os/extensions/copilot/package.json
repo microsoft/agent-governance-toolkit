@@ -48,12 +48,12 @@
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
-    "@types/node": "25.8.0",
+    "@types/node": "25.9.1",
     "@typescript-eslint/eslint-plugin": "8.59.3",
-    "@typescript-eslint/parser": "8.59.3",
+    "@typescript-eslint/parser": "8.59.4",
     "eslint": "10.4.0",
     "jest": "30.4.2",
-    "ts-jest": "29.4.9",
+    "ts-jest": "29.4.10",
     "ts-node": "10.9.2",
     "typescript": "6.0.3"
   },

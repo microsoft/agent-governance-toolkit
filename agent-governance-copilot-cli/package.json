@@ -33,7 +33,7 @@
     "directory": "agent-governance-copilot-cli"
   },
   "dependencies": {
-    "@microsoft/agent-governance-sdk": "3.6.0"
+    "@microsoft/agent-governance-sdk": "3.7.0"
   },
   "engines": {
     "node": ">=22.0.0"
