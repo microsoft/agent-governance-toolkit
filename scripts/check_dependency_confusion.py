@@ -93,6 +93,12 @@ REGISTERED_PACKAGES = {
     "aio-pika", "aiokafka",
     # Cedar/OPA policy backends
     "cedarpy", "llama-index-core", "ddtrace",
+    # Cedarling Python bindings (Jans/Gluu project, on PyPI)
+    "cedarling_python", "cedarling-python",
+    # SpendGuard SDK (on PyPI as alpha)
+    "spendguard-sdk", "spendguard_sdk",
+    # Cedarling agentmesh integration package
+    "cedarling_agentmesh", "cedarling-agentmesh",
     # Internal module references
     "inter-agent-trust-protocol", "agent-control-plane", "cmvk",
     "agentmesh-trust-protocol", "agentmesh_trust_protocol",
