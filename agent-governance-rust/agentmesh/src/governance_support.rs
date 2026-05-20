@@ -54,6 +54,20 @@ fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
         return Err(error);
     }
 
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fsync_parent_dir(parent)
+}
+
+#[cfg(unix)]
+fn fsync_parent_dir(dir: &Path) -> std::io::Result<()> {
+    fs::File::open(dir)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn fsync_parent_dir(_dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
@@ -2224,6 +2238,14 @@ mod tests {
             leaked_temp_files.is_empty(),
             "atomic write leaked temp files after rename failure: {leaked_temp_files:?}"
         );
+    }
+
+    #[test]
+    fn write_file_atomic_syncs_parent_dir() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("audit.json");
+        write_file_atomic(&target, b"[]").unwrap();
+        assert!(target.exists());
     }
 
     /// Regression: prior to fallibilizing the trait, FileFederationStore
