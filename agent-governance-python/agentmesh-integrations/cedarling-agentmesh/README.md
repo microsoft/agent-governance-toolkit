@@ -13,7 +13,7 @@ to AGT's `ExternalPolicyBackend` contract without modifying AGT core.
 pip install cedarling_agentmesh
 
 # Cedarling Python bindings (optional — fastest evaluation)
-pip install cedarling_python
+pip install cedarling-python
 
 # Or point the backend at an existing Cedarling HTTP service — no extra package.
 ```
@@ -80,7 +80,7 @@ evaluator.add_backend(
 | Mode | Behaviour |
 |------|-----------|
 | `"auto"` (default) | Python bindings → HTTP (if `cedarling_url` set) → safe denial |
-| `"python"` | Requires `cedarling_python` |
+| `"python"` | Requires `cedarling-python` |
 | `"http"` | Requires `cedarling_url`; no Python extras needed |
 
 ## Context Mapping

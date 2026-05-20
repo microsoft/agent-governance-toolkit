@@ -15,7 +15,7 @@ python example.py
 Optional — enable in-process Cedarling evaluation:
 
 ```bash
-pip install cedarling_python
+pip install cedarling-python
 python example.py
 ```
 
