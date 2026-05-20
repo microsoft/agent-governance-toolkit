@@ -102,17 +102,23 @@ pub struct DetectionConfig {
     /// Maximum number of hash-only audit records retained in memory.
     #[serde(default = "default_audit_capacity")]
     pub audit_capacity: usize,
-    /// Optional overrides for the built-in rule corpora. Lets operators add
-    /// rules to a built-in family or disable a built-in rule by stable ID.
-    /// Defaults to empty. See [`BuiltInRuleOverrides`] for the safety
-    /// guarantees and validation rules.
+    /// Optional overrides for the built-in rule corpora.
+    ///
+    /// Operators can add regex rules to a built-in family or disable a
+    /// built-in rule by stable ID. Defaults to empty. See
+    /// [`BuiltInRuleOverrides`] for validation rules and public rule-ID
+    /// shaping. Large override sets increase regex compilation cost at
+    /// detector construction and matching cost during every scan, so keep
+    /// local corpora focused.
     #[serde(default)]
     pub rule_overrides: BuiltInRuleOverrides,
-    /// Optional per-sensitivity threshold overrides. When a variant is
-    /// `Some(...)`, the override replaces the built-in `(min_threat_level,
-    /// min_confidence)` tuple for that sensitivity. Defaults to all `None`,
-    /// which preserves built-in behavior. Loosening these thresholds weakens
-    /// detection and is the operator's responsibility.
+    /// Optional per-sensitivity threshold overrides.
+    ///
+    /// When a variant is `Some(...)`, the override replaces the built-in
+    /// `(min_threat_level, min_confidence)` tuple for that sensitivity.
+    /// Defaults to all `None`, which preserves built-in behavior. Loosening
+    /// these thresholds weakens detection and is the operator's
+    /// responsibility.
     #[serde(default)]
     pub threshold_overrides: ThresholdOverrides,
 }

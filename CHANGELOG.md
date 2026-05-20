@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Rust prompt guard tuning** - added `DetectionConfig::rule_overrides` and `DetectionConfig::threshold_overrides` so operators can opt into local built-in rule additions, stable-ID disables, and per-sensitivity threshold gates while preserving existing defaults.
+
 ### Changed
 - **Rust prompt guard** - added custom configuration and audit interpretation examples, tuned escaped-sequence detection to reduce benign `\x` / `\u` false positives, and switched file-backed audit/federation persistence to compact atomic writes.
 
