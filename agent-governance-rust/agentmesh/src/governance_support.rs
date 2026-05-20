@@ -63,7 +63,8 @@ fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
 
 #[cfg(unix)]
 fn fsync_parent_dir(dir: &Path) -> std::io::Result<()> {
-    fs::File::open(dir)?.sync_all()
+    let file = fs::File::open(dir)?;
+    file.sync_all()
 }
 
 #[cfg(not(unix))]
