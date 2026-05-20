@@ -1,0 +1,11 @@
+# Gradle build cache and IntelliJ IDEA generated files
+.gradle/
+build/
+local.properties
+
+# IntelliJ IDEA project files
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
