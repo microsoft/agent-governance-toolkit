@@ -476,10 +476,33 @@ async function vendorSdkDependencyTree({ destinationExtensionPath, packageRoot }
   try {
     sdkPackageManifestPath = packageRequire.resolve("@microsoft/agent-governance-sdk/package.json");
   } catch {
-    const cliRequire = createRequire(import.meta.url);
-    sdkPackageManifestPath = cliRequire.resolve("@microsoft/agent-governance-sdk/package.json", {
-      paths: [packageRoot],
-    });
+    try {
+      const cliRequire = createRequire(import.meta.url);
+      sdkPackageManifestPath = cliRequire.resolve(
+        "@microsoft/agent-governance-sdk/package.json",
+        { paths: [packageRoot] },
+      );
+    } catch {
+      // Fallback for SDKs whose package.json is not exported via the
+      // `exports` field (older releases / strict resolution). Walk the
+      // standard node_modules layout instead of going through resolve.
+      const candidate = join(
+        packageRoot,
+        "node_modules",
+        "@microsoft",
+        "agent-governance-sdk",
+        "package.json",
+      );
+      if (!existsSync(candidate)) {
+        throw new Error(
+          `Cannot locate @microsoft/agent-governance-sdk/package.json. ` +
+            `Tried require.resolve (both contexts) and filesystem fallback at ${candidate}. ` +
+            `Ensure @microsoft/agent-governance-sdk is installed and that its package.json ` +
+            `exports field includes "./package.json".`,
+        );
+      }
+      sdkPackageManifestPath = candidate;
+    }
   }
   const sdkPackageRoot = dirname(sdkPackageManifestPath);
   const sourceNodeModulesRoot = resolve(sdkPackageRoot, "..", "..");

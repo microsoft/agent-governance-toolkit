@@ -56,7 +56,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript"
 }
