@@ -37,6 +37,7 @@ fn write_file_atomic(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     write_file_atomic_with_parent_sync(path, contents, sync_parent_directory)
 }
 
+/// Runs the atomic file replacement with an injectable parent-directory sync hook.
 fn write_file_atomic_with_parent_sync<F>(
     path: &Path,
     contents: &[u8],
@@ -69,17 +70,20 @@ where
     sync_parent(parent)
 }
 
+/// Returns the directory entry that must be synced after an atomic rename.
 fn atomic_parent_path(path: &Path) -> &Path {
     path.parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."))
 }
 
+/// Syncs the parent directory so the renamed entry is durable on Unix filesystems.
 #[cfg(unix)]
 fn sync_parent_directory(parent: &Path) -> std::io::Result<()> {
     fs::File::open(parent)?.sync_all()
 }
 
+/// No-ops parent-directory sync where Rust does not expose portable directory fsync.
 #[cfg(not(unix))]
 fn sync_parent_directory(_parent: &Path) -> std::io::Result<()> {
     // The Rust standard library does not expose a portable way to open and
@@ -2219,6 +2223,43 @@ mod tests {
 
         assert_ne!(first, second);
         assert_eq!(first.parent(), Some(Path::new(".")));
+    }
+
+    #[test]
+    fn atomic_parent_path_handles_plain_file_names() {
+        assert_eq!(atomic_parent_path(Path::new("audit.json")), Path::new("."));
+        assert_eq!(
+            atomic_parent_path(Path::new("logs/audit.json")),
+            Path::new("logs")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_parent_path_handles_unix_root_directory() {
+        assert_eq!(atomic_parent_path(Path::new("/")), Path::new("."));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sync_parent_directory_surfaces_missing_unix_parent() {
+        let root = tempfile::tempdir().unwrap();
+        let missing_parent = root.path().join("missing");
+
+        let result = sync_parent_directory(&missing_parent);
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn sync_parent_directory_noops_on_non_unix_targets() {
+        let missing_parent = Path::new("agentmesh-missing-parent-for-non-unix-test");
+
+        let result = sync_parent_directory(missing_parent);
+
+        assert!(result.is_ok());
     }
 
     #[test]

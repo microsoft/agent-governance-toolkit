@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Rust prompt guard** - added custom configuration and audit interpretation examples, tuned escaped-sequence detection to reduce benign `\x` / `\u` false positives, and switched file-backed audit/federation persistence to compact atomic writes.
+- **Rust file durability** - file-backed audit and federation stores now sync parent directories after successful atomic renames on Unix-like platforms, surfacing directory-sync failures instead of silently claiming durability.
 
 
 ## [3.6.0] - 2026-05-12

@@ -65,6 +65,11 @@ policy evaluation, trust scoring, audit logging, Ed25519 identity, execution rin
 lifecycle management, governance/compliance helpers, reward primitives, and
 control-plane utilities such as kill-switch and SLO helpers.
 
+File-backed audit and federation stores write compact JSON through temp-file
+replacement. On Unix-like platforms, successful renames also sync the parent
+directory and return any sync error instead of claiming durability when the
+directory entry was not persisted.
+
 The crate also exposes `agentmesh::prompt_injection` for deterministic prompt
 guarding in Rust agents. The detector reports typed `InjectionType` and
 `ThreatLevel` values, supports optional canary tokens plus allow/block/custom
