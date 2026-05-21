@@ -1,0 +1,30 @@
+{
+  "name": "agt-global-policy",
+  "version": "3.6.0",
+  "description": "Public Preview — AGT governance extension for Gemini CLI",
+  "contextFileName": "GEMINI.md",
+  "mcpServers": {
+    "agt_global_policy": {
+      "command": "node",
+      "args": ["${extensionPath}${/}mcp${/}server.mjs"],
+      "cwd": "${extensionPath}"
+    }
+  },
+  "plan": {
+    "directory": ".gemini/plans"
+  },
+  "settings": [
+    {
+      "name": "AGT policy path",
+      "description": "Optional override for the AGT Gemini policy file.",
+      "envVar": "AGT_GEMINI_POLICY_PATH",
+      "sensitive": false
+    },
+    {
+      "name": "AGT audit path",
+      "description": "Optional override for the AGT Gemini audit log file.",
+      "envVar": "AGT_GEMINI_AUDIT_PATH",
+      "sensitive": false
+    }
+  ]
+}

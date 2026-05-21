@@ -1,0 +1,43 @@
+{
+  "name": "@microsoft/agent-governance-gemini-cli",
+  "version": "3.6.0",
+  "description": "Public Preview — Gemini CLI governance installer for Agent Governance Toolkit developer protection policies",
+  "type": "module",
+  "bin": {
+    "agt-gemini": "./bin/agt-gemini.mjs"
+  },
+  "files": [
+    "assets/",
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run check",
+    "check": "node --check ./bin/agt-gemini.mjs && node --check ./lib/cli.mjs && node --check ./assets/extensions/agt-global-policy/hooks/before-agent.mjs && node --check ./assets/extensions/agt-global-policy/hooks/before-tool.mjs && node --check ./assets/extensions/agt-global-policy/hooks/after-tool.mjs && node --check ./assets/extensions/agt-global-policy/hooks/session-start.mjs && node --check ./assets/extensions/agt-global-policy/lib/hook-runtime.mjs && node --check ./assets/extensions/agt-global-policy/lib/policy.mjs && node --check ./assets/extensions/agt-global-policy/lib/poisoning.mjs && node --check ./assets/extensions/agt-global-policy/lib/sdk-loader.mjs && node --check ./assets/extensions/agt-global-policy/mcp/server.mjs && node --check ./test/policy-engine.test.mjs && node --check ./test/install.test.mjs && node --check ./test/hooks.test.mjs",
+    "test": "node --test ./test/policy-engine.test.mjs ./test/install.test.mjs ./test/hooks.test.mjs"
+  },
+  "keywords": [
+    "gemini",
+    "cli",
+    "agent",
+    "governance",
+    "security",
+    "policy"
+  ],
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "agent-governance-gemini-cli"
+  },
+  "dependencies": {
+    "@microsoft/agent-governance-sdk": "3.6.0",
+    "@modelcontextprotocol/sdk": "1.24.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-gemini-cli"
+}

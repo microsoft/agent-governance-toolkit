@@ -42,6 +42,7 @@ graph TB
 |---------|---------|---------|
 | TypeScript SDK | TypeScript | `npm install @microsoft/agent-governance-sdk` |
 | [Copilot CLI governance package](copilot-cli-governance.md) | Copilot CLI / Node.js | `npx @microsoft/agent-governance-copilot-cli install` |
+| [Gemini CLI governance package](gemini-cli-governance.md) | Gemini CLI / Node.js | `npm install -g @microsoft/agent-governance-gemini-cli && agt-gemini install` |
 | [.NET package](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
 | Rust crate | Rust | `cargo add agentmesh` |
 | Go module | Go | `go get github.com/microsoft/agent-governance-toolkit` |

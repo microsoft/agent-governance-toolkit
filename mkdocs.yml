@@ -98,6 +98,7 @@ nav:
     - Agent Lightning: packages/agent-lightning.md
     - Agent Hypervisor: packages/agent-hypervisor.md
     - Copilot CLI governance package: packages/copilot-cli-governance.md
+    - Gemini CLI governance package: packages/gemini-cli-governance.md
     - .NET package: packages/dotnet-sdk.md
     - VS Code Extension: packages/agent-os-vscode.md
   - Tutorials:
@@ -118,6 +119,7 @@ nav:
       - Shift-Left CI/CD Gates: tutorials/45-shift-left-governance.md
       - A2A Conversation Policy: tutorials/44-a2a-conversation-policy.md
       - Copilot CLI Governance: tutorials/46-copilot-cli-governance.md
+      - Gemini CLI Governance: tutorials/52-gemini-cli-governance.md
     - Security:
       - Execution Sandboxing: tutorials/06-execution-sandboxing.md
       - Prompt Injection Detection: tutorials/09-prompt-injection-detection.md

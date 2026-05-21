@@ -36,6 +36,7 @@ Complete workflows from a customer perspective: pick the scenario closest to you
 | [Shift-Left CI/CD Gates](45-shift-left-governance.md) | Pre-commit hooks, CI gates, build-time enforcement |
 | [A2A Conversation Policy](44-a2a-conversation-policy.md) | Govern agent-to-agent conversations |
 | [Copilot CLI Governance](46-copilot-cli-governance.md) | Install governance policies for GitHub Copilot CLI |
+| [Gemini CLI Governance](52-gemini-cli-governance.md) | Install governance policies for Gemini CLI with hooks, commands, and MCP checks |
 
 ---
 

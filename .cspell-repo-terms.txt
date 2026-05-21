@@ -144,6 +144,7 @@ markdown
 Marp
 masquerade
 mastra
+hono
 mgmt
 microkernel
 Microsoft
@@ -174,6 +175,7 @@ OpenAI
 OpenClaw
 openshell
 ospo
+parseable
 parseability
 pathext
 pathlib
