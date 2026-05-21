@@ -107,6 +107,12 @@ REGISTERED_PACKAGES = {
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
+    # SpendGuard SDK (real PyPI package, used in examples)
+    "spendguard-sdk", "spendguard_sdk",
+    # Cedarling Python bindings (real PyPI package, optional dep)
+    "cedarling-python", "cedarling_python",
+    # Cedarling-AgentMesh integration (internal cross-package, local-only)
+    "cedarling-agentmesh", "cedarling_agentmesh",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
