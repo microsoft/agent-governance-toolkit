@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent_sandbox"
+name = "agt_sandbox"
 version = "3.7.0"
 description = "Public Preview — Agent Sandbox: Docker-based execution isolation for AI agents with policy-driven resource limits, tool proxies, network enforcement, and filesystem checkpointing"
 readme = "README.md"
@@ -46,7 +46,7 @@ policy = [
     "agent-os-kernel>=3.7.0,<4.0",
 ]
 full = [
-    "agent-sandbox[docker,hyperlight,policy]",
+    "agt-sandbox[docker,hyperlight,policy]",
 ]
 dev = [
     "pytest>=9.0.3,<10.0",
