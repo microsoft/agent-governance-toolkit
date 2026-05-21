@@ -3,7 +3,7 @@
 Get from zero to governed AI agents in under 10 minutes.
 
 !!! info "Prerequisites"
-    Python 3.11+ / Node.js 18+ / .NET 8.0+ (any one or more).
+    Python 3.10+ / Node.js 18+ / .NET 8.0+ (any one or more).
 
 ## Architecture Overview
 
