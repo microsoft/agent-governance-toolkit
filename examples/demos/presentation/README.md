@@ -1,17 +1,21 @@
-# Presentation Demos
+# Agent Governance Toolkit, Presentation Demos
 
-Self-contained demo scripts for live presentations and meetups.
-All demos work **offline** with no API keys required.
+Live, runnable demos used in keynotes, conference booths, and stakeholder reviews.
 
-## Usage
+## Pick your path
 
-```powershell
-# Run all demos in sequence
-.\demo-run-all.ps1
+| If you are... | Open this | Time |
+|---|---|---|
+| Presenting live (8 min keynote) | [`agt-live-demo.ipynb`](agt-live-demo.ipynb) | ~8 min |
+| Walking a security audience through OWASP Agentic Top 10 | [`owasp-contoso-bank.ipynb`](owasp-contoso-bank.ipynb) | ~15 min |
+| Showing the visual story (booth screen, async share, leadership flyby) | [`console.html`](console.html) | self-paced |
+| Running headless verification (CI, vanilla box, no Jupyter) | [`scripts/`](scripts/) | ~2 min total |
 
-# Run a specific demo
-.\demo-run-all.ps1 -Demo 4
-```
+The notebooks and the console are the primary demo path. The PowerShell scripts under `scripts/` are the verification harness.
+
+## On-stage runbook
+
+See [`RUNBOOK.md`](RUNBOOK.md) for the exact cell-by-cell narration, smoke-test commands, and recovery tips for the live notebooks.
 
 ## Prerequisites
 
@@ -19,19 +23,4 @@ All demos work **offline** with no API keys required.
 pip install agent-governance-toolkit[full]
 ```
 
-## Demo List
-
-| # | Script | What It Shows | Time |
-|---|--------|--------------|------|
-| 1 | `demo-1-install-health-check.ps1` | `agt doctor` environment validation | ~30s |
-| 2 | `demo-2-owasp-verify.ps1` | OWASP ASI 2026 compliance checker | ~20s |
-| 3 | `demo-3-policy-enforcement.ps1` | YAML policy engine blocking destructive tools + PII | ~20s |
-| 4 | `demo-4-trust-scoring.ps1` | DID identity, cryptographic handshake, capability scoping, kill switch | ~25s |
-| 5 | `demo-5-framework-integration.ps1` | 3-line governance wrapper for any framework | ~15s |
-| 6 | `demo-6-eu-ai-act.ps1` | EU AI Act risk classification and compliance reports | ~30s |
-
-## Notes
-
-- Scripts set `$env:PYTHONUTF8 = "1"` to handle Unicode on Windows terminals.
-- Demo 3 runs the MAF loan-processing example if available, otherwise uses an inline fallback.
-- Demo 6 runs the repo's EU AI Act example, with an inline fallback if not found.
+The notebooks include a bootstrap cell that installs any missing AGT subsystem into your active Python interpreter on first run, so you can simply open a notebook and run all cells.
