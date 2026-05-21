@@ -61,7 +61,7 @@ graph TB
 | flowise-agentmesh | Flowise | `pip install flowise-agentmesh` |
 | langflow-agentmesh | LangFlow | `pip install langflow-agentmesh` |
 | mastra-agentmesh | Mastra | `npm install @agentmesh/mastra` |
-| copilot-governance | GitHub Copilot | `npm install @agentmesh/copilot-governance` |
+| copilot-governance | GitHub Copilot | `npm install @microsoft/agentmesh-copilot-governance` |
 | pydantic-ai-governance | Pydantic AI | `pip install pydantic-ai-governance` |
 | a2a-protocol | A2A Protocol | `pip install a2a-protocol` |
 | mcp-trust-proxy | MCP | `pip install mcp-trust-proxy` |

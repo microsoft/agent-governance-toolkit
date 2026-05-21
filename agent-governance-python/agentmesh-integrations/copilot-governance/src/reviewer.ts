@@ -480,7 +480,7 @@ const RULES: Rule[] = [
  *
  * @example
  * ```ts
- * import { reviewCode } from '@agentmesh/copilot-governance';
+ * import { reviewCode } from '@microsoft/agentmesh-copilot-governance';
  *
  * const result = reviewCode(myAgentSource);
  * if (!result.passed) {
