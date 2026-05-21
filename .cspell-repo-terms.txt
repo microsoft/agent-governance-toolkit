@@ -211,6 +211,7 @@ pytest
 pytestmark
 pythonhosted
 pyupgrade
+pyyaml
 readouterr
 recognised
 relativedelta
@@ -258,6 +259,7 @@ textwrap
 timedelta
 tmpfs
 toolkits
+typer
 ufeff
 uncallable
 unconfigured
