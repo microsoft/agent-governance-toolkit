@@ -56,6 +56,7 @@ jobs:
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
+              - 'agent-governance-claude-code/**'
               - 'agent-governance-copilot-cli/**'
               - 'agent-governance-typescript/**'
               - 'agent-governance-python/agent-os/extensions/**'
@@ -111,6 +112,8 @@ jobs:
               - 'agent-governance-python/agent-mesh/packages/mcp-proxy/**'
             pkg-agent-governance-copilot-cli:
               - 'agent-governance-copilot-cli/**'
+            pkg-agent-governance-claude-code:
+              - 'agent-governance-claude-code/**'
             pkg-agent-governance-sdk:
               - 'agent-governance-typescript/**'
             pkg-agentmesh-api:
@@ -159,6 +162,7 @@ jobs:
         env:
           MCP: ${{ steps.filter.outputs.pkg-agentmesh-mcp-proxy }}
           COPILOT: ${{ steps.filter.outputs.pkg-agent-governance-copilot-cli }}
+          CLAUDE: ${{ steps.filter.outputs.pkg-agent-governance-claude-code }}
           SDK: ${{ steps.filter.outputs.pkg-agent-governance-sdk }}
           API: ${{ steps.filter.outputs.pkg-agentmesh-api }}
           EXT: ${{ steps.filter.outputs.pkg-agent-os-copilot-extension }}
@@ -168,6 +172,7 @@ jobs:
           pkgs=()
           [ "$MCP" = "true" ] && pkgs+=('"agentmesh-mcp-proxy"')
           [ "$COPILOT" = "true" ] && pkgs+=('"agent-governance-copilot-cli"')
+          [ "$CLAUDE" = "true" ] && pkgs+=('"agent-governance-claude-code"')
           [ "$SDK" = "true" ] && pkgs+=('"agent-governance-sdk"')
           [ "$API" = "true" ] && pkgs+=('"agentmesh-api"')
           [ "$EXT" = "true" ] && pkgs+=('"agent-os-copilot-extension"')
@@ -746,6 +751,9 @@ jobs:
           - name: agentmesh-mcp-proxy
             path: agent-governance-python/agent-mesh/packages/mcp-proxy
             node-version: "20"
+          - name: agent-governance-claude-code
+            path: agent-governance-claude-code
+            node-version: "22"
           - name: agent-governance-copilot-cli
             path: agent-governance-copilot-cli
             node-version: "22"

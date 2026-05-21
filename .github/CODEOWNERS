@@ -18,6 +18,7 @@
 /agent-governance-python/agent-runtime/     @microsoft/agent-governance-toolkit
 /agent-governance-python/agentmesh-integrations/ @microsoft/agent-governance-toolkit
 /agent-governance-copilot-cli/              @microsoft/agent-governance-toolkit
+/agent-governance-claude-code/             @microsoft/agent-governance-toolkit
 
 # Security-sensitive paths — require maintainer review, no exceptions
 /.github/                    @microsoft/agent-governance-toolkit

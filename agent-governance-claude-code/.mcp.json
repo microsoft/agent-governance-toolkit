@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "agt_governance": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/agt-node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server/agt-mcp.mjs"
+      ],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}

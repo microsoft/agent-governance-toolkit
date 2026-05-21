@@ -42,6 +42,7 @@ graph TB
 |---------|---------|---------|
 | TypeScript SDK | TypeScript | `npm install @microsoft/agent-governance-sdk` |
 | [Copilot CLI governance package](copilot-cli-governance.md) | Copilot CLI / Node.js | `npx @microsoft/agent-governance-copilot-cli install` |
+| [Claude Code governance package](claude-code-governance.md) | Claude Code / Node.js | `claude --plugin-dir ./agent-governance-claude-code` |
 | [.NET package](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
 | Rust crate | Rust | `cargo add agentmesh` |
 | Go module | Go | `go get github.com/microsoft/agent-governance-toolkit` |

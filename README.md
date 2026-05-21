@@ -218,6 +218,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | [LangGraph](https://github.com/langchain-ai/langgraph) / [LangChain](https://github.com/langchain-ai/langchain) | Adapter |
 | [CrewAI](https://github.com/crewAIInc/crewAI) | Adapter |
 | [OpenAI Agents SDK](https://github.com/openai/openai-agents-python) | Middleware |
+| Claude Code | Governance plugin package |
 | [Google ADK](https://github.com/google/adk-python) | Adapter |
 | [LlamaIndex](https://github.com/run-llama/llama_index) | Middleware |
 | [Haystack](https://github.com/deepset-ai/haystack) | Pipeline |
@@ -252,17 +253,19 @@ Regulatory alignment: [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compli
 
 ## Install
 
-| Language | Command |
-|----------|---------|
-| **Python** | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | `npm install @microsoft/agent-governance-sdk` |
-| **Copilot CLI** | `npx @microsoft/agent-governance-copilot-cli install` |
-| **.NET** | `dotnet add package Microsoft.AgentGovernance` |
-| **Rust** | `cargo add agent-governance` |
-| **Go** | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
+| Language | Package | Command |
+|----------|---------|---------|
+| **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
+| **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
+| **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
+| **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
+| **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
+| **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
+| **Rust** | [`agent-governance`](https://crates.io/crates/agent-governance) | `cargo add agent-governance` |
+| **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
-All five languages implement core governance (policy, identity, trust, audit). Python has the full stack.
-See [Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md) for per-language coverage.
+All five language packages implement core governance (policy, identity, trust, audit). Python has the full stack, and the Copilot CLI and Claude Code packages are first-party local developer surfaces built on the TypeScript SDK.
+See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
 <summary><b>Individual Python packages</b></summary>

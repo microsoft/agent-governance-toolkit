@@ -218,6 +218,9 @@ parameters:
       - name: agent-governance-copilot-cli
         path: agent-governance-copilot-cli
         nodeVersion: '22'
+      - name: agent-governance-claude-code
+        path: agent-governance-claude-code
+        nodeVersion: '22'
       - name: agent-governance-sdk
         path: agent-governance-typescript
         nodeVersion: '20'

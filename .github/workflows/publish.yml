@@ -9,7 +9,7 @@ on:
         description: >
           Package to publish. Use "all" for everything, "all-python" for all
           Python packages, "all-npm" for all npm packages, or a specific name
-          (e.g. "agent-os", "agentmesh-langchain", "agent-governance-copilot-cli").
+          (e.g. "agent-os", "agentmesh-langchain", "agent-governance-copilot-cli", "agent-governance-claude-code").
         required: true
         type: string
         default: "all"
@@ -97,6 +97,8 @@ jobs:
             "@microsoft/agentmesh-api",
             "agent-governance-copilot-cli",
             "@microsoft/agent-governance-copilot-cli",
+            "agent-governance-claude-code",
+            "@microsoft/agent-governance-claude-code",
             "agentmesh-sdk",
             "agent-governance-sdk",
             "@microsoft/agent-governance-sdk",
@@ -224,6 +226,7 @@ jobs:
             {"name":"agentmesh-api","path":"agent-governance-python/agent-mesh/services/api","nodeVersion":"20","selectors":["agentmesh-api","@microsoft/agentmesh-api"]},
             {"name":"npm-agentmesh-mcp-proxy","path":"agent-governance-python/agent-mesh/packages/mcp-proxy","nodeVersion":"20","selectors":["npm-agentmesh-mcp-proxy","@microsoft/agentmesh-mcp-proxy"]},
             {"name":"agent-governance-copilot-cli","path":"agent-governance-copilot-cli","nodeVersion":"22","selectors":["agent-governance-copilot-cli","@microsoft/agent-governance-copilot-cli"]},
+            {"name":"agent-governance-claude-code","path":"agent-governance-claude-code","nodeVersion":"22","selectors":["agent-governance-claude-code","@microsoft/agent-governance-claude-code"]},
             {"name":"agentmesh-sdk","path":"agent-governance-typescript","nodeVersion":"20","selectors":["agentmesh-sdk","agent-governance-sdk","@microsoft/agent-governance-sdk"]},
             {"name":"agent-os-copilot-extension","path":"agent-governance-python/agent-os/extensions/copilot","nodeVersion":"20","selectors":["agent-os-copilot-extension","@microsoft/agent-os-copilot-extension"]},
             {"name":"agentos-mcp-server","path":"agent-governance-python/agent-os/extensions/mcp-server","nodeVersion":"20","selectors":["agentos-mcp-server","@microsoft/agentos-mcp-server"]}
