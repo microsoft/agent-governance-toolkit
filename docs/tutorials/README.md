@@ -150,7 +150,7 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 
 ## Learning Paths
 
-### 🚀 "I want to govern my agent in 10 minutes"
+### 🚀 "I want to govern my agent in 5 minutes"
 
 1. [01 — Policy Engine](01-policy-engine.md) → define allow/deny rules
 2. [03 — Framework Integrations](03-framework-integrations.md) → wrap your framework
@@ -227,7 +227,7 @@ go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang  # 
 
 ## More Resources
 
-- **[Quick Start](../../quickstart.md)** — Zero to governed agents in 10 minutes
+- **[Quick Start](../../quickstart.md)** — Zero to governed agents in 5 minutes
 - **[Architecture](../ARCHITECTURE.md)** — System design and security model
 - **[OWASP Compliance](../OWASP-COMPLIANCE.md)** — ASI-01 through ASI-10 mapping
 - **[Benchmarks](../../BENCHMARKS.md)** — Performance data

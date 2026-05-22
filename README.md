@@ -43,7 +43,7 @@ Python · TypeScript · .NET · Rust · Go. Works with LangChain, CrewAI, AutoGe
 - **Python**: `pip install agent-governance-toolkit[full]` requires Python 3.10+
 - **Node.js**: For TypeScript SDK, Node.js 18+ and npm 9+
 - **.NET**: .NET 8+ for the .NET SDK
-- **Go**: Go 1.21+ for the Go SDK
+- **Go**: Go 1.25+ for the Go SDK
 - **Rust**: Rust 1.70+ for the Rust SDK
 
 ### Optional dependencies
@@ -328,7 +328,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 | Category | Links |
 |----------|-------|
-| **Getting Started** | [Quick Start](docs/quickstart.md) · [Tutorials](docs/tutorials/) (40+) · [FAQ](docs/FAQ.md) |
+| **Getting Started** | [Quick Start](docs/quickstart.md) · [Tutorials](docs/tutorials/) (60+) · [FAQ](docs/FAQ.md) |
 | **Architecture** | [System Design](docs/ARCHITECTURE.md) · [Threat Model](docs/THREAT_MODEL.md) · [ADRs](docs/adr/) (25) |
 | **Specifications** | [All Specs](docs/specs/) (10 formal specs, 992 conformance tests) |
 | **API Reference** | [Agent OS](agent-governance-python/agent-os/README.md) · [AgentMesh](agent-governance-python/agent-mesh/README.md) · [Agent SRE](agent-governance-python/agent-sre/README.md) |
