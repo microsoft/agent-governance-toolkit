@@ -596,16 +596,16 @@ class CedarBackend:
 
         request = self._build_cedar_request(context)
         response = cedarpy.is_authorized(
-            request=cedarpy.AuthorizationRequest(
-                principal=request["principal"],
-                action=request["action"],
-                resource=request["resource"],
-                context=request["context"],
-            ),
+            request={
+                "principal": request["principal"],
+                "action": request["action"],
+                "resource": request["resource"],
+                "context": request.get("context", {}),
+            },
             policies=self._policy_content or "",
             entities=self._entities,
         )
-        allowed = response.decision == cedarpy.Decision.ALLOW
+        allowed = response.decision == cedarpy.Decision.Allow
         return BackendDecision(
             allowed=allowed,
             action="allow" if allowed else "deny",

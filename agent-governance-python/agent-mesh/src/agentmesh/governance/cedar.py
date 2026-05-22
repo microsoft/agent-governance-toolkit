@@ -227,16 +227,16 @@ class CedarEvaluator:
 
         request = self._build_request(action, context)
         response = cedarpy.is_authorized(
-            request=cedarpy.AuthorizationRequest(
-                principal=request["principal"],
-                action=request["action"],
-                resource=request["resource"],
-                context=request["context"],
-            ),
+            request={
+                "principal": request["principal"],
+                "action": request["action"],
+                "resource": request["resource"],
+                "context": request.get("context", {}),
+            },
             policies=self.policy_content or "",
             entities=self.entities,
         )
-        allowed = response.decision == cedarpy.Decision.ALLOW
+        allowed = response.decision == cedarpy.Decision.Allow
         return CedarDecision(
             allowed=allowed,
             raw_result={
