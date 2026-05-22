@@ -33,17 +33,6 @@ const VENDORED_RUNTIME_CHECKS = [
       "index.js",
     ),
   },
-  {
-    name: "MCP SDK",
-    relativePath: join(
-      "vendor",
-      "agent-governance-sdk",
-      "node_modules",
-      "@modelcontextprotocol",
-      "sdk",
-      "package.json",
-    ),
-  },
 ];
 
 export async function runCli(argv = [], io = console) {

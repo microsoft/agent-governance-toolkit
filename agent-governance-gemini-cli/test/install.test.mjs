@@ -69,10 +69,6 @@ async function seedPackageFixture(packageRoot, version = "3.6.0") {
   await mkdir(join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "dist"), {
     recursive: true,
   });
-  await mkdir(join(packageRoot, "node_modules", "@modelcontextprotocol", "sdk"), {
-    recursive: true,
-  });
-
   await writeFile(
     join(packageRoot, "package.json"),
     `${JSON.stringify(
@@ -81,7 +77,6 @@ async function seedPackageFixture(packageRoot, version = "3.6.0") {
         version,
         dependencies: {
           "@microsoft/agent-governance-sdk": version,
-          "@modelcontextprotocol/sdk": "1.24.3",
         },
       },
       null,
@@ -103,16 +98,11 @@ async function seedPackageFixture(packageRoot, version = "3.6.0") {
             version,
             dependencies: {
               "@microsoft/agent-governance-sdk": version,
-              "@modelcontextprotocol/sdk": "1.24.3",
             },
           },
           "node_modules/@microsoft/agent-governance-sdk": {
             version,
             integrity: "sha512-test-sdk",
-          },
-          "node_modules/@modelcontextprotocol/sdk": {
-            version: "1.24.3",
-            integrity: "sha512-test-mcp",
           },
         },
       },
@@ -185,11 +175,6 @@ async function seedPackageFixture(packageRoot, version = "3.6.0") {
     "export const version = '3.6.0';\n",
     "utf8",
   );
-  await writeFile(
-    join(packageRoot, "node_modules", "@modelcontextprotocol", "sdk", "package.json"),
-    `${JSON.stringify({ name: "@modelcontextprotocol/sdk", version: "1.24.3", dependencies: {} }, null, 2)}\n`,
-    "utf8",
-  );
 }
 
 test("installPackage vendors the Gemini extension and uninstallPackage removes managed state", async () => {
@@ -210,7 +195,6 @@ test("installPackage vendors the Gemini extension and uninstallPackage removes m
   assert.equal(doctorReport.hookConfigPresent, true);
   assert.equal(doctorReport.mcpServerPresent, true);
   assert.equal(doctorReport.vendoredRuntimeChecks["AGT SDK"], true);
-  assert.equal(doctorReport.vendoredRuntimeChecks["MCP SDK"], true);
   assert.equal(
     JSON.parse(await readFile(join(geminiHome, "agt", "policy.json"), "utf8")).schemaVersion,
     1,
@@ -371,8 +355,8 @@ test("installPackage fails when installed runtime dependencies drift from packag
   await mkdir(geminiHome, { recursive: true });
   await seedPackageFixture(packageRoot);
   await writeFile(
-    join(packageRoot, "node_modules", "@modelcontextprotocol", "sdk", "package.json"),
-    `${JSON.stringify({ name: "@modelcontextprotocol/sdk", version: "1.29.1", dependencies: {} }, null, 2)}\n`,
+    join(packageRoot, "node_modules", "@microsoft", "agent-governance-sdk", "package.json"),
+    `${JSON.stringify({ name: "@microsoft/agent-governance-sdk", version: "9.9.9", dependencies: {} }, null, 2)}\n`,
     "utf8",
   );
 
