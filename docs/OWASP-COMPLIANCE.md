@@ -19,7 +19,7 @@
 | ASI-05 | Unexpected Code Execution | ✅ Covered | Agent Runtime — Execution Rings |
 | ASI-06 | Memory & Context Poisoning | ✅ Covered | Agent OS — VFS Policies + CMVK Verification |
 | ASI-07 | Insecure Inter-Agent Communication | ✅ Covered | AgentMesh — IATP + Encrypted Channels |
-| ASI-08 | Cascading Failures | ✅ Covered | Agent SRE — Circuit Breakers + SLOs |
+| ASI-08 | Cascading Agent Failures | ✅ Covered | Agent SRE — Circuit Breakers + SLOs |
 | ASI-09 | Human-Agent Trust Exploitation | ✅ Covered | Agent OS — Approval Workflows |
 | ASI-10 | Rogue Agents | ✅ Covered | Agent Runtime — Kill Switch + Ring Isolation |
 
@@ -196,7 +196,7 @@ ciphertext = channel.send(b"governed action")  # E2E encrypted
 
 ---
 
-### ASI-08: Cascading Failures
+### ASI-08: Cascading Agent Failures
 
 > *An initial error or compromise triggers multi-step compound failures across chained agents.*
 

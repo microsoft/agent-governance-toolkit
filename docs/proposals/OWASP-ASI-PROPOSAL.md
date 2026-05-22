@@ -22,7 +22,7 @@ Contribution of insecure/secure code pairs to the OWASP Agent Security Initiativ
 | **Secure** | `PolicyEngine` validates goals against declarative YAML policy before execution |
 | **Package** | Agent OS (`agent_os.PolicyEngine`) |
 
-### ASI-02: Excessive Capabilities
+### ASI-02: Tool Misuse & Exploitation
 
 | | Description |
 |---|---|
@@ -63,7 +63,7 @@ The Agent Governance Toolkit covers 10 of 10 OWASP Agentic Top 10 risks. Future 
 | Risk | Description | Package | Status |
 |------|-------------|---------|--------|
 | ASI-01 | Agent Hijacking | Agent OS | ✅ In this PR |
-| ASI-02 | Excessive Capabilities | Agent OS | ✅ In this PR |
+| ASI-02 | Tool Misuse & Exploitation | Agent OS | ✅ In this PR |
 | ASI-03 | Insecure Communication | Agent Mesh | 🔜 Planned |
 | ASI-04 | Supply Chain (Agent-SBOM) | Agent Mesh | 🔜 Planned |
 | ASI-05 | Insecure Output | Agent Runtime | ✅ In this PR |

@@ -259,15 +259,15 @@ AGT covers all 10 risks identified in the [OWASP Agentic Security Top 10](docs/O
 
 | Risk | AGT Control |
 |------|-------------|
-| ASI-01 Agent Goal Hijacking | Policy engine blocks unauthorized goal changes |
-| ASI-02 Excessive Capabilities | Capability model enforces least-privilege |
+| ASI-01 Agent Goal Hijack | Policy engine blocks unauthorized goal changes |
+| ASI-02 Tool Misuse & Exploitation | Capability model enforces least-privilege |
 | ASI-03 Identity & Privilege Abuse | Zero-trust identity with Ed25519 + ML-DSA-65 |
-| ASI-04 Uncontrolled Code Execution | Execution rings + sandboxing |
-| ASI-05 Insecure Output Handling | Content policies validate all outputs |
-| ASI-06 Memory Poisoning | Episodic memory with integrity checks |
+| ASI-04 Agentic Supply Chain Compromise | Dependency-confusion scanning + tool verification |
+| ASI-05 Unexpected Code Execution | 4-tier execution rings + sandboxing |
+| ASI-06 Memory & Context Poisoning | Episodic memory with integrity checks |
 | ASI-07 Unsafe Inter-Agent Comms | Encrypted channels + trust gates |
-| ASI-08 Cascading Failures | Circuit breakers + SLO enforcement |
-| ASI-09 Human-Agent Trust Deficit | Full audit trails + flight recorder |
+| ASI-08 Cascading Agent Failures | Circuit breakers + SLO enforcement |
+| ASI-09 Human-Agent Trust Exploitation | Full audit trails + flight recorder |
 | ASI-10 Rogue Agents | Kill switch + ring isolation + anomaly detection |
 
 Regulatory alignment: [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md)

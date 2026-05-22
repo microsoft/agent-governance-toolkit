@@ -187,15 +187,15 @@ Catches: tool poisoning, typosquatting, hidden instructions, rug-pull attacks.
 
 | Risk | ID | AGT Control |
 |------|----|-------------|
-| Agent Goal Hijacking | ASI-01 | Policy engine blocks unauthorized goal changes |
-| Excessive Capabilities | ASI-02 | Capability model enforces least-privilege |
+| Agent Goal Hijack | ASI-01 | Policy engine blocks unauthorized goal changes |
+| Tool Misuse & Exploitation | ASI-02 | Capability model enforces least-privilege |
 | Identity & Privilege Abuse | ASI-03 | Zero-trust identity with Ed25519 certs |
-| Uncontrolled Code Execution | ASI-04 | Execution rings + sandboxing |
-| Insecure Output Handling | ASI-05 | Content policies validate all outputs |
-| Memory Poisoning | ASI-06 | Episodic memory with integrity checks |
-| Unsafe Inter-Agent Communication | ASI-07 | Encrypted channels + trust gates |
-| Cascading Failures | ASI-08 | Circuit breakers + SLO enforcement |
-| Human-Agent Trust Deficit | ASI-09 | Full audit trails + flight recorder |
+| Agentic Supply Chain Compromise | ASI-04 | Dependency-confusion scanning + tool verification |
+| Unexpected Code Execution | ASI-05 | 4-tier execution rings + sandboxing |
+| Memory & Context Poisoning | ASI-06 | Episodic memory with integrity checks |
+| Insecure Inter-Agent Communication | ASI-07 | Encrypted channels + trust gates |
+| Cascading Agent Failures | ASI-08 | Circuit breakers + SLO enforcement |
+| Human-Agent Trust Exploitation | ASI-09 | Full audit trails + flight recorder |
 | Rogue Agents | ASI-10 | Kill switch + ring isolation + behavioral anomaly detection |
 
 ---

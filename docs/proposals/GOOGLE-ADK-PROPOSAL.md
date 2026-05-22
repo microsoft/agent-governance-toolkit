@@ -98,7 +98,7 @@ This pattern has been validated across multiple frameworks:
 
 The GovernancePlugin covers 10/10 OWASP Agentic Top 10 risks through ADK's native hooks:
 
-- `before_tool_callback` → ASI-01 (Hijacking), ASI-02 (Excessive Capabilities), ASI-06 (Confused Deputy)
+- `before_tool_callback` → ASI-01 (Hijacking), ASI-02 (Tool Misuse & Exploitation), ASI-06 (Confused Deputy)
 - `on_user_message_callback` → ASI-01 (Hijacking), ASI-05 (Insecure Output)
 - `before_agent_callback` → ASI-03 (Insecure Communication), ASI-07 (Identity Spoofing)
 - `after_tool_callback` → ASI-09 (Missing Audit Trails)

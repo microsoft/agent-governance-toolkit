@@ -92,9 +92,9 @@ services:
 | ASI03 Identity Abuse | ❌ None | Requires SDK trust/identity stack |
 | ASI04 Supply Chain | ⚠️ Partial | Static MCP scanning via CLI, no runtime enforcement |
 | ASI05 Code Execution | ❌ None | Requires SDK rings/sandbox integration |
-| ASI06 Memory Poisoning | ❌ None | Requires deep runtime integration |
+| ASI06 Memory & Context Poisoning | ❌ None | Requires deep runtime integration |
 | ASI07 Inter-Agent Comms | ❌ None | Requires SDK trust gate |
-| ASI08 Cascading Failures | ❌ None | Circuit breaker requires SDK wiring |
+| ASI08 Cascading Agent Failures | ❌ None | Circuit breaker requires SDK wiring |
 | ASI09 Human-Agent Trust | ⚠️ Partial | Audit via metrics endpoint, no attribution |
 | ASI10 Rogue Agents | ❌ None | Requires behavior monitor in runtime |
 | ASI11 Untraceability | ⚠️ Partial | Request-level logging via sidecar, no hash-chain |
@@ -164,9 +164,9 @@ def handle_tool_call(tool_name, params, agent_did):
 | ASI03 Identity Abuse | ✅ Full | DID identity + trust scoring |
 | ASI04 Supply Chain | ⚠️ Partial | Tool pinning + MCP scanning, no SBOM |
 | ASI05 Code Execution | ⚠️ Partial | Rate limiting + token budgets, no sandbox |
-| ASI06 Memory Poisoning | ❌ None | Still requires deep integration |
+| ASI06 Memory & Context Poisoning | ❌ None | Still requires deep integration |
 | ASI07 Inter-Agent Comms | ✅ Full | Trust gate with DID verification |
-| ASI08 Cascading Failures | ✅ Full | Circuit breaker + rate limiter wired |
+| ASI08 Cascading Agent Failures | ✅ Full | Circuit breaker + rate limiter wired |
 | ASI09 Human-Agent Trust | ⚠️ Partial | Audit trail, no UI-level guardrails |
 | ASI10 Rogue Agents | ⚠️ Partial | Audit logging, no behavior monitoring |
 | ASI11 Untraceability | ✅ Full | Hash-chain audit log |
@@ -205,9 +205,9 @@ rings, memory guards, and framework-specific adapters.
 | ASI03 Identity Abuse | ✅ Full | (same as Tier 1) |
 | ASI04 Supply Chain | ⚠️ Partial | + SBOM scanning, still no dep vuln DB |
 | ASI05 Code Execution | ✅ Full | Execution rings + sandbox |
-| ASI06 Memory Poisoning | ⚠️ Partial | MemoryGuard, no full memory sandbox |
+| ASI06 Memory & Context Poisoning | ⚠️ Partial | MemoryGuard, no full memory sandbox |
 | ASI07 Inter-Agent Comms | ✅ Full | (same as Tier 1) |
-| ASI08 Cascading Failures | ✅ Full | + kill switch + rogue detection |
+| ASI08 Cascading Agent Failures | ✅ Full | + kill switch + rogue detection |
 | ASI09 Human-Agent Trust | ⚠️ Partial | + audit attribution, no UI guardrails |
 | ASI10 Rogue Agents | ✅ Full | Behavior monitor + quarantine |
 | ASI11 Untraceability | ✅ Full | (same as Tier 1) |

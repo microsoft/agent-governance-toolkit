@@ -123,9 +123,9 @@ Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security
 | ASI03 Identity & Privilege | ✅ Full | `require_human_approval`, RBAC policies |
 | ASI04 Supply Chain | ✅ Full | AI-BOM v2.0 — model + data + weights provenance |
 | ASI05 Code Execution | ✅ Full | `blocked_patterns`, sandbox integration |
-| ASI06 Memory Poisoning | ✅ Full | `MemoryGuard` — hash integrity, injection detection |
+| ASI06 Memory & Context Poisoning | ✅ Full | `MemoryGuard` — hash integrity, injection detection |
 | ASI07 Inter-Agent Comms | ✅ Full | AgentMesh trust handshake, HMAC auth |
-| ASI08 Cascading Failures | ✅ Full | Agent SRE circuit breakers, cascade detection |
+| ASI08 Cascading Agent Failures | ✅ Full | Agent SRE circuit breakers, cascade detection |
 | ASI09 Human-Agent Trust | ✅ Full | Human approval workflows, audit logging |
 | ASI10 Rogue Agents | ✅ Full | Agent Runtime kill switch + ring isolation |
 

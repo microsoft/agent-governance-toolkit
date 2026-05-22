@@ -234,7 +234,7 @@ The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for 
 | Unexpected Code Execution | ✅ | Agent Runtime — Execution Rings |
 | Memory & Context Poisoning | ✅ | Agent OS — VFS + CMVK |
 | Insecure Inter-Agent Communication | ✅ | AgentMesh — IATP Protocol |
-| Cascading Failures | ✅ | Agent SRE — Circuit Breakers |
+| Cascading Agent Failures | ✅ | Agent SRE — Circuit Breakers |
 | Human-Agent Trust Exploitation | ✅ | Agent OS — Approval Workflows |
 | Rogue Agents | ✅ | Agent Runtime — Kill Switch |
 

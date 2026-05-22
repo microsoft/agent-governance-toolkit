@@ -76,7 +76,7 @@ The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addr
 | Insecure Identity | ASI-03 | ✅ Covered | AgentMesh — DID identity, IATP, SPIFFE certs |
 | Supply Chain | ASI-04 | ⚠️ Partial | Agent-SBOM planned |
 | Insecure Output | ASI-05 | ✅ Covered | Runtime — execution rings, output validation |
-| Memory Poisoning | ASI-06 | ✅ Covered | VFS + CMVK (content-addressable memory) |
+| Memory & Context Poisoning | ASI-06 | ✅ Covered | VFS + CMVK (content-addressable memory) |
 | Insufficient Monitoring | ASI-07 | ✅ Covered | Agent SRE — SLOs, OTel export, anomaly detection |
 | Error Handling | ASI-08 | ✅ Covered | Circuit breakers, saga compensation, error budgets |
 | HITL Bypass | ASI-09 | ✅ Covered | Approval workflows, human-in-the-loop gates |

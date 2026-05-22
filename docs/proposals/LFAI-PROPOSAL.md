@@ -63,7 +63,7 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 | Risk | Description | Package |
 |------|-------------|---------|
 | ASI-01 | Agent Hijacking | Agent OS (PolicyEngine) |
-| ASI-02 | Excessive Capabilities | Agent OS (CapabilitySandbox) |
+| ASI-02 | Tool Misuse & Exploitation | Agent OS (CapabilitySandbox) |
 | ASI-03 | Insecure Communication | Agent Mesh (IATP + DID) |
 | ASI-05 | Insecure Output | Agent Runtime (OutputValidator) |
 | ASI-06 | Confused Deputy | Agent OS (CapabilityGuard) |

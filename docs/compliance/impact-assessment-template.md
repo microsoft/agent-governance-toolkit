@@ -56,13 +56,13 @@ _Who is affected by the agent's actions? Include both direct users and downstrea
 | # | Risk | Applicable? | AGT Mitigation |
 |---|------|------------|----------------|
 | ASI-01 | Agent Hijacking | ☐ Yes ☐ No | Policy engine, prompt injection detection |
-| ASI-02 | Excessive Capabilities | ☐ Yes ☐ No | Capability allow/deny lists |
+| ASI-02 | Tool Misuse & Exploitation | ☐ Yes ☐ No | Capability allow/deny lists |
 | ASI-03 | Tool Poisoning | ☐ Yes ☐ No | MCP security scanner |
 | ASI-04 | Insecure Data Handling | ☐ Yes ☐ No | Attribute ratchets, DLP |
 | ASI-05 | Insecure Output | ☐ Yes ☐ No | Pre-output policy stage |
 | ASI-06 | Confused Deputy | ☐ Yes ☐ No | Zero-trust identity, trust scoring |
-| ASI-07 | Unsafe Inter-Agent Communication | ☐ Yes ☐ No | E2E encryption (Signal protocol) |
-| ASI-08 | Cascading Failures | ☐ Yes ☐ No | Circuit breaker, kill switch |
+| ASI-07 | Insecure Inter-Agent Communication | ☐ Yes ☐ No | E2E encryption (Signal protocol) |
+| ASI-08 | Cascading Agent Failures | ☐ Yes ☐ No | Circuit breaker, kill switch |
 | ASI-09 | Inadequate Logging | ☐ Yes ☐ No | Tamper-evident audit, OTel |
 | ASI-10 | Resource Exhaustion | ☐ Yes ☐ No | Rate limiting, token budgets |
 

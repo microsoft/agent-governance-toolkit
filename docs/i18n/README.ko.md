@@ -207,15 +207,15 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 | Risk | ID | AGT 통제 |
 |------|----|-------------|
-| Agent Goal Hijacking | ASI-01 | 정책 엔진이 비인가된 에이전트 목표 변경을 차단 |
-| Excessive Capabilities | ASI-02 | 최소권한 부여 강제 적용 |
+| Agent Goal Hijack | ASI-01 | 정책 엔진이 비인가된 에이전트 목표 변경을 차단 |
+| Tool Misuse & Exploitation | ASI-02 | 최소권한 부여 강제 적용 |
 | Identity & Privilege Abuse | ASI-03 | Ed25519와 ML-DSA-65에 의한 제로트러스트 신원증명 제공|
-| Uncontrolled Code Execution | ASI-04 | 실행 격리 링(rings) 및 샌드박싱(sandboxing) |
-| Insecure Output Handling | ASI-05 | 컨텐츠 정책이 모든 출력을 검증 |
-| Memory Poisoning | ASI-06 | 무결성 체크를 통해 일화적(episodic) 메모리 구현 |
-| Unsafe Inter-Agent Comms | ASI-07 | 채널 암호화 및 신뢰 게이트 구현 |
-| Cascading Failures | ASI-08 | 써킷 브레이커 및 SLO 강제화 |
-| Human-Agent Trust Deficit | ASI-09 | 전체 감사 추적(full audit trails) 및 비행기록계(flight recorder) |
+| Agentic Supply Chain Compromise | ASI-04 | 의존성 혼동 스캔 및 도구 검증 |
+| Unexpected Code Execution | ASI-05 | 실행 격리 링(rings) 및 샌드박싱(sandboxing) |
+| Memory & Context Poisoning | ASI-06 | 무결성 체크를 통해 일화적(episodic) 메모리 구현 |
+| Insecure Inter-Agent Comms | ASI-07 | 채널 암호화 및 신뢰 게이트 구현 |
+| Cascading Agent Failures | ASI-08 | 써킷 브레이커 및 SLO 강제화 |
+| Human-Agent Trust Exploitation | ASI-09 | 전체 감사 추적(full audit trails) 및 비행기록계(flight recorder) |
 | Rogue Agents | ASI-10 | 실행 격리, 킬스위치(kill switch), 이상 탐지(anomaly detection) |
 
 전체 목록: [OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md) · 주요 규제 대응: [EU AI Act](../../docs/compliance/), [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md), [Colorado AI Act](../../docs/compliance/)
