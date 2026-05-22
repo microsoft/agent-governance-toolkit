@@ -54,8 +54,18 @@ Python · TypeScript · .NET · Rust · Go. Works with LangChain, CrewAI, AutoGe
 ## Quick Start
 
 ```bash
-pip install agent-governance-toolkit[full]
+pip install agent-governance-toolkit
 ```
+
+Govern any tool function in two lines:
+
+```python
+from agentmesh.governance import govern
+
+safe_tool = govern(my_tool, policy="policy.yaml")   # every call checked, logged, enforced
+```
+
+Or use the full `PolicyEvaluator` API for programmatic control:
 
 ```python
 from agent_os.policies import (
@@ -148,7 +158,7 @@ agt red-team scan ./prompts/ --min-grade B         # prompt injection audit
 agt lint-policy policies/                          # validate policy files
 ```
 
-Full walkthrough: [quickstart.md](docs/quickstart.md) -- zero to governed agents in 10 minutes with YAML, OPA/Rego, and Cedar policies.
+Full walkthrough: [quickstart.md](docs/quickstart.md) -- zero to governed agents in 5 minutes.
 🌍 Also in: [日本語](docs/i18n/quickstart.ja.md) | [简体中文](docs/i18n/quickstart.zh-CN.md) | [한국어](docs/i18n/quickstart.ko.md)
 
 ---

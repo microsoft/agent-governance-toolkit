@@ -91,6 +91,7 @@ pip install agent-governance-toolkit
   <a href="https://pypi.org/project/agent-governance-toolkit/">📦 PyPI</a>
   <a href="https://github.com/microsoft/agent-governance-toolkit">💻 GitHub</a>
   <a href="tutorials/index/">📚 Tutorials</a>
+  <a href="reference/comparison/">⚖️ How AGT Compares</a>
 </div>
 
 <div class="agt-stats">
