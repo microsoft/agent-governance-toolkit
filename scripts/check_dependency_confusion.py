@@ -297,14 +297,15 @@ def check_notebook(filepath: str) -> list[str]:
         if cell.get("cell_type") != "code":
             continue
         for line in cell.get("source", []):
-            if "pip install" in line and not line.strip().startswith("#"):
-                packages = extract_package_names(line)
-                for pkg in packages:
-                    if pkg.lower() not in registered_lower:
-                        findings.append(
-                            f"  {filepath}: "
-                            f"'{pkg}' may not be registered on PyPI"
-                        )
+            if not line.strip().startswith("#"):
+                for match in PIP_INSTALL_RE.finditer(line):
+                    packages = extract_package_names(match.group(1))
+                    for pkg in packages:
+                        if pkg.lower() not in registered_lower:
+                            findings.append(
+                                f"  {filepath}: "
+                                f"'{pkg}' may not be registered on PyPI"
+                            )
     return findings
 
 
