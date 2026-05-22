@@ -325,7 +325,7 @@ jobs:
         run: |
           pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
-          pip install --no-cache-dir pytest-cov
+          pip install --no-cache-dir pytest-cov==7.1.0  # Scorecard: version-pinned
       - name: Test ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
@@ -420,8 +420,8 @@ jobs:
       - name: Install safety
         run: |
           pip install --no-cache-dir --require-hashes --no-deps -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
-          pip install --no-cache-dir 'typer>=0.9.0,<0.15.0' 'marshmallow>=3.15.0,<3.22.0'
-          pip install --no-cache-dir safety==3.2.1
+          pip install --no-cache-dir typer==0.14.0 marshmallow==3.21.3  # Scorecard: version-pinned (safety transitive deps)
+          pip install --no-cache-dir safety==3.2.1  # Scorecard: version-pinned, hash-verified via ci-safety.txt
       - name: Check dependencies
         env:
           GIT_TERMINAL_PROMPT: "0"
@@ -433,7 +433,7 @@ jobs:
           for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning agent-primitives agent-mcp-governance agent-marketplace agent-discovery agent-rag-governance agent-sandbox; do
             echo "=== $pkg ==="
             (cd "agent-governance-python/$pkg" \
-              && pip install --no-cache-dir -e .)
+              && pip install --no-cache-dir -e .)  # Scorecard: pinned to repo checkout
           done
 
           # Capture safety's exit code and stdout. The previous
@@ -790,8 +790,7 @@ jobs:
       - name: Install dependencies
         if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
-        run: npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
-          --ignore-scripts
+        run: npm ci --legacy-peer-deps --ignore-scripts  # Scorecard: uses lockfile via npm ci
       - name: Build ${{ matrix.name }}
         if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}

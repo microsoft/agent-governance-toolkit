@@ -38,6 +38,19 @@ Python · TypeScript · .NET · Rust · Go. Works with LangChain, CrewAI, AutoGe
 
 ---
 
+## Prerequisites
+
+- **Python**: `pip install agent-governance-toolkit[full]` requires Python 3.10+
+- **Node.js**: For TypeScript SDK, Node.js 18+ and npm 9+
+- **.NET**: .NET 8+ for the .NET SDK
+- **Go**: Go 1.21+ for the Go SDK
+- **Rust**: Rust 1.70+ for the Rust SDK
+
+### Optional dependencies
+
+- **Azure credentials**: Set `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` for Azure-integrated features
+- **MCP SDK**: For Model Context Protocol integrations
+
 ## Quick Start
 
 ```bash

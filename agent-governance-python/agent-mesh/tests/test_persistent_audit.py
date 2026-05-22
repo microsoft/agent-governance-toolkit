@@ -14,7 +14,7 @@ def storage():
     """Create a connected in-memory storage provider."""
     config = StorageConfig(backend="memory")
     provider = MemoryStorageProvider(config)
-    asyncio.get_event_loop().run_until_complete(provider.connect())
+    asyncio.run(provider.connect())
     return provider
 
 

@@ -1,0 +1,58 @@
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+name: License Header Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.ts'
+      - '**.js'
+      - '**.py'
+      - '**.cs'
+      - '**.rs'
+      - '**.go'
+      - '.github/workflows/license-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-license-headers:
+    name: Check license headers on source files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check for Microsoft copyright headers
+        run: |
+          # Check all source files for copyright header
+          # If no @microsoft/license-header tool exists, use grep as fallback
+          LH_MISSING=0
+          for ext in ts js py cs rs go; do
+            for file in $(git diff --name-only origin/main...HEAD -- "*.${ext}" 2>/dev/null || echo ""); do
+              if ! grep -q "Copyright (c) Microsoft Corporation" "$file" 2>/dev/null; then
+                echo "MISSING license header: $file"
+                LH_MISSING=$((LH_MISSING + 1))
+              fi
+            done
+          done
+
+          # Also check untracked/new files
+          for ext in ts js py cs rs go; do
+            for file in $(git ls-files --others --exclude-standard "*.${ext}" 2>/dev/null | head -20); do
+              if [ -f "$file" ] && ! grep -q "Copyright (c) Microsoft Corporation" "$file" 2>/dev/null; then
+                echo "MISSING license header: $file"
+                LH_MISSING=$((LH_MISSING + 1))
+              fi
+            done
+          done
+
+          if [ "$LH_MISSING" -gt 0 ]; then
+            echo "Found $LH_MISSING file(s) without license headers"
+            exit 1
+          fi
+          echo "All source files have valid license headers."

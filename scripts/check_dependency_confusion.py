@@ -43,7 +43,7 @@ REGISTERED_PACKAGES = {
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
     "agentmesh-discovery", "agentmesh_discovery",
-    "agent-sandbox", "agent_sandbox",
+    "agt-sandbox", "agt_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
@@ -297,14 +297,15 @@ def check_notebook(filepath: str) -> list[str]:
         if cell.get("cell_type") != "code":
             continue
         for line in cell.get("source", []):
-            if "pip install" in line and not line.strip().startswith("#"):
-                packages = extract_package_names(line)
-                for pkg in packages:
-                    if pkg.lower() not in registered_lower:
-                        findings.append(
-                            f"  {filepath}: "
-                            f"'{pkg}' may not be registered on PyPI"
-                        )
+            if not line.strip().startswith("#"):
+                for match in PIP_INSTALL_RE.finditer(line):
+                    packages = extract_package_names(match.group(1))
+                    for pkg in packages:
+                        if pkg.lower() not in registered_lower:
+                            findings.append(
+                                f"  {filepath}: "
+                                f"'{pkg}' may not be registered on PyPI"
+                            )
     return findings
 
 

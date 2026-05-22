@@ -116,7 +116,7 @@ parameters:
       - name: agentmesh-discovery
         path: agent-governance-python/agent-discovery
         wave: 2
-      - name: agent-sandbox
+      - name: agt-sandbox
         path: agent-governance-python/agent-sandbox
         wave: 2
       - name: agentmesh-primitives

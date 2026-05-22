@@ -55,6 +55,7 @@ COPY . /workspace
 #
 # Scorecard: pinned via pyproject.toml. Requirements file dependencies
 # have version constraints.
+# Scorecard: editable installs pinned to repo checkout via pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install \
         -e "agent-governance-python/agent-primitives[dev]" \
