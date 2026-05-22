@@ -51,6 +51,25 @@ Changes that affect the project's architecture, public API surface, security mod
 
 If maintainers cannot reach consensus, the project lead makes the final decision after considering all perspectives. The rationale is documented in the relevant GitHub Issue.
 
+### Succession Planning
+
+Continuity of maintainership is essential for a foundation-hosted project.
+
+- **Project lead vacancy**: If the project lead steps down or becomes inactive for
+  60+ days, the Core Maintainers elect a new project lead by supermajority (2/3)
+  vote within 30 days. Until a new lead is confirmed, the longest-serving Core
+  Maintainer serves as acting lead.
+- **Maintainer vacancy**: If the number of Core Maintainers drops below three,
+  remaining maintainers must nominate and confirm a replacement within 30 days.
+  No architecture or governance decisions may be made until the minimum of three
+  is restored.
+- **Emeritus**: Maintainers inactive for 3+ months are moved to Emeritus status
+  in [MAINTAINERS.md](MAINTAINERS.md) and lose merge privileges. Emeritus
+  maintainers can be reinstated by consensus of current maintainers.
+- **Deadlock**: If a supermajority vote on project lead succession results in a
+  tie after two rounds of voting, the decision is escalated to the governing
+  foundation (if applicable) or resolved by the longest-serving Core Maintainer.
+
 ### Conflict of Interest
 
 Maintainers must disclose any financial or employment relationship that could
