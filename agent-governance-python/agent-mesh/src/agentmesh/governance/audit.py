@@ -70,7 +70,7 @@ class AuditEntry(BaseModel):
     event_type: str
     agent_did: str
     action: str
-    arguments_hash: Optional[str] = Field(
+    arguments_hash: str | None = Field(
         default=None,
         description=(
             "SHA-256 hash (hex, lowercase) of the canonical-JSON serialization of "
@@ -84,7 +84,7 @@ class AuditEntry(BaseModel):
     # Context
     resource: Optional[str] = None
     target_did: Optional[str] = None
-    approver_did: Optional[str] = Field(
+    approver_did: str | None = Field(
         default=None,
         description=(
             "DID of the principal whose approval authorized this action. Surfaces "
@@ -104,7 +104,7 @@ class AuditEntry(BaseModel):
     # Policy evaluation
     policy_decision: Optional[str] = None
     matched_rule: Optional[str] = None
-    policy_version: Optional[str] = Field(
+    policy_version: str | None = Field(
         default=None,
         description=(
             "Version identifier of the policy bundle that produced this decision. "
@@ -471,9 +471,9 @@ class AuditLog:
         policy_decision: Optional[str] = None,
         trace_id: Optional[str] = None,
         *,
-        arguments_hash: Optional[str] = None,
-        approver_did: Optional[str] = None,
-        policy_version: Optional[str] = None,
+        arguments_hash: str | None = None,
+        approver_did: str | None = None,
+        policy_version: str | None = None,
     ) -> AuditEntry:
         """Log an audit event.
 
