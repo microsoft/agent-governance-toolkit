@@ -201,8 +201,15 @@ class OPAEvaluator:
             return self._evaluate_opa_cli(query, input_data)
 
         if self.rego_content or (self.rego_path and Path(self.rego_path).exists()):
-            # Fall back to the built-in mock parser for simple Rego
-            return self._evaluate_mock(query, input_data)
+            return OPADecision(
+                allowed=False,
+                query=query,
+                source="fallback",
+                error=(
+                    "OPA CLI not available; install opa for policy evaluation: "
+                    "https://www.openpolicyagent.org/docs/latest/#running-opa"
+                ),
+            )
 
         return OPADecision(
             allowed=False,

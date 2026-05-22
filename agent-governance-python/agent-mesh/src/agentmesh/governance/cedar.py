@@ -169,8 +169,20 @@ class CedarEvaluator:
             ):
                 result = self._evaluate_cli(action, context)
             else:
-                # builtin or auto fallback: use built-in parser
-                result = self._evaluate_mock(action, context)
+                if self.mode == "builtin":
+                    result = self._evaluate_mock(action, context)
+                else:
+                    elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+                    return CedarDecision(
+                        allowed=False,
+                        action=action,
+                        evaluation_ms=elapsed,
+                        source="fallback",
+                        error=(
+                            "Cedar auto mode requires cedarpy or the cedar CLI; "
+                            "use mode='builtin' explicitly to opt into the mock evaluator"
+                        ),
+                    )
 
             elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
             result.evaluation_ms = elapsed
