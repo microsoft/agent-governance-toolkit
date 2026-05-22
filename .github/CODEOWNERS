@@ -8,34 +8,49 @@
 # Default owners for everything in the repo
 * @microsoft/agent-governance-toolkit
 
-# Package-specific ownership
-/agent-governance-python/agent-os/          @microsoft/agent-governance-toolkit
-/agent-governance-python/agent-mesh/        @microsoft/agent-governance-toolkit
-/agent-governance-python/agent-hypervisor/  @microsoft/agent-governance-toolkit
-/agent-governance-python/agent-sre/         @microsoft/agent-governance-toolkit
-/agent-governance-python/agent-compliance/  @microsoft/agent-governance-toolkit
-/agent-governance-python/agent-marketplace/ @microsoft/agent-governance-toolkit
-/agent-governance-python/agent-runtime/     @microsoft/agent-governance-toolkit
-/agent-governance-python/agentmesh-integrations/ @microsoft/agent-governance-toolkit
-/agent-governance-copilot-cli/              @microsoft/agent-governance-toolkit
-/agent-governance-claude-code/             @microsoft/agent-governance-toolkit
+# ── Python SDK packages ──────────────────────────────────────
+/agent-governance-python/agent-os/          @imran-siddique @jackbatzner
+/agent-governance-python/agent-mesh/        @imran-siddique @Knapp-Kevin @ALRubinger
+/agent-governance-python/agent-hypervisor/  @imran-siddique @jackbatzner
+/agent-governance-python/agent-sre/         @imran-siddique @miyannishar
+/agent-governance-python/agent-compliance/  @imran-siddique
+/agent-governance-python/agent-marketplace/ @imran-siddique
+/agent-governance-python/agent-runtime/     @imran-siddique
+/agent-governance-python/agent-lightning/   @imran-siddique
+/agent-governance-python/agent-primitives/  @imran-siddique
+/agent-governance-python/agent-mcp-governance/ @imran-siddique
+/agent-governance-python/agentmesh-integrations/ @imran-siddique @Knapp-Kevin @ALRubinger
+
+# ── .NET SDK ─────────────────────────────────────────────────
+/agent-governance-dotnet/                   @imran-siddique @eltoncarr-ms
+
+# ── Rust SDK ─────────────────────────────────────────────────
+/agent-governance-rust/                     @imran-siddique
+
+# ── CLI tools ────────────────────────────────────────────────
+/agent-governance-copilot-cli/              @imran-siddique
+/agent-governance-claude-code/              @imran-siddique
+
+# ── Specifications ───────────────────────────────────────────
+/specs/                                     @imran-siddique
 
 # Security-sensitive paths — require maintainer review, no exceptions
-/.github/                    @microsoft/agent-governance-toolkit
-/.github/workflows/          @microsoft/agent-governance-toolkit
-/.github/actions/            @microsoft/agent-governance-toolkit
-/*/src/**/sandbox*            @microsoft/agent-governance-toolkit
-/*/src/**/trust*              @microsoft/agent-governance-toolkit
-/*/src/**/identity*           @microsoft/agent-governance-toolkit
-/*/src/**/crypto*             @microsoft/agent-governance-toolkit
+/.github/                    @imran-siddique
+/.github/workflows/          @imran-siddique
+/.github/actions/            @imran-siddique
+/*/src/**/sandbox*            @imran-siddique
+/*/src/**/trust*              @imran-siddique
+/*/src/**/identity*           @imran-siddique
+/*/src/**/crypto*             @imran-siddique
 
 # Infrastructure & container security — require maintainer review
-/scripts/                    @microsoft/agent-governance-toolkit
-**/Dockerfile                @microsoft/agent-governance-toolkit
-**/docker-compose*           @microsoft/agent-governance-toolkit
-/.dockerignore               @microsoft/agent-governance-toolkit
-/.clusterfuzzlite/           @microsoft/agent-governance-toolkit
+/scripts/                    @imran-siddique
+**/Dockerfile                @imran-siddique
+**/docker-compose*           @imran-siddique
+/.dockerignore               @imran-siddique
+/.clusterfuzzlite/           @imran-siddique
 
 # Documentation
-/docs/                       @microsoft/agent-governance-toolkit
+/docs/                       @imran-siddique
+/site/                       @imran-siddique
 *.md                         @microsoft/agent-governance-toolkit
