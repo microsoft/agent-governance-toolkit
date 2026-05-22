@@ -160,7 +160,7 @@ All types deliver the same governance capabilities — policy enforcement, ident
 | Language | Package | Status |
 |----------|---------|--------|
 | Python | `agent-governance-toolkit[full]` | ✅ Full-featured, primary package |
-| TypeScript | `@microsoft/agentmesh-sdk` | ✅ Published on npm |
+| TypeScript | `@microsoft/agent-governance-sdk` | ✅ Published on npm |
 | .NET | `Microsoft.AgentGovernance` | ✅ Published on NuGet |
 | Rust | `agentmesh` crate | ✅ Published on crates.io |
 | Go | `github.com/microsoft/agent-governance-toolkit/agent-governance-golang` | ✅ Module available |
@@ -347,7 +347,7 @@ In sidecar deployments, the governance sidecar can be updated independently of t
 | Ecosystem | Package | Status |
 |-----------|---------|--------|
 | PyPI | `agent-governance-toolkit[full]`, `agent-os-kernel`, `agentmesh-platform`, `agentmesh-runtime`, `agent-sre`, `agentmesh-marketplace`, `agentmesh-lightning`, `agentmesh-openai-agents-trust`, `langgraph-trust` | ✅ Published |
-| npm | `@microsoft/agentmesh-sdk` | ✅ Published |
+| npm | `@microsoft/agent-governance-sdk` | ✅ Published |
 | NuGet | `Microsoft.AgentGovernance` | ✅ Published |
 | crates.io | `agentmesh` | ✅ Published |
 | Dify Marketplace | Trust verification plugin | ✅ Merged |
@@ -696,7 +696,7 @@ See [Tutorial 40 — OTel Observability](tutorials/40-otel-observability.md) for
 | GitHub Repository | https://github.com/microsoft/agent-governance-toolkit |
 | Launch Blog Post | https://opensource.microsoft.com/blog/2026/04/02/introducing-the-agent-governance-toolkit-open-source-runtime-security-for-ai-agents/ |
 | PyPI (Full Stack) | https://pypi.org/project/agent-governance-toolkit/ |
-| npm (TypeScript) | `@microsoft/agentmesh-sdk` |
+| npm (TypeScript) | `@microsoft/agent-governance-sdk` |
 | NuGet (.NET) | `Microsoft.AgentGovernance` |
 | DeepWiki | https://deepwiki.com/microsoft/agent-governance-toolkit |
 | OWASP Agentic Top 10 | https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/ |

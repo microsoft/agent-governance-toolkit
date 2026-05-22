@@ -99,7 +99,7 @@ Monitoring, alerting, and operational management of governed agents.
 | [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency controls, throttling |
 | [Agent Discovery](29-agent-discovery.md) | Finding shadow AI in your organization |
 | [Agent Lifecycle](30-agent-lifecycle.md) | Birth-to-retirement management |
-| [Chaos Testing](32-chaos-testing-agents.md) | Chaos engineering for agent reliability |
+| [Chaos Testing](52-chaos-testing-agents.md) | Chaos engineering for agent reliability |
 | [Agent Reliability](05-agent-reliability.md) | SLOs, monitoring, graceful degradation |
 
 ---
@@ -121,7 +121,7 @@ Deep dives into specialized governance patterns.
 | [Decision BOM](50-decision-bom.md) | Decision bill of materials, audit artifacts |
 | [Offline Verifiable Receipts](33-offline-verifiable-receipts.md) | Offline-verifiable decision receipts |
 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridging AGT identity with Microsoft Entra |
-| [Contributor Governance](46-contributor-governance.md) | Contributor reputation, spam detection |
+| [Contributor Governance](53-contributor-governance.md) | Contributor reputation, spam detection |
 
 ---
 

@@ -1,4 +1,4 @@
-# Tutorial 32: Chaos Testing Your AI Agents
+# Tutorial 52: Chaos Testing Your AI Agents
 
 > **Package:** `agent-sre` · **Time:** 20 minutes · **Level:** Intermediate
 

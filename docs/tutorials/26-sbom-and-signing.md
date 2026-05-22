@@ -167,7 +167,7 @@ binaries, SBOMs, policy files, or audit logs.
 ### §3.1 Signing with the TypeScript package
 
 ```typescript
-import { AgentIdentity } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity } from '@microsoft/agent-governance-sdk';
 import { readFileSync, writeFileSync } from 'fs';
 
 // 1. Generate (or load) a signing identity
@@ -277,7 +277,7 @@ func main() {
 ### §4.1 Verification with the TypeScript package
 
 ```typescript
-import { AgentIdentity } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity } from '@microsoft/agent-governance-sdk';
 import { readFileSync } from 'fs';
 
 // 1. Load the signer's public identity
@@ -411,7 +411,7 @@ Add a verification step to your deployment pipeline:
 - name: Verify artifact signature
   run: |
     node -e "
-      const { AgentIdentity } = require('@microsoft/agentmesh-sdk');
+      const { AgentIdentity } = require('@microsoft/agent-governance-sdk');
       const fs = require('fs');
       const signer = AgentIdentity.fromJSON(
         JSON.parse(fs.readFileSync('signing-identity.json', 'utf-8'))

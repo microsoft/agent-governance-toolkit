@@ -42,7 +42,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 ### TypeScript / Node.js
 
 ```bash
-npm install @microsoft/agentmesh-sdk
+npm install @microsoft/agent-governance-sdk
 ```
 
 ### .NET

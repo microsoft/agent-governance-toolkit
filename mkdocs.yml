@@ -151,7 +151,7 @@ nav:
       - Kill Switch & Rate Limiting: tutorials/14-kill-switch-and-rate-limiting.md
       - Agent Discovery: tutorials/29-agent-discovery.md
       - Agent Lifecycle: tutorials/30-agent-lifecycle.md
-      - Chaos Testing: tutorials/32-chaos-testing-agents.md
+      - Chaos Testing: tutorials/52-chaos-testing-agents.md
       - Agent Reliability: tutorials/05-agent-reliability.md
     - Advanced Topics:
       - Trust & Identity Deep Dive: tutorials/02-trust-and-identity.md
@@ -165,7 +165,7 @@ nav:
       - Decision BOM: tutorials/50-decision-bom.md
       - Offline Verifiable Receipts: tutorials/33-offline-verifiable-receipts.md
       - Entra Agent ID Bridge: tutorials/31-entra-agent-id-bridge.md
-      - Contributor Governance: tutorials/46-contributor-governance.md
+      - Contributor Governance: tutorials/53-contributor-governance.md
     - Language & Platform Guides:
       - .NET SDK: tutorials/19-dotnet-sdk.md
       - C# MCP Extension: tutorials/42-csharp-mcp-extension.md

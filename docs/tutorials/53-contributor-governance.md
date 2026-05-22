@@ -1,6 +1,6 @@
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
-# Tutorial 46: Contributor Governance
+# Tutorial 53: Contributor Governance
 
 > **Time**: 30 minutes · **Level**: Intermediate · **Prerequisites**: Tutorial 45 (Shift-Left Governance)
 

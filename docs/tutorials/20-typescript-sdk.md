@@ -1,6 +1,6 @@
-# Tutorial 20 — TypeScript package (@microsoft/agentmesh-sdk)
+# Tutorial 20 — TypeScript package (@microsoft/agent-governance-sdk)
 
-> **Package:** `@microsoft/agentmesh-sdk` · **Time:** 30 minutes · **Prerequisites:** Node.js 18+
+> **Package:** `@microsoft/agent-governance-sdk` · **Time:** 30 minutes · **Prerequisites:** Node.js 18+
 
 ---
 
@@ -14,12 +14,12 @@
 ---
 
 Build governance-aware AI agents in TypeScript and Node.js.
-The `@microsoft/agentmesh-sdk` package provides cryptographic identity (Ed25519 DIDs),
+The `@microsoft/agent-governance-sdk` package provides cryptographic identity (Ed25519 DIDs),
 trust scoring, declarative policy evaluation, and hash-chain audit logging — all in
 a single npm install.
 
 **Prerequisites:** Node.js ≥ 18 · TypeScript ≥ 5.4
-**Package:** `@microsoft/agentmesh-sdk` v1.0.0
+**Package:** `@microsoft/agent-governance-sdk` v3.7.0
 **Modules:** `AgentIdentity`, `TrustManager`, `PolicyEngine`, `AuditLogger`, `AgentMeshClient`
 
 ---
@@ -44,7 +44,7 @@ a single npm install.
 ## Installation
 
 ```bash
-npm install @microsoft/agentmesh-sdk
+npm install @microsoft/agent-governance-sdk
 ```
 
 The package has two runtime dependencies — `@noble/ed25519` for cryptography and
@@ -55,7 +55,7 @@ needed.
 
 ```bash
 # Verify the install
-node -e "const sdk = require('@microsoft/agentmesh-sdk'); console.log(Object.keys(sdk))"
+node -e "const sdk = require('@microsoft/agent-governance-sdk'); console.log(Object.keys(sdk))"
 ```
 
 ---
@@ -65,7 +65,7 @@ node -e "const sdk = require('@microsoft/agentmesh-sdk'); console.log(Object.key
 Five lines to evaluate your first policy:
 
 ```typescript
-import { PolicyEngine } from '@microsoft/agentmesh-sdk';
+import { PolicyEngine } from '@microsoft/agent-governance-sdk';
 
 const engine = new PolicyEngine([
   { action: 'data.read',  effect: 'allow' },
@@ -83,7 +83,7 @@ console.log(engine.evaluate('data.delete')); // 'deny'  ← default when no rule
 Or use the unified `AgentMeshClient` for the full governance pipeline:
 
 ```typescript
-import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient } from '@microsoft/agent-governance-sdk';
 
 const client = AgentMeshClient.create('my-agent', {
   capabilities: ['data.read', 'data.write'],
@@ -110,7 +110,7 @@ trust, policy, and audit into a single governance-aware pipeline.
 ### Creating a Client
 
 ```typescript
-import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient } from '@microsoft/agent-governance-sdk';
 
 // Quick creation with defaults
 const client = AgentMeshClient.create('sales-agent', {
@@ -127,7 +127,7 @@ console.log(client.audit);           // AuditLogger instance
 ### Full Configuration
 
 ```typescript
-import { AgentMeshClient, AgentMeshConfig } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient, AgentMeshConfig } from '@microsoft/agent-governance-sdk';
 
 const config: AgentMeshConfig = {
   agentId: 'analytics-agent',
@@ -201,7 +201,7 @@ conflict resolution).
 Flat rules match an `action` string and return an `effect`:
 
 ```typescript
-import { PolicyEngine, PolicyRule } from '@microsoft/agentmesh-sdk';
+import { PolicyEngine, PolicyRule } from '@microsoft/agent-governance-sdk';
 
 const rules: PolicyRule[] = [
   { action: 'data.read',   effect: 'allow' },
@@ -238,7 +238,7 @@ Rich policies add expressions, rate limits, approval workflows, and conflict
 resolution:
 
 ```typescript
-import { PolicyEngine } from '@microsoft/agentmesh-sdk';
+import { PolicyEngine } from '@microsoft/agent-governance-sdk';
 
 const engine = new PolicyEngine();
 
@@ -368,7 +368,7 @@ import {
   PolicyEngine,
   PolicyConflictResolver,
   ConflictResolutionStrategy,
-} from '@microsoft/agentmesh-sdk';
+} from '@microsoft/agent-governance-sdk';
 
 const engine = new PolicyEngine([], ConflictResolutionStrategy.DenyOverrides);
 ```
@@ -452,7 +452,7 @@ delegation, and lifecycle management.
 ### §5.1 Generating an Identity
 
 ```typescript
-import { AgentIdentity } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity } from '@microsoft/agent-governance-sdk';
 
 const agent = AgentIdentity.generate('sales-assistant', ['crm.read', 'email.send'], {
   name: 'Sales Assistant',
@@ -645,7 +645,7 @@ const didDoc = agent.toDIDDocument();
 Manage multiple identities with the `IdentityRegistry`:
 
 ```typescript
-import { AgentIdentity, IdentityRegistry } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity, IdentityRegistry } from '@microsoft/agent-governance-sdk';
 
 const registry = new IdentityRegistry();
 
@@ -691,7 +691,7 @@ Scores decay over time and update based on interaction outcomes.
 ### §6.1 Creating a Trust Manager
 
 ```typescript
-import { TrustManager, TrustConfig } from '@microsoft/agentmesh-sdk';
+import { TrustManager, TrustConfig } from '@microsoft/agent-governance-sdk';
 
 // Default configuration
 const tm = new TrustManager();
@@ -785,7 +785,7 @@ Verified       █████████████████████�
 Verify another agent's identity and establish initial trust:
 
 ```typescript
-import { AgentIdentity, TrustManager } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity, TrustManager } from '@microsoft/agent-governance-sdk';
 
 const tm = new TrustManager();
 const peer = AgentIdentity.generate('remote-agent', ['data.read']);
@@ -831,7 +831,7 @@ chain similar to a blockchain.
 ### §7.1 Logging Events
 
 ```typescript
-import { AuditLogger } from '@microsoft/agentmesh-sdk';
+import { AuditLogger } from '@microsoft/agent-governance-sdk';
 
 const logger = new AuditLogger();
 
@@ -941,7 +941,7 @@ const logger = new AuditLogger({ maxEntries: 50_000 });
 Wrap LangChain tool calls with governance checks:
 
 ```typescript
-import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient } from '@microsoft/agent-governance-sdk';
 import { ChatOpenAI } from '@langchain/openai';
 import { DynamicTool } from '@langchain/core/tools';
 
@@ -981,7 +981,7 @@ const searchTool = governedTool('search', async (query) => {
 Add governance to OpenAI function calls:
 
 ```typescript
-import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient } from '@microsoft/agent-governance-sdk';
 import OpenAI from 'openai';
 
 const client = AgentMeshClient.create('openai-agent', {
@@ -1061,7 +1061,7 @@ The package itself is configuration-object driven, but you can wire environment 
 into your configuration:
 
 ```typescript
-import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient } from '@microsoft/agent-governance-sdk';
 
 const client = AgentMeshClient.create(
   process.env.AGENT_ID ?? 'default-agent',
@@ -1114,7 +1114,7 @@ includes:
 ### §10.1 Identity Errors
 
 ```typescript
-import { AgentIdentity } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity } from '@microsoft/agent-governance-sdk';
 
 // Revoked identity cannot be reactivated
 const agent = AgentIdentity.generate('temp', ['read']);
@@ -1140,7 +1140,7 @@ try {
 ### §10.2 Policy Errors
 
 ```typescript
-import { PolicyEngine } from '@microsoft/agentmesh-sdk';
+import { PolicyEngine } from '@microsoft/agent-governance-sdk';
 
 const engine = new PolicyEngine();
 
@@ -1162,7 +1162,7 @@ try {
 ### §10.3 Governance Pipeline Errors
 
 ```typescript
-import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient } from '@microsoft/agent-governance-sdk';
 
 const client = AgentMeshClient.create('agent', {
   policyRules: [{ action: '*', effect: 'deny' }],
@@ -1191,7 +1191,7 @@ import type {
   PolicyDecisionResult,
   GovernanceResult,
   TrustTier,
-} from '@microsoft/agentmesh-sdk';
+} from '@microsoft/agent-governance-sdk';
 
 // Type guard for trust tiers
 function requiresTrust(tier: TrustTier, minimum: TrustTier): boolean {
@@ -1234,7 +1234,7 @@ equivalent Python tutorial for each topic:
 | `AuditLogger` | `agent_os.audit` | [Tutorial 04 — Audit & Compliance](./04-audit-and-compliance.md) |
 
 > **Note:** The TypeScript package wraps all governance features into a single
-> `@microsoft/agentmesh-sdk` package, while the Python implementation splits
+> `@microsoft/agent-governance-sdk` package, while the Python implementation splits
 > them across separate `agent_os.*` modules. The APIs are designed for
 > cross-language parity — policy YAML files work identically in both.
 

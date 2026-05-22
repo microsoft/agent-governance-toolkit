@@ -49,7 +49,7 @@ pip install agent-governance-toolkit[full]
 
 **TypeScript / Node.js** (npm)
 ```bash
-npm install @microsoft/agentmesh-sdk
+npm install @microsoft/agent-governance-sdk
 ```
 
 **.NET** (NuGet)
@@ -153,7 +153,7 @@ if decision.allowed:
 ### ポリシーの適用 — TypeScript
 
 ```typescript
-import { PolicyEngine } from "@microsoft/agentmesh-sdk";
+import { PolicyEngine } from "@microsoft/agent-governance-sdk";
 
 const engine = new PolicyEngine([
   { action: "web_search", effect: "allow" },
@@ -285,7 +285,7 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | 言語 | パッケージ | インストール |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit[full]`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@microsoft/agentmesh-sdk`](../../agent-governance-typescript/) | `npm install @microsoft/agentmesh-sdk` |
+| **TypeScript** | [`@microsoft/agent-governance-sdk`](../../agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
 | **Rust MCP** | [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) | `cargo add agentmesh-mcp` |
