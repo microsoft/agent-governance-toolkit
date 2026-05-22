@@ -398,11 +398,12 @@ html {
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
   text-decoration: none;
   color: inherit;
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
 }
 
 .agt-card:hover {
-  border-color: var(--md-primary-fg-color);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
 }
@@ -411,11 +412,23 @@ html {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+.agt-card-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.agt-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .agt-card-title {
   font-size: 1rem;
   font-weight: 600;
-  margin: 0 0 0.5rem;
-  color: var(--md-primary-fg-color);
+  margin: 0 0 0.35rem;
+  display: block;
 }
 
 .agt-card-desc {
@@ -423,7 +436,45 @@ html {
   color: var(--mslearn-text-muted);
   margin: 0;
   line-height: 1.5;
+  display: block;
 }
+
+/* ── Per-package card accent colors ── */
+.agt-card[data-pkg="os"]          { border-left: 3px solid #0E9AA7; }
+.agt-card[data-pkg="mesh"]        { border-left: 3px solid #7C3AED; }
+.agt-card[data-pkg="runtime"]     { border-left: 3px solid #EA580C; }
+.agt-card[data-pkg="sre"]         { border-left: 3px solid #DC2626; }
+.agt-card[data-pkg="compliance"]  { border-left: 3px solid #16A34A; }
+.agt-card[data-pkg="marketplace"] { border-left: 3px solid #4F46E5; }
+.agt-card[data-pkg="lightning"]   { border-left: 3px solid #D97706; }
+.agt-card[data-pkg="hypervisor"]  { border-left: 3px solid #1E40AF; }
+
+.agt-card[data-pkg="os"]:hover          { border-color: #0E9AA7; }
+.agt-card[data-pkg="mesh"]:hover        { border-color: #7C3AED; }
+.agt-card[data-pkg="runtime"]:hover     { border-color: #EA580C; }
+.agt-card[data-pkg="sre"]:hover         { border-color: #DC2626; }
+.agt-card[data-pkg="compliance"]:hover  { border-color: #16A34A; }
+.agt-card[data-pkg="marketplace"]:hover { border-color: #4F46E5; }
+.agt-card[data-pkg="lightning"]:hover   { border-color: #D97706; }
+.agt-card[data-pkg="hypervisor"]:hover  { border-color: #1E40AF; }
+
+.agt-card[data-pkg="os"]          .agt-card-title { color: #0E9AA7; }
+.agt-card[data-pkg="mesh"]        .agt-card-title { color: #7C3AED; }
+.agt-card[data-pkg="runtime"]     .agt-card-title { color: #EA580C; }
+.agt-card[data-pkg="sre"]         .agt-card-title { color: #DC2626; }
+.agt-card[data-pkg="compliance"]  .agt-card-title { color: #16A34A; }
+.agt-card[data-pkg="marketplace"] .agt-card-title { color: #4F46E5; }
+.agt-card[data-pkg="lightning"]   .agt-card-title { color: #D97706; }
+.agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #1E40AF; }
+
+[data-md-color-scheme="slate"] .agt-card[data-pkg="os"]          .agt-card-title { color: #2DD4BF; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="mesh"]        .agt-card-title { color: #A78BFA; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="runtime"]     .agt-card-title { color: #FB923C; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="sre"]         .agt-card-title { color: #F87171; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="compliance"]  .agt-card-title { color: #4ADE80; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="marketplace"] .agt-card-title { color: #818CF8; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="lightning"]   .agt-card-title { color: #FBBF24; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #60A5FA; }
 
 
 /* ==========================================================================
@@ -431,7 +482,7 @@ html {
    ========================================================================== */
 
 .agt-hero {
-  background: linear-gradient(135deg, #0078D4, #005A9E);
+  background: linear-gradient(135deg, #1B2838 0%, #0D3B66 40%, #1E3A5F 70%, #2A1B3D 100%);
   color: #FFFFFF;
   padding: 3rem 2rem;
   border-radius: 8px;
@@ -440,7 +491,7 @@ html {
 }
 
 [data-md-color-scheme="slate"] .agt-hero {
-  background: linear-gradient(135deg, #003D6B, #002244);
+  background: linear-gradient(135deg, #0F1923 0%, #0A2847 40%, #15293F 70%, #1A1128 100%);
 }
 
 .agt-hero h1,

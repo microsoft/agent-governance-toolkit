@@ -118,37 +118,45 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 ## Packages
 
 <div class="agt-cards">
-<a class="agt-card" href="packages/agent-os.md">
-<span class="agt-card-title">⚙️ Agent OS</span>
-<span class="agt-card-desc">Policy engine, agent lifecycle, governance gate</span>
+<a class="agt-card" data-pkg="os" href="packages/agent-os.md">
+<img class="agt-card-icon" src="assets/icons/agent-os.svg" alt="Agent OS">
+<span class="agt-card-body"><span class="agt-card-title">Agent OS</span>
+<span class="agt-card-desc">Policy engine, agent lifecycle, governance gate</span></span>
 </a>
-<a class="agt-card" href="packages/agent-mesh.md">
-<span class="agt-card-title">🔗 Agent Mesh</span>
-<span class="agt-card-desc">Agent discovery, routing, and trust mesh</span>
+<a class="agt-card" data-pkg="mesh" href="packages/agent-mesh.md">
+<img class="agt-card-icon" src="assets/icons/agent-mesh.svg" alt="Agent Mesh">
+<span class="agt-card-body"><span class="agt-card-title">Agent Mesh</span>
+<span class="agt-card-desc">Agent discovery, routing, and trust mesh</span></span>
 </a>
-<a class="agt-card" href="packages/agent-runtime.md">
-<span class="agt-card-title">🛡️ Agent Runtime</span>
-<span class="agt-card-desc">Execution sandboxing with four privilege rings</span>
+<a class="agt-card" data-pkg="runtime" href="packages/agent-runtime.md">
+<img class="agt-card-icon" src="assets/icons/agent-runtime.svg" alt="Agent Runtime">
+<span class="agt-card-body"><span class="agt-card-title">Agent Runtime</span>
+<span class="agt-card-desc">Execution sandboxing with four privilege rings</span></span>
 </a>
-<a class="agt-card" href="packages/agent-sre.md">
-<span class="agt-card-title">📊 Agent SRE</span>
-<span class="agt-card-desc">Kill switch, SLO monitoring, chaos testing</span>
+<a class="agt-card" data-pkg="sre" href="packages/agent-sre.md">
+<img class="agt-card-icon" src="assets/icons/agent-sre.svg" alt="Agent SRE">
+<span class="agt-card-body"><span class="agt-card-title">Agent SRE</span>
+<span class="agt-card-desc">Kill switch, SLO monitoring, chaos testing</span></span>
 </a>
-<a class="agt-card" href="packages/agent-compliance.md">
-<span class="agt-card-title">✅ Agent Compliance</span>
-<span class="agt-card-desc">OWASP verification, policy linting, integrity checks</span>
+<a class="agt-card" data-pkg="compliance" href="packages/agent-compliance.md">
+<img class="agt-card-icon" src="assets/icons/agent-compliance.svg" alt="Agent Compliance">
+<span class="agt-card-body"><span class="agt-card-title">Agent Compliance</span>
+<span class="agt-card-desc">OWASP verification, policy linting, integrity checks</span></span>
 </a>
-<a class="agt-card" href="packages/agent-marketplace.md">
-<span class="agt-card-title">🏪 Agent Marketplace</span>
-<span class="agt-card-desc">Plugin governance and trust scoring</span>
+<a class="agt-card" data-pkg="marketplace" href="packages/agent-marketplace.md">
+<img class="agt-card-icon" src="assets/icons/agent-marketplace.svg" alt="Agent Marketplace">
+<span class="agt-card-body"><span class="agt-card-title">Agent Marketplace</span>
+<span class="agt-card-desc">Plugin governance and trust scoring</span></span>
 </a>
-<a class="agt-card" href="packages/agent-lightning.md">
-<span class="agt-card-title">⚡ Agent Lightning</span>
-<span class="agt-card-desc">RL training governance with violation penalties</span>
+<a class="agt-card" data-pkg="lightning" href="packages/agent-lightning.md">
+<img class="agt-card-icon" src="assets/icons/agent-lightning.svg" alt="Agent Lightning">
+<span class="agt-card-body"><span class="agt-card-title">Agent Lightning</span>
+<span class="agt-card-desc">RL training governance with violation penalties</span></span>
 </a>
-<a class="agt-card" href="packages/agent-hypervisor.md">
-<span class="agt-card-title">🔒 Agent Hypervisor</span>
-<span class="agt-card-desc">Execution audit, delta engine, commitment anchoring</span>
+<a class="agt-card" data-pkg="hypervisor" href="packages/agent-hypervisor.md">
+<img class="agt-card-icon" src="assets/icons/agent-hypervisor.svg" alt="Agent Hypervisor">
+<span class="agt-card-body"><span class="agt-card-title">Agent Hypervisor</span>
+<span class="agt-card-desc">Execution audit, delta engine, commitment anchoring</span></span>
 </a>
 </div>
 </div>

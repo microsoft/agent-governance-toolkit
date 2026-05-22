@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7C3AED;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#5B21B6;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="12" fill="url(#g)"/>
+  <!-- Mesh network nodes -->
+  <circle cx="32" cy="22" r="4" fill="white"/>
+  <circle cx="20" cy="38" r="4" fill="white"/>
+  <circle cx="44" cy="38" r="4" fill="white"/>
+  <circle cx="32" cy="48" r="3" fill="white" opacity="0.7"/>
+  <!-- Mesh connections -->
+  <line x1="32" y1="26" x2="20" y2="34" stroke="white" stroke-width="1.5" opacity="0.6"/>
+  <line x1="32" y1="26" x2="44" y2="34" stroke="white" stroke-width="1.5" opacity="0.6"/>
+  <line x1="20" y1="42" x2="44" y2="42" stroke="white" stroke-width="1.5" opacity="0.6"/>
+  <line x1="20" y1="42" x2="32" y2="48" stroke="white" stroke-width="1.5" opacity="0.4"/>
+  <line x1="44" y1="42" x2="32" y2="48" stroke="white" stroke-width="1.5" opacity="0.4"/>
+  <!-- Identity lock in center node -->
+  <rect x="28" y="30" width="8" height="6" rx="1" fill="white" opacity="0.3"/>
+  <circle cx="32" cy="29" r="3" fill="none" stroke="white" stroke-width="1.5" opacity="0.3"/>
+</svg>
