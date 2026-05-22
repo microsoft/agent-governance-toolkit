@@ -257,6 +257,7 @@ class OPABackend:
             # the previous `--input /dev/stdin` path failed on Windows.
             cmd = [
                 "opa", "eval", "--format", "json",
+                "--v0-compatible",
                 "--stdin-input",
                 "--data", str(rego_file),
                 self._query,

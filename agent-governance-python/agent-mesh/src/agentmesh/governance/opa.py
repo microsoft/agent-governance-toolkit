@@ -222,7 +222,7 @@ class OPAEvaluator:
         """Run `opa eval` subprocess."""
         input_json = json.dumps(input_data)
 
-        cmd = ["opa", "eval", "--format", "json", "--input", "/dev/stdin", "--data"]
+        cmd = ["opa", "eval", "--format", "json", "--v0-compatible", "--input", "/dev/stdin", "--data"]
 
         if self.rego_path:
             cmd.append(self.rego_path)
