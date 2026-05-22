@@ -71,7 +71,7 @@ the relevant GitHub Issue or PR.
 
 ## Releases
 
-Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is documented in [RELEASE.md](RELEASE.md) and automated via GitHub Actions with trusted publishing and SLSA build provenance.
+Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is documented in [RELEASE.md](docs/RELEASE.md) and automated via GitHub Actions with trusted publishing and SLSA build provenance.
 
 ## Project Charter
 
