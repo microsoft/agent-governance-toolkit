@@ -3,10 +3,10 @@
 ## Agent Governance Toolkit — Runtime Governance for Agentic AI
 
 **Proposed by:** Microsoft (microsoft/agent-governance-toolkit)
-**Requested Level:** Sandbox → Incubation
+**Requested Level:** Member Project
 **License:** MIT
 **Primary Contact:** Agent Governance Toolkit Team (agentgovtoolkit@microsoft.com)
-**Status:** 🟢 Ready for submission -- Public Preview shipped (v3.2.0). 5 SDK languages. 19 framework integrations. Microsoft-signed releases via ESRP.
+**Status:** 🟢 Ready for submission -- Public Preview shipped (v3.7.0). 5 SDK languages. 19 framework integrations. Microsoft-signed releases via ESRP.
 
 ---
 
@@ -134,26 +134,32 @@ The toolkit is unique in providing **external, runtime, mandatory** governance:
 ## 9. Project Governance
 
 - **License:** MIT
-- **Code of Conduct:** Microsoft Open Source Code of Conduct (Contributor Covenant)
-- **Contributing Guide:** CONTRIBUTING.md with DCO sign-off
-- **CI/CD:** GitHub Actions, branch protection, automated testing
-- **Security:** SECURITY.md with vulnerability reporting process
+- **Code of Conduct:** Contributor Covenant v2.1 ([CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md))
+- **Contributing Guide:** [CONTRIBUTING.md](../../CONTRIBUTING.md) with CLA + DCO sign-off
+- **Governance:** [GOVERNANCE.md](../../GOVERNANCE.md) with decision-making matrix, succession planning, dispute resolution
+- **Technical Charter:** [CHARTER.md](../../CHARTER.md) covering TSC structure, IP policy, and foundation transition
+- **Security:** [SECURITY.md](../../SECURITY.md) with vulnerability reporting and threat model
+- **Maintainers:** [MAINTAINERS.md](../../MAINTAINERS.md) with 5 core maintainers (3 non-Microsoft)
+- **CODEOWNERS:** [.github/CODEOWNERS](../../.github/CODEOWNERS) with per-SDK maintainer ownership
+- **Competition Law:** [ANTITRUST.md](../../ANTITRUST.md) with participant guidelines
+- **Trademarks:** [TRADEMARKS.md](../../TRADEMARKS.md) with usage guidelines
+- **CI/CD:** GitHub Actions, branch protection, automated testing, CodeQL, OpenSSF Scorecard
 
 ## 10. Proposed Roadmap Under AAIF
 
-### Phase 1: Sandbox
-- Public release under microsoft/ org
+### Phase 1: Member Project Onboarding
+- Transfer repository or establish mirror under AAIF org
 - Complete ASI-04 (Supply Chain) coverage with Agent-SBOM
 - Formalize governance policy schema as an open specification
 - Publish integration guides for all major agent frameworks
 
-### Phase 2: Incubation
-- Multi-language support (Python + TypeScript + .NET)
+### Phase 2: Supported Project
+- Multi-language support maturity (Python + TypeScript + .NET + Rust + Go)
 - Formal verification of policy engine
 - Cross-framework governance policy portability standard
 - Reference implementations for AAIF member organizations
 
-### Phase 3: Graduated
+### Phase 3: Managed Project
 - Industry-standard governance policy format (like OPA/Rego for agents)
 - Certification program for governance-compliant agent frameworks
 - Integration with cloud-native security tooling (Falco, OPA, SPIFFE)
