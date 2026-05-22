@@ -178,7 +178,6 @@ docs/reference/comparison.md	../agent-governance-python/agent-os/
 docs/reference/comparison.md	LIMITATIONS.md
 docs/reference/contributing.md	LICENSE
 docs/reference/contributing.md	SECURITY.md
-docs/reference/contributing.md	docs/security-scanning.md
 docs/releases/RELEASE_NOTES_v1.0.0.md	LICENSE
 docs/releases/RELEASE_NOTES_v1.0.0.md	docs/OWASP-COMPLIANCE.md
 docs/releases/RELEASE_NOTES_v1.0.0.md	docs/analyst/singapore-mgf-mapping.md

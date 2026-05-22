@@ -182,10 +182,14 @@ nav:
     - OpenClaw Sidecar: deployment/openclaw-sidecar.md
     - Private Endpoints: deployment/private-endpoints.md
   - Security:
+    - Overview: security/index.md
     - Threat Model: security/threat-model.md
     - OWASP Compliance: security/owasp-compliance.md
     - Security Scanning: security/scanning.md
     - Tenant Isolation: security/tenant-isolation.md
+    - Trust Score Calibration: security/trust-score-calibration.md
+    - Audits: security/audits/README.md
+    - Reporting a Vulnerability: security/disclosure.md
   - Specifications:
     - "Agent OS Policy Engine": specs/AGENT-OS-POLICY-ENGINE-1.0.md
     - "AgentMesh Identity & Trust": specs/AGENTMESH-IDENTITY-TRUST-1.0.md

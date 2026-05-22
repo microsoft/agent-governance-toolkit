@@ -354,7 +354,7 @@ terms (risk reduction, compliance cost savings, incident prevention value).
 
 | Component | File | Key Content |
 |-----------|------|-------------|
-| STRIDE threat model | `docs/THREAT_MODEL.md` | 4 trust boundaries, 6 attack surfaces, STRIDE analysis |
+| STRIDE threat model | `docs/security/threat-model.md` | 4 trust boundaries, 6 attack surfaces, STRIDE analysis |
 | OWASP Agentic Top 10 | `docs/OWASP-COMPLIANCE.md` | 10/10 risks mapped with mitigations |
 | Blast radius containment | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring isolation, Ring 0–3 |
 | Cascade detection | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:223` | `CascadeDetector` |
@@ -724,7 +724,7 @@ requirements overlap with other frameworks.
 - **EU AI Act Checklist:** [`docs/compliance/eu-ai-act-checklist.md`](eu-ai-act-checklist.md)
 - **SOC 2 Mapping:** [`docs/compliance/soc2-mapping.md`](soc2-mapping.md)
 - **NIST RFI Response:** [`docs/compliance/nist-rfi-2026-00206.md`](nist-rfi-2026-00206.md)
-- **Threat Model (STRIDE):** [`docs/THREAT_MODEL.md`](../THREAT_MODEL.md)
+- **Threat Model (STRIDE):** [`docs/security/threat-model.md`](../security/threat-model.md)
 - **Architecture Overview:** [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
 
 ---

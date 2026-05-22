@@ -6,7 +6,7 @@ PR: [microsoft/agent-governance-toolkit#2236](https://github.com/microsoft/agent
 
 This PR adds **sandbox-provider extension fields** to the canonical
 `PolicyDocument` / `PolicyDefaults` schema in
-[`agent-governance-python/agent-os/src/agent_os/policies/schema.py`](../../agent-governance-python/agent-os/src/agent_os/policies/schema.py)
+[`agent-governance-python/agent-os/src/agent_os/policies/schema.py`](../../../agent-governance-python/agent-os/src/agent_os/policies/schema.py)
 so the new Azure Container Apps (`ACASandboxProvider`) backend — and the
 existing Docker and Hyperlight providers — can read resource and egress
 controls from a single canonical policy document instead of from
@@ -90,10 +90,10 @@ All new tests live in `agent-governance-python/agent-os/tests/` and
 
 | File | Purpose |
 |---|---|
-| [`agent-os/tests/test_policy_sandbox_fields.py`](../../agent-governance-python/agent-os/tests/test_policy_sandbox_fields.py) | Pins the contract for the new schema fields: defaults, allowed `Literal` values, YAML round-trip, and backward compatibility with older YAML files that omit every new field. |
-| [`agent-sandbox/tests/test_azure_sandbox.py`](../../agent-governance-python/agent-sandbox/tests/test_azure_sandbox.py) | Module-level helpers `_network_allowlist`, `_network_default`, and `aca_config_from_policy` are exercised against the new schema fields — including the fail-closed default, the `allow` opt-in path, and empty-allowlist behavior. |
-| [`agent-sandbox/tests/test_azure_sandbox_integration.py`](../../agent-governance-python/agent-sandbox/tests/test_azure_sandbox_integration.py) | End-to-end test `test_empty_allowlist_plus_deny_is_total_lockdown` verifies that the default policy produces zero egress decisions, and `test_network_default_allow_lets_everything_through` verifies the opt-in path. |
-| [`agent-sandbox/tests/test_docker_sandbox.py`](../../agent-governance-python/agent-sandbox/tests/test_docker_sandbox.py) | Existing Docker provider tests updated to use the new `network_allowlist` field directly, replacing the previous `SimpleNamespace` shim. Includes `test_network_allowlist_enables_network`, `test_no_network_allowlist`, and `test_empty_network_allowlist_keeps_network_disabled`. |
+| [`agent-os/tests/test_policy_sandbox_fields.py`](../../../agent-governance-python/agent-os/tests/test_policy_sandbox_fields.py) | Pins the contract for the new schema fields: defaults, allowed `Literal` values, YAML round-trip, and backward compatibility with older YAML files that omit every new field. |
+| [`agent-sandbox/tests/test_azure_sandbox.py`](../../../agent-governance-python/agent-sandbox/tests/test_azure_sandbox.py) | Module-level helpers `_network_allowlist`, `_network_default`, and `aca_config_from_policy` are exercised against the new schema fields — including the fail-closed default, the `allow` opt-in path, and empty-allowlist behavior. |
+| [`agent-sandbox/tests/test_azure_sandbox_integration.py`](../../../agent-governance-python/agent-sandbox/tests/test_azure_sandbox_integration.py) | End-to-end test `test_empty_allowlist_plus_deny_is_total_lockdown` verifies that the default policy produces zero egress decisions, and `test_network_default_allow_lets_everything_through` verifies the opt-in path. |
+| [`agent-sandbox/tests/test_docker_sandbox.py`](../../../agent-governance-python/agent-sandbox/tests/test_docker_sandbox.py) | Existing Docker provider tests updated to use the new `network_allowlist` field directly, replacing the previous `SimpleNamespace` shim. Includes `test_network_allowlist_enables_network`, `test_no_network_allowlist`, and `test_empty_network_allowlist_keeps_network_disabled`. |
 
 Full `pytest` run on `agent-governance-python/agent-os/` and
 `agent-governance-python/agent-sandbox/` is green; no existing test

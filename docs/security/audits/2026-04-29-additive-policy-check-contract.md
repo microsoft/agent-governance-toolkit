@@ -1,7 +1,7 @@
 # 2026-04-29 — Additive Policy-Check Contract
 
 PR: [microsoft/agent-governance-toolkit#1594](https://github.com/microsoft/agent-governance-toolkit/pull/1594)
-ADR: [docs/adr/0011-additive-policy-check-contract.md](../adr/0011-additive-policy-check-contract.md)
+ADR: [docs/adr/0011-additive-policy-check-contract.md](../../adr/0011-additive-policy-check-contract.md)
 
 ## What changed and why
 
