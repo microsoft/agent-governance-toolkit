@@ -35,7 +35,7 @@ The project lead sets overall technical direction, resolves disputes when consen
 
 See [MAINTAINERS.md](MAINTAINERS.md) for the full list of current maintainers, their areas of ownership, and affiliation details.
 
-We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Code ownership areas are defined in [CODEOWNERS](CODEOWNERS).
+We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Code ownership areas are defined in [CODEOWNERS](.github/CODEOWNERS).
 
 ## Decision-Making
 
@@ -103,6 +103,10 @@ All participants are expected to follow the [Microsoft Open Source Code of Condu
 ## Security
 
 Security vulnerabilities should be reported via [SECURITY.md](SECURITY.md), not through public issues.
+
+## Competition Law
+
+All participants must comply with applicable competition (antitrust) laws. See [ANTITRUST.md](ANTITRUST.md) for guidelines on appropriate discussion topics.
 
 ## Changes to Governance
 
