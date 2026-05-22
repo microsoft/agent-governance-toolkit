@@ -4,7 +4,7 @@
 #
 # If a PR touches core security surfaces (policy engine, identity, trust,
 # encryption, execution rings, kill switch), it must include a corresponding
-# docs/security-audits/YYYY-MM-DD-*.md file.
+# docs/security/audits/YYYY-MM-DD-*.md file.
 set -euo pipefail
 
 BASE_REF="${1:-origin/main}"
@@ -42,13 +42,13 @@ if [ "$CAPABILITY_TOUCHED" = false ]; then
 fi
 
 # Check for a security audit doc in this PR
-AUDIT_DOC=$(echo "$CHANGED_FILES" | grep -E '^docs/security-audits/[0-9]{4}-[0-9]{2}-[0-9]{2}-.+\.md$' || true)
+AUDIT_DOC=$(echo "$CHANGED_FILES" | grep -E '^docs/security/audits/[0-9]{4}-[0-9]{2}-[0-9]{2}-.+\.md$' || true)
 
 if [ -z "$AUDIT_DOC" ]; then
   echo "❌ security-audit-required: capability paths changed but no security audit doc found."
   echo ""
   echo "This PR touches core security surfaces. Please add a security audit document:"
-  echo "  docs/security-audits/$(date +%Y-%m-%d)-<description>.md"
+  echo "  docs/security/audits/$(date +%Y-%m-%d)-<description>.md"
   echo ""
   echo "The audit doc should cover:"
   echo "  - What changed and why"

@@ -284,7 +284,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 - [Language Package Matrix](../../docs/PACKAGE-FEATURE-MATRIX.md) — 언어별 지원 기능 비교표
 - [Architecture](../../docs/ARCHITECTURE.md) — 시스템 설계, 보안 모델, 신뢰 점수 체계
 - [Architecture Decisions](../../docs/adr/README.md) — 아키텍처 결정 기록(ADR) 로그
-- [Threat Model](../../docs/THREAT_MODEL.md) — 신뢰 경계 및 STRIDE 분석
+- [Threat Model](../../docs/security/threat-model.md) — 신뢰 경계 및 STRIDE 분석
 - [API: Agent OS](../../agent-governance-python/agent-os/README.md) · [AgentMesh](../../agent-governance-python/agent-mesh/README.md) · [Agent SRE](../../agent-governance-python/agent-sre/README.md)
 
 **컴플라이언스 및 배포**

@@ -93,7 +93,7 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 - **[Azure デプロイ](../../docs/deployment/README.md)** — AKS、Azure AI Foundry、Container Apps、OpenClaw サイドカー
 - **[NVIDIA OpenShell 統合](../../docs/integrations/openshell.md)** — サンドボックス分離とガバナンスインテリジェンスの統合
 - **[OWASP コンプライアンス](../../docs/OWASP-COMPLIANCE.md)** — ASI-01 から ASI-10 の完全マッピング
-- **[脅威モデル](../../docs/THREAT_MODEL.md)** — 信頼境界、攻撃面、STRIDE 分析
+- **[脅威モデル](../../docs/security/threat-model.md)** — 信頼境界、攻撃面、STRIDE 分析
 - **[アーキテクチャ](../../docs/ARCHITECTURE.md)** — システム設計、セキュリティモデル、トラストスコアリング
 - **[アーキテクチャ決定記録](../../docs/adr/README.md)** — ID、ランタイム、ポリシーに関する主要な ADR ログ
 - **[NIST RFI マッピング](../../docs/compliance/nist-rfi-2026-00206.md)** — NIST AI Agent セキュリティ RFI（2026-00206）へのマッピング

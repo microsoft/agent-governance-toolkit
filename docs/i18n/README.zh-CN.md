@@ -75,7 +75,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **[Azure 部署](../../docs/deployment/README.md)** — 支持 AKS, Azure AI Foundry, Container Apps, OpenClaw 边车
 - **[NVIDIA OpenShell 集成](../../docs/integrations/openshell.md)** — 将沙箱隔离与治理智能相结合
 - **[OWASP 合规](../../docs/OWASP-COMPLIANCE.md)** — 完整覆盖 ASI-01 至 ASI-10 的映射
-- **[威胁模型](../../docs/THREAT_MODEL.md)** — 包含信任边界、攻击面与 STRIDE 分析
+- **[威胁模型](../../docs/security/threat-model.md)** — 包含信任边界、攻击面与 STRIDE 分析
 - **[架构](../../docs/ARCHITECTURE.md)** — 系统设计、安全模型与信任评分
 - **[架构决策](../../docs/adr/README.md)** — 关键身份、运行时与策略选择的 ADR 记录
 - **[NIST RFI 映射](../../docs/compliance/nist-rfi-2026-00206.md)** — 对应 NIST AI Agent 安全 RFI 的映射 (2026-00206)

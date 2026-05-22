@@ -341,7 +341,7 @@ Works with **20+ agent frameworks** — no vendor lock-in:
 | Architecture Docs | [docs/ARCHITECTURE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/ARCHITECTURE.md) |
 | OWASP Compliance | [docs/OWASP-COMPLIANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/OWASP-COMPLIANCE.md) |
 | Tutorials (27) | [docs/tutorials/](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/tutorials) |
-| Threat Model | [docs/THREAT_MODEL.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/THREAT_MODEL.md) |
+| Threat Model | [docs/security/threat-model.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/security/threat-model.md) |
 | DeepWiki | [deepwiki.com/microsoft/agent-governance-toolkit](https://deepwiki.com/microsoft/agent-governance-toolkit) |
 
 ---
