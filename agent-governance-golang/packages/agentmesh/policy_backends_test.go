@@ -338,3 +338,84 @@ func TestCedarDecisionFromCLIOutput(t *testing.T) {
 		})
 	}
 }
+
+func TestCedarMockRejectsPrincipalConstraint(t *testing.T) {
+	backend := NewCedarBackend(CedarOptions{
+		Mode: CedarBuiltin,
+		PolicyContent: `permit(
+    principal == User::"admin",
+    action == Action::"Deploy",
+    resource
+);`,
+	})
+
+	_, err := backend.Evaluate(map[string]interface{}{"tool_name": "deploy", "agent_id": "bob"})
+	if err == nil {
+		t.Fatal("expected error for principal constraint, got nil")
+	}
+	if !strings.Contains(err.Error(), "principal/resource") {
+		t.Fatalf("error = %q, want principal/resource mention", err)
+	}
+}
+
+func TestCedarMockRejectsResourceConstraint(t *testing.T) {
+	backend := NewCedarBackend(CedarOptions{
+		Mode: CedarBuiltin,
+		PolicyContent: `permit(
+    principal,
+    action == Action::"Read",
+    resource == Resource::"public"
+);`,
+	})
+
+	_, err := backend.Evaluate(map[string]interface{}{"tool_name": "read", "agent_id": "a1"})
+	if err == nil {
+		t.Fatal("expected error for resource constraint, got nil")
+	}
+	if !strings.Contains(err.Error(), "principal/resource") {
+		t.Fatalf("error = %q, want principal/resource mention", err)
+	}
+}
+
+func TestCedarMockAllowsWildcardPolicies(t *testing.T) {
+	backend := NewCedarBackend(CedarOptions{
+		Mode:          CedarBuiltin,
+		PolicyContent: `permit(principal, action == Action::"Read", resource);`,
+	})
+
+	result, err := backend.Evaluate(map[string]interface{}{"tool_name": "read", "agent_id": "a1"})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if !result.Allowed {
+		t.Fatalf("expected allow for wildcard policy, got deny")
+	}
+}
+
+func TestCedarAutoFallbackRejectsPrincipalConstraint(t *testing.T) {
+	previous := cedarLookPath
+	cedarLookPath = func(file string) (string, error) {
+		return "", fmt.Errorf("%s not found", file)
+	}
+	t.Cleanup(func() {
+		cedarLookPath = previous
+	})
+
+	backend := NewCedarBackend(CedarOptions{
+		Mode:                 CedarAuto,
+		AllowBuiltinFallback: true,
+		PolicyContent: `permit(
+    principal == User::"admin",
+    action == Action::"Deploy",
+    resource
+);`,
+	})
+
+	_, err := backend.Evaluate(map[string]interface{}{"tool_name": "deploy", "agent_id": "bob"})
+	if err == nil {
+		t.Fatal("expected error for principal constraint via auto fallback, got nil")
+	}
+	if !strings.Contains(err.Error(), "principal/resource") {
+		t.Fatalf("error = %q, want principal/resource mention", err)
+	}
+}

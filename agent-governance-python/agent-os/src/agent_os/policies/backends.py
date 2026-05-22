@@ -116,7 +116,7 @@ class OPABackend:
 
     def __init__(
         self,
-        mode: Literal["remote", "local"] = "local",
+        mode: Literal["remote", "local", "builtin"] = "local",
         opa_url: str = "http://localhost:8181",
         rego_path: Optional[str] = None,
         rego_content: Optional[str] = None,
@@ -146,6 +146,8 @@ class OPABackend:
         try:
             if self._mode == "remote":
                 result = self._evaluate_remote(context)
+            elif self._mode == "builtin":
+                result = self._evaluate_mock(context)
             else:
                 result = self._evaluate_local(context)
             result.evaluation_ms = (
@@ -215,11 +217,17 @@ class OPABackend:
         if self._opa_available and self._rego_content:
             return self._evaluate_cli(context)
         if self._rego_content:
-            logger.warning(
-                "OPA CLI not available — falling back to built-in regex evaluation. "
-                "Install OPA CLI for full policy evaluation: https://www.openpolicyagent.org/docs/latest/#running-opa"
+            # local mode without CLI: deny with explicit error (matches Go behavior)
+            return BackendDecision(
+                allowed=False,
+                action="deny",
+                reason=(
+                    "OPA local mode requires the opa CLI; use mode='builtin' "
+                    "explicitly to opt into the mock evaluator"
+                ),
+                backend="opa",
+                error="no real OPA evaluator available",
             )
-            return self._evaluate_builtin(context)
         return BackendDecision(
             allowed=False,
             action="deny",
@@ -289,8 +297,14 @@ class OPABackend:
                     error="timeout",
                 )
 
-    def _evaluate_builtin(self, context: dict[str, Any]) -> BackendDecision:
-        """Built-in simple Rego evaluator for common patterns."""
+    def _evaluate_mock(self, context: dict[str, Any]) -> BackendDecision:
+        """Mock Rego evaluator for testing/dev only.
+
+        Supports simple ``==``, ``!=``, and ``not`` conditions.
+        Does NOT support comprehensions, set operations, function calls,
+        builtins, virtual documents, or any non-trivial Rego feature.
+        Use mode='cli' or a real OPA server for production.
+        """
         target_rule = self._query.split(".")[-1]
 
         # Parse defaults
@@ -521,12 +535,22 @@ class CedarBackend:
                 self._mode == "auto" and self._cli_available
             ):
                 result = self._evaluate_cli(context)
+            elif self._mode == "builtin":
+                result = self._evaluate_mock(context)
             else:
-                logger.warning(
-                    "Neither cedarpy nor Cedar CLI available — falling back to built-in "
-                    "pattern evaluation. Install cedar-py or the Cedar CLI for full evaluation."
+                # auto mode: deny when no real engine (matches Go behavior)
+                elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+                return BackendDecision(
+                    allowed=False,
+                    action="deny",
+                    reason=(
+                        "Cedar auto mode requires cedarpy or the cedar CLI; "
+                        "use mode='builtin' explicitly to opt into the mock evaluator"
+                    ),
+                    backend="cedar",
+                    evaluation_ms=elapsed,
+                    error="no real Cedar evaluator available",
                 )
-                result = self._evaluate_builtin(context)
             result.evaluation_ms = (
                 datetime.now(timezone.utc) - start
             ).total_seconds() * 1000
@@ -658,13 +682,16 @@ class CedarBackend:
                     error="timeout",
                 )
 
-    def _evaluate_builtin(self, context: dict[str, Any]) -> BackendDecision:
-        """Built-in Cedar pattern evaluator for common permit/forbid rules.
+    def _evaluate_mock(self, context: dict[str, Any]) -> BackendDecision:
+        """Mock Cedar pattern evaluator for testing/dev only.
 
         Parses simple Cedar policy patterns:
           - permit(principal, action == Action::"X", resource);
           - forbid(principal, action == Action::"X", resource);
           - permit(principal, action, resource);  // catch-all allow
+
+        Does NOT enforce principal or resource constraints.
+        Use mode='cedarpy' or mode='cli' for production.
         """
         if not self._policy_content:
             return BackendDecision(
@@ -680,6 +707,20 @@ class CedarBackend:
 
         # Parse all permit/forbid statements
         statements = _parse_cedar_statements(self._policy_content)
+
+        # Reject policies with principal/resource constraints the mock cannot enforce
+        for stmt in statements:
+            if stmt.get("has_principal_constraint") or stmt.get("has_resource_constraint"):
+                return BackendDecision(
+                    allowed=False,
+                    action="deny",
+                    reason=(
+                        "Cedar mock evaluator does not implement principal/resource "
+                        "constraints; install cedarpy or the Cedar CLI for production use"
+                    ),
+                    backend="cedar",
+                    error="mock evaluator cannot enforce principal/resource constraints",
+                )
 
         # Cedar semantics: default deny, any forbid overrides permit
         has_permit = False
@@ -725,7 +766,8 @@ def _tool_to_cedar_action(tool_name: str) -> str:
 def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
     """Parse Cedar permit/forbid statements from policy content.
 
-    Returns a list of dicts with keys: effect, action_constraint.
+    Returns a list of dicts with keys: effect, action_constraint,
+    has_principal_constraint, has_resource_constraint, raw.
     """
     import re
 
@@ -748,9 +790,19 @@ def _parse_cedar_statements(content: str) -> list[dict[str, Any]]:
             f'Action::"{action_match.group(1)}"' if action_match else None
         )
 
+        # Detect principal and resource constraints
+        has_principal = bool(re.search(
+            r'principal\s*(?:==|in)\s*\w+', body
+        ))
+        has_resource = bool(re.search(
+            r'resource\s*(?:==|in)\s*\w+', body
+        ))
+
         statements.append({
             "effect": effect,
             "action_constraint": action_constraint,
+            "has_principal_constraint": has_principal,
+            "has_resource_constraint": has_resource,
             "raw": match.group(0),
         })
 

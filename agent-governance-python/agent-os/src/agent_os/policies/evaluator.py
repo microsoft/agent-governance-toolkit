@@ -76,6 +76,7 @@ class PolicyEvaluator:
         rego_path: str | None = None,
         rego_content: str | None = None,
         package: str = "agentos",
+        mode: str = "local",
     ) -> Any:
         """Convenience: register an OPA/Rego backend.
 
@@ -83,6 +84,7 @@ class PolicyEvaluator:
             rego_path: Path to a ``.rego`` file.
             rego_content: Inline Rego policy string.
             package: Rego package name for query construction.
+            mode: Evaluation mode (``"local"``, ``"remote"``, or ``"builtin"``).
 
         Returns:
             The ``OPABackend`` instance.
@@ -90,7 +92,8 @@ class PolicyEvaluator:
         from .backends import OPABackend
 
         backend = OPABackend(
-            rego_path=rego_path, rego_content=rego_content, package=package
+            rego_path=rego_path, rego_content=rego_content, package=package,
+            mode=mode,
         )
         self.add_backend(backend)
         return backend
@@ -100,6 +103,7 @@ class PolicyEvaluator:
         policy_path: str | None = None,
         policy_content: str | None = None,
         entities: list[dict[str, Any]] | None = None,
+        mode: str = "auto",
     ) -> Any:
         """Convenience: register a Cedar backend.
 
@@ -107,6 +111,7 @@ class PolicyEvaluator:
             policy_path: Path to a ``.cedar`` policy file.
             policy_content: Inline Cedar policy string.
             entities: Cedar entities for authorization context.
+            mode: Evaluation mode (``"auto"``, ``"cedarpy"``, ``"cli"``, or ``"builtin"``).
 
         Returns:
             The ``CedarBackend`` instance.
@@ -117,6 +122,7 @@ class PolicyEvaluator:
             policy_path=policy_path,
             policy_content=policy_content,
             entities=entities,
+            mode=mode,
         )
         self.add_backend(backend)
         return backend
