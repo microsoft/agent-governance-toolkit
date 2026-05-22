@@ -39,7 +39,7 @@
   },
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-claude-code",
   "dependencies": {
-    "@microsoft/agent-governance-sdk": "3.6.0"
+    "@microsoft/agent-governance-sdk": "3.7.0"
   },
   "engines": {
     "node": ">=22.0.0"
