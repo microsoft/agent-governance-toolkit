@@ -7,6 +7,57 @@ Step-by-step guides organized by what you're trying to accomplish.
 
 ---
 
+## Learning Paths
+
+Pick a path based on your role. Each path is a curated sequence of tutorials, not a flat list.
+
+### :material-rocket-launch: **Path 1: First governed agent** (30 min)
+
+For developers adding governance to their first agent.
+
+1. [2-Line Quickstart](36-govern-quickstart.md) — `govern()` in 2 lines
+2. [Policy Engine Basics](01-policy-engine.md) — write your first policy
+3. [Framework Integrations](03-framework-integrations.md) — connect to LangChain, CrewAI, OpenAI, etc.
+4. [Govern an AI Agent](04-audit-and-compliance.md) — full audit trail
+
+### :material-shield-lock: **Path 2: Secure an agent fleet** (60 min)
+
+For platform teams deploying agents in production.
+
+1. [Trust & Identity](02-trust-and-identity.md) — agent identity with SPIFFE
+2. [MCP Security Gateway](07-mcp-security-gateway.md) — govern MCP tool servers
+3. [Execution Sandboxing](06-execution-sandboxing.md) — privilege rings
+4. [Prompt Injection Detection](09-prompt-injection-detection.md) — detect and block attacks
+5. [Security Hardening](25-security-hardening.md) — production best practices
+6. [Multi-Agent Fleet Policies](49-multi-agent-policies.md) — collective enforcement
+
+### :material-clipboard-check: **Path 3: Compliance and audit** (45 min)
+
+For teams that need to prove what happened to auditors or regulators.
+
+1. [OPA / Rego / Cedar](08-opa-rego-cedar-policies.md) — policy engine options
+2. [Delegation Chains](23-delegation-chains.md) — who authorized what
+3. [Compliance Verification](18-compliance-verification.md) — OWASP, NIST mapping
+4. [SBOM & Signing](26-sbom-and-signing.md) — artifact integrity
+5. [Decision BOM](50-decision-bom.md) — audit artifacts
+
+### :material-chart-line: **Path 4: SRE for agents** (45 min)
+
+For SRE teams operating agents at scale.
+
+1. [Agent Reliability](05-agent-reliability.md) — SLOs and error budgets
+2. [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) — emergency controls
+3. [Cost Governance](51-cost-governance.md) — budget enforcement
+4. [Chaos Testing](52-chaos-testing-agents.md) — fault injection
+5. [Observability & Tracing](13-observability-and-tracing.md) — distributed tracing
+6. [OpenTelemetry Integration](40-otel-observability.md) — OTel for governance events
+
+---
+
+## All Tutorials by Category
+
+---
+
 ## Getting Started
 
 The essentials to get your first governed agent running in minutes.
