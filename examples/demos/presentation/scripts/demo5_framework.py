@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Demo 5: Add Governance to Any Agent - 3 Lines of Code.
 
 MVP PGI - Agent Governance Toolkit
