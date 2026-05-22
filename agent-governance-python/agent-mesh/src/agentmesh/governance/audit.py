@@ -70,10 +70,30 @@ class AuditEntry(BaseModel):
     event_type: str
     agent_did: str
     action: str
+    arguments_hash: Optional[str] = Field(
+        default=None,
+        description=(
+            "SHA-256 hash (hex, lowercase) of the canonical-JSON serialization of "
+            "the action arguments. Defends downstream verifiers against silent "
+            "mutation of recorded arguments. NOT part of the canonical entry hash "
+            "in spec v1.0; v1.1 will extend MerkleAuditChain coverage. "
+            "See spec §4.3.1."
+        ),
+    )
 
     # Context
     resource: Optional[str] = None
     target_did: Optional[str] = None
+    approver_did: Optional[str] = Field(
+        default=None,
+        description=(
+            "DID of the principal whose approval authorized this action. Surfaces "
+            "approval-chain identity in the audit row itself (independent of the "
+            "workflow approval subsystem). NOT part of the canonical entry hash "
+            "in spec v1.0; v1.1 will extend MerkleAuditChain coverage. "
+            "See spec §4.3.1."
+        ),
+    )
 
     # Data (sanitized - no secrets)
     data: dict = Field(default_factory=dict)
@@ -84,6 +104,15 @@ class AuditEntry(BaseModel):
     # Policy evaluation
     policy_decision: Optional[str] = None
     matched_rule: Optional[str] = None
+    policy_version: Optional[str] = Field(
+        default=None,
+        description=(
+            "Version identifier of the policy bundle that produced this decision. "
+            "Defends against silent policy downgrade (replaying old decisions under "
+            "a newer policy version). NOT part of the canonical entry hash in spec "
+            "v1.0; v1.1 will extend MerkleAuditChain coverage. See spec §4.3.1."
+        ),
+    )
 
     # Chaining — populated automatically by MerkleAuditChain.add_entry()
     previous_hash: str = Field(default="")
@@ -182,6 +211,9 @@ class AuditEntry(BaseModel):
                 "outcome": self.outcome,
                 "policy_decision": self.policy_decision,
                 "matched_rule": self.matched_rule,
+                **({"policy_version": self.policy_version} if self.policy_version else {}),
+                **({"arguments_hash": self.arguments_hash} if self.arguments_hash else {}),
+                **({"approver_did": self.approver_did} if self.approver_did else {}),
                 **self.data,
             },
             "agentmeshentryhash": self.entry_hash,
@@ -438,8 +470,18 @@ class AuditLog:
         outcome: str = "success",
         policy_decision: Optional[str] = None,
         trace_id: Optional[str] = None,
+        *,
+        arguments_hash: Optional[str] = None,
+        approver_did: Optional[str] = None,
+        policy_version: Optional[str] = None,
     ) -> AuditEntry:
-        """Log an audit event."""
+        """Log an audit event.
+
+        The ``arguments_hash``, ``approver_did``, and ``policy_version`` parameters
+        are accepted as keyword-only arguments to preserve the positional signature
+        for existing callers. See spec §4.3.1 for semantics and the v1.0/v1.1 hash
+        coverage caveat.
+        """
         entry = AuditEntry(
             event_type=event_type,
             agent_did=agent_did,
@@ -452,6 +494,9 @@ class AuditLog:
             sandbox_id=self._env_context.sandbox_id,
             environment=self._env_context.environment,
             container_runtime=self._env_context.container_runtime,
+            arguments_hash=arguments_hash,
+            approver_did=approver_did,
+            policy_version=policy_version,
         )
 
         self._chain.add_entry(entry)

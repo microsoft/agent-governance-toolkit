@@ -248,12 +248,179 @@ class TestAudit:
     def test_audit_export(self):
         """Test exporting audit log for external verification."""
         audit_log = AuditLog()
-        
+
         audit_log.log("action", "did:agentmesh:agent-1", "read")
-        
+
         export = audit_log.export()
         assert export["entry_count"] == 1
         assert export["chain_root"] is not None  # Merkle root is computed
+
+
+class TestAuditEntryExtensions:
+    """Tests for v1.0 additive audit fields: arguments_hash, approver_did, policy_version.
+
+    These fields are recorded but are NOT yet part of the canonical hash computed
+    by ``AuditEntry.compute_hash()``; spec v1.1 will extend ``MerkleAuditChain``
+    coverage. See ``docs/specs/AUDIT-COMPLIANCE-1.0.md`` §4.3.1.
+    """
+
+    def test_audit_entry_accepts_arguments_hash(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="file_read",
+            arguments_hash="0" * 64,
+        )
+
+        assert entry.arguments_hash == "0" * 64
+
+    def test_audit_entry_accepts_approver_did(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="wire_transfer",
+            approver_did="did:agentmesh:human-reviewer",
+        )
+
+        assert entry.approver_did == "did:agentmesh:human-reviewer"
+
+    def test_audit_entry_accepts_policy_version(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="policy_evaluation",
+            agent_did="did:agentmesh:caller",
+            action="evaluate",
+            policy_version="2026.04.01-abc1234",
+        )
+
+        assert entry.policy_version == "2026.04.01-abc1234"
+
+    def test_new_fields_default_to_none(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+        )
+
+        assert entry.arguments_hash is None
+        assert entry.approver_did is None
+        assert entry.policy_version is None
+
+    def test_audit_log_log_passes_through_new_fields(self):
+        audit_log = AuditLog()
+
+        entry = audit_log.log(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="wire_transfer",
+            arguments_hash="abc123" + "0" * 58,
+            approver_did="did:agentmesh:human-reviewer",
+            policy_version="2026.04.01-abc1234",
+        )
+
+        assert entry.arguments_hash == "abc123" + "0" * 58
+        assert entry.approver_did == "did:agentmesh:human-reviewer"
+        assert entry.policy_version == "2026.04.01-abc1234"
+
+    def test_canonical_hash_unchanged_by_new_fields(self):
+        """Backward compat: new fields MUST NOT affect ``compute_hash()`` in v1.0.
+
+        Spec §4.4 fixes the canonical hash field set. The v1.0 canonical form is
+        intentionally unchanged so that previously-persisted entries continue to
+        verify. Spec v1.1 will introduce hash coverage under an explicit
+        schema-version selector. See §4.3.1.
+        """
+        from agentmesh.governance.audit import AuditEntry
+
+        fixed_ts = datetime(2026, 5, 22, 0, 0, 0, tzinfo=timezone.utc)
+
+        baseline = AuditEntry(
+            entry_id="audit_fixed_id_0001",
+            timestamp=fixed_ts,
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+        )
+
+        extended = AuditEntry(
+            entry_id="audit_fixed_id_0001",
+            timestamp=fixed_ts,
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+            arguments_hash="deadbeef" * 8,
+            approver_did="did:agentmesh:approver",
+            policy_version="v2.1.0",
+        )
+
+        assert extended.compute_hash() == baseline.compute_hash(), (
+            "v1.0 canonical hash form must not depend on additive fields; "
+            "see spec §4.3.1. Schema v1.1 will introduce hash coverage."
+        )
+
+    def test_cloudevent_serialization_includes_new_fields_when_set(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="wire_transfer",
+            arguments_hash="cafe" * 16,
+            approver_did="did:agentmesh:human-reviewer",
+            policy_version="2026.04.01-abc1234",
+        )
+
+        envelope = entry.to_cloudevent()
+
+        assert envelope["data"]["arguments_hash"] == "cafe" * 16
+        assert envelope["data"]["approver_did"] == "did:agentmesh:human-reviewer"
+        assert envelope["data"]["policy_version"] == "2026.04.01-abc1234"
+
+    def test_cloudevent_serialization_omits_new_fields_when_unset(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+        )
+
+        envelope = entry.to_cloudevent()
+
+        assert "arguments_hash" not in envelope["data"]
+        assert "approver_did" not in envelope["data"]
+        assert "policy_version" not in envelope["data"]
+
+    def test_chain_verification_with_new_fields(self):
+        """Chain still verifies when new fields are populated alongside existing ones."""
+        audit_log = AuditLog()
+
+        audit_log.log(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:agent-1",
+            action="read",
+            arguments_hash="abc" + "0" * 61,
+            policy_version="v1.0.0",
+        )
+        audit_log.log(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:agent-1",
+            action="write",
+            arguments_hash="def" + "0" * 61,
+            approver_did="did:agentmesh:approver",
+            policy_version="v1.0.0",
+        )
+
+        is_valid, error = audit_log.verify_integrity()
+        assert is_valid is True
+        assert error is None
 
 
 class TestShadowMode:

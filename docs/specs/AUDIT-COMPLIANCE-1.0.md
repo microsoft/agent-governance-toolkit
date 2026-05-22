@@ -219,12 +219,15 @@ The Agent Mesh audit entry extends the base schema with mesh-specific fields:
 | `event_type` | string | REQUIRED | Category of the audit event. |
 | `agent_did` | string | REQUIRED | DID of the agent. |
 | `action` | string | REQUIRED | The action being audited. |
+| `arguments_hash` | string | OPTIONAL | SHA-256 hash (hex, lowercase) of the canonical-JSON serialization of the action arguments. Defends against silent mutation of recorded arguments. See §4.3.1. |
 | `resource` | string | OPTIONAL | Target resource of the action. |
 | `target_did` | string | OPTIONAL | DID of the target agent (for inter-agent actions). |
+| `approver_did` | string | OPTIONAL | DID of the principal whose approval authorized this action. Surfaces approval-chain identity in the audit row itself. See §4.3.1. |
 | `data` | dict | OPTIONAL | Additional structured data. |
 | `outcome` | string | OPTIONAL | Result of the action. Default: "success". |
 | `policy_decision` | string | OPTIONAL | Policy engine decision. |
 | `matched_rule` | string | OPTIONAL | Rule that matched. |
+| `policy_version` | string | OPTIONAL | Version identifier of the policy bundle that produced this decision. Defends against silent policy downgrade. See §4.3.1. |
 | `previous_hash` | string | OPTIONAL | Hash of the previous entry in the chain. |
 | `entry_hash` | string | OPTIONAL | SHA-256 hash of this entry's canonical form. |
 | `trace_id` | string | OPTIONAL | OTel trace ID for correlation. |
@@ -232,6 +235,24 @@ The Agent Mesh audit entry extends the base schema with mesh-specific fields:
 | `sandbox_id` | string | OPTIONAL | Sandbox/container identifier. |
 | `environment` | string | OPTIONAL | Deployment environment name. |
 | `compute_driver` | string | OPTIONAL | Compute driver identifier. |
+
+### 4.3.1 Additive Tamper-Evidence Fields [Pure Specification]
+
+The fields `arguments_hash`, `approver_did`, and `policy_version` are OPTIONAL
+in spec v1.0 and serve verifiability purposes that are not yet covered by the
+canonical entry hash defined in §4.4. In spec v1.0:
+
+- Implementations MAY populate these fields. Verifiers MUST NOT treat their
+  presence or absence as a conformance signal.
+- The canonical hash field set in §4.4 is intentionally unchanged from spec
+  v1.0.0 to preserve chain verification of previously-persisted entries.
+- Because these fields are not in the canonical hash, a tampering party can
+  mutate them without invalidating `entry_hash`. Implementations and verifiers
+  MUST NOT rely on these fields for tamper detection in v1.0.
+
+Spec v1.1 will extend the §4.4 canonical field set to include these fields under
+an explicit schema-version selector, providing tamper-evident coverage while
+preserving v1.0 verification semantics for legacy chains.
 
 ### 4.4 Entry Hash Computation [Pure Specification]
 
