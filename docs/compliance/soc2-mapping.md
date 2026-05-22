@@ -181,7 +181,7 @@ These numbers are relevant to A1.1 (system capacity) and demonstrate that the go
 | Fault injection | 428,253 | 0.001 ms | 0.007 ms |
 | Concurrent throughput (1,000 agents) | 47,085 | — | — |
 
-> Source: [`BENCHMARKS.md`](../../BENCHMARKS.md). Measured with `time.perf_counter()`, 10,000 iterations, on a development workstation.
+> Source: [`BENCHMARKS.md`](../BENCHMARKS.md). Measured with `time.perf_counter()`, 10,000 iterations, on a development workstation.
 
 ```python
 # A1.2 in action: SLO with Error Budget

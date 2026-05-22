@@ -184,6 +184,7 @@ monkeypatch
 monkeypatching
 MSHV
 msinternal
+MSRC
 mTLS
 myapp
 mynamespace
@@ -291,8 +292,8 @@ stacklevel
 startswith
 staticmethod
 stepreceipt
-Streamable
 streamable
+Streamable
 streamablehttp
 streamlit
 strftime

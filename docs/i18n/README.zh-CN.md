@@ -66,7 +66,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 
 ### 📚 文档
 
-- **[快速入门](../../quickstart.md)** — 在 10 分钟内从零开始构建受治理的代理 (Python · TypeScript · .NET · Rust · Go)
+- **[快速入门](../../docs/quickstart.md)** — 在 10 分钟内从零开始构建受治理的代理 (Python · TypeScript · .NET · Rust · Go)
 - **[TypeScript 包](../../agent-governance-typescript/README.md)** — 提供身份、信任、策略与审计功能的 npm 包
 - **[.NET 包](../../agent-governance-dotnet/README.md)** — 提供完整 OWASP 覆盖的 NuGet 包
 - **[Rust crate](../../agent-governance-rust/agentmesh/README.md)** — crates.io 上的库，包含策略、信任、审计及 Ed25519 身份
@@ -80,12 +80,12 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **[架构决策](../../docs/adr/README.md)** — 关键身份、运行时与策略选择的 ADR 记录
 - **[NIST RFI 映射](../../docs/compliance/nist-rfi-2026-00206.md)** — 对应 NIST AI Agent 安全 RFI 的映射 (2026-00206)
 
-还有问题吗？请提交一个 [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) 或查看我们的 [社区页面](../../COMMUNITY.md).
+还有问题吗？请提交一个 [GitHub issue](https://github.com/microsoft/agent-governance-toolkit/issues) 或查看我们的 [社区页面](../../docs/COMMUNITY.md).
 
 ### ✨ **亮点**
 
 - **确定性策略执行**: 每个代理行为在执行 *前* 都会根据策略进行评估，延迟低于毫秒级 (<0.1 ms)
-  - [策略引擎](../../agent-governance-python/agent-os/) | [性能基准](../../BENCHMARKS.md)
+  - [策略引擎](../../agent-governance-python/agent-os/) | [性能基准](../../docs/BENCHMARKS.md)
 - **零信任代理身份**: 基于 Ed25519 的加密凭证，支持 SPIFFE/SVID，信任评分范围为 0–1000 
   - [AgentMesh](../../agent-governance-python/agent-mesh/) | [信任评分](../../agent-governance-python/agent-mesh/)
 - **执行沙箱**: 4 层权限环、Saga 编排、终止控制与紧急停止(kill switch)
@@ -93,7 +93,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **代理 SRE**: 包含 SLO、错误预算、回放调试、混沌工程、熔断机制与渐进式发布
   - [Agent SRE](../../agent-governance-python/agent-sre/) | [可观测性集成](../../agent-governance-python/agent-hypervisor/src/hypervisor/observability/)
 - **MCP 安全扫描器**: 检测 MCP 工具定义中的工具投毒、拼写劫持(typosquatting)、隐藏指令与rug-pull攻击
-  - [MCP 扫描器](../../agent-governance-python/agent-os/src/agentos/mcp_security.py) | [CLI](../../agent-governance-python/agent-os/src/agentos/cli/mcp_scan.py)
+  - [MCP 扫描器](../../agent-governance-python/agent-os/src/agent_os/mcp_security.py) | [CLI](../../agent-governance-python/agent-os/src/agent_os/cli/mcp_scan.py)
 - **信任报告 CLI**: `agentmesh trust report` — 可视化信任评分、任务成功/失败情况及代理活动
   - [信任 CLI](../../agent-governance-python/agent-mesh/src/agentmesh/cli/trust_cli.py)
 - **密钥扫描与模糊测试**: 基于 Gitleaks 的工作流，包含 7 个模糊测试目标，覆盖策略、注入、沙箱、信任及 MCP
@@ -341,7 +341,7 @@ AGT 提供 **运行时治理** — 规定代理允许执行的操作。对于 **
 | 适配器开销 | 0.004–0.006 ms | 130K–230K ops/sec |
 | 并发吞吐量（50 个 agents） | — | 35,481 ops/sec |
 
-完整方法论及各适配器细分: **[BENCHMARKS.md](../../BENCHMARKS.md)**
+完整方法论及各适配器细分: **[BENCHMARKS.md](../../docs/BENCHMARKS.md)**
 
 ## 安全模型与限制
 
@@ -375,7 +375,7 @@ AGT 提供 **运行时治理** — 规定代理允许执行的操作。对于 **
 ## 贡献者资源
 
 - [贡献指南](../../CONTRIBUTING.md)
-- [社区](../../COMMUNITY.md)
+- [社区](../../docs/COMMUNITY.md)
 - [安全策略](../../SECURITY.md)
 - [架构](../../docs/ARCHITECTURE.md)
 - [Changelog](../../CHANGELOG.md)

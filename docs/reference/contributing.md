@@ -226,7 +226,7 @@ pytest tests/ -x -q
 
 ### Security
 
-- Review the [SECURITY.md](SECURITY.md) file for vulnerability reporting procedures.
+- Review the [SECURITY.md](../../SECURITY.md) file for vulnerability reporting procedures.
 - **Security scanning runs automatically** on all PRs — see [docs/security/scanning.md](../security/scanning.md) for details
 - Use `.security-exemptions.json` to suppress false positives (requires justification)
 - Never commit secrets, credentials, or tokens.
@@ -258,7 +258,7 @@ This policy is enforced by:
 
 ## Licensing
 
-By contributing to this project, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing to this project, you agree that your contributions will be licensed under the [MIT License](../../LICENSE).
 
 ## Integration Author Guide
 
