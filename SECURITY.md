@@ -13,6 +13,52 @@ please review the latest guidance for Microsoft repositories at
 
 <!-- END MICROSOFT SECURITY.MD BLOCK -->
 
+## Threat Model
+
+Agent governance tooling occupies a unique position in the security stack: it
+sits between autonomous AI agents and the resources they access. Unlike
+traditional middleware, the agents AGT governs can reason, adapt, and attempt
+to circumvent controls. This creates threat categories that do not exist in
+conventional software.
+
+**Trust boundaries:**
+
+```
+┌──────────────┐     ┌─────────────────┐     ┌──────────────────┐
+│  AI Agent    │────▶│  AGT Policy     │────▶│  Protected       │
+│  (untrusted) │     │  Engine         │     │  Resources       │
+└──────────────┘     │  (trust anchor) │     └──────────────────┘
+                     └─────────────────┘
+                           │
+                     ┌─────────────────┐
+                     │  Audit Log      │
+                     │  (tamper-proof) │
+                     └─────────────────┘
+```
+
+**Key threat categories:**
+
+| Category | Description | AGT mitigation |
+|----------|-------------|----------------|
+| Policy bypass | Agent crafts inputs that cause the policy engine to permit unauthorized actions | Deterministic evaluation with no LLM in the policy path; formal spec conformance tests |
+| Identity spoofing | Agent presents forged credentials or DIDs to impersonate a higher-trust agent | Cryptographic identity verification via AgentMesh identity layer |
+| Audit tampering | Attacker modifies or deletes audit records to hide policy violations | Append-only audit log with cryptographic chaining |
+| Budget evasion | Agent manipulates cost inputs (NaN, negative values) to bypass spending limits | Input validation rejecting IEEE 754 special values (see advisory below) |
+| Tool-call injection | Malicious MCP server returns tool results designed to manipulate agent behavior | MCP Security Gateway with allowlist/denylist enforcement |
+| Supply chain compromise | Compromised dependency introduces backdoor into policy evaluation | SLSA build provenance, dependency review, weekly security audits |
+| Privilege escalation via delegation | Agent delegates to a sub-agent that has broader permissions than the parent | Delegation chain verification with trust score attenuation |
+
+**Operator guidance:**
+
+- Run AGT's policy engine as a separate process or sidecar, not embedded in the
+  agent's own process. This prevents a compromised agent from modifying policy
+  evaluation logic.
+- Enable audit logging to an external, append-only store. Agents should not have
+  write access to their own audit logs.
+- Use the MCP Security Gateway for any agent that calls external tools. Review
+  tool server configurations before deployment.
+- Pin AGT dependency versions and verify SLSA provenance attestations.
+
 ## Security Contact
 
 To report a vulnerability, email **secure@microsoft.com**. You will receive acknowledgement

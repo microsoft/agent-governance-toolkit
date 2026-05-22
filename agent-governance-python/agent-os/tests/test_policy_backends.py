@@ -610,6 +610,7 @@ class TestCedarAutoModeDeniesWithoutEngine:
         from agent_os.policies import backends as backends_mod
 
         monkeypatch.setattr(backends_mod.shutil, "which", lambda _: None)
+        monkeypatch.setattr(CedarBackend, "_check_cedarpy", staticmethod(lambda: False))
         backend = CedarBackend(policy_content=self.POLICY)
         assert backend._mode == "auto"
         decision = backend.evaluate({"tool_name": "read", "agent_id": "a1"})
