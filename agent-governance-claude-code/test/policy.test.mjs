@@ -111,6 +111,38 @@ test("evaluatePreToolUse denies Windows-style secret reads", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+test("evaluatePreToolUse denies direct URL metadata access regardless of parameter key name", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-claude-url-denypath-"));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath });
+
+  // Parameter named "link" (instead of standard "url")
+  const linkResult = await evaluatePreToolUse(state, {
+    tool_name: "WebFetch",
+    tool_input: {
+      link: "http://169.254.169.254/latest/meta-data/",
+    },
+    session_id: "url-session-1",
+    cwd: root,
+  });
+
+  assert.equal(linkResult.hookSpecificOutput.permissionDecision, "deny");
+
+  // Parameter named "target"
+  const targetResult = await evaluatePreToolUse(state, {
+    tool_name: "WebFetch",
+    tool_input: {
+      target: "http://169.254.169.254/latest/meta-data/",
+    },
+    session_id: "url-session-2",
+    cwd: root,
+  });
+
+  assert.equal(targetResult.hookSpecificOutput.permissionDecision, "deny");
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("checkArbitraryText surfaces poisoning and MCP scan findings", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-claude-check-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });

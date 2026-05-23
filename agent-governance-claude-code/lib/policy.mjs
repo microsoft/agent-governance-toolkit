@@ -987,7 +987,7 @@ function collectDirectResourceCandidates({ toolArgs, toolName, cwd }) {
     }
 
     const lastKey = String(keyPath.at(-1) ?? "");
-    if (looksLikeUrlField(lastKey) && looksLikeUrlValue(value)) {
+    if (looksLikeUrlValue(value)) {
       urls.push({
         normalizedUrl: normalizeUrlValue(value),
       });
