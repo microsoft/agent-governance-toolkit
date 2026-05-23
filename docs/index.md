@@ -91,23 +91,48 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
 
 ## How it works
 
-```
-                       ┌─────────────────────────────────────────────┐
-                       │            Agent Governance Toolkit          │
-                       │                                             │
-Agent ──→ govern() ──→ │  Policy Engine ──→ Identity ──→ Audit Log   │ ──→ Tool
-                       │       │                │            │       │
-                       │   YAML/OPA/Cedar   SPIFFE SVID   Tamper-   │
-                       │                                  evident    │
-                       └─────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    A[🤖 Agent] -->|"govern()"| GK
 
-  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-  │ Agent OS  │    │   Mesh   │    │   SRE    │    │ Sandbox  │
-  │ policies  │    │ identity │    │  SLOs    │    │  rings   │
-  │ lifecycle │    │  routing │    │  chaos   │    │ isolation│
-  │ approval  │    │   trust  │    │  costs   │    │ kill sw  │
-  └──────────┘    └──────────┘    └──────────┘    └──────────┘
+    subgraph GK ["Agent Governance Toolkit"]
+        direction LR
+        PE["⚙️ Policy Engine\nYAML · OPA · Cedar"]
+        ID["🔑 Identity\nSPIFFE · DID · mTLS"]
+        AL["📋 Audit Log\nTamper-evident"]
+        PE --> ID --> AL
+    end
+
+    GK -->|"✅ Allowed"| T[🔧 Tool]
+    GK -->|"🚫 Denied"| D[GovernanceDenied]
+
+    style GK fill:#0078D4,stroke:#005A9E,color:#fff
+    style PE fill:#1a5276,stroke:#0078D4,color:#fff
+    style ID fill:#1a5276,stroke:#0078D4,color:#fff
+    style AL fill:#1a5276,stroke:#0078D4,color:#fff
+    style A fill:#2C3E50,stroke:#566573,color:#fff
+    style T fill:#1E8449,stroke:#196F3D,color:#fff
+    style D fill:#922B21,stroke:#7B241C,color:#fff
 ```
+
+<div class="agt-cards" style="margin-top: 1.5rem;">
+<div class="agt-card" style="cursor:default;">
+<span class="agt-card-title">⚙️ Agent OS</span>
+<span class="agt-card-desc">Policies · Lifecycle · Approval workflows</span>
+</div>
+<div class="agt-card" style="cursor:default;">
+<span class="agt-card-title">🔗 Agent Mesh</span>
+<span class="agt-card-desc">Identity · Routing · Trust scoring</span>
+</div>
+<div class="agt-card" style="cursor:default;">
+<span class="agt-card-title">📊 Agent SRE</span>
+<span class="agt-card-desc">SLOs · Chaos testing · Cost budgets</span>
+</div>
+<div class="agt-card" style="cursor:default;">
+<span class="agt-card-title">🛡️ Sandbox</span>
+<span class="agt-card-desc">Execution rings · Isolation · Kill switch</span>
+</div>
+</div>
 
 Every layer is optional. Start with `govern()` and add layers as your risk profile grows. Most teams run policy enforcement + audit logging and never need the full stack.
 

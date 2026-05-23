@@ -44,10 +44,12 @@ codepoint
 CommonMark
 comspec
 containerapps
+containerd
 contoso
 Cpus
 cref
 CrewAI
+crun
 CuriousHet
 dataclass
 dataclasses
@@ -58,6 +60,7 @@ davidequarracino
 dbt
 dearmor
 defi
+delenv
 demux
 deprioritized
 Deque
@@ -95,6 +98,7 @@ frozenset
 fullmatch
 gemini
 getattr
+getenv
 gethostname
 getuid
 GitHub
@@ -102,7 +106,6 @@ gmtime
 GOPROXY
 governancepolicy
 gvisor
-h├⌐llo
 hasattr
 hashlib
 HEALTHCHECK
@@ -113,6 +116,7 @@ htek
 httpx
 hypercall
 Hyperlight
+h├⌐llo
 IATP
 idweb
 imran
