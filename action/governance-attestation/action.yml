@@ -25,15 +25,15 @@ inputs:
       7) Org-specific Launch Gates
   min-body-length:
     description: 'Minimum length for PR body to be considered valid'
-    required: false
+    required: true
     default: '40'
   python-version:
     description: 'Python version to use'
-    required: false
+    required: true
     default: '3.12'
   toolkit-version:
     description: 'Agent Governance Toolkit version to install (default: latest)'
-    required: false
+    required: true
     default: ''
 
 outputs:
@@ -58,7 +58,7 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install Agent Governance Toolkit
+    - name: Install Agent Governance Toolkit On Web
       shell: bash
       env:
         AGT_TOOLKIT_VERSION: ${{ inputs.toolkit-version }}
