@@ -105,25 +105,6 @@ flowchart LR
     PE -->|Denied| D["GovernanceDenied"]
 ```
 
-<div class="agt-cards" style="margin-top: 1.5rem;">
-<div class="agt-card" style="cursor:default;">
-<span class="agt-card-title">⚙️ Agent OS</span>
-<span class="agt-card-desc">Policies · Lifecycle · Approval workflows</span>
-</div>
-<div class="agt-card" style="cursor:default;">
-<span class="agt-card-title">🔗 Agent Mesh</span>
-<span class="agt-card-desc">Identity · Routing · Trust scoring</span>
-</div>
-<div class="agt-card" style="cursor:default;">
-<span class="agt-card-title">📊 Agent SRE</span>
-<span class="agt-card-desc">SLOs · Chaos testing · Cost budgets</span>
-</div>
-<div class="agt-card" style="cursor:default;">
-<span class="agt-card-title">🛡️ Sandbox</span>
-<span class="agt-card-desc">Execution rings · Isolation · Kill switch</span>
-</div>
-</div>
-
 Every layer is optional. Start with `govern()` and add layers as your risk profile grows. Most teams run policy enforcement + audit logging and never need the full stack.
 
 </div>
@@ -133,42 +114,42 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 ## Packages
 
 <div class="agt-cards">
-<a class="agt-card" data-pkg="os" href="packages/agent-os.md">
+<a class="agt-card" data-pkg="os" href="packages/agent-os/">
 <img class="agt-card-icon" src="assets/icons/agent-os.svg" alt="Agent OS">
 <span class="agt-card-body"><span class="agt-card-title">Agent OS</span>
 <span class="agt-card-desc">Policy engine, agent lifecycle, governance gate</span></span>
 </a>
-<a class="agt-card" data-pkg="mesh" href="packages/agent-mesh.md">
+<a class="agt-card" data-pkg="mesh" href="packages/agent-mesh/">
 <img class="agt-card-icon" src="assets/icons/agent-mesh.svg" alt="Agent Mesh">
 <span class="agt-card-body"><span class="agt-card-title">Agent Mesh</span>
 <span class="agt-card-desc">Agent discovery, routing, and trust mesh</span></span>
 </a>
-<a class="agt-card" data-pkg="runtime" href="packages/agent-runtime.md">
+<a class="agt-card" data-pkg="runtime" href="packages/agent-runtime/">
 <img class="agt-card-icon" src="assets/icons/agent-runtime.svg" alt="Agent Runtime">
 <span class="agt-card-body"><span class="agt-card-title">Agent Runtime</span>
 <span class="agt-card-desc">Execution sandboxing with four privilege rings</span></span>
 </a>
-<a class="agt-card" data-pkg="sre" href="packages/agent-sre.md">
+<a class="agt-card" data-pkg="sre" href="packages/agent-sre/">
 <img class="agt-card-icon" src="assets/icons/agent-sre.svg" alt="Agent SRE">
 <span class="agt-card-body"><span class="agt-card-title">Agent SRE</span>
 <span class="agt-card-desc">Kill switch, SLO monitoring, chaos testing</span></span>
 </a>
-<a class="agt-card" data-pkg="compliance" href="packages/agent-compliance.md">
+<a class="agt-card" data-pkg="compliance" href="packages/agent-compliance/">
 <img class="agt-card-icon" src="assets/icons/agent-compliance.svg" alt="Agent Compliance">
 <span class="agt-card-body"><span class="agt-card-title">Agent Compliance</span>
 <span class="agt-card-desc">OWASP verification, policy linting, integrity checks</span></span>
 </a>
-<a class="agt-card" data-pkg="marketplace" href="packages/agent-marketplace.md">
+<a class="agt-card" data-pkg="marketplace" href="packages/agent-marketplace/">
 <img class="agt-card-icon" src="assets/icons/agent-marketplace.svg" alt="Agent Marketplace">
 <span class="agt-card-body"><span class="agt-card-title">Agent Marketplace</span>
 <span class="agt-card-desc">Plugin governance and trust scoring</span></span>
 </a>
-<a class="agt-card" data-pkg="lightning" href="packages/agent-lightning.md">
+<a class="agt-card" data-pkg="lightning" href="packages/agent-lightning/">
 <img class="agt-card-icon" src="assets/icons/agent-lightning.svg" alt="Agent Lightning">
 <span class="agt-card-body"><span class="agt-card-title">Agent Lightning</span>
 <span class="agt-card-desc">RL training governance with violation penalties</span></span>
 </a>
-<a class="agt-card" data-pkg="hypervisor" href="packages/agent-hypervisor.md">
+<a class="agt-card" data-pkg="hypervisor" href="packages/agent-hypervisor/">
 <img class="agt-card-icon" src="assets/icons/agent-hypervisor.svg" alt="Agent Hypervisor">
 <span class="agt-card-body"><span class="agt-card-title">Agent Hypervisor</span>
 <span class="agt-card-desc">Execution audit, delta engine, commitment anchoring</span></span>
@@ -182,9 +163,9 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 | SDK | Install |
 |-----|---------|
-| 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit` |
+| 🐍 [Python](packages/agent-compliance/) | `pip install agent-governance-toolkit` |
 | 📘 TypeScript | `npm install @microsoft/agent-governance-sdk` |
-| 🔷 [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
+| 🔷 [.NET](packages/dotnet-sdk/) | `dotnet add package Microsoft.AgentGovernance` |
 | 🦀 Rust | `cargo add agent-governance` |
 | 🐹 Go | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
@@ -194,7 +175,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 ## Framework Integrations
 
-Works with any agent framework: LangChain, CrewAI, AutoGen, Google ADK, OpenAI Agents, LlamaIndex, Haystack, Mastra, MCP, A2A, and more. See the [full list](packages/index.md#framework-integrations-19).
+Works with any agent framework: LangChain, CrewAI, AutoGen, Google ADK, OpenAI Agents, LlamaIndex, Haystack, Mastra, MCP, A2A, and more. See the [full list](packages/#framework-integrations-19).
 
 </div>
 
