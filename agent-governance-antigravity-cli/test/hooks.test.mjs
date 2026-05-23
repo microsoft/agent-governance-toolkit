@@ -13,7 +13,7 @@ import { installPackage } from "../lib/cli.mjs";
 
 const PACKAGE_ROOT = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 
-test("before-tool fails closed with a Antigravity system block when hook bootstrap breaks", async () => {
+test("before-tool fails closed with an Antigravity system block when hook bootstrap breaks", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-antigravity-hook-block-"));
   const antigravityHome = join(root, ".antigravity");
 

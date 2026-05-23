@@ -12,7 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -742,9 +742,10 @@ function patternMatchesMetadataTarget(pattern) {
 
 function isBundledPolicyPath(path, paths) {
   const normalizedPath = normalizePath(path);
+  const normalizedProfilesRoot = normalizePath(paths.sourceProfilesRoot);
   return (
     normalizedPath === normalizePath(paths.sourcePolicyPath) ||
-    normalizedPath.startsWith(`${normalizePath(paths.sourceProfilesRoot)}\\`)
+    normalizedPath.startsWith(`${normalizedProfilesRoot}${sep}`)
   );
 }
 
@@ -773,7 +774,8 @@ async function isBundledPolicyEquivalent(path, policy, paths) {
 }
 
 function normalizePath(path) {
-  return resolve(String(path)).replace(/\//g, "\\").toLowerCase();
+  const resolvedPath = resolve(String(path));
+  return process.platform === "win32" ? resolvedPath.toLowerCase() : resolvedPath;
 }
 
 function canonicalizePolicy(policy) {
