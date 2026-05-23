@@ -40,6 +40,8 @@ Python · TypeScript · .NET · Rust · Go. Works with LangChain, CrewAI, AutoGe
 
 ## Quick Start
 
+**Prerequisites:** Python 3.10+ required.
+
 ```bash
 pip install agent-governance-toolkit[full]
 ```
