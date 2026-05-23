@@ -13,11 +13,12 @@ import {
 await runHookMain(async () => {
   const input = await loadHookInput();
   const state = await loadHookPolicyState(import.meta.url);
+  const toolArgs = input.tool_input ?? input.toolArgs;
   const result = await evaluatePreToolUse(
     state,
     {
       cwd: input.cwd,
-      toolArgs: input.tool_input,
+      toolArgs,
       toolName: input.tool_name,
     },
     { sessionId: input.session_id },
