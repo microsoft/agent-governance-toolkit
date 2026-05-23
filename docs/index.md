@@ -91,29 +91,26 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[🤖 Agent] -->|"govern()"| GK
+<div class="agt-arch-diagram" markdown>
 
-    subgraph GK ["Agent Governance Toolkit"]
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '16px', 'primaryColor': '#E8F4FD', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#0078D4', 'lineColor': '#0078D4', 'secondaryColor': '#F0FFF0', 'tertiaryColor': '#FFF0F0'}}}%%
+flowchart LR
+    A["🤖 Agent"] -->|"govern()"| PE
+
+    subgraph GK ["&nbsp;&nbsp; Agent Governance Toolkit &nbsp;&nbsp;"]
         direction LR
-        PE["⚙️ Policy Engine\nYAML · OPA · Cedar"]
-        ID["🔑 Identity\nSPIFFE · DID · mTLS"]
-        AL["📋 Audit Log\nTamper-evident"]
+        PE["⚙️ Policy Engine<br/>YAML · OPA · Cedar"]
+        ID["🔑 Identity<br/>SPIFFE · DID · mTLS"]
+        AL["📋 Audit Log<br/>Tamper-evident chain"]
         PE --> ID --> AL
     end
 
-    GK -->|"✅ Allowed"| T[🔧 Tool]
-    GK -->|"🚫 Denied"| D[GovernanceDenied]
-
-    style GK fill:#0078D4,stroke:#005A9E,color:#fff
-    style PE fill:#1a5276,stroke:#0078D4,color:#fff
-    style ID fill:#1a5276,stroke:#0078D4,color:#fff
-    style AL fill:#1a5276,stroke:#0078D4,color:#fff
-    style A fill:#2C3E50,stroke:#566573,color:#fff
-    style T fill:#1E8449,stroke:#196F3D,color:#fff
-    style D fill:#922B21,stroke:#7B241C,color:#fff
+    AL -->|"Allowed ✅"| T["🔧 Tool executes"]
+    PE -->|"Denied 🚫"| D["❌ GovernanceDenied"]
 ```
+
+</div>
 
 <div class="agt-cards" style="margin-top: 1.5rem;">
 <div class="agt-card" style="cursor:default;">

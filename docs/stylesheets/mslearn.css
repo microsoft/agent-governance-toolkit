@@ -760,3 +760,34 @@ html {
     color: #000;
   }
 }
+
+
+/* ==========================================================================
+   Architecture Diagram
+   ========================================================================== */
+
+.agt-arch-diagram .mermaid {
+  font-size: 1rem;
+}
+
+.agt-arch-diagram .mermaid svg {
+  max-width: 100%;
+  min-height: 280px;
+  height: auto;
+}
+
+/* Ensure mermaid text is readable */
+.agt-arch-diagram .mermaid .nodeLabel {
+  font-size: 14px !important;
+  line-height: 1.4;
+}
+
+.agt-arch-diagram .mermaid .edgeLabel {
+  font-size: 13px !important;
+  font-weight: 600;
+}
+
+.agt-arch-diagram .mermaid .cluster-label .nodeLabel {
+  font-size: 16px !important;
+  font-weight: 700;
+}
