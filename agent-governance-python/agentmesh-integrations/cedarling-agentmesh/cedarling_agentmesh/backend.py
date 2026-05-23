@@ -81,6 +81,11 @@ class CedarlingBackend:
         self._python_available: bool
 
         if cedarling_instance is not None:
+            if mode == "http":
+                raise ValueError(
+                    "cedarling_instance is not compatible with mode='http'. "
+                    "Use mode='auto' or mode='python' when providing a Cedarling instance."
+                )
             self._python_available = True
         elif self._mode == "python":
             try:
