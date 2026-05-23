@@ -146,6 +146,14 @@ updates:
     labels:
       - "dependencies"
 
+  - package-ecosystem: "npm"
+    directory: "/agent-governance-antigravity-cli"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
   # .NET
   - package-ecosystem: "nuget"
     directory: "/agent-governance-dotnet"

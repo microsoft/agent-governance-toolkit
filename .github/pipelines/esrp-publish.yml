@@ -223,7 +223,8 @@ parameters:
         nodeVersion: '22'
       - name: agent-governance-sdk
         path: agent-governance-typescript
-        nodeVersion: '20'
+      - name: agent-governance-antigravity-cli
+        path: agent-governance-antigravity-cli
       - name: agent-os-copilot-extension
         path: agent-governance-python/agent-os/extensions/copilot
         nodeVersion: '20'

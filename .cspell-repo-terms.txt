@@ -156,9 +156,7 @@ mastra
 mgmt
 microkernel
 Microsoft
-millicores
-mkdocs
-modelcontextprotocol
+antigravity
 Moltbook
 Molty
 monkeypatch
