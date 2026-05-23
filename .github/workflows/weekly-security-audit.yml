@@ -178,7 +178,7 @@ jobs:
 
           for pattern in "${UNSAFE_PATTERNS[@]}"; do
             # Find ${{ pattern }} in run: blocks (not in env: blocks which are safe)
-            MATCHES=$(grep -rn "\${{.*${pattern}" .github/workflows/*.yml \
+            MATCHES=$(grep -rn "[$][{][{].*${pattern}" .github/workflows/*.yml \
               | grep -v "env:" | grep -v "#" || true)
             if [ -n "$MATCHES" ]; then
               echo "⚠️ Potential injection: \`${pattern}\` in run: block:" >> "$GITHUB_STEP_SUMMARY"
