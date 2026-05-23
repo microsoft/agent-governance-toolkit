@@ -1,0 +1,15 @@
+description = "Run AGT poisoning and safety checks against arbitrary text."
+
+prompt = """
+If `{{args}}` is empty, ask the user what text they want inspected.
+
+Otherwise call the MCP tool `mcp_agt_global_policy_agt_policy_check_text` with:
+- `text`: `{{args}}`
+
+Return the findings as concise markdown with these sections:
+1. Prompt poisoning
+2. MCP scan
+3. Prompt defense
+
+Do not invent findings. Use only the MCP tool output.
+"""

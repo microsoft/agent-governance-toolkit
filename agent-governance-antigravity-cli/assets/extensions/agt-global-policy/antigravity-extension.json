@@ -1,0 +1,30 @@
+{
+  "name": "agt-global-policy",
+  "version": "3.3.0",
+  "description": "Public Preview — AGT governance extension for Antigravity CLI",
+  "contextFileName": "ANTIGRAVITY.md",
+  "mcpServers": {
+    "agt_global_policy": {
+      "command": "node",
+      "args": ["${extensionPath}${/}mcp${/}server.mjs"],
+      "cwd": "${extensionPath}"
+    }
+  },
+  "plan": {
+    "directory": ".antigravity/plans"
+  },
+  "settings": [
+    {
+      "name": "AGT policy path",
+      "description": "Optional override for the AGT Antigravity policy file.",
+      "envVar": "AGT_ANTIGRAVITY_POLICY_PATH",
+      "sensitive": false
+    },
+    {
+      "name": "AGT audit path",
+      "description": "Optional override for the AGT Antigravity audit log file.",
+      "envVar": "AGT_ANTIGRAVITY_AUDIT_PATH",
+      "sensitive": false
+    }
+  ]
+}

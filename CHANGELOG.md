@@ -12,235 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Rust prompt guard tuning** - added `DetectionConfig::rule_overrides` and `DetectionConfig::threshold_overrides` so operators can opt into local built-in rule additions, stable-ID disables, and per-sensitivity threshold gates while preserving existing defaults.
-- **Rust operator CLI (`agt`)** - feature-gated (`cli`) command-line binary for the `agentmesh` crate exposing `check` (policy decision with a CI-friendly exit code), `policy validate`/`explain`, `audit tail`/`export`, and `trust show`/`set`. The CLI is a thin consumer of existing crate APIs and adds no new library surface; the default library build stays binary- and `clap`-free. (#2445)
-- **Rust telemetry hooks** - added an opt-in `telemetry` feature for the `agentmesh` crate with sanitized OpenTelemetry spans for `AgentMeshClient` policy evaluations. The default build stays OpenTelemetry-free, and emitted attributes use labels, durations, lengths, and hashes instead of raw actions, agent IDs, policy text, context, prompts, or denied reasons. (#2446)
-
-### Changed
-- **Rust prompt guard** - added custom configuration and audit interpretation examples, tuned escaped-sequence detection to reduce benign `\x` / `\u` false positives, and switched file-backed audit/federation persistence to compact atomic writes.
-- **Rust file durability** - file-backed audit and federation stores now sync parent directories after successful atomic renames on Unix-like platforms, surfacing directory-sync failures instead of silently claiming durability.
-
-### Fixed
-- **Rust build** - migrated `cedar_request` to the cedar-policy 4.x `Request::new` API (concrete `EntityUid`s, optional schema, `Result` return) so the `agentmesh` crate compiles after the cedar-policy 4.11 upgrade (#2418); behavior-preserving via a reserved placeholder for unspecified entities.
-
-## [3.7.0] - 2026-05-18
-
-### Highlights
-
-**Release Hygiene** - opened the v3.7.0 development cycle with full release
-documentation for the v3.6.0 milestone.
-
-**Tool Usage Policies** - contributed the `ToolPolicy` schema to the Agent Spec
-standard, enabling declarative rate-limit, approval, and justification guards on
-tool invocations.
-
-### Added
-- **v3.6.0 release notes** documenting the full scope of the previous release.
-- **Presentation demos** committed to `examples/demos/presentation/` with six
-  offline scripts.
-- **EU AI Act demo** Windows UTF-8 fix.
-- **Repo structure** simplification and layout guidance.
-
-### Fixed
-- **StdoutAuditSink** overlapping merge fix.
-
-### Changed
-- **Tutorials** reorganized into customer-centric categories.
-
-
-## [3.6.0] - 2026-05-12
-
-### Highlights
-
-**Formal Specifications** - Six v1.0 specification documents published covering identity, trust, hypervisor, SRE, MCP security, framework adapters, and audit.
-
-**Security Hardening Sprint** - 319 fixes including path traversal guards, SSRF blocklist expansion, HMAC verification, shell injection prevention, and YAML deserialization hardening.
-
-**Cross-Org Agent Federation** - ExternalJWKSProvider (ADR-0007) enables federated identity verification across organizations.
-
-**Governance Sidecar Container** - Production-ready container image with OTEL bootstrap and Prometheus metrics endpoint.
-
-**Execution Ring Enforcement** - Privilege rings now enforce real isolation boundaries (previously stubs).
-
-### Added
-- **6 formal specifications** v1.0 - identity, trust, hypervisor, SRE, MCP security, adapters, audit (#2344, #2353, #2360, #2361, #2363, #2364, #2369, #2375)
-- **ExternalJWKSProvider** for cross-org agent federation (#2380)
-- **GovernanceEventSink SPI** for pluggable event routing (#2362)
-- **Governance sidecar container** with OTEL and Prometheus (#2307, #2312)
-- **Execution ring enforcement** beyond stubs (#2309)
-- **Trust ceiling propagation** for delegated child agents (#2306)
-- **StdoutAuditSink** with execution-context enrichment (#2302, #2305)
-- **Azure ACA sandbox provider** (#2236)
-- **AWS Bedrock Agent adapter** (#1833)
-- **RAG Governance** package with Cedar + LlamaIndex (#1754, #1820, #1975)
-- **Agent Shield** 5-stage guardrails integration (#1805)
-- **Copilot CLI governance package** (#2272)
-- **GitHub Actions governance gate** (#2102)
-- **NOT_IN operator** for policy evaluation (#2373)
-- **Presentation demos** - 6 self-contained offline scripts (#2390)
-- **25 retroactive ADRs** documenting prior decisions (#2329, #2377)
-
-### Fixed
-- **StdoutAuditSink syntax error** from overlapping merge (#2382)
-- **VectorClock** causal ordering and fail-closed SessionIsolation (#2346)
-- **Path traversal** guards in SRE, signing, and specs (#2352)
-- **HMAC verification** before nonce commit in MCP signer (#2354)
-- **SSRF blocklist** expanded for cloud metadata endpoints (#2358)
-- **YAML deserialization** hardened to JSON_SCHEMA (TypeScript) (#2333, #2334)
-- **Shell injection** prevention in Actions inputs (#2330)
-- **EU AI Act demo** Unicode encoding on Windows (#2388)
-
-### Changed
-- **Tutorials reorganized** into collapsible customer-centric categories (#2389)
-- **Repo structure simplified** with layout guide (#2391)
-- **ADK wrap/unwrap/get_callbacks** deprecated with runtime warnings (#2359)
-
-
-## [3.5.0] - 2026-05-07
-
-### Highlights
-
-**Citadel Integration** - Entra identity bridge and APIM policy fragment for enterprise-grade agent identity. Includes Phase 1 (docs, exporter, policy binding) and Phase 2 (Entra bridge, APIM fragment).
-
-**Multi-Agent Collective Policies** - evaluate constraints (rate limits, concurrent caps) across all agents in a workflow, not just individual agents.
-
-**Decision BOM Reconstructible View** - reconstruct the full decision lineage for any agent action from observability signals, with resilient partial reconstruction when sources are unavailable.
-
-**Centralized Version Management** - single `VERSION` file and `scripts/sync-version.py` propagates version across Python, TypeScript, .NET, and Rust.
-
-### Added
-- **Citadel Phase 1** - docs, governance exporter, policy binding, and example (#1778)
-- **Citadel Phase 2** - Entra identity bridge and APIM policy fragment (#1785)
-- **Multi-agent collective policy evaluator** - SUM/MAX/COUNT aggregates with sliding windows (#1776)
-- **Decision BOM** - reconstructible view from trust, policy, trace, and audit sources (#1777)
-- **Intent-Based Authorization** - declare/approve/execute/verify lifecycle with drift detection (Tutorial 48, #1781)
-- **Cost Governance** - tiered budgets, kill switches, anomaly detection (Tutorial 51, #1784)
-- **Identity attestation evidence model** (#1763)
-- **OTelLogsBackend** - audit event emission via OpenTelemetry logs (#1747)
-- **Aegis governance profile** - YAML to Cedar + Rego policy compiler (#1704)
-- **.NET Quickstart** - console app example (#1794)
-- **.NET unit tests** - governance client and policy evaluation (#1792)
-- **57 hardened tests** - edge cases, concurrency, resilience across intent, multi-agent, BOM, and cost (#1786)
-- **20 smoke tests** - subprocess-based demo execution for all 4 example scenarios (#1786)
-- **ADOPTERS.md** - Nobulex (#1703), Dayos (#1746) as first adopters
-- **GOVERNANCE.md** - contributor ladder and decision process (#1748)
-- **CHARTER.md, RELEASE.md** - AAIF readiness (#1787)
-- **MAINTAINERS.md, CODEOWNERS** (#1757)
-- **A365+AGT reference architecture** guide (#1768)
-- **ADR-0012** - cost governance via observability policies (#1769)
-- **Tutorials 48-51** - Intent Auth, Multi-Agent Policies, Decision BOM, Cost Governance (#1781-#1784)
-- **Rust quickstart** example (#1677)
-- **Korean README translation** (#1729)
-- Added a dbt-backed data quality evidence adapter example under `examples/data-quality-aware-governance/adapters/dbt/`, showing how dbt `run_results.json` output can be mapped into policy-readable evidence for AGT governance decisions.
-
-### Fixed
-- **Decision BOM resilience** - source exceptions no longer crash reconstruction; partial BOM returned (#1786)
-- **Version drift** - .NET packages bumped from 3.3.0 to 3.4.0, centralized in Directory.Build.props (#1803)
-- **CI hardening** - branch protection status reporting, DCO merge-commit skip, cspell terms, link-check (#1798-#1802)
-- **Go CI** - enabled cgo for race tests, narrowed coverage scope (#1779, #1780)
-- **Rust CI** - resolved build errors, suppressed dead_code warnings (#1728)
-- **Lazy imports** - framework adapters and rogue_detector guard (#1766)
-- **EU AI Act demo** - show agent names in deployment gate (#1790)
-- **Security audit** - self-match fix, persist-credentials, expression escaping (#1749-#1752)
-- **pip install** - corrected agent-discovery version constraint (#1751)
-
-### Changed
-- **Centralized version management** - root `VERSION` file + `scripts/sync-version.py` for all languages (#1803)
-- **Agent SRE README** - concise quick-start section (#1788)
-- **External maintainers** - Aileron, MythologIQ, Dayos added (#1764)
-
-
-## [3.4.0] - 2026-05-05
-
-### Fixed
-- **Contributor Reputation Check** — false-positive HIGH risk for established accounts. Accounts with age > 1yr, 50+ followers, and 20+ repos now have `recent_repo_burst` and `cross_repo_spray` signals dampened to LOW with bounded caps and abuse-signal guards (#1725)
-
-### Changed
-- **CI** — fixed ruff lint errors in agent-compliance CLI tools, added SC2153 to shellcheck disable list (#1724)
-- **README** — removed duplicate Docs and PyPI shield badges
-
-## [3.3.0] - 2026-04-27
-
-### Highlights
-
-**Contributor Reputation Check** — a new reusable GitHub Action that screens PR and issue authors for coordinated inauthentic behavior. Detects following farming, cross-repo spray, credential laundering, and network coordination. Any OSS repo can adopt it. Part of AGT's shift-left governance strategy.
-
-**Repo Reorganization** — all SDK packages now live under language-specific directories (`agent-governance-python/`, `agent-governance-typescript/`, `agent-governance-dotnet/`, `agent-governance-rust/`, `agent-governance-golang/`). Root directory is clean and navigable.
-
-### Added
-- **Contributor Reputation Action** — reusable composite action at `.github/actions/contributor-check/` for any OSS repo (#1479, #1483, #1484, #1496, #1497)
-  - `contributor_check.py`: Account shape analysis, repo velocity, following farming, spray pattern detection
-  - `credential_audit.py`: Detects credential laundering (merged PRs cited as credentials in spray issues)
-  - `cluster_detect.py`: Maps coordination networks via shared forks, co-comments, synchronized filing
-  - Runs automatically on PR/issue open, labels MEDIUM/HIGH risk, posts structured comment
-  - 38 tests across all three tools
-- **Sentry integration** for Agent SRE — native error tracking exporter (#1469, #1493)
-- **ADR 0010** — TEE keystore design with SEV-SNP attestation (#1492)
-- **RFC 9334 RATS** architecture alignment for trust framework (#1480)
-- **Tutorial 45** — Shift-left governance with contributor reputation as the leftmost check (#1450)
-- **Sigstore provenance**, plugin lifecycle management, EU AI Act evidence pipeline (#1448)
-- **MCP CVE feed** and CLI vs IDE governance parity detection (#1446)
-- **MCP auth method enforcement** in allowlist (#1444)
-- **A2A tutorial** and governance operations docs (#1442)
-- **EU AI Act compliance templates** — FRIA, post-market monitoring, data provenance (#1441, #1439)
-- **CIS Controls v8.1 mapping** for AI agent governance (#1447)
-- **Quality gate scripts** inspired by AzureClaw Phase 0 (#1440)
-- **ATR Community Rules** upgraded from 15 to 287 rules (ATR v2.0.12) with weekly sync workflow (#1277)
-- **Microsoft.Agents governance extension** for .NET (#1420)
-- **SDK parity improvements** across .NET (#1424), TypeScript (#1425), Rust (#1426), Go (#1419)
-- **MAF integration demos** and Tutorial 34 (#1387, #1388)
-- **Advisory layer** — optional classifier-based defense-in-depth (#1390)
-- **OpenTelemetry native observability** (#1389)
-- **Attribute ratchets** — monotonic session state (#1384)
-- **Human-in-the-loop approval workflows** (#1383)
-- **Multi-stage policy pipeline** — pre_input, pre_tool, post_tool, pre_output (#1381)
-- **2-line governance wrapper** — `govern()` function (#1380)
-- **Policy composition with inheritance** via `extends` (#1379)
-- **Folder-level governance** — discovery, merge, evaluator (#1352)
-- **Bilateral receipt signing** — pre-execution + post-execution (#1333)
-- **MCP governance extension** for .NET (#1330)
-- **Cognitive attestation** example (#1328)
-- **OCI manifest adapter** for AI Card spec alignment (#1456)
-- **Context poisoning detection** for agent memory (OWASP ASI-06) (#1455)
-- **Cascading failure containment** for multi-agent systems (#1454)
-- **Inbox replay on reconnect** (#1451)
-
-### Changed
-- **Repo structure**: All packages reorganized under language-specific SDK directories (#1459, #1471)
-  - `agent-governance-python/` — 10 Python packages
-  - `agent-governance-typescript/` — VS Code extension and TS SDK
-  - `agent-governance-dotnet/` — .NET SDK
-  - `agent-governance-rust/` — Rust SDK
-  - `agent-governance-golang/` — Go SDK
-- Root folders consolidated: `ci/` to `scripts/ci/`, `demo/` to `examples/demos/`, `releases/` to `docs/releases/`, `pipelines/` to `.github/pipelines/` (#1488)
-- `fuzz/`, `notebooks/`, `benchmarks/`, `requirements/` moved under `agent-governance-python/` (#1481)
-- Duplicate root `QUICKSTART.md` removed (canonical version at `docs/QUICKSTART.md`) (#1490)
-- SDK packages renamed with standardized naming (#1343)
-- Tutorials verified: all 42 tutorials pass 68 checks (#1408)
-
-### Security
-- **Contributor reputation tools** hardened: URL encoding for Python 3.13+, retry-with-backoff for rate limits, real usernames scrubbed (#1491)
-- ScopeBlind content removed after credential laundering detection (#1498)
-- Example Sentry DSN replaced to avoid secret scanning (#1494)
-- X3DH signed pre-key signature verification (#1437, #1428)
-- Adversarial X3DH signature verification tests (#1443)
-- Self-promotional content removed from ADRs (#1449)
-
-### Fixed
-- CI workflow paths updated for reorganized package directories (#1482, #1491)
-- `sentry-sdk` added to dependency scan allowlist (#1491)
-- 13 ruff lint errors in agent-mesh (#1491)
-- Docs audit: CLI name, package names, broken links, YAML, prereqs (#1378)
-- OpenClaw demo docker build context and Windows test (#1353)
-- TypeScript SDK build for TypeScript 6 (#1409, #1411)
-- Rust crate directory rename (#1347, #1345)
-- ESRP and CI pipeline updates for new SDK package names (#1344)
-
-## [3.2.2] - 2026-04-22
-
-### Fixed
-- **Docker**: OpenClaw sidecar docker compose fix
-- **TypeScript SDK**: Encryption module exports for npm package
+- **Antigravity CLI governance package** — new `@microsoft/agent-governance-antigravity-cli` package with Antigravity-native hooks, MCP helpers, custom commands, docs, CI, and release wiring.
 
 ## [3.2.1] - 2026-04-22
 
@@ -254,7 +26,7 @@ tool invocations.
 
 ### Added
 - **AgentMesh Wire Protocol v1.0** specification (`docs/specs/AGENTMESH-WIRE-1.0.md`)
-- **TypeScript E2E Encryption** — X3DH + Double Ratchet + SecureChannel ported to `@microsoft/agent-governance-sdk`
+- **TypeScript E2E Encryption** — X3DH + Double Ratchet + SecureChannel ported to `@microsoft/agentmesh-sdk`
 - **MeshClient** — high-level relay transport with plaintext peers, KNOCK pending queue, wsFactory hook
 - **Registry Service** — first-party agent registry with pre-key bundles, discovery, presence, reputation
 - **Relay Service** — store-and-forward WebSocket relay with 72h TTL offline inbox
@@ -279,6 +51,9 @@ tool invocations.
 - **Entra Agent ID bridge tutorial** — DID ↔ Entra identity integration (#1166)
 - **Chaos testing tutorial** for AI agents with Agent SRE (#1184)
 - **ISO 42001 alignment assessment** (#1183)
+- **sb-runtime governance skill** — signed decision receipts with Veritas Acta format (#1203)
+- **Physical attestation example** — cold chain sensor governance receipts (#1168)
+- **protect-mcp governed example** — Cedar policies + signed receipts (#1159)
 - **Container images** — GHCR publishing for AgentMesh components (#1192)
 - **.NET SDK**: MCP security namespace, kill switch, lifecycle management (#1021, #1065)
 - **Go SDK**: MCP security, execution rings, lifecycle management (#1066)
@@ -354,7 +129,7 @@ tool invocations.
 - NIST AI RMF 1.0 alignment assessment
 - MCP governance consolidated into docs/compliance/
 - Policy-as-code tutorial chapter 4
-- Added `EUAIActRiskClassifier` usage example and API docs to `agent-governance-python/agent-mesh/README.md`
+- Added `EUAIActRiskClassifier` usage example and API docs to `packages/agent-mesh/README.md`
 - Updated `QUICKSTART.md` and `Tutorial 04 — Audit & Compliance` with secure JSON error handling examples and schema details
 - Added "Secure Error Handling" sections to primary documentation to guide users on interpreting sanitized machine-readable outputs
 
@@ -470,13 +245,13 @@ tool invocations.
 ## [2.2.0] - 2026-03-17
 
 ### Added
-- ESRP Release ADO pipeline for PyPI publishing (`.github/pipelines/pypi-publish.yml`)
-- ESRP Release ADO pipeline for npm publishing (`.github/pipelines/npm-publish.yml`)
+- ESRP Release ADO pipeline for PyPI publishing (`pipelines/pypi-publish.yml`)
+- ESRP Release ADO pipeline for npm publishing (`pipelines/npm-publish.yml`)
 - npm build + pack job in GitHub Actions publish workflow
 - Community preview disclaimers across all READMEs, release notes, and package descriptions
 - `docs/PUBLISHING.md` guide covering PyPI, npm, and NuGet publishing requirements
 - `agent-runtime` re-export wrapper package (`src/agent_runtime/__init__.py`)
-- `docs/releases/RELEASE_NOTES_v2.2.0.md`
+- `releases/RELEASE_NOTES_v2.2.0.md`
 - `create_policies_from_config()` API — load security policies from YAML config files
 - `SQLPolicyConfig` dataclass and `load_sql_policy_config()` for structured policy loading
 - 10 sample policy configs in `examples/policies/` (sql-safety, sql-strict, sql-readonly, sandbox-safety, prompt-injection-safety, mcp-security, semantic-policy, pii-detection, conversation-guardian, cli-security-rules)
@@ -511,7 +286,7 @@ tool invocations.
 ### Added
 
 - **TypeScript SDK full parity** (— PolicyEngine + AgentIdentity) — rich policy evaluation with 4 conflict resolution strategies, expression evaluator, rate limiting, YAML/JSON policy documents, Ed25519 identity with lifecycle/delegation/JWK/JWKS/DID export, IdentityRegistry with cascade revocation. 136 tests passing. (#269)
-- **@microsoft/agent-governance-sdk 1.0.0** — TypeScript package now publish-ready with `exports` field, `prepublishOnly` build hook, correct `repository.directory`, MIT license.
+- **@microsoft/agentmesh-sdk 1.0.0** — TypeScript package now publish-ready with `exports` field, `prepublishOnly` build hook, correct `repository.directory`, MIT license.
 - **Multi-language README** — root README now surfaces Python (PyPI), TypeScript (npm), and .NET (NuGet) install sections, badges, quickstart code, and a multi-SDK packages table.
 - **Multi-language QUICKSTART** — getting started guide now covers all three SDKs with code examples.
 - **Semantic Kernel + Azure AI Foundry** added to framework integration table.
@@ -569,7 +344,7 @@ tool invocations.
 pip install agent-governance-toolkit[full]
 
 # TypeScript
-npm install @microsoft/agent-governance-sdk
+npm install @microsoft/agentmesh-sdk
 
 # .NET
 dotnet add package Microsoft.AgentGovernance
