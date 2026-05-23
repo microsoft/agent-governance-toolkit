@@ -29,7 +29,7 @@ class _EnvContext:
 
     sandbox_id: Optional[str]
     environment: Optional[str]
-    container_runtime: Optional[str]
+    compute_driver: Optional[str]
 
 
 def _capture_env_context() -> _EnvContext:
@@ -38,7 +38,7 @@ def _capture_env_context() -> _EnvContext:
     Resolution rules:
     * ``sandbox_id``: prefers ``OPENSHELL_SANDBOX_ID``; falls back to bare ``SANDBOX_ID``.
     * ``environment``: reads ``AGT_ENVIRONMENT``.
-    * ``container_runtime``: reads ``OPENSHELL_CONTAINER_RUNTIME``.
+    * ``compute_driver``: reads ``OPENSHELL_COMPUTE_DRIVER``.
 
     Empty strings are treated as absent (``None``).
     """
@@ -46,11 +46,11 @@ def _capture_env_context() -> _EnvContext:
         os.getenv("OPENSHELL_SANDBOX_ID") or os.getenv("SANDBOX_ID") or None
     )
     environment: Optional[str] = os.getenv("AGT_ENVIRONMENT") or None
-    container_runtime: Optional[str] = os.getenv("OPENSHELL_CONTAINER_RUNTIME") or None
+    compute_driver: Optional[str] = os.getenv("OPENSHELL_COMPUTE_DRIVER") or None
     return _EnvContext(
         sandbox_id=sandbox_id,
         environment=environment,
-        container_runtime=container_runtime,
+        compute_driver=compute_driver,
     )
 
 
@@ -122,10 +122,6 @@ class AuditEntry(BaseModel):
     trace_id: Optional[str] = None
     session_id: Optional[str] = None
 
-    # Execution-context enrichment (optional; not included in integrity hash)
-    sandbox_id: Optional[str] = None
-    environment: Optional[str] = None
-    container_runtime: Optional[str] = None
     # Sandbox/environment context (auto-populated from env vars when available)
     sandbox_id: Optional[str] = Field(
         default=None,
@@ -493,7 +489,7 @@ class AuditLog:
             trace_id=trace_id,
             sandbox_id=self._env_context.sandbox_id,
             environment=self._env_context.environment,
-            container_runtime=self._env_context.container_runtime,
+            compute_driver=self._env_context.compute_driver,
             arguments_hash=arguments_hash,
             approver_did=approver_did,
             policy_version=policy_version,
