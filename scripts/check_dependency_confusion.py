@@ -107,6 +107,8 @@ REGISTERED_PACKAGES = {
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
+    # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
+    "azure-functions", "azure_functions",
     # SpendGuard SDK (real PyPI package, used in examples)
     "spendguard-sdk", "spendguard_sdk",
     # Cedarling Python bindings (real PyPI package, optional dep)
