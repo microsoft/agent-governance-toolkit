@@ -39,3 +39,4 @@ Key architectural decisions and their rationale. Each ADR follows the standard f
 | [ADR-0008](0008-cross-org-policy-federation.md) | Cross-org policy federation above identity | Policy |
 | [ADR-0010](0010-tee-keystore-sevsnp-attestation.md) | TEE keystore with SEV-SNP attestation | Security |
 | [ADR-0011](0011-additive-policy-check-contract.md) | Additive policy check contract | Policy |
+| [ADR-0026](0026-foundry-ai-gateway-functions-pdp.md) | Azure Functions PDP behind AI Gateway for Foundry prompt-based agents | Policy |
