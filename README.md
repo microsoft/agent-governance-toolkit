@@ -356,6 +356,8 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 | [MAINTAINERS.md](MAINTAINERS.md) | Maintainers and organizations |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and response SLAs |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Microsoft Open Source Code of Conduct |
+| [ANTITRUST.md](ANTITRUST.md) | Competition law guidelines for participants |
+| [TRADEMARKS.md](TRADEMARKS.md) | Trademark usage policy |
 
 ## Important Notes
 

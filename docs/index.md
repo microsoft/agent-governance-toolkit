@@ -163,9 +163,9 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 | SDK | Install |
 |-----|---------|
-| 🐍 [Python](packages/agent-compliance/) | `pip install agent-governance-toolkit` |
+| 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit` |
 | 📘 TypeScript | `npm install @microsoft/agent-governance-sdk` |
-| 🔷 [.NET](packages/dotnet-sdk/) | `dotnet add package Microsoft.AgentGovernance` |
+| 🔷 [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
 | 🦀 Rust | `cargo add agent-governance` |
 | 🐹 Go | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
