@@ -91,26 +91,19 @@ GovernanceDenied: Action denied by policy rule 'block-destructive':
 
 ## How it works
 
-<div class="agt-arch-diagram" markdown>
-
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '16px', 'primaryColor': '#E8F4FD', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#0078D4', 'lineColor': '#0078D4', 'secondaryColor': '#F0FFF0', 'tertiaryColor': '#FFF0F0'}}}%%
+``` mermaid
 flowchart LR
-    A["🤖 Agent"] -->|"govern()"| PE
-
-    subgraph GK ["&nbsp;&nbsp; Agent Governance Toolkit &nbsp;&nbsp;"]
+    A["🤖 Agent"] -->|govern| PE
+    subgraph GK [" Agent Governance Toolkit "]
         direction LR
-        PE["⚙️ Policy Engine<br/>YAML · OPA · Cedar"]
-        ID["🔑 Identity<br/>SPIFFE · DID · mTLS"]
-        AL["📋 Audit Log<br/>Tamper-evident chain"]
+        PE["Policy Engine<br>YAML · OPA · Cedar"]
+        ID["Identity<br>SPIFFE · DID · mTLS"]
+        AL["Audit Log<br>Tamper-evident"]
         PE --> ID --> AL
     end
-
-    AL -->|"Allowed ✅"| T["🔧 Tool executes"]
-    PE -->|"Denied 🚫"| D["❌ GovernanceDenied"]
+    AL -->|Allowed| T["Tool executes"]
+    PE -->|Denied| D["GovernanceDenied"]
 ```
-
-</div>
 
 <div class="agt-cards" style="margin-top: 1.5rem;">
 <div class="agt-card" style="cursor:default;">
