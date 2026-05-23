@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import json
 import random
+import secrets
 import statistics
 import time
 from collections import Counter
@@ -36,7 +36,9 @@ SAMPLE_TARGETS = [
 
 def _build_payload(i: int) -> bytes:
     operation, target = random.choice(SAMPLE_TARGETS)
-    digest = hashlib.sha256(f"sample-{i}".encode()).hexdigest()
+    # Synthetic 32-byte hex string with the same shape as a real SHA-256
+    # digest. The PDP only validates shape, not the hash itself.
+    digest = secrets.token_hex(32)
     return json.dumps(
         {
             "schemaVersion": SCHEMA_VERSION,
