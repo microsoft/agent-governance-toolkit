@@ -215,6 +215,6 @@ suppress_rule(
 
 ## Getting Help
 
-- **Docs:** [Architecture](ARCHITECTURE.md) · [Policy Reference](../agent-governance-python/agent_os/policies/) · [FAQ](FAQ.md)
+- **Docs:** [Architecture](ARCHITECTURE.md) · [Policy Reference](../agent-governance-python/agent-os/src/agent_os/policies/) · [FAQ](FAQ.md)
 - **Issues:** Open a GitHub issue with the `error-handling` label
 - **Security:** For CVEs, follow [SECURITY.md](../SECURITY.md) disclosure process
