@@ -175,7 +175,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 ## Framework Integrations
 
-Works with any agent framework: LangChain, CrewAI, AutoGen, Google ADK, OpenAI Agents, LlamaIndex, Haystack, Mastra, MCP, A2A, and more. See the [full list](packages/#framework-integrations-19).
+Works with any agent framework: LangChain, CrewAI, AutoGen, Google ADK, OpenAI Agents, LlamaIndex, Haystack, Mastra, MCP, A2A, and more. See the [full list](packages/index.md).
 
 </div>
 
