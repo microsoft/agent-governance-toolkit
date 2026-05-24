@@ -104,6 +104,16 @@ When bumping the monorepo version (e.g. `3.2.0` → `3.2.1`):
 - After bumping, verify with: `Select-String -Path package-lock.json -Pattern '"<new-version>"'`
   and confirm only the SDK's own entries appear, not transitive deps.
 
+## PR Hygiene
+
+Before opening a PR:
+
+- fix the PR title so it is semantic and consistently formatted
+- ensure commits satisfy DCO/signoff requirements
+- run the relevant docs link checks for changed docs
+- treat expected 403-prone external links as markdown-link-check exceptions, not flaky failures
+- fix spell-check issues on changed lines before requesting review
+
 ## Validation
 
 - Run the narrowest existing tests for the paths you touched.
