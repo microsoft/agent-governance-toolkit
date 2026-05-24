@@ -119,9 +119,9 @@ agt verify
 ```
 Agent Governance Toolkit — OWASP ASI 2026 Compliance
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ASI-01 Agentic Prompt Injection      ✅ Covered
-  ASI-02 Unsafe Tool/Function Calling  ✅ Covered
-  ASI-03 Tool Poisoning Attacks        ✅ Covered
+  ASI-01 Agent Goal Hijack             ✅ Covered
+  ASI-02 Tool Misuse & Exploitation    ✅ Covered
+  ASI-03 Identity & Privilege Abuse    ✅ Covered
   ...
   10/10 risks covered
 ```
