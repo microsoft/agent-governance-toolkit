@@ -111,6 +111,7 @@ dateutil
 davidequarracino
 dbt
 dearmor
+deidentified
 defi
 demux
 deprioritized
@@ -126,6 +127,7 @@ esrp
 evilpypi
 exfiltration
 fastapi
+finalizer
 findall
 finditer
 flatbuffer
@@ -143,6 +145,7 @@ gvisor
 hasattr
 hashlib
 healthz
+helpdesk
 hexdigest
 htek
 httpx
@@ -156,6 +159,7 @@ isort
 jwkjwks
 kanish
 kata
+kubeconfigs
 kevinkaylie
 keypair
 keypairs
@@ -190,6 +194,7 @@ newpartner
 noqa
 npmjs
 numpy
+oxycodone
 openshell
 ospo
 parseability

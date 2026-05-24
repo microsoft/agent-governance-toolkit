@@ -1,9 +1,9 @@
 # Contoso Bank — Loan Processing Governance Demo (Python)
 
-This scenario uses the real Microsoft Agent Framework Python shape plus real AGT
-middleware. `main.py` creates an `agent_framework.Agent`, configures an
-`OpenAIChatClient`, and attaches middleware from
-`agent_os.integrations.maf_adapter`.
+This scenario uses the real Microsoft Agent Framework Python runtime plus real
+AGT middleware. `main.py` creates an `agent_framework.Agent`, attaches
+middleware from `agent_os.integrations.maf_adapter`, and runs the walkthrough
+through real `Agent.run(...)` calls with a deterministic scripted MAF client.
 
 ## Governance story
 
@@ -26,7 +26,7 @@ Optional live model backends:
 - `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT` or `AZURE_OPENAI_BASE_URL`
 
 Without credentials, the example skips the live `Agent.run(...)` preview and
-still exercises the real AGT middleware pipeline in the terminal walkthrough.
+still runs the terminal walkthrough through the real MAF agent/tool loop.
 
 ## Files
 
