@@ -7,8 +7,12 @@ No real cedarling_python installation required — tests mock the module.
 
 from __future__ import annotations
 
+import importlib
 import json
+from typing import Any
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from cedarling_agentmesh import CedarlingBackend
 
@@ -19,24 +23,28 @@ from cedarling_agentmesh import CedarlingBackend
 
 class TestProtocol:
     def test_name(self):
-        assert CedarlingBackend().name == "cedarling"
+        with patch.dict("sys.modules", {"cedarling_python": None}):
+            assert CedarlingBackend().name == "cedarling"
 
     def test_evaluate_returns_backend_decision(self):
-        b = CedarlingBackend()
-        d = b.evaluate({"tool_name": "read", "agent_id": "a1"})
+        with patch.dict("sys.modules", {"cedarling_python": None}):
+            b = CedarlingBackend()
+            d = b.evaluate({"tool_name": "read", "agent_id": "a1"})
         assert hasattr(d, "allowed")
         assert hasattr(d, "backend")
         assert d.backend == "cedarling"
 
     def test_denied_safely_when_no_runtime(self):
-        b = CedarlingBackend(mode="auto")
-        d = b.evaluate({"tool_name": "read", "agent_id": "a1"})
+        with patch.dict("sys.modules", {"cedarling_python": None}):
+            b = CedarlingBackend(mode="auto")
+            d = b.evaluate({"tool_name": "read", "agent_id": "a1"})
         assert d.allowed is False
         assert d.error is not None
 
     def test_timing_populated(self):
-        b = CedarlingBackend()
-        d = b.evaluate({"tool_name": "read", "agent_id": "a1"})
+        with patch.dict("sys.modules", {"cedarling_python": None}):
+            b = CedarlingBackend()
+            d = b.evaluate({"tool_name": "read", "agent_id": "a1"})
         assert d.evaluation_ms >= 0
 
 
@@ -123,9 +131,14 @@ def _make_cedarling_python(allowed: bool) -> MagicMock:
     mod = MagicMock()
     result = MagicMock()
     result.is_allowed.return_value = allowed
-    result.workload = None
-    mod.Cedarling.return_value.authorize.return_value = result
-    mod.AuthorizeError = Exception
+    result.request_id.return_value = "mock-req-1"
+    result.response = MagicMock()
+    result.response.decision = "Allow" if allowed else "Deny"
+    result.response.diagnostics = MagicMock()
+    result.response.diagnostics.reason = []
+    result.response.diagnostics.errors = []
+    mod.Cedarling.return_value.authorize_unsigned.return_value = result
+    mod.authorize_errors.AuthorizeError = Exception
     return mod
 
 
@@ -156,7 +169,8 @@ class TestPythonMode:
 
     def test_python_available_cached(self):
         """Once _python_available is set, evaluate must not re-probe."""
-        b = CedarlingBackend(mode="auto")
+        with patch.dict("sys.modules", {"cedarling_python": None}):
+            b = CedarlingBackend(mode="auto")
         b._python_available = False  # pre-set; no cedarling_url → safe denial
         import builtins
 
@@ -279,3 +293,97 @@ class TestAutoMode:
             b = CedarlingBackend(mode="auto")
             d = b.evaluate({"tool_name": "read", "agent_id": "a"})
         assert d.allowed is False
+
+
+def _real_cedarling_instance() -> Any:
+    """Create a real Cedarling instance backed by the test policy store."""
+    from pathlib import Path
+
+    from cedarling_python import BootstrapConfig, Cedarling
+
+    policy_store = (
+        Path(__file__).resolve().parent / "policy-stores" / "simple-unsigned"
+    )
+    config = BootstrapConfig({
+        "CEDARLING_APPLICATION_NAME": "TestIntegration",
+        "CEDARLING_POLICY_STORE_LOCAL_FN": str(policy_store),
+        "CEDARLING_JWT_SIG_VALIDATION": "disabled",
+        "CEDARLING_JWT_STATUS_VALIDATION": "disabled",
+        "CEDARLING_LOG_TYPE": "std_out",
+        "CEDARLING_LOG_LEVEL": "INFO",
+        "CEDARLING_JWT_SIGNATURE_ALGORITHMS_SUPPORTED": ["HS256"],
+    })
+    return Cedarling(config)
+
+
+REAL_CEDARLING = pytest.mark.skipif(
+    importlib.util.find_spec("cedarling_python") is None,
+    reason="cedarling-python is not installed",
+)
+
+
+class TestRealCedarling:
+    """Integration tests using a real Cedarling engine and real policy store.
+
+    Skipped automatically when ``cedarling_python`` is not installed.
+    """
+
+    @staticmethod
+    def _engine() -> Any:
+        return _real_cedarling_instance()
+
+    @REAL_CEDARLING
+    def test_allow_with_unsigned(self):
+        b = CedarlingBackend(cedarling_instance=self._engine(), mode="python")
+        d = b.evaluate({"tool_name": "read_data", "agent_id": "agent-42", "resource": "doc-1"})
+        assert d.allowed is True
+        assert d.backend == "cedarling"
+        assert "(python)" in d.reason
+        assert d.raw_result is not None
+        assert d.raw_result["request_id"] is not None
+
+    @REAL_CEDARLING
+    def test_deny_when_no_policy_matches(self):
+        b = CedarlingBackend(cedarling_instance=self._engine(), mode="python")
+        d = b.evaluate({"tool_name": "write", "agent_id": "agent-42", "resource": "doc-1"})
+        assert d.allowed is False
+
+    @REAL_CEDARLING
+    def test_diagnostics_in_raw_result(self):
+        b = CedarlingBackend(cedarling_instance=self._engine(), mode="python")
+        d = b.evaluate({"tool_name": "read_data", "agent_id": "agent-42", "resource": "doc-1"})
+        diag = d.raw_result.get("diagnostics")
+        assert diag is not None
+        assert diag["decision"] == "ALLOW"
+        assert "allow-read" in diag["reasons"]
+
+    @REAL_CEDARLING
+    def test_injected_instance_used(self):
+        """cedarling_instance is provided → backend must NOT create its own."""
+        engine = self._engine()
+        b = CedarlingBackend(
+            cedarling_instance=engine,
+            bootstrap_config={"CEDARLING_APPLICATION_NAME": "ShouldNotBeUsed"},
+            mode="python",
+        )
+        d = b.evaluate({"tool_name": "read", "agent_id": "agent-42", "resource": "doc-1"})
+        assert d.allowed is True
+
+    @REAL_CEDARLING
+    def test_auto_mode_uses_injected_instance(self):
+        """Auto mode with a cedarling_instance should still work."""
+        b = CedarlingBackend(cedarling_instance=self._engine(), mode="auto")
+        d = b.evaluate({"tool_name": "read", "agent_id": "agent-42", "resource": "doc-1"})
+        assert d.allowed is True
+
+    @REAL_CEDARLING
+    def test_custom_entity_types(self):
+        engine = self._engine()
+        b = CedarlingBackend(
+            cedarling_instance=engine,
+            mode="python",
+            principal_entity_type="Agent",
+            resource_entity_type="Resource",
+        )
+        d = b.evaluate({"tool_name": "read", "agent_id": "agent-42", "resource": "doc-1"})
+        assert d.allowed is True

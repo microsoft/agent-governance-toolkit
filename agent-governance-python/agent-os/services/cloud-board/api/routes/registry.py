@@ -6,15 +6,19 @@ Registry Routes
 API endpoints for agent registration and discovery.
 """
 
+import hashlib
+
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 # Would import from modules.nexus in production
 # For now, define inline models
 
 router = APIRouter()
+
+REPLAY_WINDOW = timedelta(minutes=5)
 
 
 class AgentIdentityRequest(BaseModel):
@@ -43,7 +47,8 @@ class RegisterAgentRequest(BaseModel):
     identity: AgentIdentityRequest
     capabilities: AgentCapabilitiesRequest = None
     privacy: AgentPrivacyRequest = None
-    signature: str
+    proof: str  # Ed25519 signature over (verification_key || proof_timestamp)
+    proof_timestamp: str  # ISO 8601 UTC timestamp
 
 
 class RegisterAgentResponse(BaseModel):
@@ -85,11 +90,47 @@ async def register_agent(request: RegisterAgentRequest):
     """
     Register a new agent on Nexus.
     
-    This is the entry point for the viral loop - agents must register
-    to communicate with other agents on the network.
+    Requires proof-of-possession: the caller must sign
+    (verification_key || proof_timestamp) with the private key
+    corresponding to the submitted verification_key.
     """
-    agent_did = request.identity.did
-    
+    import base64
+    import json
+
+    from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
+
+    # Decode and validate the verification key
+    try:
+        key_bytes = base64.urlsafe_b64decode(request.identity.verification_key + "==")
+    except Exception:
+        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "Invalid verification_key encoding"})
+    if len(key_bytes) != 32:
+        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "verification_key must be 32 bytes (Ed25519)"})
+
+    # Verify proof timestamp is within replay window
+    try:
+        ts = datetime.fromisoformat(request.proof_timestamp)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp format"})
+    now = datetime.now(timezone.utc)
+    if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
+        raise HTTPException(status_code=401, detail={"error": "EXPIRED_PROOF", "message": "Proof timestamp outside replay window"})
+
+    # Verify proof-of-possession
+    try:
+        proof_bytes = base64.urlsafe_b64decode(request.proof + "==")
+        message = request.identity.verification_key.encode() + request.proof_timestamp.encode()
+        VerifyKey(key_bytes).verify(message, proof_bytes)
+    except BadSignatureError:
+        raise HTTPException(status_code=401, detail={"error": "INVALID_PROOF", "message": "Invalid proof-of-possession"})
+    except Exception:
+        raise HTTPException(status_code=400, detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"})
+
+    # Derive DID deterministically from public key hash
+    key_hash = hashlib.sha256(key_bytes).hexdigest()[:32]
+    agent_did = f"did:nexus:{key_hash}"
+
     # Check if already registered
     if agent_did in _agents:
         raise HTTPException(
@@ -97,16 +138,6 @@ async def register_agent(request: RegisterAgentRequest):
             detail={
                 "error": "AGENT_ALREADY_REGISTERED",
                 "message": f"Agent {agent_did} is already registered",
-            }
-        )
-    
-    # Validate DID format
-    if not agent_did.startswith("did:nexus:"):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": "INVALID_DID",
-                "message": "DID must start with 'did:nexus:'",
             }
         )
     
@@ -170,7 +201,13 @@ async def get_agent(agent_did: str):
 
 @router.put("/{agent_did}", response_model=RegisterAgentResponse)
 async def update_agent(agent_did: str, request: RegisterAgentRequest):
-    """Update an agent's manifest."""
+    """Update an agent's manifest. Requires proof-of-possession."""
+    import base64
+    import json
+
+    from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
+
     if agent_did not in _agents:
         raise HTTPException(
             status_code=404,
@@ -179,13 +216,40 @@ async def update_agent(agent_did: str, request: RegisterAgentRequest):
                 "message": f"Agent {agent_did} not found",
             }
         )
-    
-    if request.identity.did != agent_did:
+
+    # Verify proof-of-possession
+    try:
+        key_bytes = base64.urlsafe_b64decode(request.identity.verification_key + "==")
+    except Exception:
+        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "Invalid verification_key encoding"})
+    if len(key_bytes) != 32:
+        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "verification_key must be 32 bytes"})
+
+    try:
+        ts = datetime.fromisoformat(request.proof_timestamp)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp"})
+    now = datetime.now(timezone.utc)
+    if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
+        raise HTTPException(status_code=401, detail={"error": "EXPIRED_PROOF", "message": "Proof timestamp outside replay window"})
+
+    try:
+        proof_bytes = base64.urlsafe_b64decode(request.proof + "==")
+        message = request.identity.verification_key.encode() + request.proof_timestamp.encode()
+        VerifyKey(key_bytes).verify(message, proof_bytes)
+    except BadSignatureError:
+        raise HTTPException(status_code=401, detail={"error": "INVALID_PROOF", "message": "Invalid proof-of-possession"})
+    except Exception:
+        raise HTTPException(status_code=400, detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"})
+
+    # Verify the derived DID matches the URL
+    derived_did = f"did:nexus:{hashlib.sha256(key_bytes).hexdigest()[:32]}"
+    if derived_did != agent_did:
         raise HTTPException(
-            status_code=400,
+            status_code=403,
             detail={
                 "error": "DID_MISMATCH",
-                "message": "DID in request does not match URL",
+                "message": "Proof key does not match the agent DID",
             }
         )
     

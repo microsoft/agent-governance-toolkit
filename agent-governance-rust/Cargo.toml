@@ -11,10 +11,14 @@ rust-version = "1.70"
 
 [workspace.dependencies]
 agentmesh-mcp = { path = "agentmesh-mcp", version = "3.6.0" }
+assert_cmd = "=2.2.2"
 base64 = "=0.22.1"
 cedar-policy = "=4.11.0"
+clap = { version = "=4.6.1", features = ["derive"] }
+predicates = "=3.1.4"
 ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }
 hmac = "=0.12.1"
+opentelemetry = { version = "=0.27.1", default-features = false, features = ["trace"] }
 rand = "=0.8.6"
 regex = "=1.12.3"
 regorus = { version = "=0.10.0", default-features = false, features = ["regex"] }

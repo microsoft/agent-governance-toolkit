@@ -46,6 +46,12 @@ class CedarlingBackend:
                        else safe denial.
         ``"python"`` — cedarling_python bindings only (ImportError if absent).
         ``"http"``   — HTTP service only (requires ``cedarling_url``).
+
+    When *cedarling_instance* is provided, it is used directly instead of
+    creating a new ``Cedarling`` from *bootstrap_config*. This lets callers
+    control initialization and lifecycle of the Cedarling engine. The mode
+    must still allow Python evaluation (``"auto"`` or ``"python"``) for the
+    instance to be reached.
     """
 
     def __init__(
@@ -59,9 +65,10 @@ class CedarlingBackend:
         cedarling_url: Optional[str] = None,
         mode: Literal["auto", "python", "http"] = "auto",
         timeout_seconds: float = 5.0,
+        cedarling_instance: Any = None,
     ) -> None:
         cfg: dict[str, Any] = dict(bootstrap_config) if bootstrap_config else {}
-        cfg.setdefault("application_name", application_name)
+        cfg.setdefault("CEDARLING_APPLICATION_NAME", application_name)
         self._bootstrap_config = cfg
         self._tokens = tokens or {}
         self._principal_entity_type = principal_entity_type
@@ -70,7 +77,36 @@ class CedarlingBackend:
         self._cedarling_url = cedarling_url.rstrip("/") if cedarling_url else None
         self._mode = mode
         self._timeout = timeout_seconds
-        self._python_available: Optional[bool] = None  # lazily resolved
+        self._cedarling_instance = cedarling_instance
+        self._python_available: bool
+
+        if cedarling_instance is not None:
+            if mode == "http":
+                raise ValueError(
+                    "cedarling_instance is not compatible with mode='http'. "
+                    "Use mode='auto' or mode='python' when providing a Cedarling instance."
+                )
+            self._python_available = True
+        elif self._mode == "python":
+            try:
+                import cedarling_python  # noqa: F401
+            except ImportError:
+                self._python_available = False
+            else:
+                bootstrap = cedarling_python.BootstrapConfig(self._bootstrap_config)
+                self._cedarling_instance = cedarling_python.Cedarling(bootstrap)
+                self._python_available = True
+        elif self._mode == "auto":
+            try:
+                import cedarling_python
+
+                bootstrap = cedarling_python.BootstrapConfig(self._bootstrap_config)
+                self._cedarling_instance = cedarling_python.Cedarling(bootstrap)
+                self._python_available = True
+            except ImportError:
+                self._python_available = False
+        else:
+            self._python_available = False
 
     @property
     def name(self) -> str:
@@ -80,15 +116,6 @@ class CedarlingBackend:
         """Evaluate *context* and return a normalized ``BackendDecision``."""
         start = datetime.now(timezone.utc)
         try:
-            # Detect cedarling_python availability once, then cache.
-            if self._python_available is None:
-                try:
-                    import cedarling_python  # noqa: F401
-
-                    self._python_available = True
-                except ImportError:
-                    self._python_available = False
-
             use_python = self._mode == "python" or (
                 self._mode == "auto" and self._python_available
             )
@@ -103,12 +130,12 @@ class CedarlingBackend:
             else:
                 msg = (
                     "No Cedarling runtime available. "
-                    "Install cedarling_python or set cedarling_url."
+                    "Install cedarling-python or set cedarling_url."
                 )
                 logger.warning(msg)
                 result = self._deny(
                     msg,
-                    "cedarling_python not installed and cedarling_url not configured",
+                    "cedarling-python not installed and cedarling_url not configured",
                 )
 
             result.evaluation_ms = (
@@ -131,6 +158,26 @@ class CedarlingBackend:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _extract_diagnostics(self, result: Any) -> Optional[dict[str, Any]]:
+        try:
+            raw = getattr(result, "response", None)
+            if raw is None:
+                return None
+            diag = getattr(raw, "diagnostics", None)
+            if diag is None:
+                return None
+            return {
+                "decision": str(raw.decision),
+                "reasons": list(diag.reason),
+            }
+        except Exception:
+            logger.debug(
+                "Failed to extract Cedarling diagnostics from result type %s",
+                type(result).__name__,
+                exc_info=True,
+            )
+            return None
 
     def _deny(self, reason: str, error: str) -> BackendDecision:
         return BackendDecision(
@@ -165,27 +212,50 @@ class CedarlingBackend:
             import cedarling_python
         except ImportError as exc:
             raise ImportError(
-                "cedarling_python is not installed. "
-                "Run `pip install cedarling_python` to use Python-binding mode."
+                "cedarling-python is not installed. "
+                "Run `pip install cedarling-python` to use Python-binding mode."
             ) from exc
 
         req = self._build_request(context)
-        bootstrap = cedarling_python.BootstrapConfig(**self._bootstrap_config)
-        engine = cedarling_python.Cedarling(bootstrap)
-        resource = cedarling_python.ResourceData(
-            resource_type=req["resource"]["type"],
-            id=req["resource"]["id"],
-            payload=req["context"],
-        )
-        request = cedarling_python.Request(
-            tokens=self._tokens,
-            action=req["action"],
-            resource=resource,
-            context=req["context"],
-        )
+
+        engine = self._cedarling_instance
+
+        resource = cedarling_python.EntityData.from_dict({
+            "cedar_entity_mapping": {
+                "entity_type": req["resource"]["type"],
+                "id": req["resource"]["id"],
+            },
+            **req["context"],
+        })
+
         try:
-            result = engine.authorize(request)
-        except cedarling_python.AuthorizeError as exc:
+            if self._tokens:
+                tokens = [
+                    cedarling_python.TokenInput(mapping=k, payload=v)
+                    for k, v in self._tokens.items()
+                ]
+                request = cedarling_python.AuthorizeMultiIssuerRequest(
+                    tokens=tokens,
+                    action=req["action"],
+                    resource=resource,
+                    context=req["context"],
+                )
+                result = engine.authorize_multi_issuer(request)
+            else:
+                principal = cedarling_python.EntityData.from_dict({
+                    "cedar_entity_mapping": {
+                        "entity_type": req["principal"]["type"],
+                        "id": req["principal"]["id"],
+                    },
+                })
+                request = cedarling_python.RequestUnsigned(
+                    principal=principal,
+                    action=req["action"],
+                    resource=resource,
+                    context=req["context"],
+                )
+                result = engine.authorize_unsigned(request)
+        except cedarling_python.authorize_errors.AuthorizeError as exc:
             return BackendDecision(
                 allowed=False,
                 action="deny",
@@ -196,9 +266,7 @@ class CedarlingBackend:
             )
 
         allowed = result.is_allowed()
-        diagnostics: Optional[dict[str, Any]] = None
-        if hasattr(result, "workload") and result.workload is not None:
-            diagnostics = {"workload": str(result.workload)}
+        diagnostics = self._extract_diagnostics(result)
 
         return BackendDecision(
             allowed=allowed,
@@ -206,7 +274,7 @@ class CedarlingBackend:
             reason=f"Cedarling: {'allowed' if allowed else 'denied'} (python)",
             backend="cedarling",
             raw_result={
-                "request_id": getattr(result, "request_id", None),
+                "request_id": result.request_id(),
                 "diagnostics": diagnostics,
             },
         )

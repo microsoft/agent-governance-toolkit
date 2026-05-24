@@ -176,8 +176,11 @@ Apply SRE practices to your agent fleet:
 Detect attacks on MCP (Model Context Protocol) tool definitions:
 
 ```bash
-agent-governance mcp-scan --server my-mcp-server
+mcp-scan scan mcp-config.json --server my-mcp-server
 ```
+
+Use `--static-only` for untrusted configs. Live scans may launch stdio commands
+or connect to configured Streamable HTTP/SSE endpoints.
 
 Catches: tool poisoning, typosquatting, hidden instructions, rug-pull attacks.
 

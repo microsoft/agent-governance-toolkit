@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-python = ["cedarling_python>=1.0.0"]
+python = ["cedarling-python>=0.0.4"]
 dev = [
     "pytest>=7.0,<8.0",
     "ruff>=0.1.0,<1.0",

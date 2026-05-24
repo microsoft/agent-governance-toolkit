@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional
 import click
 
 from agent_compliance.cli.red_team import red_team
+from agent_compliance.cli.cred import cred
 
 _logger = logging.getLogger(__name__)
 
@@ -194,6 +195,8 @@ def cli(
 
 # Register the red-team subcommand group
 cli.add_command(red_team)
+# Register the credential vault subcommand group (issue #2481)
+cli.add_command(cred)
 
 
 @cli.command()

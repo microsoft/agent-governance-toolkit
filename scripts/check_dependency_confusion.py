@@ -169,6 +169,9 @@ REGISTERED_NPM_PACKAGES = {
 REGISTERED_CARGO_PACKAGES = {
     "serde", "serde_json", "serde_yaml", "sha2", "ed25519-dalek",
     "rand", "thiserror", "tempfile", "agentmesh",
+    "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
+    "opentelemetry", "regex", "regorus",
+    "assert_cmd", "predicates",
 }
 
 # Patterns that are always safe (not package names)

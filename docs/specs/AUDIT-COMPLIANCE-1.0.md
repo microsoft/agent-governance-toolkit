@@ -215,7 +215,9 @@ The Agent Mesh audit entry extends the base schema with mesh-specific fields:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `entry_id` | string | REQUIRED | Unique identifier. Format: `audit_{uuid4_hex[:16]}`. |
-| `timestamp` | datetime (UTC) | REQUIRED | When the event occurred. |
+| `timestamp` | datetime (UTC) | REQUIRED | When the event occurred (entry creation time). |
+| `issued_at` | datetime (UTC) | OPTIONAL | When the action was authorized or issued for execution. Pairs with `completed_at` to expose execution latency. See §4.3.1. |
+| `completed_at` | datetime (UTC) | OPTIONAL | When the action's outcome was recorded. See §4.3.1. |
 | `event_type` | string | REQUIRED | Category of the audit event. |
 | `agent_did` | string | REQUIRED | DID of the agent. |
 | `action` | string | REQUIRED | The action being audited. |
@@ -238,9 +240,9 @@ The Agent Mesh audit entry extends the base schema with mesh-specific fields:
 
 ### 4.3.1 Additive Tamper-Evidence Fields [Pure Specification]
 
-The fields `arguments_hash`, `approver_did`, and `policy_version` are OPTIONAL
-in spec v1.0 and serve verifiability purposes that are not yet covered by the
-canonical entry hash defined in §4.4. In spec v1.0:
+The fields `arguments_hash`, `approver_did`, `policy_version`, `issued_at`, and
+`completed_at` are OPTIONAL in spec v1.0 and serve verifiability purposes that
+are not yet covered by the canonical entry hash defined in §4.4. In spec v1.0:
 
 - Implementations MAY populate these fields. Verifiers MUST NOT treat their
   presence or absence as a conformance signal.

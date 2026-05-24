@@ -72,6 +72,9 @@ bld/
 !agent-governance-copilot-cli/bin/agt-copilot.mjs
 !agent-governance-claude-code/bin/agt-node
 !agent-governance-claude-code/bin/agt-node.cmd
+# Rust binary source (src/bin/) is source code, not build output
+!agent-governance-rust/agentmesh/src/bin/
+!agent-governance-rust/agentmesh/src/bin/**
 # Uncomment if you have tasks that rely on *.refresh files to move binaries
 # (https://github.com/github/gitignore/pull/3736)
 #!**/[Bb]in/*.refresh
