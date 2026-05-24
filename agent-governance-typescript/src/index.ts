@@ -23,6 +23,29 @@ export { ShadowDiscovery } from './discovery';
 export { CedarBackend } from './policy-backends/cedar';
 export { OPABackend } from './policy-backends/opa';
 export { PromptDefenseEvaluator } from './prompt-defense';
+// Credential Vault & Injection (issue #2535 / #2481)
+export {
+  CredentialVault,
+  CredentialInjector,
+  CredentialHandle,
+  CredentialProfile,
+  CredentialError,
+  DenyReceipt,
+  auditDigest,
+  PLACEHOLDER_RE,
+  DENY_REASON,
+} from './credential-vault';
+export type {
+  CredentialDecision,
+  CredentialRecord,
+  CredentialVaultOptions,
+  VaultAuditEvent,
+  InjectionContext,
+  InjectionOptions,
+  InjectionResult,
+  PolicyOutcome,
+  PolicyCheck,
+} from './credential-vault';
 export { RingEnforcer, RingBreachError } from './rings';
 export { GovernanceVerifier } from './verify';
 export { SurfaceParityChecker } from './surface-parity';

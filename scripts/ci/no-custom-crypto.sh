@@ -57,6 +57,7 @@ ADDED=$(git diff "$BASE_REF"...HEAD --diff-filter=ACMR -U0 -- \
   ':!agent-governance-dotnet/**' \
   ':!agent-governance-golang/**' \
   ':!agent-governance-python/agent-os/src/agent_os/credential_vault.py' \
+  ':!agent-governance-typescript/src/credential-vault.ts' \
   ':!*test*' ':!*spec*' ':!ci/no-custom-crypto.sh' \
   | grep -E '^\+[^+]' || true)
 
