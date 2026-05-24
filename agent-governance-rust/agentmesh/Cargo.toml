@@ -18,6 +18,8 @@ autobins = false
 [features]
 # Opt-in operator CLI. Pulls clap; the default library build stays clap-free.
 cli = ["dep:clap"]
+# Opt-in OpenTelemetry tracing hooks. The default library build stays OTel-free.
+telemetry = ["dep:opentelemetry"]
 
 # Feature-gated operator binary. `required-features` ensures `cargo build`/`cargo test`
 # without `--features cli` never builds this target.
@@ -33,6 +35,7 @@ cedar-policy.workspace = true
 clap = { workspace = true, optional = true }
 ed25519-dalek.workspace = true
 hmac.workspace = true
+opentelemetry = { workspace = true, optional = true }
 rand.workspace = true
 regex.workspace = true
 regorus.workspace = true

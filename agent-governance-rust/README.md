@@ -156,6 +156,46 @@ not: a score above `1000` is rejected (no silent clamp), a store path containing
 `..` is rejected, a corrupt store is never overwritten, and after `set` the value
 is read back and confirmed — an unconfirmed write exits `1`.
 
+## OpenTelemetry policy spans
+
+The `agentmesh` crate ships optional OpenTelemetry policy-evaluation spans behind
+the `telemetry` feature. The default library build has no OpenTelemetry
+dependency, and the crate never installs a global provider or exporter for you;
+configure those in the embedding application, then install an explicit sink on
+the client:
+
+```toml
+[dependencies]
+agentmesh = { version = "3.7.0", features = ["telemetry"] }
+```
+
+```rust
+use agentmesh::{
+    telemetry::OtelTelemetrySink, AgentMeshClient, ClientOptions,
+};
+use std::sync::Arc;
+
+let client = AgentMeshClient::with_options(
+    "my-agent",
+    ClientOptions {
+        telemetry_sink: Some(Arc::new(OtelTelemetrySink::new())),
+        ..Default::default()
+    },
+)?;
+
+let result = client.execute_with_governance("data.read", None);
+assert!(result.allowed);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Each span is named `agentmesh.policy.evaluate` and records sanitized attributes:
+decision label, allowed flag, elapsed milliseconds, action length, action hash,
+and agent-id hash. It does not emit raw actions, agent IDs, policy YAML, context
+values, prompt text, canaries, rule bodies, or denied reasons.
+
+Prometheus metrics and broader audit/trust/prompt/ring telemetry are intentionally
+left as follow-up work; this slice is OTel policy spans only.
+
 ## Crates
 
 ### `agentmesh`

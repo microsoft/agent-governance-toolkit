@@ -423,6 +423,175 @@ class TestAuditEntryExtensions:
         assert error is None
 
 
+class TestAuditEntryTemporalExtensions:
+    """Tests for v1.0 additive temporal fields: issued_at, completed_at.
+
+    These fields split the single ``timestamp`` into authorization-time
+    (``issued_at``) and outcome-time (``completed_at``), enabling third-party
+    verifiers to compute execution latency. They are recorded but are NOT yet
+    part of the canonical hash computed by ``AuditEntry.compute_hash()``;
+    spec v1.1 will extend ``MerkleAuditChain`` coverage. See
+    ``docs/specs/AUDIT-COMPLIANCE-1.0.md`` §4.3.1.
+    """
+
+    def test_audit_entry_accepts_issued_at(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        issued = datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc)
+        entry = AuditEntry(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="wire_transfer",
+            issued_at=issued,
+        )
+
+        assert entry.issued_at == issued
+
+    def test_audit_entry_accepts_completed_at(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        completed = datetime(2026, 5, 22, 12, 0, 5, tzinfo=timezone.utc)
+        entry = AuditEntry(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="wire_transfer",
+            completed_at=completed,
+        )
+
+        assert entry.completed_at == completed
+
+    def test_temporal_fields_default_to_none(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+        )
+
+        assert entry.issued_at is None
+        assert entry.completed_at is None
+
+    def test_timestamp_unaffected_by_temporal_fields(self):
+        """``timestamp`` continues to auto-populate; the new fields are additive."""
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+        )
+
+        assert entry.timestamp is not None
+        assert entry.timestamp.tzinfo is timezone.utc
+
+    def test_audit_log_log_passes_through_temporal_fields(self):
+        audit_log = AuditLog()
+
+        issued = datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc)
+        completed = datetime(2026, 5, 22, 12, 0, 5, tzinfo=timezone.utc)
+        entry = audit_log.log(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="wire_transfer",
+            issued_at=issued,
+            completed_at=completed,
+        )
+
+        assert entry.issued_at == issued
+        assert entry.completed_at == completed
+
+    def test_canonical_hash_unchanged_by_temporal_fields(self):
+        """Backward compat: temporal fields MUST NOT affect ``compute_hash()`` in v1.0.
+
+        Spec §4.4 fixes the canonical hash field set. The v1.0 canonical form is
+        intentionally unchanged so that previously-persisted entries continue to
+        verify. Spec v1.1 will introduce hash coverage under an explicit
+        schema-version selector. See §4.3.1.
+        """
+        from agentmesh.governance.audit import AuditEntry
+
+        fixed_ts = datetime(2026, 5, 22, 0, 0, 0, tzinfo=timezone.utc)
+
+        baseline = AuditEntry(
+            entry_id="audit_fixed_id_0002",
+            timestamp=fixed_ts,
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+        )
+
+        extended = AuditEntry(
+            entry_id="audit_fixed_id_0002",
+            timestamp=fixed_ts,
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+            issued_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 5, 22, 12, 0, 5, tzinfo=timezone.utc),
+        )
+
+        assert extended.compute_hash() == baseline.compute_hash(), (
+            "v1.0 canonical hash form must not depend on additive fields; "
+            "see spec §4.3.1. Schema v1.1 will introduce hash coverage."
+        )
+
+    def test_cloudevent_serialization_includes_temporal_fields_when_set(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        issued = datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc)
+        completed = datetime(2026, 5, 22, 12, 0, 5, tzinfo=timezone.utc)
+        entry = AuditEntry(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:caller",
+            action="wire_transfer",
+            issued_at=issued,
+            completed_at=completed,
+        )
+
+        envelope = entry.to_cloudevent()
+
+        assert envelope["data"]["issued_at"] == issued.isoformat()
+        assert envelope["data"]["completed_at"] == completed.isoformat()
+
+    def test_cloudevent_serialization_omits_temporal_fields_when_unset(self):
+        from agentmesh.governance.audit import AuditEntry
+
+        entry = AuditEntry(
+            event_type="action",
+            agent_did="did:agentmesh:test",
+            action="read",
+        )
+
+        envelope = entry.to_cloudevent()
+
+        assert "issued_at" not in envelope["data"]
+        assert "completed_at" not in envelope["data"]
+
+    def test_chain_verification_with_temporal_fields(self):
+        """Chain still verifies when temporal fields are populated."""
+        audit_log = AuditLog()
+
+        audit_log.log(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:agent-1",
+            action="read",
+            issued_at=datetime(2026, 5, 22, 12, 0, 0, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 5, 22, 12, 0, 1, tzinfo=timezone.utc),
+        )
+        audit_log.log(
+            event_type="tool_invocation",
+            agent_did="did:agentmesh:agent-1",
+            action="write",
+            issued_at=datetime(2026, 5, 22, 12, 0, 2, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 5, 22, 12, 0, 3, tzinfo=timezone.utc),
+        )
+
+        is_valid, error = audit_log.verify_integrity()
+        assert is_valid is True
+        assert error is None
+
+
 class TestShadowMode:
     """Tests for ShadowMode."""
     

@@ -65,6 +65,28 @@ class AuditEntry(BaseModel):
 
     entry_id: str = Field(default_factory=lambda: f"audit_{uuid.uuid4().hex[:16]}")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    issued_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Optional UTC datetime marking when the action was authorized or "
+            "issued for execution (e.g., approval granted, tool call decided). "
+            "When paired with ``completed_at``, enables third-party verifiers to "
+            "compute action latency and distinguish decision time from outcome "
+            "time. NOT part of the canonical entry hash in spec v1.0; v1.1 will "
+            "extend MerkleAuditChain coverage. See spec §4.3.1."
+        ),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Optional UTC datetime marking when the action's outcome was "
+            "recorded. When ``issued_at`` and ``completed_at`` are both set, "
+            "their difference is the verifiable execution latency. The existing "
+            "``timestamp`` field continues to mark entry creation time and is "
+            "unaffected. NOT part of the canonical entry hash in spec v1.0; "
+            "v1.1 will extend MerkleAuditChain coverage. See spec §4.3.1."
+        ),
+    )
 
     # Event details
     event_type: str
@@ -210,6 +232,8 @@ class AuditEntry(BaseModel):
                 **({"policy_version": self.policy_version} if self.policy_version else {}),
                 **({"arguments_hash": self.arguments_hash} if self.arguments_hash else {}),
                 **({"approver_did": self.approver_did} if self.approver_did else {}),
+                **({"issued_at": self.issued_at.isoformat()} if self.issued_at else {}),
+                **({"completed_at": self.completed_at.isoformat()} if self.completed_at else {}),
                 **self.data,
             },
             "agentmeshentryhash": self.entry_hash,
@@ -470,13 +494,16 @@ class AuditLog:
         arguments_hash: str | None = None,
         approver_did: str | None = None,
         policy_version: str | None = None,
+        issued_at: datetime | None = None,
+        completed_at: datetime | None = None,
     ) -> AuditEntry:
         """Log an audit event.
 
-        The ``arguments_hash``, ``approver_did``, and ``policy_version`` parameters
-        are accepted as keyword-only arguments to preserve the positional signature
-        for existing callers. See spec §4.3.1 for semantics and the v1.0/v1.1 hash
-        coverage caveat.
+        The ``arguments_hash``, ``approver_did``, ``policy_version``,
+        ``issued_at``, and ``completed_at`` parameters are accepted as
+        keyword-only arguments to preserve the positional signature for
+        existing callers. See spec §4.3.1 for semantics and the v1.0/v1.1
+        hash coverage caveat.
         """
         entry = AuditEntry(
             event_type=event_type,
@@ -493,6 +520,8 @@ class AuditLog:
             arguments_hash=arguments_hash,
             approver_did=approver_did,
             policy_version=policy_version,
+            issued_at=issued_at,
+            completed_at=completed_at,
         )
 
         self._chain.add_entry(entry)
