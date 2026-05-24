@@ -74,7 +74,7 @@ guides.
 |---|----------|-------------------|---------|
 | 19 | [.NET package](19-dotnet-sdk.md) | GovernanceKernel, policy, rings, saga, SLO, OpenTelemetry in C# | `Microsoft.AgentGovernance` |
 | 42 | [C# MCP extension](42-csharp-mcp-extension.md) | Add governed tool execution, startup scanning, and response sanitization to MCP servers | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
-| 20 | [TypeScript package](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@microsoft/agentmesh-sdk` |
+| 20 | [TypeScript package](20-typescript-sdk.md) | Identity, trust, policy, audit in TypeScript/Node.js | `@microsoft/agent-governance-sdk` |
 | 21 | [Rust crate](21-rust-sdk.md) | Policy, trust, audit, identity with `agentmesh` crate | `agentmesh` |
 | 22 | [Go module](22-go-sdk.md) | Policy, trust, audit, identity with Go module | `agentmesh` |
 
@@ -82,7 +82,7 @@ guides.
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@microsoft/agentmesh-sdk` |
+| 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@microsoft/agent-governance-sdk` |
 | 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Per-session token limits, context scheduling, budget signals | `agent-os-kernel` |
 | 49 | [Multi-Agent Collective Policies](49-multi-agent-policies.md) | Aggregate constraints across agents: rate limits, concurrent caps, alert-only monitoring | `agentmesh-platform` |
 
@@ -150,7 +150,7 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 
 ## Learning Paths
 
-### 🚀 "I want to govern my agent in 10 minutes"
+### 🚀 "I want to govern my agent in 5 minutes"
 
 1. [01 — Policy Engine](01-policy-engine.md) → define allow/deny rules
 2. [03 — Framework Integrations](03-framework-integrations.md) → wrap your framework
@@ -220,14 +220,14 @@ Install the full toolkit:
 ```bash
 pip install agent-governance-toolkit[full]    # Python
 dotnet add package Microsoft.AgentGovernance  # .NET
-npm install @microsoft/agentmesh-sdk                    # TypeScript
+npm install @microsoft/agent-governance-sdk                    # TypeScript
 cargo add agentmesh                           # Rust
 go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang  # Go
 ```
 
 ## More Resources
 
-- **[Quick Start](../../quickstart.md)** — Zero to governed agents in 10 minutes
+- **[Quick Start](../../quickstart.md)** — Zero to governed agents in 5 minutes
 - **[Architecture](../ARCHITECTURE.md)** — System design and security model
 - **[OWASP Compliance](../OWASP-COMPLIANCE.md)** — ASI-01 through ASI-10 mapping
 - **[Benchmarks](../../BENCHMARKS.md)** — Performance data

@@ -67,11 +67,11 @@ Reliability layer across **170K+ combined GitHub stars** of integrated projects 
 
 ### 🛡️ OWASP Agentic Security Coverage
 
-Agent SRE directly addresses **[OWASP Agentic Security Initiative](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md)** risk **ASI08 — Cascading Failures**:
+Agent SRE directly addresses **[OWASP Agentic Security Initiative](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md)** risk **ASI08 — Cascading Agent Failures**:
 
 | OWASP Risk | Agent SRE Coverage |
 |---|---|
-| **ASI08: Cascading Failures** | Circuit breakers, error budgets, fault isolation, chaos testing to prove resilience |
+| **ASI08: Cascading Agent Failures** | Circuit breakers, error budgets, fault isolation, chaos testing to prove resilience |
 | **ASI07: Uncontrolled Costs** | Per-task cost limits, org budgets, anomaly detection, auto-throttle, kill switch |
 | **ASI09: Lack of Observability** | 7 SLI types, OpenTelemetry export, 11 observability platform integrations |
 | **ASI10: Inadequate Testing** | Chaos engineering with 9 fault templates, progressive delivery with shadow & canary |

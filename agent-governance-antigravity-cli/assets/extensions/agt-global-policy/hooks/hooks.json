@@ -1,0 +1,60 @@
+{
+  "SessionStart": [
+    {
+      "sequential": true,
+      "hooks": [
+        {
+          "type": "command",
+          "name": "agt-session-start",
+          "description": "Inject AGT Antigravity governance startup context.",
+          "command": "node \"${extensionPath}${/}hooks${/}session-start.mjs\"",
+          "timeout": 30000
+        }
+      ]
+    }
+  ],
+  "BeforeAgent": [
+    {
+      "sequential": true,
+      "hooks": [
+        {
+          "type": "command",
+          "name": "agt-before-agent",
+          "description": "Inspect prompts for AGT policy and poisoning risks.",
+          "command": "node \"${extensionPath}${/}hooks${/}before-agent.mjs\"",
+          "timeout": 30000
+        }
+      ]
+    }
+  ],
+  "BeforeTool": [
+    {
+      "matcher": ".*",
+      "sequential": true,
+      "hooks": [
+        {
+          "type": "command",
+          "name": "agt-before-tool",
+          "description": "Evaluate Antigravity tool invocations against AGT policy.",
+          "command": "node \"${extensionPath}${/}hooks${/}before-tool.mjs\"",
+          "timeout": 30000
+        }
+      ]
+    }
+  ],
+  "AfterTool": [
+    {
+      "matcher": ".*",
+      "sequential": true,
+      "hooks": [
+        {
+          "type": "command",
+          "name": "agt-after-tool",
+          "description": "Inspect Antigravity tool output for poisoning and exfiltration cues.",
+          "command": "node \"${extensionPath}${/}hooks${/}after-tool.mjs\"",
+          "timeout": 30000
+        }
+      ]
+    }
+  ]
+}

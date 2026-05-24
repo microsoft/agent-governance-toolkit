@@ -42,7 +42,9 @@
     "fastapi",
     "structlog",
     "scipy",
-    "croniter"
+    "croniter",
+    "nbconvert",
+    "PYTHONUTF"
   ],
   "ignorePaths": [
     "**/node_modules/**",

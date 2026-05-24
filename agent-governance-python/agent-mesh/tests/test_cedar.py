@@ -58,7 +58,7 @@ forbid(
         evaluator = CedarEvaluator(policy_content=self.SIMPLE_POLICY)
         decision = evaluator.evaluate('Action::"ReadData"', {"agent_did": "did:example:1"})
         assert decision.allowed is True
-        assert decision.source == "builtin"
+        assert decision.source in ("cedarpy", "cli", "builtin")
         assert decision.error is None
 
     def test_forbid_matching_action(self):

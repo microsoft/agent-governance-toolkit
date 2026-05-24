@@ -81,7 +81,7 @@ Cross-references every rule in the ASI starter policy packs
 | ASI-05 Unexpected Code Execution | ✅ | ✅ | ✅ |
 | ASI-06 Memory & Context Poisoning | ✅ | ✅ | ✅ |
 | ASI-07 Insecure Inter-Agent Communication | 🔗 | 🔗 | 🔗 |
-| ASI-08 Cascading Failures | ✅ | ✅ | ✅ |
+| ASI-08 Cascading Agent Failures | ✅ | ✅ | ✅ |
 | ASI-09 Human-Agent Trust Exploitation | 🔗 | 🔗 | 🔗 |
 | ASI-10 Rogue Agents | 🔗 | 🔗 | 🔗 |
 

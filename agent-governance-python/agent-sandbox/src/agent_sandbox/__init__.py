@@ -66,7 +66,7 @@ except ImportError:
     ACASandboxProvider = None  # type: ignore[assignment,misc]
 
 try:
-    __version__ = version("agent-sandbox")
+    __version__ = version("agt-sandbox")
 except PackageNotFoundError:
     __version__ = "0.0.0"
 __author__ = "Microsoft Corporation"

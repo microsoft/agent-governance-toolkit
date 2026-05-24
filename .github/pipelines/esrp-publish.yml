@@ -116,7 +116,7 @@ parameters:
       - name: agentmesh-discovery
         path: agent-governance-python/agent-discovery
         wave: 2
-      - name: agent-sandbox
+      - name: agt-sandbox
         path: agent-governance-python/agent-sandbox
         wave: 2
       - name: agentmesh-primitives
@@ -218,9 +218,13 @@ parameters:
       - name: agent-governance-copilot-cli
         path: agent-governance-copilot-cli
         nodeVersion: '22'
+      - name: agent-governance-claude-code
+        path: agent-governance-claude-code
+        nodeVersion: '22'
       - name: agent-governance-sdk
         path: agent-governance-typescript
-        nodeVersion: '20'
+      - name: agent-governance-antigravity-cli
+        path: agent-governance-antigravity-cli
       - name: agent-os-copilot-extension
         path: agent-governance-python/agent-os/extensions/copilot
         nodeVersion: '20'

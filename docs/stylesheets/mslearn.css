@@ -1,50 +1,100 @@
 /*
  * Microsoft Learn-inspired theme for MkDocs Material
- * Aligns colors, typography, and spacing with learn.microsoft.com
+ * Comprehensive styling to match learn.microsoft.com look and feel
+ *
+ * Sections:
+ *   1. Color Palette
+ *   2. Scroll Behavior
+ *   3. Typography
+ *   4. Header
+ *   5. Navigation Tabs
+ *   6. Sidebar Navigation
+ *   7. Content Area
+ *   8. Tables
+ *   9. Admonitions / Callouts
+ *  10. Code Blocks
+ *  11. Cards
+ *  12. Hero Section
+ *  13. Badges / Pills
+ *  14. Metadata ("Last reviewed")
+ *  15. Footer
+ *  16. Search
+ *  17. Breadcrumbs
+ *  18. Responsive
+ *  19. Print
  */
 
-/* ── Color palette: Microsoft brand blue ── */
+
+/* ==========================================================================
+   1. Color Palette
+   ========================================================================== */
+
 :root,
 [data-md-color-scheme="default"] {
-  --md-primary-fg-color: #0078D4;
-  --md-primary-fg-color--light: #50A0E6;
-  --md-primary-fg-color--dark: #005A9E;
-  --md-accent-fg-color: #0078D4;
-  --md-accent-fg-color--transparent: rgba(0, 120, 212, 0.1);
+  --md-primary-fg-color: #1B4F72;
+  --md-primary-fg-color--light: #2E86C1;
+  --md-primary-fg-color--dark: #154360;
+  --md-accent-fg-color: #1B4F72;
+  --md-accent-fg-color--transparent: rgba(27, 79, 114, 0.1);
 
-  /* Subtle warm-gray background like MS Learn */
   --md-default-bg-color: #FFFFFF;
   --md-default-bg-color--light: #F5F5F5;
 
-  /* Link colors matching MS Learn */
-  --md-typeset-a-color: #0078D4;
+  --md-typeset-a-color: #1B4F72;
+
+  --mslearn-text: #242424;
+  --mslearn-text-muted: #616161;
+  --mslearn-border: #E0E0E0;
+  --mslearn-surface: #F5F5F5;
+  --mslearn-code-bg: #1B1A19;
+  --mslearn-footer-bg: #242424;
 }
 
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #4DB8FF;
-  --md-primary-fg-color--light: #60C0FF;
-  --md-primary-fg-color--dark: #2894D6;
-  --md-accent-fg-color: #4DB8FF;
+  --md-primary-fg-color: #5DADE2;
+  --md-primary-fg-color--light: #85C1E9;
+  --md-primary-fg-color--dark: #2E86C1;
+  --md-accent-fg-color: #5DADE2;
+  --md-accent-fg-color--transparent: rgba(93, 173, 226, 0.1);
 
   --md-default-bg-color: #1B1B1F;
   --md-default-bg-color--light: #242428;
+
+  --md-typeset-a-color: #4DB8FF;
+
+  --mslearn-text: #E0E0E0;
+  --mslearn-text-muted: #A0A0A0;
+  --mslearn-border: #3A3A3E;
+  --mslearn-surface: #242428;
+  --mslearn-code-bg: #1E1E1E;
+  --mslearn-footer-bg: #141418;
 }
 
-/* ── Typography refinements ── */
+
+/* ==========================================================================
+   2. Scroll Behavior
+   ========================================================================== */
+
+html {
+  scroll-behavior: smooth;
+}
+
+
+/* ==========================================================================
+   3. Typography
+   ========================================================================== */
+
 .md-typeset {
-  font-size: 0.85rem;
-  line-height: 1.7;
-  color: #242424;
-}
-
-[data-md-color-scheme="slate"] .md-typeset {
-  color: #E0E0E0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--mslearn-text);
 }
 
 .md-typeset h1 {
+  font-size: 1.75rem;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: #242424;
+  color: var(--mslearn-text);
   margin-bottom: 1rem;
 }
 
@@ -53,23 +103,34 @@
 }
 
 .md-typeset h2 {
+  font-size: 1.3rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  border-bottom: 1px solid #E0E0E0;
+  border-bottom: 1px solid var(--mslearn-border);
   padding-bottom: 0.4rem;
   margin-top: 2rem;
 }
 
-[data-md-color-scheme="slate"] .md-typeset h2 {
-  border-bottom-color: #3A3A3E;
+.md-typeset h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
 }
 
-/* ── Header bar ── */
+
+/* ==========================================================================
+   4. Header
+   ========================================================================== */
+
 .md-header {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
-/* ── Navigation tabs: MS Learn-style underline ── */
+
+/* ==========================================================================
+   5. Navigation Tabs
+   ========================================================================== */
+
 .md-tabs {
   background-color: var(--md-primary-fg-color);
 }
@@ -79,13 +140,13 @@
   border-bottom: 2px solid #FFFFFF;
 }
 
-/* ── Sidebar styling ── */
-.md-sidebar__scrollwrap {
-  border-right: 1px solid #E0E0E0;
-}
 
-[data-md-color-scheme="slate"] .md-sidebar__scrollwrap {
-  border-right-color: #3A3A3E;
+/* ==========================================================================
+   6. Sidebar Navigation
+   ========================================================================== */
+
+.md-sidebar__scrollwrap {
+  border-right: 1px solid var(--mslearn-border);
 }
 
 .md-nav__link {
@@ -99,79 +160,635 @@
   padding-left: 0.6rem;
 }
 
-/* ── Tables: clean MS Learn style ── */
-.md-typeset table:not([class]) {
-  border: 1px solid #E0E0E0;
-  border-collapse: collapse;
-  font-size: 0.82rem;
+
+/* ==========================================================================
+   7. Content Area
+   ========================================================================== */
+
+.md-content__inner {
+  max-width: 900px;
+  line-height: 1.7;
 }
 
-[data-md-color-scheme="slate"] .md-typeset table:not([class]) {
-  border-color: #3A3A3E;
+
+/* ==========================================================================
+   8. Tables
+   ========================================================================== */
+
+.md-typeset table:not([class]) {
+  border: 1px solid var(--mslearn-border);
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .md-typeset table:not([class]) th {
-  background-color: #F5F5F5;
+  background-color: var(--mslearn-surface);
   font-weight: 600;
   text-transform: none;
   letter-spacing: 0;
-  border-bottom: 2px solid #0078D4;
+  border-bottom: 2px solid var(--md-primary-fg-color);
 }
 
 [data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
   background-color: #2A2A2E;
-  border-bottom-color: #4DB8FF;
 }
 
 .md-typeset table:not([class]) td {
-  border-bottom: 1px solid #F0F0F0;
+  border-bottom: 1px solid var(--mslearn-border);
 }
 
-[data-md-color-scheme="slate"] .md-typeset table:not([class]) td {
-  border-bottom-color: #2A2A2E;
-}
 
-/* ── Admonitions: softer, MS-style ── */
+/* ==========================================================================
+   9. Admonitions / Callouts  —  MS Learn style
+   ========================================================================== */
+
 .md-typeset .admonition,
 .md-typeset details {
   border-radius: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border-width: 0;
   border-left-width: 4px;
+  border-left-style: solid;
 }
 
-/* ── Code blocks ── */
+/* ── Note / Info ── */
+.md-typeset .admonition.note,
+.md-typeset details.note,
+.md-typeset .admonition.info,
+.md-typeset details.info {
+  border-left-color: #0078D4;
+  background-color: rgba(0, 120, 212, 0.04);
+}
+
+.md-typeset .admonition.note > .admonition-title,
+.md-typeset details.note > summary,
+.md-typeset .admonition.info > .admonition-title,
+.md-typeset details.info > summary {
+  background-color: rgba(0, 120, 212, 0.1);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.note,
+[data-md-color-scheme="slate"] .md-typeset details.note,
+[data-md-color-scheme="slate"] .md-typeset .admonition.info,
+[data-md-color-scheme="slate"] .md-typeset details.info {
+  background-color: rgba(0, 120, 212, 0.08);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.note > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.note > summary,
+[data-md-color-scheme="slate"] .md-typeset .admonition.info > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.info > summary {
+  background-color: rgba(0, 120, 212, 0.15);
+}
+
+/* ── Tip / Hint ── */
+.md-typeset .admonition.tip,
+.md-typeset details.tip,
+.md-typeset .admonition.hint,
+.md-typeset details.hint {
+  border-left-color: #107C10;
+  background-color: rgba(16, 124, 16, 0.04);
+}
+
+.md-typeset .admonition.tip > .admonition-title,
+.md-typeset details.tip > summary,
+.md-typeset .admonition.hint > .admonition-title,
+.md-typeset details.hint > summary {
+  background-color: rgba(16, 124, 16, 0.1);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.tip,
+[data-md-color-scheme="slate"] .md-typeset details.tip,
+[data-md-color-scheme="slate"] .md-typeset .admonition.hint,
+[data-md-color-scheme="slate"] .md-typeset details.hint {
+  background-color: rgba(16, 124, 16, 0.08);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.tip > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.tip > summary,
+[data-md-color-scheme="slate"] .md-typeset .admonition.hint > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.hint > summary {
+  background-color: rgba(16, 124, 16, 0.15);
+}
+
+/* ── Important ── */
+.md-typeset .admonition.important,
+.md-typeset details.important {
+  border-left-color: #8661C5;
+  background-color: rgba(134, 97, 197, 0.04);
+}
+
+.md-typeset .admonition.important > .admonition-title,
+.md-typeset details.important > summary {
+  background-color: rgba(134, 97, 197, 0.1);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.important,
+[data-md-color-scheme="slate"] .md-typeset details.important {
+  background-color: rgba(134, 97, 197, 0.08);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.important > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.important > summary {
+  background-color: rgba(134, 97, 197, 0.15);
+}
+
+/* ── Warning ── */
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-left-color: #FF8C00;
+  background-color: rgba(255, 140, 0, 0.04);
+}
+
+.md-typeset .admonition.warning > .admonition-title,
+.md-typeset details.warning > summary {
+  background-color: rgba(255, 140, 0, 0.1);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.warning,
+[data-md-color-scheme="slate"] .md-typeset details.warning {
+  background-color: rgba(255, 140, 0, 0.08);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.warning > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.warning > summary {
+  background-color: rgba(255, 140, 0, 0.15);
+}
+
+/* ── Danger / Caution ── */
+.md-typeset .admonition.danger,
+.md-typeset details.danger,
+.md-typeset .admonition.caution,
+.md-typeset details.caution {
+  border-left-color: #E81123;
+  background-color: rgba(232, 17, 35, 0.04);
+}
+
+.md-typeset .admonition.danger > .admonition-title,
+.md-typeset details.danger > summary,
+.md-typeset .admonition.caution > .admonition-title,
+.md-typeset details.caution > summary {
+  background-color: rgba(232, 17, 35, 0.1);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.danger,
+[data-md-color-scheme="slate"] .md-typeset details.danger,
+[data-md-color-scheme="slate"] .md-typeset .admonition.caution,
+[data-md-color-scheme="slate"] .md-typeset details.caution {
+  background-color: rgba(232, 17, 35, 0.08);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .admonition.danger > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.danger > summary,
+[data-md-color-scheme="slate"] .md-typeset .admonition.caution > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset details.caution > summary {
+  background-color: rgba(232, 17, 35, 0.15);
+}
+
+
+/* ==========================================================================
+   10. Code Blocks
+   ========================================================================== */
+
 .md-typeset pre > code {
+  background-color: var(--mslearn-code-bg);
+  color: #D4D4D4;
   border-radius: 6px;
   font-size: 0.82rem;
+  font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", monospace;
+}
+
+[data-md-color-scheme="default"] .md-typeset pre > code {
+  background-color: #1B1A19;
+  color: #D4D4D4;
 }
 
 .md-typeset code {
+  background-color: var(--mslearn-surface);
   border-radius: 3px;
   padding: 0.15em 0.4em;
   font-size: 0.85em;
+  font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", monospace;
 }
 
-/* ── Footer ── */
+[data-md-color-scheme="slate"] .md-typeset code {
+  background-color: #2A2A2E;
+}
+
+
+/* ==========================================================================
+   11. Cards
+   ========================================================================== */
+
+.agt-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.agt-card {
+  background-color: var(--md-default-bg-color);
+  border: 1px solid var(--mslearn-border);
+  border-radius: 6px;
+  padding: 1.25rem;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.agt-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+[data-md-color-scheme="slate"] .agt-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.agt-card-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.agt-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.agt-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem;
+  display: block;
+}
+
+.agt-card-desc {
+  font-size: 0.82rem;
+  color: var(--mslearn-text-muted);
+  margin: 0;
+  line-height: 1.5;
+  display: block;
+}
+
+/* ── Per-package card accent colors ── */
+.agt-card[data-pkg="os"]          { border-left: 3px solid #0E9AA7; }
+.agt-card[data-pkg="mesh"]        { border-left: 3px solid #7C3AED; }
+.agt-card[data-pkg="runtime"]     { border-left: 3px solid #EA580C; }
+.agt-card[data-pkg="sre"]         { border-left: 3px solid #DC2626; }
+.agt-card[data-pkg="compliance"]  { border-left: 3px solid #16A34A; }
+.agt-card[data-pkg="marketplace"] { border-left: 3px solid #4F46E5; }
+.agt-card[data-pkg="lightning"]   { border-left: 3px solid #D97706; }
+.agt-card[data-pkg="hypervisor"]  { border-left: 3px solid #1E40AF; }
+
+.agt-card[data-pkg="os"]:hover          { border-color: #0E9AA7; }
+.agt-card[data-pkg="mesh"]:hover        { border-color: #7C3AED; }
+.agt-card[data-pkg="runtime"]:hover     { border-color: #EA580C; }
+.agt-card[data-pkg="sre"]:hover         { border-color: #DC2626; }
+.agt-card[data-pkg="compliance"]:hover  { border-color: #16A34A; }
+.agt-card[data-pkg="marketplace"]:hover { border-color: #4F46E5; }
+.agt-card[data-pkg="lightning"]:hover   { border-color: #D97706; }
+.agt-card[data-pkg="hypervisor"]:hover  { border-color: #1E40AF; }
+
+.agt-card[data-pkg="os"]          .agt-card-title { color: #0E9AA7; }
+.agt-card[data-pkg="mesh"]        .agt-card-title { color: #7C3AED; }
+.agt-card[data-pkg="runtime"]     .agt-card-title { color: #EA580C; }
+.agt-card[data-pkg="sre"]         .agt-card-title { color: #DC2626; }
+.agt-card[data-pkg="compliance"]  .agt-card-title { color: #16A34A; }
+.agt-card[data-pkg="marketplace"] .agt-card-title { color: #4F46E5; }
+.agt-card[data-pkg="lightning"]   .agt-card-title { color: #D97706; }
+.agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #1E40AF; }
+
+[data-md-color-scheme="slate"] .agt-card[data-pkg="os"]          .agt-card-title { color: #2DD4BF; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="mesh"]        .agt-card-title { color: #A78BFA; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="runtime"]     .agt-card-title { color: #FB923C; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="sre"]         .agt-card-title { color: #F87171; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="compliance"]  .agt-card-title { color: #4ADE80; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="marketplace"] .agt-card-title { color: #818CF8; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="lightning"]   .agt-card-title { color: #FBBF24; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #60A5FA; }
+
+
+/* ==========================================================================
+   12. Hero Section
+   ========================================================================== */
+
+.agt-hero {
+  background: linear-gradient(135deg, #1B2838 0%, #0D3B66 40%, #1E3A5F 70%, #2A1B3D 100%);
+  color: #FFFFFF;
+  padding: 3rem 2rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+[data-md-color-scheme="slate"] .agt-hero {
+  background: linear-gradient(135deg, #0F1923 0%, #0A2847 40%, #15293F 70%, #1A1128 100%);
+}
+
+.agt-hero h1,
+.agt-hero h2,
+.agt-hero p {
+  color: #FFFFFF;
+  border: none;
+  margin-top: 0;
+}
+
+.agt-hero h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.agt-hero p {
+  font-size: 1rem;
+  opacity: 0.92;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.agt-hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.agt-hero-badges img {
+  height: 20px;
+}
+
+.agt-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+.agt-stat {
+  text-align: center;
+}
+
+.agt-stat-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.agt-stat-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Hero badge links */
+.agt-hero-badges a {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  padding: 0.5rem 1.2rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.agt-hero-badges a:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #FFFFFF;
+}
+
+/* Section spacing */
+.agt-section {
+  margin-top: 2.5rem;
+}
+
+.agt-section h2 {
+  font-size: 1.3rem;
+}
+
+
+/* ==========================================================================
+   13. Badges / Pills
+   ========================================================================== */
+
+.agt-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15em 0.6em;
+  border-radius: 10px;
+  line-height: 1.4;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.agt-badge--blue {
+  background-color: rgba(0, 120, 212, 0.12);
+  color: #0078D4;
+}
+
+.agt-badge--green {
+  background-color: rgba(16, 124, 16, 0.12);
+  color: #107C10;
+}
+
+.agt-badge--purple {
+  background-color: rgba(134, 97, 197, 0.12);
+  color: #8661C5;
+}
+
+.agt-badge--orange {
+  background-color: rgba(255, 140, 0, 0.12);
+  color: #C06A00;
+}
+
+.agt-badge--red {
+  background-color: rgba(232, 17, 35, 0.12);
+  color: #E81123;
+}
+
+[data-md-color-scheme="slate"] .agt-badge--blue {
+  background-color: rgba(77, 184, 255, 0.15);
+  color: #4DB8FF;
+}
+
+[data-md-color-scheme="slate"] .agt-badge--green {
+  background-color: rgba(16, 124, 16, 0.15);
+  color: #4CAF50;
+}
+
+[data-md-color-scheme="slate"] .agt-badge--purple {
+  background-color: rgba(134, 97, 197, 0.15);
+  color: #B39DDB;
+}
+
+[data-md-color-scheme="slate"] .agt-badge--orange {
+  background-color: rgba(255, 140, 0, 0.15);
+  color: #FFB74D;
+}
+
+[data-md-color-scheme="slate"] .agt-badge--red {
+  background-color: rgba(232, 17, 35, 0.15);
+  color: #EF5350;
+}
+
+
+/* ==========================================================================
+   14. Metadata ("Last reviewed")
+   ========================================================================== */
+
+.md-typeset .agt-metadata {
+  font-size: 0.75rem;
+  color: var(--mslearn-text-muted);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--mslearn-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.md-typeset .agt-metadata-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+
+/* ==========================================================================
+   15. Footer
+   ========================================================================== */
+
 .md-footer {
-  background-color: #242424;
+  background-color: var(--mslearn-footer-bg);
 }
 
-[data-md-color-scheme="slate"] .md-footer {
-  background-color: #141418;
-}
 
-/* ── Content max-width: comfortable reading ── */
-.md-content__inner {
-  max-width: 900px;
-}
+/* ==========================================================================
+   16. Search
+   ========================================================================== */
 
-/* ── Search bar refinements ── */
 .md-search__input {
   border-radius: 4px;
 }
 
-/* ── Breadcrumb path styling ── */
+
+/* ==========================================================================
+   17. Breadcrumbs
+   ========================================================================== */
+
 .md-path {
   font-size: 0.75rem;
   opacity: 0.8;
+}
+
+
+/* ==========================================================================
+   18. Responsive (≤ 768px)
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .agt-hero {
+    padding: 2rem 1.25rem;
+  }
+
+  .agt-hero h1 {
+    font-size: 1.5rem;
+  }
+
+  .agt-stats {
+    gap: 1rem;
+  }
+
+  .agt-stat-value {
+    font-size: 1.2rem;
+  }
+
+  .agt-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ==========================================================================
+   19. Print
+   ========================================================================== */
+
+@media print {
+  .md-header,
+  .md-tabs,
+  .md-sidebar,
+  .md-footer,
+  .md-search {
+    display: none !important;
+  }
+
+  .md-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  .md-content__inner {
+    max-width: 100%;
+  }
+
+  .agt-hero {
+    background: none;
+    color: #000;
+    border: 1px solid #CCC;
+  }
+
+  .agt-hero h1,
+  .agt-hero h2,
+  .agt-hero p {
+    color: #000;
+  }
+}
+
+
+/* ==========================================================================
+   Architecture Diagram
+   ========================================================================== */
+
+.mermaid {
+  font-size: 1rem;
+  margin: 1.5rem auto;
+}
+
+.mermaid svg {
+  max-width: 100%;
+  min-height: 280px;
+  height: auto;
+}
+
+/* Ensure mermaid text is readable */
+.mermaid .nodeLabel {
+  font-size: 14px !important;
+  line-height: 1.4;
+}
+
+.mermaid .edgeLabel {
+  font-size: 13px !important;
+  font-weight: 600;
+}
+
+.mermaid .cluster-label .nodeLabel {
+  font-size: 16px !important;
+  font-weight: 700;
 }

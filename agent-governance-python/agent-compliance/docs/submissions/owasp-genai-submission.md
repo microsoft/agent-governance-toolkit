@@ -73,7 +73,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **AuditChain**: Hash-chain audit logs for immutable compliance tracking
 - **OPA integration**: Rego-based policy evaluation for inter-agent governance
 
-### ASI08 — Cascading Failures
+### ASI08 — Cascading Agent Failures
 
 - **CircuitBreaker**: CLOSED → OPEN → HALF_OPEN state machine with configurable failure_threshold and reset_timeout
 - **ChaosEngine**: Fault injection experiments (latency, error, timeout, adversarial)

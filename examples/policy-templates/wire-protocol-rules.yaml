@@ -1,0 +1,110 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Wire-protocol-aware policy rules for SQL and Kubernetes API calls.
+#
+# Pass protocol context in the evaluation request to activate these rules:
+#
+#   SQL:
+#     context:
+#       sql:
+#         query: "DROP TABLE users"
+#
+#   Kubernetes:
+#     context:
+#       k8s:
+#         method: DELETE
+#         path: /api/v1/namespaces/production/pods/mypod
+#
+# The policy engine extracts sql.verb, sql.target, k8s.verb, k8s.namespace
+# and related fields automatically before rules are evaluated. Each rule
+# matches a single extracted field; compound checks should be expressed as
+# multiple rules with appropriate priorities.
+
+version: "1.0"
+name: wire-protocol-rules
+description: >
+  Protocol-aware governance rules for SQL and Kubernetes API calls.
+  Lets AGT distinguish safe reads from destructive writes at the policy
+  level without requiring changes to agent code.
+
+defaults:
+  action: allow
+
+rules:
+
+  # ---------------------------------------------------------------------------
+  # SQL rules
+  # ---------------------------------------------------------------------------
+
+  # Block statements that destroy data or schema objects outright.
+  - name: deny-destructive-sql
+    condition: {field: "sql.verb", operator: in, value: ["DROP", "TRUNCATE", "DELETE"]}
+    action: deny
+    priority: 100
+    message: "Destructive SQL verb is not allowed"
+
+  # Block privilege and schema changes.
+  - name: deny-sql-schema-changes
+    condition: {field: "sql.verb", operator: in, value: ["ALTER", "GRANT", "REVOKE"]}
+    action: deny
+    priority: 100
+    message: "Schema or privilege change is not allowed"
+
+  # MERGE combines INSERT, UPDATE and DELETE in one shot, so treat it as destructive.
+  - name: deny-sql-merge
+    condition: {field: "sql.verb", operator: eq, value: "MERGE"}
+    action: deny
+    priority: 100
+    message: "MERGE statements are not allowed"
+
+  # Audit writes without blocking.
+  - name: audit-sql-writes
+    condition: {field: "sql.verb", operator: in, value: ["INSERT", "UPDATE"]}
+    action: audit
+    priority: 10
+    message: "Auditing SQL write operation"
+
+  # Allow read-only queries.
+  - name: allow-read-only-sql
+    condition: {field: "sql.verb", operator: eq, value: "SELECT"}
+    action: allow
+    priority: 5
+
+  # ---------------------------------------------------------------------------
+  # Kubernetes rules
+  # ---------------------------------------------------------------------------
+
+  # Block any mutation in the production namespace.
+  - name: deny-k8s-production-namespace
+    condition: {field: "k8s.namespace", operator: eq, value: "production"}
+    action: deny
+    priority: 110
+    message: "Operations on the production namespace are not allowed"
+
+  # Block interactive shell access into pods (exec subresource).
+  - name: deny-k8s-exec
+    condition: {field: "k8s.subresource", operator: eq, value: "exec"}
+    action: deny
+    priority: 100
+    message: "Interactive exec into pods is not allowed"
+
+  # Block bulk deletes that can wipe an entire namespace worth of resources.
+  - name: deny-k8s-deletecollection
+    condition: {field: "k8s.verb", operator: eq, value: "deletecollection"}
+    action: deny
+    priority: 100
+    message: "Bulk deletecollection is not allowed"
+
+  # Audit create, update and patch operations for change tracking.
+  - name: audit-k8s-mutations
+    condition: {field: "k8s.verb", operator: in, value: ["create", "update", "patch"]}
+    action: audit
+    priority: 10
+    message: "Auditing Kubernetes mutation"
+
+  # Allow read-only Kubernetes API calls.
+  - name: allow-k8s-readonly
+    condition: {field: "k8s.verb", operator: in, value: ["get", "list", "watch"]}
+    action: allow
+    priority: 5

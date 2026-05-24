@@ -71,11 +71,10 @@ class VerifyResponse(BaseModel):
 class RegisterAgentRequest(BaseModel):
     name: str = Field(..., description="Human-readable agent name")
     public_key: str = Field(..., description="Base64-encoded Ed25519 public key")
+    proof: str = Field(..., description="Base64 Ed25519 signature over (public_key || proof_timestamp)")
+    proof_timestamp: str = Field(..., description="ISO 8601 UTC timestamp signed in the proof")
     sponsor_email: str = Field(..., description="Human sponsor email")
     description: str | None = None
-    did_unique_id: str | None = Field(
-        None, description="Custom unique ID; auto-generated if omitted"
-    )
 
 
 class GrantCapabilityRequest(BaseModel):
@@ -89,8 +88,47 @@ class GrantCapabilityRequest(BaseModel):
 
 @app.post("/api/v1/agents/register", tags=["identity"])
 async def register_agent(req: RegisterAgentRequest) -> dict[str, str]:
-    """Register an agent identity with its public key."""
-    agent_did = AgentDID.generate(req.name)
+    """Register an agent identity with proof-of-possession."""
+    import base64
+    import hashlib
+    from datetime import datetime, timedelta, timezone
+
+    from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
+
+    REPLAY_WINDOW = timedelta(minutes=5)
+
+    # Decode public key
+    try:
+        public_key_bytes = base64.b64decode(req.public_key)
+    except Exception:
+        raise HTTPException(400, "Invalid public_key encoding")
+    if len(public_key_bytes) != 32:
+        raise HTTPException(400, "public_key must be 32 bytes")
+
+    # Verify proof timestamp is within replay window
+    try:
+        ts = datetime.fromisoformat(req.proof_timestamp)
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Invalid proof_timestamp")
+    now = datetime.now(timezone.utc)
+    if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
+        raise HTTPException(401, "Proof timestamp outside replay window")
+
+    # Verify proof-of-possession
+    try:
+        proof_bytes = base64.b64decode(req.proof)
+        message = req.public_key.encode() + req.proof_timestamp.encode()
+        VerifyKey(public_key_bytes).verify(message, proof_bytes)
+    except BadSignatureError:
+        raise HTTPException(401, "Invalid proof-of-possession")
+    except Exception:
+        raise HTTPException(400, "Malformed proof")
+
+    # Derive DID from public key hash (not from name)
+    key_hash = hashlib.sha256(public_key_bytes).hexdigest()[:32]
+    agent_did = AgentDID.from_string(f"did:mesh:{key_hash}")
+
     identity = AgentIdentity(
         did=agent_did,
         name=req.name,

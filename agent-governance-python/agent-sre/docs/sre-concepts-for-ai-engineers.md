@@ -55,7 +55,7 @@ Traditional SLOs measure uptime and latency. But an agent that responds in 200ms
 
 ### Cascading failures in multi-agent systems
 
-When Agent A calls Agent B, which calls Agent C, a failure in C can cascade backward. Without circuit breakers, one flaky tool or one overloaded model can take down your entire agent workflow. This is [OWASP ASI08 — Cascading Failures](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md).
+When Agent A calls Agent B, which calls Agent C, a failure in C can cascade backward. Without circuit breakers, one flaky tool or one overloaded model can take down your entire agent workflow. This is [OWASP ASI08 — Cascading Agent Failures](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md).
 
 ### Cost runaway without guardrails
 

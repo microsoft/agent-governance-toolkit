@@ -70,6 +70,7 @@ black --check .
 - **Never serialize** private keys in JSON/YAML output
 - **Never commit** secrets, API keys, or credentials
 - **Never weaken** trust thresholds — only tighten
+- **Never accept public keys without proof-of-possession** — any HTTP endpoint that accepts a `public_key` or `verification_key` MUST verify the caller controls the corresponding private key via Ed25519 signature over `(key || timestamp)`. DIDs MUST be derived from `SHA-256(public_key)`, never client-supplied. See `registry/app.py` for the reference implementation. CI enforces this via `scripts/ci/no-unauthed-registration.sh`.
 - Keep backward compatibility with existing protocol messages
 - the repo root are standalone — changes there need their own test suite
 

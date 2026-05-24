@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from agentmesh.registry.store import AgentRecord, InMemoryRegistryStore, RegistryStore
@@ -31,8 +31,9 @@ def _utcnow() -> datetime:
 
 
 class RegisterAgentRequest(BaseModel):
-    did: str
-    public_key: str  # base64url
+    public_key: str  # base64url, Ed25519 (32 bytes)
+    proof: str  # base64url Ed25519 signature over (public_key || proof_timestamp)
+    proof_timestamp: str  # ISO 8601 UTC timestamp signed in the proof
     capabilities: list[str] = Field(default_factory=list)
     metadata: dict[str, str] = Field(default_factory=dict)
 
@@ -152,27 +153,54 @@ class RegistryServer:
 
         @app.post("/v1/agents", status_code=201)
         async def register_agent(req: RegisterAgentRequest) -> dict:
-            """Register a new agent."""
-            if store.get_agent(req.did):
-                raise HTTPException(status_code=409, detail="Agent already registered")
+            """Register a new agent with proof-of-possession."""
+            import hashlib
 
+            from nacl.exceptions import BadSignatureError
+            from nacl.signing import VerifyKey
+
+            # Decode and validate public key
             try:
                 public_key = base64.urlsafe_b64decode(req.public_key + "==")
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid public_key encoding")
-
             if len(public_key) != 32:
                 raise HTTPException(status_code=400, detail="public_key must be 32 bytes")
 
+            # Verify proof timestamp is within replay window
+            try:
+                ts = datetime.fromisoformat(req.proof_timestamp)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="Invalid proof_timestamp")
+            if abs((_utcnow() - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
+                raise HTTPException(status_code=401, detail="Proof timestamp outside replay window")
+
+            # Verify proof-of-possession: signature over (public_key || proof_timestamp)
+            try:
+                proof_bytes = base64.urlsafe_b64decode(req.proof + "==")
+                message = req.public_key.encode() + req.proof_timestamp.encode()
+                VerifyKey(public_key).verify(message, proof_bytes)
+            except BadSignatureError:
+                raise HTTPException(status_code=401, detail="Invalid proof-of-possession")
+            except Exception:
+                raise HTTPException(status_code=400, detail="Malformed proof")
+
+            # Derive DID deterministically from public key hash
+            key_hash = hashlib.sha256(public_key).hexdigest()[:32]
+            did = f"did:mesh:{key_hash}"
+
+            if store.get_agent(did):
+                raise HTTPException(status_code=409, detail="Agent already registered")
+
             record = AgentRecord(
-                did=req.did,
+                did=did,
                 public_key=public_key,
                 capabilities=req.capabilities,
                 metadata=req.metadata,
             )
             store.put_agent(record)
-            logger.info("Registered agent %s", req.did)
-            return {"did": req.did, "status": "registered"}
+            logger.info("Registered agent %s", did)
+            return {"did": did, "status": "registered"}
 
         @app.get("/v1/agents/{did}")
         async def get_agent(did: str) -> dict:
@@ -199,11 +227,20 @@ class RegistryServer:
         # ── Pre-Keys ─────────────────────────────────────────────
 
         @app.put("/v1/agents/{did}/prekeys")
-        async def upload_prekeys(did: str, req: PreKeyBundleRequest) -> dict:
-            """Upload a pre-key bundle."""
+        async def upload_prekeys(
+            did: str,
+            req: PreKeyBundleRequest,
+            authorization: str = Header(..., alias="Authorization"),
+        ) -> dict:
+            """Upload a pre-key bundle. Requires Ed25519-Timestamp auth."""
             agent = store.get_agent(did)
             if not agent:
                 raise HTTPException(status_code=404, detail="Agent not found")
+
+            # Verify the caller owns this DID via Ed25519-Timestamp auth
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != did:
+                raise HTTPException(status_code=403, detail="DID mismatch")
 
             try:
                 agent.identity_key = base64.urlsafe_b64decode(req.identity_key + "==")

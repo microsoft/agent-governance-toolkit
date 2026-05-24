@@ -29,7 +29,7 @@ class _EnvContext:
 
     sandbox_id: Optional[str]
     environment: Optional[str]
-    container_runtime: Optional[str]
+    compute_driver: Optional[str]
 
 
 def _capture_env_context() -> _EnvContext:
@@ -38,7 +38,7 @@ def _capture_env_context() -> _EnvContext:
     Resolution rules:
     * ``sandbox_id``: prefers ``OPENSHELL_SANDBOX_ID``; falls back to bare ``SANDBOX_ID``.
     * ``environment``: reads ``AGT_ENVIRONMENT``.
-    * ``container_runtime``: reads ``OPENSHELL_CONTAINER_RUNTIME``.
+    * ``compute_driver``: reads ``OPENSHELL_COMPUTE_DRIVER``.
 
     Empty strings are treated as absent (``None``).
     """
@@ -46,11 +46,11 @@ def _capture_env_context() -> _EnvContext:
         os.getenv("OPENSHELL_SANDBOX_ID") or os.getenv("SANDBOX_ID") or None
     )
     environment: Optional[str] = os.getenv("AGT_ENVIRONMENT") or None
-    container_runtime: Optional[str] = os.getenv("OPENSHELL_CONTAINER_RUNTIME") or None
+    compute_driver: Optional[str] = os.getenv("OPENSHELL_COMPUTE_DRIVER") or None
     return _EnvContext(
         sandbox_id=sandbox_id,
         environment=environment,
-        container_runtime=container_runtime,
+        compute_driver=compute_driver,
     )
 
 
@@ -65,15 +65,57 @@ class AuditEntry(BaseModel):
 
     entry_id: str = Field(default_factory=lambda: f"audit_{uuid.uuid4().hex[:16]}")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    issued_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Optional UTC datetime marking when the action was authorized or "
+            "issued for execution (e.g., approval granted, tool call decided). "
+            "When paired with ``completed_at``, enables third-party verifiers to "
+            "compute action latency and distinguish decision time from outcome "
+            "time. NOT part of the canonical entry hash in spec v1.0; v1.1 will "
+            "extend MerkleAuditChain coverage. See spec §4.3.1."
+        ),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Optional UTC datetime marking when the action's outcome was "
+            "recorded. When ``issued_at`` and ``completed_at`` are both set, "
+            "their difference is the verifiable execution latency. The existing "
+            "``timestamp`` field continues to mark entry creation time and is "
+            "unaffected. NOT part of the canonical entry hash in spec v1.0; "
+            "v1.1 will extend MerkleAuditChain coverage. See spec §4.3.1."
+        ),
+    )
 
     # Event details
     event_type: str
     agent_did: str
     action: str
+    arguments_hash: str | None = Field(
+        default=None,
+        description=(
+            "SHA-256 hash (hex, lowercase) of the canonical-JSON serialization of "
+            "the action arguments. Defends downstream verifiers against silent "
+            "mutation of recorded arguments. NOT part of the canonical entry hash "
+            "in spec v1.0; v1.1 will extend MerkleAuditChain coverage. "
+            "See spec §4.3.1."
+        ),
+    )
 
     # Context
     resource: Optional[str] = None
     target_did: Optional[str] = None
+    approver_did: str | None = Field(
+        default=None,
+        description=(
+            "DID of the principal whose approval authorized this action. Surfaces "
+            "approval-chain identity in the audit row itself (independent of the "
+            "workflow approval subsystem). NOT part of the canonical entry hash "
+            "in spec v1.0; v1.1 will extend MerkleAuditChain coverage. "
+            "See spec §4.3.1."
+        ),
+    )
 
     # Data (sanitized - no secrets)
     data: dict = Field(default_factory=dict)
@@ -84,6 +126,15 @@ class AuditEntry(BaseModel):
     # Policy evaluation
     policy_decision: Optional[str] = None
     matched_rule: Optional[str] = None
+    policy_version: str | None = Field(
+        default=None,
+        description=(
+            "Version identifier of the policy bundle that produced this decision. "
+            "Defends against silent policy downgrade (replaying old decisions under "
+            "a newer policy version). NOT part of the canonical entry hash in spec "
+            "v1.0; v1.1 will extend MerkleAuditChain coverage. See spec §4.3.1."
+        ),
+    )
 
     # Chaining — populated automatically by MerkleAuditChain.add_entry()
     previous_hash: str = Field(default="")
@@ -93,10 +144,6 @@ class AuditEntry(BaseModel):
     trace_id: Optional[str] = None
     session_id: Optional[str] = None
 
-    # Execution-context enrichment (optional; not included in integrity hash)
-    sandbox_id: Optional[str] = None
-    environment: Optional[str] = None
-    container_runtime: Optional[str] = None
     # Sandbox/environment context (auto-populated from env vars when available)
     sandbox_id: Optional[str] = Field(
         default=None,
@@ -182,6 +229,11 @@ class AuditEntry(BaseModel):
                 "outcome": self.outcome,
                 "policy_decision": self.policy_decision,
                 "matched_rule": self.matched_rule,
+                **({"policy_version": self.policy_version} if self.policy_version else {}),
+                **({"arguments_hash": self.arguments_hash} if self.arguments_hash else {}),
+                **({"approver_did": self.approver_did} if self.approver_did else {}),
+                **({"issued_at": self.issued_at.isoformat()} if self.issued_at else {}),
+                **({"completed_at": self.completed_at.isoformat()} if self.completed_at else {}),
                 **self.data,
             },
             "agentmeshentryhash": self.entry_hash,
@@ -438,8 +490,21 @@ class AuditLog:
         outcome: str = "success",
         policy_decision: Optional[str] = None,
         trace_id: Optional[str] = None,
+        *,
+        arguments_hash: str | None = None,
+        approver_did: str | None = None,
+        policy_version: str | None = None,
+        issued_at: datetime | None = None,
+        completed_at: datetime | None = None,
     ) -> AuditEntry:
-        """Log an audit event."""
+        """Log an audit event.
+
+        The ``arguments_hash``, ``approver_did``, ``policy_version``,
+        ``issued_at``, and ``completed_at`` parameters are accepted as
+        keyword-only arguments to preserve the positional signature for
+        existing callers. See spec §4.3.1 for semantics and the v1.0/v1.1
+        hash coverage caveat.
+        """
         entry = AuditEntry(
             event_type=event_type,
             agent_did=agent_did,
@@ -451,7 +516,12 @@ class AuditLog:
             trace_id=trace_id,
             sandbox_id=self._env_context.sandbox_id,
             environment=self._env_context.environment,
-            container_runtime=self._env_context.container_runtime,
+            compute_driver=self._env_context.compute_driver,
+            arguments_hash=arguments_hash,
+            approver_did=approver_did,
+            policy_version=policy_version,
+            issued_at=issued_at,
+            completed_at=completed_at,
         )
 
         self._chain.add_entry(entry)

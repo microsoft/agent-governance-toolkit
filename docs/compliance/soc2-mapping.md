@@ -47,7 +47,7 @@ The Agent Governance Toolkit provides runtime governance infrastructure that add
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC1.1 Commitment to integrity | STRIDE-oriented threat model | `docs/THREAT_MODEL.md` | ⚠️ Partial — documents threats, no control ownership |
+| CC1.1 Commitment to integrity | STRIDE-oriented threat model | `docs/security/threat-model.md` | ⚠️ Partial — documents threats, no control ownership |
 | CC1.4 Accountability | RBAC with 4 roles (READER, WRITER, ADMIN, AUDITOR) | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:16-30` | ⚠️ Partial — role-to-permission mapping, no personnel tracking |
 
 #### CC5: Control Activities
@@ -181,7 +181,7 @@ These numbers are relevant to A1.1 (system capacity) and demonstrate that the go
 | Fault injection | 428,253 | 0.001 ms | 0.007 ms |
 | Concurrent throughput (1,000 agents) | 47,085 | — | — |
 
-> Source: [`BENCHMARKS.md`](../../BENCHMARKS.md). Measured with `time.perf_counter()`, 10,000 iterations, on a development workstation.
+> Source: [`BENCHMARKS.md`](../BENCHMARKS.md). Measured with `time.perf_counter()`, 10,000 iterations, on a development workstation.
 
 ```python
 # A1.2 in action: SLO with Error Budget
@@ -430,7 +430,7 @@ All file paths referenced in this document, organized by package:
 | File | Evidence For |
 |------|-------------|
 | `BENCHMARKS.md` | A1.1 — Performance benchmarks |
-| `docs/THREAT_MODEL.md` | CC1.1 — STRIDE threat model |
+| `docs/security/threat-model.md` | CC1.1 — STRIDE threat model |
 | `.github/workflows/dependency-review.yml` | CC8.1 — CI security scanning |
 | `.github/workflows/codeql.yml` | CC8.1 — CodeQL analysis |
 | `.github/workflows/scorecard.yml` | CC8.1 — OpenSSF Scorecard |

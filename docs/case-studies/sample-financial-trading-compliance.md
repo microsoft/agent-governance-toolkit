@@ -347,9 +347,9 @@ Layer 3 — Hypervisor: Not deployed (latency risk-accepted)
 | **ASI-03: Identity Abuse** | Privilege escalation via identity abuse | Ed25519 per agent (AWS KMS HSM); dynamic trust scores (0-1000); monotonic capability narrowing in delegation chains. |
 | **ASI-04: Supply Chain** | Vulnerabilities in ML models, data feeds | AI-BOM tracks model provenance; SBOM scanned daily (Dependabot, Snyk); exchange feed integrity verification. |
 | **ASI-05: Code Execution** | Unintended trading via code exploits | Ring isolation with resource limits; <30ms kill switch; no shell/eval(); network policies block non-FIX egress. |
-| **ASI-06: Memory Poisoning** | Malicious trading instructions in memory | Read-only policy files; agents cannot modify risk limits; market data signature verification. |
+| **ASI-06: Memory & Context Poisoning** | Malicious trading instructions in memory | Read-only policy files; agents cannot modify risk limits; market data signature verification. |
 | **ASI-07: Insecure Comms** | Unauthorized trade approval via weak auth | IATP with mutual TLS 1.3; Ed25519 signatures on all messages; trust score verification before delegation. |
-| **ASI-08: Cascading Failures** | Single agent error triggers multi-agent collapse | Circuit breakers after 3 exchange rejects; kill switch on VaR breach; delegation chain monitoring. |
+| **ASI-08: Cascading Agent Failures** | Single agent error triggers multi-agent collapse | Circuit breakers after 3 exchange rejects; kill switch on VaR breach; delegation chain monitoring. |
 | **ASI-09: Trust Exploitation** | Dangerous strategies approved via trust abuse | Approval workflows for >$500K positions; risk classification; senior trader review; 60-second approval expiry. |
 | **ASI-10: Rogue Agents** | Configuration drift or emergent behavior | Ring isolation; kill switch on manipulation patterns; trust decay; Merkle audit trails; Shapley attribution. |
 

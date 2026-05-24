@@ -144,15 +144,15 @@ These two layers are **complementary, not competing**. A fully governed agentic 
 
 | Risk | Agent Governance Toolkit | NeMo Guardrails | Guardrails AI | LiteLLM | Portkey |
 |------|:------------------------:|:---------------:|:-------------:|:-------:|:-------:|
-| ASI-01 Agent Goal Hijacking | ✅ Policy engine blocks unauthorized goal changes | ⚠️ Partial (dialog rails) | ❌ | ❌ | ❌ |
-| ASI-02 Excessive Capabilities | ✅ Capability model enforces least-privilege | ❌ | ❌ | ❌ | ❌ |
+| ASI-01 Agent Goal Hijack | ✅ Policy engine blocks unauthorized goal changes | ⚠️ Partial (dialog rails) | ❌ | ❌ | ❌ |
+| ASI-02 Tool Misuse & Exploitation | ✅ Capability model enforces least-privilege | ❌ | ❌ | ❌ | ❌ |
 | ASI-03 Identity & Privilege Abuse | ✅ Ed25519 / SPIFFE zero-trust identity | ❌ | ❌ | ❌ | ❌ |
-| ASI-04 Uncontrolled Code Execution | ✅ 4-tier execution rings + sandboxing | ❌ | ❌ | ❌ | ❌ |
-| ASI-05 Insecure Output Handling | ✅ Content policies validate all outputs | ✅ Output filters | ✅ Schema validation | ⚠️ Basic hooks | ❌ |
-| ASI-06 Memory Poisoning | ✅ Episodic memory with integrity checks | ❌ | ❌ | ❌ | ❌ |
-| ASI-07 Unsafe Inter-Agent Communication | ✅ Encrypted channels + trust gates | ❌ | ❌ | ❌ | ❌ |
-| ASI-08 Cascading Failures | ✅ Circuit breakers + SLO enforcement | ❌ | ❌ | ⚠️ Retries only | ⚠️ Fallback routing |
-| ASI-09 Human-Agent Trust Deficit | ✅ Full audit trails + flight recorder | ❌ | ❌ | ⚠️ Logging | ⚠️ Observability |
+| ASI-04 Agentic Supply Chain Compromise | ✅ Dependency-confusion scanning + tool verification | ❌ | ❌ | ❌ | ❌ |
+| ASI-05 Unexpected Code Execution | ✅ 4-tier execution rings + sandboxing | ❌ | ❌ | ❌ | ❌ |
+| ASI-06 Memory & Context Poisoning | ✅ Episodic memory with integrity checks | ❌ | ❌ | ❌ | ❌ |
+| ASI-07 Insecure Inter-Agent Communication | ✅ Encrypted channels + trust gates | ❌ | ❌ | ❌ | ❌ |
+| ASI-08 Cascading Agent Failures | ✅ Circuit breakers + SLO enforcement | ❌ | ❌ | ⚠️ Retries only | ⚠️ Fallback routing |
+| ASI-09 Human-Agent Trust Exploitation | ✅ Full audit trails + flight recorder | ❌ | ❌ | ⚠️ Logging | ⚠️ Observability |
 | ASI-10 Rogue Agents | ✅ Kill switch + ring isolation + anomaly detection | ❌ | ❌ | ❌ | ❌ |
 
 ---

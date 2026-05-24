@@ -28,7 +28,11 @@ from agent_os.policies.schema import (
 
 
 class TestOPABackend:
-    """Tests for the built-in OPA/Rego evaluator."""
+    """Tests for the mock OPA/Rego evaluator.
+
+    Production code should use the real OPA engine via mode='local' (CLI).
+    These tests exercise the mock evaluator explicitly via mode='builtin'.
+    """
 
     SIMPLE_REGO = """
 package agentos
@@ -51,39 +55,39 @@ default allow = false
 """
 
     def test_opa_backend_implements_protocol(self):
-        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        backend = OPABackend(rego_content=self.SIMPLE_REGO, mode="builtin")
         assert isinstance(backend, ExternalPolicyBackend)
         assert backend.name == "opa"
 
     def test_opa_allow_matching_rule(self):
-        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        backend = OPABackend(rego_content=self.SIMPLE_REGO, mode="builtin")
         decision = backend.evaluate({"tool_name": "file_read"})
         assert decision.allowed is True
         assert decision.backend == "opa"
         assert decision.error is None
 
     def test_opa_allow_admin_role(self):
-        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        backend = OPABackend(rego_content=self.SIMPLE_REGO, mode="builtin")
         decision = backend.evaluate({"tool_name": "anything", "role": "admin"})
         assert decision.allowed is True
 
     def test_opa_deny_no_match(self):
-        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        backend = OPABackend(rego_content=self.SIMPLE_REGO, mode="builtin")
         decision = backend.evaluate({"tool_name": "file_delete", "role": "user"})
         assert decision.allowed is False
 
     def test_opa_deny_default_false(self):
-        backend = OPABackend(rego_content=self.DENY_REGO)
+        backend = OPABackend(rego_content=self.DENY_REGO, mode="builtin")
         decision = backend.evaluate({"tool_name": "anything"})
         assert decision.allowed is False
 
     def test_opa_evaluation_ms_tracked(self):
-        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        backend = OPABackend(rego_content=self.SIMPLE_REGO, mode="builtin")
         decision = backend.evaluate({"tool_name": "file_read"})
         assert decision.evaluation_ms >= 0
 
     def test_opa_no_content_returns_error(self):
-        backend = OPABackend()
+        backend = OPABackend(mode="builtin")
         decision = backend.evaluate({"tool_name": "test"})
         assert decision.allowed is False
         assert decision.error is not None
@@ -98,7 +102,7 @@ allow {
     not input.is_dangerous
 }
 """
-        backend = OPABackend(rego_content=rego)
+        backend = OPABackend(rego_content=rego, mode="builtin")
         assert backend.evaluate({"is_dangerous": False}).allowed is True
         assert backend.evaluate({"is_dangerous": True}).allowed is False
 
@@ -112,7 +116,7 @@ allow {
     input.tool_name != "file_delete"
 }
 """
-        backend = OPABackend(rego_content=rego)
+        backend = OPABackend(rego_content=rego, mode="builtin")
         assert backend.evaluate({"tool_name": "file_read"}).allowed is True
         assert backend.evaluate({"tool_name": "file_delete"}).allowed is False
 
@@ -127,7 +131,7 @@ allow {
     input.tool_name == "read_data"
 }
 """
-        backend = OPABackend(rego_content=rego)
+        backend = OPABackend(rego_content=rego, mode="builtin")
         assert backend.evaluate({"role": "analyst", "tool_name": "read_data"}).allowed is True
         assert backend.evaluate({"role": "analyst", "tool_name": "write_data"}).allowed is False
         assert backend.evaluate({"role": "user", "tool_name": "read_data"}).allowed is False
@@ -142,7 +146,7 @@ allow {
     input.role == "analyst"
 }
 """
-        backend = OPABackend(rego_content=rego, package="custom")
+        backend = OPABackend(rego_content=rego, package="custom", mode="builtin")
         decision = backend.evaluate({"role": "analyst"})
         assert decision.allowed is True
 
@@ -174,7 +178,7 @@ allow {
         monkeypatch.setattr(backends_mod.shutil, "which", lambda name: "/usr/local/bin/opa")
         monkeypatch.setattr(backends_mod.subprocess, "run", _fake_run)
 
-        backend = OPABackend(rego_content=self.SIMPLE_REGO)
+        backend = OPABackend(rego_content=self.SIMPLE_REGO, mode="builtin")
         # Force CLI path even if python opa lib is installed
         backend._opa_lib = None  # type: ignore[attr-defined]
         backend._opa_cli_available = True  # type: ignore[attr-defined]
@@ -195,7 +199,12 @@ allow {
 
 
 class TestCedarBackend:
-    """Tests for the built-in Cedar evaluator."""
+    """Tests for the mock Cedar evaluator.
+
+    Production code should use cedarpy or the Cedar CLI via
+    mode='cedarpy' or mode='cli'. These tests exercise the mock
+    evaluator explicitly via mode='builtin'.
+    """
 
     SIMPLE_POLICY = """
 permit(
@@ -226,45 +235,45 @@ permit(
 """
 
     def test_cedar_backend_implements_protocol(self):
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         assert isinstance(backend, ExternalPolicyBackend)
         assert backend.name == "cedar"
 
     def test_cedar_permit_matching_action(self):
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend.evaluate({"tool_name": "read_data", "agent_id": "a1"})
         assert decision.allowed is True
         assert decision.backend == "cedar"
         assert decision.error is None
 
     def test_cedar_forbid_matching_action(self):
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend.evaluate({"tool_name": "delete_file", "agent_id": "a1"})
         assert decision.allowed is False
 
     def test_cedar_default_deny_no_match(self):
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend.evaluate({"tool_name": "execute_code", "agent_id": "a1"})
         assert decision.allowed is False
 
     def test_cedar_permit_all_catchall(self):
-        backend = CedarBackend(policy_content=self.PERMIT_ALL)
+        backend = CedarBackend(policy_content=self.PERMIT_ALL, mode="builtin")
         decision = backend.evaluate({"tool_name": "anything", "agent_id": "a1"})
         assert decision.allowed is True
 
     def test_cedar_evaluation_ms_tracked(self):
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend.evaluate({"tool_name": "read_data", "agent_id": "a1"})
         assert decision.evaluation_ms >= 0
 
     def test_cedar_no_content_returns_error(self):
-        backend = CedarBackend()
+        backend = CedarBackend(mode="builtin")
         decision = backend.evaluate({"tool_name": "test"})
         assert decision.allowed is False
         assert decision.error is not None
 
     def test_cedar_list_files_action(self):
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend.evaluate({"tool_name": "list_files", "agent_id": "a1"})
         assert decision.allowed is True
 
@@ -366,7 +375,7 @@ class TestCedarBackendCliPath:
             backends_mod.subprocess, "run",
             lambda *_a, **_kw: _FakeProc(),
         )
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend._evaluate_cli({"tool_name": "read_data", "agent_id": "a1"})
         assert decision.allowed is True
         assert decision.error is None
@@ -382,7 +391,7 @@ class TestCedarBackendCliPath:
             backends_mod.subprocess, "run",
             lambda *_a, **_kw: _FakeProc(),
         )
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend._evaluate_cli({"tool_name": "read_data", "agent_id": "a1"})
         assert decision.allowed is False
 
@@ -405,7 +414,7 @@ class TestCedarBackendCliPath:
             backends_mod.subprocess, "run",
             lambda *_a, **_kw: _FakeProc(),
         )
-        backend = CedarBackend(policy_content=self.SIMPLE_POLICY)
+        backend = CedarBackend(policy_content=self.SIMPLE_POLICY, mode="builtin")
         decision = backend._evaluate_cli({"tool_name": "read_data", "agent_id": "a1"})
         assert decision.allowed is False
         assert decision.error == "unrecognised cedar CLI output"
@@ -439,7 +448,7 @@ class TestPolicyEvaluatorWithBackends:
         evaluator = PolicyEvaluator(
             policies=[self._make_yaml_policy("file_read", PolicyAction.DENY)]
         )
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(mode="builtin", rego_content="""
 package agentos
 default allow = true
 """)
@@ -452,7 +461,7 @@ default allow = true
         evaluator = PolicyEvaluator(
             policies=[self._make_yaml_policy("file_read", PolicyAction.DENY)]
         )
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(mode="builtin", rego_content="""
 package agentos
 default allow = false
 allow {
@@ -468,7 +477,7 @@ allow {
         evaluator = PolicyEvaluator(
             policies=[self._make_yaml_policy("file_read", PolicyAction.DENY)]
         )
-        evaluator.load_cedar(policy_content="""
+        evaluator.load_cedar(mode="builtin", policy_content="""
 permit(
     principal,
     action == Action::"WebSearch",
@@ -484,12 +493,12 @@ permit(
         evaluator = PolicyEvaluator()
 
         # OPA denies everything
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(mode="builtin", rego_content="""
 package agentos
 default allow = false
 """)
         # Cedar would allow — but OPA runs first
-        evaluator.load_cedar(policy_content="""
+        evaluator.load_cedar(mode="builtin", policy_content="""
 permit(principal, action, resource);
 """)
         decision = evaluator.evaluate({"tool_name": "anything"})
@@ -498,7 +507,7 @@ permit(principal, action, resource);
     def test_backend_decision_includes_audit_entry(self):
         """Backend decisions include audit information."""
         evaluator = PolicyEvaluator()
-        evaluator.load_rego(rego_content="""
+        evaluator.load_rego(mode="builtin", rego_content="""
 package agentos
 default allow = true
 """)
@@ -515,12 +524,123 @@ default allow = true
 
     def test_load_rego_returns_backend(self):
         evaluator = PolicyEvaluator()
-        backend = evaluator.load_rego(rego_content="package agentos\ndefault allow = true")
+        backend = evaluator.load_rego(mode="builtin", rego_content="package agentos\ndefault allow = true")
         assert backend.name == "opa"
 
     def test_load_cedar_returns_backend(self):
         evaluator = PolicyEvaluator()
         backend = evaluator.load_cedar(
-            policy_content='permit(principal, action, resource);'
+            mode="builtin", policy_content='permit(principal, action, resource);'
         )
         assert backend.name == "cedar"
+
+
+# ── Regression Tests: Mock Evaluator Constraint Detection ─────
+
+
+class TestCedarMockRejectsPrincipalResourceConstraints:
+    """The mock Cedar evaluator must refuse policies that contain
+    principal or resource constraints it cannot enforce.
+
+    Without this guard, the mock silently drops identity- and
+    resource-scoped constraints, reducing a policy like
+    ``permit(principal == User::"admin", ...)`` to
+    ``permit(*, ...)``, which is an authorization bypass.
+    """
+
+    PRINCIPAL_POLICY = """
+permit(
+    principal == User::"admin",
+    action == Action::"Deploy",
+    resource
+);
+"""
+
+    RESOURCE_POLICY = """
+permit(
+    principal,
+    action == Action::"Read",
+    resource == Resource::"public"
+);
+"""
+
+    PRINCIPAL_IN_POLICY = """
+permit(
+    principal in Group::"admins",
+    action == Action::"Deploy",
+    resource
+);
+"""
+
+    def test_mock_rejects_principal_constraint(self):
+        backend = CedarBackend(policy_content=self.PRINCIPAL_POLICY, mode="builtin")
+        decision = backend.evaluate({"tool_name": "deploy", "agent_id": "bob"})
+        assert decision.allowed is False
+        assert "principal/resource" in decision.error
+
+    def test_mock_rejects_resource_constraint(self):
+        backend = CedarBackend(policy_content=self.RESOURCE_POLICY, mode="builtin")
+        decision = backend.evaluate({"tool_name": "read", "agent_id": "a1"})
+        assert decision.allowed is False
+        assert "principal/resource" in decision.error
+
+    def test_mock_rejects_principal_in_constraint(self):
+        backend = CedarBackend(policy_content=self.PRINCIPAL_IN_POLICY, mode="builtin")
+        decision = backend.evaluate({"tool_name": "deploy", "agent_id": "bob"})
+        assert decision.allowed is False
+        assert "principal/resource" in decision.error
+
+    def test_mock_allows_wildcard_policies(self):
+        """Policies with wildcard principal/resource should still work."""
+        policy = 'permit(principal, action == Action::"Read", resource);'
+        backend = CedarBackend(policy_content=policy, mode="builtin")
+        decision = backend.evaluate({"tool_name": "read", "agent_id": "a1"})
+        assert decision.allowed is True
+
+
+class TestCedarAutoModeDeniesWithoutEngine:
+    """In auto mode, when neither cedarpy nor the Cedar CLI is available,
+    the backend must return a deny decision with an explicit error instead
+    of silently falling back to the mock evaluator.
+    """
+
+    POLICY = 'permit(principal, action == Action::"Read", resource);'
+
+    def test_auto_mode_denies_without_engine(self, monkeypatch):
+        from agent_os.policies import backends as backends_mod
+
+        monkeypatch.setattr(backends_mod.shutil, "which", lambda _: None)
+        monkeypatch.setattr(CedarBackend, "_check_cedarpy", staticmethod(lambda: False))
+        backend = CedarBackend(policy_content=self.POLICY)
+        assert backend._mode == "auto"
+        decision = backend.evaluate({"tool_name": "read", "agent_id": "a1"})
+        assert decision.allowed is False
+        assert "no real Cedar evaluator" in (decision.error or "") or "auto mode" in (decision.reason or "")
+
+
+class TestOPALocalModeDeniesWithoutCLI:
+    """When the OPA CLI is not available, local mode must return a deny
+    decision with an explicit error instead of silently falling back to
+    the mock evaluator.
+    """
+
+    REGO = """
+package agentos
+default allow = false
+allow { input.tool_name == "read" }
+"""
+
+    def test_local_mode_denies_without_cli(self, monkeypatch):
+        from agent_os.policies import backends as backends_mod
+
+        monkeypatch.setattr(backends_mod.shutil, "which", lambda _: None)
+        backend = OPABackend(rego_content=self.REGO)
+        decision = backend.evaluate({"tool_name": "read"})
+        assert decision.allowed is False
+        assert "opa CLI" in (decision.error or "").lower() or "evaluator" in (decision.error or "").lower()
+
+    def test_builtin_mode_still_works(self):
+        """Explicit builtin mode should still use the mock evaluator."""
+        backend = OPABackend(rego_content=self.REGO, mode="builtin")
+        decision = backend.evaluate({"tool_name": "read"})
+        assert decision.allowed is True

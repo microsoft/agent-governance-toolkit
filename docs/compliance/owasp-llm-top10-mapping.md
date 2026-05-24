@@ -36,7 +36,7 @@ The widest gaps are in output sanitization and sensitive data protection.
 | # | OWASP Risk | Coverage | Key Mechanism | Key Gap |
 |---|-----------|----------|---------------|---------|
 | LLM01 | Prompt Injection | Partial | 6 regex pattern groups + base64 decoding + MCP tool scanning | Regex-only; no semantic detection; opt-in, not default-wired |
-| LLM02 | Insecure Output Handling | Partial | AST-based Python code validation + drift detection | `post_execute()` never blocks; Python-only; no text output sanitization |
+| LLM02 | Unexpected Code Execution | Partial | AST-based Python code validation + drift detection | `post_execute()` never blocks; Python-only; no text output sanitization |
 | LLM03 | Training Data Poisoning | Partial | MemoryGuard for runtime memory stores | Training pipeline out of scope; MemoryGuard not wired into adapters |
 | LLM04 | Model Denial of Service | Partial | Token/call/timeout limits + concurrency semaphore + circuit breakers | TokenBudgetTracker advisory-only; RateLimiter not wired; no payload size limits |
 | LLM05 | Supply Chain Vulnerabilities | Partial | SBOM + Ed25519 signing + MCP fingerprinting + ContentHashInterceptor | SupplyChainGuard reporting-only; signing opt-in |
@@ -140,7 +140,7 @@ anyway).
 
 ---
 
-### LLM02: Insecure Output Handling
+### LLM02: Unexpected Code Execution
 
 > *Insufficient validation or sanitization of LLM outputs before passing them to downstream components, potentially enabling XSS, SSRF, or code execution.*
 

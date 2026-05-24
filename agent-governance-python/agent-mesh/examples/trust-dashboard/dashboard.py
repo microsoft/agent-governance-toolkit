@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -26,9 +26,9 @@ from typing import Any
 
 _lock = threading.Lock()
 _data: dict[str, Any] = {
-    "agents": {},      # name -> {score, protocol, did}
-    "history": {},     # name -> [(timestamp_iso, score), ...]
-    "tiers": {         # tier_name -> count
+    "agents": {},  # name -> {score, protocol, did}
+    "history": {},  # name -> [(timestamp_iso, score), ...]
+    "tiers": {  # tier_name -> count
         "Verified Partner": 0,
         "Trusted": 0,
         "Standard": 0,
@@ -39,10 +39,10 @@ _data: dict[str, Any] = {
 
 TIER_RANGES = [
     ("Verified Partner", 900, 1000),
-    ("Trusted",          700,  899),
-    ("Standard",         500,  699),
-    ("Probationary",     300,  499),
-    ("Untrusted",          0,  299),
+    ("Trusted", 700, 899),
+    ("Standard", 500, 699),
+    ("Probationary", 300, 499),
+    ("Untrusted", 0, 299),
 ]
 
 
@@ -166,25 +166,69 @@ function renderKPIs(agents){
   const scores=Object.values(agents).map(a=>a.score);
   const n=scores.length, avg=n? (scores.reduce((a,b)=>a+b,0)/n).toFixed(0) :0;
   const mn=n? Math.min(...scores):0, mx=n? Math.max(...scores):0;
-  document.getElementById("kpis").innerHTML=
-    kpi("Agents",n)+kpi("Avg Score",avg)+kpi("Min",mn)+kpi("Max",mx);
+  document.getElementById("kpis").replaceChildren(
+    kpi("Agents",n),
+    kpi("Avg Score",avg),
+    kpi("Min",mn),
+    kpi("Max",mx)
+  );
 }
 function kpi(label,value){
-  return `<div class="kpi"><div class="value">${value}</div><div class="label">${label}</div></div>`;
+  const card=document.createElement("div");
+  card.className="kpi";
+
+  const valueNode=document.createElement("div");
+  valueNode.className="value";
+  valueNode.textContent=String(value);
+
+  const labelNode=document.createElement("div");
+  labelNode.className="label";
+  labelNode.textContent=label;
+
+  card.append(valueNode,labelNode);
+  return card;
 }
 
 function renderTable(agents){
   const tbody=document.getElementById("agent-tbody");
   const sorted=Object.entries(agents).sort((a,b)=>b[1].score-a[1].score);
-  tbody.innerHTML=sorted.map(([name,info])=>{
+  const rows=sorted.map(([name,info])=>{
     const tier=tierFor(info.score);
     const pct=(info.score/1000*100).toFixed(1);
-    return `<tr><td><b>${name}</b></td><td>${info.protocol||""}</td>
-      <td>${info.score}</td>
-      <td><span class="tier-badge tier-${TIER_CSS[tier]}">${tier}</span></td>
-      <td style="width:30%"><div class="bar-cell"><div class="bar-fill"
-        style="width:${pct}%;background:${barColor(info.score)}"></div></div></td></tr>`;
-  }).join("");
+    const row=document.createElement("tr");
+
+    const nameCell=document.createElement("td");
+    const nameLabel=document.createElement("b");
+    nameLabel.textContent=name;
+    nameCell.append(nameLabel);
+
+    const protocolCell=document.createElement("td");
+    protocolCell.textContent=info.protocol ?? "";
+
+    const scoreCell=document.createElement("td");
+    scoreCell.textContent=String(info.score);
+
+    const tierCell=document.createElement("td");
+    const tierBadge=document.createElement("span");
+    tierBadge.className=`tier-badge tier-${TIER_CSS[tier]}`;
+    tierBadge.textContent=tier;
+    tierCell.append(tierBadge);
+
+    const barCell=document.createElement("td");
+    barCell.style.width="30%";
+    const barWrapper=document.createElement("div");
+    barWrapper.className="bar-cell";
+    const barFill=document.createElement("div");
+    barFill.className="bar-fill";
+    barFill.style.width=`${pct}%`;
+    barFill.style.background=barColor(info.score);
+    barWrapper.append(barFill);
+    barCell.append(barWrapper);
+
+    row.append(nameCell,protocolCell,scoreCell,tierCell,barCell);
+    return row;
+  });
+  tbody.replaceChildren(...rows);
 }
 
 function renderHistory(history){
@@ -248,6 +292,7 @@ setInterval(refresh,5000);
 # HTTP request handler
 # ---------------------------------------------------------------------------
 
+
 class _Handler(BaseHTTPRequestHandler):
     """Serves the HTML page at ``/`` and JSON data at ``/api/data``."""
 
@@ -276,6 +321,7 @@ class _Handler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 # Server lifecycle
 # ---------------------------------------------------------------------------
+
 
 def start_server(port: int = 8050) -> HTTPServer:
     """Start the dashboard server in a daemon thread and return the server."""
@@ -308,19 +354,23 @@ def _seed_demo_data() -> None:
 
     random.seed(42)
     agents = {
-        "payment-agent":     {"score": 920, "protocol": "A2A",  "did": "did:web:payments.mesh.io"},
-        "customer-service":  {"score": 870, "protocol": "A2A",  "did": "did:web:cs.mesh.io"},
-        "data-analyst":      {"score": 810, "protocol": "MCP",  "did": "did:web:analytics.mesh.io"},
-        "fraud-detector":    {"score": 940, "protocol": "IATP", "did": "did:web:fraud.mesh.io"},
-        "inventory-manager": {"score": 720, "protocol": "MCP",  "did": "did:web:inventory.mesh.io"},
-        "email-dispatcher":  {"score": 650, "protocol": "A2A",  "did": "did:web:email.mesh.io"},
-        "auth-gateway":      {"score": 950, "protocol": "IATP", "did": "did:web:auth.mesh.io"},
-        "report-generator":  {"score": 580, "protocol": "MCP",  "did": "did:web:reports.mesh.io"},
-        "scheduler":         {"score": 780, "protocol": "A2A",  "did": "did:web:scheduler.mesh.io"},
-        "compliance-bot":    {"score": 890, "protocol": "IATP", "did": "did:web:compliance.mesh.io"},
+        "payment-agent": {"score": 920, "protocol": "A2A", "did": "did:web:payments.mesh.io"},
+        "customer-service": {"score": 870, "protocol": "A2A", "did": "did:web:cs.mesh.io"},
+        "data-analyst": {"score": 810, "protocol": "MCP", "did": "did:web:analytics.mesh.io"},
+        "fraud-detector": {"score": 940, "protocol": "IATP", "did": "did:web:fraud.mesh.io"},
+        "inventory-manager": {"score": 720, "protocol": "MCP", "did": "did:web:inventory.mesh.io"},
+        "email-dispatcher": {"score": 650, "protocol": "A2A", "did": "did:web:email.mesh.io"},
+        "auth-gateway": {"score": 950, "protocol": "IATP", "did": "did:web:auth.mesh.io"},
+        "report-generator": {"score": 580, "protocol": "MCP", "did": "did:web:reports.mesh.io"},
+        "scheduler": {"score": 780, "protocol": "A2A", "did": "did:web:scheduler.mesh.io"},
+        "compliance-bot": {
+            "score": 890,
+            "protocol": "IATP",
+            "did": "did:web:compliance.mesh.io",
+        },
     }
 
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     history: dict[str, list] = {}
     for name, info in agents.items():
         pts = []

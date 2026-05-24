@@ -233,7 +233,7 @@ class TestAsgiApp:
     def test_health_endpoint(self):
         handler = _make_handler(policies=["p1"])
         app = handler.to_asgi_app()
-        status, body = asyncio.get_event_loop().run_until_complete(
+        status, body = asyncio.run(
             _asgi_request(app, "GET", "/health")
         )
         assert status == 200
@@ -242,7 +242,7 @@ class TestAsgiApp:
     def test_policies_endpoint(self):
         handler = _make_handler(policies=["my-policy"])
         app = handler.to_asgi_app()
-        status, body = asyncio.get_event_loop().run_until_complete(
+        status, body = asyncio.run(
             _asgi_request(app, "GET", "/policies")
         )
         assert status == 200
@@ -256,7 +256,7 @@ class TestAsgiApp:
         payload = json.dumps(
             {"agent_id": "a1", "action": "read", "context": {}}
         ).encode()
-        status, body = asyncio.get_event_loop().run_until_complete(
+        status, body = asyncio.run(
             _asgi_request(app, "POST", "/check", payload)
         )
         assert status == 200
@@ -265,7 +265,7 @@ class TestAsgiApp:
     def test_check_invalid_json(self):
         handler = _make_handler()
         app = handler.to_asgi_app()
-        status, body = asyncio.get_event_loop().run_until_complete(
+        status, body = asyncio.run(
             _asgi_request(app, "POST", "/check", b"not-json")
         )
         assert status == 400
@@ -274,7 +274,7 @@ class TestAsgiApp:
     def test_not_found(self):
         handler = _make_handler()
         app = handler.to_asgi_app()
-        status, body = asyncio.get_event_loop().run_until_complete(
+        status, body = asyncio.run(
             _asgi_request(app, "GET", "/unknown")
         )
         assert status == 404

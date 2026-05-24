@@ -511,9 +511,9 @@ How each tool addresses the [OWASP Top 10 for Agentic Applications](https://owas
 | **ASI03** Identity & Privilege | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ |
 | **ASI04** Supply Chain | ⚠️ | ❌ | ❌ | ❌ | ⚠️ | ⚠️ | ❌ | ⚠️ | ❌ |
 | **ASI05** Code Execution | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ✅ | ⚠️ | ❌ | ✅ |
-| **ASI06** Memory Poisoning | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **ASI06** Memory & Context Poisoning | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **ASI07** Inter-Agent Comms | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ | ❌ | ✅ |
-| **ASI08** Cascading Failures | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ |
+| **ASI08** Cascading Agent Failures | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ |
 | **ASI09** Human-Agent Trust | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ❌ | ✅ | ❌ | ❌ |
 | **ASI10** Rogue Agents | ⚠️ | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ | ❌ | ✅ |
 | **Coverage** | **8/10** | **2/10** | **1/10** | **0/10** | **4/10** | **3/10** | **4/10** | **2/10** | **6/10** |

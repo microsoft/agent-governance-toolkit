@@ -48,6 +48,8 @@ pub(crate) mod regex_cache;
 pub mod reward_support;
 pub mod rings;
 pub mod sandbox;
+#[cfg(feature = "telemetry")]
+pub mod telemetry;
 pub mod trust;
 pub mod trust_support;
 pub mod types;
@@ -129,6 +131,8 @@ pub struct AgentMeshClient {
     pub trust: TrustManager,
     pub policy: PolicyEngine,
     pub audit: AuditLogger,
+    #[cfg(feature = "telemetry")]
+    telemetry_sink: std::sync::Arc<dyn telemetry::TelemetrySink>,
 }
 
 /// Builder options for [`AgentMeshClient`].
@@ -137,6 +141,8 @@ pub struct ClientOptions {
     pub capabilities: Vec<String>,
     pub trust_config: Option<TrustConfig>,
     pub policy_yaml: Option<String>,
+    #[cfg(feature = "telemetry")]
+    pub telemetry_sink: Option<std::sync::Arc<dyn telemetry::TelemetrySink>>,
 }
 
 impl AgentMeshClient {
@@ -163,6 +169,10 @@ impl AgentMeshClient {
             trust,
             policy,
             audit: AuditLogger::new(),
+            #[cfg(feature = "telemetry")]
+            telemetry_sink: opts
+                .telemetry_sink
+                .unwrap_or_else(|| std::sync::Arc::new(telemetry::NoopTelemetrySink)),
         })
     }
 
@@ -173,7 +183,21 @@ impl AgentMeshClient {
         action: &str,
         context: Option<&HashMap<String, serde_yaml::Value>>,
     ) -> GovernanceResult {
+        #[cfg(feature = "telemetry")]
+        let policy_start = std::time::Instant::now();
         let decision = self.policy.evaluate(action, context);
+        #[cfg(feature = "telemetry")]
+        {
+            let event = telemetry::PolicyTelemetryEvent::new(
+                &self.identity.did,
+                action,
+                &decision,
+                policy_start.elapsed(),
+            );
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.telemetry_sink.record_policy_evaluation(&event);
+            }));
+        }
         let audit_entry = self.audit.log(&self.identity.did, action, decision.label());
         let trust_score = self.trust.get_trust_score(&self.identity.did);
 

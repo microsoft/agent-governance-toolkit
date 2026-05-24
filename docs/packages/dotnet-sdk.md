@@ -510,9 +510,9 @@ The .NET package addresses all 10 OWASP categories:
 | Identity Abuse | DID-based identity + trust scoring + ring demotion |
 | Supply Chain | Build provenance attestation |
 | Code Execution | Rate limiting + ring-based resource limits |
-| Memory Poisoning | Stateless evaluation (no shared context) |
+| Memory & Context Poisoning | Stateless evaluation (no shared context) |
 | Insecure Comms | Cryptographic signing |
-| Cascading Failures | Circuit breaker + SLO error budgets |
+| Cascading Agent Failures | Circuit breaker + SLO error budgets |
 | Trust Exploitation | Saga orchestrator + approval workflows |
 | Rogue Agents | Trust decay + execution ring enforcement + behavioural detection |
 

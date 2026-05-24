@@ -32,7 +32,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | **Deterministic pre-execution enforcement** | ✅ < 0.1 ms | ❌ | ❌ | ❌ | ❌ |
 | **Chaos / replay testing** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **OWASP Agentic Top 10 mapping** | **10 / 10 categories mapped** | ~2 / 10 ¹ | ~1 / 10 ¹ | ~0 / 10 ¹ | ~1 / 10 ¹ |
-| **Framework integrations** | **12+** | 3 (LangChain, NeMo-based, custom) | 2 (LangChain, custom) | N/A (gateway) | N/A (gateway) |
+| **Framework integrations** | **12+** | 5+ (LangChain, LangGraph, LlamaIndex, NeMo-based, custom) | 4+ (LangChain, LlamaIndex, OpenAI SDK, custom) | N/A (gateway) | N/A (gateway) |
 | **LLM provider routing / caching** | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **Works alongside existing tools** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
@@ -58,7 +58,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 - Agent identity or authentication between agents
 - Runtime privilege rings or sandboxing
 - SRE / reliability patterns (SLOs, circuit breakers)
-- OWASP Agentic Top 10 risks beyond output filtering (~ASI-05)
+- OWASP Agentic Top 10 risks beyond output filtering (~ASI-01 partial)
 
 **Best used:** Alongside the Agent Governance Toolkit when you want chatbot-level dialog safety **and** full agentic action governance.
 
@@ -144,15 +144,15 @@ These two layers are **complementary, not competing**. A fully governed agentic 
 
 | Risk | Agent Governance Toolkit | NeMo Guardrails | Guardrails AI | LiteLLM | Portkey |
 |------|:------------------------:|:---------------:|:-------------:|:-------:|:-------:|
-| ASI-01 Agent Goal Hijacking | ✅ Policy engine blocks unauthorized goal changes | ⚠️ Partial (dialog rails) | ❌ | ❌ | ❌ |
-| ASI-02 Excessive Capabilities | ✅ Capability model enforces least-privilege | ❌ | ❌ | ❌ | ❌ |
-| ASI-03 Identity & Privilege Abuse | ✅ Ed25519 / SPIFFE zero-trust identity | ❌ | ❌ | ❌ | ❌ |
-| ASI-04 Uncontrolled Code Execution | ✅ 4-tier execution rings + sandboxing | ❌ | ❌ | ❌ | ❌ |
-| ASI-05 Insecure Output Handling | ✅ Content policies validate all outputs | ✅ Output filters | ✅ Schema validation | ⚠️ Basic hooks | ❌ |
-| ASI-06 Memory Poisoning | ✅ Episodic memory with integrity checks | ❌ | ❌ | ❌ | ❌ |
-| ASI-07 Unsafe Inter-Agent Communication | ✅ Encrypted channels + trust gates | ❌ | ❌ | ❌ | ❌ |
-| ASI-08 Cascading Failures | ✅ Circuit breakers + SLO enforcement | ❌ | ❌ | ⚠️ Retries only | ⚠️ Fallback routing |
-| ASI-09 Human-Agent Trust Deficit | ✅ Full audit trails + flight recorder | ❌ | ❌ | ⚠️ Logging | ⚠️ Observability |
+| ASI-01 Agent Goal Hijack | ✅ Policy engine blocks unauthorized goal changes | ⚠️ Partial (dialog rails) | ❌ | ❌ | ❌ |
+| ASI-02 Tool Misuse & Exploitation | ✅ Capability model enforces least-privilege; tool-call policy checks | ❌ | ❌ | ❌ | ❌ |
+| ASI-03 Agent Identity & Privilege Abuse | ✅ Ed25519 / SPIFFE zero-trust identity | ❌ | ❌ | ❌ | ❌ |
+| ASI-04 Agentic Supply Chain Compromise | ✅ Dependency-confusion scanning + tool verification | ❌ | ❌ | ❌ | ❌ |
+| ASI-05 Unexpected Code Execution | ✅ 4-tier execution rings + sandboxing | ❌ | ❌ | ❌ | ❌ |
+| ASI-06 Memory & Context Poisoning | ✅ Episodic memory with integrity checks | ❌ | ❌ | ❌ | ❌ |
+| ASI-07 Insecure Inter-Agent Communication | ✅ Encrypted channels + trust gates | ❌ | ❌ | ❌ | ❌ |
+| ASI-08 Cascading Agent Failures | ✅ Circuit breakers + SLO enforcement | ❌ | ❌ | ⚠️ Retries only | ⚠️ Fallback routing |
+| ASI-09 Human-Agent Trust Exploitation | ✅ Full audit trails + flight recorder | ❌ | ❌ | ⚠️ Logging | ⚠️ Observability |
 | ASI-10 Rogue Agents | ✅ Kill switch + ring isolation + anomaly detection | ❌ | ❌ | ❌ | ❌ |
 
 ---

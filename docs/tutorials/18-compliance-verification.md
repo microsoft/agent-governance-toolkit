@@ -923,7 +923,7 @@ ASI-04  Supply Chain Vulns        AgentMesh      AI-BOM v2.0, provenance trackin
 ASI-05  Unexpected Code Exec      Agent Runtime  CPU ring-inspired isolation (0–3)
 ASI-06  Memory & Context Poison   Agent OS       VFS policies, CMVK verification
 ASI-07  Insecure Inter-Agent      AgentMesh      IATP protocol, encrypted channels
-ASI-08  Cascading Failures        Agent SRE      Circuit breakers, SLO enforcement
+ASI-08  Cascading Agent Failures        Agent SRE      Circuit breakers, SLO enforcement
 ASI-09  Human-Agent Trust         Agent OS       Approval workflows, quorum logic
 ASI-10  Rogue Agents              Runtime+Mesh   Kill switch, behavioral monitoring
 ```

@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: foundry-ai-gateway-pdp
+metadata:
+  template: agent-governance-toolkit/examples/foundry-ai-gateway-pdp
+infra:
+  provider: bicep
+  path: infra
+services:
+  pdp:
+    project: function
+    language: python
+    host: function

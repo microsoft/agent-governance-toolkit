@@ -122,6 +122,7 @@ dev = [
 
 [project.scripts]
 agent-os = "agent_os.cli:main"
+mcp-scan = "agent_os.cli.mcp_scan:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [

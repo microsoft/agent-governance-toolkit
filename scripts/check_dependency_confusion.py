@@ -43,7 +43,7 @@ REGISTERED_PACKAGES = {
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
     "agentmesh-discovery", "agentmesh_discovery",
-    "agent-sandbox", "agent_sandbox",
+    "agt-sandbox", "agt_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
@@ -107,6 +107,14 @@ REGISTERED_PACKAGES = {
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
+    # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
+    "azure-functions", "azure_functions",
+    # SpendGuard SDK (real PyPI package, used in examples)
+    "spendguard-sdk", "spendguard_sdk",
+    # Cedarling Python bindings (real PyPI package, optional dep)
+    "cedarling-python", "cedarling_python",
+    # Cedarling-AgentMesh integration (internal cross-package, local-only)
+    "cedarling-agentmesh", "cedarling_agentmesh",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
@@ -125,6 +133,7 @@ REGISTERED_NPM_PACKAGES = {
     "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
     "@microsoft/agentmesh-mastra", "@microsoft/agentmesh-copilot-governance",
     "@microsoft/agent-governance-sdk", "@microsoft/agent-governance-copilot-cli",
+    "@microsoft/agent-governance-claude-code",
     "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
     "@microsoft/agent-os-vscode",
     # Common deps
@@ -160,6 +169,9 @@ REGISTERED_NPM_PACKAGES = {
 REGISTERED_CARGO_PACKAGES = {
     "serde", "serde_json", "serde_yaml", "sha2", "ed25519-dalek",
     "rand", "thiserror", "tempfile", "agentmesh",
+    "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
+    "opentelemetry", "regex", "regorus",
+    "assert_cmd", "predicates",
 }
 
 # Patterns that are always safe (not package names)
@@ -291,14 +303,15 @@ def check_notebook(filepath: str) -> list[str]:
         if cell.get("cell_type") != "code":
             continue
         for line in cell.get("source", []):
-            if "pip install" in line and not line.strip().startswith("#"):
-                packages = extract_package_names(line)
-                for pkg in packages:
-                    if pkg.lower() not in registered_lower:
-                        findings.append(
-                            f"  {filepath}: "
-                            f"'{pkg}' may not be registered on PyPI"
-                        )
+            if not line.strip().startswith("#"):
+                for match in PIP_INSTALL_RE.finditer(line):
+                    packages = extract_package_names(match.group(1))
+                    for pkg in packages:
+                        if pkg.lower() not in registered_lower:
+                            findings.append(
+                                f"  {filepath}: "
+                                f"'{pkg}' may not be registered on PyPI"
+                            )
     return findings
 
 

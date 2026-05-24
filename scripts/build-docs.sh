@@ -24,9 +24,9 @@ cp docs/tutorials/*.md "$SITE_DOCS/tutorials/"
 cp docs/deployment/*.md "$SITE_DOCS/deployment/"
 
 # Security
-cp docs/THREAT_MODEL.md "$SITE_DOCS/security/threat-model.md"
+cp docs/security/threat-model.md "$SITE_DOCS/security/threat-model.md"
 cp docs/OWASP-COMPLIANCE.md "$SITE_DOCS/security/owasp-compliance.md"
-cp docs/security-scanning.md "$SITE_DOCS/security/scanning.md"
+cp docs/security/scanning.md "$SITE_DOCS/security/scanning.md"
 cp docs/security/tenant-isolation-checklist.md "$SITE_DOCS/security/tenant-isolation.md"
 
 # ADRs

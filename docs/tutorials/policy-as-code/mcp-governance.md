@@ -211,7 +211,7 @@ the practical alignment looks like this:
 | **ASI-05 Unexpected Code Execution** | Deny `run_shell`, `execute_command`, `eval`, and `spawn_process` |
 | **ASI-06 Memory & Context Poisoning** | Secret-path blocking and argument filtering prevent poisoned context from turning into exfiltration |
 | **ASI-07 Insecure Inter-Agent Communication** | Trust-gated MCP endpoints add authentication and trust checks before agents collaborate |
-| **ASI-08 Cascading Failures** | CLI rate limits and deny rules reduce runaway call chains |
+| **ASI-08 Cascading Agent Failures** | CLI rate limits and deny rules reduce runaway call chains |
 | **ASI-09 Human-Agent Trust Exploitation** | Audit visibility helps, and this guide naturally leads into approval workflows for sensitive actions |
 | **ASI-10 Rogue Agents** | Catch-all deny rules and rate caps confine agents that drift out of scope |
 

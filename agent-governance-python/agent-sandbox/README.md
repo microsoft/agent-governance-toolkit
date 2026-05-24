@@ -9,7 +9,7 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 ## Installation
 
 ```bash
-pip install agent-sandbox[full]
+pip install agt-sandbox[full]
 ```
 
 ## Quick Start

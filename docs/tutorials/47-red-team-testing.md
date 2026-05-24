@@ -306,6 +306,6 @@ If playbooks report "BYPASSED" results, your governance policies need strengthen
 ## Next Steps
 
 - [Tutorial 09: Prompt Injection Detection](09-prompt-injection-detection.md) - Runtime detection
-- [Tutorial 32: Chaos Testing Agents](32-chaos-testing-agents.md) - Resilience under failure
+- [Tutorial 32: Chaos Testing Agents](52-chaos-testing-agents.md) - Resilience under failure
 - [Tutorial 45: Shift-Left Governance](45-shift-left-governance.md) - Pre-commit governance gates
 - [Tutorial 25: Security Hardening](25-security-hardening.md) - Production security checklist

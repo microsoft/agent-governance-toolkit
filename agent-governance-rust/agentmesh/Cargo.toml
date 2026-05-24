@@ -10,13 +10,32 @@ readme = "README.md"
 keywords = ["agent", "governance", "trust", "policy", "audit"]
 categories = ["authentication", "cryptography"]
 rust-version.workspace = true
+# Disable bin auto-discovery so the operator CLI under src/bin/ is built ONLY when the
+# `cli` feature is enabled (via the explicit [[bin]] below). Keeps the default library
+# build free of clap and any binary target.
+autobins = false
+
+[features]
+# Opt-in operator CLI. Pulls clap; the default library build stays clap-free.
+cli = ["dep:clap"]
+# Opt-in OpenTelemetry tracing hooks. The default library build stays OTel-free.
+telemetry = ["dep:opentelemetry"]
+
+# Feature-gated operator binary. `required-features` ensures `cargo build`/`cargo test`
+# without `--features cli` never builds this target.
+[[bin]]
+name = "agt"
+path = "src/bin/agt/main.rs"
+required-features = ["cli"]
 
 [dependencies]
 agentmesh-mcp.workspace = true
 base64.workspace = true
 cedar-policy.workspace = true
+clap = { workspace = true, optional = true }
 ed25519-dalek.workspace = true
 hmac.workspace = true
+opentelemetry = { workspace = true, optional = true }
 rand.workspace = true
 regex.workspace = true
 regorus.workspace = true
@@ -27,4 +46,6 @@ sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
 tempfile.workspace = true

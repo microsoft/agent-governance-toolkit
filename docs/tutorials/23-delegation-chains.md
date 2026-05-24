@@ -7,7 +7,7 @@ narrowing** — child agents can only receive a subset of their parent's
 capabilities, never more. This tutorial shows how to build delegation chains
 that enforce the principle of least privilege across multi-agent systems.
 
-> **Package:** `@microsoft/agentmesh-sdk` (TypeScript) · `agentmesh` (Rust/Go)
+> **Package:** `@microsoft/agent-governance-sdk` (TypeScript) · `agentmesh` (Rust/Go)
 > **Key class:** `AgentIdentity.delegate()`
 > **Concept:** Authority can only decrease through a delegation chain
 
@@ -32,7 +32,7 @@ that enforce the principle of least privilege across multi-agent systems.
 ## Prerequisites
 
 - **Node.js 18+** with TypeScript 5.4+
-- `npm install @microsoft/agentmesh-sdk`
+- `npm install @microsoft/agent-governance-sdk`
 - Recommended: read [Tutorial 02 — Trust & Identity](02-trust-and-identity.md)
   and [Tutorial 20 — TypeScript package](20-typescript-sdk.md)
 
@@ -107,7 +107,7 @@ const bad = parent.delegate('bad', ['admin']);  // throws Error
 ### §3.1 Basic Delegation
 
 ```typescript
-import { AgentIdentity } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity } from '@microsoft/agent-governance-sdk';
 
 // 1. Create the root identity (manager)
 const manager = AgentIdentity.generate('manager', [
@@ -240,7 +240,7 @@ function getDelegationChain(
 }
 
 // Usage
-import { IdentityRegistry } from '@microsoft/agentmesh-sdk';
+import { IdentityRegistry } from '@microsoft/agent-governance-sdk';
 
 const registry = new IdentityRegistry();
 registry.register(manager);
@@ -305,7 +305,7 @@ console.log(manager.verify(attestation, signature));  // true
 Combine delegation with trust scoring to propagate trust through the chain:
 
 ```typescript
-import { AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentMeshClient } from '@microsoft/agent-governance-sdk';
 
 // Create a governed manager
 const managerClient = AgentMeshClient.create('manager', {
@@ -349,7 +349,7 @@ console.log(result.trustScore);
 ## Full Example: Manager → Researcher → Reader
 
 ```typescript
-import { AgentIdentity, IdentityRegistry, AgentMeshClient } from '@microsoft/agentmesh-sdk';
+import { AgentIdentity, IdentityRegistry, AgentMeshClient } from '@microsoft/agent-governance-sdk';
 
 // ── Step 1: Create the root manager ──
 const manager = AgentIdentity.generate('manager', [
@@ -451,7 +451,7 @@ The `IdentityRegistry` manages all agent identities and supports cascade
 revocation:
 
 ```typescript
-import { IdentityRegistry, AgentIdentity } from '@microsoft/agentmesh-sdk';
+import { IdentityRegistry, AgentIdentity } from '@microsoft/agent-governance-sdk';
 
 const registry = new IdentityRegistry();
 
