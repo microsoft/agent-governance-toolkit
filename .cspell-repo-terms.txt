@@ -1,5 +1,6 @@
 AAIF
 abstractmethod
+Acta
 addinfourl
 aenter
 aexit
@@ -16,6 +17,7 @@ allowlisted
 alnum
 amannn
 Amol
+antigravity
 APIM
 appsettings
 argparse
@@ -26,11 +28,13 @@ atexit
 autobuild
 autouse
 AWSIAM
+axios
 aymenhmaidiwastaken
 backpressure
 baselined
 bursty
 bypassable
+bytecodes
 caas
 caplog
 capsys
@@ -45,6 +49,7 @@ checkpointing
 cibuild
 cicd
 classmethod
+cmdshell
 CMVK
 CODEOWNERS
 codepoint
@@ -58,6 +63,7 @@ cref
 CrewAI
 crun
 CuriousHet
+dalek
 dataclass
 dataclasses
 DataQualityEvidence
@@ -91,6 +97,7 @@ endswith
 ensurepip
 Entra
 esrp
+EUAI
 evilpypi
 exfiltration
 expanduser
@@ -119,6 +126,7 @@ gethostname
 getuid
 GitHub
 gmtime
+gomod
 GOPROXY
 governancepolicy
 gvisor
@@ -166,16 +174,19 @@ linkified
 LlamaIndex
 lockdown
 lockfiles
+lotl
 lstrip
 manylinux
 markdown
 Marp
 masquerade
 mastra
+maxlen
 mgmt
 microkernel
 Microsoft
-antigravity
+mkdocs
+modelcontextprotocol
 Moltbook
 Molty
 monkeypatch
@@ -208,6 +219,7 @@ OpenClaw
 openshell
 ospo
 parseability
+parseable
 pathext
 pathlib
 PCRE
@@ -222,6 +234,7 @@ plotly
 pluggable
 pmcrepo
 popen
+Portkey
 Printf
 Println
 privatelink
@@ -237,6 +250,7 @@ pythonhosted
 PYTHONPATH
 pyupgrade
 pyyaml
+quickstarts
 Ravande
 readouterr
 recognised
@@ -261,6 +275,7 @@ sandboxing
 sandboxprovider
 sarif
 SCAK
+scikit
 scipy
 seccomp
 SemanticKernel
@@ -271,6 +286,7 @@ setdefault
 setext
 setitem
 setuid
+setuptools
 siddique
 SIEM
 skipif
@@ -305,6 +321,7 @@ syscall
 syscalls
 SYSTEMROOT
 textwrap
+thiserror
 timedelta
 tmpfs
 TOCTOU
@@ -333,6 +350,7 @@ usize
 utcfromtimestamp
 utcnow
 uvicorn
+VADP
 venv
 vitest
 vnet
