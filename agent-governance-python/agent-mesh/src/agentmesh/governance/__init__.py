@@ -100,6 +100,11 @@ from .federation import (
     FileFederationStore,
     FederationEngine,
 )
+from .protocol_facets import (
+    FacetRegistry,
+    extract_protocol_facets,
+    default_registry,
+)
 
 __all__ = [
     # High-level wrapper (issue #1372)
@@ -206,5 +211,9 @@ __all__ = [
     "AgentRiskProfile",
     "ClassificationResult",
     "EUAIActRiskClassifier",
+    # Wire protocol facets (issue #2483)
+    "FacetRegistry",
+    "extract_protocol_facets",
+    "default_registry",
 ]
 
