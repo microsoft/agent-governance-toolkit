@@ -61,6 +61,7 @@ dbt
 dearmor
 defi
 delenv
+deletecollection
 demux
 deprioritized
 Deque
@@ -90,6 +91,8 @@ findall
 finditer
 FIPS
 flatbuffer
+FLUSHALL
+FLUSHDB
 fnmatch
 fromisoformat
 fromtimestamp
@@ -106,6 +109,7 @@ gmtime
 GOPROXY
 governancepolicy
 gvisor
+h├⌐llo
 hasattr
 hashlib
 HEALTHCHECK
@@ -116,7 +120,6 @@ htek
 httpx
 hypercall
 Hyperlight
-h├⌐llo
 IATP
 idweb
 imran
@@ -162,6 +165,9 @@ monkeypatching
 MSHV
 msinternal
 mTLS
+myapp
+mynamespace
+mypod
 mypy
 nameof
 Nanvix
@@ -251,6 +257,7 @@ spellchecking
 SPIFFE
 spiffesvid
 splitlines
+SQLGLOT
 startswith
 staticmethod
 stepreceipt
@@ -259,6 +266,7 @@ streamlit
 strftime
 structlog
 subpro
+Subresource
 SVID
 sybil
 syscall
