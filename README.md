@@ -5,8 +5,13 @@
 # Agent Governance Toolkit
 
 <p align="center">
+  <a href="https://microsoft.github.io/agent-governance-toolkit">
+    <img src="https://img.shields.io/badge/%F0%9F%93%96_Full_Documentation-microsoft.github.io%2Fagent--governance--toolkit-0078D4?style=for-the-badge&logoColor=white" alt="Full Documentation" height="40">
+  </a>
+</p>
+
+<p align="center">
   <strong>
-    📖 <a href="https://microsoft.github.io/agent-governance-toolkit">Docs</a> ·
     🚀 <a href="#quick-start">Quick Start</a> ·
     📋 <a href="#specifications">Specifications</a> ·
     📦 <a href="https://pypi.org/project/agent-governance-toolkit/">PyPI</a> ·
