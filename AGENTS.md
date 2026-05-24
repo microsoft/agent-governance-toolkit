@@ -110,3 +110,11 @@ When bumping the monorepo version (e.g. `3.2.0` → `3.2.1`):
 - For bug fixes, prefer a regression test that would fail without the change.
 - For docs-only changes, make sure links, commands, and file paths are still correct.
 - For SDK changes, verify language-specific build and test commands in the scoped instructions.
+
+## PR Hygiene
+
+- Before opening a PR, proactively check the expected repository gates instead of waiting for CI feedback.
+- Use a semantic PR title in lowercase conventional-commit style such as `docs: ...`, `fix: ...`, or `feat: ...`.
+- Ensure commits are DCO-compliant by including a signoff (`git commit -s`).
+- For docs PRs, run `python scripts/docs/check_links.py` and `python scripts/docs/check_frontmatter.py` locally first.
+- Avoid markdown links to external sites that return `403` to automated link checkers. When an external source must be cited but the host blocks bots, prefer plain-text or code-formatted URLs in docs and put clickable links in the PR description instead.

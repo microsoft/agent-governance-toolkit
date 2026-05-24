@@ -183,6 +183,7 @@ nav:
     - Private Endpoints: deployment/private-endpoints.md
   - Security:
     - Threat Model: security/threat-model.md
+    - NSA MCP Alignment: compliance/nsa-mcp-alignment.md
     - OWASP Compliance: security/owasp-compliance.md
     - Security Scanning: security/scanning.md
     - Tenant Isolation: security/tenant-isolation.md
