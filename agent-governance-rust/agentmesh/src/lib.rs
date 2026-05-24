@@ -22,6 +22,7 @@
 
 pub mod audit;
 pub mod control_support;
+pub mod credential_vault;
 pub mod governance_support;
 pub mod identity;
 pub mod identity_support;
