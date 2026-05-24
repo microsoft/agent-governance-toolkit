@@ -80,7 +80,8 @@ def _validate_command(command: str) -> None:
     """Raise if command is not on the allowlist and policy is enforced."""
     if _ALLOW_ALL_COMMANDS:
         return
-    basename = os.path.basename(command).lower()
+    # Handle both Unix and Windows path separators regardless of host OS
+    basename = command.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
     for ext in (".exe", ".cmd", ".bat"):
         if basename.endswith(ext):
             basename = basename[: -len(ext)]
