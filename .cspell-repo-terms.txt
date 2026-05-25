@@ -2,6 +2,7 @@ AAIF
 abstractmethod
 Acta
 addinfourl
+AEAD
 aenter
 aexit
 AgentGovernance
@@ -183,6 +184,7 @@ linkified
 Linq
 LlamaIndex
 lockdown
+lockfile
 lockfiles
 lotl
 lstrip
@@ -281,6 +283,8 @@ rrdatas
 rstrip
 run_results
 runsc
+RustCrypto
+RustSec
 Sandboxed
 sandboxing
 sandboxprovider
