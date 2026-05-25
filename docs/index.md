@@ -11,7 +11,7 @@ hide:
 Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents. One `pip install`, any framework.
 
 ```
-pip install agent-governance-toolkit
+pip install agent-governance-toolkit[full]
 ```
 
 <div class="agt-hero-badges">
@@ -163,7 +163,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 | SDK | Install |
 |-----|---------|
-| 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit` |
+| 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit[full]` |
 | 📘 TypeScript | `npm install @microsoft/agent-governance-sdk` |
 | 🔷 [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
 | 🦀 Rust | `cargo add agent-governance` |

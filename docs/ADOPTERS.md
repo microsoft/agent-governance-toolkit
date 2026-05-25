@@ -24,6 +24,7 @@ momentum and credibility. Submit a PR editing this file — see
 | [chamber](https://github.com/ianphil/chamber) | AI Agent Infrastructure | AGT governance workflows for agent execution policy enforcement | Apr 2026 | [@ianphil](https://github.com/ianphil) |
 | [MythologIQ Labs, LLC](https://github.com/MythologIQ-Labs-LLC) | AI Governance / Agent Security | Evaluating AGT as an isolated upstream governance dependency for [Qortara](https://qortara.com), including LangChain/LangGraph tool-dispatch governance through [`qortara-governance-langchain`](https://github.com/MythologIQ-Labs-LLC/qortara-governance). | May 2026 | [@Knapp-Kevin](https://github.com/Knapp-Kevin) |
 | [GenAI-Gurus](https://github.com/GenAI-Gurus) | AI Governance / EU AI Act Compliance | EU AI Act compliance tooling and resource curation ([awesome-eu-ai-act](https://github.com/GenAI-Gurus/awesome-eu-ai-act)), cross-referencing AGT's compliance checklist | May 2026 | [@carloshvp](https://github.com/carloshvp) |
+| [Provedit](https://provedit.ai) | AI Agent Audit / Compliance Infrastructure | Hosted OTLP receiver for AGT's agent-os OTelLogsBackend (PR #1747) that re-signs each governance decision into a tamper-evident Merkle chain (ADR-0017) and surfaces per-tenant AGT-vs-Provedit agreement dashboards. Walkthrough: https://provedit.ai/agt-otlp.html | May 2026 | [@provedit](https://github.com/provedit) |
 
 ## Academic / Research
 
