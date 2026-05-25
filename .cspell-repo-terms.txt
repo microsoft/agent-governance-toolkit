@@ -37,9 +37,6 @@ bypassable
 bytecodes
 caas
 caplog
-ciphertext
-ENOENT
-Errno
 capsys
 carloshvp
 carryforward
@@ -51,6 +48,7 @@ checkpointed
 checkpointing
 cibuild
 cicd
+ciphertext
 classmethod
 cmdshell
 CMVK
@@ -75,8 +73,8 @@ dateutil
 davidequarracino
 dbt
 dearmor
-deidentified
 defi
+deidentified
 delenv
 deletecollection
 demux
@@ -98,20 +96,19 @@ EigenTrust
 elif
 embedders
 endswith
+ENOENT
 ensurepip
 Entra
+Errno
 esrp
 EUAI
 evilpypi
 exfiltration
 expanduser
 fastapi
-<<<<<<< HEAD
-finalizer
-=======
 fernet
 Fernet
->>>>>>> origin/main
+finalizer
 findall
 finditer
 FIPS
@@ -145,6 +142,7 @@ healthz
 helpdesk
 hexdigest
 HMAC
+HMACSHA
 htek
 HTTPMCP
 httpx
@@ -156,6 +154,7 @@ idweb
 IGNORECASE
 importorskip
 imran
+inheritdoc
 inspectable
 IPFS
 isinstance
@@ -166,11 +165,11 @@ jwkjwks
 kanish
 kata
 kayalopez
-kubeconfigs
 kevinkaylie
 keypair
 keypairs
 keyrings
+kubeconfigs
 kwarg
 kwargs
 Landlock
@@ -181,6 +180,7 @@ lawcontinue
 levelname
 linkcheck
 linkified
+Linq
 LlamaIndex
 lockdown
 lockfiles
@@ -223,15 +223,12 @@ noqa
 nostr
 npmjs
 numpy
-<<<<<<< HEAD
-oxycodone
-=======
 octo
 OpenAI
 OpenClaw
->>>>>>> origin/main
 openshell
 ospo
+oxycodone
 parseability
 parseable
 pathext

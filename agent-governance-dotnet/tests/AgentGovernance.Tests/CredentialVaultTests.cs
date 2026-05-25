@@ -45,9 +45,8 @@ public class CredentialVaultAdminTests
         var v = MakeVault();
         var names = v.ListHandles();
         Assert.Equal(new[] { "db_password", "github_pat" }, names);
-        foreach (var n in names)
+        foreach (var meta in names.Select(n => v.GetMetadata(n)))
         {
-            var meta = v.GetMetadata(n);
             Assert.NotNull(meta);
             Assert.False(meta!.ContainsKey("value"));
             Assert.DoesNotContain("ghp_real", JsonSerializer.Serialize(meta));
@@ -396,7 +395,7 @@ public class CredentialVaultPersistenceTests
     public void RoundTrip_DistinctivePlaintextNotOnDisk() // gitleaks:allow
     {
         var key = CredentialVault.GenerateKey();
-        var tmp = Path.Combine(Path.GetTempPath(), $"vault-{Guid.NewGuid():N}.bin");
+        var tmp = Path.Join(Path.GetTempPath(), $"vault-{Guid.NewGuid():N}.bin");
         try
         {
             var secret = "distinctive rotated fixture not a real key"; // gitleaks:allow

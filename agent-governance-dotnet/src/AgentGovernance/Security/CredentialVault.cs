@@ -196,26 +196,20 @@ public sealed class CredentialVault
         {
             EnsureLoaded();
             var now = NowSeconds();
-            CredentialRecord rec;
-            if (_records.TryGetValue(name!, out var existing))
-            {
-                rec = existing with
+            var rec = _records.TryGetValue(name!, out var existing)
+                ? existing with
                 {
                     Value = value,
                     Version = existing.Version + 1,
                     RotatedAt = now,
-                };
-            }
-            else
-            {
-                rec = new CredentialRecord(
+                }
+                : new CredentialRecord(
                     Name: name!,
                     Value: value,
                     CredType: credType,
                     Version: 1,
                     CreatedAt: now,
                     RotatedAt: null);
-            }
             _records[name!] = rec;
             Flush();
         }
@@ -713,20 +707,19 @@ public static class CredentialAudit
     public static string Digest(IEnumerable<VaultAuditEvent> events, byte[] key)
     {
         using var hmac = new HMACSHA256(key);
-        var buf = new MemoryStream();
-        foreach (var ev in events)
+        using var buf = new MemoryStream();
+        foreach (var json in events.Select(ev => JsonSerializer.SerializeToUtf8Bytes(new
         {
-            var json = JsonSerializer.SerializeToUtf8Bytes(new
-            {
-                timestamp = ev.Timestamp,
-                agentDid = ev.AgentDid,
-                handleName = ev.HandleName,
-                targetService = ev.TargetService,
-                actionClass = ev.ActionClass,
-                decision = ev.Decision.ToString().ToLowerInvariant(),
-                policyVersion = ev.PolicyVersion,
-                reason = ev.Reason,
-            });
+            timestamp = ev.Timestamp,
+            agentDid = ev.AgentDid,
+            handleName = ev.HandleName,
+            targetService = ev.TargetService,
+            actionClass = ev.ActionClass,
+            decision = ev.Decision.ToString().ToLowerInvariant(),
+            policyVersion = ev.PolicyVersion,
+            reason = ev.Reason,
+        })))
+        {
             buf.Write(json, 0, json.Length);
             buf.WriteByte(0x1f);
         }
