@@ -87,7 +87,7 @@ Cross-references every rule in the ASI starter policy packs
 
 **Legend:**
 - ✅ Direct policy rule(s) in this starter pack mitigate this risk
-- 🔗 Covered by the AGT runtime stack — see [OWASP-COMPLIANCE.md](OWASP-COMPLIANCE.md)
+- 🔗 Covered by the AGT runtime stack — see [OWASP ASI coverage](owasp-agentic-top10-architecture.md)
 
 > ASI-04, ASI-07, ASI-09, and ASI-10 are primarily mitigated at the infrastructure
 > layer (AgentMesh IATP, approval workflows, execution ring isolation). Policy-level
@@ -105,7 +105,7 @@ Cross-references every rule in the ASI starter policy packs
 | `general-saas` | `deny` | 16,384 | 50 | 0.80 |
 
 All packs implement **deny-all by default**, enforcing the
-[Least Agency principle](OWASP-COMPLIANCE.md#cross-cutting-principle-least-agency).
+[Least Agency principle](owasp-agentic-top10-architecture.md).
 
 ---
 
@@ -139,4 +139,4 @@ These packs extend existing patterns from this repository:
 
 *Last updated: May 2026*
 
-**[⬅ Back to docs index](index.md)** · **[🛡️ Full OWASP Stack Coverage](OWASP-COMPLIANCE.md)**
+**[⬅ Back to Compliance index](index.md)** · **[🛡️ Full OWASP ASI Coverage](owasp-agentic-top10-architecture.md)**

@@ -150,13 +150,31 @@ nav:
   - Security:
     - Overview: security/index.md
     - Threat Model: security/threat-model.md
-    - NSA MCP Alignment: compliance/nsa-mcp-alignment.md
-    - OWASP Compliance: security/owasp-compliance.md
     - Security Scanning: security/scanning.md
     - Tenant Isolation: security/tenant-isolation.md
     - Trust Score Calibration: security/trust-score-calibration.md
     - Audits: security/audits/README.md
     - Reporting a Vulnerability: security/disclosure.md
+  - Compliance:
+    - Overview: compliance/index.md
+    - OWASP ASI 2026 (Reference Architecture): compliance/owasp-agentic-top10-architecture.md
+    - OWASP ASI Policy-Rule Mapping: compliance/owasp-asi-policy-mapping.md
+    - OWASP LLM Top 10: compliance/owasp-llm-top10-mapping.md
+    - OWASP MCP Top 10: compliance/mcp-owasp-top10-mapping.md
+    - NSA MCP Alignment: compliance/nsa-mcp-alignment.md
+    - NIST AI RMF Alignment: compliance/nist-ai-rmf-alignment.md
+    - NIST RFI 2026-00206: compliance/nist-rfi-2026-00206.md
+    - EU AI Act Checklist: compliance/eu-ai-act-checklist.md
+    - SOC 2 Mapping: compliance/soc2-mapping.md
+    - ISO/IEC 42001 Mapping: compliance/iso-42001-mapping.md
+    - CIS Controls v8.1 Mapping: compliance/cis-controls-v81-mapping.md
+    - CSA Agentic Trust Framework: compliance/atf-conformance-assessment.md
+    - FRIA Template: compliance/fria-template.md
+    - Impact Assessment Template: compliance/impact-assessment-template.md
+    - Incident Response Workflow: compliance/incident-response-workflow.md
+    - Post-Market Monitoring: compliance/post-market-monitoring.md
+    - Record Retention Policy: compliance/record-retention-policy.md
+    - Data Provenance Model: compliance/data-provenance-model.md
   - Specifications:
     - "Agent OS Policy Engine": specs/AGENT-OS-POLICY-ENGINE-1.0.md
     - "AgentMesh Identity & Trust": specs/AGENTMESH-IDENTITY-TRUST-1.0.md

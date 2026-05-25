@@ -5,7 +5,7 @@
 Technical Q&A for customers, partners, and evaluators of the Agent Governance
 Toolkit.
 
-> **See also:** [Quick Start](quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](OWASP-COMPLIANCE.md)
+> **See also:** [Quick Start](quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](../docs/compliance/owasp-agentic-top10-architecture.md)
 
 ---
 

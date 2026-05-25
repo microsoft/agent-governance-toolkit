@@ -19,7 +19,7 @@
 pip install agent-governance-toolkit[full]
 ```
 
-[Architecture](#architecture) • [Quick Start](#quick-start) • [Components](#components) • [Why Unified?](#why-a-unified-governance-stack) • [Ecosystem](#the-agent-governance-ecosystem) • [OWASP Compliance](docs/OWASP-COMPLIANCE.md) • [Traction](docs/TRACTION.md)
+[Architecture](#architecture) • [Quick Start](#quick-start) • [Components](#components) • [Why Unified?](#why-a-unified-governance-stack) • [Ecosystem](#the-agent-governance-ecosystem) • [OWASP Compliance](../../docs/compliance/owasp-agentic-top10-architecture.md) • [Traction](docs/TRACTION.md)
 
 </div>
 
@@ -238,7 +238,7 @@ The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for 
 | Human-Agent Trust Exploitation | ✅ | Agent OS — Approval Workflows |
 | Rogue Agents | ✅ | Agent Runtime — Kill Switch |
 
-**[→ Full OWASP compliance mapping with code examples](docs/OWASP-COMPLIANCE.md)**
+**[→ Full OWASP compliance mapping with code examples](../../docs/compliance/owasp-agentic-top10-architecture.md)**
 
 ---
 

@@ -11,7 +11,7 @@
 [![.NET 8.0+](https://img.shields.io/badge/.NET_8.0+-NuGet-blue?logo=dotnet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](../../agent-governance-rust/agentmesh/)
 [![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](../../agent-governance-golang/)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/OWASP-COMPLIANCE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/compliance/owasp-agentic-top10-architecture.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
@@ -74,7 +74,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **[教程](../../docs/tutorials/)** — 涵盖策略、身份、集成、合规、SRE 与沙箱的分步指南
 - **[Azure 部署](../../docs/deployment/README.md)** — 支持 AKS, Azure AI Foundry, Container Apps, OpenClaw 边车
 - **[NVIDIA OpenShell 集成](../../docs/integrations/openshell.md)** — 将沙箱隔离与治理智能相结合
-- **[OWASP 合规](../../docs/OWASP-COMPLIANCE.md)** — 完整覆盖 ASI-01 至 ASI-10 的映射
+- **[OWASP 合规](../../docs/compliance/owasp-agentic-top10-architecture.md)** — 完整覆盖 ASI-01 至 ASI-10 的映射
 - **[威胁模型](../../docs/security/threat-model.md)** — 包含信任边界、攻击面与 STRIDE 分析
 - **[架构](../../docs/ARCHITECTURE.md)** — 系统设计、安全模型与信任评分
 - **[架构决策](../../docs/adr/README.md)** — 关键身份、运行时与策略选择的 ADR 记录
@@ -101,7 +101,7 @@ pip install agentmesh-lightning        # 强化学习训练治理
 - **12+ 框架集成**: 支持 Microsoft Agent Framework, LangChain, CrewAI, AutoGen, Dify, LlamaIndex, OpenAI Agents, Google ADK 等
   - [框架快速入门](../../examples/quickstart/) | [集成方案](../../docs/proposals/)
 - **完整 OWASP 覆盖**: 针对 Agentic Top 10 风险实现 10/10 覆盖，每个 ASI 类别均有专属控制措施
-  - [OWASP 合规](../../docs/OWASP-COMPLIANCE.md) | [竞品对比](../../docs/COMPARISON.md)
+  - [OWASP 合规](../../docs/compliance/owasp-agentic-top10-architecture.md) | [竞品对比](../../docs/COMPARISON.md)
 - **GitHub Actions 支持 CI/CD**: 为 PR 工作流提供自动化安全扫描与治理证明
   - [安全扫描 Action](../../action/security-scan/) | [治理证明 Action](../../action/governance-attestation/)
 
@@ -317,7 +317,7 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | 人机信任缺失 | ASI-09 | ✅ 完整审计轨迹 + 飞行记录器 |
 | 恶意代理 | ASI-10 | ✅ 终止开关 + 权限环隔离 + 行为异常检测 |
 
-完整映射包含实现细节和测试证据: **[OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md)**
+完整映射包含实现细节和测试证据: **[OWASP-COMPLIANCE.md](../../docs/compliance/owasp-agentic-top10-architecture.md)**
 
 ### 监管对齐
 

@@ -4,8 +4,8 @@ This document summarizes the security threat model for the Agent Governance
 Toolkit (AGT) using a STRIDE-oriented view of the main trust boundaries in the
 system.
 
-For the current OWASP Agentic Top 10 mapping across all 10 categories, see
-[`agent-governance-python/agent-compliance/docs/OWASP-COMPLIANCE.md`](../agent-governance-python/agent-compliance/docs/OWASP-COMPLIANCE.md).
+For the current OWASP Agentic Top 10 mapping across all ASI risk categories, see
+[`docs/compliance/owasp-agentic-top10-architecture.md`](../compliance/owasp-agentic-top10-architecture.md).
 
 ## Scope
 

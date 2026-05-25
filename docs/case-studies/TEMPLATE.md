@@ -497,7 +497,7 @@ For each challenge, include:
 
 **Additional Resources:**
 - Review sample hypothetical case studies in `docs/case-studies/` for reference. (Case studies are tied to specific AGT releases and component names may evolve)
-- Consult `docs/ARCHITECTURE.md` and `docs/OWASP-COMPLIANCE.md` for technical details
+- Consult `docs/ARCHITECTURE.md` and `../../docs/compliance/owasp-agentic-top10-architecture.md` for technical details
 - Ask questions in GitHub Discussions
 
 ## Documentation Maintenance Guidance

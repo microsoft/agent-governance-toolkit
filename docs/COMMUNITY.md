@@ -68,7 +68,7 @@ AGT maps to established security and compliance frameworks:
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic Top 10](docs/OWASP-COMPLIANCE.md) | 10/10 risks covered |
+| [OWASP Agentic Top 10](../docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories covered |
 | [NIST AI RMF](https://www.nist.gov/artificial-intelligence) | Govern, Map, Measure, Manage functions |
 | [EU AI Act](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | High-risk system compliance controls |
 | [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) | 100% passing |

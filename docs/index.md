@@ -222,7 +222,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic AI Top 10](security/owasp-compliance.md) | All 10 risks covered with deterministic controls |
+| [OWASP Agentic AI Top 10](../docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories mapped with deterministic controls |
 | [NIST AI RMF 1.0](reference/nist-rfi-mapping.md) | Full GOVERN, MAP, MEASURE, MANAGE alignment |
 | [EU AI Act](compliance/) | Compliance mapping with automated evidence |
 | [SOC 2](compliance/soc2-mapping.md) | Control mapping with audit trail export |

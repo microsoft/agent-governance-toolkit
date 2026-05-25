@@ -107,4 +107,4 @@ The GovernancePlugin covers 10/10 OWASP Agentic Top 10 risks through ADK's nativ
 
 - [Google ADK](https://github.com/google/adk-python)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+- [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/compliance/owasp-agentic-top10-architecture.md)

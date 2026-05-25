@@ -13,7 +13,7 @@
 [![.NET 8.0+](https://img.shields.io/badge/.NET_8.0+-NuGet-blue?logo=dotnet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![Rust](https://img.shields.io/badge/Rust-crates.io-orange?logo=rust)](../../agent-governance-rust/agentmesh/)
 [![Go](https://img.shields.io/badge/Go-module-00ADD8?logo=go)](../../agent-governance-golang/)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/OWASP-COMPLIANCE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/compliance/owasp-agentic-top10-architecture.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/percentage/12085?label=OpenSSF%20Best%20Practices&logo=opensourcesecurity)](https://www.bestpractices.dev/projects/12085)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
@@ -92,7 +92,7 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 - **[チュートリアル](../../docs/tutorials/)** — ポリシー、ID、統合、コンプライアンス、SRE、サンドボックスのステップバイステップガイド
 - **[Azure デプロイ](../../docs/deployment/README.md)** — AKS、Azure AI Foundry、Container Apps、OpenClaw サイドカー
 - **[NVIDIA OpenShell 統合](../../docs/integrations/openshell.md)** — サンドボックス分離とガバナンスインテリジェンスの統合
-- **[OWASP コンプライアンス](../../docs/OWASP-COMPLIANCE.md)** — ASI-01 から ASI-10 の完全マッピング
+- **[OWASP コンプライアンス](../../docs/compliance/owasp-agentic-top10-architecture.md)** — ASI-01 から ASI-10 の完全マッピング
 - **[脅威モデル](../../docs/security/threat-model.md)** — 信頼境界、攻撃面、STRIDE 分析
 - **[アーキテクチャ](../../docs/ARCHITECTURE.md)** — システム設計、セキュリティモデル、トラストスコアリング
 - **[アーキテクチャ決定記録](../../docs/adr/README.md)** — ID、ランタイム、ポリシーに関する主要な ADR ログ
@@ -119,7 +119,7 @@ pip install agentmesh-lightning        # 強化学習トレーニングガバナ
 - **12 以上のフレームワーク統合**: Microsoft Agent Framework、LangChain、CrewAI、AutoGen、Dify、LlamaIndex、OpenAI Agents、Google ADK など
   - [フレームワーククイックスタート](../../examples/quickstart/) | [統合提案](../../docs/proposals/)
 - **完全な OWASP カバレッジ**: Agentic Top 10 リスクの 10/10 を対応済み、各 ASI カテゴリに専用のコントロールを提供
-  - [OWASP コンプライアンス](../../docs/OWASP-COMPLIANCE.md) | [競合比較](../../docs/COMPARISON.md)
+  - [OWASP コンプライアンス](../../docs/compliance/owasp-agentic-top10-architecture.md) | [競合比較](../../docs/COMPARISON.md)
 - **CI/CD 向け GitHub Actions**: PR ワークフローのための自動セキュリティスキャンとガバナンスアテステーション
   - [セキュリティスキャン Action](../../action/security-scan/) | [ガバナンスアテステーション Action](../../action/governance-attestation/)
 
@@ -336,7 +336,7 @@ decision = engine.evaluate("did:mesh:agent-1", {"tool_name": "analyze"})
 | 人間-エージェント間の信頼不足 | ASI-09 | ✅ 完全な監査証跡 + フライトレコーダー |
 | 不正エージェント | ASI-10 | ✅ キルスイッチ + リング分離 + 行動異常検知 |
 
-実装の詳細とテストエビデンスを含む完全なマッピング: **[OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md)**
+実装の詳細とテストエビデンスを含む完全なマッピング: **[OWASP-COMPLIANCE.md](../../docs/compliance/owasp-agentic-top10-architecture.md)**
 
 ### 規制への適合
 
