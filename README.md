@@ -56,7 +56,7 @@ Prompt-based safety ("please follow the rules") has a [26.67% policy violation r
 **Prerequisites:** Python 3.10+
 
 ```bash
-pip install agent-governance-toolkit
+pip install agent-governance-toolkit[full]
 ```
 
 Govern any tool function in two lines:

@@ -1,6 +1,6 @@
 # Tutorial 36: 2-Line Governance with govern()
 
-> **Time**: 10 minutes · **Level**: Beginner · **Prerequisites**: `pip install agent-governance-toolkit`
+> **Time**: 10 minutes · **Level**: Beginner · **Prerequisites**: `pip install agent-governance-toolkit[full]`
 
 ## What You'll Build
 

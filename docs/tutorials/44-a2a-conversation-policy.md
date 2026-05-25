@@ -16,7 +16,7 @@ A multi-agent system where:
 ## Prerequisites
 
 ```bash
-pip install agent-governance-toolkit
+pip install agent-governance-toolkit[full]
 ```
 
 ## Step 1 — Define A2A Governance Policy

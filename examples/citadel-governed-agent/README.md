@@ -43,7 +43,7 @@ governance) and **AGT** (agent-level governance) working together.
 ## Prerequisites
 
 ```bash
-pip install agent-governance-toolkit
+pip install agent-governance-toolkit[full]
 ```
 
 For Azure integration (optional, not needed for local mock mode):
