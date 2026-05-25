@@ -515,6 +515,39 @@ class TestAuditAndStats:
         assert event.agent_name == "bot"
         assert event.details["tool"] == "calc"
         assert event.timestamp > 0
+        assert event.skill_name is None
+        assert event.skill_origin is None
+        assert event.provenance_source_trust is None
+        assert event.context_hash_before is not None
+        assert event.context_hash_after is None
+
+    def test_skill_metadata_extracted_into_audit_event(self):
+        k = GoogleADKKernel()
+        ctx = FakeToolContext(tool_name="calc", tool_args={"x": 1}, agent_name="bot")
+        setattr(ctx, "skill_name", "finance_skill")
+        setattr(ctx, "skill_origin", "local_repo")
+
+        k.before_tool_callback(ctx)
+        event = k.get_audit_log()[0]
+
+        assert event.skill_name == "finance_skill"
+        assert event.skill_origin == "local_repo"
+        assert event.provenance_source_trust == "trusted"
+
+    def test_spoofed_skill_metadata_in_tool_args_is_ignored(self):
+        k = GoogleADKKernel()
+        ctx = FakeToolContext(
+            tool_name="calc",
+            tool_args={"skill_name": "spoofed", "skill_origin": "attacker"},
+            agent_name="bot",
+        )
+
+        k.before_tool_callback(ctx)
+        event = k.get_audit_log()[0]
+
+        assert event.skill_name is None
+        assert event.skill_origin is None
+        assert event.provenance_source_trust is None
 
     def test_stats(self):
         k = GoogleADKKernel(max_tool_calls=10, blocked_tools=["shell"])
