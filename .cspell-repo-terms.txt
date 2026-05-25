@@ -102,12 +102,14 @@ ENOENT
 ensurepip
 Entra
 Errno
+Errorf
 esrp
 EUAI
 evilpypi
 exfiltration
 expanduser
 fastapi
+Fatalf
 Fernet
 fernet
 finalizer
@@ -227,6 +229,7 @@ nostr
 npmjs
 numpy
 octo
+omitempty
 OpenAI
 OpenClaw
 openshell
@@ -322,12 +325,13 @@ stacklevel
 startswith
 staticmethod
 stepreceipt
-streamable
 Streamable
+streamable
 streamablehttp
 streamlit
 strftime
 structlog
+Submatch
 subparsers
 subpro
 Subresource
@@ -350,6 +354,7 @@ uncallable
 unconfigured
 Ungated
 uninspectable
+Unmarshal
 Unregisters
 unrevocation
 unrevoke
