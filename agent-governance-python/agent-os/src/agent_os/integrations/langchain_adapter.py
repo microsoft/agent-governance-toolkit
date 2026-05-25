@@ -821,18 +821,11 @@ class GovernanceMiddleware(_MiddlewareBase):
             tool_args,
         )
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self._kernel.trusted_skill_metadata_source(
-                    skill_name=getattr(request, "skill_name", None),
-                    skill_origin=getattr(request, "skill_origin", None),
-                ),
-                self._kernel.trusted_skill_metadata_from_mapping(
-                    getattr(request, "skill_metadata", None)
-                ),
-            )
-            if source is not None
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(request),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(request, "skill_metadata", None)
+            ),
         )
 
         skill_fields = self._kernel.build_skill_audit_fields(
@@ -973,18 +966,11 @@ class GovernanceMiddleware(_MiddlewareBase):
             len(input_text),
         )
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self._kernel.trusted_skill_metadata_source(
-                    skill_name=getattr(request, "skill_name", None),
-                    skill_origin=getattr(request, "skill_origin", None),
-                ),
-                self._kernel.trusted_skill_metadata_from_mapping(
-                    getattr(request, "skill_metadata", None)
-                ),
-            )
-            if source is not None
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(request),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(request, "skill_metadata", None)
+            ),
         )
 
         self._kernel.emit_skill_audit_event(

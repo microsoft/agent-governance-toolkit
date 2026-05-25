@@ -467,16 +467,7 @@ class GoogleADKKernel(BaseIntegration):
         tool_args = getattr(tool_context, "tool_args", kwargs.get("tool_args", {}))
         agent_name = getattr(tool_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self.trusted_skill_metadata_source(
-                    skill_name=getattr(tool_context, "skill_name", None),
-                    skill_origin=getattr(tool_context, "skill_origin", None),
-                ),
-            )
-            if source is not None
-        )
+        trusted_skill_sources = self.trusted_sources_from_attrs(tool_context)
 
         skill_fields = self.build_skill_audit_fields(
             trusted_sources=trusted_skill_sources,
@@ -579,16 +570,7 @@ class GoogleADKKernel(BaseIntegration):
         tool_name = getattr(tool_context, "tool_name", kwargs.get("tool_name", "unknown"))
         agent_name = getattr(tool_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self.trusted_skill_metadata_source(
-                    skill_name=getattr(tool_context, "skill_name", None),
-                    skill_origin=getattr(tool_context, "skill_origin", None),
-                ),
-            )
-            if source is not None
-        )
+        trusted_skill_sources = self.trusted_sources_from_attrs(tool_context)
 
         skill_fields = self.build_skill_audit_fields(
             trusted_sources=trusted_skill_sources,
@@ -629,16 +611,7 @@ class GoogleADKKernel(BaseIntegration):
         """
         agent_name = getattr(callback_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self.trusted_skill_metadata_source(
-                    skill_name=getattr(callback_context, "skill_name", None),
-                    skill_origin=getattr(callback_context, "skill_origin", None),
-                ),
-            )
-            if source is not None
-        )
+        trusted_skill_sources = self.trusted_sources_from_attrs(callback_context)
 
         skill_fields = self.build_skill_audit_fields(
             trusted_sources=trusted_skill_sources,
@@ -680,16 +653,7 @@ class GoogleADKKernel(BaseIntegration):
         """
         agent_name = getattr(callback_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self.trusted_skill_metadata_source(
-                    skill_name=getattr(callback_context, "skill_name", None),
-                    skill_origin=getattr(callback_context, "skill_origin", None),
-                ),
-            )
-            if source is not None
-        )
+        trusted_skill_sources = self.trusted_sources_from_attrs(callback_context)
 
         skill_fields = self.build_skill_audit_fields(
             trusted_sources=trusted_skill_sources,

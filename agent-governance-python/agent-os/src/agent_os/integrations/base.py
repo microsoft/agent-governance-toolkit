@@ -1192,6 +1192,28 @@ class BaseIntegration(ABC):
         )
 
     @staticmethod
+    def trusted_sources(
+        *sources: TrustedSkillMetadataSource | None,
+    ) -> tuple[TrustedSkillMetadataSource, ...]:
+        """Return only non-null trusted metadata sources."""
+        return tuple(source for source in sources if source is not None)
+
+    @staticmethod
+    def trusted_sources_from_attrs(
+        *objs: Any,
+    ) -> tuple[TrustedSkillMetadataSource, ...]:
+        """Extract trusted metadata sources from objects exposing skill attrs."""
+        return BaseIntegration.trusted_sources(
+            *(
+                BaseIntegration.trusted_skill_metadata_source(
+                    skill_name=getattr(obj, "skill_name", None),
+                    skill_origin=getattr(obj, "skill_origin", None),
+                )
+                for obj in objs
+            )
+        )
+
+    @staticmethod
     def extract_skill_metadata(
         *,
         trusted_sources: tuple[TrustedSkillMetadataSource, ...] = (),

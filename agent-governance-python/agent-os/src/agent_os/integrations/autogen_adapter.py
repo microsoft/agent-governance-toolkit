@@ -158,16 +158,7 @@ class GovernanceInterventionHandler:
             tool_name = getattr(message, "name", "unknown")
             tool_args = getattr(message, "arguments", "")
 
-            trusted_skill_sources = tuple(
-                source
-                for source in (
-                    kernel.trusted_skill_metadata_source(
-                        skill_name=getattr(message, "skill_name", None),
-                        skill_origin=getattr(message, "skill_origin", None),
-                    ),
-                )
-                if source is not None
-            )
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(message)
 
             skill_fields = kernel.build_skill_audit_fields(
                 trusted_sources=trusted_skill_sources,
