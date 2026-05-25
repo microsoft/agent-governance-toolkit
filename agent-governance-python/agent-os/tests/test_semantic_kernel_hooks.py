@@ -190,7 +190,13 @@ class TestAuditTrail:
             governance_filter(ctx, next_fn)
         )
         assert len(governance_filter.context.functions_invoked) == 1
-        assert governance_filter.context.functions_invoked[0]["function"] == "MyPlugin.safe_func"
+        invocation = governance_filter.context.functions_invoked[0]
+        assert invocation["function"] == "MyPlugin.safe_func"
+        assert invocation["skill_name"] == "MyPlugin"
+        assert invocation["skill_origin"] == "semantic_kernel_plugin"
+        assert invocation["provenance_source_trust"] == "trusted"
+        assert invocation["context_hash_before"] is not None
+        assert invocation["context_hash_after"] is None
 
 
 # ── Deprecation warnings ─────────────────────────────────────────

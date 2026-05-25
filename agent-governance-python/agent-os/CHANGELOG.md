@@ -104,6 +104,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.
+- **Skill-aware audit trail (foundation)**: shared, framework-agnostic audit
+  helpers now emit normalized `skill_name` / `skill_origin` metadata with
+  nullable `context_hash_before` / `context_hash_after` and
+  `provenance_source_trust`. Skill provenance is populated only from explicit
+  framework-owned metadata surfaces, and context hashes are generated only
+  from canonically serializable payloads (non-canonical values safely return
+  `null`). Native adapter hooks progressively adopt these additive fields
+  without breaking existing payloads.
 - **Google ADK `GovernancePlugin`**: Runner-scoped governance via ADK's
   `BasePlugin` with all 12 lifecycle hooks (before/after run, model, tool,
   agent, plus event and user-message callbacks).
