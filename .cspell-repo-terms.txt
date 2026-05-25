@@ -37,6 +37,9 @@ bypassable
 bytecodes
 caas
 caplog
+ciphertext
+ENOENT
+Errno
 capsys
 carloshvp
 carryforward
