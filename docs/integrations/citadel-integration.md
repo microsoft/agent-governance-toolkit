@@ -212,7 +212,7 @@ for the fragment XML, sample product policy, and deployment instructions.
 ## Getting Started
 
 1. **Deploy Citadel Governance Hub**: Follow the [Citadel quickstart](https://github.com/Azure-Samples/ai-hub-gateway-solution-accelerator/tree/citadel-v1)
-2. **Install AGT**: `pip install agent-governance-toolkit`
+2. **Install AGT**: `pip install agent-governance-toolkit[full]`
 3. **Configure the exporter**: Set `CITADEL_EVENTHUB_CONNECTION_STRING` and `CITADEL_APPINSIGHTS_CONNECTION_STRING`
 4. **Deploy the APIM fragment**: See [`apim-policies/README.md`](../../examples/citadel-governed-agent/apim-policies/README.md)
 5. **See the example**: [`examples/citadel-governed-agent/`](../../examples/citadel-governed-agent/)
