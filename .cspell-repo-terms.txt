@@ -51,6 +51,7 @@ cibuild
 cicd
 ciphertext
 classmethod
+clippy
 cmdshell
 CMVK
 CODEOWNERS
@@ -107,8 +108,8 @@ evilpypi
 exfiltration
 expanduser
 fastapi
-fernet
 Fernet
+fernet
 finalizer
 findall
 finditer
