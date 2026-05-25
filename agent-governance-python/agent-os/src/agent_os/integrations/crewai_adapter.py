@@ -201,16 +201,7 @@ class GovernanceHooks:
                 name, tool_name, agent_name,
             )
 
-            trusted_skill_sources = tuple(
-                source
-                for source in (
-                    kernel.trusted_skill_metadata_source(
-                        skill_name=getattr(context, "skill_name", None),
-                        skill_origin=getattr(context, "skill_origin", None),
-                    ),
-                )
-                if source is not None
-            )
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
 
             kernel.emit_skill_audit_event(
                 GovernanceEventType.POLICY_CHECK,
@@ -315,16 +306,7 @@ class GovernanceHooks:
             tool_name = getattr(context, "tool_name", "unknown")
             tool_result = getattr(context, "tool_result", None)
 
-            trusted_skill_sources = tuple(
-                source
-                for source in (
-                    kernel.trusted_skill_metadata_source(
-                        skill_name=getattr(context, "skill_name", None),
-                        skill_origin=getattr(context, "skill_origin", None),
-                    ),
-                )
-                if source is not None
-            )
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
 
             if tool_result and isinstance(tool_result, str):
                 kernel.emit_skill_audit_event(
@@ -419,16 +401,7 @@ class GovernanceHooks:
                 for m in messages
             ) if messages else ""
 
-            trusted_skill_sources = tuple(
-                source
-                for source in (
-                    kernel.trusted_skill_metadata_source(
-                        skill_name=getattr(context, "skill_name", None),
-                        skill_origin=getattr(context, "skill_origin", None),
-                    ),
-                )
-                if source is not None
-            )
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
 
             if combined_input.strip():
                 kernel.emit_skill_audit_event(
@@ -488,16 +461,7 @@ class GovernanceHooks:
             """
             response = getattr(context, "response", None)
 
-            trusted_skill_sources = tuple(
-                source
-                for source in (
-                    kernel.trusted_skill_metadata_source(
-                        skill_name=getattr(context, "skill_name", None),
-                        skill_origin=getattr(context, "skill_origin", None),
-                    ),
-                )
-                if source is not None
-            )
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
 
             if response and isinstance(response, str) and response.strip():
                 kernel.emit_skill_audit_event(

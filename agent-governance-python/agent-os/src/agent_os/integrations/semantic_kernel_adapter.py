@@ -899,15 +899,11 @@ class GovernanceFunctionFilter:
         func_name = getattr(func, "name", None) or "unknown"
         plugin_name = getattr(func, "plugin_name", None) or ""
         full_name = f"{plugin_name}.{func_name}" if plugin_name else func_name
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self._wrapper.trusted_skill_metadata_source(
-                    skill_name=plugin_name or getattr(func, "skill_name", None),
-                    skill_origin=getattr(func, "skill_origin", None),
-                ),
+        trusted_skill_sources = self._wrapper.trusted_sources(
+            self._wrapper.trusted_skill_metadata_source(
+                skill_name=plugin_name or getattr(func, "skill_name", None),
+                skill_origin=getattr(func, "skill_origin", None),
             )
-            if source is not None
         )
         skill_fields = self._wrapper.build_skill_audit_fields(
             trusted_sources=trusted_skill_sources,

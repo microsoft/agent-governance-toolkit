@@ -730,18 +730,11 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
                     f"Agent '{agent_name}' blocked by governance: {reason}"
                 )
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self._kernel.trusted_skill_metadata_source(
-                    skill_name=getattr(agent, "skill_name", None),
-                    skill_origin=getattr(agent, "skill_origin", None),
-                ),
-                self._kernel.trusted_skill_metadata_from_mapping(
-                    getattr(agent, "metadata", None)
-                ),
-            )
-            if source is not None
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(agent),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(agent, "metadata", None)
+            ),
         )
 
         self._kernel.emit_skill_audit_event(
@@ -781,18 +774,11 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         """
         agent_name = self._extract_agent_name(agent)
         ctx = self._kernel._get_or_create_context(agent_name)
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self._kernel.trusted_skill_metadata_source(
-                    skill_name=getattr(agent, "skill_name", None),
-                    skill_origin=getattr(agent, "skill_origin", None),
-                ),
-                self._kernel.trusted_skill_metadata_from_mapping(
-                    getattr(agent, "metadata", None)
-                ),
-            )
-            if source is not None
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(agent),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(agent, "metadata", None)
+            ),
         )
 
         # Post-check output
@@ -871,18 +857,11 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         if hasattr(tool, "args"):
             tool_args = dict(tool.args) if tool.args else {}
 
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self._kernel.trusted_skill_metadata_source(
-                    skill_name=getattr(tool, "skill_name", None),
-                    skill_origin=getattr(tool, "skill_origin", None),
-                ),
-                self._kernel.trusted_skill_metadata_from_mapping(
-                    getattr(tool, "metadata", None)
-                ),
-            )
-            if source is not None
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(tool),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(tool, "metadata", None)
+            ),
         )
 
         self._kernel.emit_skill_audit_event(
@@ -944,18 +923,11 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         """
         agent_name = self._extract_agent_name(agent)
         tool_name = getattr(tool, "name", "") or getattr(tool, "__name__", str(tool))
-        trusted_skill_sources = tuple(
-            source
-            for source in (
-                self._kernel.trusted_skill_metadata_source(
-                    skill_name=getattr(tool, "skill_name", None),
-                    skill_origin=getattr(tool, "skill_origin", None),
-                ),
-                self._kernel.trusted_skill_metadata_from_mapping(
-                    getattr(tool, "metadata", None)
-                ),
-            )
-            if source is not None
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(tool),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(tool, "metadata", None)
+            ),
         )
 
         # Content filter on output

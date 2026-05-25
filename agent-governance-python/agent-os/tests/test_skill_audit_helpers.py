@@ -127,3 +127,33 @@ def test_emit_skill_audit_event_is_json_serializable() -> None:
 
     # Backward-compatible serialization path: nullable additive fields.
     json.dumps(payload)
+
+
+def test_trusted_sources_from_attrs_filters_missing_metadata() -> None:
+    integration = _ConcreteIntegration()
+
+    class _WithAttrs:
+        skill_name = "planner"
+        skill_origin = "catalog"
+
+    class _WithoutAttrs:
+        pass
+
+    trusted_sources = integration.trusted_sources_from_attrs(
+        _WithAttrs(),
+        _WithoutAttrs(),
+    )
+
+    assert len(trusted_sources) == 1
+    assert trusted_sources[0].skill_name == "planner"
+    assert trusted_sources[0].skill_origin == "catalog"
+
+
+def test_trusted_sources_filters_none_values() -> None:
+    integration = _ConcreteIntegration()
+    trusted = integration.trusted_skill_metadata_source(skill_name="router")
+
+    trusted_sources = integration.trusted_sources(None, trusted)
+
+    assert trusted is not None
+    assert trusted_sources == (trusted,)
