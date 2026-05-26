@@ -367,10 +367,13 @@ func detectCTEInnerVerb(query string) string {
 	var quote rune
 	var token strings.Builder
 	sawWith := false
-	for i := 0; i <= len(query); i++ {
+	// Iterate over runes (not bytes) so multi-byte UTF-8 sequences in
+	// identifiers or string literals can't be misinterpreted mid-rune.
+	runes := []rune(query)
+	for i := 0; i <= len(runes); i++ {
 		var c rune
-		if i < len(query) {
-			c = rune(query[i])
+		if i < len(runes) {
+			c = runes[i]
 		} else {
 			c = ' '
 		}

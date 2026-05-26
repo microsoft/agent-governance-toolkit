@@ -601,7 +601,7 @@ func TestSQL_CreateOrReplaceTarget(t *testing.T) {
 }
 
 func TestExampleYAML_LoadsCleanly(t *testing.T) {
-	path := "../../examples/policy-yaml/wire-protocol-rules.yaml"
+	path := "../../examples/wire-protocol-rules.yaml"
 	engine := NewPolicyEngine(nil)
 	if err := engine.LoadFromYAML(path); err != nil {
 		t.Fatalf("LoadFromYAML failed: %v", err)

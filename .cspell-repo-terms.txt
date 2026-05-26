@@ -386,3 +386,8 @@ workflow
 workflows
 xfail
 xunit
+crds
+Dedup
+Fprintf
+gfns
+Subresources
