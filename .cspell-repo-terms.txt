@@ -386,3 +386,9 @@ workflow
 workflows
 xfail
 xunit
+dedup
+dedupe
+eprintln
+peekable
+recognising
+subresources
