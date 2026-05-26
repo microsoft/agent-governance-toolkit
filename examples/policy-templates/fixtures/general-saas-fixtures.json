@@ -43,25 +43,26 @@
   },
   {
     "id": "asi06-ssn-dotted-should-deny",
-    "_comment": "Verifies default-deny catches SSN in dotted format; after #2594 merges, expected_rule should be asi06-block-pii-ssn",
+    "_comment": "Caught by default-deny on main; after #2594, expected_rule should be asi06-block-pii-ssn",
     "input": {"output": "SSN: 123.45.6789"},
     "expected_verdict": "deny"
   },
   {
     "id": "asi06-ssn-spaces-should-deny",
-    "_comment": "Same as above for space-delimited SSNs",
+    "_comment": "Same — default-deny catches this until #2594 broadens the regex",
     "input": {"output": "SSN: 123 45 6789"},
     "expected_verdict": "deny"
   },
   {
     "id": "asi06-ssn-nodash-should-deny",
-    "_comment": "Same as above for no-delimiter SSNs",
+    "_comment": "Same — default-deny catches this until #2594 broadens the regex",
     "input": {"output": "SSN: 123456789"},
     "expected_verdict": "deny"
   },
   {
     "id": "asi06-context-budget-exceeded",
-    "input": {"token_count": 9000},
+    "_comment": "Threshold on main is 16384; 17000 triggers the rule directly",
+    "input": {"token_count": 17000},
     "expected_verdict": "deny",
     "expected_rule": "asi06-context-budget-limit"
   },
