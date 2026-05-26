@@ -203,10 +203,15 @@ ProtocolFacets.DefaultRegistry.Register("redis", sub =>
 
 Rule conditions in the .NET SDK use the existing expression-string format
 (`"sql.verb == 'DROP'"`, dot-pathed field references, `and`/`or`
-compounds). Field names and decision outcomes are identical to the
-Python implementation.
+compounds). Field names and high-level decision outcomes are consistent
+with the Python implementation; minor rule-syntax differences exist
+(notably, the .NET `in` operator references list-valued context fields
+rather than YAML literal lists, so split per-verb rules into individual
+`==` checks — see the example file for the pattern).
 
 > **SQL parser note.** The .NET extractor uses a built-in regex tokenizer
 > that handles the common verb / target / function cases used by policy
-> rules. For complex dialect-specific SQL, register a custom extractor via
-> `ProtocolFacets.DefaultRegistry.Register("sql", ...)`.
+> rules. It is not a full SQL parser and will not catch every dialect-
+> specific construct; for high-assurance environments, register a custom
+> extractor via `ProtocolFacets.DefaultRegistry.Register("sql", ...)`
+> backed by a real SQL parser.

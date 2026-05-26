@@ -438,6 +438,14 @@ public static class ProtocolFacets
         };
         var m = Re(pattern).Match(query);
         if (m.Success) return NormalizeIdent(m.Groups[1].Value);
+
+        // Dialect-specific fallbacks.
+        if (verb == "INSERT")
+        {
+            // Some dialects allow `INSERT <table> (...) VALUES (...)` without INTO.
+            var bare = Re(@"\bINSERT\s+(?!INTO\b)" + Ident).Match(query);
+            if (bare.Success) return NormalizeIdent(bare.Groups[1].Value);
+        }
         if (verb == "DELETE")
         {
             var fb = Re(@"\bFROM\s+" + Ident).Match(query);
@@ -558,6 +566,12 @@ public static class ProtocolFacets
             new[] { "namespace", "resource" }, false),
         new(@"^/apis/[^/]+/[^/]+/namespaces/([^/]+)/([^/]+)/?$",
             new[] { "namespace", "resource" }, false),
+        new(@"^/api/[^/]+/([^/]+)/([^/]+)/([^/]+)/?$", new[] { "resource", "name", "subresource" }, false),
+        new(@"^/apis/[^/]+/[^/]+/([^/]+)/([^/]+)/([^/]+)/?$", new[] { "resource", "name", "subresource" }, false),
+        new(@"^/api/[^/]+/([^/]+)/([^/]+)/(proxy)(?:/.*)?$",
+            new[] { "resource", "name", "subresource" }, false),
+        new(@"^/apis/[^/]+/[^/]+/([^/]+)/([^/]+)/(proxy)(?:/.*)?$",
+            new[] { "resource", "name", "subresource" }, false),
         new(@"^/api/[^/]+/([^/]+)/([^/]+)/?$", new[] { "resource", "name" }, false),
         new(@"^/apis/[^/]+/[^/]+/([^/]+)/([^/]+)/?$", new[] { "resource", "name" }, false),
         new(@"^/api/[^/]+/([^/]+)/?$", new[] { "resource" }, false),
@@ -630,7 +644,14 @@ public static class ProtocolFacets
         string name = matched.GetValueOrDefault("name", string.Empty);
         string subresource = matched.GetValueOrDefault("subresource", string.Empty);
 
-        bool isWatch = matchedIsWatch || queryIsWatch;
+        // `watch` is a read-only verb in the Kubernetes API: it only makes
+        // sense for GET (or an empty/unspecified method). If a caller
+        // supplies a write method together with a watch path or
+        // ?watch=true, fall through to the method-derived verb so the rule
+        // engine sees the actual intent (e.g. POST on /watch/... becomes
+        // `create`, which is what the apiserver would consider it).
+        bool methodAllowsWatch = method.Length == 0 || method == "GET" || method == "HEAD";
+        bool isWatch = (matchedIsWatch || queryIsWatch) && methodAllowsWatch;
         string verb;
         if (isWatch) verb = "watch";
         else if (method.Length > 0)

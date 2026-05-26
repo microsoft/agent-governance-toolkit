@@ -357,6 +357,49 @@ public class ProtocolFacetsTests
         Assert.Equal("pods", K8s("GET", "/api/v1/namespaces/prod/pods#anchor")["resource"]);
     }
 
+    // ── Regression: cluster-scoped subresources/proxy and watch gating ────
+
+    [Fact]
+    public void K8s_ClusterScopedSubresource_Status()
+    {
+        // /api/v1/nodes/node1/status is cluster-scoped — previously only
+        // namespaced subresource patterns existed and this fell through to
+        // the (resource, name) cluster pattern, dropping `status`.
+        var f = K8s("PATCH", "/api/v1/nodes/node1/status");
+        Assert.Equal("nodes", f["resource"]);
+        Assert.Equal("node1", f["name"]);
+        Assert.Equal("status", f["subresource"]);
+    }
+
+    [Fact]
+    public void K8s_ClusterScopedSubresource_Proxy()
+    {
+        var f = K8s("GET", "/api/v1/nodes/node1/proxy/metrics");
+        Assert.Equal("nodes", f["resource"]);
+        Assert.Equal("node1", f["name"]);
+        Assert.Equal("proxy", f["subresource"]);
+    }
+
+    [Fact]
+    public void K8s_WatchQueryParamWithWriteMethod_DoesNotEmitWatchVerb()
+    {
+        // ?watch=true on POST is nonsense; intent is a write, not a watch.
+        // Verb should reflect the HTTP method, not the spoofed query.
+        var f = K8s("POST", "/api/v1/namespaces/prod/pods?watch=true");
+        Assert.NotEqual("watch", f["verb"]);
+        Assert.Equal("create", f["verb"]);
+    }
+
+    [Fact]
+    public void Sql_InsertWithoutIntoTargetIsWrittenObject()
+    {
+        // Some dialects allow `INSERT <table> (...) VALUES (...)` without
+        // the INTO keyword.
+        var f = Sql("INSERT protected (id) VALUES (1)");
+        Assert.Equal("INSERT", f["verb"]);
+        Assert.Equal("protected", f["target"]);
+    }
+
     // ── ExtractProtocolFacets default flow ────────────────────────────────
 
     [Fact]
