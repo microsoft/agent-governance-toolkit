@@ -88,7 +88,7 @@ This pattern has been validated across multiple frameworks:
 
 | Framework | Package | Tests |
 |-----------|---------|-------|
-| PydanticAI | [pydantic-ai-governance](https://github.com/microsoft/agent-governance-toolkit/tree/master/pydantic-ai-governance) | 57 |
+| PydanticAI | [pydantic-ai-governance](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/pydantic-ai-governance) | 57 |
 | CrewAI | [crewai-agentmesh](https://github.com/microsoft/agent-governance-toolkit/tree/master/crewai-agentmesh) | — |
 | Microsoft Agent Framework | MAF middleware adapter | 18 |
 | Mastra | [@agentmesh/mastra](https://github.com/microsoft/agent-governance-toolkit/tree/master/mastra-agentmesh) | 19 |

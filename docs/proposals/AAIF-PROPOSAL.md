@@ -110,7 +110,7 @@ The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addr
 ### External Adoptions and Submissions
 
 - **Merged** into awesome-copilot (21.6K ⭐) — 3 PRs accepted
-- **Proposed** to OWASP Agentic Security Initiative ([#2](https://github.com/OWASP/www-project-agentic-security-initiative/issues/2))
+- **Proposed** to OWASP Agentic Security Initiative (proposal #2)
 - **Proposed** to CoSAI WS4 Secure Design for Agentic Systems ([#42](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/issues/42))
 - **Proposed** to LF AI & Data ([lfai/proposing-projects #102](https://github.com/lfai/proposing-projects/pull/102))
 - **Integrated** with OpenLit observability ([openlit/openlit #1037](https://github.com/openlit/openlit/pull/1037))

@@ -59,8 +59,8 @@ We welcome contributions of all kinds — code, documentation, bug reports, and 
 
 | Article | Author | Topic |
 |---------|--------|-------|
-| [From Chatbot to Autonomous Agent: A Governance Maturity Model](agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
-| [Comparing Agent Governance Approaches](agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
+| [From Chatbot to Autonomous Agent: A Governance Maturity Model](../agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
+| [Comparing Agent Governance Approaches](../agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
 
 ## Standards Alignment
 
