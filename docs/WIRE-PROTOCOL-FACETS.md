@@ -159,3 +159,54 @@ write rules like:
 
 See [`examples/policy-templates/wire-protocol-rules.yaml`](../examples/policy-templates/wire-protocol-rules.yaml)
 for a full set of example rules.
+
+## Language parity — .NET
+
+The .NET SDK exposes the same facet model under the
+`AgentGovernance.Policy` namespace: `FacetRegistry`,
+`ProtocolFacets.DefaultRegistry`, `ProtocolFacets.ExtractProtocolFacets`,
+`ProtocolFacets.ExtractSqlFacets`, `ProtocolFacets.ExtractK8sFacets`.
+`PolicyEngine.Evaluate` invokes the registry on its internal copy of the
+context before rules run, so callers only need to populate raw
+`sql`/`k8s` sub-dictionaries — the caller's own dictionary is never
+mutated.
+
+```csharp
+using AgentGovernance.Policy;
+
+var engine = new PolicyEngine();
+engine.LoadYaml(@"
+apiVersion: governance.toolkit/v1
+name: sql-guard
+scope: global
+default_action: allow
+rules:
+  - name: deny-destructive-sql
+    condition: ""sql.verb == 'DROP'""
+    action: deny
+    priority: 100
+");
+
+var decision = engine.Evaluate("did:mesh:agent1", new Dictionary<string, object>
+{
+    ["sql"] = new Dictionary<string, object> { ["query"] = "DROP TABLE production" },
+});
+// decision.Allowed == false, decision.MatchedRule == "deny-destructive-sql"
+
+// Register a custom protocol extractor:
+ProtocolFacets.DefaultRegistry.Register("redis", sub =>
+{
+    var cmd = sub.TryGetValue("command", out var v) ? v?.ToString() ?? "" : "";
+    return new Dictionary<string, object> { ["verb"] = cmd.ToUpperInvariant() };
+});
+```
+
+Rule conditions in the .NET SDK use the existing expression-string format
+(`"sql.verb == 'DROP'"`, dot-pathed field references, `and`/`or`
+compounds). Field names and decision outcomes are identical to the
+Python implementation.
+
+> **SQL parser note.** The .NET extractor uses a built-in regex tokenizer
+> that handles the common verb / target / function cases used by policy
+> rules. For complex dialect-specific SQL, register a custom extractor via
+> `ProtocolFacets.DefaultRegistry.Register("sql", ...)`.
