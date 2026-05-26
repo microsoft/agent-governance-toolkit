@@ -159,3 +159,56 @@ write rules like:
 
 See [`examples/policy-templates/wire-protocol-rules.yaml`](../examples/policy-templates/wire-protocol-rules.yaml)
 for a full set of example rules.
+
+## Language parity — Rust
+
+The Rust SDK exposes the same facet model under the
+[`agentmesh::protocol_facets`](https://docs.rs/agentmesh) module:
+`FacetRegistry`, `default_registry()`, `extract_protocol_facets`,
+`extract_sql_facets`, `extract_k8s_facets`. The same `sql.*` and `k8s.*`
+fields are surfaced, and `PolicyEngine::evaluate` invokes the registry on a
+defensive copy of the caller's context before matching rules.
+
+```rust
+use agentmesh::{PolicyEngine, default_registry};
+use serde_yaml::Value;
+use std::collections::HashMap;
+
+let engine = PolicyEngine::new();
+engine.load_from_yaml(r#"
+version: "1"
+agent: "did:example:agent1"
+policies:
+  - name: deny-destructive-sql
+    type: capability
+    denied_actions: ["*"]
+    conditions:
+      sql.verb: [DROP, TRUNCATE, DELETE]
+"#).unwrap();
+
+let mut sub = serde_yaml::Mapping::new();
+sub.insert(Value::String("query".into()), Value::String("DROP TABLE production".into()));
+let mut ctx = HashMap::new();
+ctx.insert("sql".to_string(), Value::Mapping(sub));
+
+let decision = engine.evaluate("db.exec", Some(&ctx));
+// decision == PolicyDecision::Deny(...)
+
+// Register a custom protocol extractor:
+default_registry().register("redis", |sub| {
+    let mut m = std::collections::HashMap::new();
+    if let Some(cmd) = sub.get(Value::String("command".into())).and_then(|v| v.as_str()) {
+        m.insert("verb".to_string(), Value::String(cmd.to_uppercase()));
+    }
+    m
+});
+```
+
+Rule conditions in the Rust SDK use the existing YAML mapping shape
+(`key: value` or `key: [v1, v2]` for `in`-style membership). Field names
+and decision outcomes are identical to the Python implementation.
+
+> **SQL parser note.** The Rust extractor uses a built-in regex tokenizer
+> that handles the common verb / target / function cases used by policy
+> rules. For complex dialect-specific SQL, register a custom extractor via
+> `default_registry().register("sql", ...)`.
