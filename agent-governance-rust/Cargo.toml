@@ -11,6 +11,7 @@ rust-version = "1.70"
 
 [workspace.dependencies]
 agentmesh-mcp = { path = "agentmesh-mcp", version = "3.6.0" }
+aes-gcm = "=0.10.3"
 assert_cmd = "=2.2.2"
 base64 = "=0.22.1"
 cedar-policy = "=4.11.0"

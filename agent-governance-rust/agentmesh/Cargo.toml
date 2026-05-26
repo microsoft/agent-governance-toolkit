@@ -30,6 +30,7 @@ required-features = ["cli"]
 
 [dependencies]
 agentmesh-mcp.workspace = true
+aes-gcm.workspace = true
 base64.workspace = true
 cedar-policy.workspace = true
 clap = { workspace = true, optional = true }

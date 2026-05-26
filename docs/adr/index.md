@@ -40,3 +40,4 @@ Key architectural decisions and their rationale. Each ADR follows the standard f
 | [ADR-0010](0010-tee-keystore-sevsnp-attestation.md) | TEE keystore with SEV-SNP attestation | Security |
 | [ADR-0011](0011-additive-policy-check-contract.md) | Additive policy check contract | Policy |
 | [ADR-0026](0026-foundry-ai-gateway-functions-pdp.md) | Azure Functions PDP behind AI Gateway for Foundry prompt-based agents | Policy |
+| [ADR-0027](0027-adopt-dual-stack-migration-for-mcp-2026-07-28.md) | Dual-stack migration for MCP `2026-07-28` | MCP |

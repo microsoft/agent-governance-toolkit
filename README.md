@@ -28,7 +28,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
 
 > [!IMPORTANT]
 > **Public Preview** -- production-quality, Microsoft-signed releases. May have breaking changes before GA.
@@ -47,7 +47,9 @@ Your AI agents call tools, browse the web, query databases, and delegate to othe
 
 **3. Can you prove what happened?** Auditors and regulators need tamper-evident records of every decision: what policy was active, what the agent requested, and why it was allowed or denied.
 
-Prompt-based safety ("please follow the rules") has a [26.67% policy violation rate](docs/BENCHMARKS.md) in red-team testing. AGT's application-layer enforcement: **0.00%**.
+Prompt-level safety ("please follow the rules") is not a control surface. It is a polite request to a stochastic system. [OWASP LLM01:2025](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) states this explicitly: *"it is unclear if there are fool-proof methods of prevention for prompt injection."* The published numbers back this up. On [JailbreakBench (Chao et al., NeurIPS 2024)](https://arxiv.org/abs/2404.01318), the standard open robustness benchmark for LLM jailbreaks, adaptive attacks reach **near-100% attack success rates** against frontier safety-aligned models. [Andriushchenko et al., 2024](https://arxiv.org/abs/2404.02151) report 100% ASR on GPT-4, GPT-3.5, Claude 3, and Llama-3 using simple prompt-only attacks, and even the strongest published prompt-layer defenses leak double-digit residual ASR. Microsoft's own [AI Red Teaming Agent](https://learn.microsoft.com/azure/ai-foundry/concepts/ai-red-teaming-agent) formalizes **Attack Success Rate (ASR)**, the rate of policy violations under adversarial input, as the canonical metric for this class of failure, and [*Lessons from Red Teaming 100 Generative AI Products*](https://www.microsoft.com/en-us/security/blog/2025/01/13/3-takeaways-from-red-teaming-100-generative-ai-products/) concludes that *"AI red teaming is never complete"* because model-layer defenses are probabilistic by construction.
+
+AGT does not try to win that fight inside the prompt. Every tool call, message send, and delegation is intercepted in deterministic application code *before* the model's intent reaches the wire. Actions the AGT kernel denies are not "unlikely." They are **structurally impossible**. That is the difference between asking an agent to behave and making it incapable of misbehaving.
 
 ---
 
@@ -56,7 +58,7 @@ Prompt-based safety ("please follow the rules") has a [26.67% policy violation r
 **Prerequisites:** Python 3.10+
 
 ```bash
-pip install agent-governance-toolkit
+pip install agent-governance-toolkit[full]
 ```
 
 Govern any tool function in two lines:
@@ -345,7 +347,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic AI Top 10](docs/OWASP-COMPLIANCE.md) | All 10 risks covered with deterministic controls |
+| [OWASP Agentic AI Top 10](docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories mapped with deterministic controls |
 | [NIST AI RMF 1.0](docs/compliance/nist-ai-rmf-alignment.md) | Full GOVERN, MAP, MEASURE, MANAGE alignment |
 | [EU AI Act](docs/compliance/) | Compliance mapping with automated evidence |
 | [SOC 2](docs/compliance/soc2-mapping.md) | Control mapping with audit trail export |
@@ -375,10 +377,10 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 | Category | Links |
 |----------|-------|
 | **Getting Started** | [Quick Start](docs/quickstart.md) · [Tutorials](docs/tutorials/) (60+) · [FAQ](docs/FAQ.md) |
-| **Architecture** | [System Design](docs/ARCHITECTURE.md) · [Threat Model](docs/THREAT_MODEL.md) · [ADRs](docs/adr/) (25) |
+| **Architecture** | [System Design](docs/ARCHITECTURE.md) · [Threat Model](docs/security/threat-model.md) · [ADRs](docs/adr/) (25) |
 | **Specifications** | [All Specs](docs/specs/) (10 formal specs, 992 conformance tests) |
 | **API Reference** | [Agent OS](agent-governance-python/agent-os/README.md) · [AgentMesh](agent-governance-python/agent-mesh/README.md) · [Agent SRE](agent-governance-python/agent-sre/README.md) |
-| **Compliance** | [OWASP](docs/OWASP-COMPLIANCE.md) · [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md) |
+| **Compliance** | [OWASP](docs/compliance/owasp-agentic-top10-architecture.md) · [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md) |
 | **Deployment** | [Azure](docs/deployment/README.md) · [AWS](docs/deployment/README.md) · [GCP](docs/deployment/README.md) · [Docker Compose](docs/deployment/README.md) |
 | **Extensions** | [VS Code](agent-governance-typescript/agent-os-vscode/) · [Framework Integrations](agent-governance-python/agentmesh-integrations/) |
 

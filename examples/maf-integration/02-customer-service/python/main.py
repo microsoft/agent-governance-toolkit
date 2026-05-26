@@ -8,37 +8,41 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Annotated, Any
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 for relative_path in (
-    "packages\\agent-os\\src",
-    "packages\\agent-mesh\\src",
-    "packages\\agent-sre\\src",
+    "agent-governance-python\\agent-os\\src",
+    "agent-governance-python\\agent-mesh\\src",
+    "agent-governance-python\\agent-sre\\src",
+    "examples\\maf-integration\\shared-python",
 ):
     candidate = REPO_ROOT / relative_path
     if candidate.exists():
         sys.path.insert(0, str(candidate))
 
-from agent_framework import Agent, Message, tool
+from agent_framework import Agent, AgentResponse, tool
 from agent_framework.openai import OpenAIChatClient
 from agent_os.integrations.maf_adapter import (
     AuditTrailMiddleware,
     CapabilityGuardMiddleware,
     GovernancePolicyMiddleware,
-    MiddlewareTermination,
     RogueDetectionMiddleware,
 )
 from agent_os.policies import PolicyEvaluator
+from maf_scripted_runtime import (
+    ScriptedResponseClient,
+    function_call_response,
+    text_response,
+)
 
 try:
     from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
 except ImportError:
     from agent_sre.anomaly import AnomalyDetector as RogueAgentDetector  # type: ignore[assignment]
+
     RiskLevel = None  # type: ignore[assignment]
     RogueDetectorConfig = None  # type: ignore[assignment]
 
@@ -146,6 +150,18 @@ def escalate_to_manager_impl(order_id: str) -> str:
     return f"Manager escalation opened for order {order_id}; supervisor response target is 2 hours."
 
 
+def modify_account_billing_impl(order_id: str) -> str:
+    return f"Billing details changed for order {order_id}."
+
+
+def issue_refund_credit_impl(order_id: str, amount: int) -> str:
+    return f"Issued a ${amount:,} refund credit for order {order_id}."
+
+
+def export_payment_card_data_impl(order_id: str) -> str:
+    return f"Exported payment card data for order {order_id}."
+
+
 @tool(approval_mode="never_require")
 def lookup_order(
     order_id: Annotated[str, Field(description="The customer order identifier.")],
@@ -174,6 +190,39 @@ def escalate_to_manager(
     return escalate_to_manager_impl(order_id)
 
 
+@tool(approval_mode="never_require")
+def modify_account_billing(
+    order_id: Annotated[str, Field(description="The order identifier to update.")],
+) -> str:
+    return modify_account_billing_impl(order_id)
+
+
+@tool(approval_mode="never_require")
+def issue_refund_credit(
+    order_id: Annotated[str, Field(description="The order identifier to refund.")],
+    amount: Annotated[int, Field(description="The refund amount in USD.")],
+) -> str:
+    return issue_refund_credit_impl(order_id, amount)
+
+
+@tool(approval_mode="never_require")
+def export_payment_card_data(
+    order_id: Annotated[str, Field(description="The order identifier whose payment data to export.")],
+) -> str:
+    return export_payment_card_data_impl(order_id)
+
+
+SCENARIO_TOOLS = [
+    lookup_order,
+    explain_return_policy,
+    create_support_ticket,
+    escalate_to_manager,
+    modify_account_billing,
+    issue_refund_credit,
+    export_payment_card_data,
+]
+
+
 @dataclass
 class ScenarioRuntime:
     audit_log: AuditLog
@@ -196,6 +245,7 @@ def build_runtime() -> ScenarioRuntime:
             frequency_z_threshold=1.2,
             entropy_low_threshold=0.8,
             entropy_min_actions=5,
+            capability_violation_weight=2.0,
             quarantine_risk_level=RiskLevel.MEDIUM,
         )
     )
@@ -220,12 +270,8 @@ def build_runtime() -> ScenarioRuntime:
     )
 
 
-def create_agent(runtime: ScenarioRuntime) -> tuple[Agent[Any] | None, str]:
-    client, backend = configure_client()
-    if client is None:
-        return None, backend
-
-    agent = Agent(
+def build_agent(runtime: ScenarioRuntime, client: Any) -> Agent[Any]:
+    return Agent(
         client=client,
         name=AGENT_NAME,
         instructions=(
@@ -234,128 +280,129 @@ def create_agent(runtime: ScenarioRuntime) -> tuple[Agent[Any] | None, str]:
             "Never expose payment card data, modify billing directly, or grant large "
             "refunds without escalation."
         ),
-        tools=[
-            lookup_order,
-            explain_return_policy,
-            create_support_ticket,
-            escalate_to_manager,
-        ],
+        tools=SCENARIO_TOOLS,
         middleware=[
             runtime.audit_middleware,
             runtime.policy_middleware,
-            runtime.capability_middleware,
             runtime.rogue_middleware,
+            runtime.capability_middleware,
         ],
     )
-    return agent, backend
 
 
-def make_agent_context(text: str) -> Any:
-    return SimpleNamespace(
-        agent=SimpleNamespace(name=AGENT_ID),
-        messages=[Message(role="user", contents=[text])],
-        metadata={},
-        result=None,
-        stream=False,
+def create_live_agent(runtime: ScenarioRuntime) -> tuple[Agent[Any] | None, str]:
+    client, backend = configure_client()
+    if client is None:
+        return None, backend
+    return build_agent(runtime, client), backend
+
+
+def create_scripted_agent(runtime: ScenarioRuntime, responses: list[AgentResponse]) -> Agent[Any]:
+    return build_agent(runtime, ScriptedResponseClient(responses))
+
+
+def latest_audit_event(runtime: ScenarioRuntime, event_type: str) -> Any | None:
+    for entry in runtime.audit_log.query(limit=1000):
+        if entry.event_type == event_type:
+            return entry
+    return None
+
+
+def extract_function_result(response: AgentResponse | None) -> str:
+    if response is None:
+        return "No response returned."
+    for message in reversed(response.messages):
+        for content in message.contents:
+            if getattr(content, "type", None) == "function_result":
+                return str(getattr(content, "result", ""))
+    return response.text or str(response)
+
+
+async def run_scripted_prompt(
+    runtime: ScenarioRuntime,
+    prompt: str,
+    responses: list[AgentResponse],
+) -> AgentResponse | None:
+    return await create_scripted_agent(runtime, responses).run(prompt)
+
+
+async def run_policy_check(runtime: ScenarioRuntime, text: str) -> tuple[bool, str]:
+    response = await run_scripted_prompt(
+        runtime,
+        text,
+        [text_response("Customer-support request cleared for governed handling.")],
     )
-
-
-def make_function_context(tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
-    return SimpleNamespace(
-        function=SimpleNamespace(name=tool_name),
-        arguments=arguments or {},
-        metadata={},
-        result=None,
-    )
-
-
-async def run_policy_pipeline(runtime: ScenarioRuntime, text: str) -> tuple[bool, str]:
-    context = make_agent_context(text)
-
-    async def final_call() -> None:
-        context.result = "Message cleared for customer support handling."
-
-    async def policy_call() -> None:
-        await runtime.policy_middleware.process(context, final_call)
-
-    try:
-        await runtime.audit_middleware.process(context, policy_call)
-        decision = context.metadata.get("governance_decision")
-        return True, f"{decision.action} via {decision.matched_rule}"
-    except MiddlewareTermination as exc:
-        return False, str(exc)
+    violation = latest_audit_event(runtime, "policy_violation")
+    if violation is not None:
+        return False, response.text if response is not None else "Blocked by policy."
+    evaluation = latest_audit_event(runtime, "policy_evaluation")
+    matched_rule = evaluation.data.get("matched_rule") if evaluation is not None else "unknown"
+    return True, f"allow via {matched_rule}"
 
 
 async def run_tool_check(
     runtime: ScenarioRuntime,
     tool_name: str,
-    callback: Any,
-    arguments: dict[str, Any] | None = None,
+    arguments: dict[str, Any],
+    final_text: str,
 ) -> tuple[bool, str]:
-    context = make_function_context(tool_name, arguments)
-
-    async def final_call() -> None:
-        context.result = callback()
-
-    try:
-        await runtime.capability_middleware.process(context, final_call)
-        return True, str(context.result)
-    except MiddlewareTermination as exc:
-        return False, str(exc)
-
-
-def simulate_rogue_activity(runtime: ScenarioRuntime) -> tuple[bool, str]:
-    base = time.time() - 10
-    baseline = [
-        ("lookup_order", base + 0.0),
-        ("lookup_order", base + 1.2),
-        ("create_support_ticket", base + 2.4),
-        ("explain_return_policy", base + 2.7),
-    ]
-    for tool_name, timestamp in baseline:
-        runtime.detector.record_action(
-            agent_id=AGENT_ID,
-            action=tool_name,
-            tool_name=tool_name,
-            timestamp=timestamp,
-        )
-        runtime.detector.assess(AGENT_ID, timestamp=timestamp)
-
-    assessment = None
-    for offset in range(5):
-        timestamp = base + 3.6 + (offset * 0.1)
-        runtime.detector.record_action(
-            agent_id=AGENT_ID,
-            action="issue_refund_credit",
-            tool_name="issue_refund_credit",
-            timestamp=timestamp,
-        )
-        assessment = runtime.detector.assess(AGENT_ID, timestamp=timestamp)
-
-    assert assessment is not None
-    if assessment.quarantine_recommended:
-        runtime.audit_log.log(
-            event_type="rogue_detection",
-            agent_did=AGENT_ID,
-            action="quarantine",
-            resource="issue_refund_credit",
-            data=assessment.to_dict(),
-            outcome="denied",
-        )
-    return assessment.quarantine_recommended, (
-        f"risk={assessment.risk_level.value}, score={assessment.composite_score:.2f}, "
-        f"capability_score={assessment.capability_score:.2f}"
+    response = await run_scripted_prompt(
+        runtime,
+        "Continue the governed support workflow with the next scripted tool call.",
+        [
+            function_call_response(tool_name, arguments),
+            text_response(final_text),
+        ],
     )
+    detail = extract_function_result(response)
+    return (not detail.startswith("⛔")), detail
+
+
+async def run_rogue_sequence(runtime: ScenarioRuntime) -> tuple[bool, str]:
+    baseline_calls = [
+        ("lookup_order", {"order_id": "789"}),
+        ("lookup_order", {"order_id": "791"}),
+        ("create_support_ticket", {"issue": "wireless headphone return"}),
+        ("explain_return_policy", {"category": "wireless headphones"}),
+    ]
+    for tool_name, arguments in baseline_calls:
+        await run_scripted_prompt(
+            runtime,
+            "Continue the governed support walkthrough with the next scripted tool call.",
+            [
+                function_call_response(tool_name, arguments),
+                text_response(f"Completed {tool_name}."),
+            ],
+        )
+
+    last_detail = "No rogue activity detected."
+    for attempt in range(1, 13):
+        response = await run_scripted_prompt(
+            runtime,
+            "Continue the governed support walkthrough with the next scripted tool call.",
+            [function_call_response("issue_refund_credit", {"order_id": "789", "amount": 5000})],
+        )
+        last_detail = extract_function_result(response)
+        if "quarantined" in last_detail.lower():
+            event = latest_audit_event(runtime, "rogue_detection")
+            if event is not None:
+                data = event.data
+                return True, (
+                    f"risk={data['risk_level']}, score={data['composite_score']:.2f}, "
+                    f"capability_score={data['capability_score']:.2f}"
+                )
+
+    return False, last_detail
 
 
 async def preview_live_agent() -> None:
     runtime = build_runtime()
-    agent, backend = create_agent(runtime)
+    agent, backend = create_live_agent(runtime)
     section("Optional live MAF agent run")
     if agent is None:
         show_result(
             "Skipped",
-            f"{backend}. The deterministic walkthrough below still exercises the real AGT middleware objects.",
+            f"{backend}. The default walkthrough below still runs through a scripted real MAF agent pipeline.",
         )
         return
 
@@ -375,43 +422,31 @@ async def main() -> None:
     runtime = build_runtime()
 
     section("Act 1: Policy enforcement")
-    allowed, detail = await run_policy_pipeline(runtime, SAFE_PROMPT)
+    allowed, detail = await run_policy_check(runtime, SAFE_PROMPT)
     show_result("Allowed request", detail if allowed else f"unexpected block: {detail}")
     for blocked_prompt in BLOCKED_POLICY_PROMPTS:
-        blocked, reason = await run_policy_pipeline(runtime, blocked_prompt)
+        blocked, reason = await run_policy_check(runtime, blocked_prompt)
         label = "Blocked request" if not blocked else "Unexpected allow"
         show_result(label, f"{blocked_prompt} -> {reason}")
 
     section("Act 2: Capability sandboxing")
     tool_checks = [
-        ("lookup_order", lambda: lookup_order_impl("789"), {"order_id": "789"}),
-        (
-            "escalate_to_manager",
-            lambda: escalate_to_manager_impl("789"),
-            {"order_id": "789"},
-        ),
-        (
-            "modify_account_billing",
-            lambda: "Should never execute",
-            {"order_id": "789"},
-        ),
-        (
-            "issue_refund_credit",
-            lambda: "Should never execute",
-            {"order_id": "789", "amount": 5000},
-        ),
+        ("lookup_order", {"order_id": "789"}, "Order lookup completed."),
+        ("escalate_to_manager", {"order_id": "789"}, "Manager escalation created."),
+        ("modify_account_billing", {"order_id": "789"}, "Should never execute"),
+        ("issue_refund_credit", {"order_id": "789", "amount": 5000}, "Should never execute"),
     ]
-    for tool_name, callback, arguments in tool_checks:
-        allowed, detail = await run_tool_check(runtime, tool_name, callback, arguments)
+    for tool_name, arguments, final_text in tool_checks:
+        allowed, detail = await run_tool_check(runtime, tool_name, arguments, final_text)
         status = "Allowed tool" if allowed else "Blocked tool"
         show_result(status, f"{tool_name} -> {detail}")
 
     section("Act 3: Rogue agent detection")
-    quarantined, detail = simulate_rogue_activity(runtime)
+    quarantined, detail = await run_rogue_sequence(runtime)
     if quarantined:
         show_result(
             "Quarantine",
-            f"Repeated issue_refund_credit telemetry triggered refund-farming quarantine ({detail}).",
+            f"Repeated issue_refund_credit attempts triggered refund-farming quarantine ({detail}).",
         )
     else:
         show_result("Detector", f"No quarantine triggered ({detail}).")

@@ -19,7 +19,7 @@
 [![Docs](https://img.shields.io/badge/docs-microsoft.github.io%2Fagent--governance--toolkit-blue?logo=github)](https://microsoft.github.io/agent-governance-toolkit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/OWASP-COMPLIANCE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/compliance/owasp-agentic-top10-architecture.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
@@ -218,7 +218,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 | Human-Agent Trust Exploitation | ASI-09 | 전체 감사 추적(full audit trails) 및 비행기록계(flight recorder) |
 | Rogue Agents | ASI-10 | 실행 격리, 킬스위치(kill switch), 이상 탐지(anomaly detection) |
 
-전체 목록: [OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md) · 주요 규제 대응: [EU AI Act](../../docs/compliance/), [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md), [Colorado AI Act](../../docs/compliance/)
+전체 목록: [OWASP-COMPLIANCE.md](../../docs/compliance/owasp-agentic-top10-architecture.md) · 주요 규제 대응: [EU AI Act](../../docs/compliance/), [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md), [Colorado AI Act](../../docs/compliance/)
 
 ---
 
@@ -289,7 +289,7 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 **컴플라이언스 및 배포**
 - [Known Limitations](../../docs/LIMITATIONS.md) — 설계상의 제약 사항 및 권장되는 계층 방어 전략
-- [OWASP Compliance](../../docs/OWASP-COMPLIANCE.md) — ASI-01부터 ASI-10까지의 전체 매핑 가이드
+- [OWASP Compliance](../../docs/compliance/owasp-agentic-top10-architecture.md) — ASI-01부터 ASI-10까지의 전체 매핑 가이드
 - [Deployment Guides](../../docs/deployment/README.md) — Azure (AKS, Foundry, Container Apps), AWS (ECS/Fargate), GCP (GKE), Docker Compose 배포 가이드
 - [NIST AI RMF Alignment](../../docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](../../docs/compliance/) · [SOC 2 Mapping](../../docs/compliance/soc2-mapping.md)
 

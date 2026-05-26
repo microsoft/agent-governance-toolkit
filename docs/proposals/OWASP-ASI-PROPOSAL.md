@@ -79,7 +79,7 @@ The Agent Governance Toolkit covers 10 of 10 OWASP Agentic Top 10 risks. Future 
 - **5 PyPI packages** published
 - **MCP server** for governance-as-a-service
 - **8 framework integrations** (MAF, LangChain, CrewAI, ADK, etc.)
-- Full compliance mapping: [OWASP-COMPLIANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+- Full compliance mapping: [OWASP-COMPLIANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/compliance/owasp-agentic-top10-architecture.md)
 
 ## Links
 

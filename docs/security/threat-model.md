@@ -4,8 +4,8 @@ This document summarizes the security threat model for the Agent Governance
 Toolkit (AGT) using a STRIDE-oriented view of the main trust boundaries in the
 system.
 
-For the current OWASP Agentic Top 10 mapping across all 10 categories, see
-[`agent-governance-python/agent-compliance/docs/OWASP-COMPLIANCE.md`](../agent-governance-python/agent-compliance/docs/OWASP-COMPLIANCE.md).
+For the current OWASP Agentic Top 10 mapping across all ASI risk categories, see
+[`docs/compliance/owasp-agentic-top10-architecture.md`](../compliance/owasp-agentic-top10-architecture.md).
 
 ## Scope
 
@@ -177,20 +177,20 @@ AGT reduces risk but does not eliminate it. The main residual risks are:
   organization
 - **Knowledge flow risks**: AGT governs tool calls but not the knowledge
   (documents, embeddings, context) that agents consume and propagate — see
-  [Limitations §7](LIMITATIONS.md#7-knowledge-governance-gap)
+  [Limitations §7](../LIMITATIONS.md#7-knowledge-governance-gap)
 - **Credential persistence**: AGT does not observe or revoke credentials agents
   hold across tasks within a session — accumulated permissions may exceed
   what the current task requires — see
-  [Limitations §8](LIMITATIONS.md#8-credential-persistence-gap)
+  [Limitations §8](../LIMITATIONS.md#8-credential-persistence-gap)
 - **Physical AI scope**: AGT governs software agents, not physical actuators,
   hardware interlocks, or real-time control loops — see
-  [Limitations §10](LIMITATIONS.md#10-physical-ai-and-embodied-agent-governance)
+  [Limitations §10](../LIMITATIONS.md#10-physical-ai-and-embodied-agent-governance)
 - **Streaming data**: AGT evaluates policies per-action, not continuously over
   data streams — data freshness and quality are not assured — see
-  [Limitations §11](LIMITATIONS.md#11-streaming-data-and-real-time-assurance)
+  [Limitations §11](../LIMITATIONS.md#11-streaming-data-and-real-time-assurance)
 - **DID method inconsistency**: Python/.NET use `did:mesh:*` while TS/Rust/Go
   use `did:agentmesh:*` — cross-SDK policy rules must account for both — see
-  [Limitations §12](LIMITATIONS.md#12-did-method-inconsistency-across-sdks)
+  [Limitations §12](../LIMITATIONS.md#12-did-method-inconsistency-across-sdks)
 
 ## Configuration Bypass Vectors
 

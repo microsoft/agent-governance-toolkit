@@ -88,10 +88,10 @@ This pattern has been validated across multiple frameworks:
 
 | Framework | Package | Tests |
 |-----------|---------|-------|
-| PydanticAI | [pydantic-ai-governance](https://github.com/microsoft/agent-governance-toolkit/tree/master/pydantic-ai-governance) | 57 |
-| CrewAI | [crewai-agentmesh](https://github.com/microsoft/agent-governance-toolkit/tree/master/crewai-agentmesh) | — |
+| PydanticAI | [pydantic-ai-governance](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/pydantic-ai-governance) | 57 |
+| CrewAI | [crewai-agentmesh](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/crewai-agentmesh) | — |
 | Microsoft Agent Framework | MAF middleware adapter | 18 |
-| Mastra | [@agentmesh/mastra](https://github.com/microsoft/agent-governance-toolkit/tree/master/mastra-agentmesh) | 19 |
+| Mastra | [@agentmesh/mastra](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/mastra-agentmesh) | 19 |
 | **Agent OS** (core) | [agent-os](https://github.com/microsoft/agent-governance-toolkit) | 1,327 |
 
 ## OWASP Coverage
@@ -107,4 +107,4 @@ The GovernancePlugin covers 10/10 OWASP Agentic Top 10 risks through ADK's nativ
 
 - [Google ADK](https://github.com/google/adk-python)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+- [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/compliance/owasp-agentic-top10-architecture.md)

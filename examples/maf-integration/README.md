@@ -16,8 +16,10 @@ references the in-repo `agent-governance-dotnet` projects.
 
 Each Python example uses:
 
+- the published `agent-framework` package from the real
+  [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) repo
 - a real `agent_framework.Agent`
-- a real `agent_framework.openai.OpenAIChatClient`
+- a real MAF chat client (`OpenAIChatClient` for optional live preview or a deterministic scripted client for the offline walkthrough)
 - real AGT middleware from `agent_os.integrations.maf_adapter`
 - the same scenario stories used in `docs/tutorials/34-maf-integration.md` and `examples/demos/maf-integration`
 
@@ -62,8 +64,9 @@ python main.py
 
 The walkthrough always runs. If a supported model credential is configured, the
 example also performs a small live `Agent.run(...)` preview before the scripted
-governance acts. Without credentials, it skips the live call and still exercises
-the real AGT middleware objects locally.
+governance acts. Without credentials, it skips the live call and still runs the
+four governance acts through the real `Agent.run(...)` tool loop with a
+deterministic scripted MAF client.
 
 ## .NET quick start
 
@@ -100,8 +103,8 @@ Python demos detect backends in this order:
 
 Each demo runs a 4-act governance walkthrough:
 
-1. **Policy Enforcement** — governed requests are allowed or denied before the agent runs
-2. **Capability Sandboxing** — governed MAF tool calls are allowed or blocked by middleware
+1. **Policy Enforcement** — governed requests are allowed or denied inside the real MAF middleware pipeline
+2. **Capability Sandboxing** — governed MAF tool calls are allowed or blocked by function middleware
 3. **Rogue Agent Detection** — repeated risky actions trigger anomaly detection and quarantine
 4. **Audit Trail** — governance events are written into a Merkle-chained tamper-evident log
 
@@ -113,7 +116,7 @@ Each Python demo wires the same runtime shape:
 2. `GovernancePolicyMiddleware` evaluates YAML policies with the real `PolicyEvaluator`.
 3. `CapabilityGuardMiddleware` enforces allow/deny tool lists.
 4. `RogueDetectionMiddleware` records behavior against a real `RogueAgentDetector`.
-5. The scenario script prints policy blocks, capability decisions, rogue detection, and audit integrity results.
+5. The scenario script drives those checks through real `Agent.run(...)` calls and prints the resulting policy blocks, capability decisions, rogue detection, and audit integrity results.
 
 The `.NET` scenario demos follow the same flow, but implement the walkthrough with
 native MAF middleware inside the example projects themselves.
@@ -153,6 +156,6 @@ rules:
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [docs/tutorials/34-maf-integration.md](../../docs/tutorials/34-maf-integration.md)
 - [docs/tutorials/43-dotnet-maf-hook-integration.md](../../docs/tutorials/43-dotnet-maf-hook-integration.md)
-- [examples/demos/maf-integration](../../demo/maf-integration)
+- [examples/demos/maf-integration](../../examples/demos/maf-integration)
 - [agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py](../../agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py)
 - [Microsoft Agent Framework](https://github.com/microsoft/agent-framework)
