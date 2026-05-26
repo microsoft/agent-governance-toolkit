@@ -23,7 +23,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | Feature | Agent Governance Toolkit | NeMo Guardrails | Guardrails AI | LiteLLM | Portkey |
 |---------|:----------------------:|:---------------:|:-------------:|:-------:|:-------:|
 | **Agent action governance** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **LLM output validation** | ✅ (via [content-policy adapters](../agent-governance-python/agent-os/)) | ✅ | ✅ | ✅ | ✅ |
+| **LLM output validation** | ✅ (via [content-policy adapters](../../agent-governance-python/agent-os/)) | ✅ | ✅ | ✅ | ✅ |
 | **Agent identity (cryptographic)** | ✅ Ed25519 / SPIFFE | ❌ | ❌ | ❌ | ❌ |
 | **Execution sandboxing** | ✅ 4-tier rings | ❌ | ❌ | ❌ | ❌ |
 | **SRE (SLOs / error budgets)** | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -38,7 +38,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 
 > ¹ **OWASP scoring methodology:** Each tool was assessed against the ten [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) risk categories. A risk is counted as "covered" only when the tool provides a mitigation that addresses the root cause of that risk category (not merely partial or indirect coverage). Scores for NeMo, Guardrails AI, LiteLLM, and Portkey are approximate because none of those tools publish explicit OWASP Agentic Top 10 mappings; they are based on a good-faith review of each tool's documented capabilities as of early 2026.
 >
-> ² **10/10 means mitigation components exist for each risk category**, not that each risk is fully eliminated. AGT provides application-layer governance — see [Known Limitations](LIMITATIONS.md) for documented gaps including hallucination detection, indirect prompt injection into reasoning, and multi-step workflow correlation.
+> ² **10/10 means mitigation components exist for each risk category**, not that each risk is fully eliminated. AGT provides application-layer governance — see [Known Limitations](../LIMITATIONS.md) for documented gaps including hallucination detection, indirect prompt injection into reasoning, and multi-step workflow correlation.
 
 ---
 
@@ -171,4 +171,4 @@ For production agentic systems, you likely need the Agent Governance Toolkit **p
 
 ---
 
-*See also: [OWASP Compliance Mapping](../OWASP-COMPLIANCE.md) · [Architecture Overview](../README.md#architecture) · [Quick Start](../quickstart.md)*
+*See also: [OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md) · [Architecture Overview](../../README.md#architecture) · [Quick Start](../quickstart.md)*

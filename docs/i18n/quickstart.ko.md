@@ -344,7 +344,7 @@ agt integrity --manifest integrity.json
 | 전체 API 레퍼런스 (Python) | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
 | TypeScript 패키지 문서 | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
 | .NET 패키지 문서 | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
-| OWASP 커버리지 맵 | [docs/OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md) |
+| OWASP 커버리지 맵 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
 | 프레임워크 통합 가이드 | [agent-governance-python/agent-os/src/agent_os/integrations/](../../agent-governance-python/agent-os/src/agent_os/integrations/) |
 | 예제 애플리케이션 | [agent-governance-python/agent-os/examples/](../../agent-governance-python/agent-os/examples/) |
 | 기여하기 | [CONTRIBUTING.md](../../CONTRIBUTING.md) |

@@ -3,7 +3,7 @@
 #
 # OWASP ASI Starter Policy: Financial Services (SOX / PCI DSS / AML)
 # Maps to OWASP Agentic Security Initiatives (ASI) Top 10
-# See: docs/owasp-asi-mapping.md
+# See: ../../docs/compliance/owasp-asi-policy-mapping.md
 #
 # ⚠️  IMPORTANT: This is a STARTER policy provided as a production-ready
 # baseline. You MUST review and customize these rules for your specific

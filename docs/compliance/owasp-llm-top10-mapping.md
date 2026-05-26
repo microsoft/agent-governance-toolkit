@@ -438,7 +438,7 @@ These are defense-in-depth signals, not primary mitigations.
 
 ## Relationship to OWASP Agentic Top 10
 
-This document covers the **OWASP Top 10 for LLM Applications (2025)** — risks specific to LLM-powered applications. The toolkit also maps against the **OWASP Top 10 for Agentic Applications (2026)** in [`docs/OWASP-COMPLIANCE.md`](../OWASP-COMPLIANCE.md), which covers agent-specific risks (goal hijack, rogue agents, cascading failures, etc.).
+This document covers the **OWASP Top 10 for LLM Applications (2025)** — risks specific to LLM-powered applications. The toolkit also maps against the **OWASP Top 10 for Agentic Applications (2026)** in [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md), which covers agent-specific risks (goal hijack, rogue agents, cascading failures, etc.).
 
 Several risks overlap between the two lists:
 

@@ -59,8 +59,8 @@ We welcome contributions of all kinds — code, documentation, bug reports, and 
 
 | Article | Author | Topic |
 |---------|--------|-------|
-| [From Chatbot to Autonomous Agent: A Governance Maturity Model](agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
-| [Comparing Agent Governance Approaches](agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
+| [From Chatbot to Autonomous Agent: A Governance Maturity Model](../agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
+| [Comparing Agent Governance Approaches](../agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
 
 ## Standards Alignment
 
@@ -68,7 +68,7 @@ AGT maps to established security and compliance frameworks:
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic Top 10](docs/OWASP-COMPLIANCE.md) | 10/10 risks covered |
+| [OWASP Agentic Top 10](../docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories covered |
 | [NIST AI RMF](https://www.nist.gov/artificial-intelligence) | Govern, Map, Measure, Manage functions |
 | [EU AI Act](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | High-risk system compliance controls |
 | [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) | 100% passing |

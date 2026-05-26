@@ -28,7 +28,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.AgentGovernance?label=NuGet)](https://www.nuget.org/packages/Microsoft.AgentGovernance)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
 
 > [!IMPORTANT]
 > **Public Preview** -- production-quality, Microsoft-signed releases. May have breaking changes before GA.
@@ -345,7 +345,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic AI Top 10](docs/OWASP-COMPLIANCE.md) | All 10 risks covered with deterministic controls |
+| [OWASP Agentic AI Top 10](docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories mapped with deterministic controls |
 | [NIST AI RMF 1.0](docs/compliance/nist-ai-rmf-alignment.md) | Full GOVERN, MAP, MEASURE, MANAGE alignment |
 | [EU AI Act](docs/compliance/) | Compliance mapping with automated evidence |
 | [SOC 2](docs/compliance/soc2-mapping.md) | Control mapping with audit trail export |
@@ -378,7 +378,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 | **Architecture** | [System Design](docs/ARCHITECTURE.md) · [Threat Model](docs/security/threat-model.md) · [ADRs](docs/adr/) (25) |
 | **Specifications** | [All Specs](docs/specs/) (10 formal specs, 992 conformance tests) |
 | **API Reference** | [Agent OS](agent-governance-python/agent-os/README.md) · [AgentMesh](agent-governance-python/agent-mesh/README.md) · [Agent SRE](agent-governance-python/agent-sre/README.md) |
-| **Compliance** | [OWASP](docs/OWASP-COMPLIANCE.md) · [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md) |
+| **Compliance** | [OWASP](docs/compliance/owasp-agentic-top10-architecture.md) · [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md) |
 | **Deployment** | [Azure](docs/deployment/README.md) · [AWS](docs/deployment/README.md) · [GCP](docs/deployment/README.md) · [Docker Compose](docs/deployment/README.md) |
 | **Extensions** | [VS Code](agent-governance-typescript/agent-os-vscode/) · [Framework Integrations](agent-governance-python/agentmesh-integrations/) |
 
