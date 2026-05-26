@@ -1,0 +1,35 @@
+# Federation Policy Configuration — ADR-0007
+#
+# Loadable from AGT's config system. Controls which external JWKS
+# endpoints are trusted for cross-org agent identity verification.
+#
+# See: docs/adr/0007-external-jwks-federation-for-cross-org-identity.md
+
+federation:
+  # Trusted JWKS endpoints (explicit allowlist — default tier)
+  trusted_endpoints:
+    - domain: "partner-corp.example.com"
+      jwks_url: "https://partner-corp.example.com/.well-known/jwks.json"
+      trust_tier: "trusted"
+
+    - domain: "external-platform.dev"
+      jwks_url: "https://external-platform.dev/.well-known/jwks.json"
+      trust_tier: "verified_partner"
+
+  # Policy for endpoints not in the allowlist.
+  # "deny"  — reject unknown endpoints (production default)
+  # "tofu"  — trust-on-first-use, log and cache on first contact
+  # "open"  — accept any valid did:web + JWKS (public marketplaces)
+  unknown_endpoint_policy: "deny"
+
+  # JWKS response cache TTL in seconds.
+  # After expiry the provider re-fetches from the endpoint.
+  jwks_cache_ttl_seconds: 300
+
+  # Revocation list cache TTL in seconds.
+  # Shorter than JWKS TTL because revocations are time-sensitive.
+  revocation_cache_ttl_seconds: 60
+
+  # Require DNSSEC validation on endpoint domains.
+  # Set to true for high-assurance deployments.
+  require_dnssec: false

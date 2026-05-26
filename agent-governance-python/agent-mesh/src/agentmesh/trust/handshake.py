@@ -96,6 +96,12 @@ class HandshakeResult(BaseModel):
     # Capabilities
     capabilities: list[str] = Field(default_factory=list)
 
+    # External identity (ADR-0007: present only for cross-org agents)
+    external_identity: Optional[Any] = Field(
+        None,
+        description="ExternalIdentity from JWKS federation, set when peer was resolved via ExternalJWKSProvider",
+    )
+
     # User context (propagated from OBO flow)
     user_context: Optional[UserContext] = Field(None, description="End-user context if acting on behalf of a user")
 
@@ -116,6 +122,7 @@ class HandshakeResult(BaseModel):
         peer_name: Optional[str] = None,
         started: Optional[datetime] = None,
         user_context: Optional[UserContext] = None,
+        external_identity: Optional[Any] = None,
     ) -> "HandshakeResult":
         """Create a successful handshake result."""
         now = datetime.now(timezone.utc)
@@ -138,6 +145,7 @@ class HandshakeResult(BaseModel):
             trust_score=trust_score,
             trust_level=level,
             capabilities=capabilities,
+            external_identity=external_identity,
             user_context=user_context,
             handshake_started=start,
             handshake_completed=now,
