@@ -185,7 +185,7 @@ import {
 } from '@microsoft/agent-governance-sdk';
 
 const engine = new PolicyEngine();
-engine.loadYaml(/* see examples/policy-templates/wire-protocol-rules.yaml */);
+engine.loadYaml(/* see agent-governance-typescript/examples/wire-protocol-rules.yaml */);
 
 // Facets are extracted automatically inside evaluatePolicy() — you only need
 // to populate the raw protocol context.

@@ -450,12 +450,16 @@ export class PolicyEngine {
   evaluatePolicy(agentDid: string, context: Record<string, unknown>): PolicyDecisionResult {
     const start = performance.now();
 
-    // Enrich context with wire-protocol facets (sql.*, k8s.*, etc.) so policy
-    // rules can reference protocol-level semantics. Mutates `context` in
-    // place; failures inside individual extractors are swallowed and logged
-    // so a broken parser cannot block evaluation.
+    // Enrich a defensive copy of the context with wire-protocol facets
+    // (sql.*, k8s.*, etc.) so policy rules can reference protocol-level
+    // semantics. We never mutate the caller's outer dict; FacetRegistry
+    // also replaces sub-object slots with merged copies so caller-owned
+    // sub-objects are untouched. Failures inside individual extractors
+    // are swallowed and logged so a broken parser cannot block
+    // evaluation.
+    const evalContext: Record<string, unknown> = { ...context };
     try {
-      extractProtocolFacets(context);
+      extractProtocolFacets(evalContext);
     } catch {
       // Defensive: the registry already swallows per-extractor errors.
     }
@@ -478,7 +482,7 @@ export class PolicyEngine {
         for (const rule of policy.rules) {
           if (rule.enabled === false) continue;
           const ruleAction = rule.ruleAction ?? asPolicyAction(rule.effect) ?? 'deny';
-          if (evaluateRuleCondition(rule, context)) {
+          if (evaluateRuleCondition(rule, evalContext)) {
             candidates.push({
               action: ruleAction,
               priority: rule.priority ?? 0,
@@ -641,8 +645,10 @@ export class PolicyEngine {
    * First match wins; default is 'deny'.
    */
   evaluate(action: string, context: Record<string, unknown> = {}): PolicyDecision {
+    // Enrich a defensive copy so the caller's dict is not mutated.
+    const evalContext: Record<string, unknown> = { ...context };
     try {
-      extractProtocolFacets(context);
+      extractProtocolFacets(evalContext);
     } catch {
       // Defensive: extractor failures must never block legacy evaluation.
     }
@@ -651,7 +657,7 @@ export class PolicyEngine {
         this.matchAction(rule.action ?? '', action) &&
         this.matchLegacyConditions(
           (rule.condition ?? rule.conditions) as Record<string, unknown> | undefined,
-          context,
+          evalContext,
         )
       ) {
         return (rule.effect ?? 'deny') as PolicyDecision;

@@ -41,15 +41,25 @@ export class FacetRegistry {
     this.extractors.push({ key: contextKey, extractor });
   }
 
-  /** Run all registered extractors against `context` in place. */
+  /**
+   * Run all registered extractors against `context`. Mutates the top-level
+   * `context` map (replacing the slot for each registered key with a fresh
+   * merged copy) but does NOT mutate the caller's nested sub-objects, so
+   * passing the same sub-object alias into multiple evaluations is safe.
+   */
   extract(context: Record<string, unknown>): Record<string, unknown> {
     for (const { key, extractor } of this.extractors) {
       const sub = context[key];
       if (!isPlainObject(sub)) continue;
       try {
-        const facets = extractor(sub);
+        // Hand the extractor a defensive copy so a buggy implementation
+        // cannot mutate the caller's input through the argument.
+        const facets = extractor({ ...sub });
         if (facets && typeof facets === 'object') {
-          Object.assign(sub, facets);
+          // Replace the slot with a merged copy rather than mutating
+          // `sub` in place, so the caller's original sub-object (which
+          // may be aliased elsewhere) is left untouched.
+          context[key] = { ...sub, ...facets };
         }
       } catch (err) {
         // Never block evaluation if an extractor throws.
@@ -315,11 +325,60 @@ function pickTarget(query: string, verb: string, tables: string[]): string {
   return tables[0] ?? '';
 }
 
+/**
+ * Strip `/* ... *\/` and `-- ...` SQL comments in a quote-aware way.
+ *
+ * A naive regex strip would corrupt inputs like `SELECT '--'; DROP TABLE x`
+ * (the `--` inside the string literal would be treated as a line comment
+ * and the trailing `DROP` would be silently consumed) and, in the case of
+ * the block-comment pattern, is susceptible to polynomial backtracking on
+ * adversarial input (a CodeQL warning). This single-pass walker respects
+ * single, double and backtick quoting (with SQL doubled-quote escapes)
+ * before recognising comment markers.
+ */
 function stripSqlComments(sql: string): string {
-  // Strip /* ... */ and -- line comments. Keep semantics simple.
-  return sql
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/--[^\n\r]*/g, ' ');
+  let out = '';
+  let quote: '' | "'" | '"' | '`' = '';
+  let i = 0;
+  while (i < sql.length) {
+    const c = sql[i];
+    if (quote) {
+      out += c;
+      if (c === quote) {
+        if (sql[i + 1] === quote) {
+          // Escaped doubled quote
+          out += sql[i + 1];
+          i += 2;
+          continue;
+        }
+        quote = '';
+      }
+      i++;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      quote = c as "'" | '"' | '`';
+      out += c;
+      i++;
+      continue;
+    }
+    if (c === '-' && sql[i + 1] === '-') {
+      i += 2;
+      while (i < sql.length && sql[i] !== '\n' && sql[i] !== '\r') i++;
+      out += ' ';
+      continue;
+    }
+    if (c === '/' && sql[i + 1] === '*') {
+      i += 2;
+      while (i + 1 < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+      if (i + 1 < sql.length) i += 2;
+      out += ' ';
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
 }
 
 const IDENT_PART = '(?:[A-Za-z_][A-Za-z0-9_]*|"[^"]+"|`[^`]+`|\\[[^\\]]+\\])';
@@ -373,8 +432,6 @@ function extractTables(query: string, verb: string): string[] {
   return found;
 }
 
-const FUNC_RE = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
-
 // Reserved words that look like function calls syntactically but aren't.
 const FUNC_DENYLIST: ReadonlySet<string> = new Set([
   'VALUES',
@@ -398,10 +455,12 @@ const FUNC_DENYLIST: ReadonlySet<string> = new Set([
 ]);
 
 function extractFunctions(query: string): string[] {
+  // Use matchAll on a fresh per-call regex so the module-scoped /g state
+  // can never leak between calls (this is otherwise a common foot-gun).
+  const re = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
   const found: string[] = [];
   const seen = new Set<string>();
-  let m: RegExpExecArray | null;
-  while ((m = FUNC_RE.exec(query)) !== null) {
+  for (const m of query.matchAll(re)) {
     const name = m[1].toUpperCase();
     if (FUNC_DENYLIST.has(name)) continue;
     if (!seen.has(name)) {
@@ -504,87 +563,109 @@ const METHOD_TO_VERB_COLLECTION: Readonly<Record<string, string>> = {
 interface K8sPattern {
   re: RegExp;
   groups: ReadonlyArray<'namespace' | 'resource' | 'name' | 'subresource'>;
+  isWatch: boolean;
 }
 
 // Ordered most specific first. Matches Python's _K8S_PATH_PATTERNS, plus
-// explicit `watch` and proxy-tail handling.
+// explicit `watch` and proxy-tail handling (namespaced and cluster-scoped).
 const K8S_PATH_PATTERNS: ReadonlyArray<K8sPattern> = [
-  // Watch paths — namespaced collection
+  // Watch — namespaced collection
   {
     re: /^\/api\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource'],
+    isWatch: true,
   },
   {
     re: /^\/apis\/[^/]+\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource'],
+    isWatch: true,
   },
-  // Watch paths — namespaced named object
+  // Watch — namespaced named object
   {
     re: /^\/api\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource', 'name'],
+    isWatch: true,
   },
   {
     re: /^\/apis\/[^/]+\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource', 'name'],
+    isWatch: true,
   },
-  // Watch paths — cluster-scoped
-  {
-    re: /^\/api\/[^/]+\/watch\/([^/]+)\/?$/,
-    groups: ['resource'],
-  },
-  {
-    re: /^\/apis\/[^/]+\/[^/]+\/watch\/([^/]+)\/?$/,
-    groups: ['resource'],
-  },
-  // Proxy tail: pods/<name>/proxy/<...> → subresource = proxy
+  // Watch — cluster-scoped
+  { re: /^\/api\/[^/]+\/watch\/([^/]+)\/?$/, groups: ['resource'], isWatch: true },
+  { re: /^\/apis\/[^/]+\/[^/]+\/watch\/([^/]+)\/?$/, groups: ['resource'], isWatch: true },
+  // Proxy tail (namespaced): pods/<name>/proxy/<...> → subresource = proxy
   {
     re: /^\/api\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/(proxy)(?:\/.*)?$/,
     groups: ['namespace', 'resource', 'name', 'subresource'],
+    isWatch: false,
   },
   {
     re: /^\/apis\/[^/]+\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/(proxy)(?:\/.*)?$/,
     groups: ['namespace', 'resource', 'name', 'subresource'],
+    isWatch: false,
   },
+  // Generic namespaced — most specific first
   {
     re: /^\/api\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource', 'name', 'subresource'],
+    isWatch: false,
   },
   {
     re: /^\/apis\/[^/]+\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource', 'name', 'subresource'],
+    isWatch: false,
   },
   {
     re: /^\/api\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource', 'name'],
+    isWatch: false,
   },
   {
     re: /^\/apis\/[^/]+\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource', 'name'],
+    isWatch: false,
   },
   {
     re: /^\/api\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource'],
+    isWatch: false,
   },
   {
     re: /^\/apis\/[^/]+\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource'],
+    isWatch: false,
+  },
+  // Cluster-scoped (resource, name, subresource): e.g. /api/v1/nodes/n1/status
+  {
+    re: /^\/api\/[^/]+\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
+    groups: ['resource', 'name', 'subresource'],
+    isWatch: false,
   },
   {
-    re: /^\/api\/[^/]+\/([^/]+)\/([^/]+)\/?$/,
-    groups: ['resource', 'name'],
+    re: /^\/apis\/[^/]+\/[^/]+\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
+    groups: ['resource', 'name', 'subresource'],
+    isWatch: false,
   },
+  // Cluster-scoped proxy tail
+  {
+    re: /^\/api\/[^/]+\/([^/]+)\/([^/]+)\/(proxy)(?:\/.*)?$/,
+    groups: ['resource', 'name', 'subresource'],
+    isWatch: false,
+  },
+  {
+    re: /^\/apis\/[^/]+\/[^/]+\/([^/]+)\/([^/]+)\/(proxy)(?:\/.*)?$/,
+    groups: ['resource', 'name', 'subresource'],
+    isWatch: false,
+  },
+  { re: /^\/api\/[^/]+\/([^/]+)\/([^/]+)\/?$/, groups: ['resource', 'name'], isWatch: false },
   {
     re: /^\/apis\/[^/]+\/[^/]+\/([^/]+)\/([^/]+)\/?$/,
     groups: ['resource', 'name'],
+    isWatch: false,
   },
-  {
-    re: /^\/api\/[^/]+\/([^/]+)\/?$/,
-    groups: ['resource'],
-  },
-  {
-    re: /^\/apis\/[^/]+\/[^/]+\/([^/]+)\/?$/,
-    groups: ['resource'],
-  },
+  { re: /^\/api\/[^/]+\/([^/]+)\/?$/, groups: ['resource'], isWatch: false },
+  { re: /^\/apis\/[^/]+\/[^/]+\/([^/]+)\/?$/, groups: ['resource'], isWatch: false },
 ];
 
 interface K8sFacets extends Record<string, unknown> {
@@ -611,20 +692,35 @@ export function extractK8sFacets(k8sCtx: Record<string, unknown>): K8sFacets {
   const methodRaw = k8sCtx.method;
   const pathRaw = k8sCtx.path;
   const method = typeof methodRaw === 'string' ? methodRaw.toUpperCase() : '';
-  const path = typeof pathRaw === 'string' ? pathRaw : '';
+  const rawPath = typeof pathRaw === 'string' ? pathRaw : '';
 
   const result: K8sFacets = { ...EMPTY_K8S_FACETS };
-  if (!path) return result;
+  if (!rawPath) return result;
+
+  // Strip query/fragment before pattern matching so resources or namespaces
+  // whose names contain "watch" cannot spoof the verb signal, and so
+  // ?watch=true can be detected independently of path.
+  let pathOnly = rawPath;
+  let query = '';
+  const qIdx = pathOnly.indexOf('?');
+  if (qIdx >= 0) {
+    query = pathOnly.slice(qIdx + 1);
+    pathOnly = pathOnly.slice(0, qIdx);
+  }
+  const hIdx = pathOnly.indexOf('#');
+  if (hIdx >= 0) pathOnly = pathOnly.slice(0, hIdx);
 
   let matched: Partial<Record<'namespace' | 'resource' | 'name' | 'subresource', string>> = {};
-  for (const { re, groups } of K8S_PATH_PATTERNS) {
-    const m = path.match(re);
+  let matchedIsWatch = false;
+  for (const { re, groups, isWatch } of K8S_PATH_PATTERNS) {
+    const m = pathOnly.match(re);
     if (m) {
       const captured: Partial<Record<string, string>> = {};
       groups.forEach((g, i) => {
         captured[g] = m[i + 1];
       });
       matched = captured;
+      matchedIsWatch = isWatch;
       break;
     }
   }
@@ -634,10 +730,29 @@ export function extractK8sFacets(k8sCtx: Record<string, unknown>): K8sFacets {
   result.name = matched.name ?? '';
   result.subresource = matched.subresource ?? '';
 
+  // Honor ?watch=true as an alternate watch signal.
+  let queryIsWatch = false;
+  if (query) {
+    for (const kv of query.split('&')) {
+      const eq = kv.indexOf('=');
+      if (eq < 0) continue;
+      if (kv.slice(0, eq) === 'watch') {
+        const v = kv.slice(eq + 1);
+        if (v === 'true' || v === '1' || v === 'True') {
+          queryIsWatch = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // `watch` is a read-only verb. Only emit it for GET/HEAD or empty
+  // method, so a write method with ?watch=true cannot be silently
+  // classified as a benign watch.
+  const methodAllowsWatch = method === '' || method === 'GET' || method === 'HEAD';
+  const isWatch = (matchedIsWatch || queryIsWatch) && methodAllowsWatch;
   const hasName = result.name !== '';
-  const isWatch = /\/watch\//.test(path);
   if (isWatch) {
-    // Kubernetes "watch" verb is path-derived, not method-derived.
     result.verb = 'watch';
   } else if (method) {
     const table = hasName ? METHOD_TO_VERB_NAMED : METHOD_TO_VERB_COLLECTION;

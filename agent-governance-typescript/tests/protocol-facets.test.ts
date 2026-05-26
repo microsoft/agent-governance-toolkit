@@ -581,4 +581,112 @@ rules: []
     const decision = engine.evaluatePolicy('did:example:agent1', {});
     expect(decision.allowed).toBe(true);
   });
+
+  it('does not mutate the caller-provided context or sub-object', () => {
+    const engine = new PolicyEngine(undefined, ConflictResolutionStrategy.DenyOverrides);
+    loadPolicy(
+      engine,
+      `
+apiVersion: governance.toolkit/v1
+name: noop
+scope: global
+default_action: allow
+rules: []
+`,
+    );
+    const sub = { query: 'SELECT 1' };
+    const ctx: Record<string, unknown> = { sql: sub };
+    engine.evaluatePolicy('did:example:agent1', ctx);
+
+    // Caller's sub-object must not be mutated (no facets injected).
+    expect(Object.keys(sub).sort()).toEqual(['query']);
+    // Caller's outer dict must keep its original sub-object reference.
+    expect(ctx.sql).toBe(sub);
+  });
+});
+
+describe('regression: ReDoS / quote-aware comment stripping', () => {
+  it('double-dash inside string literal does not hide injection', () => {
+    // Naive `--[^\n]*` regex stripping would eat from `--';` through
+    // to end-of-line and silently downgrade this to a single SELECT.
+    const f = extractSqlFacets({
+      query: "SELECT '--'; DROP TABLE production",
+    });
+    expect(f.verb).toBe('UNKNOWN');
+  });
+
+  it('block-comment marker inside string literal is preserved', () => {
+    const f = extractSqlFacets({
+      query: "SELECT '/* not a comment */' FROM users",
+    });
+    expect(f.verb).toBe('SELECT');
+    expect(f.target).toBe('users');
+  });
+});
+
+describe('K8s: query-string / fragment / cluster subresources / watch gating', () => {
+  it('strips query string before path matching', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/namespaces/prod/pods?fieldManager=test',
+    });
+    expect(f.resource).toBe('pods');
+    expect(f.namespace).toBe('prod');
+    expect(f.verb).toBe('list');
+  });
+
+  it('?watch=true on GET signals watch verb', () => {
+    expect(
+      extractK8sFacets({
+        method: 'GET',
+        path: '/api/v1/namespaces/prod/pods?watch=true',
+      }).verb,
+    ).toBe('watch');
+  });
+
+  it('?watch=true on POST must NOT yield watch (read-only verb)', () => {
+    expect(
+      extractK8sFacets({
+        method: 'POST',
+        path: '/api/v1/namespaces/prod/pods?watch=true',
+      }).verb,
+    ).not.toBe('watch');
+  });
+
+  it('namespace named "watch-test" does not spoof verb=watch', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/namespaces/watch-test/pods',
+    });
+    expect(f.verb).toBe('list');
+    expect(f.namespace).toBe('watch-test');
+  });
+
+  it('# fragment is stripped', () => {
+    expect(
+      extractK8sFacets({
+        method: 'GET',
+        path: '/api/v1/namespaces/prod/pods#anchor',
+      }).resource,
+    ).toBe('pods');
+  });
+
+  it('cluster-scoped subresource: /api/v1/nodes/n1/status', () => {
+    const f = extractK8sFacets({
+      method: 'PATCH',
+      path: '/api/v1/nodes/node1/status',
+    });
+    expect(f.resource).toBe('nodes');
+    expect(f.name).toBe('node1');
+    expect(f.subresource).toBe('status');
+  });
+
+  it('cluster-scoped proxy tail', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/nodes/node1/proxy/metrics',
+    });
+    expect(f.resource).toBe('nodes');
+    expect(f.subresource).toBe('proxy');
+  });
 });
