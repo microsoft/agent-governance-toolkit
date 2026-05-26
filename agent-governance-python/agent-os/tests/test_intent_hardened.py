@@ -34,11 +34,7 @@ from agent_os.stateless import ExecutionContext, MemoryBackend, StatelessKernel
 # ---------------------------------------------------------------------------
 
 def _run(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    return asyncio.run(coro)
 
 
 @pytest.fixture

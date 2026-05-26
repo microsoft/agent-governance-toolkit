@@ -160,12 +160,7 @@ class GovernanceInterventionHandler:
 
             trusted_skill_sources = kernel.trusted_sources_from_attrs(message)
 
-            skill_fields = kernel.build_skill_audit_fields(
-                trusted_sources=trusted_skill_sources,
-                default_origin="autogen",
-                context_before=tool_args,
-            )
-            kernel.emit_skill_audit_event(
+            emitted = kernel.emit_skill_audit_event(
                 GovernanceEventType.POLICY_CHECK,
                 agent_id=ctx.agent_id,
                 action="autogen.on_send.function_call",
@@ -179,7 +174,11 @@ class GovernanceInterventionHandler:
                 "function_name": tool_name,
                 "args_summary": str(tool_args)[:200],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                **skill_fields,
+                "skill_name": emitted.get("skill_name"),
+                "skill_origin": emitted.get("skill_origin"),
+                "provenance_source_trust": emitted.get("provenance_source_trust"),
+                "context_hash_before": emitted.get("context_hash_before"),
+                "context_hash_after": emitted.get("context_hash_after"),
             })
 
             logger.debug(

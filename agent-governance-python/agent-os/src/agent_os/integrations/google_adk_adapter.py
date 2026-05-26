@@ -469,13 +469,7 @@ class GoogleADKKernel(BaseIntegration):
 
         trusted_skill_sources = self.trusted_sources_from_attrs(tool_context)
 
-        skill_fields = self.build_skill_audit_fields(
-            trusted_sources=trusted_skill_sources,
-            default_origin="adk",
-            context_before=tool_args,
-        )
-
-        self.emit_skill_audit_event(
+        emitted = self.emit_skill_audit_event(
             GovernanceEventType.POLICY_CHECK,
             agent_id=agent_name,
             action="adk.before_tool_callback",
@@ -489,7 +483,11 @@ class GoogleADKKernel(BaseIntegration):
             "before_tool",
             agent_name,
             {"tool": tool_name, "args": tool_args},
-            **skill_fields,
+            skill_name=emitted.get("skill_name"),
+            skill_origin=emitted.get("skill_origin"),
+            provenance_source_trust=emitted.get("provenance_source_trust"),
+            context_hash_before=emitted.get("context_hash_before"),
+            context_hash_after=emitted.get("context_hash_after"),
         )
 
         # Check timeout
@@ -572,17 +570,25 @@ class GoogleADKKernel(BaseIntegration):
 
         trusted_skill_sources = self.trusted_sources_from_attrs(tool_context)
 
-        skill_fields = self.build_skill_audit_fields(
+        emitted = self.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=agent_name,
+            action="adk.after_tool_callback",
             trusted_sources=trusted_skill_sources,
             default_origin="adk",
             context_after=tool_result,
+            tool_name=tool_name,
         )
 
         self._record(
             "after_tool",
             agent_name,
             {"tool": tool_name, "result_type": type(tool_result).__name__},
-            **skill_fields,
+            skill_name=emitted.get("skill_name"),
+            skill_origin=emitted.get("skill_origin"),
+            provenance_source_trust=emitted.get("provenance_source_trust"),
+            context_hash_before=emitted.get("context_hash_before"),
+            context_hash_after=emitted.get("context_hash_after"),
         )
 
         # Check output content

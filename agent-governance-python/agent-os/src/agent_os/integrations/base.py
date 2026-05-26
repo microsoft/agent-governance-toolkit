@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Protocol
 
 if TYPE_CHECKING:
     from agent_os.policies.decision import PolicyCheckResult
@@ -694,7 +694,7 @@ class SkillAuditMetadata:
 
     skill_name: str | None = None
     skill_origin: str | None = None
-    provenance_source_trust: str | None = None
+    provenance_source_trust: Literal["trusted"] | None = None
     context_hash_before: str | None = None
     context_hash_after: str | None = None
 
@@ -714,6 +714,9 @@ class TrustedSkillMetadataSource:
 
     Adapters must construct this only from framework metadata surfaces,
     never from user-controlled request payloads or tool arguments.
+
+    TODO: extend this with verifiable attestations/signatures when
+    framework runtimes expose portable trust claims.
     """
 
     skill_name: str | None = None
@@ -1143,6 +1146,11 @@ class BaseIntegration(ABC):
                 ensure_ascii=True,
             )
         except Exception:
+            logger.debug(
+                "Unable to canonicalize context for hashing (type=%s)",
+                type(context).__name__,
+                exc_info=True,
+            )
             # Fail-safe: non-canonical payloads should not produce hashes.
             return None
 
@@ -1244,7 +1252,7 @@ class BaseIntegration(ABC):
         if skill_name and not skill_origin and default_origin:
             skill_origin = default_origin
 
-        provenance_source_trust: str | None = "trusted" if skill_name else None
+        provenance_source_trust: Literal["trusted"] | None = "trusted" if skill_name else None
 
         return SkillAuditMetadata(
             skill_name=skill_name,

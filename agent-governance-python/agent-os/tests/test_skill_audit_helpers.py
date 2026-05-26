@@ -78,7 +78,7 @@ def test_context_hash_is_stable_for_same_value() -> None:
     assert left == right
 
 
-def test_context_hash_stable_for_nested_ordering() -> None:
+def test_context_hash_stable_for_nested_dict_key_ordering() -> None:
     integration = _ConcreteIntegration()
 
     left = integration.hash_context(

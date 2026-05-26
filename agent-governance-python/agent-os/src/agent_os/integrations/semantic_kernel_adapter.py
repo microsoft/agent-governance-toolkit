@@ -27,7 +27,7 @@ Features:
 import asyncio
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
@@ -924,7 +924,7 @@ class GovernanceFunctionFilter:
         # Record invocation
         self._ctx.functions_invoked.append({
             "function": full_name,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             **skill_fields,
         })
 

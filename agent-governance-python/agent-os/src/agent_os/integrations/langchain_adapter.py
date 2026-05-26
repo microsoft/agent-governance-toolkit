@@ -55,7 +55,7 @@ import functools
 import logging
 import time
 import warnings
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .base import PII_PATTERNS, BaseIntegration, GovernanceEventType, GovernancePolicy
@@ -250,7 +250,7 @@ class LangChainKernel(BaseIntegration):
             "tool_name": tool_name,
             "args": str(args),
             "kwargs": str(kwargs),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             **(skill_fields or self.build_skill_audit_fields()),
         }
         self._tool_invocations.append(record)

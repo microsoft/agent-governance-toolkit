@@ -698,7 +698,7 @@ class IntentManager:
         """
         intent = await self._load(intent_id)
 
-        if intent.state not in (IntentState.EXECUTING, IntentState.APPROVED):
+        if intent.state != IntentState.EXECUTING:
             raise IntentStateError(
                 f"Cannot verify intent in state '{intent.state.value}'"
             )
