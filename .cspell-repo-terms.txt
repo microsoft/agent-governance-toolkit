@@ -389,10 +389,15 @@ xunit
 apiserver
 behaviour
 Dedup
+dedup
+dedupe
+eprintln
 gfns
+materialised
 normalises
 paramref
 pathed
+peekable
+recognising
 Subresources
 subresources
-materialised
