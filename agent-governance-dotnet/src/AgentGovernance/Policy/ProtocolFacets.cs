@@ -83,7 +83,19 @@ public sealed class FacetRegistry
             {
                 facets = extractor(new Dictionary<string, object>(subDict));
             }
-            catch (Exception ex)
+            catch (ArgumentException ex)
+            {
+                Console.Error.WriteLine(
+                    $"[protocol-facets] extractor for '{key}' threw: {ex.Message}");
+                continue;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.Error.WriteLine(
+                    $"[protocol-facets] extractor for '{key}' threw: {ex.Message}");
+                continue;
+            }
+            catch (Exception ex) when (!IsFatal(ex))
             {
                 Console.Error.WriteLine(
                     $"[protocol-facets] extractor for '{key}' threw: {ex.Message}");
@@ -104,6 +116,16 @@ public sealed class FacetRegistry
             context[key] = merged;
         }
     }
+
+    private static bool IsFatal(Exception ex) =>
+        ex is OutOfMemoryException
+        or StackOverflowException
+        or AccessViolationException
+        or AppDomainUnloadedException
+        or BadImageFormatException
+        or CannotUnloadAppDomainException
+        or InvalidProgramException
+        or ThreadAbortException;
 }
 
 /// <summary>
