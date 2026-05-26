@@ -159,6 +159,95 @@ describe('extractSqlFacets', () => {
     const h = extractSqlFacets({ query: 'SELECT * FROM [dbo].[items]' });
     expect(h.tables.split(',')).toContain('items');
   });
+
+  // ── Multi-statement / CTE / target-aware regression cases ────────────────
+
+  it('fails closed to UNKNOWN for multi-statement input', () => {
+    const f = extractSqlFacets({
+      query: 'SELECT 1; DROP TABLE production',
+    });
+    expect(f.verb).toBe('UNKNOWN');
+    expect(f.target).toBe('');
+  });
+
+  it('ignores trailing semicolons (still single statement)', () => {
+    const f = extractSqlFacets({ query: 'SELECT * FROM users;' });
+    expect(f.verb).toBe('SELECT');
+    expect(f.target).toBe('users');
+  });
+
+  it('does not treat semicolons inside string literals as statement boundaries', () => {
+    const f = extractSqlFacets({
+      query: "SELECT * FROM users WHERE name = 'a;b'",
+    });
+    expect(f.verb).toBe('SELECT');
+  });
+
+  it('classifies a CTE-wrapped DELETE as DELETE, not WITH', () => {
+    const f = extractSqlFacets({
+      query: 'WITH stale AS (SELECT id FROM users WHERE inactive) DELETE FROM users WHERE id IN (SELECT id FROM stale)',
+    });
+    expect(f.verb).toBe('DELETE');
+  });
+
+  it('classifies a CTE-wrapped INSERT as INSERT', () => {
+    const f = extractSqlFacets({
+      query: 'WITH new_rows AS (SELECT 1 AS id) INSERT INTO audit (id) SELECT id FROM new_rows',
+    });
+    expect(f.verb).toBe('INSERT');
+  });
+
+  it('classifies a plain CTE+SELECT as SELECT', () => {
+    const f = extractSqlFacets({
+      query: 'WITH x AS (SELECT 1) SELECT * FROM x',
+    });
+    expect(f.verb).toBe('SELECT');
+  });
+
+  it('INSERT INTO target SELECT FROM src → target is written object', () => {
+    const f = extractSqlFacets({
+      query: 'INSERT INTO protected SELECT * FROM source',
+    });
+    expect(f.verb).toBe('INSERT');
+    expect(f.target).toBe('protected');
+    expect(f.tables.split(',').sort()).toEqual(['protected', 'source']);
+  });
+
+  it('UPDATE target FROM src → target is written object', () => {
+    const f = extractSqlFacets({
+      query: 'UPDATE protected SET val = src.val FROM source AS src WHERE protected.id = src.id',
+    });
+    expect(f.verb).toBe('UPDATE');
+    expect(f.target).toBe('protected');
+  });
+
+  it('DELETE FROM target → target is the deleted-from table', () => {
+    const f = extractSqlFacets({
+      query: 'DELETE FROM protected WHERE id IN (SELECT id FROM staging)',
+    });
+    expect(f.verb).toBe('DELETE');
+    expect(f.target).toBe('protected');
+  });
+
+  it('exposes sql.target to policy rules and denies on target match', () => {
+    const engine = new PolicyEngine(undefined, ConflictResolutionStrategy.DenyOverrides);
+    engine.loadYaml(`
+apiVersion: governance.toolkit/v1
+name: sql-target-guard
+scope: global
+default_action: allow
+rules:
+  - name: deny-writes-to-protected
+    condition: "sql.target == 'protected'"
+    ruleAction: deny
+    priority: 100
+`);
+    const decision = engine.evaluatePolicy('did:example:agent1', {
+      sql: { query: 'INSERT INTO protected SELECT * FROM staging' },
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.matchedRule).toBe('deny-writes-to-protected');
+  });
 });
 
 describe('extractK8sFacets', () => {
@@ -274,6 +363,67 @@ describe('extractK8sFacets', () => {
     const f = extractK8sFacets({ path: '/api/v1/namespaces/prod/pods' });
     expect(f.verb).toBe('');
     expect(f.resource).toBe('pods');
+  });
+
+  // ── Watch / proxy / subresource regressions ──────────────────────────────
+
+  it('parses cluster-scoped watch path → verb=watch', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/watch/pods',
+    });
+    expect(f.verb).toBe('watch');
+    expect(f.resource).toBe('pods');
+    expect(f.namespace).toBe('');
+  });
+
+  it('parses namespaced watch collection path → verb=watch', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/watch/namespaces/prod/pods',
+    });
+    expect(f.verb).toBe('watch');
+    expect(f.namespace).toBe('prod');
+    expect(f.resource).toBe('pods');
+  });
+
+  it('parses namespaced watch named path → verb=watch', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/watch/namespaces/prod/pods/web',
+    });
+    expect(f.verb).toBe('watch');
+    expect(f.name).toBe('web');
+  });
+
+  it('parses pod proxy tail → subresource=proxy', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/namespaces/prod/pods/web/proxy/healthz',
+    });
+    expect(f.subresource).toBe('proxy');
+    expect(f.resource).toBe('pods');
+    expect(f.name).toBe('web');
+    expect(f.namespace).toBe('prod');
+  });
+
+  it('parses pod log subresource', () => {
+    const f = extractK8sFacets({
+      method: 'GET',
+      path: '/api/v1/namespaces/prod/pods/web/log',
+    });
+    expect(f.subresource).toBe('log');
+    expect(f.resource).toBe('pods');
+    expect(f.name).toBe('web');
+  });
+
+  it('parses status subresource for non-core /apis path', () => {
+    const f = extractK8sFacets({
+      method: 'PATCH',
+      path: '/apis/apps/v1/namespaces/prod/deployments/web/status',
+    });
+    expect(f.subresource).toBe('status');
+    expect(f.verb).toBe('patch');
   });
 });
 

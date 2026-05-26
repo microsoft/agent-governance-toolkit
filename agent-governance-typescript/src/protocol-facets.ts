@@ -131,18 +131,37 @@ const UNKNOWN_SQL_FACETS: SqlFacets = {
  * own extractor backed by a full parser such as `node-sql-parser`.
  */
 function regexExtractSql(rawQuery: string): SqlFacets {
-  const query = stripSqlComments(rawQuery).trim();
-  if (!query) return { ...EMPTY_SQL_FACETS };
+  const stripped = stripSqlComments(rawQuery).trim();
+  if (!stripped) return { ...EMPTY_SQL_FACETS };
 
-  // First non-whitespace word is the verb.
+  // Multi-statement guard: fail closed if the input contains more than one
+  // meaningful statement (ignoring trailing semicolons and empties). A single
+  // attacker-supplied query like `SELECT 1; DROP TABLE x` must not be
+  // classified as `SELECT`.
+  const statements = splitSqlStatements(stripped);
+  if (statements.length > 1) {
+    return { ...UNKNOWN_SQL_FACETS };
+  }
+  const query = statements[0] ?? stripped;
+
+  // First non-whitespace word is the surface verb.
   const verbMatch = query.match(/^\s*([A-Za-z]+)/);
   if (!verbMatch) return { ...UNKNOWN_SQL_FACETS };
-  const verbRaw = verbMatch[1].toUpperCase();
-  const verb = SQL_KNOWN_VERBS.has(verbRaw) ? verbRaw : 'UNKNOWN';
+  const surfaceVerb = verbMatch[1].toUpperCase();
+
+  // CTE handling: `WITH ... <verb> ...` should be classified by the underlying
+  // DML verb, not by the `WITH` keyword. Matches Python sqlglot which exposes
+  // the inner statement type for `WITH` queries.
+  let verb: string;
+  if (surfaceVerb === 'WITH') {
+    verb = detectCteInnerVerb(query);
+  } else {
+    verb = SQL_KNOWN_VERBS.has(surfaceVerb) ? surfaceVerb : 'UNKNOWN';
+  }
 
   const tables = extractTables(query, verb);
   const functions = extractFunctions(query);
-  const target = tables[0] ?? '';
+  const target = pickTarget(query, verb, tables);
 
   return {
     verb,
@@ -150,6 +169,150 @@ function regexExtractSql(rawQuery: string): SqlFacets {
     tables: tables.join(','),
     functions: functions.join(','),
   };
+}
+
+/**
+ * Split SQL on top-level semicolons (semicolons outside of quoted strings).
+ * Trailing empty/whitespace segments are dropped.
+ */
+function splitSqlStatements(sql: string): string[] {
+  const out: string[] = [];
+  let buf = '';
+  let quote: '' | "'" | '"' | '`' = '';
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (quote) {
+      buf += ch;
+      if (ch === quote) {
+        // Handle SQL doubled-quote escape ('' or "")
+        if (sql[i + 1] === quote) {
+          buf += sql[++i];
+        } else {
+          quote = '';
+        }
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch as '"' | "'" | '`';
+      buf += ch;
+      continue;
+    }
+    if (ch === ';') {
+      const t = buf.trim();
+      if (t) out.push(t);
+      buf = '';
+      continue;
+    }
+    buf += ch;
+  }
+  const tail = buf.trim();
+  if (tail) out.push(tail);
+  return out;
+}
+
+/**
+ * For a CTE-prefixed query (`WITH ... AS (...) <verb> ...`), find the first
+ * DML keyword that appears at top-level paren depth (i.e. not inside a CTE
+ * body or subquery). Falls back to SELECT because every CTE must terminate
+ * in one of SELECT/INSERT/UPDATE/DELETE/MERGE.
+ */
+function detectCteInnerVerb(query: string): string {
+  const candidates = new Set(['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE']);
+  let depth = 0;
+  let quote: '' | "'" | '"' | '`' = '';
+  let token = '';
+  let sawFirstWord = false;
+  for (let i = 0; i <= query.length; i++) {
+    const ch = i < query.length ? query[i] : ' ';
+    if (quote) {
+      if (ch === quote) {
+        if (query[i + 1] === quote) {
+          i++;
+        } else {
+          quote = '';
+        }
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch as '"' | "'" | '`';
+      continue;
+    }
+    if (ch === '(') {
+      depth++;
+      token = '';
+      continue;
+    }
+    if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+      token = '';
+      continue;
+    }
+    if (/[A-Za-z_]/.test(ch)) {
+      token += ch;
+      continue;
+    }
+    if (token) {
+      if (depth === 0) {
+        const up = token.toUpperCase();
+        // Skip the leading WITH itself.
+        if (!sawFirstWord && up === 'WITH') {
+          sawFirstWord = true;
+        } else if (candidates.has(up)) {
+          return up;
+        }
+      }
+      token = '';
+    }
+  }
+  return 'SELECT';
+}
+
+/**
+ * Verb-aware target picker so `INSERT INTO target SELECT ... FROM src` and
+ * `UPDATE target SET ... FROM src` resolve `sql.target` to the written object,
+ * not the read-from one.
+ */
+function pickTarget(query: string, verb: string, tables: string[]): string {
+  let m: RegExpMatchArray | null = null;
+  switch (verb) {
+    case 'INSERT':
+    case 'MERGE':
+      m = query.match(new RegExp(`\\bINTO\\s+${IDENT}`, 'i'));
+      break;
+    case 'UPDATE':
+      m = query.match(new RegExp(`\\bUPDATE\\s+${IDENT}`, 'i'));
+      break;
+    case 'DELETE':
+      m = query.match(new RegExp(`\\bDELETE\\s+FROM\\s+${IDENT}`, 'i'));
+      if (!m) m = query.match(new RegExp(`\\bFROM\\s+${IDENT}`, 'i'));
+      break;
+    case 'DROP':
+    case 'TRUNCATE':
+    case 'ALTER':
+    case 'CREATE':
+    case 'RENAME':
+      m = query.match(
+        new RegExp(
+          `\\b${verb}\\s+(?:TABLE|VIEW|INDEX|SEQUENCE|SCHEMA|DATABASE|TRIGGER|FUNCTION|PROCEDURE)?\\s*(?:IF\\s+(?:NOT\\s+)?EXISTS\\s+)?${IDENT}`,
+          'i',
+        ),
+      );
+      break;
+    case 'GRANT':
+    case 'REVOKE':
+      m = query.match(new RegExp(`\\bON\\s+(?:TABLE\\s+)?${IDENT}`, 'i'));
+      break;
+    default:
+      // SELECT, WITH-as-SELECT, etc.: first FROM target.
+      m = query.match(new RegExp(`\\bFROM\\s+${IDENT}`, 'i'));
+      break;
+  }
+  if (m && m[1]) {
+    return normalizeIdent(m[1]);
+  }
+  return tables[0] ?? '';
 }
 
 function stripSqlComments(sql: string): string {
@@ -343,8 +506,45 @@ interface K8sPattern {
   groups: ReadonlyArray<'namespace' | 'resource' | 'name' | 'subresource'>;
 }
 
-// Ordered most specific first. Matches Python's _K8S_PATH_PATTERNS.
+// Ordered most specific first. Matches Python's _K8S_PATH_PATTERNS, plus
+// explicit `watch` and proxy-tail handling.
 const K8S_PATH_PATTERNS: ReadonlyArray<K8sPattern> = [
+  // Watch paths — namespaced collection
+  {
+    re: /^\/api\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/?$/,
+    groups: ['namespace', 'resource'],
+  },
+  {
+    re: /^\/apis\/[^/]+\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/?$/,
+    groups: ['namespace', 'resource'],
+  },
+  // Watch paths — namespaced named object
+  {
+    re: /^\/api\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
+    groups: ['namespace', 'resource', 'name'],
+  },
+  {
+    re: /^\/apis\/[^/]+\/[^/]+\/watch\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
+    groups: ['namespace', 'resource', 'name'],
+  },
+  // Watch paths — cluster-scoped
+  {
+    re: /^\/api\/[^/]+\/watch\/([^/]+)\/?$/,
+    groups: ['resource'],
+  },
+  {
+    re: /^\/apis\/[^/]+\/[^/]+\/watch\/([^/]+)\/?$/,
+    groups: ['resource'],
+  },
+  // Proxy tail: pods/<name>/proxy/<...> → subresource = proxy
+  {
+    re: /^\/api\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/(proxy)(?:\/.*)?$/,
+    groups: ['namespace', 'resource', 'name', 'subresource'],
+  },
+  {
+    re: /^\/apis\/[^/]+\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/(proxy)(?:\/.*)?$/,
+    groups: ['namespace', 'resource', 'name', 'subresource'],
+  },
   {
     re: /^\/api\/[^/]+\/namespaces\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/?$/,
     groups: ['namespace', 'resource', 'name', 'subresource'],
@@ -435,7 +635,11 @@ export function extractK8sFacets(k8sCtx: Record<string, unknown>): K8sFacets {
   result.subresource = matched.subresource ?? '';
 
   const hasName = result.name !== '';
-  if (method) {
+  const isWatch = /\/watch\//.test(path);
+  if (isWatch) {
+    // Kubernetes "watch" verb is path-derived, not method-derived.
+    result.verb = 'watch';
+  } else if (method) {
     const table = hasName ? METHOD_TO_VERB_NAMED : METHOD_TO_VERB_COLLECTION;
     result.verb = table[method] ?? method.toLowerCase();
   }
