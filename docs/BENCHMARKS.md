@@ -5,6 +5,8 @@
 > All benchmarks use `time.perf_counter()` with 10,000 iterations (unless noted).
 > Numbers are from a development workstation — CI runs on `ubuntu-latest` GitHub-hosted runners.
 
+> **Scope:** This document covers **latency and throughput** for AGT's enforcement path. For security / red-team metrics (Attack Success Rate, jailbreak robustness), see [Security & Red-Team Benchmarks](#security--red-team-benchmarks) below. AGT does not yet publish its own ASR benchmark and instead references external, reproducible sources.
+
 ## TL;DR
 
 | What you care about | Number |
@@ -198,3 +200,23 @@ The governance layer adds less overhead than a single Redis read and is **10,000
 |---|---|---|
 | v2.1.0 | March 2026 | Added 1K concurrent agent benchmarks, ~15% faster policy eval vs v1.1.x |
 | v1.1.0 | February 2026 | Initial published benchmarks |
+
+---
+
+## Security & Red-Team Benchmarks
+
+AGT does **not** currently publish an in-house Attack Success Rate (ASR) benchmark for its enforcement layer. We intentionally avoid quoting unsourced violation-rate percentages. Instead, we point users to reproducible external sources for the security side of the conversation:
+
+| Source | What it measures | Why it matters |
+|---|---|---|
+| [JailbreakBench (Chao et al., NeurIPS 2024)](https://arxiv.org/abs/2404.01318) | Open robustness benchmark covering ASR of jailbreak attacks vs. defenses on frontier LLMs. | Standard reproducible leaderboard; covers GPT-3.5/4, Claude, Llama, Vicuna. |
+| [Andriushchenko et al., 2024](https://arxiv.org/abs/2404.02151) | Adaptive prompt-only attacks against safety-aligned LLMs. | Reports **100% ASR** on GPT-4, GPT-3.5-Turbo, Claude 3 (Opus/Sonnet/Haiku), Gemini Pro, and Llama-3, showing prompt-layer defenses are not a control. |
+| [OWASP LLM01:2025 (Prompt Injection)](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) | Threat taxonomy and mitigation guidance. | States that *"it is unclear if there are fool-proof methods of prevention for prompt injection"* and recommends application-layer controls. |
+| [Microsoft AI Red Teaming Agent (Azure AI Foundry)](https://learn.microsoft.com/azure/ai-foundry/concepts/ai-red-teaming-agent) | Defines **Attack Success Rate (ASR)** as the canonical metric for policy violations under adversarial input. | Microsoft-official source for the metric AGT cares about. |
+| [Lessons from Red Teaming 100 Generative AI Products (Microsoft, 2025)](https://www.microsoft.com/en-us/security/blog/2025/01/13/3-takeaways-from-red-teaming-100-generative-ai-products/) | Microsoft AI Red Team field findings across 100+ products. | Concludes *"AI red teaming is never complete,"* reinforcing why deterministic enforcement is required alongside model-layer safety. |
+
+### How AGT's enforcement model maps to ASR
+
+AGT's value proposition is not "lower ASR than a prompt." It is **moving the decision off the model entirely**. For any tool call, message, or delegation governed by AGT, the allow/deny decision is made in deterministic application code before reaching the model boundary. The probabilistic failure mode that ASR measures does not apply to that path.
+
+We plan to publish a reproducible red-team harness (target corpus, scoring rubric, sample size, methodology) in a future release. Until then, please treat any third-party percentage you see attributed to AGT, including older repo copies of a "26.67% / 0.00%" pair, as **not yet substantiated by a published methodology** ([#2577](https://github.com/microsoft/agent-governance-toolkit/issues/2577)).
