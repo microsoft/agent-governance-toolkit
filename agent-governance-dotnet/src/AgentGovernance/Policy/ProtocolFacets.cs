@@ -109,7 +109,7 @@ public sealed class FacetRegistry
 /// Built-in SQL and Kubernetes facet extractors and the process-wide
 /// default <see cref="FacetRegistry"/>.
 /// </summary>
-public static class ProtocolFacets
+public static partial class ProtocolFacets
 {
     private static readonly Lazy<FacetRegistry> s_default = new(() =>
     {
@@ -160,11 +160,23 @@ public static class ProtocolFacets
         @"(?:[A-Za-z_][A-Za-z0-9_]*|""[^""]+""|`[^`]+`|\[[^\]]+\])";
     private const string Ident = "(" + IdentPart + @"(?:\." + IdentPart + ")*)";
 
-    private static readonly Regex SqlFirstWord = new(@"^\s*([A-Za-z]+)", RegexOptions.Compiled);
+    // The two hottest patterns (first-word verb scan and function-call
+    // detection) are materialised as compile-time regexes via the
+    // `GeneratedRegex` source generator on .NET 7+. This skips the runtime
+    // compiler entirely and lets the JIT inline the matcher.
+    [GeneratedRegex(@"^\s*([A-Za-z]+)")]
+    private static partial Regex SqlFirstWord();
 
-    private static readonly Regex FuncRe =
-        new(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.Compiled);
+    [GeneratedRegex(@"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")]
+    private static partial Regex FuncRe();
 
+    // Cache for dynamic (verb-templated) patterns produced by the verb
+    // dispatch in `PickTarget` / `ExtractTables`. The set of distinct
+    // patterns is fully determined by that dispatch and is therefore
+    // bounded by a small constant — there is no path from caller input to
+    // a new entry in this cache, so unbounded growth is impossible.
+    // If a future change ever lets caller-supplied strings flow into `Re`,
+    // this cache must be replaced with a bounded LRU.
     private static readonly ConcurrentDictionary<string, Regex> _regexCache = new();
     private static Regex Re(string pattern) =>
         _regexCache.GetOrAdd(pattern, p => new Regex(p, RegexOptions.Compiled | RegexOptions.IgnoreCase));
@@ -189,7 +201,7 @@ public static class ProtocolFacets
         if (statements.Count > 1) return UnknownSqlFacets();
         var query = statements.Count == 1 ? statements[0] : stripped;
 
-        var firstWordMatch = SqlFirstWord.Match(query);
+        var firstWordMatch = SqlFirstWord().Match(query);
         if (!firstWordMatch.Success) return UnknownSqlFacets();
         var surface = firstWordMatch.Groups[1].Value.ToUpperInvariant();
 
@@ -414,7 +426,7 @@ public static class ProtocolFacets
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var result = new List<string>();
-        foreach (Match m in FuncRe.Matches(query))
+        foreach (Match m in FuncRe().Matches(query))
         {
             var up = m.Groups[1].Value.ToUpperInvariant();
             if (SqlFunctionDenylist.Contains(up)) continue;
