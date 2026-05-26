@@ -375,6 +375,17 @@ fn conditions_match(
     conditions: &HashMap<String, serde_yaml::Value>,
     context: Option<&HashMap<String, serde_yaml::Value>>,
 ) -> bool {
+    // Condition matching is **case-sensitive** for both keys and values.
+    // Wire-protocol extractors (`protocol_facets`) emit canonical casing:
+    // SQL verbs are uppercase (`SELECT`, `DROP`, ...) while Kubernetes
+    // verbs are lowercase (`get`, `list`, `watch`, ...). Policy authors
+    // must match that casing exactly — e.g.
+    //     sql.verb: DROP            # matches
+    //     sql.verb: drop            # does NOT match
+    //     k8s.verb: get             # matches
+    //     k8s.verb: GET             # does NOT match
+    // If the rule expresses the expected value as a YAML sequence the same
+    // case-sensitive comparison is applied to each element.
     if conditions.is_empty() {
         return true;
     }

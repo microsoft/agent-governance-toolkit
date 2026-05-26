@@ -29,7 +29,30 @@
 use regex::Regex;
 use serde_yaml::Value;
 use std::collections::HashMap;
-use std::sync::{OnceLock, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
+
+/// Process-wide cache of compiled regexes. The set of patterns is fully
+/// determined by the verb dispatch in [`pick_target`] / [`extract_tables`],
+/// so the cache is bounded by a small constant and cannot grow unbounded.
+fn cached_regex(pattern: &str) -> Arc<Regex> {
+    static CACHE: OnceLock<Mutex<HashMap<String, Arc<Regex>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    // Fast path: lock briefly to look up; compile outside the lock if absent
+    // so a slow regex compile doesn't serialise other lookups behind us.
+    {
+        let guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(re) = guard.get(pattern) {
+            return Arc::clone(re);
+        }
+    }
+    let compiled = Arc::new(Regex::new(pattern).expect("static pattern must compile"));
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    // Another thread may have inserted in the meantime; prefer the existing.
+    guard
+        .entry(pattern.to_string())
+        .or_insert_with(|| Arc::clone(&compiled))
+        .clone()
+}
 
 /// Function signature for a protocol facet extractor.
 ///
@@ -99,6 +122,16 @@ impl FacetRegistry {
     ///    context see them), and
     /// 2. Inserted as flat `<key>.<field>` entries on the top-level
     ///    context so dot-keyed policy rules match.
+    ///
+    /// # Performance
+    ///
+    /// Each registered sub-mapping is `.clone()`d once so the extractor
+    /// receives an owned snapshot without holding any borrow on `context`.
+    /// For typical wire-protocol sub-maps (a handful of small string keys
+    /// per protocol) this is sub-microsecond. Hot paths that need to push
+    /// large structured payloads into the protocol context should keep
+    /// them out of the sub-mapping (e.g. by stashing them at the top level
+    /// where they bypass extractor cloning).
     pub fn extract(&self, context: &mut HashMap<String, Value>) {
         let extractors = self
             .extractors
@@ -390,22 +423,22 @@ fn normalize_ident(ident: &str) -> String {
 
 fn extract_tables(query: &str, verb: &str) -> Vec<String> {
     let ident = ident_pattern();
-    let mut patterns: Vec<Regex> = Vec::new();
-    patterns.push(Regex::new(&format!(r"(?i)\bFROM\s+{}", ident)).unwrap());
-    patterns.push(Regex::new(&format!(r"(?i)\bJOIN\s+{}", ident)).unwrap());
-    patterns.push(Regex::new(&format!(r"(?i)\bINTO\s+{}", ident)).unwrap());
-    patterns.push(Regex::new(&format!(r"(?i)\bUPDATE\s+{}", ident)).unwrap());
+    let mut patterns: Vec<Arc<Regex>> = Vec::new();
+    patterns.push(cached_regex(&format!(r"(?i)\bFROM\s+{}", ident)));
+    patterns.push(cached_regex(&format!(r"(?i)\bJOIN\s+{}", ident)));
+    patterns.push(cached_regex(&format!(r"(?i)\bINTO\s+{}", ident)));
+    patterns.push(cached_regex(&format!(r"(?i)\bUPDATE\s+{}", ident)));
 
     if matches!(verb, "DROP" | "TRUNCATE" | "ALTER" | "CREATE" | "RENAME") {
         let p = format!(
             r"(?i)\b{}\s+(?:TABLE|VIEW|INDEX|SEQUENCE|SCHEMA|DATABASE|TRIGGER|FUNCTION|PROCEDURE)?\s*(?:IF\s+(?:NOT\s+)?EXISTS\s+)?{}",
             verb, ident
         );
-        patterns.push(Regex::new(&p).unwrap());
-        patterns.push(Regex::new(&format!(r"(?i)\bON\s+{}", ident)).unwrap());
+        patterns.push(cached_regex(&p));
+        patterns.push(cached_regex(&format!(r"(?i)\bON\s+{}", ident)));
     }
     if matches!(verb, "GRANT" | "REVOKE") {
-        patterns.push(Regex::new(&format!(r"(?i)\bON\s+(?:TABLE\s+)?{}", ident)).unwrap());
+        patterns.push(cached_regex(&format!(r"(?i)\bON\s+(?:TABLE\s+)?{}", ident)));
     }
 
     let mut seen = std::collections::HashSet::new();
@@ -461,7 +494,7 @@ fn pick_target(query: &str, verb: &str, tables: &[String]) -> String {
         _ => Some(format!(r"(?i)\bFROM\s+{}", ident)),
     };
     if let Some(p) = pat {
-        let re = Regex::new(&p).unwrap();
+        let re = cached_regex(&p);
         if let Some(caps) = re.captures(query) {
             if let Some(m) = caps.get(1) {
                 return normalize_ident(m.as_str());
@@ -470,7 +503,7 @@ fn pick_target(query: &str, verb: &str, tables: &[String]) -> String {
     }
     // DELETE without FROM (rare dialects): fall back to first FROM
     if verb == "DELETE" {
-        let re = Regex::new(&format!(r"(?i)\bFROM\s+{}", ident)).unwrap();
+        let re = cached_regex(&format!(r"(?i)\bFROM\s+{}", ident));
         if let Some(caps) = re.captures(query) {
             if let Some(m) = caps.get(1) {
                 return normalize_ident(m.as_str());
@@ -499,9 +532,13 @@ pub fn extract_sql_facets(sql_ctx: &serde_yaml::Mapping) -> HashMap<String, Valu
     }
     let query = statements.first().cloned().unwrap_or_else(|| trimmed.to_string());
 
-    let verb_match = match Regex::new(r"^\s*([A-Za-z]+)").unwrap().captures(&query) {
-        Some(c) => c.get(1).unwrap().as_str().to_ascii_uppercase(),
-        None => return unknown_sql_facets(),
+    let verb_match = {
+        static FIRST_WORD: OnceLock<Regex> = OnceLock::new();
+        let re = FIRST_WORD.get_or_init(|| Regex::new(r"^\s*([A-Za-z]+)").unwrap());
+        match re.captures(&query) {
+            Some(c) => c.get(1).unwrap().as_str().to_ascii_uppercase(),
+            None => return unknown_sql_facets(),
+        }
     };
 
     let verb: String = if verb_match == "WITH" {
