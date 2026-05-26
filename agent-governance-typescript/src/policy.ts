@@ -16,6 +16,7 @@ import {
   PolicyScope,
   LegacyPolicyDecision,
 } from './types';
+import { extractProtocolFacets } from './protocol-facets';
 
 export type PolicyDecision = LegacyPolicyDecision;
 
@@ -449,6 +450,16 @@ export class PolicyEngine {
   evaluatePolicy(agentDid: string, context: Record<string, unknown>): PolicyDecisionResult {
     const start = performance.now();
 
+    // Enrich context with wire-protocol facets (sql.*, k8s.*, etc.) so policy
+    // rules can reference protocol-level semantics. Mutates `context` in
+    // place; failures inside individual extractors are swallowed and logged
+    // so a broken parser cannot block evaluation.
+    try {
+      extractProtocolFacets(context);
+    } catch {
+      // Defensive: the registry already swallows per-extractor errors.
+    }
+
     const applicable = [...this._policies.values()].filter((p) =>
       policyAppliesTo(p, agentDid),
     );
@@ -630,6 +641,11 @@ export class PolicyEngine {
    * First match wins; default is 'deny'.
    */
   evaluate(action: string, context: Record<string, unknown> = {}): PolicyDecision {
+    try {
+      extractProtocolFacets(context);
+    } catch {
+      // Defensive: extractor failures must never block legacy evaluation.
+    }
     for (const rule of this._legacyRules) {
       if (
         this.matchAction(rule.action ?? '', action) &&

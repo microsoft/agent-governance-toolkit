@@ -159,3 +159,54 @@ write rules like:
 
 See [`examples/policy-templates/wire-protocol-rules.yaml`](../examples/policy-templates/wire-protocol-rules.yaml)
 for a full set of example rules.
+
+## Language parity
+
+The same facet model is available in the language SDKs. Each SDK exposes
+`FacetRegistry`, `defaultRegistry`, and `extractProtocolFacets`, ships
+`sql.*` and `k8s.*` extractors with the same field names, and runs the
+extractors automatically inside policy evaluation.
+
+| Language   | Module / package | Status |
+|------------|------------------|--------|
+| Python     | `agentmesh.governance.protocol_facets` | Shipped (#2553) |
+| TypeScript | `@microsoft/agent-governance-sdk` → `protocol-facets` | Shipped (#2537) |
+| Rust       | `agent-governance-rust` | Tracked in #2537 |
+| .NET       | `agent-governance-dotnet` | Tracked in #2537 |
+| Go         | `agent-governance-golang` | Tracked in #2537 |
+
+### TypeScript usage
+
+```ts
+import {
+  PolicyEngine,
+  extractProtocolFacets,
+  defaultRegistry,
+} from '@microsoft/agent-governance-sdk';
+
+const engine = new PolicyEngine();
+engine.loadYaml(/* see examples/policy-templates/wire-protocol-rules.yaml */);
+
+// Facets are extracted automatically inside evaluatePolicy() — you only need
+// to populate the raw protocol context.
+const decision = engine.evaluatePolicy('did:example:agent1', {
+  sql: { query: 'DROP TABLE production' },
+});
+// decision.action === 'deny'
+
+// Register a custom protocol extractor on the module-level registry:
+defaultRegistry.register('redis', (ctx) => ({
+  verb: String(ctx.command ?? '').toUpperCase(),
+  key: String(ctx.key ?? ''),
+}));
+```
+
+Rule conditions in the TypeScript SDK use the expression-string format
+(`"sql.verb in ['DROP']"`) rather than the Python `{field, operator, value}`
+dict form, but the available fields and decision outcomes are identical.
+
+> **SQL parser note.** The TypeScript extractor uses a built-in regex
+> tokenizer that handles the common verb / target / function cases used by
+> policy rules. The Python implementation uses `sqlglot` for full AST
+> parsing. For complex dialect-specific SQL, register a custom extractor
+> backed by a full parser via `defaultRegistry.register('sql', ...)`.

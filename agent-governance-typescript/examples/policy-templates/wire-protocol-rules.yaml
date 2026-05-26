@@ -1,0 +1,53 @@
+# Wire-protocol-aware policy rules (TypeScript SDK)
+#
+# Mirrors examples/policy-templates/wire-protocol-rules.yaml from the Python
+# SDK. Load with `engine.loadYaml(readFileSync(path, 'utf-8'))`.
+apiVersion: governance.toolkit/v1
+name: wire-protocol-rules
+scope: global
+default_action: allow
+
+rules:
+  # ── SQL ──────────────────────────────────────────────────────────────────
+  - name: deny-destructive-sql
+    description: Block DROP/TRUNCATE/DELETE statements outright.
+    condition: "sql.verb in ['DROP', 'TRUNCATE', 'DELETE']"
+    ruleAction: deny
+    priority: 100
+
+  - name: deny-schema-changes
+    description: Block schema and permission mutations.
+    condition: "sql.verb in ['ALTER', 'GRANT', 'REVOKE']"
+    ruleAction: deny
+    priority: 100
+
+  - name: allow-read-only-sql
+    description: SELECT is always allowed.
+    condition: "sql.verb == 'SELECT'"
+    ruleAction: allow
+    priority: 5
+
+  # ── Kubernetes ───────────────────────────────────────────────────────────
+  - name: deny-k8s-production-namespace
+    description: No writes against the production namespace.
+    condition: "k8s.namespace == 'production'"
+    ruleAction: deny
+    priority: 110
+
+  - name: deny-k8s-exec
+    description: Block pod exec from any agent.
+    condition: "k8s.subresource == 'exec'"
+    ruleAction: deny
+    priority: 100
+
+  - name: deny-k8s-deletecollection
+    description: Block bulk deletes.
+    condition: "k8s.verb == 'deletecollection'"
+    ruleAction: deny
+    priority: 100
+
+  - name: allow-k8s-readonly
+    description: Read-only Kubernetes verbs are allowed.
+    condition: "k8s.verb in ['get', 'list', 'watch']"
+    ruleAction: allow
+    priority: 5
