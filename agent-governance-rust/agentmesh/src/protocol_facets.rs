@@ -180,14 +180,65 @@ fn unknown_sql_facets() -> HashMap<String, Value> {
     m
 }
 
-/// Strip `/* ... */` and `-- ...` style SQL comments.
+/// Strip `/* ... */` and `-- ...` style SQL comments in a quote-aware way.
+///
+/// A naive regex strip would corrupt inputs like `SELECT '--'; DROP TABLE x`
+/// (the `--` inside the string literal would be treated as a line comment
+/// and the trailing `DROP` would be silently consumed). This walker
+/// respects single, double and backtick quoting (with SQL doubled-quote
+/// escapes) before recognising comment markers.
 fn strip_sql_comments(sql: &str) -> String {
-    static BLOCK: OnceLock<Regex> = OnceLock::new();
-    static LINE: OnceLock<Regex> = OnceLock::new();
-    let block = BLOCK.get_or_init(|| Regex::new(r"(?s)/\*.*?\*/").unwrap());
-    let line = LINE.get_or_init(|| Regex::new(r"--[^\n\r]*").unwrap());
-    let s = block.replace_all(sql, " ").to_string();
-    line.replace_all(&s, " ").to_string()
+    let mut out = String::with_capacity(sql.len());
+    let mut chars = sql.chars().peekable();
+    let mut quote: Option<char> = None;
+    while let Some(ch) = chars.next() {
+        if let Some(q) = quote {
+            out.push(ch);
+            if ch == q {
+                if chars.peek().copied() == Some(q) {
+                    // Escaped doubled quote
+                    if let Some(next) = chars.next() {
+                        out.push(next);
+                    }
+                } else {
+                    quote = None;
+                }
+            }
+            continue;
+        }
+        if ch == '\'' || ch == '"' || ch == '`' {
+            quote = Some(ch);
+            out.push(ch);
+            continue;
+        }
+        // -- line comment
+        if ch == '-' && chars.peek().copied() == Some('-') {
+            chars.next(); // consume second '-'
+            while let Some(&c) = chars.peek() {
+                if c == '\n' || c == '\r' {
+                    break;
+                }
+                chars.next();
+            }
+            out.push(' ');
+            continue;
+        }
+        // /* block comment */
+        if ch == '/' && chars.peek().copied() == Some('*') {
+            chars.next(); // consume '*'
+            let mut prev = '\0';
+            for c in chars.by_ref() {
+                if prev == '*' && c == '/' {
+                    break;
+                }
+                prev = c;
+            }
+            out.push(' ');
+            continue;
+        }
+        out.push(ch);
+    }
+    out
 }
 
 /// Split on top-level semicolons (outside quoted strings).
@@ -478,75 +529,89 @@ pub fn extract_sql_facets(sql_ctx: &serde_yaml::Mapping) -> HashMap<String, Valu
 struct K8sPattern {
     re: Regex,
     groups: &'static [&'static str],
+    is_watch: bool,
 }
 
 fn k8s_patterns() -> &'static Vec<K8sPattern> {
     static P: OnceLock<Vec<K8sPattern>> = OnceLock::new();
     P.get_or_init(|| {
-        let mk = |p: &str, g: &'static [&'static str]| K8sPattern {
+        let mk = |p: &str, g: &'static [&'static str], is_watch: bool| K8sPattern {
             re: Regex::new(p).unwrap(),
             groups: g,
+            is_watch,
         };
         vec![
             // Watch — namespaced collection
             mk(
                 r"^/api/[^/]+/watch/namespaces/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource"],
+                true,
             ),
             mk(
                 r"^/apis/[^/]+/[^/]+/watch/namespaces/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource"],
+                true,
             ),
             // Watch — namespaced named
             mk(
                 r"^/api/[^/]+/watch/namespaces/([^/]+)/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource", "name"],
+                true,
             ),
             mk(
                 r"^/apis/[^/]+/[^/]+/watch/namespaces/([^/]+)/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource", "name"],
+                true,
             ),
             // Watch — cluster
-            mk(r"^/api/[^/]+/watch/([^/]+)/?$", &["resource"]),
-            mk(r"^/apis/[^/]+/[^/]+/watch/([^/]+)/?$", &["resource"]),
+            mk(r"^/api/[^/]+/watch/([^/]+)/?$", &["resource"], true),
+            mk(r"^/apis/[^/]+/[^/]+/watch/([^/]+)/?$", &["resource"], true),
             // Proxy tail
             mk(
                 r"^/api/[^/]+/namespaces/([^/]+)/([^/]+)/([^/]+)/(proxy)(?:/.*)?$",
                 &["namespace", "resource", "name", "subresource"],
+                false,
             ),
             mk(
                 r"^/apis/[^/]+/[^/]+/namespaces/([^/]+)/([^/]+)/([^/]+)/(proxy)(?:/.*)?$",
                 &["namespace", "resource", "name", "subresource"],
+                false,
             ),
             // Generic — most specific first
             mk(
                 r"^/api/[^/]+/namespaces/([^/]+)/([^/]+)/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource", "name", "subresource"],
+                false,
             ),
             mk(
                 r"^/apis/[^/]+/[^/]+/namespaces/([^/]+)/([^/]+)/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource", "name", "subresource"],
+                false,
             ),
             mk(
                 r"^/api/[^/]+/namespaces/([^/]+)/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource", "name"],
+                false,
             ),
             mk(
                 r"^/apis/[^/]+/[^/]+/namespaces/([^/]+)/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource", "name"],
+                false,
             ),
             mk(
                 r"^/api/[^/]+/namespaces/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource"],
+                false,
             ),
             mk(
                 r"^/apis/[^/]+/[^/]+/namespaces/([^/]+)/([^/]+)/?$",
                 &["namespace", "resource"],
+                false,
             ),
-            mk(r"^/api/[^/]+/([^/]+)/([^/]+)/?$", &["resource", "name"]),
-            mk(r"^/apis/[^/]+/[^/]+/([^/]+)/([^/]+)/?$", &["resource", "name"]),
-            mk(r"^/api/[^/]+/([^/]+)/?$", &["resource"]),
-            mk(r"^/apis/[^/]+/[^/]+/([^/]+)/?$", &["resource"]),
+            mk(r"^/api/[^/]+/([^/]+)/([^/]+)/?$", &["resource", "name"], false),
+            mk(r"^/apis/[^/]+/[^/]+/([^/]+)/([^/]+)/?$", &["resource", "name"], false),
+            mk(r"^/api/[^/]+/([^/]+)/?$", &["resource"], false),
+            mk(r"^/apis/[^/]+/[^/]+/([^/]+)/?$", &["resource"], false),
         ]
     })
 }
@@ -582,7 +647,7 @@ pub fn extract_k8s_facets(k8s_ctx: &serde_yaml::Mapping) -> HashMap<String, Valu
         Some(Value::String(s)) => s.to_ascii_uppercase(),
         _ => String::new(),
     };
-    let path = match k8s_ctx.get(Value::String("path".to_string())) {
+    let raw_path = match k8s_ctx.get(Value::String("path".to_string())) {
         Some(Value::String(s)) => s.clone(),
         _ => String::new(),
     };
@@ -591,18 +656,32 @@ pub fn extract_k8s_facets(k8s_ctx: &serde_yaml::Mapping) -> HashMap<String, Valu
     for k in ["verb", "resource", "namespace", "name", "subresource"] {
         out.insert(k.to_string(), Value::String(String::new()));
     }
-    if path.is_empty() {
+    if raw_path.is_empty() {
         return out;
     }
 
+    // Strip query and fragment before path-pattern matching so resources
+    // named "watch" cannot be spoofed and `?watch=true` can be detected
+    // independently of the path.
+    let (path_only, query) = match raw_path.split_once('?') {
+        Some((p, q)) => (p.to_string(), q.to_string()),
+        None => (raw_path.clone(), String::new()),
+    };
+    let path_only = match path_only.split_once('#') {
+        Some((p, _)) => p.to_string(),
+        None => path_only,
+    };
+
     let mut matched: HashMap<&'static str, String> = HashMap::new();
+    let mut matched_is_watch = false;
     for pat in k8s_patterns() {
-        if let Some(caps) = pat.re.captures(&path) {
+        if let Some(caps) = pat.re.captures(&path_only) {
             for (i, g) in pat.groups.iter().enumerate() {
                 if let Some(m) = caps.get(i + 1) {
                     matched.insert(*g, m.as_str().to_string());
                 }
             }
+            matched_is_watch = pat.is_watch;
             break;
         }
     }
@@ -612,7 +691,13 @@ pub fn extract_k8s_facets(k8s_ctx: &serde_yaml::Mapping) -> HashMap<String, Valu
     let name = matched.get("name").cloned().unwrap_or_default();
     let subresource = matched.get("subresource").cloned().unwrap_or_default();
 
-    let is_watch = path.contains("/watch/");
+    // Honor `?watch=true` query parameter as an alternate way to signal a
+    // watch request. Only treat as watch when explicitly set to true/1.
+    let query_signals_watch = query
+        .split('&')
+        .any(|kv| matches!(kv.split_once('='), Some(("watch", v)) if matches!(v, "true" | "1" | "True")));
+
+    let is_watch = matched_is_watch || query_signals_watch;
     let verb: String = if is_watch {
         "watch".to_string()
     } else if !method.is_empty() {
@@ -657,6 +742,18 @@ pub fn default_registry() -> &'static FacetRegistry {
 /// dot-path traversal.
 pub fn extract_protocol_facets(context: &mut HashMap<String, Value>) {
     default_registry().extract(context);
+}
+
+/// Like [`extract_protocol_facets`] but using a caller-supplied registry.
+///
+/// Mirrors the Python `extract_protocol_facets(context, registry=...)` form
+/// for callers that need an isolated or test-local registry rather than the
+/// process-wide default.
+pub fn extract_protocol_facets_with(
+    context: &mut HashMap<String, Value>,
+    registry: &FacetRegistry,
+) {
+    registry.extract(context);
 }
 
 #[cfg(test)]
@@ -1104,6 +1201,84 @@ mod tests {
         assert_eq!(
             ctx.get("k8s.namespace").and_then(|v| v.as_str()),
             Some("prod")
+        );
+    }
+
+    // ── Regression: comment-stripping must be quote-aware ────────────────
+
+    #[test]
+    fn sql_double_dash_inside_string_literal_does_not_hide_injection() {
+        // Naive `--[^\n\r]*` regex stripping would eat from `--';` through
+        // to end-of-line and silently turn this into a single SELECT. The
+        // quote-aware stripper preserves the semicolon so the multi-
+        // statement guard fires.
+        let f = sql_facets("SELECT '--'; DROP TABLE production");
+        assert_eq!(fv(&f, "verb"), "UNKNOWN");
+    }
+
+    #[test]
+    fn sql_block_comment_inside_string_literal_preserved() {
+        let f = sql_facets("SELECT '/* not a comment */' FROM users");
+        assert_eq!(fv(&f, "verb"), "SELECT");
+        assert_eq!(fv(&f, "target"), "users");
+    }
+
+    // ── Regression: K8s query-string / fragment / spoofed names ──────────
+
+    #[test]
+    fn k8s_query_string_is_stripped_before_path_match() {
+        // Resource `pods` must still parse with a trailing ?fieldManager=...
+        let f = k8s("GET", "/api/v1/namespaces/prod/pods?fieldManager=test");
+        assert_eq!(fv(&f, "resource"), "pods");
+        assert_eq!(fv(&f, "namespace"), "prod");
+        assert_eq!(fv(&f, "verb"), "list");
+    }
+
+    #[test]
+    fn k8s_watch_query_param_signals_watch_verb() {
+        let f = k8s("GET", "/api/v1/namespaces/prod/pods?watch=true");
+        assert_eq!(fv(&f, "verb"), "watch");
+        assert_eq!(fv(&f, "resource"), "pods");
+    }
+
+    #[test]
+    fn k8s_resource_named_watch_does_not_falsely_trigger_watch_verb() {
+        // Namespace name `watch-test` contains the substring `/watch` after
+        // /namespaces/ — the previous `path.contains("/watch/")` substring
+        // check would have spuriously emitted verb=watch.
+        let f = k8s("GET", "/api/v1/namespaces/watch-test/pods");
+        assert_eq!(fv(&f, "verb"), "list");
+        assert_eq!(fv(&f, "namespace"), "watch-test");
+    }
+
+    #[test]
+    fn k8s_fragment_is_stripped() {
+        let f = k8s("GET", "/api/v1/namespaces/prod/pods#anchor");
+        assert_eq!(fv(&f, "resource"), "pods");
+    }
+
+    // ── extract_protocol_facets_with custom registry ─────────────────────
+
+    #[test]
+    fn extract_with_custom_registry_does_not_touch_default() {
+        let r = FacetRegistry::new();
+        r.register("sql", |_| {
+            let mut m = HashMap::new();
+            m.insert("verb".to_string(), Value::String("CUSTOM".to_string()));
+            m
+        });
+        let mut ctx: HashMap<String, Value> = HashMap::new();
+        ctx.insert(
+            "sql".to_string(),
+            Value::Mapping(map_of(&[(
+                "query",
+                Value::String("SELECT 1".to_string()),
+            )])),
+        );
+        extract_protocol_facets_with(&mut ctx, &r);
+        assert_eq!(
+            ctx.get("sql.verb").and_then(|v| v.as_str()),
+            Some("CUSTOM")
         );
     }
 }
