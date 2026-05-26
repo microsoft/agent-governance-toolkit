@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -79,6 +80,24 @@ def test_bounded_semaphore_module_blocks_when_capacity_exhausted():
     assert "Max concurrency reached" in (second.reason or "")
 
 
+def test_bounded_semaphore_slot_released_after_post_execute_success():
+    kernel = _kernel(
+        bounded_semaphore={"enabled": True, "max_concurrent": 1, "backpressure_threshold": 1}
+    )
+    ctx1 = kernel.create_context("agent-d-post-1")
+    ctx2 = kernel.create_context("agent-d-post-2")
+
+    first = kernel.pre_execute_check(ctx1, "safe")
+    assert first.allowed
+
+    # Successful post-execution should release the held semaphore slot.
+    post = kernel.post_execute_check(ctx1, {"status": "ok"})
+    assert post.allowed
+
+    second = kernel.pre_execute_check(ctx2, "safe")
+    assert second.allowed
+
+
 def test_scope_guard_module_blocks_when_changes_exceed_limits():
     kernel = _kernel(scope_guard={"enabled": True, "max_files": 1, "max_lines": 5})
     ctx = kernel.create_context("agent-f")
@@ -131,4 +150,21 @@ def test_supply_chain_module_blocks_high_severity_findings(tmp_path: Path):
     result = kernel.pre_execute_check(ctx, {"supply_chain_path": str(tmp_path)})
     assert not result.allowed
     assert "Supply chain guard blocked" in (result.reason or "")
+
+
+def test_supply_chain_module_degrades_gracefully_when_package_missing(monkeypatch, caplog):
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "agent_compliance.supply_chain":
+            raise ImportError("simulated missing dependency")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with caplog.at_level("WARNING"):
+        kernel = _kernel(supply_chain={"enabled": True, "allow_ranges": False})
+
+    assert kernel._supply_chain_guard is None
+    assert any("module disabled" in message for message in caplog.messages)
 
