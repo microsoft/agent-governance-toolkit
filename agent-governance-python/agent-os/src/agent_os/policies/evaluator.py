@@ -219,6 +219,18 @@ class PolicyEvaluator:
                             "evaluation_ms": result.evaluation_ms,
                             "context_snapshot": context,
                             "timestamp": datetime.now(timezone.utc).isoformat(),
+                            # High-assurance backends may carry offline-
+                            # verifiable evidence; propagate when present.
+                            **(
+                                {"proof_artefact": result.proof_artefact}
+                                if result.proof_artefact
+                                else {}
+                            ),
+                            **(
+                                {"verification_pointers": dict(result.verification_pointers)}
+                                if result.verification_pointers
+                                else {}
+                            ),
                         },
                     )
 

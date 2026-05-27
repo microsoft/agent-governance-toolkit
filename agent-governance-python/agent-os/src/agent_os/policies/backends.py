@@ -32,7 +32,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional, Protocol, runtime_checkable
@@ -72,7 +72,16 @@ class ExternalPolicyBackend(Protocol):
 
 @dataclass
 class BackendDecision:
-    """Normalized result from an external policy backend."""
+    """Normalized result from an external policy backend.
+
+    The optional ``proof_artefact`` and ``verification_pointers`` fields
+    let high-assurance backends (SMT-verified gates, mechanised-proof
+    PDPs, TEE-attested PDPs) attach offline-verifiable evidence to a
+    decision. They flow verbatim through ``PolicyEvaluator`` into the
+    resulting ``PolicyDecision.audit_entry`` so downstream audit
+    consumers can record and re-check them. Backends without proofs
+    leave both empty; existing OPA/Cedar backends are unaffected.
+    """
 
     allowed: bool
     action: str = "allow"
@@ -81,6 +90,8 @@ class BackendDecision:
     raw_result: Any = None
     evaluation_ms: float = 0.0
     error: Optional[str] = None
+    proof_artefact: Optional[str] = None
+    verification_pointers: dict[str, str] = field(default_factory=dict)
 
 
 # ── OPA/Rego Backend ─────────────────────────────────────────
