@@ -1,3 +1,4 @@
+<!-- cspell:words vite GHSA vg6x rcgg rjx6 jqfw vq24 v9c3 cwx -->
 # Dependency audit — mcp-proxy vitest 1.6.1 → 4.1.7
 
 ## Which dependencies changed and why
