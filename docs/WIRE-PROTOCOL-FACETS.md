@@ -162,54 +162,19 @@ for a full set of example rules.
 
 ## Language parity
 
-The same facet model is available in the language SDKs. Each SDK exposes
-`FacetRegistry`, `defaultRegistry`, and `extractProtocolFacets`, ships
-`sql.*` and `k8s.*` extractors with the same field names, and runs the
-extractors automatically inside policy evaluation.
+The same facet model is available across the language SDKs. Each SDK
+exposes a `FacetRegistry`, a default registry, and an
+`extract_protocol_facets`-equivalent helper, ships `sql.*` and `k8s.*`
+extractors with the same field names, and runs the extractors
+automatically inside policy evaluation.
 
 | Language   | Module / package | Status |
 |------------|------------------|--------|
 | Python     | `agentmesh.governance.protocol_facets` | Shipped (#2553) |
-| TypeScript | `@microsoft/agent-governance-sdk` → `protocol-facets` | Shipped (#2537) |
 | Rust       | `agentmesh::protocol_facets` | Shipped (#2588) |
-| .NET       | `agent-governance-dotnet` | Tracked in #2589 |
+| TypeScript | `@microsoft/agent-governance-sdk` → `protocol-facets` | Tracked in #2587 |
+| .NET       | `agent-governance-dotnet` → `AgentGovernance.Policy.ProtocolFacets` | Tracked in #2589 |
 | Go         | `agent-governance-golang` | Tracked in #2590 |
-
-### TypeScript usage
-
-```ts
-import {
-  PolicyEngine,
-  extractProtocolFacets,
-  defaultRegistry,
-} from '@microsoft/agent-governance-sdk';
-
-const engine = new PolicyEngine();
-engine.loadYaml(/* see agent-governance-typescript/examples/wire-protocol-rules.yaml */);
-
-// Facets are extracted automatically inside evaluatePolicy() — you only need
-// to populate the raw protocol context.
-const decision = engine.evaluatePolicy('did:example:agent1', {
-  sql: { query: 'DROP TABLE production' },
-});
-// decision.action === 'deny'
-
-// Register a custom protocol extractor on the module-level registry:
-defaultRegistry.register('redis', (ctx) => ({
-  verb: String(ctx.command ?? '').toUpperCase(),
-  key: String(ctx.key ?? ''),
-}));
-```
-
-Rule conditions in the TypeScript SDK use the expression-string format
-(`"sql.verb in ['DROP']"`) rather than the Python `{field, operator, value}`
-dict form, but the available fields and decision outcomes are identical.
-
-> **SQL parser note.** The TypeScript extractor uses a built-in regex
-> tokenizer that handles the common verb / target / function cases used by
-> policy rules. The Python implementation uses `sqlglot` for full AST
-> parsing. For complex dialect-specific SQL, register a custom extractor
-> backed by a full parser via `defaultRegistry.register('sql', ...)`.
 
 ### Rust usage
 
@@ -263,3 +228,59 @@ and decision outcomes are identical to the Python implementation.
 > that handles the common verb / target / function cases used by policy
 > rules. For complex dialect-specific SQL, register a custom extractor via
 > `default_registry().register("sql", ...)`.
+
+### .NET usage
+
+The .NET SDK exposes the same facet model under the
+`AgentGovernance.Policy` namespace: `FacetRegistry`,
+`ProtocolFacets.DefaultRegistry`, `ProtocolFacets.ExtractProtocolFacets`,
+`ProtocolFacets.ExtractSqlFacets`, `ProtocolFacets.ExtractK8sFacets`.
+`PolicyEngine.Evaluate` invokes the registry on its internal copy of the
+context before rules run, so callers only need to populate raw
+`sql`/`k8s` sub-dictionaries — the caller's own dictionary is never
+mutated.
+
+```csharp
+using AgentGovernance.Policy;
+
+var engine = new PolicyEngine();
+engine.LoadYaml(@"
+apiVersion: governance.toolkit/v1
+name: sql-guard
+scope: global
+default_action: allow
+rules:
+  - name: deny-destructive-sql
+    condition: ""sql.verb == 'DROP'""
+    action: deny
+    priority: 100
+");
+
+var decision = engine.Evaluate("did:mesh:agent1", new Dictionary<string, object>
+{
+    ["sql"] = new Dictionary<string, object> { ["query"] = "DROP TABLE production" },
+});
+// decision.Allowed == false, decision.MatchedRule == "deny-destructive-sql"
+
+// Register a custom protocol extractor:
+ProtocolFacets.DefaultRegistry.Register("redis", sub =>
+{
+    var cmd = sub.TryGetValue("command", out var v) ? v?.ToString() ?? "" : "";
+    return new Dictionary<string, object> { ["verb"] = cmd.ToUpperInvariant() };
+});
+```
+
+Rule conditions in the .NET SDK use the existing expression-string format
+(`"sql.verb == 'DROP'"`, dot-pathed field references, `and`/`or`
+compounds). Field names and high-level decision outcomes are consistent
+with the Python implementation; minor rule-syntax differences exist
+(notably, the .NET `in` operator references list-valued context fields
+rather than YAML literal lists, so split per-verb rules into individual
+`==` checks — see the example file for the pattern).
+
+> **SQL parser note.** The .NET extractor uses a built-in regex tokenizer
+> that handles the common verb / target / function cases used by policy
+> rules. It is not a full SQL parser and will not catch every dialect-
+> specific construct; for high-assurance environments, register a custom
+> extractor via `ProtocolFacets.DefaultRegistry.Register("sql", ...)`
+> backed by a real SQL parser.

@@ -20,6 +20,7 @@ amannn
 Amol
 antigravity
 APIM
+apiserver
 appsettings
 argparse
 asctime
@@ -33,6 +34,7 @@ axios
 aymenhmaidiwastaken
 backpressure
 baselined
+behaviour
 bursty
 bypassable
 bytecodes
@@ -77,6 +79,8 @@ dateutil
 davidequarracino
 dbt
 dearmor
+Dedup
+dedupe
 defi
 deidentified
 delenv
@@ -103,6 +107,7 @@ endswith
 ENOENT
 ensurepip
 Entra
+eprintln
 Errno
 Errorf
 esrp
@@ -112,7 +117,6 @@ exfiltration
 expanduser
 fastapi
 Fatalf
-fernet
 Fernet
 finalizer
 findall
@@ -124,7 +128,6 @@ FLUSHALL
 FLUSHDB
 fmean
 fnmatch
-FRIA
 fria
 fromisoformat
 fromtimestamp
@@ -137,12 +140,14 @@ getattr
 getenv
 gethostname
 getuid
+gfns
 GitHub
 gmtime
 gomod
 GOPROXY
 governancepolicy
 gvisor
+h├⌐llo
 hasattr
 hashlib
 HEALTHCHECK
@@ -156,7 +161,6 @@ HTTPMCP
 httpx
 hypercall
 Hyperlight
-h├⌐llo
 IATP
 idweb
 IGNORECASE
@@ -200,6 +204,7 @@ markdown
 Marp
 masquerade
 mastra
+materialised
 maxlen
 mgmt
 microkernel
@@ -229,6 +234,7 @@ newpartner
 NNNN
 nonlocal
 noqa
+normalises
 nostr
 npmjs
 numpy
@@ -239,11 +245,14 @@ OpenClaw
 openshell
 ospo
 oxycodone
+paramref
 parseability
 parseable
+pathed
 pathext
 pathlib
 PCRE
+peekable
 Permissioned
 pharma
 pids
@@ -276,6 +285,7 @@ quickstarts
 Ravande
 readouterr
 recognised
+recognising
 Rego
 relativedelta
 removeprefix
@@ -330,7 +340,6 @@ stacklevel
 startswith
 staticmethod
 stepreceipt
-streamable
 Streamable
 streamablehttp
 streamlit
@@ -340,6 +349,7 @@ Submatch
 subparsers
 subpro
 Subresource
+subresources
 SVID
 sybil
 syscall
@@ -364,6 +374,7 @@ Unregisters
 unrevocation
 unrevoke
 unsets
+uppercased
 urandom
 urljoin
 urllib
@@ -388,10 +399,3 @@ workflows
 XACML
 xfail
 xunit
-dedup
-dedupe
-eprintln
-peekable
-uppercased
-recognising
-subresources
