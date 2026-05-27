@@ -112,8 +112,8 @@ exfiltration
 expanduser
 fastapi
 Fatalf
-Fernet
 fernet
+Fernet
 finalizer
 findall
 finditer
@@ -255,6 +255,7 @@ plotly
 pluggable
 pmcrepo
 popen
+popleft
 Portkey
 Printf
 Println
