@@ -1,239 +1,267 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 #
-# OWASP ASI Starter Policy: General SaaS
-# Maps to OWASP Agentic Security Initiatives (ASI) Top 10
-# See: ../../docs/compliance/owasp-asi-policy-mapping.md
+# OWASP Agentic Security Initiative (ASI) — General SaaS Starter Pack
 #
-# ⚠️  IMPORTANT: This is a STARTER policy provided as a production-ready
-# baseline. You MUST review and customize these rules for your specific
-# threat model and deployment context before use.
+# Full ASI mapping: docs/compliance/owasp-asi-policy-mapping.md
+# Threats covered: ASI-01 through ASI-10 (see mapping doc for per-rule detail)
+# Default posture: deny-all (Least Agency)
+# Domain scope: General SaaS, multi-tenant B2B/B2C applications
+# Regulatory alignment: GDPR, CCPA, SOC 2
 #
-# Prior art: Extends patterns from examples/policies/production/enterprise.yaml
-# and examples/policies/prompt-injection-safety.yaml in this repository.
+# Usage:
+#   from agentmesh.governance import PolicyEngine
+#   engine = PolicyEngine.from_yaml("examples/policy-templates/general-saas.yaml")
+#
+# Companion packs:
+#   - healthcare.yaml      (HIPAA-aligned)
+#   - financial-services.yaml (PCI DSS / SOX / AML-aligned)
 
 version: "1.0"
-name: general-saas-asi-starter
+name: owasp-asi-general-saas
 description: >
-  OWASP ASI-mapped governance starter pack for general SaaS applications.
-  Provides a balanced security posture covering the ASI Top 10 risks
-  without domain-specific regulatory requirements. Deny-all default
-  follows the Least Agency principle.
+  OWASP ASI-aligned policy rules for general SaaS deployments.
+  Covers prompt injection, tool misuse, privilege escalation, supply-chain,
+  code execution, context poisoning, communication manipulation, cascading
+  failures, trust exploitation, and rogue agent detection.
 
 rules:
+
   # =========================================================================
-  # ASI-01: Agent Goal Hijack
-  # Attackers manipulate the agent's objectives via indirect prompt injection
-  # or poisoned inputs.
+  # ASI-01: Agent Goal Hijack / Prompt Injection
+  # An attacker tricks the agent into abandoning its original task and
+  # pursuing an attacker-chosen goal instead.
   # =========================================================================
 
   - name: asi01-prompt-injection-override
-    condition: {field: output, operator: matches, value: "(?i)ignore\\s+(all\\s+)?previous\\s+instructions"}
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(ignore|disregard|forget|override)\\s+(all\\s+)?(previous|prior|above|earlier|original|system)\\s+(instructions?|prompts?|rules?|guidelines?|directives?|constraints?)"
     action: deny
     priority: 100
-    message: "ASI-01: Prompt injection — instruction override attempt detected"
+    message: "ASI-01: Prompt Injection — detected instruction override attempt"
 
   - name: asi01-prompt-injection-role-hijack
-    condition: {field: output, operator: matches, value: "(?i)(you\\s+are\\s+now|new\\s+role\\s*:|forget\\s+(everything|all|your))"}
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(you\\s+are\\s+now|from\\s+now\\s+on|switch\\s+to|enter)\\s+(DAN|jailbreak|evil|unrestricted|god)\\s*(mode)?"
     action: deny
     priority: 100
-    message: "ASI-01: Prompt injection — role hijack attempt detected"
+    message: "ASI-01: Prompt Injection — detected role hijack attempt"
 
   - name: asi01-prompt-injection-delimiter
-    condition: {field: output, operator: matches, value: "(\\<\\|im_start\\|\\>|\\<\\|im_end\\|\\>|\\[INST\\]|\\<\\<SYS\\>\\>)"}
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(\\[SYSTEM\\]|\\[INST\\]|<\\|im_start\\|>|<\\|system\\|>|###\\s*(system|instruction|prompt)|\\{\\{system_prompt\\}\\})"
     action: deny
     priority: 100
-    message: "ASI-01: Prompt injection — chat template delimiter injection detected"
+    message: "ASI-01: Prompt Injection — detected raw delimiter / control token injection"
 
   - name: asi01-prompt-injection-jailbreak
-    condition: {field: output, operator: matches, value: "(?i)(\\bjailbreak\\b|\\bDAN\\s+mode\\b|developer\\s+mode\\s+override|bypass\\s+(all\\s+)?(safety|content)\\s+(filters?|restrictions?))"}
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(DAN\\s+mode|do\\s+anything\\s+now|jailbreak|bypass\\s+(safety|alignment|guardrails?|restrictions?)|act\\s+as\\s+(an?\\s+)?unrestricted)"
     action: deny
     priority: 100
-    message: "ASI-01: Prompt injection — jailbreak/DAN mode attempt detected"
+    message: "ASI-01: Prompt Injection — jailbreak or DAN-mode attempt detected"
 
   - name: asi01-nested-swarm-guardrail
-    condition: 
-      field: output
+    condition:
+      field: input
       operator: matches
-      value: "(?i)(delegate\\s+to\\s+agent|spawn\\s+sub-agent|swarm\\s+mode|handoff\\s+raw\\s+input|pass-through\\s*:\\s*true)"
+      value: "(?i)(spawn|fork|replicate|clone)\\s+(a(n|nother)?\\s+)?(copy|instance|agent|worker|thread)"
     action: deny
     priority: 100
-    message: "ASI-01: Goal Hijack — detected attempt to create nested swarm delegation"
+    message: "ASI-01: Prompt Injection — detected self-replication / nested swarm spawn attempt"
 
   # =========================================================================
   # ASI-02: Tool Misuse & Exploitation
-  # An agent's authorized tools are abused in unintended ways.
+  # The agent uses tools in ways that go beyond their intended purpose,
+  # exploiting overly broad permissions.
   # =========================================================================
 
   - name: asi02-block-shell-execution
-    condition: {field: action, operator: matches, value: "^(run_shell|execute_command|exec|eval|os_system)$"}
+    condition: {field: action, operator: matches, value: "^(exec_shell|run_command|system_call|spawn_process)$"}
     action: deny
     priority: 100
-    message: "ASI-02: Shell/code execution tools are prohibited"
+    message: "ASI-02: Tool Misuse — direct shell execution is prohibited"
 
   - name: asi02-block-network-exfiltration
-    condition: {field: action, operator: matches, value: "^(http_post|http_put|upload_file|send_data|ftp_upload)$"}
+    condition: {field: action, operator: matches, value: "^(http_post|upload_file|send_data|webhook_call)$"}
     action: deny
-    priority: 95
-    message: "ASI-02: Outbound data transfer tools are prohibited without explicit allowlisting"
+    priority: 100
+    message: "ASI-02: Tool Misuse — outbound data exfiltration blocked"
 
   - name: asi02-block-destructive-operations
-    condition: {field: action, operator: matches, value: "^(delete_|remove_|drop_|truncate_)"}
+    condition: {field: action, operator: matches, value: "^(delete_|drop_|truncate_|purge_|destroy_|wipe_)"}
     action: deny
-    priority: 95
-    message: "ASI-02: Destructive operations are prohibited"
+    priority: 100
+    message: "ASI-02: Tool Misuse — destructive data operations are prohibited"
 
   - name: asi02-block-database-mutation
-    condition: {field: action, operator: matches, value: "^(insert_|update_|alter_|create_table)"}
-    action: audit
-    priority: 80
-    message: "ASI-02: Database mutation action — audit trail required"
+    condition: {field: action, operator: matches, value: "^(alter_schema|create_table|modify_index)$"}
+    action: deny
+    priority: 100
+    message: "ASI-02: Tool Misuse — direct schema mutation is prohibited. Use migration workflows."
 
   # =========================================================================
   # ASI-03: Identity & Privilege Abuse
-  # Agents escalate privileges by abusing identities or inheriting
-  # excessive credentials.
+  # The agent escalates its own privileges or impersonates other agents/users
+  # to access resources beyond its authorization.
   # =========================================================================
 
   - name: asi03-block-privilege-escalation
-    condition: {field: action, operator: matches, value: "^(grant_|elevate_|assume_role|change_permissions|chmod|chown|sudo)"}
+    condition: {field: action, operator: matches, value: "^(elevate_|grant_|modify_permissions|change_role|sudo_|set_admin)"}
     action: deny
     priority: 100
-    message: "ASI-03: Privilege escalation operations are prohibited"
+    message: "ASI-03: Privilege Abuse — agent cannot self-elevate permissions"
 
   - name: asi03-block-credential-access
-    condition: {field: action, operator: matches, value: "^(get_credentials|read_secrets|access_vault|decrypt_key)"}
+    condition: {field: action, operator: matches, value: "^(read_secret|access_vault|get_api_key|dump_credentials)$"}
     action: deny
     priority: 100
-    message: "ASI-03: Direct credential access is prohibited — use scoped delegation"
-
-  - name: asi03-account-mfa-bypass
-    condition: 
-      field: output
-      operator: matches
-      value: "(?i)(remove|disable|bypass|waive)\\s+(mfa|2fa|multi-factor|lockout|authentication)"
-    action: deny
-    priority: 100
-    message: "ASI-03: Account Integrity — unauthorized attempt to disable MFA or authentication lockouts"
-
-  - name: asi03-account-admin-promotion
-    condition: 
-      field: output
-      operator: matches
-      value: "(?i)(add|promote|assign|grant).*(admin|superuser|api\\s+access|billing|owner)"
-    action: deny
-    priority: 100
-    message: "ASI-03: Account Integrity — unauthorized attempt to promote user to admin or privileged role"
-
-  - name: asi03-account-password-reset
-    condition: 
-      field: output
-      operator: matches
-      value: "(?i)reset\\s+password.*(for|to|send)"
-    action: deny
-    priority: 100
-    message: "ASI-03: Account Integrity — unauthorized semantic password reset attempt"
-
-  - name: asi03-account-audit-tampering
-    condition: 
-      field: output
-      operator: matches
-      value: "(?i)(delete|clear|wipe|remove).*(audit\\s+log|security\\s+log|event\\s+log)"
-    action: deny
-    priority: 100
-    message: "ASI-03: Account Integrity — unauthorized attempt to clear security or audit logs"
+    message: "ASI-03: Privilege Abuse — direct credential access is denied"
 
   - name: asi03-block-user-impersonation
-    condition: {field: action, operator: matches, value: "^(impersonate_|switch_user|login_as)"}
+    condition: {field: action, operator: matches, value: "^(impersonate_user|switch_identity|act_as_user)$"}
     action: deny
     priority: 100
-    message: "ASI-03: User impersonation is prohibited"
+    message: "ASI-03: Privilege Abuse — user impersonation is prohibited"
+
+  - name: asi03-account-mfa-bypass
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(bypass|skip|disable|remove|turn\\s+off)\\s+(MFA|2FA|two[- ]factor|multi[- ]factor|authentication)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Identity Abuse — MFA bypass attempt detected"
+
+  - name: asi03-account-admin-promotion
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(make|set|grant|promote|give)\\s+(me|this\\s+user|account)\\s+(to\\s+)?(admin|root|superuser|owner|elevated)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Identity Abuse — admin promotion attempt detected"
+
+  - name: asi03-account-password-reset
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(reset|change|update)\\s+(the\\s+)?(password|credentials?)\\s+(for|of)\\s+(?!my\\b)(all|every|another|other|the\\s+admin)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Identity Abuse — bulk or third-party password reset attempt detected"
+
+  - name: asi03-account-audit-tampering
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(delete|clear|purge|wipe|remove|hide)\\s+(the\\s+)?(audit|access|security)\\s+(log|trail|record|history)"
+    action: deny
+    priority: 100
+    message: "ASI-03: Identity Abuse — audit trail tampering attempt detected"
 
   # =========================================================================
-  # ASI-04: Supply Chain Risk
-  # Agents are tricked into using untrusted tools, registries, or MCP servers.
+  # ASI-04: Supply-Chain & Dependency Attacks
+  # Compromised or untrusted components in the agent's toolchain are
+  # exploited to inject malicious functionality.
   # =========================================================================
 
   - name: asi04-supply-chain-tool-enumeration
-    condition: 
-      field: output
+    condition:
+      field: input
       operator: matches
-      value: "(?i)(list\\s+all\\s+tools|what\\s+plugins\\s+are\\s+installed|dump\\s+(environment\\s+)?variables|show\\s+mcp\\s+servers|enumerate\\s+capabilities)"
+      value: "(?i)(list|enumerate|show|reveal|dump)\\s+(all\\s+)?(available\\s+)?(tools?|functions?|capabilities?|plugins?|extensions?)"
     action: deny
-    priority: 100
-    message: "ASI-04: Supply Chain — detected pre-attack tool enumeration or capability reconnaissance"
+    priority: 95
+    message: "ASI-04: Supply Chain — tool/capability enumeration attempt detected"
 
   - name: asi04-supply-chain-dependency-poisoning
-    condition: 
-      field: output
+    condition:
+      field: input
       operator: matches
-      value: "(?i)((pip|npm|yarn|gem|cargo|apt|apt-get|apk|brew)\\s+(install|add|update)|(curl|wget)\\s+.*(-O|\\|))"
+      value: "(?i)(install|add|import|load|require|pip\\s+install|npm\\s+install)\\s+[a-zA-Z0-9_-]+"
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — detected unauthorized dependency installation or remote payload execution"
+    message: "ASI-04: Supply Chain — dependency injection/poisoning attempt detected"
 
   - name: asi04-supply-chain-plugin-hijack
-    condition: {field: action, operator: matches, value: "^(install_tool|register_mcp|add_plugin|load_extension)$"}
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(replace|swap|override|modify|patch)\\s+(the\\s+)?(plugin|extension|module|tool|dependency)"
     action: deny
     priority: 100
-    message: "ASI-04: Supply Chain — unauthorized tool registry or MCP plugin modification detected"
+    message: "ASI-04: Supply Chain — plugin/dependency hijack attempt detected"
 
   - name: asi04-supply-chain-config-mutation
-    condition: {field: action, operator: matches, value: "^(update_config|edit_env|set_env|modify_registry)$"}
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(modify|change|update|alter|overwrite)\\s+(the\\s+)?(config|configuration|settings?|environment|env\\s+var)"
     action: deny
-    priority: 100
-    message: "ASI-04: Supply Chain — unauthorized configuration or environment state mutation detected"
+    priority: 95
+    message: "ASI-04: Supply Chain — configuration mutation attempt detected"
 
   # =========================================================================
   # ASI-05: Unexpected Code Execution
-  # Agents trigger remote code execution through tools, interpreters,
-  # or APIs.
+  # The agent generates and executes code that performs unintended actions.
   # =========================================================================
 
   - name: asi05-block-code-execution
-    condition: {field: action, operator: eq, value: execute_code}
+    condition: {field: action, operator: matches, value: "^(eval|exec|compile|run_code|execute_script)$"}
     action: deny
     priority: 100
-    message: "ASI-05: Code execution is prohibited — use sandboxed execution rings"
+    message: "ASI-05: Code Execution — dynamic code execution is prohibited"
 
   - name: asi05-block-dynamic-eval
-    condition: {field: output, operator: matches, value: "(?i)(\\beval\\s*\\(|\\bexec\\s*\\(|\\bcompile\\s*\\(|__import__)"}
-    action: deny
-    priority: 100
-    message: "ASI-05: Dynamic code evaluation patterns detected in output"
-
-  - name: asi05-sandbox-anti-pattern-detection
-    condition: 
+    condition:
       field: output
       operator: matches
-      value: "(?i)(subprocess\\.Popen|os\\.system|eval\\(|exec\\(|__import__|\\.spawn|\\.fork)"
+      value: "(?i)(exec\\(|eval\\(|compile\\(|__import__|subprocess|os\\.system|os\\.popen|shutil\\.rmtree)"
     action: deny
     priority: 100
-    message: "ASI-05: Unsafe Code Execution — detected code anti-pattern in agent output"
+    message: "ASI-05: Code Execution — detected dangerous function in output"
+
+  - name: asi05-sandbox-anti-pattern-detection
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(import\\s+subprocess|import\\s+os|import\\s+shutil|from\\s+os\\s+import|__builtins__|globals\\(\\)|locals\\(\\))"
+    action: deny
+    priority: 100
+    message: "ASI-05: Code Execution — sandbox anti-pattern detected in generated code"
 
   - name: asi05-block-ssh
-    condition: {field: action, operator: eq, value: ssh_connect}
+    condition: {field: action, operator: matches, value: "^(ssh_connect|remote_exec|sftp_upload)$"}
     action: deny
     priority: 100
-    message: "ASI-05: SSH connections are prohibited"
+    message: "ASI-05: Code Execution — remote execution via SSH is prohibited"
 
   # =========================================================================
   # ASI-06: Memory & Context Poisoning
-  # Persistent memory or long-running context is poisoned with malicious
-  # instructions.
+  # Injecting misleading or malicious data into the agent's context, memory,
+  # or retrieval pipeline to corrupt future decisions.
   # =========================================================================
 
   - name: asi06-context-budget-limit
-    condition: {field: token_count, operator: gt, value: 16384}
+    condition: {field: token_count, operator: gt, value: 8192}
     action: deny
     priority: 90
     message: "ASI-06: Context budget exceeded — limit enforced to prevent memory poisoning"
 
   - name: asi06-block-context-manipulation
-    condition: 
-      field: output
+    condition:
+      field: input
       operator: matches
-      value: "(?i)(starting\\s+now|from\\s+this\\s+point|ignore\\s+all\\s+past|your\\s+real\\s+instructions|the\\s+above\\s+instructions\\s+are\\s+wrong|actually\\s+your\\s+real\\s+instructions|disregard\\s+(all\\s+)?(above|prior|previous)|(\\[VERIFIED:\\s*Always\\s*allow|\\[TRUSTED\\s*CONTEXT\\]|\\[SECURITY\\s*BYPASS\\]))"
+      value: "(?i)(inject|poison|corrupt|overwrite|replace)\\s+(the\\s+)?(context|memory|history|knowledge|retrieval|embedding|vector)"
     action: deny
     priority: 100
     message: "ASI-06: Context Integrity — detected attempt to manipulate agent memory or override system instructions"
@@ -348,7 +376,7 @@ rules:
   # =========================================================================
 
   - name: asi06-block-pii-ssn
-    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    condition: {field: output, operator: matches, value: "\\b\\d{3}[\\s.-]?\\d{2}[\\s.-]?\\d{4}\\b"}
     action: deny
     priority: 100
     message: "ASI-01/06: PII: Social Security Number pattern detected in output"
