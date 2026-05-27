@@ -66,6 +66,7 @@ containerd
 contoso
 coro
 Cpus
+crds
 cref
 CrewAI
 crun
@@ -128,6 +129,7 @@ FLUSHALL
 FLUSHDB
 fmean
 fnmatch
+Fprintf
 fria
 fromisoformat
 fromtimestamp
