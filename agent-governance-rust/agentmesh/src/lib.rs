@@ -45,6 +45,7 @@ pub mod mcp {
 }
 pub mod policy;
 pub mod prompt_injection;
+pub mod protocol_facets;
 pub(crate) mod regex_cache;
 pub mod reward_support;
 pub mod rings;
@@ -98,6 +99,10 @@ pub use integration_support::{
 };
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
 pub use policy::{PolicyEngine, PolicyError};
+pub use protocol_facets::{
+    default_registry, extract_k8s_facets, extract_protocol_facets, extract_protocol_facets_with,
+    extract_sql_facets, FacetRegistry,
+};
 pub use prompt_injection::{
     AuditRecord as PromptInjectionAuditRecord, DetectionConfig as PromptInjectionDetectionConfig,
     DetectionOptions as PromptInjectionDetectionOptions, DetectionResult as PromptInjectionResult,

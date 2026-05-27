@@ -762,7 +762,8 @@ jobs:
             path: agent-governance-typescript
             node-version: "20"
           - name: agentmesh-api
-            path: packages/agent-mesh/services/api
+            path: agent-governance-python/agent-mesh/services/api
+            node-version: "20"
           - name: agent-governance-antigravity-cli
             path: agent-governance-antigravity-cli
           - name: agent-os-copilot-extension
