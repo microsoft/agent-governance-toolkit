@@ -64,7 +64,7 @@ pip install agent-governance-toolkit[full]
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
 
 ```text
-/plugin marketplace add microsoft/agent-governance-toolkit --sparse .claude-plugin agent-governance-claude-code
+/plugin marketplace add microsoft/agent-governance-toolkit
 /plugin install agt-governance@agent-governance-toolkit
 ```
 
