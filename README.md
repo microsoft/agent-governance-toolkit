@@ -61,6 +61,13 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 pip install agent-governance-toolkit[full]
 ```
 
+For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
+
+```text
+/plugin marketplace add microsoft/agent-governance-toolkit --sparse .claude-plugin agent-governance-claude-code
+/plugin install agt-governance@agent-governance-toolkit
+```
+
 Govern any tool function in two lines:
 
 ```python
