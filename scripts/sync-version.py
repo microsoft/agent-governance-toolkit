@@ -103,16 +103,21 @@ def sync_package_json(path: Path, version: str, check: bool) -> bool:
 def sync_claude_marketplace(version: str, check: bool) -> bool:
     """Update Claude Code plugin and marketplace versions."""
     ok = True
+
+    plugin_json_path = REPO_ROOT / "agent-governance-claude-code" / ".claude-plugin" / "plugin.json"
+    plugin_name: str | None = None
+    if plugin_json_path.exists():
+        plugin_name = json.loads(plugin_json_path.read_text(encoding="utf-8")).get("name")
+
     targets = [
-        (REPO_ROOT / "agent-governance-claude-code" / ".claude-plugin" / "plugin.json", ["version"]),
+        (plugin_json_path, ["version"]),
         (REPO_ROOT / ".claude-plugin" / "marketplace.json", ["version"]),
     ]
 
     for path, keys in targets:
         if not path.exists():
             continue
-        text = path.read_text(encoding="utf-8")
-        data = json.loads(text)
+        data = json.loads(path.read_text(encoding="utf-8"))
         changed = False
         for key in keys:
             if data.get(key) == version:
@@ -124,16 +129,16 @@ def sync_claude_marketplace(version: str, check: bool) -> bool:
             data[key] = version
             changed = True
 
-        if path.name == "marketplace.json":
+        if path.name == "marketplace.json" and plugin_name:
             for plugin in data.get("plugins", []):
-                if plugin.get("name") != "agt-governance":
+                if plugin.get("name") != plugin_name:
                     continue
                 if plugin.get("version") == version:
                     continue
                 if check:
                     print(
                         f"  DRIFT {path.relative_to(REPO_ROOT)}  "
-                        f"(agt-governance version has {plugin.get('version')})"
+                        f"({plugin_name} version has {plugin.get('version')})"
                     )
                     ok = False
                     continue
