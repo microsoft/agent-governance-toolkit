@@ -209,7 +209,7 @@ rules:
   # =========================================================================
 
   - name: asi06-context-budget-limit
-    condition: {field: token_count, operator: gt, value: 8192}
+    condition: {field: token_count, operator: gt, value: 4096}
     action: deny
     priority: 90
     message: "ASI-06: Context budget exceeded — limit enforced to prevent memory poisoning"
@@ -345,7 +345,7 @@ rules:
     message: "ASI-01/06: PCI DSS: CVV/CVC pattern detected in output"
 
   - name: asi06-block-pii-ssn
-    condition: {field: output, operator: matches, value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+    condition: {field: output, operator: matches, value: "\\b\\d{3}[\\s.-]?\\d{2}[\\s.-]?\\d{4}\\b"}
     action: deny
     priority: 100
     message: "ASI-01/06: PII: Social Security Number pattern detected in output"

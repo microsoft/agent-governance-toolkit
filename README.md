@@ -408,6 +408,24 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 If you use the Agent Governance Toolkit to build applications that operate with third-party agent frameworks or services, you do so at your own risk. We recommend reviewing all data being shared with third-party services and being cognizant of third-party practices for retention and location of data.
 
+## Official Sources
+
+The only official sources for the Agent Governance Toolkit are:
+
+| Resource | Location |
+|----------|----------|
+| **Source code** | [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
+| **Documentation** | [microsoft.github.io/agent-governance-toolkit](https://microsoft.github.io/agent-governance-toolkit/) |
+| **Python packages** | [pypi.org/user/agentgovtoolkit](https://pypi.org/user/agentgovtoolkit/) |
+| **npm packages** | `@microsoft/agentmesh-sdk`, `@microsoft/agent-os-kernel` on [npmjs.com](https://www.npmjs.com/) |
+| **NuGet packages** | `Microsoft.AgentGovernance.*` on [nuget.org](https://www.nuget.org/) |
+| **Rust crates** | `agent-os-kernel`, `agentmesh` on [crates.io](https://crates.io/) |
+
+The project team does not maintain or endorse any third-party websites,
+packages, or documentation sites claiming to be official. If you encounter a
+suspicious site or package using the Agent Governance Toolkit name, please
+report it through the channels described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

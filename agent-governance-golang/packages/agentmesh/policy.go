@@ -85,12 +85,19 @@ func (pe *PolicyEngine) LoadCedar(options CedarOptions) {
 // Concurrency: the rule scan runs under RLock so concurrent evaluations
 // don't serialize. Only checkRateLimit acquires the write lock.
 func (pe *PolicyEngine) Evaluate(action string, context map[string]interface{}) PolicyDecision {
+	// Enrich a defensive copy of the context with wire-protocol facets
+	// (sql.*, k8s.*) so policy rules can reference protocol-level fields
+	// via flat keys without any rule-schema changes. The caller's map and
+	// any nested sub-maps it owns are never mutated.
+	evalContext := clonePolicyContext(context)
+	ExtractProtocolFacets(evalContext)
+
 	pe.mu.RLock()
 
 	var matched *PolicyRule
 	for i := range pe.rules {
 		r := &pe.rules[i]
-		if matchAction(r.Action, action) && matchConditions(r.Conditions, context) {
+		if matchAction(r.Action, action) && matchConditions(r.Conditions, evalContext) {
 			matched = r
 			break
 		}
@@ -100,7 +107,7 @@ func (pe *PolicyEngine) Evaluate(action string, context map[string]interface{}) 
 
 	if matched != nil {
 		if matched.MaxCalls > 0 {
-			return pe.checkRateLimit(*matched, context)
+			return pe.checkRateLimit(*matched, evalContext)
 		}
 		if matched.MinApprovals > 0 {
 			return RequiresApproval
@@ -108,7 +115,7 @@ func (pe *PolicyEngine) Evaluate(action string, context map[string]interface{}) 
 		return matched.Effect
 	}
 
-	backendContext := clonePolicyContext(context)
+	backendContext := clonePolicyContext(evalContext)
 	if _, ok := backendContext["action"]; !ok {
 		backendContext["action"] = action
 	}

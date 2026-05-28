@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of running with a caller-supplied identity.
 
 ### Added
+- **`BackendDecision` assurance fields**: optional `proof_artefact: str | None`
+  (content-address of an underlying proof, e.g. `sha256:…`) and
+  `verification_pointers: dict[str, str]` (named URLs for offline re-verification)
+  on `agent_os.policies.backends.BackendDecision`. High-assurance external
+  backends (SMT-verified gates, mechanised-proof PDPs, TEE-attested PDPs) can
+  populate them; `PolicyEvaluator._evaluate_flat` propagates non-empty values
+  into `PolicyDecision.audit_entry`. Fully additive — existing `OPABackend` and
+  `CedarBackend` are unaffected and audit consumers see no new keys until a
+  backend supplies them.
 - `AGENT_OS_EXECUTION_TOKENS="agent-id=token"` for packaged-server bootstrap
   credentials. These tokens remain valid for the life of the process unless
   revoked explicitly.
