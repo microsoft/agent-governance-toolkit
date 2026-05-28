@@ -483,6 +483,25 @@ class TestSysModulesBypass:
         import os as _os
         assert sys.modules["os"] is _os
 
+    def test_nested_execute_sandboxed_keeps_outer_hook(self):
+        """Regression: inner call must not uninstall the import hook.
+
+        Previously ``_install_hook_reentrant`` LIFO-popped without tracking
+        whether the inner layer actually owned the install, so nested
+        same-instance calls left the outer call without an import hook.
+        """
+        sandbox = ExecutionSandbox()
+
+        def inner():
+            sandbox.execute_sandboxed(lambda: None)
+            # After the inner call returns, the import hook must still
+            # be on sys.meta_path so the outer call can block imports.
+            return sandbox._hook in sys.meta_path
+
+        assert sandbox.execute_sandboxed(inner) is True
+        # And after the outer call exits, the hook is cleaned up.
+        assert sandbox._hook not in sys.meta_path
+
     def test_concurrent_execute_sandboxed_is_thread_safe(self):
         """Regression: two threads must not corrupt each other's shadow.
 

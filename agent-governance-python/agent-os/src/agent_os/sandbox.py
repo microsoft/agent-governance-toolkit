@@ -578,16 +578,28 @@ def _install_hook_reentrant(hook: Any) -> None:
     Must be called while ``_SANDBOX_SHADOW_LOCK`` is held (i.e. between
     ``_enter_sys_modules_shadow`` and ``_exit_sys_modules_shadow``) to
     serialize updates to ``sys.meta_path``.
+
+    Tracks whether *this* call owns the install: ``SandboxImportHook.install``
+    is idempotent, so nested same-instance calls would otherwise let the
+    inner ``_uninstall_hook_reentrant`` remove the hook while the outer
+    call still needs it.
     """
+    already_installed = hook in sys.meta_path
     hook.install()
-    _SANDBOX_INSTALLED_HOOKS.append(hook)
+    _SANDBOX_INSTALLED_HOOKS.append((hook, not already_installed))
 
 
 def _uninstall_hook_reentrant() -> None:
-    """Remove the most recently installed hook (LIFO)."""
+    """Remove the most recently installed hook (LIFO).
+
+    Only calls ``hook.uninstall()`` if this layer was the one that actually
+    installed it; nested same-instance calls leave the hook in place for
+    the outer call.
+    """
     if _SANDBOX_INSTALLED_HOOKS:
-        hook = _SANDBOX_INSTALLED_HOOKS.pop()
-        hook.uninstall()
+        hook, owns_install = _SANDBOX_INSTALLED_HOOKS.pop()
+        if owns_install:
+            hook.uninstall()
 
 
 
@@ -791,6 +803,12 @@ class ExecutionSandbox:
             on the same thread share the shadow without double-snapshotting.
             Disable ``shadow_sys_modules`` if you need concurrent host
             access to those modules.
+
+            Because the shared shadow lock is held for the entire duration
+            of ``func`` execution, a long-running or non-terminating
+            sandboxed function will block other threads that try to enter
+            the sandbox. Use the subprocess-based providers in
+            :mod:`agent_os.sandbox_provider` for adversarial workloads.
         """
         if self.config.shadow_sys_modules:
             # Acquire the shared lock + reentrant shadow first, then install
