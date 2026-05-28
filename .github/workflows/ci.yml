@@ -56,6 +56,8 @@ jobs:
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
+              - '.claude-plugin/**'
+              - 'scripts/sync-claude-marketplace-version.mjs'
               - 'agent-governance-claude-code/**'
               - 'agent-governance-copilot-cli/**'
               - 'agent-governance-typescript/**'
@@ -114,6 +116,8 @@ jobs:
             pkg-agent-governance-copilot-cli:
               - 'agent-governance-copilot-cli/**'
             pkg-agent-governance-claude-code:
+              - '.claude-plugin/**'
+              - 'scripts/sync-claude-marketplace-version.mjs'
               - 'agent-governance-claude-code/**'
             pkg-agent-governance-sdk:
               - 'agent-governance-typescript/**'
@@ -802,6 +806,9 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
         run: npm ci --legacy-peer-deps --ignore-scripts  # Scorecard: uses lockfile via npm ci
+      - name: Check Claude Code marketplace version
+        if: steps.gate.outputs.run == 'true' && matrix.name == 'agent-governance-claude-code'
+        run: node scripts/sync-claude-marketplace-version.mjs --check
       - name: Build ${{ matrix.name }}
         if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}

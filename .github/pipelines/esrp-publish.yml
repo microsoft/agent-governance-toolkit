@@ -446,6 +446,11 @@ stages:
               workingDirectory: '${{ pkg.path }}'
               displayName: 'Build ${{ pkg.name }}'
 
+            - ${{ if eq(pkg.name, 'agent-governance-claude-code') }}:
+              - script: node scripts/sync-claude-marketplace-version.mjs --check
+                workingDirectory: '$(Build.SourcesDirectory)'
+                displayName: 'Check Claude Code marketplace version'
+
             - script: |
                 mkdir -p $(Pipeline.Workspace)/npm-out
                 npm pack --pack-destination $(Pipeline.Workspace)/npm-out

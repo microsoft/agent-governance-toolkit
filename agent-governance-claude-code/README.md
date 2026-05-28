@@ -50,15 +50,14 @@ cd agent-governance-claude-code
 npm install
 ```
 
-Load the plugin directly:
+Add the repository as a Claude Code plugin marketplace and install from the catalog:
 
-```powershell
-claude --plugin-dir .\agent-governance-claude-code
+```text
+/plugin marketplace add microsoft/agent-governance-toolkit --sparse .claude-plugin agent-governance-claude-code
+/plugin install agt-governance@agent-governance-toolkit
 ```
 
-```bash
-claude --plugin-dir "$(pwd)/agent-governance-claude-code"
-```
+For local checkout testing, replace `microsoft/agent-governance-toolkit` with `.`.
 
 Inspect the active policy and command wiring:
 
