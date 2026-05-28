@@ -519,11 +519,15 @@ full environment to the child process. The child receives only:
 |----------|--------|
 | `PATH` | Inherited from parent |
 | `SYSTEMROOT` | Inherited from parent (Windows only) |
-| Server-specific `env` keys | From the MCP config `env` object |
+| Server-specific `env` keys except command-loading overrides | From the MCP config `env` object |
 
 This prevents accidental credential leakage (tokens, cloud keys, secrets in
-`$HOME/.bashrc`) to untrusted MCP servers. If a server needs additional
-environment variables, declare them explicitly in the config:
+`$HOME/.bashrc`) to untrusted MCP servers. Launch-policy validation in both live
+and `--static-only` modes also blocks config-provided command-loading overrides
+such as `PATH`, `PATHEXT`, `PYTHONPATH`, `NODE_OPTIONS`, `JAVA_TOOL_OPTIONS`,
+`DOTNET_STARTUP_HOOKS`, `UV_*`, and `NPM_CONFIG_*`, and requires a bare
+allowlisted command name unless you opt in with `--allow-commands`. If a server
+needs additional environment variables, declare them explicitly in the config:
 
 ```json
 {

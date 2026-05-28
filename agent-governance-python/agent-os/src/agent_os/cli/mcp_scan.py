@@ -65,6 +65,24 @@ _COMMAND_ALLOWLIST: set[str] = {
     "docker", "podman", "deno", "bun", "tsx", "ts-node",
     "dotnet", "java", "go", "cargo",
 }
+_COMMAND_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+\-]*$")
+_COMMAND_RESOLUTION_ENV_KEYS = {
+    "PATH",
+    "PATHEXT",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+    "DYLD_LIBRARY_PATH",
+    "DOTNET_STARTUP_HOOKS",
+    "JAVA_TOOL_OPTIONS",
+    "_JAVA_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+}
+_COMMAND_RESOLUTION_ENV_PREFIXES = ("UV_", "NPM_CONFIG_")
 
 # Module-level flag; set via --allow-commands CLI flag.
 _ALLOW_ALL_COMMANDS: bool = False
@@ -76,22 +94,103 @@ def _configure_command_policy(*, allow_all: bool = False) -> None:
     _ALLOW_ALL_COMMANDS = allow_all
 
 
-def _validate_command(command: str) -> None:
-    """Raise if command is not on the allowlist and policy is enforced."""
-    if _ALLOW_ALL_COMMANDS:
-        return
-    # Handle both Unix and Windows path separators regardless of host OS
-    basename = command.rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+def _normalize_allowlisted_command(command: str) -> str:
+    """Normalize a bare command name for allowlist checks."""
+    normalized = command.lower()
     for ext in (".exe", ".cmd", ".bat"):
-        if basename.endswith(ext):
-            basename = basename[: -len(ext)]
+        if normalized.endswith(ext):
+            normalized = normalized[: -len(ext)]
             break
-    if basename not in _COMMAND_ALLOWLIST:
+    return normalized
+
+
+def _blocked_command_env_keys(env: Mapping[str, str] | None) -> list[str]:
+    if not env:
+        return []
+    return sorted(
+        {
+            key.upper()
+            for key in env
+            if key.upper() in _COMMAND_RESOLUTION_ENV_KEYS
+            or any(key.upper().startswith(prefix) for prefix in _COMMAND_RESOLUTION_ENV_PREFIXES)
+        }
+    )
+
+
+def _resolve_allowlisted_command(command: str, env: Mapping[str, str]) -> str | None:
+    """Resolve an allowlisted bare command using PATH entries only.
+
+    This intentionally avoids platform helpers like ``shutil.which`` because on
+    Windows they may consult the current working directory before PATH, which
+    would let a repo-local binary shadow the trusted host runtime.
+    """
+    path_value = env.get("PATH", "")
+    path_entries = [entry for entry in path_value.split(os.pathsep) if entry]
+    if os.name == "nt":
+        pathext_value = env.get("PATHEXT") or os.environ.get(
+            "PATHEXT", ".COM;.EXE;.BAT;.CMD"
+        )
+        pathexts = [
+            ext if ext.startswith(".") else f".{ext}"
+            for ext in pathext_value.split(";")
+            if ext
+        ]
+        candidates = [command] if Path(command).suffix else [
+            f"{command}{ext}" for ext in pathexts
+        ]
+    else:
+        candidates = [command]
+    for entry in path_entries:
+        base_path = Path(entry)
+        for candidate in candidates:
+            resolved = base_path / candidate
+            if resolved.is_file() and os.access(resolved, os.X_OK):
+                return str(resolved)
+    return None
+
+
+
+def _validate_command(
+    command: str,
+    env: Mapping[str, str] | None = None,
+    *,
+    base_env: Mapping[str, str] | None = None,
+    require_resolution: bool = True,
+) -> str:
+    """Return a safe executable path or raise if policy is enforced."""
+    if _ALLOW_ALL_COMMANDS:
+        return command
+    if not _COMMAND_NAME_RE.fullmatch(command):
+        raise RuntimeError(
+            f"Command {command!r} must be a bare executable name from the allowed command list. "
+            f"Use --allow-commands to permit execution of untrusted commands, "
+            f"or use --static-only to scan without executing."
+        )
+    blocked_env_keys = _blocked_command_env_keys(env)
+    if blocked_env_keys:
+        keys = ", ".join(blocked_env_keys)
+        raise RuntimeError(
+            f"Server env overrides {keys}, which is blocked during live command validation. "
+            f"Use --allow-commands to permit execution of untrusted commands, "
+            f"or use --static-only to scan without executing."
+        )
+    normalized = _normalize_allowlisted_command(command)
+    if normalized not in _COMMAND_ALLOWLIST:
         raise RuntimeError(
             f"Command {command!r} is not on the allowed command list. "
             f"Use --allow-commands to permit execution of untrusted commands, "
             f"or use --static-only to scan without executing."
         )
+    if not require_resolution:
+        return command
+    launch_env = dict(base_env) if base_env is not None else _sanitized_child_env()
+    resolved = _resolve_allowlisted_command(command, launch_env)
+    if resolved is None:
+        raise RuntimeError(
+            f"Command {command!r} is allowlisted but was not found on the scanner host PATH. "
+            f"Use --allow-commands to permit execution of untrusted commands."
+        )
+    return resolved
 
 
 @dataclass
@@ -499,6 +598,10 @@ def validate_stdio_launch_config(config_path: Path, single_server: str | None = 
             continue
 
         _resolve_cwd(spec.get("cwd"), config_path, findings, server_name)
+        try:
+            _validate_command(command, raw_env, require_resolution=False)
+        except RuntimeError as exc:
+            findings.append(_config_finding(server_name, "critical", str(exc)))
     return findings
 
 
@@ -521,11 +624,11 @@ class _StdioJSONRPCClient:
         self._threads: list[threading.Thread] = []
 
     def start(self) -> None:
-        _validate_command(self.server.command)
         env = _sanitized_child_env()
+        launch_command = _validate_command(self.server.command, self.server.env, base_env=env)
         env.update(self.server.env)
         self.process = subprocess.Popen(  # noqa: S603 - command comes from user MCP config by design.
-            [self.server.command, *self.server.args],
+            [launch_command, *self.server.args],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -639,7 +742,7 @@ def _sanitized_child_env() -> dict[str, str]:
         "TEMP",
         "TMP",
     }
-    return {key: value for key, value in os.environ.items() if key in keep}
+    return {key.upper(): value for key, value in os.environ.items() if key.upper() in keep}
 
 def _schema_text(schema: Mapping[str, Any]) -> str:
     """Return scanner-visible text from schema descriptions and property names."""
