@@ -463,6 +463,60 @@ class TestSysModulesBypass:
         with pytest.raises(SecurityError):
             sandbox.execute_sandboxed(grab_proxy)
 
+    def test_nested_execute_sandboxed_keeps_outer_shadow(self):
+        """Regression: inner call's restore must not unshadow the outer call.
+
+        Previously the inner ``finally`` cleared the shared shadow dict,
+        leaving the outer call running with real ``sys.modules['os']``.
+        """
+        sandbox = ExecutionSandbox()
+
+        def inner():
+            # Inner sandboxed call exits and runs its own restore.
+            sandbox.execute_sandboxed(lambda: None)
+            # Outer must still see the proxy.
+            return type(sys.modules["os"]).__name__
+
+        result_type = sandbox.execute_sandboxed(inner)
+        assert result_type == "_BlockedModuleProxy"
+        # And after both exits, sys.modules is fully restored.
+        import os as _os
+        assert sys.modules["os"] is _os
+
+    def test_concurrent_execute_sandboxed_is_thread_safe(self):
+        """Regression: two threads must not corrupt each other's shadow.
+
+        Without the shared lock + depth counter, a fast thread's restore
+        wiped a slow thread's still-active shadow, exposing real
+        ``sys.modules['os']`` mid-execution.
+        """
+        import threading
+        import time
+
+        sandbox = ExecutionSandbox()
+        observed: dict[str, str] = {}
+
+        def worker(name: str, sleep_s: float):
+            def body():
+                time.sleep(sleep_s)
+                observed[name] = type(sys.modules["os"]).__name__
+            sandbox.execute_sandboxed(body)
+
+        t_slow = threading.Thread(target=worker, args=("slow", 0.30))
+        t_fast = threading.Thread(target=worker, args=("fast", 0.05))
+        t_slow.start()
+        # Give slow a head start so its shadow is up before fast enters.
+        time.sleep(0.05)
+        t_fast.start()
+        t_slow.join()
+        t_fast.join()
+
+        assert observed["slow"] == "_BlockedModuleProxy"
+        assert observed["fast"] == "_BlockedModuleProxy"
+        # Process-wide restore: nothing left over.
+        import os as _os
+        assert sys.modules["os"] is _os
+
 
 class TestExecuteCodeSandboxed:
     """End-to-end fail-closed code execution path."""

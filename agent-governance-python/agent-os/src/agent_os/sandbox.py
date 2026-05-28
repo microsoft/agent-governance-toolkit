@@ -30,6 +30,7 @@ import importlib.machinery
 import os
 import pathlib
 import sys
+import threading
 import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -497,6 +498,101 @@ class _BlockedModuleProxy:
         return f"<BlockedModuleProxy {name!r}>"
 
 
+# ---------------------------------------------------------------------------
+# Process-wide shadow coordination
+# ---------------------------------------------------------------------------
+#
+# ``sys.modules`` is a process-global mapping, so all ``ExecutionSandbox``
+# instances must coordinate when they replace its entries with proxies.
+# Without this, two failure modes are possible:
+#
+#   1. Nested ``execute_sandboxed`` calls: an inner call's ``finally`` clears
+#      the shadow while the outer call is still executing, restoring real
+#      ``os``/``subprocess``/etc. mid-flight.
+#   2. Concurrent calls from multiple threads (or multiple sandbox instances):
+#      a thread's restore step can wipe another thread's still-active shadow,
+#      or can write proxies back into ``sys.modules`` as "originals" and
+#      leak them permanently.
+#
+# We solve both with a single module-level ``RLock`` plus a shared snapshot
+# and depth counter. Only the *outermost* enter snapshots, and only the
+# *outermost* exit restores. Overlapping sandboxed execution across threads
+# serializes on the lock — this is the correct behaviour since
+# ``sys.modules`` cannot be partitioned per thread.
+_SANDBOX_SHADOW_LOCK = threading.RLock()
+_SANDBOX_SHADOW_DEPTH = 0
+_SANDBOX_SHADOW_ORIGINALS: dict[str, Any] = {}
+_SANDBOX_INSTALLED_HOOKS: list[Any] = []
+
+
+def _enter_sys_modules_shadow(blocked_modules: list[str]) -> None:
+    """Acquire the shadow lock and (if outermost) replace blocked modules.
+
+    Safe to call recursively from the same thread; other threads block on
+    the lock until the holder exits. Callers MUST pair every call with
+    :func:`_exit_sys_modules_shadow` in a ``finally`` block.
+    """
+    global _SANDBOX_SHADOW_DEPTH
+    _SANDBOX_SHADOW_LOCK.acquire()
+    try:
+        if _SANDBOX_SHADOW_DEPTH == 0:
+            _SANDBOX_SHADOW_ORIGINALS.clear()
+            for name in blocked_modules:
+                to_shadow = [
+                    key for key in list(sys.modules)
+                    if key == name or key.startswith(name + ".")
+                ]
+                for key in to_shadow:
+                    current = sys.modules[key]
+                    # Defensive: never snapshot a proxy as the "original".
+                    if isinstance(current, _BlockedModuleProxy):
+                        continue
+                    _SANDBOX_SHADOW_ORIGINALS[key] = current
+                    sys.modules[key] = _BlockedModuleProxy(key)
+        _SANDBOX_SHADOW_DEPTH += 1
+    except BaseException:
+        _SANDBOX_SHADOW_LOCK.release()
+        raise
+
+
+def _exit_sys_modules_shadow() -> None:
+    """Decrement depth; restore ``sys.modules`` on the outermost exit."""
+    global _SANDBOX_SHADOW_DEPTH
+    try:
+        _SANDBOX_SHADOW_DEPTH -= 1
+        if _SANDBOX_SHADOW_DEPTH <= 0:
+            _SANDBOX_SHADOW_DEPTH = 0
+            for key, original in _SANDBOX_SHADOW_ORIGINALS.items():
+                # Only restore if the proxy we installed is still there.
+                # If something else replaced it, leave that in place.
+                if isinstance(sys.modules.get(key), _BlockedModuleProxy):
+                    sys.modules[key] = original
+            _SANDBOX_SHADOW_ORIGINALS.clear()
+    finally:
+        _SANDBOX_SHADOW_LOCK.release()
+
+
+def _install_hook_reentrant(hook: Any) -> None:
+    """Install a meta-path hook with depth tracking.
+
+    Must be called while ``_SANDBOX_SHADOW_LOCK`` is held (i.e. between
+    ``_enter_sys_modules_shadow`` and ``_exit_sys_modules_shadow``) to
+    serialize updates to ``sys.meta_path``.
+    """
+    hook.install()
+    _SANDBOX_INSTALLED_HOOKS.append(hook)
+
+
+def _uninstall_hook_reentrant() -> None:
+    """Remove the most recently installed hook (LIFO)."""
+    if _SANDBOX_INSTALLED_HOOKS:
+        hook = _SANDBOX_INSTALLED_HOOKS.pop()
+        hook.uninstall()
+
+
+
+
+
 class ExecutionSandbox:
     """Restricted execution environment that frustrates stdlib bypass.
 
@@ -526,9 +622,6 @@ class ExecutionSandbox:
         self.config = config or SandboxConfig()
         self.policy = policy
         self._hook = SandboxImportHook(self.config.blocked_modules)
-        # Snapshot of sys.modules entries replaced during execute_sandboxed,
-        # so we can restore them on exit. Empty when no shadow is active.
-        self._shadowed_modules: dict[str, Any] = {}
 
     def check_import(self, module_name: str) -> bool:
         """Check if a module import is allowed.
@@ -658,26 +751,21 @@ class ExecutionSandbox:
         Closes the ``sys.modules['os'].system(...)`` escape that the import
         hook alone cannot stop (preloaded modules are already cached).
         Caller must invoke :meth:`_restore_sys_modules` to clean up.
+
+        Reentrant and thread-safe via :func:`_enter_sys_modules_shadow`:
+        only the outermost call across the whole process actually snapshots
+        and replaces entries; concurrent calls from other threads serialize
+        on the shared shadow lock.
         """
-        if self._shadowed_modules:
-            # Already shadowed (nested execute) — don't double-snapshot.
-            return
-        for name in self.config.blocked_modules:
-            # Shadow the top-level module AND any cached submodules
-            # (e.g. ``os.path``, ``importlib.util``).
-            to_shadow = [
-                key for key in list(sys.modules)
-                if key == name or key.startswith(name + ".")
-            ]
-            for key in to_shadow:
-                self._shadowed_modules[key] = sys.modules[key]
-                sys.modules[key] = _BlockedModuleProxy(key)
+        _enter_sys_modules_shadow(self.config.blocked_modules)
 
     def _restore_sys_modules(self) -> None:
-        """Restore ``sys.modules`` entries replaced by :meth:`_shadow_sys_modules`."""
-        for key, original in self._shadowed_modules.items():
-            sys.modules[key] = original
-        self._shadowed_modules.clear()
+        """Restore ``sys.modules`` entries replaced by :meth:`_shadow_sys_modules`.
+
+        Only the outermost paired call across the whole process actually
+        restores; inner calls just decrement the depth counter.
+        """
+        _exit_sys_modules_shadow()
 
     def execute_sandboxed(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Run a function with import hooks and (optionally) sys.modules shadowing.
@@ -698,19 +786,32 @@ class ExecutionSandbox:
 
             When ``config.shadow_sys_modules`` is True (default), this
             temporarily replaces blocked entries in the *process-wide*
-            ``sys.modules`` cache. Other threads in the same process will
-            see those replacements while ``func`` is running. Disable if
-            you need concurrent host access to those modules.
+            ``sys.modules`` cache. Concurrent ``execute_sandboxed`` calls
+            from other threads serialize on a shared lock; nested calls
+            on the same thread share the shadow without double-snapshotting.
+            Disable ``shadow_sys_modules`` if you need concurrent host
+            access to those modules.
         """
-        self._hook.install()
         if self.config.shadow_sys_modules:
+            # Acquire the shared lock + reentrant shadow first, then install
+            # the per-instance import hook under that lock. Pairing both
+            # under one lock prevents another thread from observing a
+            # half-installed sandbox.
             self._shadow_sys_modules()
-        try:
-            return func(*args, **kwargs)
-        finally:
-            if self.config.shadow_sys_modules:
+            try:
+                _install_hook_reentrant(self._hook)
+                try:
+                    return func(*args, **kwargs)
+                finally:
+                    _uninstall_hook_reentrant()
+            finally:
                 self._restore_sys_modules()
-            self._hook.uninstall()
+        else:
+            self._hook.install()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                self._hook.uninstall()
 
     def execute_code_sandboxed(
         self,
