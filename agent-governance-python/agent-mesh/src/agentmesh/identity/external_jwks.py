@@ -168,7 +168,16 @@ class ExternalJWKSProvider:
             return None
 
         revocation_url = self._revocation_url_for(endpoint, payload)
+        if revocation_url is None:
+            # Override URL failed validation (different host, non-https,
+            # or unparseable). Fail closed rather than fall back silently.
+            return None
         revoked = await self._get_revocation_list(revocation_url)
+        if revoked is None:
+            # Revocation fetch failed (network error, 5xx, malformed body).
+            # Fail closed — accepting a token whose revocation status we
+            # cannot determine would let revoked credentials pass.
+            return None
         if kid in revoked:
             return None
 
@@ -217,23 +226,71 @@ class ExternalJWKSProvider:
             return False
 
     @staticmethod
-    def _revocation_url_for(endpoint: TrustedEndpoint, verified_payload: dict) -> str:
+    def _normalize_host(host: Optional[str]) -> Optional[str]:
+        """Lowercase a hostname and strip a trailing dot.
+
+        Returns None for empty/None inputs so callers can fail closed.
+        """
+        if not host:
+            return None
+        normalized = host.strip().lower()
+        if normalized.endswith("."):
+            normalized = normalized[:-1]
+        return normalized or None
+
+    @classmethod
+    def _safe_host_from_url(cls, value: str) -> Optional[str]:
+        """Extract a normalized hostname from a URL or bare host string.
+
+        Uses urlparse's `.hostname` property so userinfo (`user@host`) and
+        ports are excluded. Returns None for inputs that don't yield a
+        parseable host so callers fail closed instead of fetching from
+        `https:///...` or attacker-controlled netloc tricks.
+        """
+        if not value or not isinstance(value, str):
+            return None
+        candidate = value if "://" in value else f"https://{value}"
+        try:
+            parsed = urlparse(candidate)
+        except ValueError:
+            return None
+        return cls._normalize_host(parsed.hostname)
+
+    @classmethod
+    def _revocation_url_for(
+        cls, endpoint: TrustedEndpoint, verified_payload: dict
+    ) -> Optional[str]:
         """Return revocation URL, preferring a verified claim override.
 
-        Override is taken only from the already-signature-verified payload,
-        not from unverified token contents, to prevent attackers steering
-        verifiers at attacker-controlled URLs. Default URL is derived by
-        rewriting the JWKS URL's path filename — robust against query
-        strings, fragments, and non-standard JWKS URL shapes.
+        Override is taken only from the already-signature-verified payload.
+        Even then, the override is constrained to the same scheme (https)
+        and host as the trusted JWKS endpoint — this prevents a malicious
+        or compromised issuer from steering verifiers at attacker-controlled
+        or internal (SSRF) URLs.
+
+        Returns None when the override is present but fails validation,
+        signalling the caller to fail the verification closed rather than
+        silently falling back to a default URL.
         """
         delegation = verified_payload.get("delegation_claims") or {}
         override = delegation.get("revocation_check_url")
+        jwks_host = cls._safe_host_from_url(str(endpoint.jwks_url))
         if override:
-            return str(override)
+            override_str = str(override)
+            try:
+                parsed_override = urlparse(override_str)
+            except ValueError:
+                return None
+            override_host = cls._normalize_host(parsed_override.hostname)
+            if (
+                parsed_override.scheme != "https"
+                or not override_host
+                or jwks_host is None
+                or override_host != jwks_host
+            ):
+                return None
+            return override_str
         parsed = urlparse(str(endpoint.jwks_url))
-        # Replace only the final path segment if it ends in jwks.json; else
-        # append the revocation filename to the path. Preserves scheme,
-        # netloc, params, query, and fragment.
         path = parsed.path
         if path.endswith("/jwks.json"):
             new_path = path[: -len("/jwks.json")] + "/jwks-revoked.json"
@@ -242,10 +299,16 @@ class ExternalJWKSProvider:
         return urlunparse(parsed._replace(path=new_path))
 
     def _resolve_endpoint(self, iss: str) -> Optional[TrustedEndpoint]:
-        domain = urlparse(iss if "://" in iss else f"https://{iss}").netloc
+        domain = self._safe_host_from_url(iss)
+        if domain is None:
+            return None
         for endpoint in self._policy.trusted_endpoints:
-            if endpoint.domain == domain:
+            if self._normalize_host(endpoint.domain) == domain:
                 return endpoint
+        # TOFU/open construct a JWKS URL from the issuer claim. Only the
+        # parsed hostname is reused — never raw `iss` substrings — so
+        # crafted values like "attacker.com/path" or "user@trusted.com"
+        # cannot smuggle a different netloc into the fetch URL.
         if self._policy.unknown_endpoint_policy == "tofu":
             return TrustedEndpoint(
                 domain=domain,
@@ -286,13 +349,22 @@ class ExternalJWKSProvider:
         except (httpx.HTTPError, ValueError):
             return None
 
-    async def _get_revocation_list(self, revocation_url: str) -> set[str]:
+    async def _get_revocation_list(self, revocation_url: str) -> Optional[set[str]]:
+        """Return the revocation set for `revocation_url`.
+
+        Returns:
+            - A (possibly empty) set of revoked kids on success or 404.
+            - None on transport/parse failure, signalling callers to fail
+              closed instead of treating "fetch failed" as "no revocations".
+        """
         async with self._cache_lock:
             entry = self._revocation_cache.get(revocation_url)
             if entry and entry.expires_at > time.monotonic():
                 return entry.value  # type: ignore[return-value]
 
         revoked = await self._fetch_revocation_list(revocation_url)
+        if revoked is None:
+            return None
         async with self._cache_lock:
             self._revocation_cache[revocation_url] = _CacheEntry(
                 value=revoked,
@@ -300,7 +372,15 @@ class ExternalJWKSProvider:
             )
         return revoked
 
-    async def _fetch_revocation_list(self, revocation_url: str) -> set[str]:
+    async def _fetch_revocation_list(self, revocation_url: str) -> Optional[set[str]]:
+        """Fetch a revocation list. Returns None on failure (fail closed).
+
+        A 404 is treated as "no revocation list published yet" and yields
+        an empty set, matching the design where issuers may bootstrap
+        without one. Any other transport or parse failure returns None so
+        the caller can deny the token rather than treat the absence of
+        signal as a positive signal.
+        """
         try:
             async with httpx.AsyncClient(timeout=self._http_timeout) as client:
                 resp = await client.get(revocation_url)
@@ -309,8 +389,8 @@ class ExternalJWKSProvider:
             resp.raise_for_status()
             data = resp.json()
             return {entry["kid"] for entry in data.get("revoked", [])}
-        except (httpx.HTTPError, KeyError, ValueError):
-            return set()
+        except (httpx.HTTPError, KeyError, ValueError, TypeError):
+            return None
 
     def _build_identity(
         self, payload: dict, endpoint: TrustedEndpoint
