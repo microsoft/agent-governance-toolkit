@@ -47,6 +47,7 @@ carveout
 CCPA
 cedarling
 cedarpy
+chdir
 cheatsheet
 checkpointed
 checkpointing
@@ -100,6 +101,7 @@ Dockerfiles
 Docstrings
 DOTALL
 dpkg
+DYLD
 eastus
 egresspolicy
 EigenTrust
@@ -133,6 +135,7 @@ fnmatch
 Fprintf
 fria
 fromisoformat
+fromkeys
 fromtimestamp
 frontmatter
 frozenset
@@ -176,6 +179,7 @@ isinstance
 isoformat
 isort
 itertools
+javaagent
 jwkjwks
 kanish
 kata
@@ -254,7 +258,9 @@ parseability
 parseable
 pathed
 pathext
+pathexts
 pathlib
+pathsep
 PCRE
 peekable
 Permissioned
@@ -281,6 +287,7 @@ pypistats
 pyproject
 pytest
 pytestmark
+PYTHONHOME
 pythonhosted
 PYTHONPATH
 pyupgrade
