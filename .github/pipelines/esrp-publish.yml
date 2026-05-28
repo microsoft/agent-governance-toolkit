@@ -159,6 +159,9 @@ parameters:
         path: agent-governance-python/agentmesh-integrations/mcp-trust-proxy
         wave: 2
       # Wave 3: Framework integrations
+      - name: cedarling-agentmesh
+        path: agent-governance-python/agentmesh-integrations/cedarling-agentmesh
+        wave: 3
       - name: crewai-agentmesh
         path: agent-governance-python/agentmesh-integrations/crewai-agentmesh
         wave: 3
