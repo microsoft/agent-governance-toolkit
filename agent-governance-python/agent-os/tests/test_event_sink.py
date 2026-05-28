@@ -159,13 +159,15 @@ class TestGovernanceEventProcessor:
         proc = GovernanceEventProcessor(
             max_queue_size=5, schedule_delay_ms=5000, max_batch_size=100
         )
-        proc.add_sink(sink)
-
-        # Enqueue 10 events into a queue of size 5
+        # Enqueue BEFORE adding sink so the worker thread is not yet started.
+        # This avoids a race where notify() wakes the worker which drains
+        # events between on_event() calls, preventing overflow.
         for i in range(10):
             proc.on_event(GovernanceEvent(agent_id=f"agent-{i}"))
 
         assert proc.dropped_count > 0
+
+        proc.add_sink(sink)
         proc.shutdown(timeout_ms=2000)
 
         # Should have received at most 5 events (queue max)
