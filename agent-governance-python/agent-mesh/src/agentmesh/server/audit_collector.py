@@ -86,7 +86,18 @@ class QueryParams(BaseModel):
 
 @app.post("/api/v1/audit/log", tags=["audit"], response_model=LogEntryResponse)
 async def log_entry(req: LogEntryRequest) -> LogEntryResponse:
-    """Log a single audit entry."""
+    """Log a single audit entry.
+
+    SECURITY (known gap): this endpoint accepts ``agent_did`` from the
+    request body without authenticating the caller. The audit-collector
+    is a separate service that does not have direct access to the
+    identity registry, so binding ``agent_did`` to an Ed25519-Timestamp
+    signature requires cross-service auth plumbing (shared trust
+    anchor or mTLS gateway) that lives outside this module. Deploy
+    behind a gateway that authenticates callers; do NOT expose this
+    endpoint directly. Tracked alongside the trust-engine / registry
+    auth-binding work.
+    """
     entry = _audit_service.log_action(
         agent_did=req.agent_did,
         action=req.action,
@@ -108,7 +119,12 @@ async def log_entry(req: LogEntryRequest) -> LogEntryResponse:
 
 @app.post("/api/v1/audit/batch", tags=["audit"])
 async def log_batch(req: BatchLogRequest) -> dict[str, Any]:
-    """Log a batch of audit entries."""
+    """Log a batch of audit entries.
+
+    SECURITY (known gap): same as ``/audit/log`` — accepts ``agent_did``
+    per entry without per-entry caller authentication. Must be deployed
+    behind an authenticating gateway.
+    """
     results = []
     entries_for_sink = []
 

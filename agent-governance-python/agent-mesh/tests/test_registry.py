@@ -252,14 +252,35 @@ class TestRegistryAPI:
         assert resp.json()["online"] is True
 
     def test_reputation(self, client):
-        body, _, did = _make_registration_body()
-        client.post("/v1/agents", json=body)
-        resp = client.post(f"/v1/agents/{did}/reputation", json={
-            "score": 0.9,
-            "reason": "reliable execution",
-        })
+        # Reporter (different agent) submits reputation on the target.
+        target_body, _, target_did = _make_registration_body()
+        client.post("/v1/agents", json=target_body)
+        reporter_body, reporter_sk, reporter_did = _make_registration_body()
+        client.post("/v1/agents", json=reporter_body)
+        resp = client.post(
+            f"/v1/agents/{target_did}/reputation",
+            json={"score": 0.9, "reason": "reliable execution"},
+            headers={"Authorization": _make_auth_header(reporter_sk, reporter_did)},
+        )
         assert resp.status_code == 200
         assert resp.json()["reputation_score"] > 0.5
+
+    def test_reputation_requires_auth(self, client):
+        body, _, did = _make_registration_body()
+        client.post("/v1/agents", json=body)
+        resp = client.post(f"/v1/agents/{did}/reputation", json={"score": 0.9})
+        assert resp.status_code == 401
+
+    def test_reputation_rejects_self_reporting(self, client):
+        body, sk, did = _make_registration_body()
+        client.post("/v1/agents", json=body)
+        resp = client.post(
+            f"/v1/agents/{did}/reputation",
+            json={"score": 1.0, "reason": "i am great"},
+            headers={"Authorization": _make_auth_header(sk, did)},
+        )
+        assert resp.status_code == 403
+        assert "themselves" in resp.json()["detail"].lower()
 
     def test_discover(self, client):
         for i in range(3):
@@ -271,31 +292,126 @@ class TestRegistryAPI:
         assert resp.json()["total"] == 2
 
     def test_heartbeat_updates_last_seen(self, client):
-        body, _, did = _make_registration_body()
+        body, sk, did = _make_registration_body()
         client.post("/v1/agents", json=body)
-        resp = client.post(f"/v1/agents/{did}/heartbeat")
+        resp = client.post(
+            f"/v1/agents/{did}/heartbeat",
+            headers={"Authorization": _make_auth_header(sk, did)},
+        )
         assert resp.status_code == 200
         assert resp.json()["did"] == did
         assert resp.json()["last_seen"] is not None
 
-    def test_heartbeat_not_found(self, client):
-        resp = client.post("/v1/agents/did:mesh:missing/heartbeat")
-        assert resp.status_code == 404
-
-    def test_heartbeat_throttled(self, client):
+    def test_heartbeat_requires_auth(self, client):
         body, _, did = _make_registration_body()
         client.post("/v1/agents", json=body)
-        resp1 = client.post(f"/v1/agents/{did}/heartbeat")
+        resp = client.post(f"/v1/agents/{did}/heartbeat")
+        assert resp.status_code == 401
+
+    def test_heartbeat_rejects_other_did(self, client):
+        body_a, _, did_a = _make_registration_body()
+        body_b, sk_b, did_b = _make_registration_body()
+        client.post("/v1/agents", json=body_a)
+        client.post("/v1/agents", json=body_b)
+        # B tries to heartbeat A.
+        resp = client.post(
+            f"/v1/agents/{did_a}/heartbeat",
+            headers={"Authorization": _make_auth_header(sk_b, did_b)},
+        )
+        assert resp.status_code == 403
+
+    def test_heartbeat_not_found(self, client):
+        # An unregistered DID can never auth; the auth helper short-circuits
+        # before the 404 path is even reachable.
+        sk = SigningKey.generate()
+        ghost_did = "did:mesh:" + "0" * 32
+        ts = datetime.now(timezone.utc).isoformat()
+        sig = sk.sign(ts.encode()).signature
+        resp = client.post(
+            f"/v1/agents/{ghost_did}/heartbeat",
+            headers={
+                "Authorization": f"Ed25519-Timestamp {ghost_did} {ts} {_b64(sig)}",
+            },
+        )
+        assert resp.status_code == 401
+
+    def test_heartbeat_throttled(self, client):
+        body, sk, did = _make_registration_body()
+        client.post("/v1/agents", json=body)
+        auth = _make_auth_header(sk, did)
+        resp1 = client.post(f"/v1/agents/{did}/heartbeat", headers={"Authorization": auth})
         assert resp1.status_code == 200
         first_ts = resp1.json()["last_seen"]
 
-        # Immediate second heartbeat is throttled
-        resp2 = client.post(f"/v1/agents/{did}/heartbeat")
+        # Immediate second heartbeat is throttled (use a fresh signed
+        # timestamp so we know we hit the throttle, not the replay window).
+        resp2 = client.post(
+            f"/v1/agents/{did}/heartbeat",
+            headers={"Authorization": _make_auth_header(sk, did)},
+        )
         assert resp2.status_code == 429
 
         # Verify last_seen was NOT updated on throttled request
         presence = client.get(f"/v1/agents/{did}/presence")
         assert presence.json()["last_seen"] == first_ts
+
+    # ── Session reputation auth ─────────────────────────────────
+
+    def test_session_reputation_requires_auth(self, client):
+        body_i, _, did_i = _make_registration_body()
+        body_r, _, did_r = _make_registration_body()
+        client.post("/v1/agents", json=body_i)
+        client.post("/v1/agents", json=body_r)
+        resp = client.post(
+            "/v1/registry/reputation/session",
+            json={
+                "session_id": "s-1",
+                "initiator_amid": did_i,
+                "receiver_amid": did_r,
+                "outcome": "success",
+                "reporter_amid": did_i,
+            },
+        )
+        assert resp.status_code == 401
+
+    def test_session_reputation_rejects_spoofed_reporter(self, client):
+        # Caller authenticates as did_i but claims did_r is the reporter.
+        body_i, sk_i, did_i = _make_registration_body()
+        body_r, _, did_r = _make_registration_body()
+        client.post("/v1/agents", json=body_i)
+        client.post("/v1/agents", json=body_r)
+        resp = client.post(
+            "/v1/registry/reputation/session",
+            json={
+                "session_id": "s-2",
+                "initiator_amid": did_i,
+                "receiver_amid": did_r,
+                "outcome": "success",
+                "reporter_amid": did_r,  # spoofed
+            },
+            headers={"Authorization": _make_auth_header(sk_i, did_i)},
+        )
+        assert resp.status_code == 403
+        assert "reporter_amid" in resp.json()["detail"].lower()
+
+    def test_session_reputation_succeeds_with_matching_reporter(self, client):
+        body_i, sk_i, did_i = _make_registration_body()
+        body_r, _, did_r = _make_registration_body()
+        client.post("/v1/agents", json=body_i)
+        client.post("/v1/agents", json=body_r)
+        resp = client.post(
+            "/v1/registry/reputation/session",
+            json={
+                "session_id": "s-3",
+                "initiator_amid": did_i,
+                "receiver_amid": did_r,
+                "outcome": "success",
+                "reporter_amid": did_i,
+            },
+            headers={"Authorization": _make_auth_header(sk_i, did_i)},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["outcome"] == "success"
 
     def test_identity_key_ed_validation_rejects_wrong_length(self, client):
         body, sk, did = _make_registration_body()

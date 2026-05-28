@@ -320,12 +320,26 @@ class RegistryServer:
             }
 
         @app.post("/v1/agents/{did}/heartbeat")
-        async def heartbeat(did: str) -> dict:
+        async def heartbeat(
+            did: str,
+            authorization: str | None = Header(None, alias="Authorization"),
+        ) -> dict:
             """Bump an agent's `last_seen` to keep it visible in presence
             checks. Rate-limited to at most once per 10 seconds per agent
             to prevent abuse (attacker keeping stale agents permanently
             online). Returns 429 when throttled without updating last_seen.
+
+            Authentication: required. The caller must present an
+            ``Ed25519-Timestamp`` header signed by ``did``. Without this,
+            any unauthenticated party could keep an offline agent's
+            presence record live (impersonation / DoS-mask).
             """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != did:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Authenticated DID does not match heartbeat target",
+                )
             if not store.get_agent(did):
                 raise HTTPException(status_code=404, detail="Agent not found")
             if not store.try_update_last_seen(did, min_interval_seconds=10.0):
@@ -342,8 +356,24 @@ class RegistryServer:
         # ── Reputation ───────────────────────────────────────────
 
         @app.post("/v1/agents/{did}/reputation")
-        async def submit_reputation(did: str, req: ReputationRequest) -> dict:
-            """Submit reputation feedback for an agent."""
+        async def submit_reputation(
+            did: str,
+            req: ReputationRequest,
+            authorization: str | None = Header(None, alias="Authorization"),
+        ) -> dict:
+            """Submit reputation feedback for an agent.
+
+            Authentication: required. The caller must present an
+            ``Ed25519-Timestamp`` header so the reporter is bound to an
+            authenticated identity. Self-reporting is rejected — agents
+            cannot inflate their own reputation.
+            """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did == did:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Agents may not submit reputation about themselves",
+                )
             agent = store.get_agent(did)
             if not agent:
                 raise HTTPException(status_code=404, detail="Agent not found")
@@ -355,7 +385,10 @@ class RegistryServer:
             return {"did": did, "reputation_score": round(agent.reputation_score, 4)}
 
         @app.post("/v1/registry/reputation/session")
-        async def submit_session_reputation(req: SessionReputationRequest) -> dict:
+        async def submit_session_reputation(
+            req: SessionReputationRequest,
+            authorization: str | None = Header(None, alias="Authorization"),
+        ) -> dict:
             """Record a session outcome and update both endpoints' reputation.
 
             Outcome mapping (EMA, alpha=0.2):
@@ -364,8 +397,20 @@ class RegistryServer:
               - timeout → score 0.2 toward the receiver (initiator unchanged)
 
             Missing agents are silently skipped (best-effort telemetry).
-            The reporter must be a registered agent (either initiator or receiver).
+
+            Authentication: required. The caller must present an
+            ``Ed25519-Timestamp`` header and the authenticated DID MUST
+            equal ``reporter_amid``. Additionally, the reporter must be
+            a session participant (initiator or receiver). Together this
+            stops any party — authenticated or not — from forging session
+            telemetry as another agent.
             """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != req.reporter_amid:
+                raise HTTPException(
+                    status_code=403,
+                    detail="reporter_amid does not match authenticated DID",
+                )
             # Validate reporter is a session participant
             if req.reporter_amid not in (req.initiator_amid, req.receiver_amid):
                 raise HTTPException(
