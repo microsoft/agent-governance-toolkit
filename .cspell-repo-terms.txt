@@ -153,7 +153,6 @@ gomod
 GOPROXY
 governancepolicy
 gvisor
-h├⌐llo
 hasattr
 hashlib
 HEALTHCHECK
@@ -167,6 +166,7 @@ HTTPMCP
 httpx
 hypercall
 Hyperlight
+h├⌐llo
 IATP
 idweb
 IGNORECASE
@@ -201,6 +201,7 @@ linkcheck
 linkified
 Linq
 LlamaIndex
+LOCALAPPDATA
 lockdown
 lockfile
 lockfiles
@@ -213,6 +214,7 @@ masquerade
 mastra
 materialised
 maxlen
+Mevil
 mgmt
 microkernel
 Microsoft
@@ -280,6 +282,8 @@ Printf
 Println
 privatelink
 promptdefense
+PSMODULEPATH
+psmodules
 pycache
 Pydantic
 pypdf
@@ -290,6 +294,7 @@ pytestmark
 PYTHONHOME
 pythonhosted
 PYTHONPATH
+pythonstartup
 pyupgrade
 pyyaml
 quickstarts
@@ -312,6 +317,7 @@ rmtree
 Rootfs
 rrdatas
 rstrip
+RUBYOPT
 run_results
 runsc
 RustCrypto
@@ -336,6 +342,7 @@ setuptools
 shutil
 siddique
 SIEM
+sitecustomize
 skipif
 Slidev
 slos
@@ -402,6 +409,7 @@ utcnow
 uvicorn
 VADP
 venv
+VIRTUALENVS
 vitest
 vnet
 westus
@@ -412,3 +420,4 @@ workflows
 XACML
 xfail
 xunit
+ZDOTDIR

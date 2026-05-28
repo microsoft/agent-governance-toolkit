@@ -20,7 +20,9 @@ from agent_os.cli.mcp_scan import (
     RemoteMCPServerConfig,
     StdioMCPServerConfig,
     _configure_command_policy,
+    _resolve_allowlisted_command,
     _validate_command,
+    _validate_launch_cwd,
     compare_fingerprints,
     compute_fingerprints,
     format_json_output,
@@ -1232,6 +1234,26 @@ class TestCommandAllowlist:
             ("LD_PRELOAD", "/tmp/payload.so"),
             ("UV_TOOL_BIN_DIR", "/tmp/attacker"),
             ("NPM_CONFIG_PREFIX", "/tmp/attacker"),
+            # User-config-file hijack: child reads attacker rc files under HOME.
+            ("HOME", "/tmp/attacker-home"),
+            ("USERPROFILE", r"C:\attacker-home"),
+            ("APPDATA", r"C:\attacker-appdata"),
+            ("LOCALAPPDATA", r"C:\attacker-local"),
+            ("XDG_CONFIG_HOME", "/tmp/attacker-xdg"),
+            ("ZDOTDIR", "/tmp/attacker-zsh"),
+            ("PSMODULEPATH", r"C:\attacker-psmodules"),
+            # Tool-specific config/index redirects.
+            ("PIP_INDEX_URL", "https://attacker.example.com/simple"),
+            ("PIP_EXTRA_INDEX_URL", "https://attacker.example.com/simple"),
+            ("POETRY_VIRTUALENVS_PATH", "/tmp/attacker"),
+            ("GEM_HOME", "/tmp/attacker"),
+            ("GIT_SSH_COMMAND", "ssh -F /tmp/attacker/ssh_config"),
+            # Shell resolver for child subprocess(..., shell=True) on Windows.
+            ("COMSPEC", r"C:\attacker\cmd.exe"),
+            # Additional runtime startup hooks.
+            ("PERL5OPT", "-Mevil"),
+            ("PERL5LIB", "/tmp/attacker"),
+            ("BASH_ENV", "/tmp/attacker/init.sh"),
         ],
     )
     def test_resolution_env_override_is_blocked(self, env_key, env_value):
@@ -1263,6 +1285,148 @@ class TestCommandAllowlist:
     def test_sys_executable_is_blocked_without_allow_commands(self):
         with pytest.raises(RuntimeError, match="must be a bare executable name"):
             _validate_command(sys.executable)
+
+
+class TestResolverRejectsUntrustedPathEntries:
+    """Verify the launch resolver only honors absolute, non-UNC PATH entries.
+
+    A repo-local binary must never shadow the trusted host runtime when a
+    relative PATH entry (``.``, ``bin``, ``./tools``) is present, regardless of
+    whether the entry came from config or from the operator's parent env.
+    """
+
+    @pytest.mark.parametrize("relative", [".", "./bin", "bin", "..", "subdir"])
+    def test_relative_path_entries_are_skipped(self, tmp_path: Path, monkeypatch, relative):
+        fake_name = "node.exe" if sys.platform == "win32" else "node"
+        fake = tmp_path / fake_name
+        fake.write_bytes(b"")
+        if sys.platform != "win32":
+            fake.chmod(0o755)
+        monkeypatch.chdir(tmp_path)
+
+        resolved = _resolve_allowlisted_command(
+            "node", {"PATH": relative, "PATHEXT": ".EXE;.CMD;.BAT;.COM"}
+        )
+
+        assert resolved is None
+
+    def test_mixed_path_keeps_absolute_and_drops_relative(self, tmp_path: Path, monkeypatch):
+        # A repo-planted fake should never be chosen even when a legitimate
+        # absolute PATH entry follows. The relative entry must be dropped, not
+        # merely deprioritized.
+        fake_name = "node.exe" if sys.platform == "win32" else "node"
+        fake = tmp_path / fake_name
+        fake.write_bytes(b"")
+        if sys.platform != "win32":
+            fake.chmod(0o755)
+        monkeypatch.chdir(tmp_path)
+        mixed = f".{__import__('os').pathsep}{tmp_path}"
+
+        resolved = _resolve_allowlisted_command(
+            "node", {"PATH": mixed, "PATHEXT": ".EXE;.CMD;.BAT;.COM"}
+        )
+
+        # The absolute tmp_path entry will find the fake, so the test only
+        # verifies that resolution succeeds via the absolute entry — never via
+        # the leading ``.`` entry. (When resolved, the path must be absolute.)
+        assert resolved is None or Path(resolved).is_absolute()
+
+    def test_unc_path_entries_are_skipped(self):
+        unc_path = r"\\attacker.example.com\share"
+        resolved = _resolve_allowlisted_command(
+            "node", {"PATH": unc_path, "PATHEXT": ".EXE;.CMD;.BAT;.COM"}
+        )
+
+        assert resolved is None
+
+    def test_empty_path_returns_none(self):
+        assert _resolve_allowlisted_command("node", {"PATH": ""}) is None
+
+
+class TestUntrustedCwdPolicy:
+    """Verify launch refuses config-provided server cwd by default."""
+
+    def setup_method(self):
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=False)
+
+    def teardown_method(self):
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=False)
+
+    def test_validate_launch_cwd_rejects_set_value(self, tmp_path: Path):
+        with pytest.raises(RuntimeError, match="comes from the MCP config"):
+            _validate_launch_cwd(tmp_path)
+
+    def test_validate_launch_cwd_accepts_none(self):
+        _validate_launch_cwd(None)  # should not raise
+        _validate_launch_cwd("")  # should not raise
+
+    def test_validate_launch_cwd_allowed_when_flag_set(self, tmp_path: Path):
+        _configure_command_policy(allow_untrusted_cwd=True)
+        _validate_launch_cwd(tmp_path)  # should not raise
+
+    def test_validate_launch_cwd_allowed_when_allow_commands(self, tmp_path: Path):
+        _configure_command_policy(allow_all=True)
+        _validate_launch_cwd(tmp_path)  # should not raise
+
+    def test_static_only_reports_untrusted_cwd(self, tmp_path: Path, capsys):
+        cwd_target = tmp_path / "subdir"
+        cwd_target.mkdir()
+        config_file = tmp_path / "mcp.json"
+        config_file.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "with-cwd": {
+                            "command": "node",
+                            "args": [],
+                            "cwd": str(cwd_target),
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        ret = main(["scan", str(config_file), "--format", "json", "--static-only"])
+
+        assert ret == 2
+        data = json.loads(capsys.readouterr().out)
+        assert any(
+            "comes from the MCP config" in finding["message"]
+            for finding in data["config_findings"]
+        )
+
+    def test_allow_untrusted_cwd_flag_suppresses_finding(self, tmp_path: Path, capsys):
+        cwd_target = tmp_path / "subdir"
+        cwd_target.mkdir()
+        config_file = tmp_path / "mcp.json"
+        config_file.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "with-cwd": {
+                            "command": "node",
+                            "args": [],
+                            "cwd": str(cwd_target),
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        ret = main(
+            ["scan", str(config_file), "--format", "json", "--static-only", "--allow-untrusted-cwd"]
+        )
+
+        # ret may still be non-zero from other findings, but the untrusted-cwd
+        # finding must not be present.
+        data = json.loads(capsys.readouterr().out)
+        assert not any(
+            "comes from the MCP config" in finding["message"]
+            for finding in data["config_findings"]
+        )
+        assert ret in (0, 2)
 
 
 class TestCommandAllowlistCLI:

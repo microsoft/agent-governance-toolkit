@@ -67,6 +67,7 @@ _COMMAND_ALLOWLIST: set[str] = {
 }
 _COMMAND_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+\-]*$")
 _COMMAND_RESOLUTION_ENV_KEYS = {
+    # PATH-style resolution / loader hijack
     "PATH",
     "PATHEXT",
     "PYTHONPATH",
@@ -77,21 +78,56 @@ _COMMAND_RESOLUTION_ENV_KEYS = {
     "LD_LIBRARY_PATH",
     "DYLD_INSERT_LIBRARIES",
     "DYLD_LIBRARY_PATH",
+    # Runtime startup hooks that execute attacker code before main entry
     "DOTNET_STARTUP_HOOKS",
     "JAVA_TOOL_OPTIONS",
     "_JAVA_OPTIONS",
     "JDK_JAVA_OPTIONS",
+    "RUBYOPT",
+    "BASH_ENV",
+    "ENV",
+    "PERL5OPT",
+    "PERL5LIB",
+    # User-config-file lookup hijack: child reads attacker-controlled rc files
+    # (e.g. ~/.npmrc preinstall, ~/.pythonstartup, ~/.cargo/config.toml,
+    # PowerShell profile, zsh init) from these locations.
+    "HOME",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "ZDOTDIR",
+    "PSMODULEPATH",
+    # Shell resolver: a child that uses ``subprocess(..., shell=True)`` on
+    # Windows would exec the attacker-pointed binary.
+    "COMSPEC",
 }
-_COMMAND_RESOLUTION_ENV_PREFIXES = ("UV_", "NPM_CONFIG_")
+_COMMAND_RESOLUTION_ENV_PREFIXES = (
+    "UV_",
+    "NPM_CONFIG_",
+    # Tool-specific config-file/index redirects that lead to code execution
+    # through preinstall scripts, malicious wheels, dependency confusion, etc.
+    "PIP_",
+    "POETRY_",
+    "GEM_",
+    "GIT_",
+)
 
 # Module-level flag; set via --allow-commands CLI flag.
 _ALLOW_ALL_COMMANDS: bool = False
+# Module-level flag; set via --allow-untrusted-cwd CLI flag.
+_ALLOW_UNTRUSTED_CWD: bool = False
 
 
-def _configure_command_policy(*, allow_all: bool = False) -> None:
+def _configure_command_policy(
+    *, allow_all: bool = False, allow_untrusted_cwd: bool = False
+) -> None:
     """Set command execution policy. Call once from CLI entry point."""
-    global _ALLOW_ALL_COMMANDS  # noqa: PLW0603
+    global _ALLOW_ALL_COMMANDS, _ALLOW_UNTRUSTED_CWD  # noqa: PLW0603
     _ALLOW_ALL_COMMANDS = allow_all
+    _ALLOW_UNTRUSTED_CWD = allow_untrusted_cwd
 
 
 def _normalize_allowlisted_command(command: str) -> str:
@@ -123,9 +159,26 @@ def _resolve_allowlisted_command(command: str, env: Mapping[str, str]) -> str | 
     This intentionally avoids platform helpers like ``shutil.which`` because on
     Windows they may consult the current working directory before PATH, which
     would let a repo-local binary shadow the trusted host runtime.
+
+    Only absolute, non-UNC PATH entries are honored. Relative entries (``.``,
+    ``bin``, ``./tools``) would otherwise resolve against the scanner's current
+    working directory, which can be the scanned repository, re-introducing the
+    repo-local shadowing class. UNC entries (``\\\\server\\share``) point at
+    remote SMB shares an attacker may control.
     """
     path_value = env.get("PATH", "")
-    path_entries = [entry for entry in path_value.split(os.pathsep) if entry]
+    path_entries: list[str] = []
+    for entry in path_value.split(os.pathsep):
+        if not entry:
+            continue
+        if not Path(entry).is_absolute():
+            continue
+        if entry.startswith(("\\\\", "//")):
+            # Treat UNC-style entries as untrusted on every platform; on POSIX
+            # ``//foo`` is equivalent to ``/foo`` but the cost of skipping it is
+            # negligible and the simpler rule is easier to audit.
+            continue
+        path_entries.append(entry)
     if os.name == "nt":
         pathext_value = env.get("PATHEXT") or os.environ.get(
             "PATHEXT", ".COM;.EXE;.BAT;.CMD"
@@ -147,6 +200,28 @@ def _resolve_allowlisted_command(command: str, env: Mapping[str, str]) -> str | 
             if resolved.is_file() and os.access(resolved, os.X_OK):
                 return str(resolved)
     return None
+
+
+def _validate_launch_cwd(cwd: Path | str | None) -> None:
+    """Reject untrusted config-provided working directories in live mode.
+
+    Even with a trusted launch executable, running it in an attacker-chosen
+    directory lets the runtime load attacker-controlled config files relative
+    to cwd (``./package.json`` ``preinstall``, ``./nuget.config``,
+    ``./sitecustomize.py``, etc.). Operators opt in to this with
+    ``--allow-untrusted-cwd`` when they trust the config source.
+    """
+    if cwd in (None, ""):
+        return
+    if _ALLOW_ALL_COMMANDS or _ALLOW_UNTRUSTED_CWD:
+        return
+    raise RuntimeError(
+        f"Server cwd {str(cwd)!r} comes from the MCP config and is not allowed "
+        f"during live command validation. "
+        f"Use --allow-untrusted-cwd to opt in when the config source is trusted, "
+        f"--allow-commands to permit execution of untrusted commands, "
+        f"or --static-only to scan without executing."
+    )
 
 
 
@@ -597,11 +672,16 @@ def validate_stdio_launch_config(config_path: Path, single_server: str | None = 
             findings.append(_config_finding(server_name, "critical", "Server env contains unresolved variables"))
             continue
 
-        _resolve_cwd(spec.get("cwd"), config_path, findings, server_name)
+        resolved_cwd = _resolve_cwd(spec.get("cwd"), config_path, findings, server_name)
         try:
             _validate_command(command, raw_env, require_resolution=False)
         except RuntimeError as exc:
             findings.append(_config_finding(server_name, "critical", str(exc)))
+        if resolved_cwd is not None:
+            try:
+                _validate_launch_cwd(resolved_cwd)
+            except RuntimeError as exc:
+                findings.append(_config_finding(server_name, "critical", str(exc)))
     return findings
 
 
@@ -626,6 +706,7 @@ class _StdioJSONRPCClient:
     def start(self) -> None:
         env = _sanitized_child_env()
         launch_command = _validate_command(self.server.command, self.server.env, base_env=env)
+        _validate_launch_cwd(self.server.cwd)
         env.update(self.server.env)
         self.process = subprocess.Popen(  # noqa: S603 - command comes from user MCP config by design.
             [launch_command, *self.server.args],
@@ -2027,7 +2108,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not launch or connect to MCP servers; scan only inline tool definitions and config metadata",
     )
     scan_parser.add_argument("--json", action="store_true", help="Output in JSON format")
-    scan_parser.add_argument("--allow-commands", action="store_true", help="Allow execution of commands not on the default allowlist")
+    scan_parser.add_argument("--allow-commands", action="store_true", help="Allow execution of commands not on the default allowlist. The allowlist only gates which interpreter runs; args (e.g., 'python -c ...') are not validated.")
+    scan_parser.add_argument("--allow-untrusted-cwd", action="store_true", help="Allow config-provided server cwd during live launch. Off by default because the child runtime loads config files (package.json, nuget.config, sitecustomize.py, ...) relative to cwd.")
     scan_parser.add_argument("--no-verify-tls", action="store_true", help="Skip TLS certificate verification for remote endpoints")
 
     fp_parser = subparsers.add_parser("fingerprint", help="Register/compare tool fingerprints")
@@ -2037,7 +2119,8 @@ def build_parser() -> argparse.ArgumentParser:
     fp_parser.add_argument("--timeout", type=float, default=10.0, help="Per-request timeout")
     fp_parser.add_argument("--static-only", action="store_true", help="Fingerprint inline tools only")
     fp_parser.add_argument("--json", action="store_true", help="Output in JSON format")
-    fp_parser.add_argument("--allow-commands", action="store_true", help="Allow execution of commands not on the default allowlist")
+    fp_parser.add_argument("--allow-commands", action="store_true", help="Allow execution of commands not on the default allowlist. The allowlist only gates which interpreter runs; args (e.g., 'python -c ...') are not validated.")
+    fp_parser.add_argument("--allow-untrusted-cwd", action="store_true", help="Allow config-provided server cwd during live launch.")
     fp_parser.add_argument("--no-verify-tls", action="store_true", help="Skip TLS certificate verification for remote endpoints")
 
     report_parser = subparsers.add_parser("report", help="Generate a full security report")
@@ -2046,7 +2129,8 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("--timeout", type=float, default=10.0, help="Per-request timeout")
     report_parser.add_argument("--static-only", action="store_true", help="Report on inline tools only")
     report_parser.add_argument("--json", action="store_true", help="Output in JSON format")
-    report_parser.add_argument("--allow-commands", action="store_true", help="Allow execution of commands not on the default allowlist")
+    report_parser.add_argument("--allow-commands", action="store_true", help="Allow execution of commands not on the default allowlist. The allowlist only gates which interpreter runs; args (e.g., 'python -c ...') are not validated.")
+    report_parser.add_argument("--allow-untrusted-cwd", action="store_true", help="Allow config-provided server cwd during live launch.")
     report_parser.add_argument("--no-verify-tls", action="store_true", help="Skip TLS certificate verification for remote endpoints")
 
     return parser
@@ -2059,8 +2143,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 0
-    if getattr(args, "allow_commands", False):
-        _configure_command_policy(allow_all=True)
+    if getattr(args, "allow_commands", False) or getattr(args, "allow_untrusted_cwd", False):
+        _configure_command_policy(
+            allow_all=getattr(args, "allow_commands", False),
+            allow_untrusted_cwd=getattr(args, "allow_untrusted_cwd", False),
+        )
     if getattr(args, "no_verify_tls", False):
         _configure_tls(verify=False)
     if args.command == "scan":
