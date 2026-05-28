@@ -83,7 +83,12 @@ class GrantCapabilityRequest(BaseModel):
     # ``from_agent`` is intentionally NOT in the request body — the grantor
     # is the caller authenticated via the Ed25519-Timestamp header. Accepting
     # an arbitrary ``from_agent`` from the body lets any caller claim to grant
-    # capabilities on behalf of any other agent.
+    # capabilities on behalf of any other agent. Pydantic v2 by default
+    # silently ignores unknown fields, which means an old client that still
+    # sends ``from_agent`` would not get any feedback that the field is
+    # being dropped. ``extra="forbid"`` surfaces that as a 422 so client
+    # bugs are caught early.
+    model_config = {"extra": "forbid"}
 
 
 def _verify_ed25519_timestamp(authorization: str | None) -> str:
@@ -116,6 +121,11 @@ def _verify_ed25519_timestamp(authorization: str | None) -> str:
         ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
     except ValueError:
         raise HTTPException(401, "Invalid timestamp format")
+    # Reject TZ-naive timestamps explicitly — otherwise the
+    # ``datetime.now(tz) - ts`` subtraction below raises ``TypeError``
+    # and surfaces as an unhelpful 500.
+    if ts.tzinfo is None:
+        raise HTTPException(401, "Timestamp must include timezone offset")
     if abs((datetime.now(timezone.utc) - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
         raise HTTPException(401, "Timestamp outside replay window")
 
@@ -125,7 +135,7 @@ def _verify_ed25519_timestamp(authorization: str | None) -> str:
 
     try:
         pub_bytes = base64.b64decode(identity.public_key)
-        sig = base64.b64decode(sig_b64 + "==")
+        sig = base64.urlsafe_b64decode(sig_b64 + "==")
         VerifyKey(pub_bytes).verify(ts_str.encode("utf-8"), sig)
     except BadSignatureError:
         raise HTTPException(401, "Invalid signature")

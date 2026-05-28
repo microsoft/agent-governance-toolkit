@@ -99,6 +99,10 @@ def verify_ed25519_timestamp_auth(
         ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid timestamp format")
+    # Reject TZ-naive timestamps explicitly to avoid a 500 from the
+    # ``now - ts`` subtraction below.
+    if ts.tzinfo is None:
+        raise HTTPException(status_code=401, detail="Timestamp must include timezone offset")
 
     now = _utcnow()
     if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():

@@ -71,24 +71,37 @@ class TrustStore:
         self.interactions: list[dict[str, Any]] = []
         self.handshakes: dict[str, dict[str, Any]] = {}
 
-    def get_score(self, agent_did: str) -> dict[str, Any]:
-        """Return trust record for *agent_did*, creating a default if absent.
+    def _default_record(self, agent_did: str) -> dict[str, Any]:
+        """Build a non-persisted default record for an unknown DID."""
+        return {
+            "agent_did": agent_did,
+            "overall_score": 0,
+            "dimensions": {d: 0 for d in TRUST_DIMENSIONS},
+            "trust_level": "untrusted",
+            "interaction_count": 0,
+            "known": False,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        }
 
-        New records start at score 0 / level ``untrusted`` so unknown
-        agents cannot automatically clear ``MIN_TRUST_SCORE``. A peer
-        must accumulate trust through ``record_interaction`` or a
-        successful handshake before it is considered trusted.
+    def get_score(self, agent_did: str) -> dict[str, Any]:
+        """Return trust record for *agent_did* WITHOUT inserting on miss.
+
+        Unknown DIDs get a fresh ``untrusted`` record returned by value;
+        the in-memory ``self.scores`` dict is left untouched. This keeps
+        attacker queries against ``check_trust`` / ``verify_delegation``
+        from being able to grow the score table without bound.
+        Mutating callers (``update_score``, ``record_interaction``)
+        go through ``_get_or_create`` so legitimate writes still
+        persist.
         """
+        record = self.scores.get(agent_did)
+        if record is None:
+            return self._default_record(agent_did)
+        return record
+
+    def _get_or_create(self, agent_did: str) -> dict[str, Any]:
         if agent_did not in self.scores:
-            self.scores[agent_did] = {
-                "agent_did": agent_did,
-                "overall_score": 0,
-                "dimensions": {d: 0 for d in TRUST_DIMENSIONS},
-                "trust_level": "untrusted",
-                "interaction_count": 0,
-                "known": False,
-                "last_updated": datetime.now(timezone.utc).isoformat(),
-            }
+            self.scores[agent_did] = self._default_record(agent_did)
         return self.scores[agent_did]
 
     def is_known(self, agent_did: str) -> bool:
@@ -100,7 +113,7 @@ class TrustStore:
         self, agent_did: str, delta: int, dimension: str | None = None
     ) -> dict[str, Any]:
         """Apply *delta* to the agent's score (overall and optionally a dimension)."""
-        record = self.get_score(agent_did)
+        record = self._get_or_create(agent_did)
         record["overall_score"] = max(0, min(1000, record["overall_score"] + delta))
         if dimension and dimension in record["dimensions"]:
             record["dimensions"][dimension] = max(

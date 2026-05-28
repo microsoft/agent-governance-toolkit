@@ -267,17 +267,58 @@ test("POST /api/handshake signs domain-separated envelope, not raw challenge", a
   );
 
   // Signature MUST verify against the reconstructed envelope.
+  const capabilitiesCanonical = [...res.body.capabilities_granted]
+    .map((c: unknown) => String(c))
+    .sort()
+    .join(",");
   const envelope = [
     res.body.signing_domain,
     res.body.agent_did,
     res.body.server_nonce,
     res.body.server_timestamp,
     res.body.challenge_digest,
+    capabilitiesCanonical,
+    String(res.body.trust_score),
   ].join("\n");
   assert.strictEqual(
     verify(envelope, res.body.signature, agent.public_key),
     true,
     "signature must verify against the structured envelope",
+  );
+});
+
+test("POST /api/handshake signature does not verify if granted capabilities are tampered", async (server) => {
+  // Defends against a MITM rewriting capabilities_granted on the wire.
+  const { registerAgent } = await import("../src/services/registry");
+  const { verify } = await import("../src/services/identity");
+  const agent = registerAgent({
+    name: "CapVerifier",
+    sponsor_email: "cv@example.com",
+    capabilities: ["read"],
+  });
+
+  const res = await request(
+    server,
+    "POST",
+    "/api/handshake",
+    { challenge: "c", capabilities_requested: ["read"] },
+    { "x-api-key": agent.api_key },
+  );
+  assert.strictEqual(res.status, 200);
+
+  const tamperedEnvelope = [
+    res.body.signing_domain,
+    res.body.agent_did,
+    res.body.server_nonce,
+    res.body.server_timestamp,
+    res.body.challenge_digest,
+    "read,admin", // attacker adds 'admin'
+    String(res.body.trust_score),
+  ].join("\n");
+  assert.strictEqual(
+    verify(tamperedEnvelope, res.body.signature, agent.public_key),
+    false,
+    "tampered capability list must not verify under the issued signature",
   );
 });
 

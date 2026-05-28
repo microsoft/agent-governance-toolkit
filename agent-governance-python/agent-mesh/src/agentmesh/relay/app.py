@@ -102,6 +102,11 @@ def _verify_connect_pop(frame: dict) -> tuple[bool, str]:
         ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
     except ValueError:
         return False, "invalid timestamp format"
+    if ts.tzinfo is None:
+        # Without tzinfo, the subtraction below raises TypeError. Treat
+        # naive timestamps as an outright rejection — clients must send
+        # explicit offsets per spec.
+        return False, "timestamp must include timezone offset"
     if abs((_utcnow() - ts).total_seconds()) > DID_POP_REPLAY_WINDOW.total_seconds():
         return False, "timestamp outside replay window"
 

@@ -62,14 +62,12 @@ router.post("/handshake", (req: Request, res: Response) => {
 
   // Build a domain-separated, server-bound signing payload. We sign a
   // structured envelope rather than the raw client-supplied challenge,
-  // and include:
-  //   * a fixed domain string (no cross-protocol reuse),
-  //   * the agent's DID (signature is intrinsically bound to identity),
-  //   * a fresh server-generated nonce (prevents pre-computed challenges),
-  //   * a server-generated timestamp (anchors the signature in time),
-  //   * a SHA-256 of the client challenge (the client still gets to bind
-  //     their own value into the signed material, but as a hash so the
-  //     signed bytes are fixed-length and structured).
+  // and include EVERY field a relying party will act on (DID, granted
+  // capabilities, advertised trust score, the challenge digest, and a
+  // server-chosen nonce/timestamp). Without binding the grant + score
+  // into the signed bytes a MITM could rewrite the response (e.g.
+  // adding 'admin' to capabilities_granted) while the signature still
+  // verified.
   const serverNonce = crypto.randomBytes(16).toString("hex");
   const serverTimestamp = new Date().toISOString();
   const challengeDigest = crypto
@@ -77,12 +75,23 @@ router.post("/handshake", (req: Request, res: Response) => {
     .update(challenge, "utf8")
     .digest("hex");
 
+  // Canonical form for capability list: trim, sort, join with ','. This
+  // guarantees the verifier reconstructs an identical byte sequence
+  // regardless of the order the client cares about.
+  const capabilitiesCanonical = [...granted]
+    .map((c) => String(c))
+    .sort()
+    .join(",");
+  const trustScoreCanonical = String(agent.trust_score.total);
+
   const signingPayload = [
     HANDSHAKE_SIGNING_DOMAIN,
     agent.did,
     serverNonce,
     serverTimestamp,
     challengeDigest,
+    capabilitiesCanonical,
+    trustScoreCanonical,
   ].join("\n");
 
   const signature = sign(signingPayload, agent.private_key);
