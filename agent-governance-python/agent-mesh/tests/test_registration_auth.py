@@ -173,7 +173,6 @@ class TestPrekeyUploadRejectsUnauthenticated:
         self.client = TestClient(server.app)
 
     def _register_agent(self):
-        import hashlib
         from datetime import datetime, timezone
         sk = SigningKey.generate()
         pub = sk.verify_key.encode()
@@ -222,3 +221,124 @@ class TestPrekeyUploadRejectsUnauthenticated:
             headers={"Authorization": auth},
         )
         assert resp.status_code == 401, "Must reject prekey upload with wrong key"
+
+
+# ── Capability Grant Auth (security regression) ──────────────────────
+
+
+class TestCapabilityGrantRejectsUnauthenticated:
+    """POST /api/v1/capabilities/grant must require Ed25519-Timestamp
+    auth tying the grantor to the caller, AND the grantor must already
+    hold the capability being delegated."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from agentmesh.server.trust_engine import (
+            app, registry, capability_registry, _pending_challenges,
+        )
+        from fastapi.testclient import TestClient
+        _pending_challenges.clear()
+        registry._identities.clear()
+        registry._by_sponsor.clear()
+        capability_registry._scopes.clear()
+        capability_registry._grants_by_grantor.clear()
+        self.client = TestClient(app)
+        self.registry = registry
+        self.capability_registry = capability_registry
+
+    def _register(self, name: str = "alice"):
+        """Register an agent through the public API; returns (sk, did)."""
+        from datetime import datetime, timezone
+        import hashlib
+        sk = SigningKey.generate()
+        pub = sk.verify_key.encode()
+        pub_b64 = base64.b64encode(pub).decode()
+        ts = datetime.now(timezone.utc).isoformat()
+        message = pub_b64.encode() + ts.encode()
+        sig = sk.sign(message).signature
+        resp = self.client.post("/api/v1/agents/register", json={
+            "name": name,
+            "public_key": pub_b64,
+            "proof": base64.b64encode(sig).decode(),
+            "proof_timestamp": ts,
+            "sponsor_email": f"{name}@test.example.com",
+        })
+        assert resp.status_code == 200
+        did = f"did:mesh:{hashlib.sha256(pub).hexdigest()[:32]}"
+        assert resp.json()["agent_did"] == did
+        return sk, did
+
+    def _auth(self, sk: SigningKey, did: str) -> dict:
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).isoformat()
+        sig = sk.sign(ts.encode()).signature
+        token = f"Ed25519-Timestamp {did} {ts} {base64.b64encode(sig).decode()}"
+        return {"Authorization": token}
+
+    def test_rejects_no_auth_header(self):
+        _, did_b = self._register("bob")
+        resp = self.client.post("/api/v1/capabilities/grant", json={
+            "capability": "read:data",
+            "to_agent": did_b,
+        })
+        assert resp.status_code == 422  # missing required header
+
+    def test_rejects_caller_does_not_hold_capability(self):
+        """Caller authenticates but has no grants — cannot delegate."""
+        sk_a, did_a = self._register("alice")
+        _, did_b = self._register("bob")
+        resp = self.client.post(
+            "/api/v1/capabilities/grant",
+            json={"capability": "read:data", "to_agent": did_b},
+            headers=self._auth(sk_a, did_a),
+        )
+        assert resp.status_code == 403
+        assert "does not hold" in resp.json()["detail"]
+
+    def test_grantor_holding_capability_can_delegate(self):
+        """Authenticated caller that holds the cap may delegate it."""
+        sk_a, did_a = self._register("alice")
+        _, did_b = self._register("bob")
+        # Bootstrap: directly seed alice's scope with the capability she
+        # is about to delegate (simulates a prior admin/bootstrap grant).
+        self.capability_registry.grant(
+            capability="read:data",
+            to_agent=did_a,
+            from_agent="did:mesh:bootstrap",
+        )
+        resp = self.client.post(
+            "/api/v1/capabilities/grant",
+            json={"capability": "read:data", "to_agent": did_b},
+            headers=self._auth(sk_a, did_a),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["granted_by"] == did_a
+        assert self.capability_registry.check(did_b, "read:data")
+
+    def test_grantor_identity_is_authenticated_caller_not_body(self):
+        """Even if the body sets ``from_agent``, the grantor is always
+        the authenticated DID; spoofed body values are ignored."""
+        sk_a, did_a = self._register("alice")
+        _, did_b = self._register("bob")
+        self.capability_registry.grant(
+            capability="read:data",
+            to_agent=did_a,
+            from_agent="did:mesh:bootstrap",
+        )
+        resp = self.client.post(
+            "/api/v1/capabilities/grant",
+            json={
+                "capability": "read:data",
+                "to_agent": did_b,
+                "from_agent": "did:mesh:somebody-else",
+            },
+            headers=self._auth(sk_a, did_a),
+        )
+        # Either the model rejects the extra field (422) or it ignores it
+        # and the grantor is bound to the authenticated DID. Both are safe.
+        assert resp.status_code in (200, 422)
+        if resp.status_code == 200:
+            assert resp.json()["granted_by"] == did_a
+
+

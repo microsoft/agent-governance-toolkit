@@ -152,10 +152,42 @@ class TestRegistryAPI:
         assert resp.status_code == 404
 
     def test_delete_agent(self, client):
-        body, _, did = _make_registration_body()
+        body, sk, did = _make_registration_body()
         client.post("/v1/agents", json=body)
-        resp = client.delete(f"/v1/agents/{did}")
+        auth = _make_auth_header(sk, did)
+        resp = client.delete(f"/v1/agents/{did}", headers={"Authorization": auth})
         assert resp.status_code == 204
+
+    def test_delete_agent_requires_auth(self, client):
+        """Deregistration must reject unauthenticated callers."""
+        body, _sk, did = _make_registration_body()
+        client.post("/v1/agents", json=body)
+        # No Authorization header
+        resp = client.delete(f"/v1/agents/{did}")
+        assert resp.status_code == 422  # FastAPI: missing required header
+
+    def test_delete_agent_rejects_other_did(self, client):
+        """Auth header for one DID cannot be used to delete another."""
+        # Register two agents
+        body_a, sk_a, did_a = _make_registration_body()
+        body_b, _sk_b, did_b = _make_registration_body()
+        client.post("/v1/agents", json=body_a)
+        client.post("/v1/agents", json=body_b)
+        # Sign with A's key but try to delete B
+        auth = _make_auth_header(sk_a, did_a)
+        resp = client.delete(f"/v1/agents/{did_b}", headers={"Authorization": auth})
+        assert resp.status_code == 403
+
+    def test_delete_agent_rejects_forged_signature(self, client):
+        body, _sk, did = _make_registration_body()
+        client.post("/v1/agents", json=body)
+        # Use a fresh (unregistered) key claiming to be the registered DID
+        forged_sk = SigningKey.generate()
+        ts = datetime.now(timezone.utc).isoformat()
+        sig = forged_sk.sign(ts.encode()).signature
+        auth = f"Ed25519-Timestamp {did} {ts} {_b64(sig)}"
+        resp = client.delete(f"/v1/agents/{did}", headers={"Authorization": auth})
+        assert resp.status_code == 401
 
     def test_upload_and_fetch_prekeys(self, client):
         body, sk, did = _make_registration_body()

@@ -2,14 +2,66 @@
 # Licensed under the MIT License.
 """Tests for AgentMesh Relay service."""
 
+import base64
+import hashlib
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from nacl.signing import SigningKey
 
 from agentmesh.relay.app import RelayServer
 from agentmesh.relay.store import InMemoryInboxStore, StoredMessage
+
+
+# ── Connect-frame helper ─────────────────────────────────────────────
+#
+# Every test in this file used to send the legacy unauthenticated frame
+# ``{"v":1,"type":"connect","from":"did:agentmesh:<name>"}``. The relay
+# now requires proof-of-possession of the DID's private key (see
+# ``_verify_connect_pop`` in ``relay/app.py``), so we build connect
+# frames whose ``from`` is derived from the supplied public key.
+#
+# A per-label cache keeps the DID stable across calls in the same test
+# so a sender and a recipient can refer to the same identity.
+
+_KEY_CACHE: dict[str, SigningKey] = {}
+
+
+def _key_for(label: str) -> SigningKey:
+    if label not in _KEY_CACHE:
+        _KEY_CACHE[label] = SigningKey.generate()
+    return _KEY_CACHE[label]
+
+
+def _did_for(label: str) -> str:
+    pk = _key_for(label).verify_key.encode()
+    return f"did:mesh:{hashlib.sha256(pk).hexdigest()[:32]}"
+
+
+def _connect_frame(label: str) -> dict:
+    """Build a valid (signed) ``connect`` frame for *label*."""
+    sk = _key_for(label)
+    pk = sk.verify_key.encode()
+    ts = datetime.now(timezone.utc).isoformat()
+    sig = sk.sign(ts.encode("utf-8")).signature
+    return {
+        "v": 1,
+        "type": "connect",
+        "from": f"did:mesh:{hashlib.sha256(pk).hexdigest()[:32]}",
+        "public_key": base64.b64encode(pk).decode(),
+        "timestamp": ts,
+        "signature": base64.b64encode(sig).decode(),
+    }
+
+
+@pytest.fixture(autouse=True)
+def _clear_key_cache():
+    """Give each test a fresh DID universe to avoid cross-test bleed."""
+    _KEY_CACHE.clear()
+    yield
+    _KEY_CACHE.clear()
 
 
 # ── Inbox Store Tests ────────────────────────────────────────────────
@@ -90,15 +142,12 @@ class TestRelayServer:
     def test_websocket_connect(self):
         server = RelayServer()
         client = TestClient(server.app)
+        alice_did = _did_for("alice")
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({
-                "v": 1, "type": "connect", "from": "did:agentmesh:alice",
-            })
-            # Should stay connected (no error response)
-            # Send heartbeat to verify connection works
-            ws.send_json({
-                "v": 1, "type": "heartbeat", "from": "did:agentmesh:alice",
-            })
+            ws.send_json(_connect_frame("alice"))
+            # Should stay connected (no error response). Send a heartbeat
+            # to verify the socket is alive.
+            ws.send_json({"v": 1, "type": "heartbeat", "from": alice_did})
 
     def test_websocket_connect_missing_from(self):
         server = RelayServer()
@@ -120,24 +169,26 @@ class TestRelayServer:
         """Two agents connected — messages route directly."""
         server = RelayServer()
         client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
 
         with client.websocket_connect("/ws") as ws_bob:
-            ws_bob.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            ws_bob.send_json(_connect_frame("bob"))
 
             with client.websocket_connect("/ws") as ws_alice:
-                ws_alice.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:alice"})
+                ws_alice.send_json(_connect_frame("alice"))
 
                 # Alice sends to Bob
                 ws_alice.send_json({
                     "v": 1, "type": "message",
-                    "from": "did:agentmesh:alice", "to": "did:agentmesh:bob",
+                    "from": alice_did, "to": bob_did,
                     "id": "msg-001", "ciphertext": "encrypted_payload",
                 })
 
                 # Bob receives
                 msg = ws_bob.receive_json()
                 assert msg["type"] == "message"
-                assert msg["from"] == "did:agentmesh:alice"
+                assert msg["from"] == alice_did
                 assert msg["id"] == "msg-001"
 
         assert server.stats["messages_routed"] == 1
@@ -146,14 +197,16 @@ class TestRelayServer:
         """Message stored when recipient is offline."""
         server = RelayServer()
         client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
 
         with client.websocket_connect("/ws") as ws_alice:
-            ws_alice.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:alice"})
+            ws_alice.send_json(_connect_frame("alice"))
 
             # Send to offline Bob
             ws_alice.send_json({
                 "v": 1, "type": "message",
-                "from": "did:agentmesh:alice", "to": "did:agentmesh:bob",
+                "from": alice_did, "to": bob_did,
                 "id": "offline-001", "ciphertext": "stored_payload",
             })
 
@@ -163,22 +216,24 @@ class TestRelayServer:
         """Stored messages delivered when agent reconnects."""
         server = RelayServer()
         inbox = server._inbox
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
 
         # Pre-store a message for Bob
         inbox.store(StoredMessage(
             message_id="pending-001",
-            sender_did="did:agentmesh:alice",
-            recipient_did="did:agentmesh:bob",
+            sender_did=alice_did,
+            recipient_did=bob_did,
             payload=json.dumps({
                 "v": 1, "type": "message",
-                "from": "did:agentmesh:alice", "to": "did:agentmesh:bob",
+                "from": alice_did, "to": bob_did,
                 "id": "pending-001", "ciphertext": "old_message",
             }),
         ))
 
         client = TestClient(server.app)
         with client.websocket_connect("/ws") as ws_bob:
-            ws_bob.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            ws_bob.send_json(_connect_frame("bob"))
 
             # Should receive the pending message
             msg = ws_bob.receive_json()
@@ -190,16 +245,18 @@ class TestRelayServer:
         """KNOCK frames route like messages."""
         server = RelayServer()
         client = TestClient(server.app)
+        alice_did = _did_for("alice")
+        bob_did = _did_for("bob")
 
         with client.websocket_connect("/ws") as ws_bob:
-            ws_bob.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            ws_bob.send_json(_connect_frame("bob"))
 
             with client.websocket_connect("/ws") as ws_alice:
-                ws_alice.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:alice"})
+                ws_alice.send_json(_connect_frame("alice"))
 
                 ws_alice.send_json({
                     "v": 1, "type": "knock",
-                    "from": "did:agentmesh:alice", "to": "did:agentmesh:bob",
+                    "from": alice_did, "to": bob_did,
                     "id": "knock-001",
                     "intent": {"action": "delegate_task"},
                 })
@@ -212,17 +269,18 @@ class TestRelayServer:
         """ACK frame removes message from inbox."""
         server = RelayServer()
         inbox = server._inbox
+        acker_did = _did_for("acker")
 
         inbox.store(StoredMessage(
             message_id="ack-test",
-            sender_did="a", recipient_did="did:agentmesh:acker",
-            payload=json.dumps({"v": 1, "type": "message", "id": "ack-test", "from": "a", "to": "did:agentmesh:acker"}),
+            sender_did="a", recipient_did=acker_did,
+            payload=json.dumps({"v": 1, "type": "message", "id": "ack-test", "from": "a", "to": acker_did}),
         ))
         assert inbox.message_count == 1
 
         client = TestClient(server.app)
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:acker"})
+            ws.send_json(_connect_frame("acker"))
             # Receive pending message
             msg = ws.receive_json()
             assert msg["id"] == "ack-test"
@@ -240,14 +298,15 @@ class TestRelayServer:
         """
         server = RelayServer()
         inbox = server._inbox
+        bob_did = _did_for("bob")
 
         inbox.store(StoredMessage(
             message_id="survives-001",
             sender_did="alice",
-            recipient_did="did:agentmesh:bob",
+            recipient_did=bob_did,
             payload=json.dumps({
                 "v": 1, "type": "message",
-                "from": "alice", "to": "did:agentmesh:bob",
+                "from": "alice", "to": bob_did,
                 "id": "survives-001", "ciphertext": "important",
             }),
         ))
@@ -256,7 +315,7 @@ class TestRelayServer:
         client = TestClient(server.app)
         # First connect: receive frame, disconnect WITHOUT acking.
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            ws.send_json(_connect_frame("bob"))
             msg = ws.receive_json()
             assert msg["id"] == "survives-001"
             # Drop the connection without sending an ack.
@@ -266,7 +325,7 @@ class TestRelayServer:
 
         # Reconnect: message must be re-delivered.
         with client.websocket_connect("/ws") as ws:
-            ws.send_json({"v": 1, "type": "connect", "from": "did:agentmesh:bob"})
+            ws.send_json(_connect_frame("bob"))
             msg = ws.receive_json()
             assert msg["id"] == "survives-001"
             ws.send_json({"v": 1, "type": "ack", "id": "survives-001"})
@@ -294,35 +353,103 @@ class TestGhostConnectionCleanup:
     def test_rebind_replaces_ghost_connection(self):
         server = RelayServer()
         client = TestClient(server.app)
+        rebind_did = _did_for("rebind")
+        sender_did = _did_for("sender")
 
         # First connection registers
         with client.websocket_connect("/ws") as ws_old:
-            ws_old.send_json({
-                "v": 1, "type": "connect", "from": "did:agentmesh:rebind",
-            })
+            ws_old.send_json(_connect_frame("rebind"))
             # Second connection with same DID triggers ghost close on old.
             with client.websocket_connect("/ws") as ws_new:
-                ws_new.send_json({
-                    "v": 1, "type": "connect", "from": "did:agentmesh:rebind",
-                })
+                ws_new.send_json(_connect_frame("rebind"))
                 # Send a message to the rebinding DID from another agent.
                 with client.websocket_connect("/ws") as ws_sender:
-                    ws_sender.send_json({
-                        "v": 1, "type": "connect", "from": "did:agentmesh:sender",
-                    })
+                    ws_sender.send_json(_connect_frame("sender"))
                     ws_sender.send_json({
                         "v": 1, "type": "message",
-                        "from": "did:agentmesh:sender",
-                        "to": "did:agentmesh:rebind",
+                        "from": sender_did,
+                        "to": rebind_did,
                         "id": "post-rebind",
                         "ciphertext": "data",
                     })
                     # The NEW socket must receive it (ghost old socket is closed).
                     msg = ws_new.receive_json()
                     assert msg["id"] == "post-rebind"
-                    assert msg["from"] == "did:agentmesh:sender"
+                    assert msg["from"] == sender_did
 
         # Active connection count returns to 0 after both rebind sockets
         # leave their `with` blocks (sender already left).
         assert len(server._connections) == 0
 
+
+# -- DID Proof-of-Possession (security regression) -------------------
+
+
+class TestRelayDIDProofOfPossession:
+    """Connect frames must carry a valid DID proof; relay must reject
+    spoofed DIDs that don't match the supplied public key."""
+
+    def test_rejects_missing_pop_fields(self):
+        server = RelayServer()
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({
+                "v": 1, "type": "connect",
+                "from": "did:mesh:1234567890abcdef1234567890abcdef",
+            })
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+            assert "did proof failed" in resp["detail"].lower()
+
+    def test_rejects_did_not_matching_pubkey(self):
+        """Attacker uses their own key but claims someone else's DID."""
+        server = RelayServer()
+        client = TestClient(server.app)
+        frame = _connect_frame("attacker")
+        # Swap the DID for a fabricated one — public_key, timestamp and
+        # signature are all still the attacker's. The relay must catch
+        # the sha256 mismatch.
+        frame["from"] = "did:mesh:" + "00" * 16
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json(frame)
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+            assert "sha256 mismatch" in resp["detail"].lower()
+
+    def test_rejects_bad_signature(self):
+        server = RelayServer()
+        client = TestClient(server.app)
+        frame = _connect_frame("victim")
+        frame["signature"] = base64.b64encode(b"\x00" * 64).decode()
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json(frame)
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+
+    def test_rejects_stale_timestamp(self):
+        server = RelayServer()
+        client = TestClient(server.app)
+        sk = _key_for("late")
+        pk = sk.verify_key.encode()
+        old_ts = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        sig = sk.sign(old_ts.encode()).signature
+        frame = {
+            "v": 1, "type": "connect",
+            "from": f"did:mesh:{hashlib.sha256(pk).hexdigest()[:32]}",
+            "public_key": base64.b64encode(pk).decode(),
+            "timestamp": old_ts,
+            "signature": base64.b64encode(sig).decode(),
+        }
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json(frame)
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+            assert "replay" in resp["detail"].lower()
+
+    def test_valid_pop_succeeds(self):
+        server = RelayServer()
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json(_connect_frame("legit"))
+            # Heartbeat round-trip proves the socket is still open.
+            ws.send_json({"v": 1, "type": "heartbeat", "from": _did_for("legit")})

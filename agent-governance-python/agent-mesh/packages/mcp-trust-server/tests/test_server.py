@@ -13,7 +13,6 @@ from mcp_trust_server.server import (
     get_trust_score,
     record_interaction,
     verify_delegation,
-    TrustStore,
 )
 
 
@@ -42,22 +41,36 @@ class TestCheckTrust:
     def test_returns_expected_keys(self) -> None:
         result = check_trust(AGENT_DID)
         assert "trusted" in result
+        assert "known" in result
         assert "overall_score" in result
         assert "trust_level" in result
         assert "dimensions" in result
         assert "min_trust_threshold" in result
 
-    def test_default_agent_is_trusted(self) -> None:
+    def test_unknown_agent_is_not_trusted(self) -> None:
+        """Security regression: unknown DIDs must not be auto-trusted."""
         result = check_trust(AGENT_DID)
-        assert result["trusted"] is True
-        assert result["overall_score"] == 500
+        assert result["trusted"] is False
+        assert result["known"] is False
+        assert result["overall_score"] == 0
+        assert result["trust_level"] == "unknown"
 
     def test_dimensions_present(self) -> None:
         result = check_trust(AGENT_DID)
         dims = result["dimensions"]
         for dim in ["competence", "integrity", "availability", "predictability", "transparency"]:
             assert dim in dims
-            assert dims[dim] == 500
+            assert dims[dim] == 0
+
+    def test_known_agent_above_threshold_is_trusted(self) -> None:
+        """An agent with recorded interactions above the threshold IS trusted."""
+        # Record enough successes to climb above MIN_TRUST_SCORE (500).
+        # Each success adds 10 to overall_score.
+        for _ in range(60):
+            record_interaction(PEER_DID, "success", "ok")
+        result = check_trust(PEER_DID)
+        assert result["known"] is True
+        assert result["trusted"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +124,18 @@ class TestVerifyDelegation:
     def setup_method(self) -> None:
         _reset_store()
 
-    def test_valid_delegation(self) -> None:
+    def test_unknown_delegation_invalid(self) -> None:
+        """Security regression: both DIDs unknown → not a valid delegation."""
+        result = verify_delegation(AGENT_DID, DELEGATOR_DID, "read:data")
+        assert result["valid"] is False
+        assert result["delegator_known"] is False
+        assert result["agent_known"] is False
+
+    def test_valid_delegation_when_both_trusted(self) -> None:
+        # Raise both above threshold via real interactions.
+        for _ in range(60):
+            record_interaction(DELEGATOR_DID, "success", "ok")
+            record_interaction(AGENT_DID, "success", "ok")
         result = verify_delegation(AGENT_DID, DELEGATOR_DID, "read:data")
         assert result["valid"] is True
         assert result["delegator_trusted"] is True
@@ -124,8 +148,12 @@ class TestVerifyDelegation:
             "dimensions": {d: 100 for d in ["competence", "integrity", "availability", "predictability", "transparency"]},
             "trust_level": "untrusted",
             "interaction_count": 0,
+            "known": True,
             "last_updated": "2025-01-01T00:00:00",
         }
+        # Make agent known and trusted
+        for _ in range(60):
+            record_interaction(AGENT_DID, "success", "ok")
         result = verify_delegation(AGENT_DID, DELEGATOR_DID, "read:data")
         assert result["valid"] is False
         assert result["delegator_trusted"] is False
@@ -156,10 +184,16 @@ class TestRecordInteraction:
         result = record_interaction(PEER_DID, "success", "completed task")
         assert result["updated_score"] > before
 
-    def test_failure_decreases_score(self) -> None:
-        before = _store.get_score(PEER_DID)["overall_score"]
+    def test_failure_does_not_underflow(self) -> None:
+        """With score floored at 0, a failure against an unknown DID
+        leaves it at 0 — but the agent is now ``known`` and remains
+        untrusted regardless of MIN_TRUST_SCORE."""
         result = record_interaction(PEER_DID, "failure", "agent crashed")
-        assert result["updated_score"] < before
+        assert result["updated_score"] == 0
+        # Known but score still below threshold ⇒ not trusted.
+        check = check_trust(PEER_DID)
+        assert check["known"] is True
+        assert check["trusted"] is False
 
     def test_invalid_outcome(self) -> None:
         result = record_interaction(PEER_DID, "unknown", "bad outcome")

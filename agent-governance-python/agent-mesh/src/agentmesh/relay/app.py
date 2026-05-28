@@ -9,11 +9,13 @@ Independent design: implements against wire spec only.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -29,12 +31,90 @@ if not _RELAY_TOKEN:
         "unauthenticated connections.  Set this env var in production."
     )
 
+# Proof-of-possession enforcement for connect frames. When True (default),
+# every ``connect`` frame must include ``public_key``, ``timestamp``, and
+# ``signature`` and the relay verifies that the supplied DID is derived
+# from the public key and that the signature over the timestamp is valid.
+# Setting ``AGENTMESH_RELAY_ALLOW_UNAUTHED_DID=1`` re-enables the legacy
+# behaviour for local/dev usage only — never in production.
+_REQUIRE_DID_POP: bool = (
+    os.environ.get("AGENTMESH_RELAY_ALLOW_UNAUTHED_DID", "").lower()
+    not in ("1", "true", "yes")
+)
+if not _REQUIRE_DID_POP:
+    logger.warning(
+        "AGENTMESH_RELAY_ALLOW_UNAUTHED_DID is set — the relay will "
+        "accept connect frames without DID proof-of-possession. "
+        "Any client can impersonate any DID. Do not use in production."
+    )
+
 HEARTBEAT_INTERVAL = 30  # seconds
 OFFLINE_THRESHOLD = 90  # seconds — 3 missed heartbeats
+DID_POP_REPLAY_WINDOW = timedelta(minutes=5)
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _verify_connect_pop(frame: dict) -> tuple[bool, str]:
+    """Verify proof-of-possession on a relay ``connect`` frame.
+
+    Required fields when ``_REQUIRE_DID_POP`` is True:
+
+    - ``from`` — the agent DID (``did:mesh:<32-hex>``)
+    - ``public_key`` — base64 Ed25519 public key (32 bytes)
+    - ``timestamp`` — ISO-8601 UTC timestamp (within 5-minute window)
+    - ``signature`` — base64 Ed25519 signature over the timestamp
+
+    The DID is checked against ``did:mesh:`` + ``sha256(public_key)[:32]``
+    so the client cannot present someone else's DID with their own key.
+
+    Returns ``(True, "")`` on success; ``(False, reason)`` on failure.
+    """
+    from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
+
+    did = frame.get("from")
+    pub_b64 = frame.get("public_key")
+    ts_str = frame.get("timestamp")
+    sig_b64 = frame.get("signature")
+
+    if not (isinstance(did, str) and isinstance(pub_b64, str)
+            and isinstance(ts_str, str) and isinstance(sig_b64, str)):
+        return False, "connect frame missing did/public_key/timestamp/signature"
+
+    # Decode and length-check the public key.
+    try:
+        pub_bytes = base64.b64decode(pub_b64)
+    except Exception:
+        return False, "invalid public_key encoding"
+    if len(pub_bytes) != 32:
+        return False, "public_key must be 32 bytes"
+
+    # DID must be derived from the public key (binds key to identity).
+    expected_did = f"did:mesh:{hashlib.sha256(pub_bytes).hexdigest()[:32]}"
+    if did != expected_did:
+        return False, "DID does not match public_key (sha256 mismatch)"
+
+    # Reject stale or future-dated proofs.
+    try:
+        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except ValueError:
+        return False, "invalid timestamp format"
+    if abs((_utcnow() - ts).total_seconds()) > DID_POP_REPLAY_WINDOW.total_seconds():
+        return False, "timestamp outside replay window"
+
+    # Verify Ed25519 signature over the timestamp.
+    try:
+        sig = base64.b64decode(sig_b64)
+        VerifyKey(pub_bytes).verify(ts_str.encode("utf-8"), sig)
+    except BadSignatureError:
+        return False, "invalid signature"
+    except Exception:
+        return False, "signature verification failed"
+
+    return True, ""
 
 
 class ConnectedAgent:
@@ -113,6 +193,21 @@ class RelayServer:
                     await ws.send_json({"type": "error", "detail": "Missing 'from' field"})
                     await ws.close(code=4002)
                     return
+
+                # Verify DID proof-of-possession (binds the WebSocket to the
+                # holder of the private key, preventing any client from
+                # connecting as an arbitrary DID and intercepting its mail).
+                if _REQUIRE_DID_POP:
+                    ok, reason = _verify_connect_pop(frame)
+                    if not ok:
+                        logger.warning(
+                            "Rejecting connect frame for %s: %s", agent_did, reason
+                        )
+                        await ws.send_json(
+                            {"type": "error", "detail": f"DID proof failed: {reason}"}
+                        )
+                        await ws.close(code=4005)
+                        return
 
                 # Authenticate: require token when AGENTMESH_RELAY_TOKEN is set
                 if _RELAY_TOKEN is not None:

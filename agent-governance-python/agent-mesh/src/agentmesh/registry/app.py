@@ -218,8 +218,19 @@ class RegistryServer:
             }
 
         @app.delete("/v1/agents/{did}", status_code=204)
-        async def deregister_agent(did: str) -> None:
-            """Deregister an agent."""
+        async def deregister_agent(
+            did: str,
+            authorization: str = Header(..., alias="Authorization"),
+        ) -> None:
+            """Deregister an agent.
+
+            Requires Ed25519-Timestamp auth and the caller's DID must
+            match the DID being deregistered — only the holder of the
+            corresponding private key can remove a registration.
+            """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != did:
+                raise HTTPException(status_code=403, detail="DID mismatch")
             if not store.delete_agent(did):
                 raise HTTPException(status_code=404, detail="Agent not found")
             logger.info("Deregistered agent %s", did)
