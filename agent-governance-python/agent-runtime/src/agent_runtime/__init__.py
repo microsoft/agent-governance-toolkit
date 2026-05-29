@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """
 Agent Runtime — Execution supervisor for multi-agent sessions.
 
@@ -25,7 +26,7 @@ _warnings.warn(
     stacklevel=2,
 )
 del _warnings
-from hypervisor import (  # noqa: F401, E402
+from hypervisor import (  # noqa: F401
     __version__,
     # Core
     Hypervisor,

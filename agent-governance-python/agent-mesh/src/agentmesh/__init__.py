@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """
 AgentMesh - The Secure Nervous System for Cloud-Native Agent Ecosystems
 

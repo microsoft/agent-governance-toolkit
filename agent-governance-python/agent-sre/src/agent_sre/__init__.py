@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """Agent SRE — Reliability Engineering for AI Agent Systems.
 
 agent-sre brings Site Reliability Engineering practices to AI agents.

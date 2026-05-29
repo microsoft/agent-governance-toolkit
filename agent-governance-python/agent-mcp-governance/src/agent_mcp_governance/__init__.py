@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""agent_mcp_governance — MCP governance primitives for the Agent Governance Toolkit.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
+"""agent_mcp_governance— MCP governance primitives for the Agent Governance Toolkit.
 
 This package provides a focused surface for governing agents that communicate
 over the Model Context Protocol (MCP). It re-exports:
