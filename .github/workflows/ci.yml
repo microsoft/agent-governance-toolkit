@@ -374,23 +374,15 @@ jobs:
       matrix:
         package:
           [
-            agent-os,
-            agent-mesh,
-            agent-hypervisor,
-            agent-sre,
-            agent-compliance,
-            agent-runtime,
-            agent-lightning,
-            agent-primitives,
-            agent-mcp-governance,
-            agent-marketplace,
-            agent-discovery,
-            agent-rag-governance,
-            agent-sandbox,
             agent-governance-toolkit-core,
             agent-governance-toolkit-integrations,
             agent-governance-toolkit-cli,
             agent-governance-toolkit-protocols,
+            agent-compliance,
+            agent-discovery,
+            agent-lightning,
+            agent-marketplace,
+            agent-rag-governance,
           ]
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
@@ -436,7 +428,7 @@ jobs:
           # Install each package. A failure here means safety would scan
           # against the wrong dependency set, so surface it instead of
           # silently `|| true`-ing past it.
-          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning agent-primitives agent-mcp-governance agent-marketplace agent-discovery agent-rag-governance agent-sandbox; do
+          for pkg in agent-governance-toolkit-core agent-governance-toolkit-integrations agent-governance-toolkit-cli agent-governance-toolkit-protocols agent-compliance agent-discovery agent-lightning agent-marketplace agent-rag-governance; do
             echo "=== $pkg ==="
             (cd "agent-governance-python/$pkg" \
               && pip install --no-cache-dir -e .)  # Scorecard: pinned to repo checkout

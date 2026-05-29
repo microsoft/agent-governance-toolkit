@@ -69,152 +69,27 @@ parameters:
     type: object
     displayName: 'Python packages to publish'
     default:
-      # Wave 0: Consolidated distributions (v4.0.0) — must publish before
-      # stubs so pip can resolve the new dependency chain.
+      # Consolidated distributions (v4.0.0)
       - name: agent-governance-toolkit-core
         path: agent-governance-python/agent-governance-toolkit-core
-        wave: 0
       - name: agent-governance-toolkit-integrations
         path: agent-governance-python/agent-governance-toolkit-integrations
-        wave: 0
       - name: agent-governance-toolkit-cli
         path: agent-governance-python/agent-governance-toolkit-cli
-        wave: 0
       - name: agent-governance-toolkit-protocols
         path: agent-governance-python/agent-governance-toolkit-protocols
-        wave: 0
-      # Wave 1: Stub packages (redirect to consolidated distributions)
-      - name: agent-os
-        path: agent-governance-python/agent-os
-        wave: 1
-      - name: agent-mesh
-        path: agent-governance-python/agent-mesh
-        wave: 1
-      - name: agent-hypervisor
-        path: agent-governance-python/agent-hypervisor
-        wave: 1
-      - name: agent-sre
-        path: agent-governance-python/agent-sre
-        wave: 1
-      - name: agent-compliance
+      # Meta-package
+      - name: agent-governance-toolkit
         path: agent-governance-python/agent-compliance
-        wave: 1
-      - name: agent-runtime
-        path: agent-governance-python/agent-runtime
-        wave: 1
+      # Standalone packages
+      - name: agent-discovery
+        path: agent-governance-python/agent-discovery
       - name: agent-lightning
         path: agent-governance-python/agent-lightning
-        wave: 1
       - name: agent-marketplace
         path: agent-governance-python/agent-marketplace
-        wave: 1
-      - name: agent-mcp-governance
-        path: agent-governance-python/agent-mcp-governance
-        wave: 1
-      - name: agentmesh-message-bus
-        path: agent-governance-python/agent-os/modules/amb
-        wave: 1
-      - name: agentmesh-context
-        path: agent-governance-python/agent-os/modules/caas
-        wave: 1
-      - name: agentmesh-drift
-        path: agent-governance-python/agent-os/modules/cmvk
-        wave: 1
-      - name: agentmesh-mcp-server
-        path: agent-governance-python/agent-os/modules/mcp-kernel-server
-        wave: 1
-      - name: agentmesh-nexus
-        path: agent-governance-python/agent-os/modules/nexus
-        wave: 1
-      # Wave 2: Renamed/new standalone + modules
-      - name: agentmesh-discovery
-        path: agent-governance-python/agent-discovery
-        wave: 2
-      - name: agt-sandbox
-        path: agent-governance-python/agent-sandbox
-        wave: 2
-      - name: agentmesh-primitives
-        path: agent-governance-python/agent-primitives
-        wave: 2
-      - name: agentmesh-tool-registry
-        path: agent-governance-python/agent-os/modules/atr
-        wave: 2
-      - name: agentmesh-control-plane
-        path: agent-governance-python/agent-os/modules/control-plane
-        wave: 2
-      - name: agentmesh-memory
-        path: agent-governance-python/agent-os/modules/emk
-        wave: 2
-      - name: agentmesh-trust-protocol
-        path: agent-governance-python/agent-os/modules/iatp
-        wave: 2
-      - name: agentmesh-observability
-        path: agent-governance-python/agent-os/modules/observability
-        wave: 2
-      - name: agentmesh-mcp-trust
-        path: agent-governance-python/agent-mesh/packages/mcp-trust-server
-        wave: 2
-      - name: a2a-protocol
-        path: agent-governance-python/agentmesh-integrations/a2a-protocol
-        wave: 2
-      - name: adk-agentmesh
-        path: agent-governance-python/agentmesh-integrations/adk-agentmesh
-        wave: 2
-      - name: avp-agentmesh
-        path: agent-governance-python/agentmesh-integrations/agentmesh-avp
-        wave: 2
-      - name: agentmesh-audit-export
-        path: agent-governance-python/agentmesh-integrations/audit-accountability-export
-        wave: 2
-      - name: agentmesh-mcp-receipts
-        path: agent-governance-python/agentmesh-integrations/mcp-receipt-governed
-        wave: 2
-      - name: agentmesh-mcp-proxy
-        path: agent-governance-python/agentmesh-integrations/mcp-trust-proxy
-        wave: 2
-      # Wave 3: Framework integrations
-      - name: cedarling-agentmesh
-        path: agent-governance-python/agentmesh-integrations/cedarling-agentmesh
-        wave: 3
-      - name: crewai-agentmesh
-        path: agent-governance-python/agentmesh-integrations/crewai-agentmesh
-        wave: 3
-      - name: flowise-agentmesh
-        path: agent-governance-python/agentmesh-integrations/flowise-agentmesh
-        wave: 3
-      - name: haystack-agentmesh
-        path: agent-governance-python/agentmesh-integrations/haystack-agentmesh
-        wave: 3
-      - name: agentmesh-langchain
-        path: agent-governance-python/agentmesh-integrations/langchain-agentmesh
-        wave: 3
-      - name: langflow-agentmesh
-        path: agent-governance-python/agentmesh-integrations/langflow-agentmesh
-        wave: 3
-      - name: langgraph-agentmesh
-        path: agent-governance-python/agentmesh-integrations/langgraph-trust
-        wave: 3
-      - name: llamaindex-agentmesh
-        path: agent-governance-python/agentmesh-integrations/llamaindex-agentmesh
-        wave: 3
-      - name: nostr-wot-agentmesh
-        path: agent-governance-python/agentmesh-integrations/nostr-wot
-        wave: 3
-      - name: openai-agents-agentmesh
-        path: agent-governance-python/agentmesh-integrations/openai-agents-agentmesh
-        wave: 3
-      - name: agentmesh-openai-agents-trust
-        path: agent-governance-python/agentmesh-integrations/openai-agents-trust
-        wave: 3
-      - name: openshell-skill
-        path: agent-governance-python/agentmesh-integrations/openshell-skill
-        wave: 3
-      - name: pydantic-ai-agentmesh
-        path: agent-governance-python/agentmesh-integrations/pydantic-ai-governance
-        wave: 3
-      - name: structural-authz-agentmesh
-        path: agent-governance-python/agentmesh-integrations/structural-authz-agentmesh
-        wave: 3
+      - name: agent-rag-governance
+        path: agent-governance-python/agent-rag-governance
 
   - name: npmPackages
     type: object
@@ -283,7 +158,7 @@ pool:
 
 stages:
   # =======================================================
-  # PYTHON (PyPI) — 45 packages (4 consolidated + 41 stubs/modules/integrations)
+  # PYTHON (PyPI) — 9 packages (4 consolidated + 1 meta + 4 standalone)
   # =======================================================
   - stage: Build_PyPI
     displayName: 'Build Python Packages'
@@ -328,154 +203,40 @@ stages:
                 publishLocation: 'pipeline'
               displayName: 'Publish ${{ pkg.name }} artifacts'
 
-  # Publish in 4 waves to respect dependency order and PyPI rate limits.
-  # Wave 0: Consolidated distributions (must land first — stubs depend on them)
-  # Wave 1: Stub packages (already registered on PyPI, now redirect to consolidated)
-  # Wave 2: renamed/new standalone + modules
-  # Wave 3: framework integrations
-  - stage: Publish_PyPI_Wave0
-    displayName: 'Publish to PyPI — Wave 0 (consolidated)'
+  - stage: Publish_PyPI
+    displayName: 'Publish to PyPI'
     dependsOn: Build_PyPI
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
     jobs:
       - ${{ each pkg in parameters.pypiPackages }}:
-        - ${{ if eq(pkg.wave, 0) }}:
-          - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
-            displayName: 'Publish ${{ pkg.name }} to PyPI'
-            steps:
-              - task: DownloadPipelineArtifact@2
-                inputs:
-                  artifact: 'pypi-${{ pkg.name }}'
-                  targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                displayName: 'Download ${{ pkg.name }} artifacts'
+        - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Publish ${{ pkg.name }} to PyPI'
+          steps:
+            - task: DownloadPipelineArtifact@2
+              inputs:
+                artifact: 'pypi-${{ pkg.name }}'
+                targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
+              displayName: 'Download ${{ pkg.name }} artifacts'
 
-              - task: EsrpRelease@11
-                displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
-                retryCountOnTaskFailure: 2
-                inputs:
-                  connectedservicename: 'Agent Governance Toolkit'
-                  usemanagedidentity: true
-                  keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-                  clientid: '$(ESRP_CLIENT_ID)'
-                  intent: 'PackageDistribution'
-                  contenttype: 'PyPi'
-                  contentsource: 'Folder'
-                  folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                  waitforreleasecompletion: true
-                  owners: '$(ESRP_OWNERS)'
-                  approvers: '$(ESRP_APPROVERS)'
-                  serviceendpointurl: 'https://api.esrp.microsoft.com'
-                  mainpublisher: 'ESRPRELPACMAN'
-                  domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-  - stage: Publish_PyPI_Wave1
-    displayName: 'Publish to PyPI — Wave 1 (stubs)'
-    dependsOn: Publish_PyPI_Wave0
-    condition: and(not(failed()), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
-    jobs:
-      - ${{ each pkg in parameters.pypiPackages }}:
-        - ${{ if eq(pkg.wave, 1) }}:
-          - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
-            displayName: 'Publish ${{ pkg.name }} to PyPI'
-            steps:
-              - task: DownloadPipelineArtifact@2
-                inputs:
-                  artifact: 'pypi-${{ pkg.name }}'
-                  targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                displayName: 'Download ${{ pkg.name }} artifacts'
-
-              - task: EsrpRelease@11
-                displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
-                retryCountOnTaskFailure: 2
-                inputs:
-                  connectedservicename: 'Agent Governance Toolkit'
-                  usemanagedidentity: true
-                  keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-                  clientid: '$(ESRP_CLIENT_ID)'
-                  intent: 'PackageDistribution'
-                  contenttype: 'PyPi'
-                  contentsource: 'Folder'
-                  folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                  waitforreleasecompletion: true
-                  owners: '$(ESRP_OWNERS)'
-                  approvers: '$(ESRP_APPROVERS)'
-                  serviceendpointurl: 'https://api.esrp.microsoft.com'
-                  mainpublisher: 'ESRPRELPACMAN'
-                  domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-  - stage: Publish_PyPI_Wave2
-    displayName: 'Publish to PyPI — Wave 2 (modules)'
-    dependsOn: Publish_PyPI_Wave1
-    condition: and(not(failed()), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
-    jobs:
-      - ${{ each pkg in parameters.pypiPackages }}:
-        - ${{ if eq(pkg.wave, 2) }}:
-          - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
-            displayName: 'Publish ${{ pkg.name }} to PyPI'
-            steps:
-              - task: DownloadPipelineArtifact@2
-                inputs:
-                  artifact: 'pypi-${{ pkg.name }}'
-                  targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                displayName: 'Download ${{ pkg.name }} artifacts'
-
-              - task: EsrpRelease@11
-                displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
-                retryCountOnTaskFailure: 2
-                inputs:
-                  connectedservicename: 'Agent Governance Toolkit'
-                  usemanagedidentity: true
-                  keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-                  clientid: '$(ESRP_CLIENT_ID)'
-                  intent: 'PackageDistribution'
-                  contenttype: 'PyPi'
-                  contentsource: 'Folder'
-                  folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                  waitforreleasecompletion: true
-                  owners: '$(ESRP_OWNERS)'
-                  approvers: '$(ESRP_APPROVERS)'
-                  serviceendpointurl: 'https://api.esrp.microsoft.com'
-                  mainpublisher: 'ESRPRELPACMAN'
-                  domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-  - stage: Publish_PyPI_Wave3
-    displayName: 'Publish to PyPI — Wave 3 (integrations)'
-    dependsOn: Publish_PyPI_Wave2
-    condition: and(not(failed()), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
-    jobs:
-      - ${{ each pkg in parameters.pypiPackages }}:
-        - ${{ if eq(pkg.wave, 3) }}:
-          - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
-            displayName: 'Publish ${{ pkg.name }} to PyPI'
-            steps:
-              - task: DownloadPipelineArtifact@2
-                inputs:
-                  artifact: 'pypi-${{ pkg.name }}'
-                  targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                displayName: 'Download ${{ pkg.name }} artifacts'
-
-              - task: EsrpRelease@11
-                displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
-                retryCountOnTaskFailure: 2
-                inputs:
-                  connectedservicename: 'Agent Governance Toolkit'
-                  usemanagedidentity: true
-                  keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-                  clientid: '$(ESRP_CLIENT_ID)'
-                  intent: 'PackageDistribution'
-                  contenttype: 'PyPi'
-                  contentsource: 'Folder'
-                  folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                  waitforreleasecompletion: true
-                  owners: '$(ESRP_OWNERS)'
-                  approvers: '$(ESRP_APPROVERS)'
-                  serviceendpointurl: 'https://api.esrp.microsoft.com'
-                  mainpublisher: 'ESRPRELPACMAN'
-                  domaintenantid: '$(MICROSOFT_TENANT_ID)'
+            - task: EsrpRelease@11
+              displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
+              retryCountOnTaskFailure: 2
+              inputs:
+                connectedservicename: 'Agent Governance Toolkit'
+                usemanagedidentity: true
+                keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+                signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
+                clientid: '$(ESRP_CLIENT_ID)'
+                intent: 'PackageDistribution'
+                contenttype: 'PyPi'
+                contentsource: 'Folder'
+                folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
+                waitforreleasecompletion: true
+                owners: '$(ESRP_OWNERS)'
+                approvers: '$(ESRP_APPROVERS)'
+                serviceendpointurl: 'https://api.esrp.microsoft.com'
+                mainpublisher: 'ESRPRELPACMAN'
+                domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
   # =======================================================
   # NPM — 7 packages (@microsoft scope)

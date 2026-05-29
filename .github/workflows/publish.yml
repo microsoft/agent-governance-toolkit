@@ -9,7 +9,7 @@ on:
         description: >
           Package to publish. Use "all" for everything, "all-python" for all
           Python packages, "all-npm" for all npm packages, or a specific name
-          (e.g. "agent-os", "agentmesh-langchain", "agent-governance-copilot-cli", "agent-governance-claude-code", "agent-governance-opencode").
+          (e.g. "agent-governance-toolkit-core", "agent-governance-copilot-cli", "agent-governance-claude-code", "agent-governance-opencode").
         required: true
         type: string
         default: "all"
@@ -41,53 +41,17 @@ jobs:
           INPUT: ${{ github.event.inputs.package }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          # Complete list of publishable Python packages (45 packages)
+          # Complete list of publishable Python packages (9 packages)
           ALL='[
             {"name":"agent-governance-toolkit-core","path":"agent-governance-python/agent-governance-toolkit-core"},
             {"name":"agent-governance-toolkit-integrations","path":"agent-governance-python/agent-governance-toolkit-integrations"},
             {"name":"agent-governance-toolkit-cli","path":"agent-governance-python/agent-governance-toolkit-cli"},
             {"name":"agent-governance-toolkit-protocols","path":"agent-governance-python/agent-governance-toolkit-protocols"},
-            {"name":"agent-os","path":"agent-governance-python/agent-os"},
-            {"name":"agent-mesh","path":"agent-governance-python/agent-mesh"},
-            {"name":"agent-hypervisor","path":"agent-governance-python/agent-hypervisor"},
-            {"name":"agent-sre","path":"agent-governance-python/agent-sre"},
-            {"name":"agent-compliance","path":"agent-governance-python/agent-compliance"},
-            {"name":"agent-runtime","path":"agent-governance-python/agent-runtime"},
+            {"name":"agent-governance-toolkit","path":"agent-governance-python/agent-compliance"},
+            {"name":"agent-discovery","path":"agent-governance-python/agent-discovery"},
             {"name":"agent-lightning","path":"agent-governance-python/agent-lightning"},
             {"name":"agent-marketplace","path":"agent-governance-python/agent-marketplace"},
-            {"name":"agent-mcp-governance","path":"agent-governance-python/agent-mcp-governance"},
-            {"name":"agentmesh-discovery","path":"agent-governance-python/agent-discovery"},
-            {"name":"agentmesh-primitives","path":"agent-governance-python/agent-primitives"},
-            {"name":"agentmesh-message-bus","path":"agent-governance-python/agent-os/modules/amb"},
-            {"name":"agentmesh-tool-registry","path":"agent-governance-python/agent-os/modules/atr"},
-            {"name":"agentmesh-context","path":"agent-governance-python/agent-os/modules/caas"},
-            {"name":"agentmesh-drift","path":"agent-governance-python/agent-os/modules/cmvk"},
-            {"name":"agentmesh-control-plane","path":"agent-governance-python/agent-os/modules/control-plane"},
-            {"name":"agentmesh-memory","path":"agent-governance-python/agent-os/modules/emk"},
-            {"name":"agentmesh-trust-protocol","path":"agent-governance-python/agent-os/modules/iatp"},
-            {"name":"agentmesh-mcp-server","path":"agent-governance-python/agent-os/modules/mcp-kernel-server"},
-            {"name":"agentmesh-nexus","path":"agent-governance-python/agent-os/modules/nexus"},
-            {"name":"agentmesh-observability","path":"agent-governance-python/agent-os/modules/observability"},
-            {"name":"agentmesh-mcp-trust","path":"agent-governance-python/agent-mesh/packages/mcp-trust-server"},
-            {"name":"a2a-protocol","path":"agent-governance-python/agentmesh-integrations/a2a-protocol"},
-            {"name":"adk-agentmesh","path":"agent-governance-python/agentmesh-integrations/adk-agentmesh"},
-            {"name":"avp-agentmesh","path":"agent-governance-python/agentmesh-integrations/agentmesh-avp"},
-            {"name":"agentmesh-audit-export","path":"agent-governance-python/agentmesh-integrations/audit-accountability-export"},
-            {"name":"crewai-agentmesh","path":"agent-governance-python/agentmesh-integrations/crewai-agentmesh"},
-            {"name":"flowise-agentmesh","path":"agent-governance-python/agentmesh-integrations/flowise-agentmesh"},
-            {"name":"haystack-agentmesh","path":"agent-governance-python/agentmesh-integrations/haystack-agentmesh"},
-            {"name":"agentmesh-langchain","path":"agent-governance-python/agentmesh-integrations/langchain-agentmesh"},
-            {"name":"langflow-agentmesh","path":"agent-governance-python/agentmesh-integrations/langflow-agentmesh"},
-            {"name":"langgraph-agentmesh","path":"agent-governance-python/agentmesh-integrations/langgraph-trust"},
-            {"name":"llamaindex-agentmesh","path":"agent-governance-python/agentmesh-integrations/llamaindex-agentmesh"},
-            {"name":"agentmesh-mcp-receipts","path":"agent-governance-python/agentmesh-integrations/mcp-receipt-governed"},
-            {"name":"agentmesh-mcp-proxy","path":"agent-governance-python/agentmesh-integrations/mcp-trust-proxy"},
-            {"name":"nostr-wot-agentmesh","path":"agent-governance-python/agentmesh-integrations/nostr-wot"},
-            {"name":"openai-agents-agentmesh","path":"agent-governance-python/agentmesh-integrations/openai-agents-agentmesh"},
-            {"name":"agentmesh-openai-agents-trust","path":"agent-governance-python/agentmesh-integrations/openai-agents-trust"},
-            {"name":"openshell-skill","path":"agent-governance-python/agentmesh-integrations/openshell-skill"},
-            {"name":"pydantic-ai-agentmesh","path":"agent-governance-python/agentmesh-integrations/pydantic-ai-governance"},
-            {"name":"structural-authz-agentmesh","path":"agent-governance-python/agentmesh-integrations/structural-authz-agentmesh"}
+            {"name":"agent-rag-governance","path":"agent-governance-python/agent-rag-governance"}
           ]'
           # Compact the JSON
           ALL=$(echo "$ALL" | jq -c '.')
