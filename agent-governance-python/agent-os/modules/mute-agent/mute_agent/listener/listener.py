@@ -28,8 +28,6 @@ from collections import deque
 
 from ..knowledge_graph.multidimensional_graph import MultidimensionalKnowledgeGraph
 from ..core.handshake_protocol import (
-    CONFIRMATION_REQUIRED_KEY,
-    CONFIRMATION_SATISFIED_KEY,
     HandshakeProtocol,
     HandshakeState,
 )
@@ -467,56 +465,74 @@ class ListenerAgent:
             return f"Warning emitted for {len(rules)} triggered rules"
 
         elif action == "require_confirmation":
-            # Mark pending sessions as requiring confirmation
+            # Mark pending sessions as requiring confirmation. Iterate
+            # over a thread-safe snapshot so we don't race with
+            # concurrent state transitions inside the protocol.
             pending_blocked = 0
-            for session_id, session in self.protocol.sessions.items():
+            reason = f"Threshold breach: {[r.description for r in rules]}"
+            for session in self.protocol.snapshot_sessions():
                 if session.state in [HandshakeState.VALIDATED, HandshakeState.ACCEPTED]:
-                    session.metadata[CONFIRMATION_REQUIRED_KEY] = True
-                    session.metadata[CONFIRMATION_SATISFIED_KEY] = False
-                    session.metadata["confirmation_reason"] = (
-                        f"Threshold breach: {[r.description for r in rules]}"
-                    )
-                    pending_blocked += 1
+                    try:
+                        self.protocol.mark_confirmation_required(
+                            session.session_id, reason=reason
+                        )
+                        pending_blocked += 1
+                    except ValueError:
+                        # Session reached a terminal state between
+                        # snapshot and mark; skip it.
+                        continue
             return f"Soft block applied to {pending_blocked} pending sessions"
 
         elif action == "block_pending_actions":
             # Reject all pending sessions
             blocked = 0
-            for session_id, session in list(self.protocol.sessions.items()):
+            for session in self.protocol.snapshot_sessions():
                 if session.state in [HandshakeState.INITIATED, HandshakeState.NEGOTIATING,
                                     HandshakeState.VALIDATED, HandshakeState.ACCEPTED]:
-                    self.protocol.reject_proposal(
-                        session_id,
-                        reason=f"Listener intervention: {level.value}"
-                    )
-                    blocked += 1
+                    try:
+                        self.protocol.reject_proposal(
+                            session.session_id,
+                            reason=f"Listener intervention: {level.value}"
+                        )
+                        blocked += 1
+                    except ValueError:
+                        continue
             return f"Hard block applied, {blocked} sessions rejected"
 
         elif action == "emergency_halt":
             # Emergency halt - reject all and set protective state
             halted = 0
-            for session_id, session in list(self.protocol.sessions.items()):
+            for session in self.protocol.snapshot_sessions():
                 if session.state != HandshakeState.COMPLETED:
                     try:
                         self.protocol.reject_proposal(
-                            session_id,
+                            session.session_id,
                             reason="EMERGENCY: System halt by Listener"
                         )
                         halted += 1
                     except ValueError:
                         pass  # Session may already be in terminal state
 
-            # If security adapter available, notify it
+            # If security adapter available, notify it. Alert
+            # *delivery* failure must be visible: log at ERROR with
+            # stack trace and surface it through the returned outcome
+            # so callers know the side-channel didn't fire.
+            alert_status = "skipped"
             if self._security_adapter:
                 try:
                     self._security_adapter.emergency_alert(
                         reason="Listener emergency halt",
                         triggered_rules=[r.description for r in rules],
                     )
+                    alert_status = "delivered"
                 except Exception:
-                    pass
+                    import logging as _logging
+                    _logging.getLogger(__name__).exception(
+                        "Listener emergency_alert failed to deliver via security adapter"
+                    )
+                    alert_status = "failed"
 
-            return f"Emergency halt: {halted} sessions terminated"
+            return f"Emergency halt: {halted} sessions terminated (alert={alert_status})"
 
         return "No action taken"
 
