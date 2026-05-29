@@ -17,6 +17,15 @@ backends, plus three built-in implementations:
   egress allowlist enforcement.
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agt-sandbox is deprecated. Use agent-governance-toolkit-cli instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 from importlib.metadata import PackageNotFoundError, version
 
 from agent_sandbox.sandbox_provider import (

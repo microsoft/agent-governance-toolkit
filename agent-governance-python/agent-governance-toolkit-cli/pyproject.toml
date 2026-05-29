@@ -1,0 +1,104 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-governance-toolkit-cli"
+version = "4.0.0"
+description = "CLI tools, SRE observability, and sandbox isolation for the Agent Governance Toolkit"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+maintainers = [
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
+]
+keywords = [
+    "ai-agents", "governance", "sre", "sandbox", "cli",
+    "observability", "mcp", "trust", "reliability",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: System :: Monitoring",
+    "Topic :: Software Development :: Libraries",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+# Merged from agent-sre + agent-sandbox + mcp-trust-server
+dependencies = [
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
+    "pydantic>=2.4.0,<3.0",
+    "pyyaml>=6.0,<7.0",
+    "croniter>=2.0,<7.0",
+    "opentelemetry-api>=1.20,<2.0",
+    "opentelemetry-sdk>=1.20,<2.0",
+]
+
+[project.optional-dependencies]
+docker = ["docker>=7.1.0,<8.0"]
+hyperlight = ["hyperlight-sandbox>=0.4.0,<0.5"]
+policy = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
+mcp = ["mcp>=1.0.0,<2.0", "cryptography>=46.0.7,<49.0"]
+api = ["fastapi>=0.115.0,<1.0", "uvicorn>=0.27.0,<1.0"]
+otel = ["opentelemetry-exporter-otlp>=1.20,<2.0"]
+langfuse = ["langfuse>=2.0,<5.0"]
+arize = ["arize-phoenix>=4.0,<17.0"]
+langchain = ["langchain-core>=1.2.11,<2.0"]
+llamaindex = ["llama-index-core>=0.10,<1.0"]
+braintrust = ["braintrust>=0.0.100,<1.0"]
+helicone = ["helicone>=4.0,<5.0"]
+datadog = ["ddtrace>=2.0,<5.0"]
+sentry = ["sentry-sdk>=2.0,<3.0"]
+langsmith = ["langsmith>=0.1,<1.0"]
+wandb = ["wandb>=0.16,<1.0"]
+mlflow = ["mlflow>=2.10,<4.0"]
+agentops = ["agentops>=0.3,<1.0"]
+full = [
+    "agent-governance-toolkit-cli[docker,mcp,api,otel]",
+]
+dev = [
+    "pytest>=8.0,<10.0",
+    "pytest-asyncio>=0.23,<2.0",
+    "pytest-cov>=5.0,<8.0",
+    "ruff>=0.4.0,<1.0",
+    "mypy>=1.8.0,<3.0",
+]
+
+[project.scripts]
+agent-sre = "agent_sre.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+# ============================================================================
+# Hatchling: pull sources from sibling dirs
+# ============================================================================
+[tool.hatch.build.targets.wheel]
+packages = ["_placeholder"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../agent-sre/src/agent_sre" = "agent_sre"
+"../agent-sandbox/src/agent_sandbox" = "agent_sandbox"
+"../agent-mesh/packages/mcp-trust-server/src/mcp_trust_server" = "mcp_trust_server"
+
+[tool.hatch.build.targets.sdist]
+include = ["README.md", "LICENSE"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "SIM"]
+ignore = ["E501"]

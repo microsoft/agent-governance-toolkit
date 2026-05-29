@@ -383,24 +383,11 @@ jobs:
             agent-discovery,
             agent-rag-governance,
             agent-sandbox,
+            agent-governance-toolkit-core,
+            agent-governance-toolkit-integrations,
+            agent-governance-toolkit-cli,
+            agent-governance-toolkit-protocols,
           ]
-    steps:
-      - name: Determine if package changed
-        id: gate
-        env:
-          CHANGED: ${{ needs.changes.outputs.changed-py-pkgs }}
-          PKG: ${{ matrix.package }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "push" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          elif printf '%s' "$CHANGED" | grep -q "\"$PKG\""; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Package $PKG unchanged on this PR — skipping build."
-          fi
       - name: Skip (unchanged package)
         if: steps.gate.outputs.run != 'true'
         run: echo "Package ${{ matrix.package }} unchanged — skipping wheel build"

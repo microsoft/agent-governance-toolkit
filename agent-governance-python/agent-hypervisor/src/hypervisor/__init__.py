@@ -16,6 +16,15 @@ Usage:
 Version: 2.0.0
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agent-hypervisor is deprecated. Use agent-governance-toolkit-core instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 __version__ = "3.2.2"
 
 # Centralized constants

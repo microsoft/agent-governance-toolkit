@@ -44,7 +44,17 @@ Installation:
     pip install agent-os-kernel        # Core
 """
 
+
 from __future__ import annotations
+
+import warnings as _warnings
+_warnings.warn(
+    "agent-os-kernel is deprecated. Use agent-governance-toolkit-core instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 
 __version__ = "3.2.2"
 __author__ = "Microsoft Corporation"

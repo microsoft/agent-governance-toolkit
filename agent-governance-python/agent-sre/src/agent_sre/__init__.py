@@ -35,6 +35,15 @@ Quick start::
 See https://github.com/microsoft/agent-governance-toolkit for full documentation.
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agent-sre is deprecated. Use agent-governance-toolkit-cli instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 from agent_sre.slo.indicators import SLI, SLIRegistry, SLIValue
 from agent_sre.slo.objectives import SLO, ErrorBudget
 

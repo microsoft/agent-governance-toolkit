@@ -1,0 +1,194 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-governance-toolkit-core"
+version = "4.0.0"
+description = "Core runtime, kernel, and trust layer for the Agent Governance Toolkit"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+maintainers = [
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
+]
+keywords = [
+    "ai-agents", "governance", "multi-agent", "trust", "security",
+    "compliance", "audit", "policy-enforcement", "agent-os", "agentmesh",
+    "runtime", "kernel", "hypervisor", "identity", "zero-trust",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Security",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+# Merged dependencies from agent-os-kernel, agentmesh-primitives,
+# agentmesh-runtime, agent-hypervisor, and agentmesh-platform.
+dependencies = [
+    "pydantic[email]>=2.5.0,<3.0",
+    "pyyaml>=6.0,<7.0",
+    "rich>=13.0.0,<16.0",
+    "cryptography>=46.0.7,<49.0",
+    "pynacl>=1.5.0,<2.0",
+    "httpx>=0.27.0,<1.0",
+    "aiohttp>=3.13.4,<4.0",
+    "structlog>=24.1.0,<26.0",
+    "click>=8.1.0,<9.0",
+    "python-dateutil>=2.8.0,<3.0",
+    "jsonschema>=4.0.0,<5.0",
+]
+
+[project.optional-dependencies]
+# --- Inherited from agent-os-kernel ---
+cmvk = ["numpy>=1.20.0,<3.0"]
+iatp = [
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
+]
+amb = [
+    "anyio>=3.0.0,<5.0",
+    "aiofiles>=23.0.0,<26.0",
+]
+observability = [
+    "prometheus-client>=0.17.0,<1.0",
+    "opentelemetry-api>=1.20.0,<2.0",
+    "opentelemetry-sdk>=1.20.0,<2.0",
+]
+mcp = ["mcp>=1.0.0,<2.0"]
+nexus = ["agent-governance-toolkit-core[iatp]"]
+
+# --- Inherited from agent-hypervisor ---
+api = [
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
+]
+blockchain = ["web3>=6.0.0,<8.0"]
+otel = ["opentelemetry-api>=1.20,<2.0"]
+
+# --- Inherited from agentmesh-platform ---
+redis = ["redis>=4.0,<8.0"]
+server = [
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn[standard]>=0.27.0,<1.0",
+]
+storage = [
+    "redis[asyncio]>=5.0.0,<8.0",
+    "sqlalchemy[asyncio]>=2.0.0,<3.0",
+    "asyncpg>=0.29.0,<1.0",
+]
+langchain = ["langchain-core>=1.2.11,<2.0"]
+django = ["django>=4.2,<6.0"]
+websocket = ["websockets>=12.0,<17.0"]
+grpc = [
+    "grpcio>=1.60.0,<2.0",
+    "grpcio-tools>=1.60.0,<2.0",
+]
+
+# --- Bundles ---
+full = [
+    "agent-governance-toolkit-core[cmvk,iatp,amb,observability,mcp,nexus,api,otel,server,storage]",
+]
+
+dev = [
+    "pytest>=8.0.0,<10.0",
+    "pytest-asyncio>=0.23.0,<2.0",
+    "pytest-cov>=4.0.0,<8.0",
+    "hypothesis>=6.0.0,<7.0",
+    "mypy>=1.8.0,<3.0",
+    "ruff>=0.4.0,<1.0",
+    "import-linter>=2.0,<3.0",
+    "numpy>=1.20.0,<3.0",
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
+    "anyio>=3.0.0,<5.0",
+    "redis>=4.0.0,<8.0",
+    "eval_type_backport>=0.2.0; python_version < '3.10'",
+]
+
+[project.scripts]
+agent-os = "agent_os.cli:main"
+mcp-scan = "agent_os.cli.mcp_scan:main"
+hypervisor = "hypervisor.cli.session_commands:main"
+agentmesh = "agentmesh.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+# ============================================================================
+# Hatchling build config: pull sources from sibling package directories
+# ============================================================================
+[tool.hatch.build.targets.wheel]
+packages = ["_placeholder"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# --- agent-os-kernel (kernel + all internal modules) ---
+"../agent-os/src/agent_os" = "agent_os"
+"../agent-os/modules/cmvk/src/cmvk" = "cmvk"
+"../agent-os/modules/caas/src/caas" = "caas"
+"../agent-os/modules/emk/emk" = "emk"
+"../agent-os/modules/iatp/iatp" = "iatp"
+"../agent-os/modules/amb/amb_core" = "amb_core"
+"../agent-os/modules/atr/atr" = "atr"
+"../agent-os/modules/control-plane/src/agent_control_plane" = "agent_control_plane"
+"../agent-os/modules/observability/src/agent_os_observability" = "agent_os_observability"
+"../agent-os/modules/nexus" = "nexus"
+"../agent-os/modules/scak/agent_kernel" = "agent_kernel"
+"../agent-os/modules/mute-agent/mute_agent" = "mute_agent"
+"../agent-os/modules/mcp-kernel-server/src/mcp_kernel_server" = "mcp_kernel_server"
+# --- agentmesh-primitives ---
+"../agent-primitives/agent_primitives" = "agent_primitives"
+# --- agentmesh-runtime ---
+"../agent-runtime/src/agent_runtime" = "agent_runtime"
+# --- agent-hypervisor ---
+"../agent-hypervisor/src/hypervisor" = "hypervisor"
+# --- agentmesh-platform ---
+"../agent-mesh/src/agentmesh" = "agentmesh"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "README.md",
+    "LICENSE",
+]
+
+# ============================================================================
+# Ruff
+# ============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "C4", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+
+# ============================================================================
+# Pytest
+# ============================================================================
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "benchmark: performance benchmark tests",
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]

@@ -24,6 +24,15 @@ MCP-specific security primitives (from ``agent_os.mcp_security``):
 
 from __future__ import annotations
 
+import warnings as _warnings
+_warnings.warn(
+    "agent-mcp-governance is deprecated. Use agent-governance-toolkit-protocols instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
+
 __version__ = "3.6.0"
 
 from agent_os.governance.middleware import GovernanceMiddleware

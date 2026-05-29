@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_platform"
-version = "3.7.0"
-description = "Public Preview — The Secure Nervous System for Cloud-Native Agent Ecosystems - Identity, Trust, Reward, Governance"
+version = "4.0.0"
+description = "Deprecated — use agent-governance-toolkit-core instead. The Secure Nervous System for Cloud-Native Agent Ecosystems"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -45,7 +45,9 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    # Core dependencies
+    # Core dependency redirect
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
+    # Original deps kept for backward compat
     "pydantic[email]>=2.5.0,<3.0",
     "cryptography>=46.0.7,<49.0",
     "pynacl>=1.5.0,<2.0",

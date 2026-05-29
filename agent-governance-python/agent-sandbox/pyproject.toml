@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agt_sandbox"
-version = "3.7.0"
-description = "Public Preview — Agent Sandbox: Docker-based execution isolation for AI agents with policy-driven resource limits, tool proxies, network enforcement, and filesystem checkpointing"
+version = "4.0.0"
+description = "Deprecated — use agent-governance-toolkit-cli instead. Agent Sandbox: Docker-based execution isolation for AI agents"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
@@ -33,7 +33,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-dependencies = []
+dependencies = [
+    "agent-governance-toolkit-cli>=4.0.0,<5.0",
+]
 
 [project.optional-dependencies]
 docker = [

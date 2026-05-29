@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_os_kernel"
-version = "3.7.0"
-description = "Public Preview — A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
+version = "4.0.0"
+description = "Deprecated — use agent-governance-toolkit-core instead. A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
@@ -41,10 +41,12 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# Core dependencies (minimal - just what's needed for kernel)
+# This package is deprecated. All functionality is now in agent-governance-toolkit-core.
+# The dependency below ensures existing installs continue to work.
 dependencies = [
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
     "pydantic>=2.4.0,<3.0",
-    "rich>=13.0.0,<16.0"
+    "rich>=13.0.0,<16.0",
 ]
 
 [project.urls]

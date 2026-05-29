@@ -16,6 +16,15 @@ The ``agent-hypervisor`` package remains available for backward compatibility
 and will be deprecated in a future release.
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agentmesh-runtime is deprecated. Use agent-governance-toolkit-core instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 from hypervisor import (  # noqa: F401
     __version__,
     # Core

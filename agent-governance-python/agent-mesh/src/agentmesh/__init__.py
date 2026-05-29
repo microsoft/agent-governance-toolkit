@@ -11,6 +11,15 @@ multi-vendor network of AI agents that will define enterprise operations.
 Version: 3.6.0
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agentmesh-platform is deprecated. Use agent-governance-toolkit-core instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 __version__ = "3.6.0"
 
 # Layer 1: Identity & Zero-Trust Core
