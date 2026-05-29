@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "file://../../agent-governance-opencode/src/index.mjs"
+  ],
+  "mcp": {
+    "agt-governance": {
+      "type": "local",
+      "command": [
+        "node",
+        "../../agent-governance-opencode/server/agt-mcp.mjs"
+      ]
+    }
+  }
+}

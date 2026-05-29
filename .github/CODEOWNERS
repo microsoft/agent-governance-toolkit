@@ -18,6 +18,9 @@
 /packages/agent-runtime/     @microsoft/agent-governance-toolkit
 /packages/agentmesh-integrations/ @microsoft/agent-governance-toolkit
 /agent-governance-antigravity-cli/ @microsoft/agent-governance-toolkit
+/agent-governance-claude-code/    @microsoft/agent-governance-toolkit
+/agent-governance-opencode/       @microsoft/agent-governance-toolkit
+/examples/opencode-agt/           @microsoft/agent-governance-toolkit
 
 # Security-sensitive paths — require maintainer review, no exceptions
 /.github/                    @imran-siddique

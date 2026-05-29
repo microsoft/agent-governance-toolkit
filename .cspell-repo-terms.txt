@@ -18,6 +18,7 @@ allowlisted
 alnum
 amannn
 Amol
+anomalyco
 antigravity
 APIM
 apiserver
@@ -252,6 +253,7 @@ octo
 omitempty
 OpenAI
 OpenClaw
+opencode
 openshell
 ospo
 oxycodone

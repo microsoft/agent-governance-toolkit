@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenCode CLI governance package** — new `@microsoft/agent-governance-opencode` package: in-process OpenCode plugin enforcing AGT prompt, tool, and tool-output policy with secret redaction, plus bundled stdio MCP server, default policy, docs, tutorial, runnable example, CI, and ESRP release wiring.
 - **Antigravity CLI governance package** — new `@microsoft/agent-governance-antigravity-cli` package with Antigravity-native hooks, MCP helpers, custom commands, docs, CI, and release wiring.
 
 ## [3.2.1] - 2026-04-22

@@ -147,3 +147,4 @@ A focused series on writing, testing, and versioning governance policies.
 | 21 | [Rust crate](21-rust-sdk.md) | Agent governance in Rust |
 | 22 | [Go module](22-go-sdk.md) | Agent governance in Go |
 | 52 | [Antigravity CLI governance](52-antigravity-cli-governance.md) | Install governance policies for Antigravity CLI with hooks, commands, and MCP checks |
+| 54 | [OpenCode CLI governance](54-opencode-cli-governance.md) | In-process OpenCode plugin for AGT policy on prompts, tools, and tool-output secret redaction |
