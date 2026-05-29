@@ -6,11 +6,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+logger = logging.getLogger(__name__)
 
 bearer_scheme = HTTPBearer(auto_error=False)
 BEARER_AUTH = Depends(bearer_scheme)
@@ -18,6 +21,11 @@ BEARER_AUTH = Depends(bearer_scheme)
 ADMIN_TOKENS_ENV = "NEXUS_CLOUD_BOARD_ADMIN_TOKENS"
 ADMIN_TOKEN_ENV = "NEXUS_CLOUD_BOARD_ADMIN_TOKEN"
 AGENT_TOKENS_ENV = "NEXUS_CLOUD_BOARD_AGENT_TOKENS"
+
+# Reject overlong bearer tokens before the SHA-256 hash so that an attacker
+# cannot force expensive hashing work with multi-megabyte tokens. 256 bytes
+# is far above any reasonable opaque token / JWT in practice.
+MAX_BEARER_TOKEN_BYTES = 256
 
 
 @dataclass(frozen=True)
@@ -35,18 +43,17 @@ class AuthPrincipal:
 def require_admin(
     credentials: HTTPAuthorizationCredentials | None = BEARER_AUTH,
 ) -> AuthPrincipal:
-    """Require an administrator bearer token."""
+    """Require an administrator bearer token.
+
+    Returns ``401`` for **any** non-admin credential — including valid
+    agent tokens — so that the endpoint cannot be used as a binary oracle
+    to classify an exfiltrated token as a valid agent token.
+    """
     _ensure_admin_auth_configured()
     token = _extract_bearer_token(credentials)
 
     if _matches_any_token(token, _admin_tokens()):
         return AuthPrincipal(role="admin")
-
-    if _agent_did_for_token(token) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "FORBIDDEN", "message": "Administrator token required"},
-        )
 
     raise _invalid_credentials()
 
@@ -148,7 +155,13 @@ def _extract_bearer_token(
     if credentials.scheme.lower() != "bearer":
         raise _missing_credentials()
 
-    return credentials.credentials
+    token = credentials.credentials
+    if len(token.encode("utf-8")) > MAX_BEARER_TOKEN_BYTES:
+        # Refuse before hashing to avoid CPU DoS via giant tokens. Use 401
+        # (same shape as any other invalid-token response) to avoid creating
+        # an oracle for "you guessed an admin token with this length".
+        raise _invalid_credentials()
+    return token
 
 
 def _missing_credentials() -> HTTPException:
@@ -183,29 +196,47 @@ def _agent_did_for_token(token: str) -> str | None:
 
 
 def _agent_token_entries() -> list[tuple[str, str]]:
-    raw_entries = _split_env_tokens(os.environ.get(AGENT_TOKENS_ENV, ""))
+    raw_env = os.environ.get(AGENT_TOKENS_ENV, "")
+    cached = _AGENT_TOKEN_CACHE.get(raw_env)
+    if cached is not None:
+        return cached
+
+    raw_entries = _split_env_tokens(raw_env)
     entries: list[tuple[str, str]] = []
 
     for entry in raw_entries:
         agent_did, separator, token = entry.partition("=")
+        agent_did = agent_did.strip()
+        token = token.strip()
+        # A single malformed entry must not 503 the entire authenticated
+        # surface (including the admin plane). Skip the entry with a
+        # warning so misconfiguration degrades gracefully rather than DoSing
+        # every authenticated request.
         if separator != "=" or not agent_did or not token:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "error": "AUTH_CONFIG_INVALID",
-                    "message": f"{AGENT_TOKENS_ENV} entries must use '<did>=<token>'",
-                },
+            logger.warning(
+                "Skipping malformed %s entry (expected '<did>=<token>')",
+                AGENT_TOKENS_ENV,
             )
+            continue
         if not agent_did.startswith("did:nexus:"):
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "error": "AUTH_CONFIG_INVALID",
-                    "message": f"{AGENT_TOKENS_ENV} agent IDs must be did:nexus DIDs",
-                },
+            logger.warning(
+                "Skipping %s entry with non-did:nexus DID: %r",
+                AGENT_TOKENS_ENV,
+                agent_did,
             )
+            continue
+        if len(token.encode("utf-8")) > MAX_BEARER_TOKEN_BYTES:
+            logger.warning(
+                "Skipping %s entry for %s: token exceeds %d-byte cap",
+                AGENT_TOKENS_ENV,
+                agent_did,
+                MAX_BEARER_TOKEN_BYTES,
+            )
+            continue
         entries.append((agent_did, token))
 
+    _AGENT_TOKEN_CACHE.clear()
+    _AGENT_TOKEN_CACHE[raw_env] = entries
     return entries
 
 
@@ -220,4 +251,17 @@ def _token_matches(token: str, expected_token: str) -> bool:
 
 
 def _split_env_tokens(value: str) -> list[str]:
+    # NOTE: Tokens that themselves contain ',' cannot be expressed in this
+    # env format because comma is the separator. Operators who need such
+    # tokens must rotate them; values containing commas are silently
+    # truncated by ``split(",")``. This limitation is documented in the
+    # service README under the security boundary section.
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+# Module-level cache for parsed agent-token entries keyed by the raw env
+# string. The cache avoids re-parsing the env on every authenticated request
+# (which both adds latency and previously turned a single misconfiguration
+# into a per-request 503). The cache key is the raw env value, so tests and
+# operators changing the env are picked up on the next call.
+_AGENT_TOKEN_CACHE: dict[str, list[tuple[str, str]]] = {}
