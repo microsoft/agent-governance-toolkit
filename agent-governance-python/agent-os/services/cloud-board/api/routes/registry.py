@@ -128,6 +128,17 @@ async def register_agent(request: RegisterAgentRequest):
             status_code=400,
             detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp format"},
         ) from None
+    if ts.tzinfo is None:
+        # A naive timestamp is ambiguous (which timezone?) and previously caused
+        # an uncaught ``TypeError`` when subtracted from the aware UTC ``now``,
+        # producing a 500 on every unauth call. Require explicit UTC offset.
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_TIMESTAMP",
+                "message": "proof_timestamp must include a timezone offset (e.g. '+00:00' or 'Z')",
+            },
+        )
     now = datetime.now(timezone.utc)
     if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
         raise HTTPException(
@@ -151,8 +162,11 @@ async def register_agent(request: RegisterAgentRequest):
             detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"},
         ) from None
 
-    # Derive DID deterministically from public key hash
-    key_hash = hashlib.sha256(key_bytes).hexdigest()[:32]
+    # Derive DID deterministically from full public key hash. We use the full
+    # 256-bit (64 hex char) SHA-256 to avoid 64-bit collision resistance on a
+    # truncated hash — keys are public, so collision search is feasible at
+    # ~2^64 with 128-bit truncation.
+    key_hash = hashlib.sha256(key_bytes).hexdigest()
     agent_did = f"did:nexus:{key_hash}"
     if request.identity.did != agent_did:
         raise HTTPException(
@@ -321,6 +335,14 @@ async def update_agent(
             status_code=400,
             detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp"},
         ) from None
+    if ts.tzinfo is None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_TIMESTAMP",
+                "message": "proof_timestamp must include a timezone offset (e.g. '+00:00' or 'Z')",
+            },
+        )
     now = datetime.now(timezone.utc)
     if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
         raise HTTPException(
@@ -343,8 +365,8 @@ async def update_agent(
             detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"},
         ) from None
 
-    # Verify the derived DID matches the URL
-    derived_did = f"did:nexus:{hashlib.sha256(key_bytes).hexdigest()[:32]}"
+    # Verify the derived DID matches the URL (full 256-bit SHA-256 hex).
+    derived_did = f"did:nexus:{hashlib.sha256(key_bytes).hexdigest()}"
     if derived_did != agent_did or request.identity.did != agent_did:
         raise HTTPException(
             status_code=403,
@@ -478,16 +500,35 @@ async def verify_peer(
 def _view_manifest(
     agent: dict, principal: AuthPrincipal | None
 ) -> dict:
-    """Return a manifest copy with PII fields redacted for anonymous callers."""
-    if principal is not None:
+    """Return a manifest copy with PII fields redacted by allowlist.
+
+    Only the agent's owner (DID-matched authenticated caller) or an
+    administrator may see the unredacted ``identity`` block. Anonymous
+    callers and other authenticated agents receive only an explicit
+    allowlist of public identity fields, so that a future field added to
+    ``AgentIdentityRequest`` does not silently leak to every caller.
+    """
+    agent_did = agent.get("identity", {}).get("did")
+    is_owner = (
+        principal is not None
+        and not principal.is_admin
+        and principal.agent_did == agent_did
+    )
+    if principal is not None and (principal.is_admin or is_owner):
         return agent
 
-    redacted = dict(agent)
-    identity = dict(agent.get("identity", {}))
-    identity.pop("owner_id", None)
-    identity.pop("contact", None)
-    redacted["identity"] = identity
-    return redacted
+    public = dict(agent)
+    raw_identity = agent.get("identity", {})
+    # Allowlist: only these identity fields are exposed to non-owners.
+    # owner_id and contact are PII and MUST NOT appear here. Any new
+    # identity field defaults to redacted unless added intentionally.
+    _PUBLIC_IDENTITY_FIELDS = ("did", "verification_key", "display_name")
+    public["identity"] = {
+        field: raw_identity[field]
+        for field in _PUBLIC_IDENTITY_FIELDS
+        if field in raw_identity
+    }
+    return public
 
 
 def _get_tier(score: int) -> str:
