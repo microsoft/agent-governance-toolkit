@@ -7,11 +7,15 @@ Exposes CMVK, IATP, code safety, and governed execution as MCP-compatible tools.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, List
+from typing import Any, Callable, Optional, List
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 import re
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -445,10 +449,36 @@ class KernelExecuteTool:
         "send_email": {"requires_approval": True},
     }
     
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+        approval_provider: Optional[Callable[[str, dict], bool]] = None,
+    ):
+        """Initialize the kernel execute tool.
+
+        Args:
+            config: Optional configuration dict (``policy_mode``, etc.).
+            approval_provider: Optional trusted approval callback for
+                actions whose policy declares ``requires_approval``.
+                Called as ``approval_provider(action, params)`` and must
+                return a boolean. When omitted, all ``requires_approval``
+                actions are denied by default (caller-supplied
+                ``approved`` flags in ``params`` are still untrusted and
+                never satisfy this gate). When the callback raises any
+                exception, the policy check fails closed and the action
+                is denied.
+
+                The callback is invoked synchronously inside
+                :meth:`_check_policies`. Implementations that need
+                asynchronous host elicitation should resolve approval
+                ahead of time (e.g. via the MCP host's elicitation
+                primitive) and pass a closure that returns the cached
+                decision.
+        """
         self.config = config or {}
         self.policy_mode = self.config.get("policy_mode", "strict")
-    
+        self._approval_provider = approval_provider
+
     async def execute(self, arguments: dict) -> ToolResult:
         """Execute action with kernel governance."""
         action = arguments.get("action", "")
@@ -501,9 +531,64 @@ class KernelExecuteTool:
             if action == "database_query" and params.get("query", "").upper().startswith(("INSERT", "UPDATE", "DELETE")):
                 return {"allowed": False, "reason": "Write query blocked by read_only policy"}
         
-        # Check requires_approval
-        if action_policy.get("requires_approval") and not params.get("approved"):
-            return {"allowed": False, "reason": f"Action '{action}' requires approval"}
+        # Check requires_approval — caller-supplied "approved" flags are
+        # untrusted and must NOT bypass policy. Approval for sensitive
+        # actions must come from a server-side approval workflow (e.g.
+        # MCP host elicitation or a trusted IntentManager), not from the
+        # tool arguments dictionary.
+        if action_policy.get("requires_approval"):
+            if params.get("approved") is not None:
+                # Detect and warn on the legacy bypass attempt so audits
+                # surface it instead of silently ignoring it.
+                logger.warning(
+                    "Ignoring caller-supplied approval flag for action '%s'; "
+                    "trusted approval workflow required.",
+                    action,
+                )
+            # Trusted approval injection point: when a host wires an
+            # ``approval_provider`` into the tool constructor we consult
+            # it here. The provider receives the action name and a copy
+            # of params (sanitised of the caller-supplied ``approved``
+            # key) and returns a boolean. Any exception fails closed.
+            if self._approval_provider is not None:
+                sanitised_params = {
+                    k: v for k, v in params.items() if k != "approved"
+                }
+                try:
+                    approved = bool(
+                        self._approval_provider(action, sanitised_params)
+                    )
+                except Exception:
+                    logger.exception(
+                        "Trusted approval_provider raised; failing closed | "
+                        "action=%s",
+                        action,
+                    )
+                    return {
+                        "allowed": False,
+                        "reason": (
+                            f"Action '{action}' requires approval; the "
+                            "trusted approval provider failed. Access "
+                            "denied (fail closed)."
+                        ),
+                    }
+                if approved:
+                    return {"allowed": True, "reason": None}
+                return {
+                    "allowed": False,
+                    "reason": (
+                        f"Action '{action}' requires approval; the "
+                        "trusted approval provider denied this request."
+                    ),
+                }
+            return {
+                "allowed": False,
+                "reason": (
+                    f"Action '{action}' requires approval. Caller-supplied "
+                    "approval flags are ignored; obtain approval through a "
+                    "trusted host workflow before invoking this tool."
+                ),
+            }
         
         # Check no_pii policy
         if "no_pii" in policies:

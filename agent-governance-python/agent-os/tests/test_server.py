@@ -10,13 +10,18 @@ from agent_os.server.app import GovServer, _build_execute_authenticator_from_env
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+    monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+    monkeypatch.delenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
     server = GovServer()
     return TestClient(server.app)
 
 
 @pytest.fixture
-def authenticated_execute_client():
+def authenticated_execute_client(monkeypatch):
+    monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+    monkeypatch.delenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
     authenticator = MCPSessionAuthenticator()
     token = authenticator.create_session("test-agent", user_id="user@example.com")
     server = GovServer(execute_authenticator=authenticator)
@@ -258,6 +263,7 @@ class TestExecuteEndpoint:
     def test_env_configured_execute_token_authenticates_server(self, monkeypatch):
         monkeypatch.setenv("AGENT_OS_EXECUTION_TOKENS", "test-agent=env-token")
         monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.delenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
 
         authenticator = _build_execute_authenticator_from_env()
 
@@ -282,7 +288,9 @@ class TestExecuteEndpoint:
 
     def test_execute_allows_unauthenticated_when_escape_hatch_enabled(self, monkeypatch):
         monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
-        monkeypatch.setenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.setenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.setenv("AGENT_OS_ENV", "local")
 
         server = GovServer()
         client = TestClient(server.app)
@@ -291,16 +299,17 @@ class TestExecuteEndpoint:
             json={
                 "action": "database_query",
                 "params": {"query": "SELECT 1"},
-                "agent_id": "unauthenticated-agent",
             },
         )
 
         assert resp.status_code == 200
         assert resp.json()["success"] is True
 
-    def test_execute_escape_hatch_requires_agent_id(self, monkeypatch):
+    def test_execute_escape_hatch_rejects_caller_agent_id(self, monkeypatch):
         monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
-        monkeypatch.setenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.setenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.setenv("AGENT_OS_ENV", "local")
 
         server = GovServer()
         client = TestClient(server.app)
@@ -309,11 +318,42 @@ class TestExecuteEndpoint:
             json={
                 "action": "database_query",
                 "params": {"query": "SELECT 1"},
+                "agent_id": "caller-controlled-agent",
             },
         )
 
         assert resp.status_code == 422
-        assert "agent_id is required" in resp.json()["detail"]
+        assert "server-controlled agent_id" in resp.json()["detail"]
+
+    def test_execute_rejects_legacy_unauthenticated_escape_hatch(self, monkeypatch):
+        monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+        monkeypatch.setenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.delenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+
+        with pytest.raises(ValueError, match="no longer supported"):
+            GovServer()
+
+    def test_execute_unsafe_escape_hatch_requires_local_environment(self, monkeypatch):
+        monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+        monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.setenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.setenv("AGENT_OS_ENV", "production")
+
+        with pytest.raises(ValueError, match="only allowed"):
+            GovServer()
+
+    def test_execute_programmatic_kwarg_requires_local_environment(self, monkeypatch):
+        """The ``allow_unauthenticated_execute=True`` kwarg must NOT
+        bypass the AGENT_OS_ENV gate. Without ``AGENT_OS_ENV=local``,
+        constructing the server with the kwarg must raise ValueError so
+        a programmatic caller cannot smuggle in the escape hatch."""
+        monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+        monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.delenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.delenv("AGENT_OS_ENV", raising=False)
+
+        with pytest.raises(ValueError, match="only allowed"):
+            GovServer(allow_unauthenticated_execute=True)
 
     def test_execute_returns_503_when_auth_not_configured(self, client):
         resp = client.post(

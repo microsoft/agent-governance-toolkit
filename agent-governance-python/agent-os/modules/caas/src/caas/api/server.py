@@ -2,8 +2,31 @@
 # Licensed under the MIT License.
 """
 REST API for Context-as-a-Service.
+
+SECURITY WARNING — UNAUTHENTICATED SURFACE:
+============================================
+TODO(security, broader-design-required): This module exposes ~50 FastAPI
+routes — including destructive ``POST/PUT/DELETE`` endpoints over
+``/ingest``, ``/documents``, ``/triad``, ``/conversation``, ``/vfs/files``,
+``/gateway/audit`` — with **no authentication, no authorization, and no
+caller-identity verification**. Caller-supplied identifiers like
+``agent_id`` and ``user_id`` on ``/vfs/files`` and ``/gateway/*`` are
+trusted blindly. Body and upload sizes are unbounded.
+
+Fixing this surface end-to-end requires a broader design discussion
+(auth provider selection, identity model, multitenant isolation, body
+size budgets per endpoint, audit-trail scope). That is intentionally
+out of scope for the current Agent OS authz hardening sweep. Until the
+design lands, **DO NOT bind this server to a non-loopback interface in
+any shared, multi-tenant, or production environment** — it is intended
+for single-tenant local development only.
+
+When wiring deployment, prefer ``uvicorn caas.api.server:app --host
+127.0.0.1`` and front it with an authenticating reverse proxy that
+strips/rewrites caller identity headers before reaching this app.
 """
 
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -52,6 +75,28 @@ app = FastAPI(
     description="Intelligent context extraction and serving",
     version="0.1.0"
 )
+
+
+@app.on_event("startup")
+async def _warn_unauthenticated_surface() -> None:
+    """Emit a loud warning whenever this app starts in a non-local env.
+
+    The CaaS HTTP surface is unauthenticated by design (see module-level
+    SECURITY WARNING). The startup hook gives operators a visible signal
+    when this app is unexpectedly running outside a developer workstation.
+    """
+    import logging
+    log = logging.getLogger("caas.api")
+    env = (os.getenv("AGENT_OS_ENV") or "").strip().lower()
+    if env not in {"local", "dev", "development"}:
+        log.warning(
+            "caas.api: starting an UNAUTHENTICATED FastAPI app "
+            "(AGENT_OS_ENV=%r). All routes are open and caller-supplied "
+            "user_id/agent_id are trusted. This server must be bound to "
+            "loopback only and never exposed to a shared network. "
+            "See module docstring for the deferred design follow-up.",
+            env or "<unset>",
+        )
 
 # Initialize components
 document_store = DocumentStore()

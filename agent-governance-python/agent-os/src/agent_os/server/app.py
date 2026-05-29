@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -60,7 +61,18 @@ def _parse_cors_origins(raw: str) -> list[str]:
 _EXECUTE_TOKENS_ENV = "AGENT_OS_EXECUTION_TOKENS"
 _EXECUTE_TOKENS_TTL_ENV = "AGENT_OS_EXECUTION_TOKEN_TTL_HOURS"
 _DEFAULT_EXECUTE_TOKEN_TTL_HOURS = 24
-_ALLOW_UNAUTHENTICATED_EXECUTE_ENV = "AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE"
+_LEGACY_ALLOW_UNAUTHENTICATED_EXECUTE_ENV = "AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE"
+_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE_ENV = "AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE"
+_UNSAFE_LOCAL_EXECUTE_AGENT_ID_ENV = "AGENT_OS_UNSAFE_LOCAL_EXECUTE_AGENT_ID"
+_AGENT_OS_ENV_ENV = "AGENT_OS_ENV"
+_DEFAULT_UNSAFE_LOCAL_EXECUTE_AGENT_ID = "local-dev-agent"
+_LOCAL_ENVIRONMENT_NAMES = frozenset({"dev", "development", "local"})
+
+
+@dataclass(frozen=True)
+class _ExecuteIdentity:
+    agent_id: str
+    authenticated: bool
 
 
 def _detection_result_to_response(result: Any) -> DetectionResponse:
@@ -99,10 +111,11 @@ class GovServer:
         self._execute_authenticator: MCPSessionAuthenticator | None = (
             execute_authenticator or _build_execute_authenticator_from_env()
         )
-        self._allow_unauthenticated_execute = (
-            _read_bool_env(_ALLOW_UNAUTHENTICATED_EXECUTE_ENV, default=False)
-            if allow_unauthenticated_execute is None
-            else allow_unauthenticated_execute
+        (
+            self._allow_unauthenticated_execute,
+            self._unsafe_local_execute_agent_id,
+        ) = _resolve_unauthenticated_execute_config(
+            requested_override=allow_unauthenticated_execute
         )
         if not self._allow_unauthenticated_execute and self._execute_authenticator is None:
             logger.warning(
@@ -136,12 +149,57 @@ class GovServer:
     def allow_unauthenticated_execute(self) -> bool:
         return self._allow_unauthenticated_execute
 
+    @property
+    def unsafe_local_execute_agent_id(self) -> str | None:
+        return self._unsafe_local_execute_agent_id
+
 
 def _read_bool_env(name: str, *, default: bool) -> bool:
     raw_value = os.environ.get(name)
     if raw_value is None:
         return default
     return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_unauthenticated_execute_config(
+    *, requested_override: bool | None = None
+) -> tuple[bool, str | None]:
+    if _read_bool_env(_LEGACY_ALLOW_UNAUTHENTICATED_EXECUTE_ENV, default=False):
+        raise ValueError(
+            f"{_LEGACY_ALLOW_UNAUTHENTICATED_EXECUTE_ENV} is no longer supported. "
+            f"Use {_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE_ENV}=true only with "
+            f"{_AGENT_OS_ENV_ENV}=local for loopback-only development."
+        )
+
+    requested = (
+        _read_bool_env(_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE_ENV, default=False)
+        if requested_override is None
+        else requested_override
+    )
+    if not requested:
+        return False, None
+
+    environment = os.environ.get(_AGENT_OS_ENV_ENV, "").strip().lower()
+    if environment not in _LOCAL_ENVIRONMENT_NAMES:
+        raise ValueError(
+            f"{_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE_ENV}=true is only allowed when "
+            f"{_AGENT_OS_ENV_ENV} is one of {sorted(_LOCAL_ENVIRONMENT_NAMES)}. "
+            "Configure execute bearer tokens before exposing /api/v1/execute."
+        )
+
+    agent_id = os.environ.get(
+        _UNSAFE_LOCAL_EXECUTE_AGENT_ID_ENV,
+        _DEFAULT_UNSAFE_LOCAL_EXECUTE_AGENT_ID,
+    ).strip()
+    if not agent_id:
+        raise ValueError(f"{_UNSAFE_LOCAL_EXECUTE_AGENT_ID_ENV} must not be empty.")
+
+    logger.warning(
+        "UNSAFE unauthenticated execute mode enabled for local development only; "
+        "using server-controlled agent_id=%s",
+        agent_id,
+    )
+    return True, agent_id
 
 
 def _parse_execute_tokens(raw_tokens: str) -> dict[str, str]:
@@ -214,9 +272,18 @@ def _authenticate_execute_request(
     *,
     execute_authenticator: Any | None,
     allow_unauthenticated_execute: bool,
-) -> Any | None:
+    unsafe_local_execute_agent_id: str | None,
+) -> _ExecuteIdentity:
     if allow_unauthenticated_execute:
-        return None
+        if not unsafe_local_execute_agent_id:
+            raise HTTPException(
+                status_code=503,
+                detail="Unsafe local execute mode is enabled without a server identity.",
+            )
+        return _ExecuteIdentity(
+            agent_id=unsafe_local_execute_agent_id,
+            authenticated=False,
+        )
     if execute_authenticator is None:
         raise HTTPException(
             status_code=503,
@@ -229,7 +296,7 @@ def _authenticate_execute_request(
     session = execute_authenticator.validate_token(_extract_bearer_token(request))
     if session is None:
         raise HTTPException(status_code=401, detail="Invalid or expired execute bearer token.")
-    return session
+    return _ExecuteIdentity(agent_id=session.agent_id, authenticated=True)
 
 
 def create_app(
@@ -242,10 +309,13 @@ def create_app(
 
     version = server._version if server else __version__
     execute_authenticator = server.execute_authenticator if server else _build_execute_authenticator_from_env()
-    allow_unauthenticated_execute = (
-        server.allow_unauthenticated_execute
+    (
+        allow_unauthenticated_execute,
+        unsafe_local_execute_agent_id,
+    ) = (
+        (server.allow_unauthenticated_execute, server.unsafe_local_execute_agent_id)
         if server
-        else _read_bool_env(_ALLOW_UNAUTHENTICATED_EXECUTE_ENV, default=False)
+        else _resolve_unauthenticated_execute_config()
     )
 
     app = FastAPI(
@@ -393,28 +463,27 @@ def create_app(
         """Execute an action through the stateless kernel."""
         from agent_os.stateless import ExecutionContext, StatelessKernel
 
-        authenticated_session = _authenticate_execute_request(
+        execute_identity = _authenticate_execute_request(
             request,
             execute_authenticator=execute_authenticator,
             allow_unauthenticated_execute=allow_unauthenticated_execute,
+            unsafe_local_execute_agent_id=unsafe_local_execute_agent_id,
         )
-        if authenticated_session is not None:
-            if req.agent_id and req.agent_id != authenticated_session.agent_id:
-                raise HTTPException(
-                    status_code=403,
-                    detail=(
-                        "Request agent_id does not match the identity bound to the "
-                        "execute bearer token."
-                    ),
+        if req.agent_id and req.agent_id != execute_identity.agent_id:
+            detail = (
+                "Request agent_id does not match the identity bound to the "
+                "execute bearer token."
+                if execute_identity.authenticated
+                else (
+                    "Unsafe local execute mode uses a server-controlled agent_id; "
+                    "caller-supplied agent_id values are not trusted."
                 )
-            effective_agent_id = authenticated_session.agent_id
-        else:
-            if not req.agent_id:
-                raise HTTPException(
-                    status_code=422,
-                    detail="agent_id is required when unauthenticated execute mode is enabled.",
-                )
-            effective_agent_id = req.agent_id
+            )
+            raise HTTPException(
+                status_code=403 if execute_identity.authenticated else 422,
+                detail=detail,
+            )
+        effective_agent_id = execute_identity.agent_id
 
         kernel = StatelessKernel()
         ctx = ExecutionContext(
@@ -430,6 +499,11 @@ def create_app(
                 signal=result.signal,
             )
         except Exception as exc:
+            logger.exception(
+                "Execute request failed | agent=%s action=%s",
+                effective_agent_id,
+                req.action,
+            )
             return ExecuteResponse(
                 success=False,
                 error=str(exc),

@@ -527,7 +527,13 @@ class StatelessKernel:
             external_state = await self._backend_get(context.state_ref) or {}
 
         # 2. Check policies
-        policy_result = self._check_policies(action, params, context.policies)
+        has_trusted_intent = bool(context.intent_id and self.intent_manager)
+        policy_result = self._check_policies(
+            action,
+            params,
+            context.policies,
+            has_trusted_intent=has_trusted_intent,
+        )
         if not policy_result["allowed"]:
             return ExecutionResult(
                 success=False,
@@ -540,42 +546,106 @@ class StatelessKernel:
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
             )
+        effective_params = dict(params)
+        # Strip caller-supplied approval flag unconditionally on key
+        # presence (not truthiness). Defense in depth: prevents falsy
+        # values like ``approved=False`` / ``0`` / ``""`` from being
+        # forwarded to ``IntentManager.check_action`` or
+        # ``_execute_action`` where future handlers might mis-interpret
+        # key-presence as caller intent.
+        if "approved" in effective_params:
+            effective_params.pop("approved", None)
 
         # 2b. Check intent (opt-in: only when intent_id is present)
         intent_metadata: dict[str, Any] = {}
         if context.intent_id and self.intent_manager:
-            intent_check = await self.intent_manager.check_action(
-                intent_id=context.intent_id,
-                action=action,
-                params=params,
-                agent_id=context.agent_id,
-                request_id=request.request_id or "",
-            )
-            if not intent_check.allowed:
+            try:
+                intent_check = await self.intent_manager.check_action(
+                    intent_id=context.intent_id,
+                    action=action,
+                    params=effective_params,
+                    agent_id=context.agent_id,
+                    request_id=request.request_id or "",
+                )
+                # Read every attribute we depend on inside the guarded
+                # block so a partial/misbehaving IntentManager
+                # implementation (one that returns an object missing
+                # ``.allowed``, ``.was_planned``, ``.reason``, etc.)
+                # fails closed with SIGKILL instead of bubbling an
+                # AttributeError as a 500. The reads below are only the
+                # decision branches that emit ExecutionResults — the
+                # metadata-only reads on lines further down still sit
+                # outside the try because they're guarded by the
+                # ``not intent_check.was_planned`` check that already
+                # exercised attribute access here.
+                intent_allowed = intent_check.allowed
+                intent_reason = intent_check.reason if not intent_allowed else None
+                intent_drift_policy = (
+                    intent_check.drift_policy_applied.value
+                    if (not intent_allowed and intent_check.drift_policy_applied)
+                    else None
+                )
+                intent_was_planned = intent_check.was_planned
+                intent_trust_penalty = intent_check.trust_penalty
+                intent_drift_policy_obj = intent_check.drift_policy_applied
+            except Exception:
+                logger.exception(
+                    "Intent authorization failed closed | agent=%s action=%s intent=%s",
+                    context.agent_id,
+                    action,
+                    context.intent_id,
+                )
                 return ExecutionResult(
                     success=False,
                     data=None,
-                    error=intent_check.reason,
+                    error="Intent authorization error; access denied (fail closed)",
+                    signal="SIGKILL",
+                    metadata={
+                        "request_id": request.request_id,
+                        "intent_error": True,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            if not intent_allowed:
+                return ExecutionResult(
+                    success=False,
+                    data=None,
+                    error=intent_reason,
                     signal="SIGKILL",
                     metadata={
                         "request_id": request.request_id,
                         "intent_drift": True,
-                        "drift_policy": intent_check.drift_policy_applied.value
-                        if intent_check.drift_policy_applied else None,
+                        "drift_policy": intent_drift_policy,
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                 )
-            if not intent_check.was_planned:
+            if policy_result.get("requires_trusted_approval") and not intent_was_planned:
+                return ExecutionResult(
+                    success=False,
+                    data=None,
+                    error=(
+                        f"Action '{action}' requires trusted approval in an approved "
+                        "intent plan; unplanned drift is denied."
+                    ),
+                    signal="SIGKILL",
+                    metadata={
+                        "request_id": request.request_id,
+                        "approval_required": True,
+                        "intent_drift": True,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            if not intent_was_planned:
                 intent_metadata["intent_drift"] = True
-                intent_metadata["trust_penalty"] = intent_check.trust_penalty
+                intent_metadata["trust_penalty"] = intent_trust_penalty
                 intent_metadata["drift_policy"] = (
-                    intent_check.drift_policy_applied.value
-                    if intent_check.drift_policy_applied else None
+                    intent_drift_policy_obj.value
+                    if intent_drift_policy_obj else None
                 )
 
         # 3. Execute action
         try:
-            result = await self._execute_action(action, params, external_state)
+            result = await self._execute_action(action, effective_params, external_state)
         except Exception as e:
             return ExecutionResult(
                 success=False,
@@ -623,7 +693,9 @@ class StatelessKernel:
         self,
         action: str,
         params: dict[str, Any],
-        policy_names: list[str]
+        policy_names: list[str],
+        *,
+        has_trusted_intent: bool = False,
     ) -> dict[str, Any]:
         """Check if action is allowed under policies.
 
@@ -636,6 +708,8 @@ class StatelessKernel:
             Dict with 'allowed' (bool) and 'reason' (str) keys.
             When blocked, includes 'suggestion' with actionable fix.
         """
+        requires_trusted_approval = False
+        drop_caller_approval_param = False
         for policy_name in policy_names:
             policy = self.policies.get(policy_name)
             if not policy:
@@ -687,19 +761,39 @@ class StatelessKernel:
                             )
                         }
 
-            # Check requires approval
+            # Check requires approval. Caller-supplied "approved" flags
+            # are untrusted and never satisfy this gate — only a trusted
+            # IntentManager that returns ``was_planned=True`` for an
+            # approved intent can authorize the action.
             if action in policy.get("require_approval", []):
-                if not params.get("approved"):
+                requires_trusted_approval = True
+                # Always record that the caller-supplied flag must be
+                # stripped (defense-in-depth); _execute_inner also strips
+                # the flag unconditionally on key presence.
+                drop_caller_approval_param = True
+                if "approved" in params:
+                    logger.warning(
+                        "Ignoring caller-supplied approval flag | action=%s policy=%s",
+                        action,
+                        policy_name,
+                    )
+                if not has_trusted_intent:
                     return {
                         "allowed": False,
                         "reason": (
                             f"Action '{action}' requires approval. "
-                            f"Add approved=True to params after getting authorization, "
-                            f"or use a non-restricted action instead."
+                            "Caller-supplied approval flags are ignored; provide an "
+                            "approved intent_id through a trusted IntentManager, or "
+                            "use a non-restricted action instead."
                         )
                     }
 
-        return {"allowed": True, "reason": None}
+        return {
+            "allowed": True,
+            "reason": None,
+            "requires_trusted_approval": requires_trusted_approval,
+            "drop_caller_approval_param": drop_caller_approval_param,
+        }
 
     async def _execute_action(
         self,

@@ -259,14 +259,16 @@ class TestKernelExecuteTool:
         assert "requires approval" in result.error
 
     @pytest.mark.asyncio
-    async def test_requires_approval_passes_with_approval(self):
+    async def test_requires_approval_rejects_caller_supplied_approved_flag(self):
+        """Caller-controlled approved=True must not bypass policy."""
         result = await self.tool.execute({
             "action": "file_write",
             "params": {"path": "/tmp/test.txt", "approved": True},
             "agent_id": "test-agent",
             "policies": [],
         })
-        assert result.success is True
+        assert result.success is False
+        assert "caller-supplied approval flags are ignored" in result.error.lower()
 
     def test_check_policies_read_only(self):
         result = self.tool._check_policies("file_write", {}, ["read_only"])
@@ -279,6 +281,95 @@ class TestKernelExecuteTool:
     def test_check_policies_no_pii_password(self):
         result = self.tool._check_policies("api_call", {"password": "secret"}, ["no_pii"])
         assert result["allowed"] is False
+
+    # ------------------------------------------------------------------
+    # Trusted approval injection point
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_requires_approval_denies_without_provider(self):
+        """No approval_provider injected → requires_approval action denied."""
+        tool = KernelExecuteTool()
+        result = await tool.execute({
+            "action": "file_write",
+            "params": {"path": "/tmp/test.txt"},
+            "agent_id": "agent-x",
+            "policies": [],
+        })
+        assert result.success is False
+        assert "requires approval" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_requires_approval_allows_when_provider_returns_true(self):
+        """Trusted approval_provider returning True authorizes the action."""
+        seen: list[tuple[str, dict]] = []
+
+        def provider(action: str, params: dict) -> bool:
+            seen.append((action, dict(params)))
+            return True
+
+        tool = KernelExecuteTool(approval_provider=provider)
+        result = await tool.execute({
+            "action": "file_write",
+            "params": {"path": "/tmp/ok.txt"},
+            "agent_id": "agent-y",
+            "policies": [],
+        })
+        assert result.success is True
+        assert seen == [("file_write", {"path": "/tmp/ok.txt"})]
+
+    @pytest.mark.asyncio
+    async def test_requires_approval_denies_when_provider_returns_false(self):
+        """Trusted approval_provider returning False denies the action."""
+        tool = KernelExecuteTool(approval_provider=lambda action, params: False)
+        result = await tool.execute({
+            "action": "send_email",
+            "params": {"to": "alice@example.com"},
+            "agent_id": "agent-z",
+            "policies": [],
+        })
+        assert result.success is False
+        assert "denied this request" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_requires_approval_fails_closed_when_provider_raises(self):
+        """Provider raising any exception fails closed → action denied."""
+        def bad_provider(action: str, params: dict) -> bool:
+            raise RuntimeError("provider crashed")
+
+        tool = KernelExecuteTool(approval_provider=bad_provider)
+        result = await tool.execute({
+            "action": "file_write",
+            "params": {"path": "/tmp/x.txt"},
+            "agent_id": "agent-q",
+            "policies": [],
+        })
+        assert result.success is False
+        assert "fail closed" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_requires_approval_strips_caller_approved_before_provider(self):
+        """Caller-supplied 'approved' must not reach the trusted provider."""
+        seen: list[dict] = []
+
+        def provider(action: str, params: dict) -> bool:
+            seen.append(dict(params))
+            return True
+
+        tool = KernelExecuteTool(approval_provider=provider)
+        for falsy_or_truthy in (True, False, 0, ""):
+            seen.clear()
+            result = await tool.execute({
+                "action": "file_write",
+                "params": {"path": "/tmp/a.txt", "approved": falsy_or_truthy},
+                "agent_id": "agent-strip",
+                "policies": [],
+            })
+            assert result.success is True, f"value={falsy_or_truthy!r}"
+            assert seen and "approved" not in seen[0], (
+                f"approved leaked to provider with value={falsy_or_truthy!r}: "
+                f"{seen[0]}"
+            )
 
     @pytest.mark.asyncio
     async def test_metadata_includes_agent_id(self):

@@ -5,7 +5,8 @@ Test Stateless Kernel (MCP June 2026 compliant).
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -118,6 +119,170 @@ class TestStatelessKernel:
         assert result.success is False
         assert result.signal == "SIGKILL"
         assert "ssn" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_requires_trusted_approval_ignores_caller_flag(self):
+        """Caller-controlled approved=True must not satisfy approval policy."""
+        from agent_os.stateless import ExecutionContext, StatelessKernel
+
+        kernel = StatelessKernel()
+        context = ExecutionContext(agent_id="test", policies=["strict"])
+
+        result = await kernel.execute(
+            action="file_write",
+            params={"path": "/data/file.txt", "approved": True},
+            context=context,
+        )
+
+        assert result.success is False
+        assert result.signal == "SIGKILL"
+        assert "caller-supplied approval flags are ignored" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_strips_falsy_approved_from_downstream_params(self):
+        """approved=False (and any key presence) must be stripped before
+        IntentManager.check_action and _execute_action see params.
+        """
+        from agent_os.stateless import ExecutionContext, StatelessKernel
+
+        captured: dict[str, dict] = {}
+
+        class SpyIntentManager:
+            async def check_action(self, **kwargs):
+                captured["intent_params"] = dict(kwargs.get("params") or {})
+                return SimpleNamespace(
+                    allowed=True,
+                    reason=None,
+                    was_planned=True,
+                    trust_penalty=0.0,
+                    drift_policy_applied=None,
+                )
+
+        kernel = StatelessKernel(intent_manager=SpyIntentManager())
+
+        async def spy_execute(action, params, state):
+            captured["exec_params"] = dict(params)
+            return {"data": {"status": "executed", "action": action}}
+
+        kernel._execute_action = spy_execute  # type: ignore[assignment]
+
+        context = ExecutionContext(
+            agent_id="test",
+            policies=["strict"],
+            intent_id="intent-approved",
+        )
+
+        for falsy in (False, 0, ""):
+            captured.clear()
+            result = await kernel.execute(
+                action="file_write",
+                params={"path": "/data/file.txt", "approved": falsy},
+                context=context,
+            )
+
+            assert result.success is True, f"falsy={falsy!r}"
+            assert "approved" not in captured["intent_params"], (
+                f"approved leaked to IntentManager.check_action with falsy={falsy!r}: "
+                f"{captured['intent_params']}"
+            )
+            assert "approved" not in captured["exec_params"], (
+                f"approved leaked to _execute_action with falsy={falsy!r}: "
+                f"{captured['exec_params']}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_execute_allows_restricted_action_with_approved_intent(self):
+        """Trusted intent approval can authorize actions requiring approval."""
+        from agent_os.stateless import ExecutionContext, StatelessKernel
+
+        class ApprovedIntentManager:
+            async def check_action(self, **kwargs):
+                return SimpleNamespace(
+                    allowed=True,
+                    reason=None,
+                    was_planned=True,
+                    trust_penalty=0.0,
+                    drift_policy_applied=None,
+                )
+
+        kernel = StatelessKernel(intent_manager=ApprovedIntentManager())
+        context = ExecutionContext(
+            agent_id="test",
+            policies=["strict"],
+            intent_id="intent-approved",
+        )
+
+        result = await kernel.execute(
+            action="file_write",
+            params={"path": "/data/file.txt", "approved": True},
+            context=context,
+        )
+
+        assert result.success is True
+        assert result.data["action"] == "file_write"
+
+    @pytest.mark.asyncio
+    async def test_execute_denies_restricted_action_when_intent_drift_allowed(self):
+        """Approval-required actions must be explicitly planned, not soft-drifted."""
+        from agent_os.stateless import ExecutionContext, StatelessKernel
+
+        class DriftAllowedIntentManager:
+            async def check_action(self, **kwargs):
+                return SimpleNamespace(
+                    allowed=True,
+                    was_planned=False,
+                    trust_penalty=0.1,
+                    drift_policy_applied=SimpleNamespace(value="soft_block"),
+                )
+
+        kernel = StatelessKernel(intent_manager=DriftAllowedIntentManager())
+        context = ExecutionContext(
+            agent_id="test",
+            policies=["strict"],
+            intent_id="intent-drift",
+        )
+
+        result = await kernel.execute(
+            action="file_write",
+            params={"path": "/data/file.txt"},
+            context=context,
+        )
+
+        assert result.success is False
+        assert result.signal == "SIGKILL"
+        assert "requires trusted approval" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_fails_closed_on_partial_intent_manager(self):
+        """A partial/misbehaving IntentManager returning an object missing
+        required attributes (e.g. ``.was_planned``) must fail closed with
+        SIGKILL rather than bubbling an AttributeError as a 500."""
+        from agent_os.stateless import ExecutionContext, StatelessKernel
+
+        class PartialIntentManager:
+            async def check_action(self, **kwargs):
+                # Returns an object missing ``.was_planned`` /
+                # ``.trust_penalty`` / ``.drift_policy_applied`` — only
+                # ``.allowed`` and ``.reason`` are present. Should still
+                # fail closed instead of raising AttributeError.
+                return SimpleNamespace(allowed=True, reason=None)
+
+        kernel = StatelessKernel(intent_manager=PartialIntentManager())
+        context = ExecutionContext(
+            agent_id="test",
+            policies=["strict"],
+            intent_id="intent-partial",
+        )
+
+        result = await kernel.execute(
+            action="file_write",
+            params={"path": "/data/file.txt"},
+            context=context,
+        )
+
+        assert result.success is False
+        assert result.signal == "SIGKILL"
+        assert result.metadata.get("intent_error") is True
 
     @pytest.mark.asyncio
     async def test_execute_updates_context(self):
