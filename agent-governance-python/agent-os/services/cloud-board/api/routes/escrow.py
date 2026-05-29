@@ -187,8 +187,22 @@ async def release_escrow(
     - dispute: Escalate to Arbiter
     """
     escrow = _get_escrow_or_404(escrow_id)
+
+    # Authorization model:
+    #   - success: requester confirms work was delivered and pays the provider.
+    #     Only the requester (or admin) may release as success.
+    #   - failure: provider confirms they did not deliver and credits go back to
+    #     requester. Only the provider (or admin) may release as failure — the
+    #     requester cannot unilaterally refund themselves; that is what /dispute
+    #     is for.
+    #   - dispute: either escrow participant (or admin) may escalate.
     if not principal.is_admin:
-        authorize_agent(escrow["requester_did"], principal)
+        if request.outcome == "success":
+            authorize_agent(escrow["requester_did"], principal)
+        elif request.outcome == "failure":
+            authorize_agent(escrow["provider_did"], principal)
+        else:  # dispute
+            _authorize_escrow_participant(escrow, principal)
 
     if escrow["status"] not in ("pending", "active", "awaiting_validation"):
         raise HTTPException(status_code=400, detail=f"Escrow already resolved: {escrow['status']}")
@@ -368,6 +382,105 @@ def get_escrow_parties(escrow_id: str) -> Optional[dict[str, str]]:
         "requester": escrow["requester_did"],
         "provider": escrow["provider_did"],
     }
+
+
+def get_escrow_credits(escrow_id: str) -> Optional[int]:
+    """Return the locked credit amount for an escrow, or ``None`` if unknown."""
+    escrow = _escrows.get(escrow_id)
+    if escrow is None:
+        return None
+    return int(escrow.get("credits", 0))
+
+
+def mark_escrow_disputed(escrow_id: str, reason: str) -> None:
+    """Atomically transition an escrow into ``disputed`` for arbiter handling.
+
+    Raises ``HTTPException`` if the escrow does not exist or is in a terminal
+    state. This is the only way to lock an escrow against further releases
+    while a dispute is being processed.
+    """
+    escrow = _get_escrow_or_404(escrow_id)
+    if escrow["status"] in ("released", "refunded", "split"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ESCROW_ALREADY_RESOLVED",
+                "message": f"Escrow {escrow_id} is already resolved",
+            },
+        )
+    if escrow["status"] == "disputed":
+        # Idempotent: already locked. Preserve the original reason.
+        return
+    escrow["status"] = "disputed"
+    escrow["dispute_reason"] = reason
+
+
+def disburse_disputed_escrow(
+    escrow_id: str,
+    *,
+    credits_to_requester: int,
+    credits_to_provider: int,
+    resolution_reason: str,
+    resolved_by: str = "arbiter",
+) -> None:
+    """Distribute locked credits for a disputed escrow and mark it resolved.
+
+    Only callable for escrows that are currently in the ``disputed`` state.
+    The caller is responsible for ensuring the split sums to the escrow's
+    locked credit total — over- or under-payment is rejected to make
+    misuse fail loudly.
+    """
+    escrow = _get_escrow_or_404(escrow_id)
+    if escrow["status"] != "disputed":
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ESCROW_NOT_DISPUTED",
+                "message": (
+                    f"Escrow {escrow_id} must be in 'disputed' state for arbiter "
+                    f"disbursement (current: {escrow['status']})"
+                ),
+            },
+        )
+    if credits_to_requester < 0 or credits_to_provider < 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_DISBURSEMENT",
+                "message": "Disbursement amounts must be non-negative",
+            },
+        )
+    locked = int(escrow.get("credits", 0))
+    if credits_to_requester + credits_to_provider != locked:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "DISBURSEMENT_MISMATCH",
+                "message": (
+                    f"Sum of split ({credits_to_requester + credits_to_provider}) "
+                    f"does not match locked credits ({locked})"
+                ),
+            },
+        )
+
+    if credits_to_requester:
+        requester = escrow["requester_did"]
+        _agent_credits[requester] = _agent_credits.get(requester, 0) + credits_to_requester
+    if credits_to_provider:
+        provider = escrow["provider_did"]
+        _agent_credits[provider] = _agent_credits.get(provider, 0) + credits_to_provider
+
+    if credits_to_provider and not credits_to_requester:
+        final_status = "released"
+    elif credits_to_requester and not credits_to_provider:
+        final_status = "refunded"
+    else:
+        final_status = "split"
+
+    escrow["status"] = final_status
+    escrow["resolved_at"] = datetime.now(timezone.utc).isoformat()
+    escrow["resolved_by"] = resolved_by
+    escrow["resolution_reason"] = resolution_reason
 
 
 def _get_escrow_or_404(escrow_id: str) -> dict:

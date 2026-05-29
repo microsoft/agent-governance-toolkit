@@ -432,9 +432,112 @@ def test_get_resolution_returns_stored_decision_and_404s_before_resolve(client: 
     body = fetched.json()
     assert fetched.status_code == 200
     assert body["outcome"] == "provider_wins"
-    assert body["credits_to_provider"] == 100
+    # Default escrow_request() locks 40 credits; the arbiter now disburses
+    # the actual escrow balance (not a hardcoded 100).
+    assert body["credits_to_provider"] == 40
     assert body["credits_to_requester"] == 0
     assert body["decision_explanation"] == "logs confirm delivery"
+
+
+def test_release_outcome_failure_requires_provider_or_admin(client: TestClient):
+    client.post(
+        f"/v1/escrow/credits/{REQUESTER_DID}/add",
+        params={"amount": 100},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    created = client.post(
+        "/v1/escrow",
+        json=escrow_request(),
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    escrow_id = created.json()["escrow_id"]
+
+    # Requester cannot unilaterally refund themselves via outcome=failure.
+    requester_attempt = client.post(
+        f"/v1/escrow/{escrow_id}/release",
+        json={"outcome": "failure"},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    # Provider can acknowledge failure.
+    provider_attempt = client.post(
+        f"/v1/escrow/{escrow_id}/release",
+        json={"outcome": "failure"},
+        headers=auth_header(PROVIDER_TOKEN),
+    )
+
+    assert requester_attempt.status_code == 403
+    # No partial refund must have happened from the rejected attempt.
+    assert PROVIDER_DID not in escrow._agent_credits
+    assert provider_attempt.status_code == 200
+    # Provider acknowledging failure returns the locked credits to the requester.
+    assert escrow._agent_credits[REQUESTER_DID] == 100  # 60 leftover + 40 refunded
+
+
+def test_submit_dispute_locks_escrow_against_subsequent_release(client: TestClient):
+    client.post(
+        f"/v1/escrow/credits/{REQUESTER_DID}/add",
+        params={"amount": 100},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    created = client.post(
+        "/v1/escrow",
+        json=escrow_request(),
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    escrow_id = created.json()["escrow_id"]
+
+    dispute = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "provider did not deliver",
+            "claimed_outcome": "failure",
+        },
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+
+    # The escrow is now locked in 'disputed' state. A direct release attempt
+    # (from either party) must be rejected so the parties cannot bypass the
+    # arbiter while the dispute is in flight.
+    follow_up_release = client.post(
+        f"/v1/escrow/{escrow_id}/release",
+        json={"outcome": "success", "scak_drift_score": 0.01},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+
+    assert dispute.status_code == 200
+    assert escrow._escrows[escrow_id]["status"] == "disputed"
+    assert follow_up_release.status_code == 400
+    assert PROVIDER_DID not in escrow._agent_credits
+
+
+def test_resolve_dispute_disburses_locked_credits_and_unlocks_escrow(client: TestClient):
+    escrow_id, dispute_id = _open_resolved_dispute(client, outcome="failure")
+
+    # Sanity: the escrow is currently locked at 'disputed' and credits remain
+    # in escrow (neither party has been paid).
+    assert escrow._escrows[escrow_id]["status"] == "disputed"
+    assert escrow._agent_credits.get(PROVIDER_DID, 0) == 0
+
+    resolved = client.post(
+        f"/v1/disputes/{dispute_id}/resolve",
+        json={"outcome": "provider_wins", "explanation": "evidence backed provider"},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+
+    assert resolved.status_code == 200
+    # Locked credits (40) were actually moved to the provider, not just
+    # returned in the response body.
+    assert escrow._agent_credits[PROVIDER_DID] == 40
+    # The escrow is no longer stuck in 'disputed'.
+    assert escrow._escrows[escrow_id]["status"] == "released"
+    assert escrow._escrows[escrow_id]["resolved_by"] == "arbiter"
+    # A compliance event was emitted for the resolution.
+    assert any(
+        e.get("event_type") == "dispute_resolved" and e.get("dispute_id") == dispute_id
+        for e in compliance._compliance_events
+    )
 
 
 def signed_registration_request(did: str) -> dict:

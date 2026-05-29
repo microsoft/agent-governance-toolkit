@@ -73,6 +73,24 @@ HTTP and only mutate worker-local state. The `ReportOutcomeRequest.reporter_did`
 admin-supplied metadata and is **not** verified against the caller's principal; downstream
 consumers must not trust it for authorization.
 
+Escrow release is authorized per outcome:
+
+- `outcome=success` — requester (or admin) only. The requester is acknowledging delivery
+  and authorizing payment to the provider.
+- `outcome=failure` — provider (or admin) only. The provider is acknowledging non-delivery
+  and authorizing refund to the requester. A requester who believes the provider failed
+  must raise a dispute rather than unilaterally clawing back credits.
+- `outcome=dispute` — either escrow participant (or admin).
+
+Submitting a dispute via `POST /v1/disputes` atomically transitions the escrow to
+`disputed`, blocking further releases until the arbiter rules. Arbiter resolution
+(`POST /v1/disputes/{id}/resolve`) requires an admin-supplied `outcome`
+(`requester_wins`, `provider_wins`, `split`); the disputant's `claimed_outcome` is
+never used to decide the winner. The arbiter disburses the escrow's actual locked
+credits and emits a `dispute_resolved` compliance event. The reputation deltas
+surfaced on the resolution response remain **advisory** in this demo — they are
+not yet wired into `reputation._reputation_history`.
+
 ## API Endpoints
 
 ### Registry (`/v1/agents`)

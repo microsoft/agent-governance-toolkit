@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..auth import ADMIN_AUTH, AGENT_AUTH, AuthPrincipal, authorize_agent
+from . import compliance as compliance_routes
 from . import escrow as escrow_routes
 
 router = APIRouter()
@@ -90,6 +91,14 @@ async def submit_dispute(
         raise HTTPException(status_code=404, detail="Escrow not found")
 
     authorize_agent(escrow_parties[request.disputing_party], principal)
+
+    # Lock the escrow against any further release attempts before recording
+    # the dispute. mark_escrow_disputed raises 400 if the escrow is already in
+    # a terminal state and is idempotent for already-disputed escrows.
+    escrow_routes.mark_escrow_disputed(
+        request.escrow_id,
+        reason=request.dispute_reason,
+    )
 
     dispute_id = f"dispute_{uuid.uuid4().hex[:16]}"
 
@@ -183,14 +192,27 @@ async def resolve_dispute(
             status_code=400, detail="Evidence required from both parties before resolution"
         )
 
+    # Total credits are derived from the locked escrow, not a hardcoded
+    # constant — otherwise the disbursement would silently over- or
+    # under-pay for any non-100-credit escrow.
+    total_credits = escrow_routes.get_escrow_credits(dispute["escrow_id"])
+    if total_credits is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "ESCROW_NOT_FOUND",
+                "message": (
+                    f"Escrow {dispute['escrow_id']} for dispute {dispute_id} no longer exists"
+                ),
+            },
+        )
+
     outcome = request.outcome
     explanation = request.explanation or {
         "requester_wins": "Administrator ruled in favor of the requester",
         "provider_wins": "Administrator ruled in favor of the provider",
         "split": "Administrator ruled the dispute should be split",
     }[outcome]
-
-    total_credits = 100
 
     if outcome == "requester_wins":
         credits_requester = total_credits
@@ -203,10 +225,22 @@ async def resolve_dispute(
         rep_requester = -50
         rep_provider = 10
     else:
-        credits_requester = total_credits // 2
         credits_provider = total_credits // 2
+        credits_requester = total_credits - credits_provider
         rep_requester = -10
         rep_provider = -10
+
+    # Actually disburse the locked escrow credits and transition the escrow
+    # out of the 'disputed' state. Reputation deltas remain advisory in this
+    # demo (they are surfaced on the response but not yet wired into
+    # reputation._reputation_history); the README documents that boundary.
+    escrow_routes.disburse_disputed_escrow(
+        dispute["escrow_id"],
+        credits_to_requester=credits_requester,
+        credits_to_provider=credits_provider,
+        resolution_reason=f"Arbiter ruled: {outcome}",
+        resolved_by="arbiter",
+    )
 
     resolved_at = datetime.now(timezone.utc).isoformat()
     resolution_record = {
@@ -226,6 +260,18 @@ async def resolve_dispute(
     dispute["resolution_outcome"] = outcome
     dispute["resolved_at"] = resolved_at
     dispute["resolution"] = resolution_record
+
+    compliance_routes._record_event(
+        "dispute_resolved",
+        dispute_id=dispute_id,
+        escrow_id=dispute["escrow_id"],
+        requester_did=dispute.get("requester_did"),
+        provider_did=dispute.get("provider_did"),
+        outcome=outcome,
+        credits_to_requester=credits_requester,
+        credits_to_provider=credits_provider,
+        resolved_by="arbiter",
+    )
 
     return DisputeResolutionResponse(
         dispute_id=dispute_id,
