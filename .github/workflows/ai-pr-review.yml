@@ -210,7 +210,14 @@ jobs:
             const repo = context.repo.repo;
             const prNumber = context.payload.pull_request.number;
             const SUMMARY_MARKER = '<!-- ai-pr-summary -->';
-            const RUN_MARKER = `<!-- ai-agent-run:${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT || '1'} -->`;
+            // RUN_MARKER intentionally uses GITHUB_RUN_ID only — not
+            // GITHUB_RUN_ATTEMPT. The aggregator filters PR comments to ones
+            // posted by *this* workflow run; including RUN_ATTEMPT would skip
+            // comments from a previous attempt that may still be valid (e.g.
+            // a flaky job that succeeded on its first attempt but failed an
+            // unrelated job, triggering a re-run). RUN_ID is unique per run
+            // and stable across attempts.
+            const RUN_MARKER = `<!-- ai-agent-run:${process.env.GITHUB_RUN_ID} -->`;
 
             const AGENTS = [
               { marker: '<!-- ai-agent:code-reviewer -->',           icon: '🔍', label: 'Code Review' },
