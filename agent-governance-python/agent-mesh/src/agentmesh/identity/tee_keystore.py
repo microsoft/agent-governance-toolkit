@@ -5,6 +5,14 @@
 Provides an async key store abstraction for TEE-bound key material (Secure Key
 Release, TEE-generated keys) alongside mock and local adapter implementations
 for CI testing.  The existing synchronous ``KeyStore`` is not modified.
+
+``LocalTEEKeyStore`` and ``MockSKRKeyStore`` are development/test adapters.
+They intentionally use in-process Ed25519 keys so downstream code can exercise
+the async interface in normal CI.  Production TEE/SKR implementations must use
+opaque signer handles backed by the TEE, HSM, or provider SDK so private key
+material is not cached in Python process memory; where a backend must expose
+software key bytes temporarily, it should use backend-supported memory locking
+and zeroization patterns.
 """
 
 from __future__ import annotations
@@ -85,7 +93,8 @@ class TEEKeyHandle(ABC):
 class SoftwareKeyHandle(TEEKeyHandle):
     """Key handle backed by an in-memory Ed25519 private key.
 
-    Used by :class:`LocalTEEKeyStore` and :class:`MockSKRKeyStore`.
+    Used by development/test adapters only. Real TEE or SKR providers should
+    return opaque signer handles instead of wrapping extractable private keys.
     """
 
     def __init__(
@@ -130,9 +139,7 @@ class SoftwareKeyHandle(TEEKeyHandle):
     async def sign(self, data: bytes) -> bytes:
         """Sign *data*, rejecting expired handles."""
         if self.is_expired():
-            raise KeyAcquisitionError(
-                f"Key handle '{self._key_id}' has expired"
-            )
+            raise KeyAcquisitionError(f"Key handle '{self._key_id}' has expired")
         return self._private_key.sign(data)
 
 
@@ -171,11 +178,16 @@ class TEEKeyStore(ABC):
 
 
 class LocalTEEKeyStore(TEEKeyStore):
-    """Adapter for non-TEE environments (``key_origin=LOCAL``).
+    """Development/test adapter for non-TEE environments (``key_origin=LOCAL``).
 
     Wraps in-memory Ed25519 key generation behind the :class:`TEEKeyStore`
     interface so that downstream code (handshake, policy engine) can use a
     uniform async API regardless of whether a real TEE is present.
+
+    This class is not a production TEE key store. It caches private keys in a
+    plain Python dictionary and should only be used for local development,
+    tests, and non-TEE compatibility paths where ``KeyOrigin.LOCAL`` is
+    acceptable.
     """
 
     def __init__(self) -> None:
@@ -213,7 +225,8 @@ class MockSKRKeyStore(TEEKeyStore):
 
     Supports configurable latency, error injection, key TTL, and
     ``key_origin`` override for testing downstream policy and handshake
-    paths.
+    paths. Like :class:`LocalTEEKeyStore`, this is not a production key store:
+    it uses in-memory private keys to keep CI hardware-independent.
     """
 
     def __init__(
@@ -258,9 +271,7 @@ class MockSKRKeyStore(TEEKeyStore):
         private_key, _public_key = self._keys[key_id]
         now = datetime.now(UTC)
         expires_at = (
-            now + timedelta(seconds=self._ttl_seconds)
-            if self._ttl_seconds is not None
-            else None
+            now + timedelta(seconds=self._ttl_seconds) if self._ttl_seconds is not None else None
         )
 
         return SoftwareKeyHandle(
@@ -289,9 +300,7 @@ def require_tee_bound_key(handle: TEEKeyHandle, context: str = "") -> None:
         KeyAcquisitionError: If ``handle.key_origin`` is not TEE-bound.
     """
     if not handle.key_origin.is_tee_bound:
-        msg = (
-            f"TEE-bound key required but got key_origin={handle.key_origin.value}"
-        )
+        msg = f"TEE-bound key required but got key_origin={handle.key_origin.value}"
         if context:
             msg += f" ({context})"
         raise KeyAcquisitionError(msg)

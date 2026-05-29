@@ -12,9 +12,9 @@ Secure Key Release and TEE-generated keys alongside the existing synchronous
 `KeyStore`. New types:
 
 - `TEEKeyHandle` (ABC): opaque signer handle with expiry enforcement
-- `SoftwareKeyHandle`: concrete in-memory Ed25519 implementation
+- `SoftwareKeyHandle`: concrete in-memory Ed25519 implementation for development/test adapters
 - `TEEKeyStore` (ABC): async key acquisition interface
-- `LocalTEEKeyStore`: non-TEE adapter (key_origin=LOCAL)
+- `LocalTEEKeyStore`: development/test non-TEE adapter (key_origin=LOCAL)
 - `MockSKRKeyStore`: CI-safe mock for Secure Key Release
 - `require_tee_bound_key()`: policy helper for fail-closed enforcement
 - `KeyAcquisitionError`: new exception for TEE key failures
@@ -39,12 +39,25 @@ Secure Key Release and TEE-generated keys alongside the existing synchronous
    enforcement. PR 5 (policy integration) will wire this into the trust policy
    engine. The `KeyOrigin.is_tee_bound` property makes the check explicit.
 
-3. **Mock used in production**: `MockSKRKeyStore` or `LocalTEEKeyStore` could
+3. **Dev/test adapter used in production**: `MockSKRKeyStore` or `LocalTEEKeyStore` could
    be deployed instead of a real TEE store.
 
    **Mitigation:** These stores honestly report `key_origin=LOCAL` or the
    configured mock origin. The policy engine (PR 5) will reject non-TEE origins
-   when attestation is required. There is no silent fallback.
+   when attestation is required. There is no silent fallback. The module
+   docstrings explicitly mark both classes as development/test adapters.
+
+4. **In-process private key cache**: `LocalTEEKeyStore` and `MockSKRKeyStore`
+   cache generated Ed25519 private keys in normal Python dictionaries so tests
+   can run without confidential hardware.
+
+   **Mitigation:** These classes are development/test adapters only and expose
+   `key_origin=LOCAL` or a configured mock origin. Production TEE/SKR providers
+   must return opaque signer handles backed by the TEE, HSM, or provider SDK so
+   raw key material is not retained in Python process memory. If a future
+   provider must handle software key bytes temporarily, it should use
+   backend-supported memory locking and zeroization patterns before exposing a
+   `TEEKeyHandle`.
 
 ### Existing security properties preserved
 
@@ -61,6 +74,7 @@ Secure Key Release and TEE-generated keys alongside the existing synchronous
 | Local key accepted as TEE-bound | `require_tee_bound_key()` raises `KeyAcquisitionError` | `TestRequireTEEBoundKey` |
 | KeyAcquisitionError not raised on SKR failure | MockSKRKeyStore wraps errors in `KeyAcquisitionError` | `test_error_injection_wraps_in_key_acquisition_error` |
 | Key origin misreported | All stores declare `key_origin()` matching actual behavior | `test_key_origin_*` tests |
+| Dev/test store mistaken for production TEE storage | Local and mock stores are documented as non-production adapters | Docstring and audit review |
 
 ## Test coverage
 
