@@ -150,4 +150,4 @@ Both surfaces share the same policy and audit log.
 - [OpenCode CLI governance package reference](../packages/opencode-governance.md)
 - [Antigravity CLI Governance tutorial](52-antigravity-cli-governance.md) — the
   closest sibling package
-- [`examples/opencode-agt`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/opencode-agt) — runnable scenario
+- [`examples/opencode-agt`](../../examples/opencode-agt/README.md) — runnable scenario

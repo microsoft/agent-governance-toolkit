@@ -95,4 +95,4 @@ A minimal review-heavy policy:
 ## Tutorials and examples
 
 - [Tutorial: govern an OpenCode CLI session](../tutorials/54-opencode-cli-governance.md)
-- [`examples/opencode-agt`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/opencode-agt)
+- [`examples/opencode-agt`](../../examples/opencode-agt/README.md)
