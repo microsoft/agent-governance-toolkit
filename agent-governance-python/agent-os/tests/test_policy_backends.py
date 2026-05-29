@@ -646,6 +646,62 @@ allow { input.tool_name == "read" }
         assert decision.allowed is True
 
 
+class TestOPARemoteHttpsGate:
+    """Plaintext OPA remote URLs to a non-loopback host must be
+    denied unless explicitly opted in for local/dev."""
+
+    def test_plaintext_remote_non_loopback_denied(self, monkeypatch):
+        monkeypatch.delenv("AGENT_OS_OPA_ALLOW_PLAINTEXT", raising=False)
+        monkeypatch.delenv("AGENT_OS_ENV", raising=False)
+        backend = OPABackend(opa_url="http://opa.prod.example:8181", mode="remote")
+        decision = backend.evaluate({"tool_name": "read"})
+        assert decision.allowed is False
+        assert decision.error == "plaintext_opa_blocked"
+
+    def test_plaintext_remote_loopback_allowed(self, monkeypatch):
+        """Loopback hosts are exempt — local OPA over plaintext is safe."""
+        import urllib.request
+        monkeypatch.delenv("AGENT_OS_OPA_ALLOW_PLAINTEXT", raising=False)
+        monkeypatch.delenv("AGENT_OS_ENV", raising=False)
+        import io
+        class _Resp(io.BytesIO):
+            def __enter__(self_inner): return self_inner
+            def __exit__(self_inner, *exc): return False
+        monkeypatch.setattr(
+            urllib.request, "urlopen",
+            lambda req, timeout=None: _Resp(b'{"result": true}'),
+        )
+        backend = OPABackend(opa_url="http://127.0.0.1:8181", mode="remote")
+        decision = backend.evaluate({"tool_name": "read"})
+        assert decision.allowed is True
+
+    def test_plaintext_remote_opt_in_local_env_allowed(self, monkeypatch):
+        """Explicit opt-in + AGENT_OS_ENV=local permits plaintext."""
+        import urllib.request
+        import io
+        monkeypatch.setenv("AGENT_OS_OPA_ALLOW_PLAINTEXT", "1")
+        monkeypatch.setenv("AGENT_OS_ENV", "local")
+        class _Resp(io.BytesIO):
+            def __enter__(self_inner): return self_inner
+            def __exit__(self_inner, *exc): return False
+        monkeypatch.setattr(
+            urllib.request, "urlopen",
+            lambda req, timeout=None: _Resp(b'{"result": true}'),
+        )
+        backend = OPABackend(opa_url="http://opa.dev.example:8181", mode="remote")
+        decision = backend.evaluate({"tool_name": "read"})
+        assert decision.allowed is True
+
+    def test_plaintext_opt_in_without_local_env_denied(self, monkeypatch):
+        """Opt-in alone is not enough — must also be local/dev env."""
+        monkeypatch.setenv("AGENT_OS_OPA_ALLOW_PLAINTEXT", "1")
+        monkeypatch.setenv("AGENT_OS_ENV", "production")
+        backend = OPABackend(opa_url="http://opa.prod:8181", mode="remote")
+        decision = backend.evaluate({"tool_name": "read"})
+        assert decision.allowed is False
+        assert decision.error == "plaintext_opa_blocked"
+
+
 class TestOPARemoteFailClosed:
     """Regression tests for OPA remote-mode response validation.
 
@@ -655,7 +711,7 @@ class TestOPARemoteFailClosed:
     permissive ``bool(value)`` cast or a silent default.
     """
 
-    REGO_URL = "http://opa.local:8181"
+    REGO_URL = "http://127.0.0.1:8181"
 
     def _backend(self):
         return OPABackend(opa_url=self.REGO_URL, mode="remote")
