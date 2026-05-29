@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
 """
 Base Adapter Protocol
 
@@ -8,10 +7,14 @@ Defines the common interface that all layer adapters must implement.
 This ensures consistent integration patterns across the stack.
 """
 
+import logging
 from typing import Dict, Any, Optional, Protocol, runtime_checkable
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -92,62 +95,90 @@ class BaseLayerAdapter(ABC):
     def connect(self) -> bool:
         """
         Establish connection to the layer service.
-        
+
         Returns:
             True if connection successful, False otherwise
+
+        Note:
+            ``_create_client`` and ``_mock_client`` may delegate to arbitrary
+            third-party driver/SDK code that raises any exception type. We
+            therefore catch ``Exception`` here intentionally so the adapter
+            never propagates an unrelated failure as a hard crash, but every
+            failure is logged with ``exc_info=True`` and persisted to
+            ``self._last_error`` so observability is preserved.
+            ``KeyboardInterrupt``/``SystemExit`` are not caught.
         """
         if self._connected:
             return True
-        
+
         try:
             if self.mock_mode:
                 self._client = self._mock_client()
             else:
                 self._client = self._create_client()
-            
+
             self._connected = True
             self._last_health_check = datetime.now()
             self._last_error = None
             return True
-        
+
         except Exception as e:
             self._connected = False
             self._last_error = f"{type(e).__name__}: {e}"
+            logger.exception(
+                "Adapter %s failed to connect", self.get_layer_name()
+            )
             return False
-    
+
     def disconnect(self) -> None:
-        """Disconnect from the layer service."""
+        """
+        Disconnect from the layer service.
+
+        Driver ``close()`` implementations are also third-party code; a broad
+        ``except`` keeps shutdown best-effort but failures are logged and
+        recorded in ``self._last_error`` so they aren't silently lost.
+        """
         if self._client and hasattr(self._client, 'close'):
             try:
                 self._client.close()
-            except Exception:
-                pass
-        
+            except Exception as e:
+                self._last_error = f"{type(e).__name__}: {e}"
+                logger.exception(
+                    "Adapter %s raised while closing client",
+                    self.get_layer_name(),
+                )
+
         self._client = None
         self._connected = False
-    
+
     def health_check(self) -> AdapterStatus:
         """
         Check health of the layer connection.
-        
+
         Returns:
             AdapterStatus with connection details
+
+        Note:
+            ``_health_ping`` may invoke arbitrary driver code, so we catch
+            ``Exception`` here as well. Every failure is logged with
+            ``exc_info=True`` and surfaced through ``self._last_error`` and
+            ``AdapterStatus.error``.
         """
         self._last_health_check = datetime.now()
-        
+
         if not self._connected or not self._client:
             return AdapterStatus(
                 connected=False,
                 layer_name=self.get_layer_name(),
                 error=self._last_error or "Not connected",
             )
-        
+
         try:
             # Attempt a lightweight operation to verify connection
             start = datetime.now()
             self._health_ping()
             latency = (datetime.now() - start).total_seconds() * 1000
-            
+
             return AdapterStatus(
                 connected=True,
                 layer_name=self.get_layer_name(),
@@ -155,10 +186,13 @@ class BaseLayerAdapter(ABC):
                 last_health_check=self._last_health_check,
                 latency_ms=latency,
             )
-        
+
         except Exception as e:
             self._connected = False
             self._last_error = f"{type(e).__name__}: {e}"
+            logger.exception(
+                "Adapter %s health_check failed", self.get_layer_name()
+            )
             return AdapterStatus(
                 connected=False,
                 layer_name=self.get_layer_name(),

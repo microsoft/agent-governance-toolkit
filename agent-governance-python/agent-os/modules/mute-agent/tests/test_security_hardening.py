@@ -270,3 +270,67 @@ def test_confirm_session_accepts_any_principal_without_allowlist():
     confirmed = protocol.confirm_session(session.session_id, confirmed_by="any-operator")
     assert confirmed.metadata[CONFIRMATION_SATISFIED_KEY] is True
     assert confirmed.metadata["confirmed_by"] == "any-operator"
+
+def test_connect_logs_and_records_unexpected_exception(caplog):
+    import logging
+    from src.listener.adapters import base_adapter as base_mod
+
+    class ExplodingAdapter(base_mod.BaseLayerAdapter):
+        def get_layer_name(self) -> str:
+            return "exploding"
+
+        def _create_client(self):
+            raise RuntimeError("driver kaboom")
+
+        def _mock_client(self):
+            return object()
+
+    adapter = ExplodingAdapter()
+    with caplog.at_level(logging.ERROR, logger=base_mod.__name__):
+        result = adapter.connect()
+    assert result is False
+    assert adapter._last_error == "RuntimeError: driver kaboom"
+    assert any(
+        "exploding" in rec.message and rec.exc_info is not None
+        for rec in caplog.records
+    )
+
+
+def test_disconnect_logs_and_records_close_failure(caplog):
+    import logging
+    from src.listener.adapters import base_adapter as base_mod
+
+    class FlakyCloseClient:
+        def close(self):
+            raise OSError("socket gone")
+
+    class FlakyAdapter(base_mod.BaseLayerAdapter):
+        def get_layer_name(self) -> str:
+            return "flaky"
+
+        def _create_client(self):
+            return FlakyCloseClient()
+
+        def _mock_client(self):
+            return FlakyCloseClient()
+
+    adapter = FlakyAdapter()
+    assert adapter.connect() is True
+    with caplog.at_level(logging.ERROR, logger=base_mod.__name__):
+        adapter.disconnect()
+    assert adapter._last_error == "OSError: socket gone"
+    assert any(
+        "flaky" in rec.message and rec.exc_info is not None
+        for rec in caplog.records
+    )
+    assert adapter._connected is False
+
+
+def test_connect_records_expected_backend_unavailable_exception():
+    from src.listener.adapters import iatp_adapter as iatp_mod
+
+    adapter = iatp_mod.SecurityAdapter()
+    result = adapter.connect()
+    assert result is False
+    assert adapter._last_error is not None
+    assert "IATPBackendUnavailable" in adapter._last_error
