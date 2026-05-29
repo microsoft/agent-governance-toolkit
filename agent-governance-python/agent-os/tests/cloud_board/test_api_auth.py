@@ -225,7 +225,9 @@ def test_dispute_access_is_limited_to_escrow_participants(client: TestClient):
     )
 
     assert created.status_code == 200
-    assert blocked.status_code == 403
+    # F#5 — non-participant gets 404 (not 403) so dispute IDs cannot be
+    # enumerated via status-code differential.
+    assert blocked.status_code == 404
 
 
 def _seed_agent(did: str, owner_id: str = "owner-1", contact: str = "ops@example.com") -> None:
@@ -800,3 +802,103 @@ def test_dispute_reason_capped_on_release_dispute(client: TestClient):
         headers=auth_header(REQUESTER_TOKEN),
     )
     assert response.status_code == 422
+
+# ---------------------------------------------------------------------------
+# F#5, F#6, F#8, F#14, F#17 — arbiter regression tests
+# ---------------------------------------------------------------------------
+
+
+def test_submit_dispute_rejects_duplicate_for_same_escrow(client: TestClient):
+    """F#6 — only one unresolved dispute per escrow."""
+    escrow_id = _create_funded_escrow(client)
+    first = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "first",
+            "claimed_outcome": "failure",
+        },
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    second = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "duplicate spam",
+            "claimed_outcome": "failure",
+        },
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert second.json()["detail"]["error"] == "DISPUTE_ALREADY_OPEN"
+
+
+def test_submit_dispute_records_submitted_by(client: TestClient):
+    """F#14 — disputes carry an attribution field for who initiated them."""
+    escrow_id = _create_funded_escrow(client)
+    response = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "did not deliver",
+            "claimed_outcome": "failure",
+        },
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["submitted_by"] == REQUESTER_DID
+    assert arbiter._disputes[body["dispute_id"]]["submitted_by"] == REQUESTER_DID
+
+
+def test_submit_dispute_unauthorized_returns_404_not_403(client: TestClient):
+    """F#5 — submit_dispute against someone else's escrow returns 404."""
+    escrow_id = _create_funded_escrow(client)
+    response = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "trying to dispute someone else's escrow",
+            "claimed_outcome": "failure",
+        },
+        headers=auth_header(OTHER_TOKEN),
+    )
+    assert response.status_code == 404
+
+
+def test_dispute_reason_capped_on_submit_dispute(client: TestClient):
+    """F#8 — SubmitDisputeRequest.dispute_reason is capped at 1000 chars."""
+    escrow_id = _create_funded_escrow(client)
+    response = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "x" * 1001,
+            "claimed_outcome": "failure",
+        },
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert response.status_code == 422
+
+
+def test_orphan_dispute_marked_terminal_when_escrow_gone(client: TestClient):
+    """F#17 — if the escrow is deleted out from under a dispute, resolving it
+    marks the dispute terminal (unresolvable) so it doesn't leak as orphan.
+    """
+    escrow_id, dispute_id = _open_resolved_dispute(client, outcome="failure")
+    del escrow._escrows[escrow_id]
+
+    response = client.post(
+        f"/v1/disputes/{dispute_id}/resolve",
+        json={"outcome": "requester_wins"},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    assert response.status_code == 409
+    assert arbiter._disputes[dispute_id]["resolved"] is True
+    assert arbiter._disputes[dispute_id]["status"] == "unresolvable"
