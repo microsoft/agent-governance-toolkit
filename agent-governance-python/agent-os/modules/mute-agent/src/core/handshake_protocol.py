@@ -1,12 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
 """
 Dynamic Semantic Handshake Protocol - The negotiation mechanism between
 The Face (Reasoning) and The Hands (Execution).
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
@@ -81,9 +80,30 @@ class HandshakeProtocol:
     the knowledge graph constraints.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        allowed_confirmers: Optional[Iterable[str]] = None,
+    ):
+        """Initialize the protocol.
+
+        Authorization model for ``confirm_session``:
+
+        * ``confirmed_by`` is always required and must be a non-empty string;
+          anonymous confirmations are rejected.
+        * If ``allowed_confirmers`` is provided (an iterable of operator
+          identifiers), ``confirm_session`` additionally rejects any
+          ``confirmed_by`` value not contained in that set. This is a
+          lightweight allowlist intended to gate confirmation authority to a
+          known operator roster without pulling in a full ACL/identity stack.
+        * If ``allowed_confirmers`` is ``None`` (the default), the allowlist
+          check is skipped and only the non-empty requirement applies, so
+          callers that wire their own identity system upstream are unaffected.
+        """
         self.sessions: Dict[str, HandshakeSession] = {}
         self._session_counter = 0
+        self._allowed_confirmers: Optional[frozenset] = (
+            frozenset(allowed_confirmers) if allowed_confirmers is not None else None
+        )
 
     def initiate_handshake(
         self,
@@ -238,9 +258,28 @@ class HandshakeProtocol:
     def confirm_session(
         self,
         session_id: str,
-        confirmed_by: Optional[str] = None,
+        confirmed_by: str,
     ) -> HandshakeSession:
-        """Record that a required confirmation has been satisfied."""
+        """Record that a required confirmation has been satisfied.
+
+        ``confirmed_by`` must be a non-empty string identifying the operator
+        or upstream confirmation principal. If the protocol was constructed
+        with ``allowed_confirmers``, the value must also be present in that
+        allowlist. Empty or unknown values are rejected to ensure
+        confirmations carry attribution.
+        """
+        if not isinstance(confirmed_by, str) or not confirmed_by.strip():
+            raise ValueError("confirmed_by must be a non-empty string")
+
+        confirmer = confirmed_by.strip()
+        if (
+            self._allowed_confirmers is not None
+            and confirmer not in self._allowed_confirmers
+        ):
+            raise ValueError(
+                f"confirmed_by '{confirmer}' is not in the allowed confirmers list"
+            )
+
         session = self.sessions.get(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
@@ -254,8 +293,7 @@ class HandshakeProtocol:
             raise ValueError("Session does not require confirmation")
 
         session.metadata[CONFIRMATION_SATISFIED_KEY] = True
-        if confirmed_by:
-            session.metadata["confirmed_by"] = confirmed_by
+        session.metadata["confirmed_by"] = confirmer
         session.metadata["confirmed_at"] = datetime.now().isoformat()
         session.updated_at = datetime.now()
         return session

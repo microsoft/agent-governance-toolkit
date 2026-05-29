@@ -234,3 +234,39 @@ def test_health_check_failure_records_last_error_and_persists():
         assert "backend ping timeout" in (status2.error or "")
     finally:
         del iatp_mod.SecurityAdapter._health_ping
+
+
+def test_confirm_session_requires_non_empty_confirmed_by():
+    protocol = HandshakeProtocol()
+    session = _validated_session(protocol)
+    session.metadata[CONFIRMATION_REQUIRED_KEY] = True
+
+    with pytest.raises(ValueError, match="non-empty string"):
+        protocol.confirm_session(session.session_id, confirmed_by="")
+    with pytest.raises(ValueError, match="non-empty string"):
+        protocol.confirm_session(session.session_id, confirmed_by="   ")
+    assert session.metadata.get(CONFIRMATION_SATISFIED_KEY) is not True
+
+
+def test_confirm_session_enforces_allowlist_when_configured():
+    protocol = HandshakeProtocol(allowed_confirmers=["operator", "oncall"])
+    session = _validated_session(protocol)
+    session.metadata[CONFIRMATION_REQUIRED_KEY] = True
+
+    with pytest.raises(ValueError, match="not in the allowed confirmers"):
+        protocol.confirm_session(session.session_id, confirmed_by="stranger")
+    assert session.metadata.get(CONFIRMATION_SATISFIED_KEY) is not True
+
+    confirmed = protocol.confirm_session(session.session_id, confirmed_by="oncall")
+    assert confirmed.metadata[CONFIRMATION_SATISFIED_KEY] is True
+    assert confirmed.metadata["confirmed_by"] == "oncall"
+
+
+def test_confirm_session_accepts_any_principal_without_allowlist():
+    protocol = HandshakeProtocol()
+    session = _validated_session(protocol)
+    session.metadata[CONFIRMATION_REQUIRED_KEY] = True
+
+    confirmed = protocol.confirm_session(session.session_id, confirmed_by="any-operator")
+    assert confirmed.metadata[CONFIRMATION_SATISFIED_KEY] is True
+    assert confirmed.metadata["confirmed_by"] == "any-operator"
