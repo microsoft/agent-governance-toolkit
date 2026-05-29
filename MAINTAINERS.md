@@ -18,7 +18,7 @@ see [GOVERNANCE.md](GOVERNANCE.md).
 |------|-------------|--------|------|-------|
 | Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | Python SDK, Agent OS | Jan 2025 |
 | Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | .NET SDK, CI/CD | Feb 2025 |
-| Andrew Lee Rubinger | Aileron | [@ALRubinger](https://github.com/ALRubinger) | Governance runtime, integrations | May 2026 |
+| Prashan Sapkota | Robert Half Inc. | [@prashansapkota](https://github.com/prashansapkota) | Cloud infrastructure, deployment | May 2026 |
 | Kevin Knapp | MythologIQ | [@Knapp-Kevin](https://github.com/Knapp-Kevin) | Policy engine, LangChain integration | May 2026 |
 | Nishar Miya | Dayos | [@miyannishar](https://github.com/miyannishar) | Observability, adopter integrations | May 2026 |
 
@@ -49,4 +49,6 @@ contributing and reach out in [GitHub Discussions](https://github.com/microsoft/
 
 ## Emeritus Maintainers
 
-None yet.
+| Name | Organization | GitHub | Contribution Period |
+|------|-------------|--------|-------------------|
+| Andrew Lee Rubinger | Aileron | [@ALRubinger](https://github.com/ALRubinger) | May 2026 |
