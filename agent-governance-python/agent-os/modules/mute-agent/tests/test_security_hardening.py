@@ -58,7 +58,7 @@ def test_iatp_adapter_non_mock_mode_fails_closed_when_backend_missing(monkeypatc
 
     assert adapter.connect() is False
     assert adapter.is_connected is False
-    with pytest.raises(ConnectionError, match="Failed to connect to iatp"):
+    with pytest.raises(ConnectionError, match=r"Failed to connect to iatp:.*SecurityBackendUnavailable"):
         adapter.check_permission("user-1", "delete")
 
 
@@ -151,6 +151,9 @@ def test_layer_adapters_fail_closed_when_backend_missing(module, adapter_cls, la
 
     assert adapter.connect() is False
     assert adapter.is_connected is False
+    status = adapter.health_check()
+    assert status.connected is False
+    assert status.error and layer_name in status.error.lower() or "backendunavailable" in (status.error or "").lower()
 
 
 def test_handshake_cannot_revalidate_rejected_session():
@@ -185,3 +188,14 @@ def test_handshake_terminal_state_guards_block_reject_and_fail():
     with pytest.raises(ValueError, match="terminal state"):
         protocol.fail_execution(session.session_id, "too late")
     assert session.state == HandshakeState.COMPLETED
+
+
+@pytest.mark.parametrize("alias_key", ["confirmation_required", "requires_confirmation"])
+def test_confirmation_gate_accepts_both_metadata_aliases(alias_key):
+    protocol = HandshakeProtocol()
+    session = _validated_session(protocol)
+    session.metadata[alias_key] = True
+
+    with pytest.raises(ValueError, match="until confirmation is satisfied"):
+        protocol.accept_proposal(session.session_id)
+    assert session.state == HandshakeState.VALIDATED

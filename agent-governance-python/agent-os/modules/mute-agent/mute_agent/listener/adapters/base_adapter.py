@@ -71,6 +71,7 @@ class BaseLayerAdapter(ABC):
         self._connected = False
         self._last_health_check: Optional[datetime] = None
         self._client: Optional[Any] = None
+        self._last_error: Optional[str] = None
     
     @abstractmethod
     def get_layer_name(self) -> str:
@@ -102,13 +103,15 @@ class BaseLayerAdapter(ABC):
                 self._client = self._mock_client()
             else:
                 self._client = self._create_client()
-            
+
             self._connected = True
             self._last_health_check = datetime.now()
+            self._last_error = None
             return True
-        
+
         except Exception as e:
             self._connected = False
+            self._last_error = f"{type(e).__name__}: {e}"
             return False
     
     def disconnect(self) -> None:
@@ -135,7 +138,7 @@ class BaseLayerAdapter(ABC):
             return AdapterStatus(
                 connected=False,
                 layer_name=self.get_layer_name(),
-                error="Not connected",
+                error=self._last_error or "Not connected",
             )
         
         try:
@@ -184,6 +187,7 @@ class BaseLayerAdapter(ABC):
         """Ensure adapter is connected, raising if not."""
         if not self._connected:
             if not self.connect():
+                detail = f": {self._last_error}" if self._last_error else ""
                 raise ConnectionError(
-                    f"Failed to connect to {self.get_layer_name()}"
+                    f"Failed to connect to {self.get_layer_name()}{detail}"
                 )

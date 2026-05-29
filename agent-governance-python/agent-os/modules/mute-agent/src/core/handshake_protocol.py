@@ -12,8 +12,11 @@ from enum import Enum
 from datetime import datetime
 
 
-CONFIRMATION_REQUIRED_KEY = "requires_confirmation"
+CONFIRMATION_REQUIRED_KEY = "confirmation_required"
 CONFIRMATION_SATISFIED_KEY = "confirmation_satisfied"
+# Legacy alias accepted on read so callers using the older "requires_confirmation"
+# metadata key still trip the gate. Producers should write CONFIRMATION_REQUIRED_KEY.
+_CONFIRMATION_REQUIRED_ALIASES = (CONFIRMATION_REQUIRED_KEY, "requires_confirmation")
 
 
 class HandshakeState(Enum):
@@ -254,7 +257,9 @@ class HandshakeProtocol:
 
     def requires_confirmation(self, session: HandshakeSession) -> bool:
         """Check whether a session is gated on explicit confirmation."""
-        return bool(session.metadata.get(CONFIRMATION_REQUIRED_KEY))
+        return any(
+            bool(session.metadata.get(key)) for key in _CONFIRMATION_REQUIRED_ALIASES
+        )
 
     def is_confirmation_satisfied(self, session: HandshakeSession) -> bool:
         """Check whether a confirmation gate is either absent or satisfied."""
