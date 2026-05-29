@@ -266,19 +266,19 @@ All five language SDKs implement core governance (policy, identity, trust, audit
 See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
-<summary><b>Individual Python packages</b></summary>
+<summary><b>Python distributions (v4.0.0 — consolidated)</b></summary>
 
-| Package | PyPI | Description |
-|---------|------|-------------|
-| Agent OS | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine, capability model, audit logging, MCP gateway |
-| AgentMesh | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
-| Agent Runtime | [`agentmesh-runtime`](agent-governance-python/agent-runtime/) | Privilege rings, saga orchestration, termination control |
-| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
-| Agent Compliance | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | OWASP verification, integrity checks, policy linting |
-| Agent Discovery | [`agent-discovery`](agent-governance-python/agent-discovery/) | Shadow AI discovery, inventory, risk scoring |
-| Agent Hypervisor | [`agent-hypervisor`](agent-governance-python/agent-hypervisor/) | Execution plan validation, reversibility verification |
-| Agent Marketplace | [`agentmesh-marketplace`](agent-governance-python/agent-marketplace/) | Plugin lifecycle management |
-| Agent Lightning | [`agentmesh-lightning`](agent-governance-python/agent-lightning/) | RL training governance |
+As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
+
+| Distribution | PyPI | What's included |
+|--------------|------|-----------------|
+| `agent-governance-toolkit-core` | [`agent-governance-toolkit-core`](https://pypi.org/project/agent-governance-toolkit-core/) | Policy engine, capability model, audit, MCP gateway, zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
+| `agent-governance-toolkit-runtime` | [`agent-governance-toolkit-runtime`](https://pypi.org/project/agent-governance-toolkit-runtime/) | Privilege rings, saga orchestration, termination control, execution plan validation |
+| `agent-governance-toolkit-sre` | [`agent-governance-toolkit-sre`](https://pypi.org/project/agent-governance-toolkit-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
+| `agent-governance-toolkit-cli` | [`agent-governance-toolkit-cli`](https://pypi.org/project/agent-governance-toolkit-cli/) | `agt` CLI, OWASP verification, integrity checks, policy linting |
+| `agent-governance-toolkit[full]` | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Meta-package installing all of the above |
+
+Previous package names (`agent-os-kernel`, `agentmesh-platform`, `agentmesh-runtime`, `agent-sre`, `agent-discovery`, `agent-hypervisor`, `agentmesh-marketplace`, `agentmesh-lightning`) remain installable as stub packages that redirect to the consolidated distributions.
 
 </details>
 
@@ -425,9 +425,9 @@ The only official sources for the Agent Governance Toolkit are:
 | **Source code** | [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
 | **Documentation** | [microsoft.github.io/agent-governance-toolkit](https://microsoft.github.io/agent-governance-toolkit/) |
 | **Python packages** | [pypi.org/user/agentgovtoolkit](https://pypi.org/user/agentgovtoolkit/) |
-| **npm packages** | `@microsoft/agentmesh-sdk`, `@microsoft/agent-os-kernel` on [npmjs.com](https://www.npmjs.com/) |
+| **npm packages** | `@microsoft/agent-governance-sdk` on [npmjs.com](https://www.npmjs.com/) |
 | **NuGet packages** | `Microsoft.AgentGovernance.*` on [nuget.org](https://www.nuget.org/) |
-| **Rust crates** | `agent-os-kernel`, `agentmesh` on [crates.io](https://crates.io/) |
+| **Rust crates** | `agent-governance`, `agent-governance-mcp` on [crates.io](https://crates.io/) |
 
 The project team does not maintain or endorse any third-party websites,
 packages, or documentation sites claiming to be official. If you encounter a

@@ -11,7 +11,7 @@ Runnable examples demonstrating AgentMesh multi-agent governance capabilities.
 ## Prerequisites
 
 - Python 3.10+
-- `pip install agentmesh-platform`
+- `pip install agent-governance-toolkit-core`
 
 ## Related
 
