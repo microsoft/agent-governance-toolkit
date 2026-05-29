@@ -10,7 +10,7 @@ see [GOVERNANCE.md](GOVERNANCE.md).
 
 | Name | Organization | GitHub | Role | Since |
 |------|-------------|--------|------|-------|
-| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | Project lead, creator | Oct 2024 |
+| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | Project lead, creator | Mar 2026 |
 
 ## Core Maintainers
 
@@ -28,7 +28,7 @@ Package maintainers have publish rights to one or more registries (PyPI, npm, Nu
 
 | Name | Organization | GitHub | Package(s) | Since |
 |------|-------------|--------|-----------|-------|
-| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | agent-os-kernel, agentmesh-platform, agent-governance-toolkit (PyPI) | Oct 2024 |
+| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | agent-os-kernel, agentmesh-platform, agent-governance-toolkit (PyPI) | Mar 2026 |
 | Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | @microsoft/agent-governance (npm), Microsoft.AgentGovernance (NuGet) | Apr 2026 |
 | Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | Microsoft.AgentGovernance.* (NuGet) | Apr 2026 |
 
