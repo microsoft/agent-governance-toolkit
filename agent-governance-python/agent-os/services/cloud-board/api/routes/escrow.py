@@ -6,12 +6,13 @@ Escrow Routes
 API endpoints for the Proof-of-Outcome escrow system.
 """
 
+import math
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..auth import ADMIN_AUTH, AGENT_AUTH, AuthPrincipal, authorize_agent
 
@@ -46,7 +47,19 @@ class ReleaseEscrowRequest(BaseModel):
     output_hash: Optional[str] = None
     duration_ms: Optional[int] = None
     scak_drift_score: Optional[float] = None
-    dispute_reason: Optional[str] = None
+    dispute_reason: Optional[str] = Field(default=None, max_length=1000)
+
+    @field_validator("scak_drift_score")
+    @classmethod
+    def _validate_drift_finite(cls, value: Optional[float]) -> Optional[float]:
+        # NaN/±Inf must not silently bypass the SCAK gate: ``NaN > threshold``
+        # is ``False``, so a malicious caller could otherwise release a SCAK-
+        # gated escrow without ever crossing the threshold. Reject explicitly.
+        if value is not None and not math.isfinite(value):
+            raise ValueError(
+                "scak_drift_score must be a finite number (no NaN/Inf)"
+            )
+        return value
 
 
 class EscrowResolutionResponse(BaseModel):
@@ -80,6 +93,35 @@ async def create_escrow(
     Locks credits from requester until task completion or timeout.
     """
     authorize_agent(request.requester_did, principal)
+
+    # Self-escrow is rejected: it has no economic meaning (a participant
+    # would only be paying themselves) and provides a free primitive for
+    # spamming compliance/audit state with no cost.
+    if request.requester_did == request.provider_did:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "SELF_ESCROW_FORBIDDEN",
+                "message": "requester_did and provider_did must differ",
+            },
+        )
+
+    # Provider must be a registered agent. Otherwise a credit transfer can
+    # be routed to an unowned DID (where no one holds the matching token to
+    # ever spend the credits) — effectively burning credits in a way that
+    # the requester cannot observe up-front.
+    from . import registry as registry_routes
+    if request.provider_did not in registry_routes._agents:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "PROVIDER_NOT_REGISTERED",
+                "message": (
+                    f"Provider DID {request.provider_did} is not registered "
+                    "with the Cloud Board"
+                ),
+            },
+        )
 
     # Check credits
     available = _agent_credits.get(request.requester_did, 0)
@@ -233,7 +275,16 @@ async def release_escrow(
 
     else:  # dispute
         escrow["status"] = "disputed"
-        escrow["dispute_reason"] = request.dispute_reason
+        # Don't clobber an existing dispute_reason with None. If the caller
+        # didn't provide one, preserve whatever was recorded previously (this
+        # branch should only fire from a 'pending'/'active' state per the
+        # status guard above, so dispute_reason is usually absent — but the
+        # ``setdefault`` semantics protect us from audit-trail destruction in
+        # any future code path that might re-enter the dispute branch.)
+        if request.dispute_reason is not None:
+            escrow["dispute_reason"] = request.dispute_reason
+        else:
+            escrow.setdefault("dispute_reason", None)
 
         return EscrowResolutionResponse(
             escrow_id=escrow_id,
@@ -242,7 +293,11 @@ async def release_escrow(
             credits_to_requester=0,
             provider_reputation_change=0,
             requester_reputation_change=0,
-            resolution_reason=f"Dispute raised: {request.dispute_reason}",
+            resolution_reason=(
+                f"Dispute raised: {request.dispute_reason}"
+                if request.dispute_reason is not None
+                else "Dispute raised"
+            ),
             resolved_by="arbiter",
         )
 
@@ -253,9 +308,34 @@ async def raise_dispute(
     request: RaiseDisputeRequest,
     principal: AuthPrincipal = AGENT_AUTH,
 ):
-    """Raise a dispute on an escrow."""
+    """Raise a dispute on an escrow.
+
+    Only escrows in an open state (``pending``, ``active``, ``awaiting_validation``)
+    may be transitioned to ``disputed``. Reopening a terminal escrow (``released``,
+    ``refunded``, ``split``, ``resolved``) is rejected to prevent double-disbursement
+    via re-dispute and re-resolution.
+    """
     escrow = _get_escrow_or_404(escrow_id)
     _authorize_escrow_participant(escrow, principal)
+    if escrow["status"] not in ("pending", "active", "awaiting_validation", "disputed"):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ESCROW_ALREADY_RESOLVED",
+                "message": (
+                    f"Cannot dispute escrow in terminal state '{escrow['status']}'"
+                ),
+            },
+        )
+    if escrow["status"] == "disputed":
+        # Idempotent re-raise must preserve the original dispute reason so
+        # audit history cannot be rewritten by a subsequent participant call.
+        return {
+            "success": True,
+            "escrow_id": escrow_id,
+            "status": "disputed",
+            "message": "Dispute already open",
+        }
     escrow["status"] = "disputed"
     escrow["dispute_reason"] = request.reason
 
@@ -442,6 +522,20 @@ def disburse_disputed_escrow(
                 ),
             },
         )
+    # Defense-in-depth: even if a regression somewhere allows a terminal escrow
+    # to be flipped back to 'disputed', refuse to disburse twice. A prior
+    # resolved_at marker indicates credits have already been distributed.
+    if escrow.get("resolved_at") is not None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "ESCROW_ALREADY_DISBURSED",
+                "message": (
+                    f"Escrow {escrow_id} has already been disbursed and cannot be "
+                    "paid out again"
+                ),
+            },
+        )
     if credits_to_requester < 0 or credits_to_provider < 0:
         raise HTTPException(
             status_code=400,
@@ -500,10 +594,13 @@ def _authorize_escrow_participant(escrow: dict, principal: AuthPrincipal) -> Non
         return
     if principal.agent_did in (escrow["requester_did"], escrow["provider_did"]):
         return
+    # Return 404 (not 403) so an unauthorized caller cannot distinguish
+    # "escrow exists but not yours" from "escrow does not exist". This closes
+    # the object-existence oracle for escrow IDs.
     raise HTTPException(
-        status_code=403,
+        status_code=404,
         detail={
-            "error": "FORBIDDEN",
-            "message": "Token is not authorized for this escrow",
+            "error": "ESCROW_NOT_FOUND",
+            "message": f"Escrow {escrow['escrow_id']} not found",
         },
     )
