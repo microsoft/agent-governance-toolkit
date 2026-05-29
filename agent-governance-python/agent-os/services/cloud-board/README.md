@@ -57,14 +57,26 @@ The following reads are kept anonymous on purpose (the "viral mechanism") and sh
 public information:
 
 - `GET /health`, `GET /v1/stats` — service liveness and aggregate counts.
-- `GET /v1/agents/{did}` and `GET /v1/agents/discover` — agent manifests, with `identity.owner_id`
-  and `identity.contact` redacted for unauthenticated callers.
+- `GET /v1/agents/{did}` and `GET /v1/agents/discover` — agent manifests. Only the agent's owner
+  (DID-matched authenticated caller) or an administrator sees the unredacted ``identity`` block.
+  Anonymous callers and other authenticated agents see an explicit allowlist of public identity
+  fields (currently ``did``, ``verification_key``, ``display_name``) — any new identity field
+  defaults to redacted.
 - `POST /v1/agents/{did}/verify` — peer verification handshake.
 - `GET /v1/reputation/{did}`, `POST /v1/reputation/sync`, `GET /v1/reputation/leaderboard` —
   reputation scores intended to be widely visible.
 
 Slash event history (`GET /v1/reputation/slashes`) is **admin-only** because it discloses dispute
 evidence and trace identifiers.
+
+#### Reputation read asymmetry (intentional)
+
+The asymmetry between public reputation reads (`/sync`, `/leaderboard`, `/{did}`) and the
+admin-gated `/slashes` endpoint is deliberate: aggregate trust scores are the network's
+"viral mechanism" and must be cheaply discoverable, but slash events carry evidence hashes and
+trace identifiers that double as forensic pointers. Operators who consider even aggregate
+reputation data sensitive should put this service behind an authenticated gateway — the
+in-process auth layer does not enforce per-DID read ACLs on these endpoints.
 
 ### Known demo-only limits
 
