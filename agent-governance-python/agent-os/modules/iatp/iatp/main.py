@@ -54,6 +54,42 @@ HUMAN_IN_LOOP = os.getenv("IATP_HUMAN_IN_LOOP", "false").lower() == "true"
 TRAINING_CONSENT = os.getenv("IATP_TRAINING_CONSENT", "false").lower() == "true"
 
 
+_WEAK_TOKEN_BLACKLIST = frozenset({
+    "true", "yes", "1", "on", "enabled", "ok", "approve", "approved",
+    "x-user-override", "iatp", "override", "admin", "password",
+    "secret", "token", "default", "changeme", "test",
+})
+_MIN_OVERRIDE_TOKEN_LENGTH = 16
+
+
+def _load_trusted_override_token() -> str:
+    """Read and validate the trusted override token from the environment.
+
+    Rejects empty, short, or blacklisted (well-known/weak) values so a
+    misconfigured operator cannot accidentally enable the override gate
+    with a guessable token like ``true`` or ``yes``. Returns the empty
+    string when no usable token is configured — callers MUST treat an
+    empty return as "override disabled, fail closed"."""
+    raw = os.getenv("IATP_TRUSTED_USER_OVERRIDE_TOKEN", "").strip()
+    if not raw:
+        return ""
+    if len(raw) < _MIN_OVERRIDE_TOKEN_LENGTH:
+        logger.warning(
+            "IATP_TRUSTED_USER_OVERRIDE_TOKEN is too short (%d < %d). "
+            "Override gate disabled.",
+            len(raw),
+            _MIN_OVERRIDE_TOKEN_LENGTH,
+        )
+        return ""
+    if raw.lower() in _WEAK_TOKEN_BLACKLIST:
+        logger.warning(
+            "IATP_TRUSTED_USER_OVERRIDE_TOKEN matches a well-known/weak "
+            "value; override gate disabled."
+        )
+        return ""
+    return raw
+
+
 def _trusted_user_override(header_value: Optional[str]) -> bool:
     """Return True only when the caller-supplied ``X-User-Override`` header
     can be trusted to satisfy a "requires user confirmation" warning.
@@ -67,11 +103,12 @@ def _trusted_user_override(header_value: Optional[str]) -> bool:
     Hardened behavior (defense in depth + double-gate):
 
     1. The server operator must set ``IATP_TRUSTED_USER_OVERRIDE_TOKEN`` to
-       a non-empty secret value out of band. This represents the trusted
-       host approval channel.
+       a non-empty secret value out of band — at least 16 chars and not
+       one of the well-known weak values (``true``, ``yes``, ``admin``,
+       ...). Weak tokens disable the gate entirely.
     2. The caller must echo that exact token in ``X-User-Override``.
-    3. If the env var is unset/empty, the header is ignored entirely and
-       all warnings fail closed regardless of what the caller sends.
+    3. If the env var is unset/empty/weak, the header is ignored entirely
+       and all warnings fail closed regardless of what the caller sends.
 
     This is a stop-gap; the real fix is a trusted out-of-band approval
     provider analogous to ``KernelExecuteTool.approval_provider``. See
@@ -79,7 +116,7 @@ def _trusted_user_override(header_value: Optional[str]) -> bool:
     """
     if not header_value:
         return False
-    expected = os.getenv("IATP_TRUSTED_USER_OVERRIDE_TOKEN", "").strip()
+    expected = _load_trusted_override_token()
     if not expected:
         return False
     # Constant-time compare to avoid timing oracles on the token.

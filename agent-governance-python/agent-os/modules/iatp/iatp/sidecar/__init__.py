@@ -40,15 +40,13 @@ def _trusted_user_override(header_value: Optional[str]) -> bool:
 
     Mirrors the hardening applied to ``iatp.main`` — caller-supplied
     bypass values are no longer self-authorizing. The header is ignored
-    entirely when the env var is unset or empty.
+    entirely when the env var is unset, empty, too short (< 16 chars),
+    or matches a well-known weak value (``true``, ``yes``, ``admin``...).
     """
-    if not header_value:
-        return False
-    expected = os.getenv("IATP_TRUSTED_USER_OVERRIDE_TOKEN", "").strip()
-    if not expected:
-        return False
-    import hmac
-    return hmac.compare_digest(header_value.strip(), expected)
+    # Delegate to the canonical implementation in ``iatp.main`` so the
+    # two helpers cannot drift apart.
+    from iatp.main import _trusted_user_override as _canonical
+    return _canonical(header_value)
 
 
 
