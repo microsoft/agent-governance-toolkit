@@ -77,26 +77,57 @@ app = FastAPI(
 )
 
 
-@app.on_event("startup")
-async def _warn_unauthenticated_surface() -> None:
-    """Emit a loud warning whenever this app starts in a non-local env.
+_CAAS_UNSAFE_ALLOW_UNAUTH_ENV = "CAAS_UNSAFE_ALLOW_UNAUTH"
+_CAAS_LOCAL_ENV_NAMES = frozenset({"local", "dev", "development"})
 
-    The CaaS HTTP surface is unauthenticated by design (see module-level
-    SECURITY WARNING). The startup hook gives operators a visible signal
-    when this app is unexpectedly running outside a developer workstation.
+
+def _caas_unauth_gate_satisfied() -> tuple[bool, str]:
+    """Return ``(allowed, reason)``. The CaaS app refuses to start
+    unless either (a) AGENT_OS_ENV is local/dev/development, or
+    (b) the operator has explicitly accepted the risk via
+    ``CAAS_UNSAFE_ALLOW_UNAUTH=1``."""
+    env = (os.getenv("AGENT_OS_ENV") or "").strip().lower()
+    if env in _CAAS_LOCAL_ENV_NAMES:
+        return True, f"AGENT_OS_ENV={env!r}"
+    raw = (os.getenv(_CAAS_UNSAFE_ALLOW_UNAUTH_ENV) or "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True, f"{_CAAS_UNSAFE_ALLOW_UNAUTH_ENV}={raw!r} (operator opt-in)"
+    return False, env or "<unset>"
+
+
+@app.on_event("startup")
+async def _enforce_unauthenticated_surface_gate() -> None:
+    """Refuse to start the CaaS app unless we're in a developer env or
+    the operator has explicitly accepted the risk.
+
+    Previously this was only a log warning, which meant a misconfigured
+    deployment could expose every CaaS route on a shared network
+    silently. The control is now a hard fail-closed check on startup.
     """
     import logging
     log = logging.getLogger("caas.api")
-    env = (os.getenv("AGENT_OS_ENV") or "").strip().lower()
-    if env not in {"local", "dev", "development"}:
-        log.warning(
-            "caas.api: starting an UNAUTHENTICATED FastAPI app "
-            "(AGENT_OS_ENV=%r). All routes are open and caller-supplied "
-            "user_id/agent_id are trusted. This server must be bound to "
-            "loopback only and never exposed to a shared network. "
-            "See module docstring for the deferred design follow-up.",
-            env or "<unset>",
+    allowed, detail = _caas_unauth_gate_satisfied()
+    if not allowed:
+        log.error(
+            "caas.api refusing to start: unauthenticated FastAPI surface "
+            "is only permitted with AGENT_OS_ENV in %s, or with "
+            "%s=1 as an explicit operator opt-in. "
+            "Current AGENT_OS_ENV=%s",
+            sorted(_CAAS_LOCAL_ENV_NAMES),
+            _CAAS_UNSAFE_ALLOW_UNAUTH_ENV,
+            detail,
         )
+        raise RuntimeError(
+            "caas.api: unauthenticated surface is not permitted in this "
+            f"environment (AGENT_OS_ENV={detail!r}). Set AGENT_OS_ENV to "
+            f"local/dev/development or {_CAAS_UNSAFE_ALLOW_UNAUTH_ENV}=1 "
+            "to accept the risk explicitly."
+        )
+    log.warning(
+        "caas.api: starting UNAUTHENTICATED FastAPI app (gate satisfied by %s). "
+        "All routes are open; bind to loopback only.",
+        detail,
+    )
 
 # Initialize components
 document_store = DocumentStore()
