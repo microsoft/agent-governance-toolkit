@@ -27,6 +27,44 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# Shared PII / secrets detection patterns reused by every framework
+# adapter (LangChain, AutoGen, CrewAI, Bedrock, ...).
+#
+# Defined here as the single source of truth so adapters cannot silently
+# drift apart when a new sensitive-data class is added or an existing
+# pattern is broadened.  Stored as a tuple to prevent accidental
+# mutation of a process-wide constant by adapter or test code.
+#
+# Patterns (in order):
+#   0. U.S. Social Security Number.  Covers all common separator
+#      variants — dash, space, dot, or none — so that ``123-45-6789``,
+#      ``123 45 6789``, ``123.45.6789``, and ``123456789`` all match.
+#      Mirrors the broadened SSN pattern used by the YAML policy packs
+#      (see PR #2594 and issue #2469).
+#   1. Email address (simple RFC-5322-ish match, sufficient for content
+#      filtering — not for address validation).
+#   2. Visa / Mastercard primary account number (PAN).  Visa: 13 or 16
+#      digits with a leading ``4``; Mastercard: 16 digits with a leading
+#      ``51``-``55``.  Other card brands (Amex, Discover, JCB) are
+#      intentionally out of scope until we add full check-digit
+#      validation; expand this entry alongside any such helper rather
+#      than adding brittle prefix-only regexes here.
+#   3. Inline credential assignment such as ``password=``, ``api_key:``,
+#      ``token = ...``.  Case-insensitive, and accepts both ``api_key``
+#      and ``api-key`` spellings.
+#
+# Adapters consume this tuple read-only via ``for pattern in PII_PATTERNS:``;
+# new adapters MUST import from here and MUST NOT define a private copy.
+# The name follows the repo convention (no leading underscore) for
+# constants that are intentionally shared across modules.
+PII_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b"),                       # SSN
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),     # email
+    re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\b"),          # credit card
+    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),  # secrets
+)
+
+
 class PatternType(Enum):
     """Type of pattern matching for blocked_patterns."""
     SUBSTRING = "substring"

@@ -49,13 +49,13 @@ Features:
 from __future__ import annotations
 
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterator
 
 from .base import (
+    PII_PATTERNS,
     BaseIntegration,
     ExecutionContext,
     GovernanceEventType,
@@ -73,12 +73,12 @@ try:
 except ImportError:
     _HAS_BOTO3 = False
 
-_PII_RE = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),                                    # SSN
-    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),     # email
-    re.compile(r"\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})\b"),          # credit card
-    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),  # secrets
-]
+# Back-compat alias for the shared ``PII_PATTERNS`` constant (issue #2635).
+# Existing consumers can keep importing ``bedrock_adapter._PII_RE`` — the
+# pre-refactor name for Bedrock's PII regex list — and continue to get the
+# same tuple of compiled regexes, now sourced from a single point of truth
+# in :mod:`agent_os.integrations.base`.
+_PII_RE = PII_PATTERNS
 
 
 def _check_boto3() -> None:

@@ -27,13 +27,13 @@ Legacy usage (deprecated)::
 
 import functools
 import logging
-import re
 from datetime import datetime
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 from .base import (
+    PII_PATTERNS,
     BaseIntegration,
     GovernancePolicy,
     PolicyInterceptor,
@@ -56,13 +56,6 @@ try:
     _HOOKS_AVAILABLE = True
 except ImportError:
     _HOOKS_AVAILABLE = False
-
-# Patterns used to detect potential PII / secrets in memory writes
-_PII_PATTERNS = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
-    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
-    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
-]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -894,7 +887,7 @@ class CrewAIKernel(BaseIntegration):
                     combined = str(args) + str(kwargs)
 
                     # PII / secrets check
-                    for pattern in _PII_PATTERNS:
+                    for pattern in PII_PATTERNS:
                         if pattern.search(combined):
                             raise PolicyViolationError(
                                 f"Memory write blocked: sensitive data detected "

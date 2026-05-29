@@ -29,21 +29,19 @@ Legacy usage (deprecated)::
 
 import functools
 import logging
-import re
 import time
 from datetime import datetime
 from typing import Any, Callable, Optional
 
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy, PolicyViolationError
+from .base import (
+    PII_PATTERNS,
+    BaseIntegration,
+    ExecutionContext,
+    GovernancePolicy,
+    PolicyViolationError,
+)
 
 logger = logging.getLogger("agent_os.autogen")
-
-# Patterns used to detect potential PII / secrets in state changes
-_PII_PATTERNS = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
-    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
-    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
-]
 
 # ── Graceful import of AutoGen native intervention handlers ───────
 # AutoGen v0.4+ provides DefaultInterventionHandler with on_send,
@@ -231,7 +229,7 @@ class GovernanceInterventionHandler:
                 return DropMessage
 
             # PII check on outbound messages
-            for pii_pattern in _PII_PATTERNS:
+            for pii_pattern in PII_PATTERNS:
                 if pii_pattern.search(content):
                     logger.info(
                         "[%s] Policy DENY: PII detected in message "
@@ -282,7 +280,7 @@ class GovernanceInterventionHandler:
                 return DropMessage
 
             # PII check
-            for pii_pattern in _PII_PATTERNS:
+            for pii_pattern in PII_PATTERNS:
                 if pii_pattern.search(content):
                     logger.info(
                         "[%s] Policy DENY (publish): PII detected",
@@ -936,7 +934,7 @@ class AutoGenKernel(BaseIntegration):
                 content = str(args[0]) if args else str(kwargs)
 
                 # PII check
-                for pattern in _PII_PATTERNS:
+                for pattern in PII_PATTERNS:
                     if pattern.search(content):
                         raise PolicyViolationError(
                             f"State update blocked for '{agent_id}': "
