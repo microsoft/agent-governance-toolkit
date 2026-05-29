@@ -313,6 +313,130 @@ def test_raise_dispute_uses_json_body(client: TestClient):
     assert escrow._escrows[escrow_id]["dispute_reason"] == "provider did not deliver outputs"
 
 
+def _open_resolved_dispute(client: TestClient, outcome: str) -> tuple[str, str]:
+    client.post(
+        f"/v1/escrow/credits/{REQUESTER_DID}/add",
+        params={"amount": 100},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    escrow_response = client.post(
+        "/v1/escrow",
+        json=escrow_request(),
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    escrow_id = escrow_response.json()["escrow_id"]
+    dispute_response = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "provider did not deliver",
+            "claimed_outcome": outcome,
+        },
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    dispute_id = dispute_response.json()["dispute_id"]
+    for token in (REQUESTER_TOKEN, PROVIDER_TOKEN):
+        client.post(
+            f"/v1/disputes/{dispute_id}/evidence",
+            params={"party": "requester" if token == REQUESTER_TOKEN else "provider"},
+            json={"flight_recorder_logs_hash": f"hash-{token}"},
+            headers=auth_header(token),
+        )
+    return escrow_id, dispute_id
+
+
+def test_scak_release_without_drift_score_fails_closed(client: TestClient):
+    client.post(
+        f"/v1/escrow/credits/{REQUESTER_DID}/add",
+        params={"amount": 100},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    payload = escrow_request()
+    payload["require_scak"] = True
+    payload["scak_threshold"] = 0.15
+    created = client.post(
+        "/v1/escrow",
+        json=payload,
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    escrow_id = created.json()["escrow_id"]
+
+    missing = client.post(
+        f"/v1/escrow/{escrow_id}/release",
+        json={"outcome": "success"},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    over_threshold = client.post(
+        f"/v1/escrow/{escrow_id}/release",
+        json={"outcome": "success", "scak_drift_score": 0.9},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+
+    assert missing.status_code == 400
+    assert missing.json()["detail"]["error"] == "SCAK_DRIFT_SCORE_REQUIRED"
+    # Provider must not have been paid by the failed release attempt.
+    assert PROVIDER_DID not in escrow._agent_credits
+    # The escrow is still releasable; a subsequent attempt with a high drift
+    # score should hit the failure path (returning credits to the requester).
+    assert over_threshold.status_code == 200
+    assert escrow._agent_credits[REQUESTER_DID] == 100
+
+
+def test_resolve_dispute_requires_admin_supplied_outcome(client: TestClient):
+    escrow_id, dispute_id = _open_resolved_dispute(client, outcome="success")
+
+    no_body = client.post(
+        f"/v1/disputes/{dispute_id}/resolve",
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    bad_outcome = client.post(
+        f"/v1/disputes/{dispute_id}/resolve",
+        json={"outcome": "requester_loses"},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    resolved = client.post(
+        f"/v1/disputes/{dispute_id}/resolve",
+        json={"outcome": "requester_wins", "explanation": "evidence backed requester"},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+
+    assert no_body.status_code == 422
+    assert bad_outcome.status_code == 422
+    # Even though the disputing party claimed "success" (i.e. provider_wins),
+    # the admin-supplied "requester_wins" is what gets recorded.
+    assert resolved.status_code == 200
+    assert resolved.json()["outcome"] == "requester_wins"
+    assert arbiter._disputes[dispute_id]["resolution_outcome"] == "requester_wins"
+
+
+def test_get_resolution_returns_stored_decision_and_404s_before_resolve(client: TestClient):
+    _escrow_id, dispute_id = _open_resolved_dispute(client, outcome="failure")
+
+    not_resolved = client.get(
+        f"/v1/disputes/{dispute_id}/resolution",
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    client.post(
+        f"/v1/disputes/{dispute_id}/resolve",
+        json={"outcome": "provider_wins", "explanation": "logs confirm delivery"},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    fetched = client.get(
+        f"/v1/disputes/{dispute_id}/resolution",
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+
+    assert not_resolved.status_code == 404
+    assert not_resolved.json()["detail"]["error"] == "RESOLUTION_NOT_FOUND"
+    body = fetched.json()
+    assert fetched.status_code == 200
+    assert body["outcome"] == "provider_wins"
+    assert body["credits_to_provider"] == 100
+    assert body["credits_to_requester"] == 0
+    assert body["decision_explanation"] == "logs confirm delivery"
+
+
 def signed_registration_request(did: str) -> dict:
     signing_key = SigningKey.generate()
     verification_key = base64.urlsafe_b64encode(bytes(signing_key.verify_key)).decode().rstrip("=")

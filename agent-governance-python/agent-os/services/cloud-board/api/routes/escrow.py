@@ -194,10 +194,22 @@ async def release_escrow(
         raise HTTPException(status_code=400, detail=f"Escrow already resolved: {escrow['status']}")
 
     if request.outcome == "success":
-        # Check SCAK if required
-        if escrow.get("require_scak") and request.scak_drift_score is not None:
+        # SCAK gate: when the escrow requires SCAK we must have an explicit
+        # drift score. A missing score is treated as a failure (fail-closed)
+        # rather than silently allowing release.
+        if escrow.get("require_scak"):
+            if request.scak_drift_score is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "SCAK_DRIFT_SCORE_REQUIRED",
+                        "message": (
+                            "scak_drift_score is required when releasing an "
+                            "escrow with require_scak=true"
+                        ),
+                    },
+                )
             if request.scak_drift_score > escrow.get("scak_threshold", 0.15):
-                # SCAK failed - treat as failure
                 return await _resolve_failure(escrow_id, escrow)
 
         return await _resolve_success(escrow_id, escrow)

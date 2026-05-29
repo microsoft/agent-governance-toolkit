@@ -45,6 +45,18 @@ class SubmitEvidenceRequest(BaseModel):
     flight_recorder_logs_hash: str
 
 
+class ResolveDisputeRequest(BaseModel):
+    """Admin-supplied resolution input for ``resolve_dispute``.
+
+    The arbiter does not infer the winner from caller-supplied claim metadata.
+    An administrator must explicitly state ``outcome`` (and may attach an
+    ``explanation`` for the audit trail) before credits are redistributed.
+    """
+
+    outcome: Literal["requester_wins", "provider_wins", "split"]
+    explanation: str = ""
+
+
 class DisputeResolutionResponse(BaseModel):
     dispute_id: str
     escrow_id: str
@@ -151,45 +163,33 @@ async def submit_evidence(
 @router.post("/{dispute_id}/resolve", response_model=DisputeResolutionResponse)
 async def resolve_dispute(
     dispute_id: str,
+    request: ResolveDisputeRequest,
     _principal: AuthPrincipal = ADMIN_AUTH,
 ):
-    """
-    Resolve a dispute by analyzing evidence.
+    """Resolve a dispute using an admin-supplied outcome.
 
-    The Arbiter replays flight recorder logs against the Control Plane
-    to determine which agent's claim is accurate.
+    The outcome **must** be supplied by the administrator; the arbiter does
+    not derive it from ``claimed_outcome`` (which is attacker-controlled at
+    submit time). The decision is persisted on the dispute record so
+    ``get_resolution`` can return the actual decision.
     """
     dispute = _get_dispute_or_404(dispute_id)
 
     if dispute["resolved"]:
         raise HTTPException(status_code=400, detail="Dispute already resolved")
 
-    # Check we have evidence
     if not dispute["requester_logs_hash"] or not dispute["provider_logs_hash"]:
         raise HTTPException(
             status_code=400, detail="Evidence required from both parties before resolution"
         )
 
-    # Analyze dispute (placeholder logic)
-    # In production, would replay logs against Control Plane
+    outcome = request.outcome
+    explanation = request.explanation or {
+        "requester_wins": "Administrator ruled in favor of the requester",
+        "provider_wins": "Administrator ruled in favor of the provider",
+        "split": "Administrator ruled the dispute should be split",
+    }[outcome]
 
-    # Determine outcome
-    if dispute["claimed_outcome"] == "success":
-        # Disputing party claims success - likely provider
-        outcome = "provider_wins"
-        decision = "Evidence supports task completion claim"
-        liar = None
-    elif dispute["claimed_outcome"] == "failure":
-        # Disputing party claims failure - likely requester
-        outcome = "requester_wins"
-        decision = "Evidence supports task failure claim"
-        liar = None
-    else:
-        outcome = "split"
-        decision = "Inconclusive evidence; compromise reached"
-        liar = None
-
-    # Calculate credit distribution (assume 100 credits for demo)
     total_credits = 100
 
     if outcome == "requester_wins":
@@ -208,24 +208,29 @@ async def resolve_dispute(
         rep_requester = -10
         rep_provider = -10
 
-    # Mark resolved
+    resolved_at = datetime.now(timezone.utc).isoformat()
+    resolution_record = {
+        "outcome": outcome,
+        "decision_explanation": explanation,
+        "confidence_score": 1.0,
+        "credits_to_requester": credits_requester,
+        "credits_to_provider": credits_provider,
+        "requester_reputation_change": rep_requester,
+        "provider_reputation_change": rep_provider,
+        "liar_identified": None,
+        "resolved_at": resolved_at,
+    }
+
     dispute["resolved"] = True
     dispute["status"] = "resolved"
     dispute["resolution_outcome"] = outcome
-    dispute["resolved_at"] = datetime.now(timezone.utc).isoformat()
+    dispute["resolved_at"] = resolved_at
+    dispute["resolution"] = resolution_record
 
     return DisputeResolutionResponse(
         dispute_id=dispute_id,
         escrow_id=dispute["escrow_id"],
-        outcome=outcome,
-        decision_explanation=decision,
-        confidence_score=0.85,
-        credits_to_requester=credits_requester,
-        credits_to_provider=credits_provider,
-        requester_reputation_change=rep_requester,
-        provider_reputation_change=rep_provider,
-        liar_identified=liar,
-        resolved_at=dispute["resolved_at"],
+        **resolution_record,
     )
 
 
@@ -238,22 +243,20 @@ async def get_resolution(
     dispute = _get_dispute_or_404(dispute_id)
     _authorize_dispute_participant(dispute, principal)
 
-    if not dispute["resolved"]:
-        raise HTTPException(status_code=400, detail="Dispute not yet resolved")
+    resolution = dispute.get("resolution")
+    if not dispute.get("resolved") or resolution is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "RESOLUTION_NOT_FOUND",
+                "message": "Dispute has not been resolved yet",
+            },
+        )
 
-    # Return stored resolution (in production would fetch from resolution store)
     return DisputeResolutionResponse(
         dispute_id=dispute_id,
         escrow_id=dispute["escrow_id"],
-        outcome=dispute.get("resolution_outcome", "split"),
-        decision_explanation="Resolution from Arbiter",
-        confidence_score=0.85,
-        credits_to_requester=50,
-        credits_to_provider=50,
-        requester_reputation_change=-10,
-        provider_reputation_change=-10,
-        liar_identified=None,
-        resolved_at=dispute["resolved_at"],
+        **resolution,
     )
 
 
