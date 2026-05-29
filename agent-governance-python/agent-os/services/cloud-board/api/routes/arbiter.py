@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..auth import ADMIN_AUTH, AGENT_AUTH, AuthPrincipal, authorize_agent
 from . import compliance as compliance_routes
@@ -23,7 +23,11 @@ router = APIRouter()
 class SubmitDisputeRequest(BaseModel):
     escrow_id: str
     disputing_party: Literal["requester", "provider"]
-    dispute_reason: str
+    # Capped to 1000 chars consistent with RaiseDisputeRequest.reason and
+    # ReleaseEscrowRequest.dispute_reason — any of the three paths can be
+    # used to seed the dispute audit record, so a per-path cap would let
+    # callers smuggle multi-megabyte reasons via the longest-allowed surface.
+    dispute_reason: str = Field(min_length=1, max_length=1000)
     claimed_outcome: Literal["success", "failure", "partial"]
     flight_recorder_logs_hash: Optional[str] = None
 
@@ -40,6 +44,7 @@ class DisputeResponse(BaseModel):
     created_at: str
     requester_logs_hash: Optional[str] = None
     provider_logs_hash: Optional[str] = None
+    submitted_by: Optional[str] = None
 
 
 class SubmitEvidenceRequest(BaseModel):
@@ -55,7 +60,7 @@ class ResolveDisputeRequest(BaseModel):
     """
 
     outcome: Literal["requester_wins", "provider_wins", "split"]
-    explanation: str = ""
+    explanation: str = Field(default="", max_length=2000)
 
 
 class DisputeResolutionResponse(BaseModel):
@@ -90,7 +95,27 @@ async def submit_dispute(
     if escrow_parties is None:
         raise HTTPException(status_code=404, detail="Escrow not found")
 
-    authorize_agent(escrow_parties[request.disputing_party], principal)
+    # Use 404 (not 403) for the participant check so an unauthorized caller
+    # cannot use submit_dispute as an oracle for escrow_id existence.
+    expected_did = escrow_parties[request.disputing_party]
+    if not principal.is_admin and principal.agent_did != expected_did:
+        raise HTTPException(status_code=404, detail="Escrow not found")
+
+    # Reject duplicate disputes for the same escrow: only one open (unresolved)
+    # dispute may exist per escrow at a time, to prevent dispute spam and the
+    # creation of "orphan" disputes that can never be resolved.
+    for existing in _disputes.values():
+        if existing["escrow_id"] == request.escrow_id and not existing.get("resolved"):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "DISPUTE_ALREADY_OPEN",
+                    "message": (
+                        f"An unresolved dispute ({existing['dispute_id']}) already "
+                        f"exists for escrow {request.escrow_id}"
+                    ),
+                },
+            )
 
     # Lock the escrow against any further release attempts before recording
     # the dispute. mark_escrow_disputed raises 400 if the escrow is already in
@@ -117,6 +142,11 @@ async def submit_dispute(
         "requester_logs_hash": None,
         "provider_logs_hash": None,
         "resolved": False,
+        # Attribution: who actually called submit_dispute. For agent callers
+        # this is their DID; for admin callers it is the literal "admin"
+        # sentinel so audit/log readers can distinguish admin-initiated from
+        # participant-initiated disputes.
+        "submitted_by": "admin" if principal.is_admin else principal.agent_did,
     }
 
     # Set initial evidence
@@ -152,7 +182,11 @@ async def submit_evidence(
 ):
     """Submit counter-evidence from the other party."""
     dispute = _get_dispute_or_404(dispute_id)
-    authorize_agent(dispute[f"{party}_did"], principal)
+    # Convert agent-mismatch 403 to 404 so unauthorized callers cannot
+    # enumerate dispute IDs or party slots via submit_evidence.
+    expected_did = dispute[f"{party}_did"]
+    if not principal.is_admin and principal.agent_did != expected_did:
+        raise HTTPException(status_code=404, detail="Dispute not found")
 
     if dispute["resolved"]:
         raise HTTPException(status_code=400, detail="Dispute already resolved")
@@ -197,6 +231,17 @@ async def resolve_dispute(
     # under-pay for any non-100-credit escrow.
     total_credits = escrow_routes.get_escrow_credits(dispute["escrow_id"])
     if total_credits is None:
+        # The escrow has disappeared from under this dispute. Mark the
+        # dispute terminal so it cannot accumulate as an orphan in
+        # ``_disputes`` (and so a retry will see a 400 "already resolved"
+        # rather than another 409). The dispute is recorded as
+        # ``unresolvable`` for audit purposes.
+        resolved_at_orphan = datetime.now(timezone.utc).isoformat()
+        dispute["resolved"] = True
+        dispute["status"] = "unresolvable"
+        dispute["resolved_at"] = resolved_at_orphan
+        dispute["resolution_outcome"] = "unresolvable"
+        dispute["resolution"] = None
         raise HTTPException(
             status_code=409,
             detail={
@@ -347,10 +392,12 @@ def _authorize_dispute_participant(dispute: dict, principal: AuthPrincipal) -> N
         return
     if principal.agent_did in (dispute.get("requester_did"), dispute.get("provider_did")):
         return
+    # Return 404 (not 403) so an unauthorized caller cannot enumerate dispute
+    # IDs by distinguishing "exists but not yours" from "does not exist".
     raise HTTPException(
-        status_code=403,
+        status_code=404,
         detail={
-            "error": "FORBIDDEN",
-            "message": "Token is not authorized for this dispute",
+            "error": "DISPUTE_NOT_FOUND",
+            "message": f"Dispute {dispute.get('dispute_id')} not found",
         },
     )
