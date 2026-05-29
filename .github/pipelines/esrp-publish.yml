@@ -282,8 +282,15 @@ stages:
               displayName: 'Use Python ${{ parameters.pythonVersion }}'
 
             - script: |
-                python -m pip install --no-cache-dir build==1.2.1 setuptools==80.9.0
-              displayName: 'Install build tools'
+                # Hash-pinned lockfile. --require-hashes refuses any wheel/sdist
+                # whose SHA-256 is not in release-tools.txt; --no-deps stops
+                # pip from quietly resolving extra transitives the lockfile
+                # would not cover. See release-tools/release-tools.txt for the
+                # regeneration command.
+                python -m pip install --no-cache-dir --disable-pip-version-check \
+                  --require-hashes --no-deps \
+                  -r $(Build.SourcesDirectory)/.github/pipelines/release-tools/release-tools.txt
+              displayName: 'Install build tools (hash-pinned)'
 
             - script: |
                 python -m build
@@ -721,6 +728,16 @@ stages:
               set -euo pipefail
               RUSTUP_VERSION="1.27.1"
               RUSTUP_SHA256="6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d"
+              # ``${{ parameters.rustVersion }}`` is expanded at YAML template
+              # *compile* time, before this script ever runs. The runtime
+              # regex below validates the resulting literal one more time as
+              # defense-in-depth: if a future edit promotes rustVersion to a
+              # runtime variable (e.g. ``$(rustVersion)``), the check still
+              # rejects an attacker-controlled toolchain spec like
+              # ``stable --default-toolchain malicious`` that would otherwise
+              # reach ``rustup-init``. The *primary* defense remains the ADO
+              # queue-time parameter ACL: only authorized pipeline runners
+              # may set rustVersion at all.
               RUST_TOOLCHAIN="${{ parameters.rustVersion }}"
               if ! printf '%s' "$RUST_TOOLCHAIN" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
                 echo "##[error]rustVersion must be an exact version such as 1.70.0, not a mutable channel"
