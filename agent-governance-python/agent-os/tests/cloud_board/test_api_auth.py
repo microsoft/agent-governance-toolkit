@@ -95,7 +95,8 @@ def test_non_admin_cannot_mutate_reputation(client: TestClient):
         headers=auth_header(REQUESTER_TOKEN),
     )
 
-    assert response.status_code == 403
+    # F#3 — uniform 401 (not 403) closes a token-validity oracle.
+    assert response.status_code == 401
 
 
 def test_compliance_reads_and_exports_require_admin(client: TestClient):
@@ -104,7 +105,7 @@ def test_compliance_reads_and_exports_require_admin(client: TestClient):
     admin = client.get("/v1/compliance/events", headers=auth_header(ADMIN_TOKEN))
 
     assert unauthenticated.status_code == 401
-    assert agent.status_code == 403
+    assert agent.status_code == 401  # F#3 oracle-close
     assert admin.status_code == 200
 
 
@@ -129,7 +130,7 @@ def test_escrow_credits_start_at_zero_and_cannot_be_self_minted(client: TestClie
     assert REQUESTER_DID not in escrow._agent_credits
     assert create.status_code == 400
     assert create.json()["detail"]["error"] == "INSUFFICIENT_CREDITS"
-    assert mint.status_code == 403
+    assert mint.status_code == 401  # F#3 oracle-close
 
 
 def test_admin_seeds_positive_credits_before_requester_creates_escrow(client: TestClient):
@@ -280,7 +281,7 @@ def test_slash_history_requires_admin(client: TestClient):
     admin = client.get("/v1/reputation/slashes", headers=auth_header(ADMIN_TOKEN))
 
     assert unauthenticated.status_code == 401
-    assert agent.status_code == 403
+    assert agent.status_code == 401  # F#3 oracle-close
     assert admin.status_code == 200
 
 
@@ -561,3 +562,45 @@ def signed_registration_request(did: str) -> dict:
         "proof": proof,
         "proof_timestamp": proof_timestamp,
     }
+
+
+# ---------------------------------------------------------------------------
+# F#15 / F#4 — bearer-auth hardening regressions
+# ---------------------------------------------------------------------------
+
+
+def test_bearer_token_length_cap(client: TestClient):
+    """F#15 — overlong bearer tokens are rejected before SHA-256."""
+    response = client.get(
+        f"/v1/escrow/credits/{REQUESTER_DID}",
+        headers=auth_header("x" * 1024),
+    )
+    assert response.status_code == 401
+
+
+def test_malformed_agent_token_entry_does_not_503_admin_plane(
+    client: TestClient, monkeypatch
+):
+    """F#4 — a single malformed AGENT_TOKENS entry must not 503 every
+    authenticated request (including the admin plane).
+    """
+    monkeypatch.setenv(
+        "NEXUS_CLOUD_BOARD_AGENT_TOKENS",
+        ",".join(
+            [
+                f"{REQUESTER_DID}={REQUESTER_TOKEN}",
+                "this-is-malformed-no-equals",
+                "did:nexus:bad=",
+                "=missing-did",
+                "not-a-did:foo=token",
+                f"{PROVIDER_DID}={PROVIDER_TOKEN}",
+            ]
+        ),
+    )
+    admin = client.get("/v1/compliance/events", headers=auth_header(ADMIN_TOKEN))
+    agent = client.get(
+        f"/v1/escrow/credits/{REQUESTER_DID}",
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert admin.status_code == 200
+    assert agent.status_code == 200
