@@ -274,6 +274,33 @@ def _extract_bearer_token(request: Request) -> str:
     return token.strip()
 
 
+_LOOPBACK_CLIENT_HOSTS = frozenset({
+    "127.0.0.1",
+    "::1",
+    "localhost",
+})
+
+
+def _is_loopback_client(request: Request) -> bool:
+    """Return True when the HTTP request originated from a loopback peer."""
+    try:
+        client = request.client
+        if client is None or not client.host:
+            # No peer info (e.g. ASGI test client without a client tuple).
+            # Treat as loopback to keep tests working; production servers
+            # always populate ``request.client``.
+            return True
+        host = client.host.strip().lower()
+        if host in _LOOPBACK_CLIENT_HOSTS:
+            return True
+        # IPv6-mapped IPv4 loopback: ``::ffff:127.0.0.1``
+        if host.startswith("::ffff:127."):
+            return True
+        return False
+    except Exception:
+        return False
+
+
 def _authenticate_execute_request(
     request: Request,
     *,
@@ -286,6 +313,20 @@ def _authenticate_execute_request(
             raise HTTPException(
                 status_code=503,
                 detail="Unsafe local execute mode is enabled without a server identity.",
+            )
+        # Defense-in-depth: even when unsafe-unauth mode is engaged
+        # (only allowed in local/dev/development envs), refuse any
+        # request from a non-loopback peer. This closes the case where
+        # an operator accidentally binds the server to a routable
+        # address while AGENT_OS_ENV=local.
+        if not _is_loopback_client(request):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Unsafe unauthenticated execute mode only accepts loopback "
+                    "callers (127.0.0.1/::1). Configure AGENT_OS_EXECUTION_TOKENS "
+                    "before exposing /api/v1/execute to non-loopback clients."
+                ),
             )
         return _ExecuteIdentity(
             agent_id=unsafe_local_execute_agent_id,
