@@ -423,3 +423,5 @@ XACML
 xfail
 xunit
 ZDOTDIR
+webfetch
+websearch
