@@ -199,3 +199,38 @@ def test_confirmation_gate_accepts_both_metadata_aliases(alias_key):
     with pytest.raises(ValueError, match="until confirmation is satisfied"):
         protocol.accept_proposal(session.session_id)
     assert session.state == HandshakeState.VALIDATED
+
+
+def test_confirm_session_refused_in_terminal_state():
+    protocol = HandshakeProtocol()
+    session = _validated_session(protocol)
+    session.metadata[CONFIRMATION_REQUIRED_KEY] = True
+    session.metadata[CONFIRMATION_SATISFIED_KEY] = False
+    protocol.reject_proposal(session.session_id, "blocked")
+
+    with pytest.raises(ValueError, match="terminal state"):
+        protocol.confirm_session(session.session_id, confirmed_by="operator")
+    assert session.metadata[CONFIRMATION_SATISFIED_KEY] is False
+
+
+def test_health_check_failure_records_last_error_and_persists():
+    from src.listener.adapters import iatp_adapter as iatp_mod
+    from src.listener.adapters.iatp_adapter import SecurityAdapter
+
+    class FlakyClient:
+        def ping(self):
+            raise RuntimeError("backend ping timeout")
+
+    adapter = SecurityAdapter(config={"client_factory": lambda _cfg: FlakyClient()})
+    assert adapter.connect() is True
+    monkeypatched_ping = lambda self: self._client.ping()  # noqa: E731
+    iatp_mod.SecurityAdapter._health_ping = monkeypatched_ping
+    try:
+        status = adapter.health_check()
+        assert status.connected is False
+        assert "backend ping timeout" in (status.error or "")
+        assert adapter._last_error and "backend ping timeout" in adapter._last_error
+        status2 = adapter.health_check()
+        assert "backend ping timeout" in (status2.error or "")
+    finally:
+        del iatp_mod.SecurityAdapter._health_ping

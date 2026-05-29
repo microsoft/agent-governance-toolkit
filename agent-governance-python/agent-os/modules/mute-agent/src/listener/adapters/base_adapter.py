@@ -158,11 +158,12 @@ class BaseLayerAdapter(ABC):
         
         except Exception as e:
             self._connected = False
+            self._last_error = f"{type(e).__name__}: {e}"
             return AdapterStatus(
                 connected=False,
                 layer_name=self.get_layer_name(),
                 last_health_check=self._last_health_check,
-                error=str(e),
+                error=self._last_error,
             )
     
     def _health_ping(self) -> None:

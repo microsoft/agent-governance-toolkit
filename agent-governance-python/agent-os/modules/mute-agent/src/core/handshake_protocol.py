@@ -245,6 +245,11 @@ class HandshakeProtocol:
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
+        if session.state in TERMINAL_STATES:
+            raise ValueError(
+                f"Cannot confirm session in terminal state {session.state}"
+            )
+
         if not self.requires_confirmation(session):
             raise ValueError("Session does not require confirmation")
 
