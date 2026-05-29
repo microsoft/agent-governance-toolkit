@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openshell-agentmesh"
-version = "3.7.0"
+version = "4.0.0"
 description = "Public Preview - OpenShell + AgentMesh governance skill"
 readme = "README.md"
 license = {text = "MIT"}
@@ -13,7 +13,7 @@ authors = [{ name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.
 dependencies = ["pyyaml>=6.0,<7.0"]
 
 [project.optional-dependencies]
-agentmesh = ["agentmesh-platform>=3.0,<4.0"]
+agentmesh = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
 dev = ["pytest>=7.0"]
 
 [project.urls]

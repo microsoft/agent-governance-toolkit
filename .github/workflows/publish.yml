@@ -41,8 +41,12 @@ jobs:
           INPUT: ${{ github.event.inputs.package }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          # Complete list of publishable Python packages (41 packages)
+          # Complete list of publishable Python packages (45 packages)
           ALL='[
+            {"name":"agent-governance-toolkit-core","path":"agent-governance-python/agent-governance-toolkit-core"},
+            {"name":"agent-governance-toolkit-integrations","path":"agent-governance-python/agent-governance-toolkit-integrations"},
+            {"name":"agent-governance-toolkit-cli","path":"agent-governance-python/agent-governance-toolkit-cli"},
+            {"name":"agent-governance-toolkit-protocols","path":"agent-governance-python/agent-governance-toolkit-protocols"},
             {"name":"agent-os","path":"agent-governance-python/agent-os"},
             {"name":"agent-mesh","path":"agent-governance-python/agent-mesh"},
             {"name":"agent-hypervisor","path":"agent-governance-python/agent-hypervisor"},
