@@ -5,11 +5,13 @@ on:
     types: [opened, synchronize, reopened]
 permissions:
   contents: read
-  pull-requests: write
 # SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   label:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # actions/labeler adds path-based labels to the PR
     # SECURITY: pull_request_target — uses actions/labeler which reads config from
     # the base branch (default checkout). No PR head code is executed.
     steps:

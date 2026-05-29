@@ -25,12 +25,14 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write          # Used by contributor-check action to post comments / labels on issues
+      pull-requests: write   # Used by contributor-check action to post comments / labels on PRs
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.actor != 'dependabot[bot]' &&
