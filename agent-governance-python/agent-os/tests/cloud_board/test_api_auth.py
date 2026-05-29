@@ -50,6 +50,11 @@ def reset_cloud_board_state(monkeypatch):
     escrow._agent_credits.clear()
     arbiter._disputes.clear()
     compliance._compliance_events.clear()
+    # F#12 — escrow.create_escrow now requires the provider DID to be
+    # registered. Seed the three test DIDs so existing tests that don't
+    # exercise registration continue to work.
+    for did in (REQUESTER_DID, PROVIDER_DID, OTHER_DID):
+        _seed_agent(did)
 
 
 @pytest.fixture
@@ -604,3 +609,194 @@ def test_malformed_agent_token_entry_does_not_503_admin_plane(
     )
     assert admin.status_code == 200
     assert agent.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# F#1, F#2, F#5, F#7, F#8, F#9, F#12 — escrow regression tests
+# ---------------------------------------------------------------------------
+
+
+def _create_funded_escrow(client: TestClient, credits: int = 40) -> str:
+    """Seed credits and create an escrow; return the escrow_id."""
+    client.post(
+        f"/v1/escrow/credits/{REQUESTER_DID}/add",
+        params={"amount": max(100, credits)},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    created = client.post(
+        "/v1/escrow",
+        json=escrow_request(credits=credits),
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert created.status_code == 200, created.json()
+    return created.json()["escrow_id"]
+
+
+def test_raise_dispute_rejects_terminal_escrow_no_double_payout(client: TestClient):
+    """F#1 — after a successful /release, /dispute MUST NOT reopen the escrow,
+    AND total system credits must not double.
+
+    Full chain: create -> release(success) -> dispute (attempt) -> assert
+    total system credits == original locked amount (not 2x).
+    """
+    escrow_id = _create_funded_escrow(client, credits=40)
+    total_before = (
+        escrow._agent_credits.get(REQUESTER_DID, 0)
+        + escrow._agent_credits.get(PROVIDER_DID, 0)
+        + escrow._escrows[escrow_id].get("credits", 0)
+    )
+
+    released = client.post(
+        f"/v1/escrow/{escrow_id}/release",
+        json={"outcome": "success", "scak_drift_score": 0.01},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert released.status_code == 200
+    assert escrow._agent_credits[PROVIDER_DID] == 40
+
+    # Attempt re-open via /dispute -- must be rejected.
+    reopened = client.post(
+        f"/v1/escrow/{escrow_id}/dispute",
+        json={"reason": "actually it did not deliver"},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert reopened.status_code == 400
+    assert reopened.json()["detail"]["error"] == "ESCROW_ALREADY_RESOLVED"
+    assert escrow._escrows[escrow_id]["status"] == "released"
+
+    # And via /disputes (submit_dispute path).
+    via_disputes = client.post(
+        "/v1/disputes",
+        json={
+            "escrow_id": escrow_id,
+            "disputing_party": "requester",
+            "dispute_reason": "second-pay attempt",
+            "claimed_outcome": "failure",
+        },
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert via_disputes.status_code == 400
+
+    # Total system credits unchanged (no double-pay).
+    total_after = (
+        escrow._agent_credits.get(REQUESTER_DID, 0)
+        + escrow._agent_credits.get(PROVIDER_DID, 0)
+    )
+    assert total_after == total_before, (
+        f"credits doubled: {total_before} -> {total_after}"
+    )
+
+
+def test_disburse_disputed_escrow_refuses_second_payout(client: TestClient):
+    """F#1 defense-in-depth: even if status is flipped back to 'disputed'
+    after a prior disbursement, the resolved_at marker blocks a second
+    disbursement.
+    """
+    escrow_id, dispute_id = _open_resolved_dispute(client, outcome="failure")
+    first = client.post(
+        f"/v1/disputes/{dispute_id}/resolve",
+        json={"outcome": "provider_wins", "explanation": "first"},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    assert first.status_code == 200
+    assert escrow._agent_credits[PROVIDER_DID] == 40
+
+    escrow._escrows[escrow_id]["status"] = "disputed"
+    with pytest.raises(Exception) as exc_info:
+        escrow.disburse_disputed_escrow(
+            escrow_id,
+            credits_to_requester=0,
+            credits_to_provider=40,
+            resolution_reason="second-pay attempt",
+        )
+    assert "ESCROW_ALREADY_DISBURSED" in str(exc_info.value)
+    assert escrow._agent_credits[PROVIDER_DID] == 40
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+def test_scak_drift_score_rejects_non_finite_values(bad_value: float):
+    """F#2 — NaN/+Inf/-Inf MUST NOT bypass the SCAK fail-closed gate.
+
+    Asserted at the Pydantic model layer because httpx/JSON cannot
+    transport non-finite floats over the wire (defense-in-depth).
+    """
+    from api.routes.escrow import ReleaseEscrowRequest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as exc_info:
+        ReleaseEscrowRequest(outcome="success", scak_drift_score=bad_value)
+    assert "finite" in str(exc_info.value).lower()
+
+
+def test_release_dispute_branch_preserves_audit_reason(client: TestClient):
+    """F#7 — /dispute then /release(outcome=dispute) MUST NOT clobber
+    an existing dispute_reason with None.
+    """
+    escrow_id = _create_funded_escrow(client)
+    client.post(
+        f"/v1/escrow/{escrow_id}/dispute",
+        json={"reason": "original audit reason"},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert escrow._escrows[escrow_id]["dispute_reason"] == "original audit reason"
+
+
+def test_create_escrow_rejects_self_escrow(client: TestClient):
+    """F#9 — requester_did == provider_did must 400."""
+    client.post(
+        f"/v1/escrow/credits/{REQUESTER_DID}/add",
+        params={"amount": 100},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    response = client.post(
+        "/v1/escrow",
+        json=escrow_request(provider_did=REQUESTER_DID),
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "SELF_ESCROW_FORBIDDEN"
+
+
+def test_create_escrow_rejects_unregistered_provider(client: TestClient):
+    """F#12 — provider_did must be a registered agent."""
+    client.post(
+        f"/v1/escrow/credits/{REQUESTER_DID}/add",
+        params={"amount": 100},
+        headers=auth_header(ADMIN_TOKEN),
+    )
+    registry._agents.pop(PROVIDER_DID, None)
+    response = client.post(
+        "/v1/escrow",
+        json=escrow_request(),
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "PROVIDER_NOT_REGISTERED"
+
+
+def test_unauthorized_escrow_access_returns_404_not_403(client: TestClient):
+    """F#5 — unauthorized escrow access returns 404 (not 403) so escrow IDs
+    cannot be enumerated via status-code differential.
+    """
+    escrow_id = _create_funded_escrow(client)
+    other_view = client.get(
+        f"/v1/escrow/{escrow_id}",
+        headers=auth_header(OTHER_TOKEN),
+    )
+    nonexistent_view = client.get(
+        "/v1/escrow/escrow_doesnotexist",
+        headers=auth_header(OTHER_TOKEN),
+    )
+    assert other_view.status_code == 404
+    assert nonexistent_view.status_code == 404
+
+
+def test_dispute_reason_capped_on_release_dispute(client: TestClient):
+    """F#8 — ReleaseEscrowRequest.dispute_reason is capped at 1000 chars."""
+    escrow_id = _create_funded_escrow(client)
+    response = client.post(
+        f"/v1/escrow/{escrow_id}/release",
+        json={"outcome": "dispute", "dispute_reason": "x" * 1001},
+        headers=auth_header(REQUESTER_TOKEN),
+    )
+    assert response.status_code == 422
