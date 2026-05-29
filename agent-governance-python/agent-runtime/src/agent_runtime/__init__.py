@@ -25,7 +25,7 @@ _warnings.warn(
     stacklevel=2,
 )
 del _warnings
-from hypervisor import (  # noqa: F401
+from hypervisor import (  # noqa: F401, E402
     __version__,
     # Core
     Hypervisor,

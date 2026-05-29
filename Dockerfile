@@ -63,7 +63,12 @@ COPY . /workspace
 # have version constraints.
 # Scorecard: editable installs pinned to repo checkout via pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install \
+    python -m pip install --no-deps \
+        -e "agent-governance-python/agent-governance-toolkit-core" \
+        -e "agent-governance-python/agent-governance-toolkit-integrations" \
+        -e "agent-governance-python/agent-governance-toolkit-cli" \
+        -e "agent-governance-python/agent-governance-toolkit-protocols" \
+    && python -m pip install \
         "cedarpy>=4.0.0,<5.0" \
         -e "agent-governance-python/agent-primitives[dev]" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
