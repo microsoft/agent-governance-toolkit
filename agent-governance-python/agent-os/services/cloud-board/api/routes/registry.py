@@ -7,11 +7,14 @@ API endpoints for agent registration and discovery.
 """
 
 import hashlib
-
-from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import BaseModel
+
+from ..auth import AGENT_AUTH, BEARER_AUTH, AuthPrincipal, authorize_agent, try_authenticate
 
 # Would import from modules.nexus in production
 # For now, define inline models
@@ -89,7 +92,7 @@ _agents: dict[str, dict] = {}
 async def register_agent(request: RegisterAgentRequest):
     """
     Register a new agent on Nexus.
-    
+
     Requires proof-of-possession: the caller must sign
     (verification_key || proof_timestamp) with the private key
     corresponding to the submitted verification_key.
@@ -104,18 +107,44 @@ async def register_agent(request: RegisterAgentRequest):
     try:
         key_bytes = base64.urlsafe_b64decode(request.identity.verification_key + "==")
     except Exception:
-        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "Invalid verification_key encoding"})
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_KEY", "message": "Invalid verification_key encoding"},
+        ) from None
     if len(key_bytes) != 32:
-        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "verification_key must be 32 bytes (Ed25519)"})
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_KEY",
+                "message": "verification_key must be 32 bytes (Ed25519)",
+            },
+        )
 
     # Verify proof timestamp is within replay window
     try:
         ts = datetime.fromisoformat(request.proof_timestamp)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp format"})
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp format"},
+        ) from None
+    if ts.tzinfo is None:
+        # A naive timestamp is ambiguous (which timezone?) and previously caused
+        # an uncaught ``TypeError`` when subtracted from the aware UTC ``now``,
+        # producing a 500 on every unauth call. Require explicit UTC offset.
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_TIMESTAMP",
+                "message": "proof_timestamp must include a timezone offset (e.g. '+00:00' or 'Z')",
+            },
+        )
     now = datetime.now(timezone.utc)
     if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
-        raise HTTPException(status_code=401, detail={"error": "EXPIRED_PROOF", "message": "Proof timestamp outside replay window"})
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "EXPIRED_PROOF", "message": "Proof timestamp outside replay window"},
+        )
 
     # Verify proof-of-possession
     try:
@@ -123,13 +152,30 @@ async def register_agent(request: RegisterAgentRequest):
         message = request.identity.verification_key.encode() + request.proof_timestamp.encode()
         VerifyKey(key_bytes).verify(message, proof_bytes)
     except BadSignatureError:
-        raise HTTPException(status_code=401, detail={"error": "INVALID_PROOF", "message": "Invalid proof-of-possession"})
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "INVALID_PROOF", "message": "Invalid proof-of-possession"},
+        ) from None
     except Exception:
-        raise HTTPException(status_code=400, detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"})
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"},
+        ) from None
 
-    # Derive DID deterministically from public key hash
-    key_hash = hashlib.sha256(key_bytes).hexdigest()[:32]
+    # Derive DID deterministically from full public key hash. We use the full
+    # 256-bit (64 hex char) SHA-256 to avoid 64-bit collision resistance on a
+    # truncated hash — keys are public, so collision search is feasible at
+    # ~2^64 with 128-bit truncation.
+    key_hash = hashlib.sha256(key_bytes).hexdigest()
     agent_did = f"did:nexus:{key_hash}"
+    if request.identity.did != agent_did:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "DID_MISMATCH",
+                "message": "Submitted DID does not match verification_key",
+            },
+        )
 
     # Check if already registered
     if agent_did in _agents:
@@ -138,22 +184,22 @@ async def register_agent(request: RegisterAgentRequest):
             detail={
                 "error": "AGENT_ALREADY_REGISTERED",
                 "message": f"Agent {agent_did} is already registered",
-            }
+            },
         )
-    
+
     # Calculate initial trust score
     trust_score = 400  # Base score for new registrations
-    
+
     if request.capabilities:
         if request.capabilities.reversibility == "full":
             trust_score += 50
-    
+
     if request.privacy:
         if request.privacy.retention_policy == "ephemeral":
             trust_score += 30
         if request.privacy.pii_handling == "reject":
             trust_score += 20
-    
+
     # Store agent
     now = datetime.now(timezone.utc).isoformat()
     _agents[agent_did] = {
@@ -165,14 +211,12 @@ async def register_agent(request: RegisterAgentRequest):
         "registered_at": now,
         "last_seen": now,
     }
-    
+
     # Generate manifest hash
-    import hashlib
-    import json
     manifest_hash = hashlib.sha256(
         json.dumps(_agents[agent_did], sort_keys=True).encode()
     ).hexdigest()
-    
+
     return RegisterAgentResponse(
         success=True,
         agent_did=agent_did,
@@ -183,25 +227,77 @@ async def register_agent(request: RegisterAgentRequest):
     )
 
 
+@router.get("/discover", response_model=list[AgentManifestResponse])
+async def discover_agents(
+    capabilities: Optional[str] = Query(default=None),
+    min_score: int = Query(default=500, ge=0, le=1000),
+    privacy_policy: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    credentials: HTTPAuthorizationCredentials | None = BEARER_AUTH,
+):
+    """Discover agents matching criteria.
+
+    Owner and contact identity fields are redacted for unauthenticated
+    callers.
+    """
+    results = []
+    principal = try_authenticate(credentials)
+
+    required_caps = capabilities.split(",") if capabilities else []
+
+    for _agent_did, agent in _agents.items():
+        if agent["trust_score"] < min_score:
+            continue
+
+        if required_caps:
+            agent_caps = agent.get("capabilities", {}).get("domains", [])
+            if not all(c in agent_caps for c in required_caps):
+                continue
+
+        if privacy_policy:
+            if agent.get("privacy", {}).get("retention_policy") != privacy_policy:
+                continue
+
+        results.append(AgentManifestResponse(**_view_manifest(agent, principal)))
+
+        if len(results) >= limit:
+            break
+
+    results.sort(key=lambda a: a.trust_score, reverse=True)
+
+    return results
+
+
 @router.get("/{agent_did}", response_model=AgentManifestResponse)
-async def get_agent(agent_did: str):
-    """Get an agent's manifest by DID."""
+async def get_agent(
+    agent_did: str,
+    credentials: HTTPAuthorizationCredentials | None = BEARER_AUTH,
+):
+    """Get an agent's manifest by DID.
+
+    Unauthenticated callers receive a sanitized manifest with owner/contact
+    PII redacted. Authenticated callers see the full manifest.
+    """
     if agent_did not in _agents:
         raise HTTPException(
             status_code=404,
             detail={
                 "error": "AGENT_NOT_FOUND",
                 "message": f"Agent {agent_did} not found in registry",
-            }
+            },
         )
-    
-    agent = _agents[agent_did]
-    return AgentManifestResponse(**agent)
+
+    principal = try_authenticate(credentials)
+    return AgentManifestResponse(**_view_manifest(_agents[agent_did], principal))
 
 
 @router.put("/{agent_did}", response_model=RegisterAgentResponse)
-async def update_agent(agent_did: str, request: RegisterAgentRequest):
-    """Update an agent's manifest. Requires proof-of-possession."""
+async def update_agent(
+    agent_did: str,
+    request: RegisterAgentRequest,
+    principal: AuthPrincipal = AGENT_AUTH,
+):
+    """Update an agent's manifest. Requires scoped auth and proof-of-possession."""
     import base64
     import json
 
@@ -214,63 +310,90 @@ async def update_agent(agent_did: str, request: RegisterAgentRequest):
             detail={
                 "error": "AGENT_NOT_FOUND",
                 "message": f"Agent {agent_did} not found",
-            }
+            },
         )
+    authorize_agent(agent_did, principal)
 
     # Verify proof-of-possession
     try:
         key_bytes = base64.urlsafe_b64decode(request.identity.verification_key + "==")
     except Exception:
-        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "Invalid verification_key encoding"})
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_KEY", "message": "Invalid verification_key encoding"},
+        ) from None
     if len(key_bytes) != 32:
-        raise HTTPException(status_code=400, detail={"error": "INVALID_KEY", "message": "verification_key must be 32 bytes"})
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_KEY", "message": "verification_key must be 32 bytes"},
+        )
 
     try:
         ts = datetime.fromisoformat(request.proof_timestamp)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp"})
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "INVALID_TIMESTAMP", "message": "Invalid proof_timestamp"},
+        ) from None
+    if ts.tzinfo is None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "INVALID_TIMESTAMP",
+                "message": "proof_timestamp must include a timezone offset (e.g. '+00:00' or 'Z')",
+            },
+        )
     now = datetime.now(timezone.utc)
     if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
-        raise HTTPException(status_code=401, detail={"error": "EXPIRED_PROOF", "message": "Proof timestamp outside replay window"})
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "EXPIRED_PROOF", "message": "Proof timestamp outside replay window"},
+        )
 
     try:
         proof_bytes = base64.urlsafe_b64decode(request.proof + "==")
         message = request.identity.verification_key.encode() + request.proof_timestamp.encode()
         VerifyKey(key_bytes).verify(message, proof_bytes)
     except BadSignatureError:
-        raise HTTPException(status_code=401, detail={"error": "INVALID_PROOF", "message": "Invalid proof-of-possession"})
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "INVALID_PROOF", "message": "Invalid proof-of-possession"},
+        ) from None
     except Exception:
-        raise HTTPException(status_code=400, detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"})
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "MALFORMED_PROOF", "message": "Malformed proof"},
+        ) from None
 
-    # Verify the derived DID matches the URL
-    derived_did = f"did:nexus:{hashlib.sha256(key_bytes).hexdigest()[:32]}"
-    if derived_did != agent_did:
+    # Verify the derived DID matches the URL (full 256-bit SHA-256 hex).
+    derived_did = f"did:nexus:{hashlib.sha256(key_bytes).hexdigest()}"
+    if derived_did != agent_did or request.identity.did != agent_did:
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "DID_MISMATCH",
                 "message": "Proof key does not match the agent DID",
-            }
+            },
         )
-    
+
     # Preserve registration time
     registered_at = _agents[agent_did]["registered_at"]
-    
+
     # Update agent
     now = datetime.now(timezone.utc).isoformat()
-    _agents[agent_did].update({
-        "identity": request.identity.model_dump(),
-        "capabilities": request.capabilities.model_dump() if request.capabilities else {},
-        "privacy": request.privacy.model_dump() if request.privacy else {},
-        "last_seen": now,
-    })
-    
-    import hashlib
-    import json
+    _agents[agent_did].update(
+        {
+            "identity": request.identity.model_dump(),
+            "capabilities": request.capabilities.model_dump() if request.capabilities else {},
+            "privacy": request.privacy.model_dump() if request.privacy else {},
+            "last_seen": now,
+        }
+    )
+
     manifest_hash = hashlib.sha256(
         json.dumps(_agents[agent_did], sort_keys=True).encode()
     ).hexdigest()
-    
+
     return RegisterAgentResponse(
         success=True,
         agent_did=agent_did,
@@ -282,7 +405,10 @@ async def update_agent(agent_did: str, request: RegisterAgentRequest):
 
 
 @router.delete("/{agent_did}")
-async def deregister_agent(agent_did: str):
+async def deregister_agent(
+    agent_did: str,
+    principal: AuthPrincipal = AGENT_AUTH,
+):
     """Remove an agent from the registry."""
     if agent_did not in _agents:
         raise HTTPException(
@@ -290,9 +416,10 @@ async def deregister_agent(agent_did: str):
             detail={
                 "error": "AGENT_NOT_FOUND",
                 "message": f"Agent {agent_did} not found",
-            }
+            },
         )
-    
+    authorize_agent(agent_did, principal)
+
     del _agents[agent_did]
     return {"success": True, "message": f"Agent {agent_did} deregistered"}
 
@@ -305,7 +432,7 @@ async def verify_peer(
 ):
     """
     Verify a peer agent before IATP handshake.
-    
+
     This is the core viral mechanism - returns error with registration
     URL for unregistered agents.
     """
@@ -319,12 +446,12 @@ async def verify_peer(
                 "peer_id": agent_did,
                 "registration_url": f"https://nexus.agent-os.dev/register?agent={agent_did}",
                 "action_required": "Register the agent on Nexus to enable communication",
-            }
+            },
         )
-    
+
     agent = _agents[agent_did]
     trust_score = agent["trust_score"]
-    
+
     # Check trust threshold
     if trust_score < min_score:
         raise HTTPException(
@@ -337,13 +464,13 @@ async def verify_peer(
                 "required_score": min_score,
                 "score_gap": min_score - trust_score,
                 "improvement_url": f"https://nexus.agent-os.dev/reputation/{agent_did}",
-            }
+            },
         )
-    
+
     # Check capabilities if required
     required_caps = capabilities.split(",") if capabilities else []
     agent_caps = agent.get("capabilities", {}).get("domains", [])
-    
+
     if required_caps:
         missing = set(required_caps) - set(agent_caps)
         if missing:
@@ -355,10 +482,10 @@ async def verify_peer(
                 capabilities=agent_caps,
                 rejection_reason=f"Missing capabilities: {missing}",
             )
-    
+
     # Update last seen
     agent["last_seen"] = datetime.now(timezone.utc).isoformat()
-    
+
     return VerifyPeerResponse(
         verified=True,
         peer_did=agent_did,
@@ -370,43 +497,38 @@ async def verify_peer(
     )
 
 
-@router.get("/discover", response_model=list[AgentManifestResponse])
-async def discover_agents(
-    capabilities: Optional[str] = Query(default=None),
-    min_score: int = Query(default=500, ge=0, le=1000),
-    privacy_policy: Optional[str] = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=1000),
-):
-    """Discover agents matching criteria."""
-    results = []
-    
-    required_caps = capabilities.split(",") if capabilities else []
-    
-    for agent_did, agent in _agents.items():
-        # Filter by score
-        if agent["trust_score"] < min_score:
-            continue
-        
-        # Filter by capabilities
-        if required_caps:
-            agent_caps = agent.get("capabilities", {}).get("domains", [])
-            if not all(c in agent_caps for c in required_caps):
-                continue
-        
-        # Filter by privacy policy
-        if privacy_policy:
-            if agent.get("privacy", {}).get("retention_policy") != privacy_policy:
-                continue
-        
-        results.append(AgentManifestResponse(**agent))
-        
-        if len(results) >= limit:
-            break
-    
-    # Sort by trust score
-    results.sort(key=lambda a: a.trust_score, reverse=True)
-    
-    return results
+def _view_manifest(
+    agent: dict, principal: AuthPrincipal | None
+) -> dict:
+    """Return a manifest copy with PII fields redacted by allowlist.
+
+    Only the agent's owner (DID-matched authenticated caller) or an
+    administrator may see the unredacted ``identity`` block. Anonymous
+    callers and other authenticated agents receive only an explicit
+    allowlist of public identity fields, so that a future field added to
+    ``AgentIdentityRequest`` does not silently leak to every caller.
+    """
+    agent_did = agent.get("identity", {}).get("did")
+    is_owner = (
+        principal is not None
+        and not principal.is_admin
+        and principal.agent_did == agent_did
+    )
+    if principal is not None and (principal.is_admin or is_owner):
+        return agent
+
+    public = dict(agent)
+    raw_identity = agent.get("identity", {})
+    # Allowlist: only these identity fields are exposed to non-owners.
+    # owner_id and contact are PII and MUST NOT appear here. Any new
+    # identity field defaults to redacted unless added intentionally.
+    _PUBLIC_IDENTITY_FIELDS = ("did", "verification_key", "display_name")
+    public["identity"] = {
+        field: raw_identity[field]
+        for field in _PUBLIC_IDENTITY_FIELDS
+        if field in raw_identity
+    }
+    return public
 
 
 def _get_tier(score: int) -> str:
