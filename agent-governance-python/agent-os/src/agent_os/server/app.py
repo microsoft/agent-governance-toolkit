@@ -31,6 +31,13 @@ from agent_os.server.models import (
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log_field_local(value: Any) -> str:
+    """Neutralize CR/LF/tab in attacker-controlled log fields to prevent
+    log-injection / forgery via line-oriented log shippers."""
+    text = str(value)
+    return text.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+
+
 def _parse_cors_origins(raw: str) -> list[str]:
     """Parse, validate, and return CORS origins.
 
@@ -501,8 +508,8 @@ def create_app(
         except Exception as exc:
             logger.exception(
                 "Execute request failed | agent=%s action=%s",
-                effective_agent_id,
-                req.action,
+                _sanitize_log_field_local(effective_agent_id),
+                _sanitize_log_field_local(req.action),
             )
             return ExecuteResponse(
                 success=False,

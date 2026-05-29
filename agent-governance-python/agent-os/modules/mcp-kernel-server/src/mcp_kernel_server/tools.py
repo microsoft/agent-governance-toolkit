@@ -13,9 +13,69 @@ import hashlib
 import json
 import logging
 import re
+import unicodedata
 
 
 logger = logging.getLogger(__name__)
+
+
+_APPROVED_NORMALIZED = "approved"
+
+
+def _is_approval_key(key: Any) -> bool:
+    """Return True if ``key`` is a caller-supplied approval flag in any
+    confusable form (case-insensitive NFKC normalisation)."""
+    if not isinstance(key, str):
+        return False
+    return unicodedata.normalize("NFKC", key).casefold() == _APPROVED_NORMALIZED
+
+
+def _contains_approval_key(value: Any) -> bool:
+    """Recursively check whether ``value`` contains an approval key.
+
+    Catches Cyrillic-confusable ``approvеd``, case variants ``Approved``
+    and ``APPROVED``, and nested forms like ``{"meta": {"approved": True}}``.
+    """
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if _is_approval_key(k):
+                return True
+            if _contains_approval_key(v):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_approval_key(item) for item in value)
+    return False
+
+
+def _strip_approval_keys(value: Any) -> Any:
+    """Recursively strip approval keys from ``value`` (dict / list).
+
+    Returns a deep copy of ``value`` with every NFKC-case-folded
+    ``approved`` key removed at every depth. Defends against the
+    bypasses the red-team review flagged for ``params.get('approved')``
+    exact-key checks: sibling keys (``Approved``, ``APPROVED``),
+    confusables (``approvеd``), and nested payloads.
+    """
+    if isinstance(value, dict):
+        return {
+            k: _strip_approval_keys(v)
+            for k, v in value.items()
+            if not _is_approval_key(k)
+        }
+    if isinstance(value, list):
+        return [_strip_approval_keys(item) for item in value]
+    return value
+
+
+def _sanitize_log_field(value: Any) -> str:
+    """Neutralize CR/LF/control-byte injection in log fields.
+
+    Attacker-controlled fields (``action``, ``intent_id``, ``agent_id``)
+    flow into ``logger.exception`` calls; raw newlines forge log
+    entries past line-oriented shippers (Splunk forwarder, fluent-bit,
+    journald grep). Replace control bytes with escape codes."""
+    text = str(value)
+    return text.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
 
 
 @dataclass
@@ -537,32 +597,33 @@ class KernelExecuteTool:
         # MCP host elicitation or a trusted IntentManager), not from the
         # tool arguments dictionary.
         if action_policy.get("requires_approval"):
-            if params.get("approved") is not None:
+            if _contains_approval_key(params):
                 # Detect and warn on the legacy bypass attempt so audits
                 # surface it instead of silently ignoring it.
                 logger.warning(
                     "Ignoring caller-supplied approval flag for action '%s'; "
                     "trusted approval workflow required.",
-                    action,
+                    _sanitize_log_field(action),
                 )
             # Trusted approval injection point: when a host wires an
             # ``approval_provider`` into the tool constructor we consult
             # it here. The provider receives the action name and a copy
-            # of params (sanitised of the caller-supplied ``approved``
-            # key) and returns a boolean. Any exception fails closed.
+            # of params (sanitised of any caller-supplied ``approved``-
+            # equivalent key, including NFKC confusables and nested
+            # dicts) and must return the JSON boolean literal ``True``
+            # to authorize. Any other return value (truthy strings,
+            # non-empty dicts, ``1``, etc.) and any exception fails
+            # closed — same wire contract as the OPA backend's
+            # ``_is_strict_true`` check shipped in this PR series.
             if self._approval_provider is not None:
-                sanitised_params = {
-                    k: v for k, v in params.items() if k != "approved"
-                }
+                sanitised_params = _strip_approval_keys(params)
                 try:
-                    approved = bool(
-                        self._approval_provider(action, sanitised_params)
-                    )
-                except Exception:
+                    raw = self._approval_provider(action, sanitised_params)
+                except BaseException:
                     logger.exception(
                         "Trusted approval_provider raised; failing closed | "
                         "action=%s",
-                        action,
+                        _sanitize_log_field(action),
                     )
                     return {
                         "allowed": False,
@@ -572,7 +633,7 @@ class KernelExecuteTool:
                             "denied (fail closed)."
                         ),
                     }
-                if approved:
+                if raw is True:
                     return {"allowed": True, "reason": None}
                 return {
                     "allowed": False,

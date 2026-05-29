@@ -59,6 +59,7 @@ import hashlib
 import json
 import logging
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -67,6 +68,53 @@ from agent_os.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, Circu
 from agent_os.exceptions import SerializationError
 
 logger = logging.getLogger(__name__)
+
+
+_APPROVED_NORMALIZED = "approved"
+
+
+def _is_approval_key(key: Any) -> bool:
+    """Return True for any caller-supplied approval-flag key in
+    confusable form (NFKC case-folded equality to ``approved``)."""
+    if not isinstance(key, str):
+        return False
+    return unicodedata.normalize("NFKC", key).casefold() == _APPROVED_NORMALIZED
+
+
+def _contains_approval_key(value: Any) -> bool:
+    """Recursively detect any approval-flag key in ``value``."""
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if _is_approval_key(k):
+                return True
+            if _contains_approval_key(v):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_approval_key(item) for item in value)
+    return False
+
+
+def _strip_approval_keys(value: Any) -> Any:
+    """Return a deep copy with every approval-flag key removed at
+    every depth (defense against case / NFKC-confusable / nested
+    bypasses)."""
+    if isinstance(value, dict):
+        return {
+            k: _strip_approval_keys(v)
+            for k, v in value.items()
+            if not _is_approval_key(k)
+        }
+    if isinstance(value, list):
+        return [_strip_approval_keys(item) for item in value]
+    return value
+
+
+def _sanitize_log_field(value: Any) -> str:
+    """Neutralize CR/LF/tab in attacker-controlled fields before they
+    reach ``logger.exception``; prevents log forgery against line-
+    oriented log shippers."""
+    text = str(value)
+    return text.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
 
 # ---------------------------------------------------------------------------
 # Optional OpenTelemetry support
@@ -546,15 +594,12 @@ class StatelessKernel:
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
             )
-        effective_params = dict(params)
-        # Strip caller-supplied approval flag unconditionally on key
-        # presence (not truthiness). Defense in depth: prevents falsy
-        # values like ``approved=False`` / ``0`` / ``""`` from being
-        # forwarded to ``IntentManager.check_action`` or
-        # ``_execute_action`` where future handlers might mis-interpret
-        # key-presence as caller intent.
-        if "approved" in effective_params:
-            effective_params.pop("approved", None)
+        effective_params = _strip_approval_keys(dict(params))
+        # ``_strip_approval_keys`` already removed any caller-supplied
+        # approval flag in confusable form (``Approved``, ``APPROVED``,
+        # Cyrillic ``approvеd``) at every depth; ``IntentManager`` and
+        # ``_execute_action`` now never see a caller-controlled approval
+        # signal.
 
         # 2b. Check intent (opt-in: only when intent_id is present)
         intent_metadata: dict[str, Any] = {}
@@ -591,9 +636,9 @@ class StatelessKernel:
             except Exception:
                 logger.exception(
                     "Intent authorization failed closed | agent=%s action=%s intent=%s",
-                    context.agent_id,
-                    action,
-                    context.intent_id,
+                    _sanitize_log_field(context.agent_id),
+                    _sanitize_log_field(action),
+                    _sanitize_log_field(context.intent_id),
                 )
                 return ExecutionResult(
                     success=False,
@@ -771,11 +816,11 @@ class StatelessKernel:
                 # stripped (defense-in-depth); _execute_inner also strips
                 # the flag unconditionally on key presence.
                 drop_caller_approval_param = True
-                if "approved" in params:
+                if _contains_approval_key(params):
                     logger.warning(
                         "Ignoring caller-supplied approval flag | action=%s policy=%s",
-                        action,
-                        policy_name,
+                        _sanitize_log_field(action),
+                        _sanitize_log_field(policy_name),
                     )
                 if not has_trusted_intent:
                     return {
