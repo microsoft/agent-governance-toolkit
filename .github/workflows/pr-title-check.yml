@@ -6,12 +6,15 @@ on:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
-  pull-requests: read
+  contents: read
 
 jobs:
   semantic-title:
     name: Validate PR title
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read    # amannn/action-semantic-pull-request reads the PR title/body
     steps:
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env:

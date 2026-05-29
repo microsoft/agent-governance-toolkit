@@ -58,7 +58,7 @@ parameters:
   - name: rustVersion
     type: string
     displayName: 'Rust toolchain version'
-    default: 'stable'
+    default: '1.70.0'
 
   - name: goVersion
     type: string
@@ -177,9 +177,15 @@ stages:
               displayName: 'Use Python ${{ parameters.pythonVersion }}'
 
             - script: |
-                python -m pip install --upgrade pip
-                pip install --no-cache-dir build==1.2.1 setuptools
-              displayName: 'Install build tools'
+                # Hash-pinned lockfile. --require-hashes refuses any wheel/sdist
+                # whose SHA-256 is not in release-tools.txt; --no-deps stops
+                # pip from quietly resolving extra transitives the lockfile
+                # would not cover. See release-tools/release-tools.txt for the
+                # regeneration command.
+                python -m pip install --no-cache-dir --disable-pip-version-check \
+                  --require-hashes --no-deps \
+                  -r $(Build.SourcesDirectory)/.github/pipelines/release-tools/release-tools.txt
+              displayName: 'Install build tools (hash-pinned)'
 
             - script: |
                 # Consolidated packages use force-include with sibling paths,
@@ -262,7 +268,7 @@ stages:
               inputs:
                 version: '${{ coalesce(pkg.nodeVersion, parameters.nodeVersion) }}'
 
-            - script: npm install --ignore-scripts --legacy-peer-deps
+            - script: npm ci --ignore-scripts --legacy-peer-deps
               workingDirectory: '${{ pkg.path }}'
               displayName: 'Install dependencies'
 
@@ -548,8 +554,31 @@ stages:
           - checkout: self
 
           - script: |
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${{ parameters.rustVersion }}
+              set -euo pipefail
+              RUSTUP_VERSION="1.27.1"
+              RUSTUP_SHA256="6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d"
+              # ``${{ parameters.rustVersion }}`` is expanded at YAML template
+              # *compile* time, before this script ever runs. The runtime
+              # regex below validates the resulting literal one more time as
+              # defense-in-depth: if a future edit promotes rustVersion to a
+              # runtime variable (e.g. ``$(rustVersion)``), the check still
+              # rejects an attacker-controlled toolchain spec like
+              # ``stable --default-toolchain malicious`` that would otherwise
+              # reach ``rustup-init``. The *primary* defense remains the ADO
+              # queue-time parameter ACL: only authorized pipeline runners
+              # may set rustVersion at all.
+              RUST_TOOLCHAIN="${{ parameters.rustVersion }}"
+              if ! printf '%s' "$RUST_TOOLCHAIN" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+                echo "##[error]rustVersion must be an exact version such as 1.70.0, not a mutable channel"
+                exit 1
+              fi
+              curl --proto '=https' --tlsv1.2 -fsSLo rustup-init "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init"
+              echo "${RUSTUP_SHA256}  rustup-init" | sha256sum -c -
+              chmod +x rustup-init
+              ./rustup-init -y --profile minimal --default-toolchain "$RUST_TOOLCHAIN"
               echo "##vso[task.prependpath]$HOME/.cargo/bin"
+              "$HOME/.cargo/bin/rustc" --version
+              "$HOME/.cargo/bin/cargo" --version
             displayName: 'Install Rust ${{ parameters.rustVersion }}'
 
           - script: |

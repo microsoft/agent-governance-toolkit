@@ -345,9 +345,35 @@ jobs:
       - name: Install ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
+        env:
+          PKG: ${{ matrix.package }}
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
+          set -euo pipefail
+          # Deterministic install: each package gets exactly one extras spec, no
+          # error-swallowing fallback chain. Packages without a [dev] extra are
+          # listed explicitly. Adding a new package to the matrix without
+          # updating this case will hard-fail rather than silently degrade.
+          case "$PKG" in
+            agent-compliance|agent-runtime|agent-mcp-governance)
+              pip install --no-cache-dir -e .
+              ;;
+            agent-os|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
+              pip install --no-cache-dir -e ".[dev]"
+              ;;
+            *)
+              echo "::error::Unknown package '$PKG' — update the install case in ci.yml" >&2
+              exit 1
+              ;;
+          esac
+          CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          if [ -f "$CI_TEST_REQS" ]; then
+            # Hash-pinned shared test deps. Previously swallowed errors with
+            # `|| true`, which masked real hash-mismatch / network failures.
+            # If the file exists, the install must succeed.
+            pip install --no-cache-dir --require-hashes -r "$CI_TEST_REQS"
+          else
+            echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
+          fi
           pip install --no-cache-dir pytest-cov==7.1.0  # Scorecard: version-pinned
       - name: Test ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
@@ -588,8 +614,18 @@ jobs:
       - name: Install ${{ matrix.package }}
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
+          # All agentmesh-integrations packages declare a [dev] extra (audited
+          # 2026-05). Deterministic install — no error-swallowing fallback.
+          pip install --no-cache-dir -e ".[dev]"
+          CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          if [ -f "$CI_TEST_REQS" ]; then
+            # Hash-pinned shared test deps. Previously swallowed errors with
+            # `|| true`, which masked real hash-mismatch / network failures.
+            # If the file exists, the install must succeed.
+            pip install --no-cache-dir --require-hashes -r "$CI_TEST_REQS"
+          else
+            echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
+          fi
       - name: Validate Python syntax
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
@@ -745,7 +781,8 @@ jobs:
           node-version: "20"
       - name: Install mastra-agentmesh
         working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
-        run: npm ci 2>/dev/null || npm install --ignore-scripts
+        # Lockfile required; fail fast rather than fall back to an unlocked install (supply-chain integrity).
+        run: npm ci --ignore-scripts
       - name: Lint mastra-agentmesh
         working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm run lint 2>/dev/null || true
@@ -754,7 +791,8 @@ jobs:
         run: npm test
       - name: Install copilot-governance
         working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
-        run: npm ci 2>/dev/null || npm install --ignore-scripts
+        # Lockfile required; fail fast rather than fall back to an unlocked install (supply-chain integrity).
+        run: npm ci --ignore-scripts
       - name: Lint copilot-governance
         working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm run lint 2>/dev/null || true
