@@ -9,7 +9,7 @@ graph states and only intervenes when configured thresholds are exceeded.
 
 The Listener consolidates the full stack:
 - agent-control-plane (base orchestration)
-- scak (intelligence/knowledge)  
+- scak (intelligence/knowledge)
 - iatp (security/trust)
 - caas (context awareness)
 

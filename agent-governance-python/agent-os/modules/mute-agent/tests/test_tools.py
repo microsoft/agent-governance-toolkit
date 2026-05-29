@@ -18,7 +18,6 @@ from core.tools import (
     ResourceState,
     Service,
     Deployment,
-    Artifact,
 )
 
 

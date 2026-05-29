@@ -13,7 +13,7 @@ not retrieved probabilistically at runtime.
 """
 
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 import sys
 import os
@@ -26,17 +26,11 @@ from src.core.tools import (
     User,
     UserRole,
     Environment,
-    ResourceState,
-    Service,
 )
 
 # Import Mute Agent core
 from mute_agent import (
-    ReasoningAgent,
-    ExecutionAgent,
-    HandshakeProtocol,
     MultidimensionalKnowledgeGraph,
-    SuperSystemRouter,
 )
 from mute_agent.knowledge_graph.graph_elements import Node, Edge, NodeType, EdgeType
 from mute_agent.knowledge_graph.subgraph import Dimension
@@ -49,18 +43,18 @@ class MuteAgentResult:
     action_taken: Optional[str]
     parameters_used: Optional[Dict[str, Any]]
     final_result: Optional[Dict[str, Any]]
-    
+
     # Failure analysis
     constraint_violation: Optional[str]
     blocked_by_graph: bool
     safety_violation: bool
     state_misalignment: bool
-    
+
     # Performance metrics
     token_count: int
     graph_traversals: int
     latency_ms: float
-    
+
     # No clarification needed - graph is deterministic
     needed_clarification: bool = False
 
@@ -68,16 +62,16 @@ class MuteAgentResult:
 class GraphEngine:
     """
     Graph Engine for Mute Agent - builds state-aware constraint graphs.
-    
+
     This is extracted as a separate component per the PRD structure.
     """
-    
+
     def __init__(self, api: MockInfrastructureAPI):
         """Initialize graph engine with access to infrastructure state."""
         self.api = api
         self.kg = MultidimensionalKnowledgeGraph()
         self._initialize_dimensions()
-    
+
     def _initialize_dimensions(self):
         """Initialize the dimensional subgraphs."""
         # Dimension 1: Operations (what actions are available)
@@ -87,7 +81,7 @@ class GraphEngine:
             priority=10
         )
         self.kg.add_dimension(operations_dim)
-        
+
         # Dimension 2: Permissions (who can do what)
         permissions_dim = Dimension(
             name="permissions",
@@ -95,7 +89,7 @@ class GraphEngine:
             priority=9
         )
         self.kg.add_dimension(permissions_dim)
-        
+
         # Dimension 3: State (resource state constraints)
         state_dim = Dimension(
             name="state",
@@ -103,7 +97,7 @@ class GraphEngine:
             priority=8
         )
         self.kg.add_dimension(state_dim)
-        
+
         # Dimension 4: Context (current focus tracking)
         context_dim = Dimension(
             name="context",
@@ -111,30 +105,30 @@ class GraphEngine:
             priority=7
         )
         self.kg.add_dimension(context_dim)
-    
+
     def build_graph_from_state(self, context: SessionContext) -> MultidimensionalKnowledgeGraph:
         """
         Build a constraint graph from current infrastructure state.
-        
+
         This is the key difference from baseline: The graph encodes
         ALL context, so the agent doesn't need to reason about it.
         """
         # Get current system state
         system_state = self.api.get_system_state(context)
-        
+
         # Clear existing nodes (rebuild fresh each time)
         self.kg = MultidimensionalKnowledgeGraph()
         self._initialize_dimensions()
-        
+
         # Build graph for current state
         self._add_operation_nodes()
         self._add_service_nodes(system_state, context)
         self._add_permission_constraints(context.user, system_state)
         self._add_state_constraints(system_state)
         self._add_context_constraints(context, system_state)
-        
+
         return self.kg
-    
+
     def _add_operation_nodes(self):
         """Add operation action nodes."""
         operations = [
@@ -144,7 +138,7 @@ class GraphEngine:
             ("force_delete", "Force delete a resource"),
             ("get_logs", "Get service logs"),
         ]
-        
+
         for op_id, description in operations:
             node = Node(
                 id=op_id,
@@ -152,11 +146,11 @@ class GraphEngine:
                 attributes={"description": description}
             )
             self.kg.add_node_to_dimension("operations", node)
-    
+
     def _add_service_nodes(self, system_state: Dict[str, Any], context: SessionContext):
         """Add nodes for each service."""
         services = system_state.get("services", {})
-        
+
         for service_id, service_data in services.items():
             node = Node(
                 id=service_id,
@@ -169,7 +163,7 @@ class GraphEngine:
                 }
             )
             self.kg.add_node_to_dimension("operations", node)
-            
+
             # Add to context dimension if this is the current focus
             if context.current_focus == service_id:
                 focus_node = Node(
@@ -178,7 +172,7 @@ class GraphEngine:
                     attributes={"service_id": service_id, "is_current_focus": True}
                 )
                 self.kg.add_node_to_dimension("context", focus_node)
-                
+
                 # Add edge from operations to focused service
                 # This makes operations on the focused service valid
                 for operation in ["restart_service", "scale_service", "force_delete"]:
@@ -189,7 +183,7 @@ class GraphEngine:
                         attributes={"reason": "service_in_focus"}
                     )
                     self.kg.add_edge_to_dimension("context", edge)
-    
+
     def _add_permission_constraints(self, user: User, system_state: Dict[str, Any]):
         """Add permission-based constraints."""
         # Add user node
@@ -199,13 +193,13 @@ class GraphEngine:
             attributes={"role": user.role.value}
         )
         self.kg.add_node_to_dimension("permissions", user_node)
-        
+
         services = system_state.get("services", {})
-        
+
         for service_id, service_data in services.items():
             env_str = service_data["environment"]
             env = Environment[env_str.upper()] if env_str.upper() in Environment.__members__ else Environment.DEV
-            
+
             # Add permission edges based on user role and environment
             if user.can_write_to(env):
                 # User can perform write operations on this service
@@ -217,7 +211,7 @@ class GraphEngine:
                         attributes={"permission": "write", "environment": env_str}
                     )
                     self.kg.add_edge_to_dimension("permissions", edge)
-            
+
             # Force delete requires SRE/Admin
             if user.role in [UserRole.SRE, UserRole.ADMIN]:
                 edge = Edge(
@@ -227,14 +221,14 @@ class GraphEngine:
                     attributes={"permission": "force_delete"}
                 )
                 self.kg.add_edge_to_dimension("permissions", edge)
-    
+
     def _add_state_constraints(self, system_state: Dict[str, Any]):
         """Add state-based constraints (e.g., can't restart PARTIAL services)."""
         services = system_state.get("services", {})
-        
+
         for service_id, service_data in services.items():
             state = service_data["state"]
-            
+
             if state == "partial":
                 # PARTIAL services can't be restarted or scaled
                 # Only force_delete is allowed
@@ -244,11 +238,11 @@ class GraphEngine:
                         source_id=operation,
                         target_id=service_id,
                         edge_type=EdgeType.CONFLICTS_WITH,
-                        attributes={"reason": f"service_in_{state}_state", 
+                        attributes={"reason": f"service_in_{state}_state",
                                    "suggestion": "use_force_delete"}
                     )
                     self.kg.add_edge_to_dimension("state", edge)
-            
+
             elif state == "running":
                 # Running services can be restarted and scaled
                 for operation in ["restart_service", "scale_service"]:
@@ -259,7 +253,7 @@ class GraphEngine:
                         attributes={"state": state}
                     )
                     self.kg.add_edge_to_dimension("state", edge)
-            
+
             elif state == "stopped":
                 # Stopped services can be started but not restarted
                 edge = Edge(
@@ -269,11 +263,11 @@ class GraphEngine:
                     attributes={"state": state}
                 )
                 self.kg.add_edge_to_dimension("state", edge)
-    
+
     def _add_context_constraints(self, context: SessionContext, system_state: Dict[str, Any]):
         """
         Add context-based constraints.
-        
+
         This is the KEY to solving the "Stale State" scenario:
         The graph encodes which service is currently in focus.
         """
@@ -286,7 +280,7 @@ class GraphEngine:
                 attributes={"service_id": context.current_focus}
             )
             self.kg.add_node_to_dimension("context", focus_node)
-            
+
             # Add edge prioritizing current focus for ambiguous operations
             for operation in ["restart_service", "scale_service"]:
                 edge = Edge(
@@ -301,21 +295,21 @@ class GraphEngine:
 class MuteAgent:
     """
     The Mute Agent - Graph-Constrained Agent
-    
+
     Uses the Mute Agent architecture with state-aware graph constraints.
     """
-    
+
     # Token costs (much lower due to graph pruning)
     BASE_SYSTEM_PROMPT_TOKENS = 200  # No tool definitions needed
     GRAPH_TRAVERSAL_TOKENS = 50  # Per graph query
     VALIDATION_TOKENS = 100  # Constraint checking
-    
+
     def __init__(self, api: MockInfrastructureAPI):
         """Initialize with access to infrastructure API."""
         self.api = api
         self.graph_engine = GraphEngine(api)
         self.execution_history: List[MuteAgentResult] = []
-    
+
     def execute_request(
         self,
         user_command: str,
@@ -323,31 +317,31 @@ class MuteAgent:
     ) -> MuteAgentResult:
         """
         Execute a user request using graph-based constraints.
-        
+
         No reflection loops, no clarification needed - the graph
         encodes all context deterministically.
         """
         start_time = datetime.now()
         token_count = self.BASE_SYSTEM_PROMPT_TOKENS
         graph_traversals = 0
-        
+
         # Build graph from current state
         kg = self.graph_engine.build_graph_from_state(context)
         token_count += self.GRAPH_TRAVERSAL_TOKENS
         graph_traversals += 1
-        
+
         # Parse command to determine intent
         intent = self._parse_command(user_command)
-        
+
         # Resolve parameters using graph
         resolution = self._resolve_with_graph(intent, user_command, context, kg)
         token_count += self.GRAPH_TRAVERSAL_TOKENS
         graph_traversals += 1
-        
+
         if resolution["blocked"]:
             # Graph constraint prevented execution
             latency = (datetime.now() - start_time).total_seconds() * 1000
-            
+
             result = MuteAgentResult(
                 success=False,
                 action_taken=intent,
@@ -361,10 +355,10 @@ class MuteAgent:
                 graph_traversals=graph_traversals,
                 latency_ms=latency,
             )
-            
+
             self.execution_history.append(result)
             return result
-        
+
         # Execute the action
         token_count += self.VALIDATION_TOKENS
         result = self._execute_action(
@@ -374,17 +368,17 @@ class MuteAgent:
             token_count,
             graph_traversals
         )
-        
+
         latency = (datetime.now() - start_time).total_seconds() * 1000
         result.latency_ms = latency
-        
+
         self.execution_history.append(result)
         return result
-    
+
     def _parse_command(self, command: str) -> str:
         """Parse user command to determine intent."""
         command_lower = command.lower()
-        
+
         if "restart" in command_lower:
             return "restart_service"
         elif "scale" in command_lower:
@@ -399,7 +393,7 @@ class MuteAgent:
             return "restart_service"
         else:
             return "unknown"
-    
+
     def _resolve_with_graph(
         self,
         intent: str,
@@ -409,16 +403,16 @@ class MuteAgent:
     ) -> Dict[str, Any]:
         """
         Resolve parameters using graph constraints.
-        
+
         This is deterministic - no guessing, no hallucination.
         """
         # Get current focus from context
         target_service = None
-        
+
         # Check if service is explicitly mentioned in command
         system_state = self.api.get_system_state(context)
         services = system_state.get("services", {})
-        
+
         # Try explicit match first
         for service_id, service_data in services.items():
             service_name = service_data.get("name", "").lower()
@@ -436,16 +430,16 @@ class MuteAgent:
                 if len(matching) == 1:
                     target_service = service_id
                     break
-        
+
         # If no explicit match and command uses pronoun ("it", "the service")
         # Use current focus from graph
         if not target_service and any(word in command.lower() for word in ["it", "the service", "this"]):
             target_service = context.current_focus
-        
+
         # If still no target, check for last log viewed
         if not target_service and context.last_log_viewed:
             target_service = context.last_log_viewed
-        
+
         if not target_service:
             return {
                 "blocked": True,
@@ -454,10 +448,10 @@ class MuteAgent:
                 "parameters": None,
                 "safety_violation": False,
             }
-        
+
         # Check graph constraints for this action + target
         validation = self._validate_action_in_graph(intent, target_service, kg, context)
-        
+
         if not validation["valid"]:
             return {
                 "blocked": True,
@@ -466,10 +460,10 @@ class MuteAgent:
                 "parameters": {"service_id": target_service},
                 "safety_violation": validation.get("safety_violation", False),
             }
-        
+
         # Action is valid - prepare parameters
         parameters = {"service_id": target_service}
-        
+
         # Add extra parameters for specific actions
         if intent == "scale_service":
             import re
@@ -485,7 +479,7 @@ class MuteAgent:
                 if match:
                     replicas = int(match.group(1))
                     break
-            
+
             if replicas is not None:
                 parameters["replicas"] = replicas
             else:
@@ -496,13 +490,13 @@ class MuteAgent:
                     "parameters": parameters,
                     "safety_violation": False,
                 }
-        
+
         return {
             "blocked": False,
             "action": intent,
             "parameters": parameters,
         }
-    
+
     def _validate_action_in_graph(
         self,
         action: str,
@@ -512,7 +506,7 @@ class MuteAgent:
     ) -> Dict[str, Any]:
         """
         Validate if action is allowed by checking all graph constraints.
-        
+
         This checks:
         1. Permission dimension - does user have rights?
         2. State dimension - is service in right state?
@@ -530,7 +524,7 @@ class MuteAgent:
                             "reason": f"Action {action} conflicts with service state. {suggestion}",
                             "safety_violation": False,
                         }
-        
+
         # Check permissions dimension
         permissions_subgraph = kg.get_subgraph("permissions")
         if permissions_subgraph:
@@ -541,22 +535,22 @@ class MuteAgent:
                     if edge.edge_type == EdgeType.ENABLES:
                         has_permission = True
                         break
-            
+
             if not has_permission and action != "get_logs":
                 # Get service environment to provide helpful error
                 system_state = self.api.get_system_state(context)
                 services = system_state.get("services", {})
                 service_data = services.get(service_id, {})
                 env = service_data.get("environment", "unknown")
-                
+
                 return {
                     "valid": False,
                     "reason": f"User {context.user.name} ({context.user.role.value}) lacks permission for {action} on {env} environment",
                     "safety_violation": True,  # Permission violation is a safety issue
                 }
-        
+
         return {"valid": True}
-    
+
     def _execute_action(
         self,
         action: str,
@@ -581,10 +575,10 @@ class MuteAgent:
             result = self.api.force_delete(parameters["service_id"], context)
         else:
             result = {"error": "Unknown action"}
-        
+
         success = result.get("success", False)
         safety_violation = result.get("safety_violation", False)
-        
+
         return MuteAgentResult(
             success=success,
             action_taken=action,
@@ -598,21 +592,21 @@ class MuteAgent:
             graph_traversals=graph_traversals,
             latency_ms=0,  # Will be set by caller
         )
-    
+
     def get_statistics(self) -> Dict[str, Any]:
         """Get performance statistics."""
         if not self.execution_history:
             return {}
-        
+
         total = len(self.execution_history)
         successful = len([r for r in self.execution_history if r.success])
         blocked = len([r for r in self.execution_history if r.blocked_by_graph])
         safety_violations = len([r for r in self.execution_history if r.safety_violation])
-        
+
         avg_tokens = sum(r.token_count for r in self.execution_history) / total
         avg_latency = sum(r.latency_ms for r in self.execution_history) / total
         avg_traversals = sum(r.graph_traversals for r in self.execution_history) / total
-        
+
         return {
             "total_executions": total,
             "success_rate": successful / total if total > 0 else 0,

@@ -5,7 +5,7 @@
 Knowledge Graph Node and Edge definitions.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -37,7 +37,7 @@ class Node:
     node_type: NodeType
     attributes: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
+
     def matches_constraint(self, constraint: Dict[str, Any]) -> bool:
         """Check if node matches given constraints."""
         for key, value in constraint.items():
@@ -60,7 +60,7 @@ class Edge:
     edge_type: EdgeType
     weight: float = 1.0
     attributes: Dict[str, Any] = field(default_factory=dict)
-    
+
     def is_valid(self) -> bool:
         """Check if edge is valid."""
         return self.weight > 0 and self.source_id and self.target_id

@@ -9,7 +9,7 @@ without interfering until configured thresholds are exceeded.
 Consolidated Stack:
 - agent-control-plane: Base orchestration
 - scak: Intelligence/Knowledge layer
-- iatp: Security/Trust layer  
+- iatp: Security/Trust layer
 - caas: Context-as-a-Service layer
 """
 

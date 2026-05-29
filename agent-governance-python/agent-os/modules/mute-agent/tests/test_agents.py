@@ -12,7 +12,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 import pytest
-from datetime import datetime
 
 
 # ---------------------------------------------------------------------------
@@ -30,7 +29,6 @@ def _import_mute_agent_result():
         pass
 
     # Fallback: load only the dataclass via AST / source manipulation
-    import importlib.util
     import types
 
     src_path = os.path.join(os.path.dirname(__file__), '..', 'src', 'agents', 'mute_agent.py')

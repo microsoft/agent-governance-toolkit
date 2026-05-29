@@ -14,11 +14,10 @@ could not reach certain nodes because the path was severed.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Any
+from typing import Dict, List, Optional, Any
 from enum import Enum
 from datetime import datetime
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ except ImportError:
 
 try:
     import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
+    import matplotlib.patches as mpatches  # noqa: F401  # availability probe
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -71,17 +70,17 @@ class GraphDebugger:
     The Graph Debugger generates visual artifacts for every execution.
     Shows deterministic safety by visualizing which paths were accessible.
     """
-    
+
     def __init__(self, knowledge_graph=None):
         """
         Initialize the Graph Debugger.
-        
+
         Args:
             knowledge_graph: The MultidimensionalKnowledgeGraph to visualize
         """
         self.knowledge_graph = knowledge_graph
         self.traces: List[ExecutionTrace] = []
-        
+
         if not VISUALIZATION_AVAILABLE:
             missing = []
             if not NETWORKX_AVAILABLE:
@@ -92,7 +91,7 @@ class GraphDebugger:
                 missing.append("matplotlib")
             print(f"Warning: Visualization libraries not available: {', '.join(missing)}")
             print("Install with: pip install matplotlib networkx pyvis")
-    
+
     def create_trace(
         self,
         session_id: str,
@@ -107,7 +106,7 @@ class GraphDebugger:
         )
         self.traces.append(trace)
         return trace
-    
+
     def record_node_visit(self, trace: ExecutionTrace, node_id: str, success: bool):
         """Record a node visit in the trace."""
         trace.traversed_nodes.append(node_id)
@@ -116,18 +115,18 @@ class GraphDebugger:
         else:
             trace.node_states[node_id] = NodeState.FAILURE
             trace.failed_node = node_id
-    
+
     def record_edge_traversal(self, trace: ExecutionTrace, source_id: str, target_id: str):
         """Record an edge traversal."""
         trace.edge_traversals.append((source_id, target_id))
-    
+
     def mark_unreachable_nodes(self, trace: ExecutionTrace, all_node_ids: List[str]):
         """Mark nodes that were not reached as unreachable."""
         reached = set(trace.traversed_nodes)
         for node_id in all_node_ids:
             if node_id not in reached and node_id not in trace.node_states:
                 trace.node_states[node_id] = NodeState.UNREACHABLE
-    
+
     def visualize_trace(
         self,
         trace: ExecutionTrace,
@@ -136,26 +135,26 @@ class GraphDebugger:
     ) -> str:
         """
         Generate a visual artifact for the execution trace.
-        
+
         Args:
             trace: The execution trace to visualize
             output_path: Where to save the visualization
             format: 'html' (interactive) or 'png' (static image)
-        
+
         Returns:
             Path to the generated visualization
         """
         if not VISUALIZATION_AVAILABLE:
             print("Cannot generate visualization: libraries not installed")
             return ""
-        
+
         if format == "html":
             return self._generate_interactive_html(trace, output_path)
         elif format == "png":
             return self._generate_static_png(trace, output_path)
         else:
             raise ValueError(f"Unsupported format: {format}")
-    
+
     def _generate_interactive_html(self, trace: ExecutionTrace, output_path: str) -> str:
         """Generate an interactive HTML visualization using pyvis."""
         # Create a directed graph
@@ -167,7 +166,7 @@ class GraphDebugger:
             bgcolor="#ffffff",
             font_color="#000000"
         )
-        
+
         # Configure physics for better layout
         net.set_options("""
         {
@@ -199,11 +198,11 @@ class GraphDebugger:
           }
         }
         """)
-        
+
         # Add nodes with colors based on state
         for node_id, state in trace.node_states.items():
             color, title = self._get_node_style(node_id, state, trace)
-            
+
             # Make failed node stand out
             if state == NodeState.FAILURE:
                 net.add_node(
@@ -223,7 +222,7 @@ class GraphDebugger:
                     title=title,
                     size=20
                 )
-        
+
         # Add edges from knowledge graph if available
         if self.knowledge_graph:
             self._add_edges_from_knowledge_graph(net, trace)
@@ -233,28 +232,28 @@ class GraphDebugger:
                 # Check if edge was part of success or failure path
                 edge_color = "#2ecc71" if source in trace.traversed_nodes else "#95a5a6"
                 net.add_edge(source, target, color=edge_color, width=2)
-        
+
         # Add legend as HTML title
         html_legend = self._create_html_legend(trace)
-        
+
         # Generate the HTML
         net.save_graph(output_path)
-        
+
         # Insert legend into HTML
         self._inject_legend_into_html(output_path, html_legend)
-        
+
         print(f"Interactive visualization saved to: {output_path}")
         return output_path
-    
+
     def _generate_static_png(self, trace: ExecutionTrace, output_path: str) -> str:
         """Generate a static PNG visualization using matplotlib and networkx."""
         # Create a directed graph
         G = nx.DiGraph()
-        
+
         # Add nodes
         for node_id in trace.node_states.keys():
             G.add_node(node_id)
-        
+
         # Add edges
         if self.knowledge_graph:
             # Extract edges from knowledge graph
@@ -265,17 +264,17 @@ class GraphDebugger:
         else:
             for source, target in trace.edge_traversals:
                 G.add_edge(source, target)
-        
+
         # Create figure
         plt.figure(figsize=(14, 10))
-        
+
         # Use hierarchical layout
         try:
             pos = nx.spring_layout(G, k=2, iterations=50)
         except (ValueError, RuntimeError) as e:
             logger.debug("spring_layout failed, falling back to shell_layout: %s", e)
             pos = nx.shell_layout(G)
-        
+
         # Draw nodes with colors based on state
         for state in NodeState:
             nodes = [n for n, s in trace.node_states.items() if s == state]
@@ -289,7 +288,7 @@ class GraphDebugger:
                     label=label,
                     alpha=0.9
                 )
-        
+
         # Draw edges
         nx.draw_networkx_edges(
             G, pos,
@@ -299,7 +298,7 @@ class GraphDebugger:
             width=2,
             alpha=0.6
         )
-        
+
         # Highlight traversed edges
         traversed_edges = [(s, t) for s, t in trace.edge_traversals if G.has_edge(s, t)]
         if traversed_edges:
@@ -312,10 +311,10 @@ class GraphDebugger:
                 width=3,
                 alpha=0.9
             )
-        
+
         # Draw labels
         nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
-        
+
         # Add title and legend
         plt.title(
             f"Execution Trace: {trace.action_id}\n"
@@ -324,18 +323,18 @@ class GraphDebugger:
             fontweight='bold',
             pad=20
         )
-        
+
         plt.legend(loc='upper left', fontsize=10)
         plt.axis('off')
         plt.tight_layout()
-        
+
         # Save
         plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
-        
+
         print(f"Static visualization saved to: {output_path}")
         return output_path
-    
+
     def _get_node_style(self, node_id: str, state: NodeState, trace: ExecutionTrace) -> tuple:
         """Get node color and title based on state."""
         if state == NodeState.SUCCESS:
@@ -351,9 +350,9 @@ class GraphDebugger:
         else:
             color = "#3498db"  # Blue
             title = f"{node_id}\n○ Pending"
-        
+
         return color, title
-    
+
     def _get_node_color_for_png(self, state: NodeState) -> tuple:
         """Get node color and label for PNG visualization."""
         if state == NodeState.SUCCESS:
@@ -364,14 +363,14 @@ class GraphDebugger:
             return "#95a5a6", "Unreachable (Path Severed)"
         else:
             return "#3498db", "Pending"
-    
+
     def _add_edges_from_knowledge_graph(self, net, trace: ExecutionTrace):
         """Add edges from the knowledge graph to the visualization."""
         if not self.knowledge_graph:
             return
-        
+
         traversed = set(trace.traversed_nodes)
-        
+
         for dim_name, subgraph in self.knowledge_graph.subgraphs.items():
             for edge in subgraph.edges:
                 # Only add edges between nodes that are in the trace
@@ -383,7 +382,7 @@ class GraphDebugger:
                     else:
                         color = "#95a5a6"  # Grey for not traversed
                         width = 1
-                    
+
                     title = f"{edge.edge_type.value}: {edge.source_id} → {edge.target_id}"
                     net.add_edge(
                         edge.source_id,
@@ -392,16 +391,16 @@ class GraphDebugger:
                         width=width,
                         title=title
                     )
-    
+
     def _create_html_legend(self, trace: ExecutionTrace) -> str:
         """Create HTML legend for the visualization."""
         success_count = sum(1 for s in trace.node_states.values() if s == NodeState.SUCCESS)
         failure_count = sum(1 for s in trace.node_states.values() if s == NodeState.FAILURE)
         unreachable_count = sum(1 for s in trace.node_states.values() if s == NodeState.UNREACHABLE)
-        
+
         legend = f"""
-        <div style="position: absolute; top: 10px; right: 10px; background: white; 
-                    padding: 15px; border: 2px solid #ccc; border-radius: 5px; 
+        <div style="position: absolute; top: 10px; right: 10px; background: white;
+                    padding: 15px; border: 2px solid #ccc; border-radius: 5px;
                     font-family: Arial; max-width: 300px;">
             <h3 style="margin: 0 0 10px 0;">Execution Trace Legend</h3>
             <p style="margin: 5px 0;"><span style="color: #2ecc71;">●</span> <strong>Green:</strong> Traversed successfully ({success_count})</p>
@@ -414,16 +413,16 @@ class GraphDebugger:
         </div>
         """
         return legend
-    
+
     def _inject_legend_into_html(self, html_path: str, legend_html: str):
         """Inject legend HTML into the generated visualization."""
         try:
             with open(html_path, 'r') as f:
                 html_content = f.read()
-            
+
             # Insert legend before closing body tag
             html_content = html_content.replace('</body>', f'{legend_html}</body>')
-            
+
             with open(html_path, 'w') as f:
                 f.write(html_content)
         except FileNotFoundError:
@@ -432,7 +431,7 @@ class GraphDebugger:
             print(f"Warning: Permission denied writing to: {html_path}")
         except Exception as e:
             print(f"Warning: Could not inject legend: {type(e).__name__}: {e}")
-    
+
     def generate_comparison_visualization(
         self,
         traces: List[ExecutionTrace],
@@ -445,30 +444,30 @@ class GraphDebugger:
         if not VISUALIZATION_AVAILABLE:
             print("Cannot generate visualization: libraries not installed")
             return ""
-        
+
         num_traces = len(traces)
         fig, axes = plt.subplots(1, num_traces, figsize=(7 * num_traces, 6))
-        
+
         if num_traces == 1:
             axes = [axes]
-        
+
         for idx, trace in enumerate(traces):
             ax = axes[idx]
-            
+
             # Create graph for this trace
             G = nx.DiGraph()
             for node_id in trace.node_states.keys():
                 G.add_node(node_id)
             for source, target in trace.edge_traversals:
                 G.add_edge(source, target)
-            
+
             # Layout
             try:
                 pos = nx.spring_layout(G, k=1.5, iterations=50)
             except (ValueError, RuntimeError) as e:
                 logger.debug("spring_layout failed, falling back to shell_layout: %s", e)
                 pos = nx.shell_layout(G)
-            
+
             # Draw nodes
             for state in NodeState:
                 nodes = [n for n, s in trace.node_states.items() if s == state]
@@ -482,22 +481,22 @@ class GraphDebugger:
                         alpha=0.9,
                         ax=ax
                     )
-            
+
             # Draw edges
-            nx.draw_networkx_edges(G, pos, edge_color='#95a5a6', 
-                                  arrows=True, arrowsize=15, width=1.5, 
+            nx.draw_networkx_edges(G, pos, edge_color='#95a5a6',
+                                  arrows=True, arrowsize=15, width=1.5,
                                   alpha=0.6, ax=ax)
-            
+
             # Draw labels
             nx.draw_networkx_labels(G, pos, font_size=8, font_weight='bold', ax=ax)
-            
+
             ax.set_title(f"Trace {idx + 1}: {trace.action_id}", fontweight='bold')
             ax.axis('off')
-        
+
         plt.suptitle("Execution Trace Comparison", fontsize=16, fontweight='bold')
         plt.tight_layout()
         plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
-        
+
         print(f"Comparison visualization saved to: {output_path}")
         return output_path

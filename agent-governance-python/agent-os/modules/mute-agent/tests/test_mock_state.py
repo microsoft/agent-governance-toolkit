@@ -11,7 +11,6 @@ import pytest
 from core.mock_state import (
     MockState,
     MockStateConfig,
-    ContextEvent,
     ContextEventType,
     create_stale_pointer_scenario,
     create_zombie_resource_scenario,
