@@ -10,9 +10,12 @@ Scans for:
 
 ## Quick Start
 
+> **Breaking change (vNEXT):** `toolkit-version` is now **required**. Pin to an exact published release (e.g. `3.7.0`); wildcards and floating refs are rejected.
+
 ```yaml
 - uses: microsoft/agent-governance-toolkit/action/security-scan@v2
   with:
+    toolkit-version: "3.7.0"
     paths: 'plugins/'
 ```
 
@@ -67,7 +70,7 @@ Scans for:
 | `min-severity` | Minimum severity to block (`critical`, `high`, `medium`, `low`) | No | `high` |
 | `verbose` | Enable verbose output | No | `false` |
 | `python-version` | Python version to use | No | `3.12` |
-| `toolkit-version` | Toolkit version to install | No | (latest) |
+| `toolkit-version` | Exact toolkit version to install (e.g. `3.7.0`) | **Yes** | |
 
 ## Outputs
 

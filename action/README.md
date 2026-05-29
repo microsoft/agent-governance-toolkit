@@ -7,11 +7,13 @@ Add governance as a required CI check with minimal configuration.
 
 ## Quick Start
 
+> **Breaking change (vNEXT):** `toolkit-version` is now **required**. Pin to an exact published release (e.g. `3.7.0`); wildcards and floating refs are rejected.
+
 ```yaml
 - uses: microsoft/agent-governance-toolkit/action@v2
+  with:
+    toolkit-version: "3.7.0"
 ```
-
-That's it — runs `agent-compliance verify` against your repo.
 
 ## Usage Examples
 
@@ -96,7 +98,7 @@ jobs:
 | `output-format` | Output format: `text`, `json`, `badge` | No | `text` |
 | `fail-on-warning` | Fail on warnings (not just errors) | No | `false` |
 | `python-version` | Python version to use | No | `3.12` |
-| `toolkit-version` | Toolkit version to install (default: latest) | No | |
+| `toolkit-version` | Exact toolkit version to install (e.g. `3.7.0`) | **Yes** | |
 
 ## Outputs
 

@@ -64,6 +64,10 @@ runs:
           echo "::error::toolkit-version must be set to an exact published version"
           exit 1
         fi
+        if ! printf '%s' "$AGT_TOOLKIT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.+-][A-Za-z0-9._+-]+)?$'; then
+          echo "::error::toolkit-version must be an exact version (e.g. 3.7.0); got: $AGT_TOOLKIT_VERSION"
+          exit 1
+        fi
         python -m pip install --quiet --no-cache-dir --disable-pip-version-check "agent-governance-toolkit[security]==$AGT_TOOLKIT_VERSION"
 
     - name: Run security scan

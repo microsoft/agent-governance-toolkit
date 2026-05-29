@@ -6,8 +6,12 @@ Ensures PRs contain properly filled governance attestations with exactly one che
 
 ## Quick Start
 
+> **Breaking change (vNEXT):** `toolkit-version` is now **required**. Pin to an exact published release (e.g. `3.7.0`); wildcards and floating refs are rejected.
+
 ```yaml
 - uses: microsoft/agent-governance-toolkit/action/governance-attestation@v2
+  with:
+    toolkit-version: "3.7.0"
 ```
 
 This validates the current PR's description against the standard 7-section governance attestation.
@@ -50,7 +54,7 @@ This validates the current PR's description against the standard 7-section gover
 | `required-sections` | YAML list of section titles (one per line) | No | Standard 7 sections |
 | `min-body-length` | Minimum PR body length | No | `40` |
 | `python-version` | Python version to use | No | `3.12` |
-| `toolkit-version` | Toolkit version to install | No | (latest) |
+| `toolkit-version` | Exact toolkit version to install (e.g. `3.7.0`) | **Yes** | |
 
 ## Outputs
 
