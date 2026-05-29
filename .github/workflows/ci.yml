@@ -332,12 +332,12 @@ jobs:
       - name: Install local sibling dependencies
         if: steps.gate.outputs.run == 'true'
         run: |
-          # agent-os depends on agent_primitives (local, not on PyPI at >=3.x)
-          # and agentmesh (test_cmd_sign.py imports agentmesh.marketplace)
-          if [ "${{ matrix.package }}" = "agent-os" ]; then
-            pip install --no-cache-dir -e agent-governance-python/agent-primitives
-            pip install --no-cache-dir -e agent-governance-python/agent-mesh
-          fi
+          # Install consolidated packages from local source (not yet on PyPI).
+          # Most packages depend on these, so install them first.
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-core
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
       - name: Install ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
@@ -639,6 +639,8 @@ jobs:
           python3 -c "
           import json, glob, sys, re
           REGISTERED = {
+              'agent-governance-toolkit-core','agent-governance-toolkit-integrations',
+              'agent-governance-toolkit-cli','agent-governance-toolkit-protocols',
               'agent-os-kernel','agentmesh-platform','agent-hypervisor',
               'agentmesh-runtime','agent-sre','agent-governance-toolkit',
               'agentmesh-lightning','agentmesh-marketplace',

@@ -32,6 +32,11 @@ except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback
 
 # Known registered PyPI package names for this project
 REGISTERED_PACKAGES = {
+    # Consolidated packages (v4.0.0+)
+    "agent-governance-toolkit-core", "agent_governance_toolkit_core",
+    "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
+    "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
+    "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
     # Core packages (on PyPI) — both hyphen and underscore variants
     "agent-os-kernel", "agent_os_kernel",
     "agentmesh-platform", "agentmesh_platform",
