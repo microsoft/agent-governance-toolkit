@@ -62,6 +62,12 @@ COPY . /workspace
 # Scorecard: pinned via pyproject.toml. Requirements file dependencies
 # have version constraints.
 # Scorecard: editable installs pinned to repo checkout via pyproject.toml
+#
+# The consolidated v4.0.0 packages (agent-governance-toolkit-{core,cli,
+# integrations,protocols}) are not yet published to PyPI, but the legacy
+# shim packages below declare hard dependencies on them. Pre-install them
+# from local source with --no-deps so the subsequent shim installs resolve
+# without reaching out to PyPI for the unpublished names.
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --no-deps \
         -e "agent-governance-python/agent-governance-toolkit-core" \

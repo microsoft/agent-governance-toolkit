@@ -1,35 +1,74 @@
 # Agent Sandbox
 
-Public Preview — Docker-based execution isolation for AI agents with
-policy-driven resource limits, tool proxies, network enforcement, and
-filesystem checkpointing.
+Public Preview — execution isolation for AI agents with policy-driven
+resource limits, tool proxies, network enforcement, and filesystem
+checkpointing. Ships three interchangeable backends behind the same
+`SandboxProvider` ABC.
 
 Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
+
+## Providers at a glance
+
+| Provider | Isolation primitive | Best for | Extra |
+|----------|--------------------|----------|-------|
+| `DockerSandboxProvider` | Hardened OCI container (runc, auto-upgrades to gVisor / Kata) | Local dev, CI, self-hosted runners | `agt-sandbox[docker]` |
+| `HyperLightSandboxProvider` | KVM / mshv / WHP micro-VM via [hyperlight-sandbox](https://github.com/hyperlight-dev/hyperlight-sandbox) | Sub-millisecond cold start, per-call VM isolation | `agt-sandbox[hyperlight]` |
+| `ACASandboxProvider` | [Azure Container Apps sandbox](https://github.com/microsoft/azure-container-apps) (managed) | Production, multi-tenant, no infra to run | `agt-sandbox[azure]` + the [early-access SDK wheel](https://github.com/microsoft/azure-container-apps/releases) |
+
+All three implement the same async + sync API (`create_session`,
+`execute_code`, `destroy_session`, plus `*_async` variants) and consume
+the same `PolicyDocument` for resource caps, network allowlists, and
+tool allowlists.
 
 ## Installation
 
 ```bash
-pip install agt-sandbox[full]
+# Everything (Docker + Hyperlight + policy engine):
+pip install "agt-sandbox[full]"
+
+# Pick what you need:
+pip install "agt-sandbox[docker]"
+pip install "agt-sandbox[hyperlight]"
+pip install "agt-sandbox[azure,policy]"
 ```
 
-## Quick Start
+The Azure data-plane SDK ships as an early-access wheel — pin the URL:
+
+```bash
+pip install https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
+```
+
+## Quick start (all three providers)
 
 ```python
-from agent_sandbox import DockerSandboxProvider
+from agent_sandbox import (
+    DockerSandboxProvider,
+    HyperLightSandboxProvider,
+    ACASandboxProvider,
+)
 
+# Pick one:
 provider = DockerSandboxProvider()
+# provider = HyperLightSandboxProvider(backend="wasm")
+# provider = ACASandboxProvider(
+#     resource_group="my-rg", sandbox_group="agents",
+#     region="eastus2", disk="python-3.13",
+#     ensure_group_location="eastus2",
+# )
+
 handle = provider.create_session("agent-1")
-result = provider.execute_code("agent-1", handle.session_id, "print('hello')")
-print(result.result.stdout)
+out = provider.execute_code("agent-1", handle.session_id, "print('hello')")
+print(out.result.stdout)
 provider.destroy_session("agent-1", handle.session_id)
 ```
 
-## Running Agent Code in a Docker Sandbox
+---
 
-The example below shows how to run AI-generated code inside an isolated Docker
-sandbox using the Microsoft Agent Governance Toolkit. Each agent session gets its
-own hardened container with dropped capabilities, read-only root filesystem,
-non-root execution, and optional policy-based gating.
+## 1. `DockerSandboxProvider` — local hardened containers
+
+Each agent session runs in its own container with capabilities dropped,
+no privilege escalation, a read-only root filesystem, a non-root user,
+and no network by default.
 
 ```python
 import asyncio
@@ -40,65 +79,37 @@ from agent_sandbox import (
 )
 
 async def run_agent_task():
-    # 1. Create a provider — auto-detects gVisor / Kata if available
     provider = DockerSandboxProvider(
         image="python:3.12-slim",
-        runtime=IsolationRuntime.AUTO,
+        runtime=IsolationRuntime.AUTO,   # auto-upgrade to gVisor / Kata
     )
-
-    # 2. Configure resource limits for the agent session
     config = SandboxConfig(
         timeout_seconds=30,
         memory_mb=256,
         cpu_limit=0.5,
-        network_enabled=False,   # no outbound access
-        read_only_fs=True,       # immutable root filesystem
+        network_enabled=False,
+        read_only_fs=True,
     )
 
-    # 3. Create an isolated session for the agent
-    session = await provider.create_session_async(
-        agent_id="research-agent",
-        config=config,
-    )
-    print(f"Session created: {session.session_id}")
-
+    session = await provider.create_session_async("research-agent", config=config)
     try:
-        # 4. Execute agent-generated code inside the sandbox
-        agent_code = """
-import json, math
-
-data = [math.sqrt(x) for x in range(1, 11)]
-result = {"roots": [round(v, 4) for v in data]}
-print(json.dumps(result))
-"""
         execution = await provider.execute_code_async(
-            agent_id="research-agent",
-            session_id=session.session_id,
-            code=agent_code,
+            "research-agent", session.session_id,
+            "import json, math; print(json.dumps([math.sqrt(x) for x in range(5)]))",
         )
+        print(execution.result.stdout)
 
-        if execution.result.success:
-            print(f"Output: {execution.result.stdout}")
-        else:
-            print(f"Error: {execution.result.stderr}")
-
-        # 5. Checkpoint the session state for later resumption
         checkpoint = provider.save_state(
             "research-agent", session.session_id, "after-step-1",
         )
         print(f"Checkpoint saved: {checkpoint.image_tag}")
-
     finally:
-        # 6. Tear down the container
-        await provider.destroy_session_async(
-            "research-agent", session.session_id,
-        )
-        print("Session destroyed")
+        await provider.destroy_session_async("research-agent", session.session_id)
 
 asyncio.run(run_agent_task())
 ```
 
-### What the sandbox enforces
+### What the Docker sandbox enforces
 
 | Control | Default |
 |---------|---------|
@@ -108,7 +119,147 @@ asyncio.run(run_agent_task())
 | Container user | `nobody` (UID 65534) |
 | PID limit | 256 |
 | Network | Disabled unless explicitly allowed |
-| Runtime | runc (auto-upgrades to gVisor or Kata when available) |
+| Runtime | `runc` (auto-upgrades to gVisor or Kata when available) |
+| State | `save_state` / `restore_state` via image commit |
+
+---
+
+## 2. `HyperLightSandboxProvider` — micro-VM isolation
+
+Backed by the upstream [hyperlight-sandbox](https://github.com/hyperlight-dev/hyperlight-sandbox)
+runtime. Each session is a fresh micro-VM on KVM (Linux), mshv (Azure
+HCL), or WHP (Windows) — typical cold start is well under a millisecond.
+Tools are registered as host functions and invoked synchronously from
+the guest, gated by the session's `policy.tool_allowlist`.
+
+```python
+from agent_sandbox import HyperLightSandboxProvider
+
+def fetch_arxiv(query: str) -> str:
+    return f"<results for {query}>"
+
+provider = HyperLightSandboxProvider(
+    backend="wasm",                 # or "hyperlightjs" / "nanvix"
+    module="python_guest",          # only meaningful for backend="wasm"
+    tools={"fetch_arxiv": fetch_arxiv},
+)
+
+if not provider.is_available():
+    raise SystemExit(f"Hyperlight unavailable: {provider.unavailable_reason}")
+
+handle = provider.create_session("agent-1")
+out = provider.execute_code(
+    "agent-1", handle.session_id,
+    "print(fetch_arxiv('cs.CL'))",
+)
+print(out.result.stdout)
+provider.destroy_session("agent-1", handle.session_id)
+```
+
+Notes:
+- Each session owns one OS thread that is the sole code path touching
+  its `Sandbox` — required by the upstream runtime.
+- `provider.is_available()` probes for a hypervisor and returns
+  `unavailable_reason` if none is present (e.g. on macOS hosts without
+  WHP / KVM passthrough).
+- Only tools listed in a session's `policy.tool_allowlist` are exposed
+  to that session's guest; the rest stay host-side.
+
+---
+
+## 3. `ACASandboxProvider` — Azure Container Apps
+
+Runs each session inside a managed Azure Container Apps sandbox via the
+early-access `azure-containerapps-sandbox` Python SDK
+([complete reference](https://github.com/microsoft/azure-container-apps/blob/main/docs/early/python-sdk/complete-reference.md)).
+Same API as the other providers; the rest of your code is unchanged.
+
+```bash
+pip install "agt-sandbox[azure,policy]"
+pip install https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
+
+az login   # or use managed identity in hosted compute
+```
+
+```python
+from agent_sandbox import ACASandboxProvider
+
+provider = ACASandboxProvider(
+    resource_group="my-rg",          # must already exist
+    sandbox_group="agents",          # auto-created if ensure_group_location is set
+    region="eastus2",                # selects the data-plane endpoint
+    subscription_id=None,            # falls back to AZURE_SUBSCRIPTION_ID env var
+    disk="python-3.13",              # public disk image with python3 preinstalled
+    ensure_group_location="eastus2", # create the sandbox group on first use
+)
+
+if not provider.is_available():
+    raise SystemExit(f"ACA unavailable: {provider.unavailable_reason}")
+
+handle = provider.create_session("agent-1")
+out = provider.execute_code(
+    "agent-1", handle.session_id, "print('hello azure')"
+)
+print(out.result.stdout)
+provider.destroy_session("agent-1", handle.session_id)
+provider.close()
+```
+
+The provider holds one `SandboxGroupClient` per `(resource_group,
+sandbox_group)` pair and caches the per-sandbox `SandboxClient` returned
+by `begin_create_sandbox().result()`. When a `PolicyDocument` is
+supplied, `network_allowlist` is translated into a fail-closed egress
+policy (`defaultAction: Deny` + per-host `Allow` rules) and applied via
+`SandboxClient.set_egress_policy`. Set `defaults.network_default: allow`
+in the policy if you explicitly want the SDK's default-allow behaviour.
+
+A complete worked example (8 verified branches against live Azure —
+allow / policy-deny / egress-block / sanity / tool-allowed /
+tool-denied / remote-execution proof / egress audit) lives at
+[`examples/quickstart/aca_sandbox_test.py`](../../examples/quickstart/aca_sandbox_test.py)
+and reads its policy from
+[`examples/quickstart/policies/aca_research_agent.yaml`](../../examples/quickstart/policies/aca_research_agent.yaml).
+
+---
+
+## Policy-driven configuration
+
+All three providers consume the same `agent_os.policies.PolicyDocument`.
+Sandbox resource caps, network allowlists, and tool allowlists are
+native fields on the schema as of AGT 3.3, so policies live in YAML:
+
+```yaml
+name: research-agent
+version: "2"
+
+defaults:
+  action: allow
+  max_cpu: 1.0
+  max_memory_mb: 2048
+  timeout_seconds: 90
+  network_default: deny
+
+network_allowlist:
+  - api.openai.com
+  - "*.github.com"
+
+tool_allowlist:
+  - fetch_arxiv
+
+rules:
+  - name: deny-shell-out
+    condition: { field: code, operator: contains, value: subprocess }
+    action: deny
+    priority: 100
+    message: "shell-out blocked by research-agent policy"
+```
+
+```python
+from agent_os.policies import PolicyDocument
+
+policy = PolicyDocument.from_yaml("policies/aca_research_agent.yaml")
+handle = await provider.create_session_async("agent-1", policy=policy)
+```
 
 ## License
 

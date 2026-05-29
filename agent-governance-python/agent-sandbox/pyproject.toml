@@ -44,6 +44,12 @@ docker = [
 hyperlight = [
     "hyperlight-sandbox>=0.4.0,<0.5",
 ]
+azure = [
+    # Early-access Python SDK for Azure Container Apps sandboxes.
+    # Installed via the GitHub release wheel — see README.
+    "azure-identity>=1.19.0,<2.0",
+    "azure-core>=1.32.0,<2.0",
+]
 policy = [
     "agent-governance-toolkit-core>=4.0.0,<5.0",
 ]

@@ -61,6 +61,7 @@ pytestmark = pytest.mark.skipif(
 
 _RG = os.environ.get("AZURE_RG", "")
 _REGION = os.environ.get("AZURE_REGION", "")
+_SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
 _GROUP = os.environ.get("AZURE_SANDBOX_GROUP", "agt-test")
 _DISK = os.environ.get("AZURE_SANDBOX_DISK", "python-3.13")
 
@@ -109,11 +110,15 @@ def provider():
     p = ACASandboxProvider(
         resource_group=_RG,
         sandbox_group=_GROUP,
+        region=_REGION,
+        subscription_id=_SUBSCRIPTION_ID or None,
         disk=_DISK,
         ensure_group_location=_REGION,
     )
     if not p.is_available():
-        pytest.skip("ACASandboxProvider is_available() returned False")
+        pytest.skip(
+            f"ACASandboxProvider unavailable: {p.unavailable_reason}"
+        )
     yield p
     p.close()
 

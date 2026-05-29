@@ -427,3 +427,12 @@ xunit
 ZDOTDIR
 webfetch
 websearch
+exfil
+fromlist
+hyperlightjs
+millicores
+nonimport
+pasteable
+héllo
+attributeerror
+typeerror

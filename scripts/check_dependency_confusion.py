@@ -44,6 +44,10 @@ REGISTERED_PACKAGES = {
     "agentmesh-runtime", "agentmesh_runtime",
     "agent-sre", "agent_sre",
     "agent-governance-toolkit", "agent_governance_toolkit",
+    "agent-governance-toolkit-core", "agent_governance_toolkit_core",
+    "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
+    "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
+    "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
     "agentmesh-lightning", "agentmesh_lightning",
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
@@ -114,6 +118,9 @@ REGISTERED_PACKAGES = {
     "agent-framework-openai", "agent_framework_openai",
     # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
     "azure-functions", "azure_functions",
+    # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
+    "azure-identity", "azure_identity",
+    "azure-core", "azure_core",
     # SpendGuard SDK (real PyPI package, used in examples)
     "spendguard-sdk", "spendguard_sdk",
     # Cedarling Python bindings (real PyPI package, optional dep)

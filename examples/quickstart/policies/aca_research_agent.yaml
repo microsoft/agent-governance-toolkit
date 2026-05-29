@@ -1,15 +1,34 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 # Policy file referenced by the Step 5 walkthrough in
-# docs/proposals/azure-aca-sandbox.md. Sandbox-only fields
-# (network_allowlist, tool_allowlist, defaults.max_cpu, etc.)
-# are attached in code via SimpleNamespace; this YAML only
-# contains keys that are part of PolicyDocument's pydantic schema.
+# docs/proposals/azure-aca-sandbox.md. As of AGT 3.3,
+# network_allowlist, tool_allowlist, and the sandbox
+# resource caps (max_cpu / max_memory_mb / timeout_seconds /
+# network_default) are native PolicyDocument fields, so the
+# whole policy can be expressed declaratively in YAML and
+# loaded with PolicyDocument.from_yaml.
 name: research-agent
 version: "2"
 
 defaults:
   action: allow
+  max_cpu: 1.0
+  max_memory_mb: 2048
+  timeout_seconds: 90
+  network_default: deny   # fail-closed (also the schema default)
+
+network_allowlist:
+  - api.openai.com
+  - api.arxiv.org
+  - export.arxiv.org
+  - "*.github.com"
+  - pypi.org
+  - files.pythonhosted.org
+
+tool_allowlist:
+  - fetch_arxiv
+  - fetch_github_readme
+  - search_index
 
 rules:
   - name: deny-shell-out-subprocess
@@ -65,3 +84,28 @@ rules:
     action: deny
     priority: 100
     message: "agents may not read host credentials"
+
+  - name: deny-secret-ssh
+    condition: { field: code, operator: contains, value: "/.ssh/" }
+    action: deny
+    priority: 100
+    message: "agents may not read host credentials"
+
+  - name: deny-secret-aws
+    condition: { field: code, operator: contains, value: "/.aws/" }
+    action: deny
+    priority: 100
+    message: "agents may not read host credentials"
+
+  # Tool-allowlist gate. The evaluator short-circuits to False when
+  # the context field is absent (see PolicyEvaluator._match_condition),
+  # so callers that do NOT pass tool_name in the eval context are
+  # unaffected -- only tool-tagged execute_code calls are gated.
+  - name: deny-tool-not-in-allowlist
+    condition:
+      field: tool_name
+      operator: not_in
+      value: [fetch_arxiv, fetch_github_readme, search_index]
+    action: deny
+    priority: 200
+    message: "tool not in research-agent tool_allowlist"

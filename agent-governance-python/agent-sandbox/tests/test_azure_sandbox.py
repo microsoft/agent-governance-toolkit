@@ -2,27 +2,28 @@
 # Licensed under the MIT License.
 """Unit tests for ``ACASandboxProvider``.
 
-All ``azure-sandbox`` / ``azure-mgmt-sandbox`` calls are mocked, so this
-file runs without Azure credentials or network access.  Integration
-tests that hit real Azure live in ``test_azure_sandbox_integration.py``.
+All ``azure-containerapps-sandbox`` calls are mocked, so this file runs
+without Azure credentials or network access. Integration tests that hit
+real Azure live in ``test_azure_sandbox_integration.py``.
 
 Covers:
 * Module-level helpers (``_validate_resource_name``,
   ``_network_allowlist``, ``_network_default``,
-  ``aca_config_from_policy``).
-* Construction: missing SDK, name validation,
-  ``ensure_group_location`` wiring.
+  ``_unpack_exec_result``, ``aca_config_from_policy``).
+* Construction: missing SDK, name validation, missing region,
+  ``ensure_group_location`` wiring, mgmt-client failure tolerance.
 * ``create_session``: with/without policy, fail-closed egress,
   ``network_default=allow`` opt-out, empty allowlist, invalid IDs,
-  data-plane failures, missing sandbox id.
+  data-plane failures, missing sandbox id, kwargs forwarding,
+  resource-cap projection.
 * ``execute_code``: policy gate fires before any Azure call,
   base64 transport, context merging, timeout kill, no-session error,
-  data-plane failure surfacing.
+  data-plane failure surfacing, dict-vs-typed-result handling.
 * ``destroy_session``: idempotent, error swallowing.
 * ``get_session_status``, ``close``, ``__exit__``, ``is_available``.
 * ``*_async`` wrappers delegate to sync counterparts.
-* Multi-session isolation: per-session evaluator + config + sandbox id
-  do not bleed between agents.
+* Multi-session isolation: per-session evaluator + config + sandbox
+  client do not bleed between agents.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ from agent_sandbox.aca_sandbox_provider import (
 from agent_sandbox.aca_sandbox_provider.aca_sandbox_provider import (
     _network_allowlist,
     _network_default,
+    _unpack_exec_result,
     _validate_resource_name,
 )
 from agent_sandbox.sandbox_provider import (
@@ -69,12 +71,7 @@ def _make_policy(
     name="test-policy",
     version="1",
 ):
-    """Build a duck-typed policy object matching what the provider reads.
-
-    Using ``SimpleNamespace`` keeps the unit tests independent of
-    ``agent-os-kernel``'s real ``PolicyDocument`` schema.  Schema-level
-    contracts are validated separately in ``test_azure_sandbox_schema.py``.
-    """
+    """Build a duck-typed policy object matching what the provider reads."""
     defaults = SimpleNamespace()
     if max_cpu is not None:
         defaults.max_cpu = max_cpu
@@ -95,38 +92,107 @@ def _make_policy(
     )
 
 
+def _make_sandbox_client(sandbox_id="sb-abc123", exec_response=None):
+    """Build a per-sandbox SandboxClient mock that mirrors the SDK surface."""
+    sb = MagicMock(name=f"SandboxClient({sandbox_id})")
+    sb.sandbox_id = sandbox_id
+    sb.exec.return_value = (
+        exec_response
+        if exec_response is not None
+        else SimpleNamespace(exit_code=0, stdout="ok", stderr="")
+    )
+    return sb
+
+
+def _make_poller(sandbox_client):
+    """Wrap a sandbox client in a poller mock matching ``LROPoller``."""
+    poller = MagicMock(name="LROPoller")
+    poller.result.return_value = sandbox_client
+    return poller
+
+
 @pytest.fixture()
-def fake_clients():
-    """Patch the lazy SDK imports so construction never touches Azure."""
-    data_client = MagicMock(name="SandboxClient")
+def fake_sdk():
+    """Patch ``azure.containerapps.sandbox`` + ``azure.identity``.
+
+    Yields ``(group_client, mgmt_client, sandbox_factory)`` where
+    ``sandbox_factory`` is a callable that creates the next sandbox
+    client to be returned from ``begin_create_sandbox().result()``.
+    """
+    group_client = MagicMock(name="SandboxGroupClient")
     mgmt_client = MagicMock(name="SandboxGroupManagementClient")
 
-    sandbox_module = MagicMock()
-    sandbox_module.SandboxClient = MagicMock(return_value=data_client)
-    mgmt_module = MagicMock()
-    mgmt_module.SandboxGroupManagementClient = MagicMock(return_value=mgmt_client)
+    # Default: one sandbox per create call.
+    default_sb = _make_sandbox_client()
+    group_client.begin_create_sandbox.return_value = _make_poller(default_sb)
+
+    sdk_module = MagicMock(name="azure.containerapps.sandbox")
+    sdk_module.SandboxGroupClient = MagicMock(return_value=group_client)
+    sdk_module.SandboxGroupManagementClient = MagicMock(
+        return_value=mgmt_client
+    )
+    sdk_module.endpoint_for_region = MagicMock(
+        side_effect=lambda r: f"https://management.{r}.azuredevcompute.io"
+    )
+
+    # Typed egress models — use SimpleNamespace-style stand-ins so test
+    # assertions can read the attributes the SDK exposes (default_action,
+    # host_rules, pattern, action) instead of MagicMock junk.
+    def _make_host_rule(pattern="", action="Allow"):
+        return SimpleNamespace(pattern=pattern, action=action)
+
+    def _make_egress_policy(
+        default_action="Allow", host_rules=None, rules=None,
+        traffic_inspection=None,
+    ):
+        return SimpleNamespace(
+            default_action=default_action,
+            host_rules=list(host_rules or []),
+            rules=list(rules or []),
+            traffic_inspection=traffic_inspection,
+        )
+
+    sdk_module.EgressHostRule = MagicMock(side_effect=_make_host_rule)
+    sdk_module.EgressPolicy = MagicMock(side_effect=_make_egress_policy)
+
+    containerapps_pkg = MagicMock(name="azure.containerapps")
+    containerapps_pkg.sandbox = sdk_module
+
+    identity_module = MagicMock(name="azure.identity")
+    identity_module.DefaultAzureCredential = MagicMock(return_value="cred-X")
 
     with patch.dict(
         "sys.modules",
         {
-            "azure.sandbox": sandbox_module,
-            "azure.mgmt.sandbox": mgmt_module,
+            "azure.containerapps": containerapps_pkg,
+            "azure.containerapps.sandbox": sdk_module,
+            "azure.identity": identity_module,
         },
     ):
-        yield data_client, mgmt_client
+        # Expose a tiny helper so individual tests can queue follow-up
+        # sandbox clients without rewriting the poller plumbing.
+        def queue(*sandbox_clients):
+            pollers = [_make_poller(sb) for sb in sandbox_clients]
+            group_client.begin_create_sandbox.side_effect = pollers
+
+        yield SimpleNamespace(
+            group=group_client,
+            mgmt=mgmt_client,
+            sdk=sdk_module,
+            identity=identity_module,
+            default_sandbox=default_sb,
+            queue=queue,
+        )
 
 
 @pytest.fixture()
-def provider(fake_clients):
-    data_client, _ = fake_clients
-    # Configure default create_sandbox response so happy paths "just work".
-    data_client.create_sandbox.return_value = {"id": "sb-abc123"}
-    data_client.exec.return_value = {"exitCode": 0, "stdout": "ok", "stderr": ""}
-    p = ACASandboxProvider(
+def provider(fake_sdk):
+    """A ready-to-use provider with the default sandbox queued."""
+    return ACASandboxProvider(
         resource_group="rg",
         sandbox_group="grp",
+        region="eastus2",
     )
-    return p
 
 
 # =========================================================================
@@ -145,14 +211,14 @@ class TestValidateResourceName:
     @pytest.mark.parametrize(
         "value",
         [
-            "",                # empty
-            "-leading-dash",   # must start with alnum
-            "_leading_us",     # must start with alnum
+            "",
+            "-leading-dash",
+            "_leading_us",
             "has space",
             "has/slash",
             "has.dot",
-            "a" * 64,          # length 64 — limit is 63 after first char
-            123,               # wrong type
+            "a" * 64,
+            123,
             None,
         ],
     )
@@ -170,25 +236,28 @@ class TestNetworkAllowlist:
         assert _network_allowlist(policy) == ["a.com", "*.b.com"]
 
     def test_accepts_host_object_form(self):
-        entries = [SimpleNamespace(host="x.com"), SimpleNamespace(pattern="*.y.com")]
-        assert _network_allowlist(SimpleNamespace(network_allowlist=entries)) == [
-            "x.com",
-            "*.y.com",
+        entries = [
+            SimpleNamespace(host="x.com"),
+            SimpleNamespace(pattern="*.y.com"),
         ]
+        assert _network_allowlist(
+            SimpleNamespace(network_allowlist=entries)
+        ) == ["x.com", "*.y.com"]
 
     def test_skips_entries_with_no_host_or_pattern(self):
         entries = [
             "a.com",
-            SimpleNamespace(),  # neither host nor pattern → skipped
+            SimpleNamespace(),
             SimpleNamespace(host="b.com"),
         ]
-        assert _network_allowlist(SimpleNamespace(network_allowlist=entries)) == [
-            "a.com",
-            "b.com",
-        ]
+        assert _network_allowlist(
+            SimpleNamespace(network_allowlist=entries)
+        ) == ["a.com", "b.com"]
 
     def test_none_allowlist(self):
-        assert _network_allowlist(SimpleNamespace(network_allowlist=None)) == []
+        assert _network_allowlist(
+            SimpleNamespace(network_allowlist=None)
+        ) == []
 
 
 class TestNetworkDefault:
@@ -214,10 +283,39 @@ class TestNetworkDefault:
         assert _network_default(policy) == "deny"
 
 
+class TestUnpackExecResult:
+    def test_typed_result_object(self):
+        resp = SimpleNamespace(exit_code=0, stdout="hi", stderr="")
+        assert _unpack_exec_result(resp) == (0, "hi", "")
+
+    def test_typed_result_with_camelcase_exit_code(self):
+        # Some preview builds expose ``exitCode`` on a typed object.
+        resp = SimpleNamespace(stdout="x", stderr="", exitCode=2)
+        assert _unpack_exec_result(resp) == (2, "x", "")
+
+    def test_dict_snake_case(self):
+        assert _unpack_exec_result(
+            {"exit_code": 7, "stdout": "a", "stderr": "b"}
+        ) == (7, "a", "b")
+
+    def test_dict_camel_case(self):
+        assert _unpack_exec_result(
+            {"exitCode": 1, "stdout": "", "stderr": "boom"}
+        ) == (1, "", "boom")
+
+    def test_none(self):
+        assert _unpack_exec_result(None) == (-1, "", "")
+
+    def test_unknown_shape_falls_back(self):
+        assert _unpack_exec_result("opaque") == (-1, "", "opaque")
+
+
 class TestAzureConfigFromPolicy:
     def test_preserves_base_when_policy_empty(self):
         base = SandboxConfig(memory_mb=999, cpu_limit=3.0, timeout_seconds=42)
-        cfg = aca_config_from_policy(SimpleNamespace(defaults=SimpleNamespace()), base)
+        cfg = aca_config_from_policy(
+            SimpleNamespace(defaults=SimpleNamespace()), base
+        )
         assert cfg.memory_mb == 999
         assert cfg.cpu_limit == 3.0
         assert cfg.timeout_seconds == 42
@@ -231,7 +329,6 @@ class TestAzureConfigFromPolicy:
         assert cfg.timeout_seconds == 15
 
     def test_zero_or_falsy_caps_do_not_override(self):
-        # Falsy values should leave the base config alone (provider default wins).
         policy = _make_policy(max_cpu=0, max_memory_mb=0, timeout_seconds=0)
         base = SandboxConfig(memory_mb=777, cpu_limit=4.0, timeout_seconds=30)
         cfg = aca_config_from_policy(policy, base)
@@ -246,7 +343,9 @@ class TestAzureConfigFromPolicy:
 
     def test_env_vars_are_copied_not_aliased(self):
         base = SandboxConfig(env_vars={"K": "V"})
-        cfg = aca_config_from_policy(SimpleNamespace(defaults=SimpleNamespace()), base)
+        cfg = aca_config_from_policy(
+            SimpleNamespace(defaults=SimpleNamespace()), base
+        )
         cfg.env_vars["NEW"] = "X"
         assert "NEW" not in base.env_vars
 
@@ -258,87 +357,219 @@ class TestAzureConfigFromPolicy:
 
 class TestConstruction:
     def test_unavailable_when_sdk_missing(self, monkeypatch):
-        # Force the lazy import to raise ImportError.
         import builtins
 
         real_import = builtins.__import__
 
         def fake_import(name, *a, **kw):
-            if name == "azure.sandbox":
+            if name == "azure.containerapps" or name.startswith(
+                "azure.containerapps"
+            ):
                 raise ImportError("simulated")
             return real_import(name, *a, **kw)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
-        p = ACASandboxProvider(resource_group="rg", sandbox_group="grp")
+        p = ACASandboxProvider(
+            resource_group="rg", sandbox_group="grp", region="eastus2"
+        )
         assert p.is_available() is False
-        with pytest.raises(RuntimeError, match="not available"):
+        # The unavailable reason names the missing package.
+        reason = p.unavailable_reason
+        assert reason is not None
+        assert "azure-containerapps-sandbox is not installed" in reason
+        # And the RuntimeError from create_session must carry that reason
+        # too — callers should not have to dig through logs.
+        with pytest.raises(RuntimeError) as exc_info:
             p.create_session("agent")
+        msg = str(exc_info.value)
+        assert "not available" in msg
+        assert "azure-containerapps-sandbox is not installed" in msg
 
-    def test_validates_sandbox_group_name(self, fake_clients):
-        with pytest.raises(ValueError, match="sandbox_group"):
-            ACASandboxProvider(resource_group="rg", sandbox_group="bad name")
-
-    def test_data_client_construction_failure_marks_unavailable(self, monkeypatch):
+    def test_unavailable_when_sdk_import_raises_nonimport_error(
+        self, monkeypatch, caplog
+    ):
+        # Anything other than ImportError must also leave the provider
+        # unavailable but log a different message.
         import builtins
-
-        sandbox_module = MagicMock()
-        sandbox_module.SandboxClient = MagicMock(side_effect=RuntimeError("boom"))
 
         real_import = builtins.__import__
 
         def fake_import(name, *a, **kw):
-            if name == "azure.sandbox":
-                return sandbox_module
+            if name == "azure.containerapps":
+                raise RuntimeError("module loader exploded")
             return real_import(name, *a, **kw)
 
         monkeypatch.setattr(builtins, "__import__", fake_import)
+        with caplog.at_level("WARNING"):
+            p = ACASandboxProvider(
+                resource_group="rg", sandbox_group="grp", region="eastus2"
+            )
+        assert p.is_available() is False
+        assert "Failed to import azure-containerapps-sandbox" in caplog.text
+
+    def test_endpoint_for_region_failure_marks_unavailable(
+        self, fake_sdk, caplog
+    ):
+        fake_sdk.sdk.endpoint_for_region.side_effect = ValueError(
+            "unknown region 'mars'"
+        )
+        with caplog.at_level("WARNING"):
+            p = ACASandboxProvider(
+                resource_group="rg", sandbox_group="grp", region="mars"
+            )
+        assert p.is_available() is False
+        assert "endpoint_for_region" in caplog.text
+
+    def test_default_credential_import_failure_marks_unavailable(
+        self, fake_sdk, monkeypatch, caplog
+    ):
+        # azure-identity is part of the SDK's transitive deps, but make
+        # sure missing-azure-identity gets a clean diagnostic instead of
+        # a crash.
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *a, **kw):
+            if name == "azure.identity":
+                raise ImportError("simulated")
+            return real_import(name, *a, **kw)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        with caplog.at_level("WARNING"):
+            p = ACASandboxProvider(
+                resource_group="rg", sandbox_group="grp", region="eastus2"
+            )
+        assert p.is_available() is False
+        # Diagnostic includes both the missing-module statement and the
+        # install hint pointing at the `azure` extra.
+        assert "azure-identity is not installed" in p.unavailable_reason
+        assert "agt-sandbox[azure]" in p.unavailable_reason
+        assert "azure-identity is not installed" in caplog.text
+
+    def test_unavailable_reason_is_none_when_healthy(self, fake_sdk):
+        p = ACASandboxProvider(
+            resource_group="rg", sandbox_group="grp", region="eastus2"
+        )
+        assert p.is_available() is True
+        assert p.unavailable_reason is None
+
+    def test_default_credential_construction_failure_marks_unavailable(
+        self, fake_sdk, caplog
+    ):
+        fake_sdk.identity.DefaultAzureCredential.side_effect = RuntimeError(
+            "no token source"
+        )
+        with caplog.at_level("WARNING"):
+            p = ACASandboxProvider(
+                resource_group="rg", sandbox_group="grp", region="eastus2"
+            )
+        assert p.is_available() is False
+        assert "DefaultAzureCredential" in caplog.text
+
+    def test_validates_sandbox_group_name(self, fake_sdk):
+        with pytest.raises(ValueError, match="sandbox_group"):
+            ACASandboxProvider(
+                resource_group="rg", sandbox_group="bad name", region="eastus2"
+            )
+
+    def test_missing_region_marks_unavailable(self, fake_sdk, monkeypatch):
+        # No region kwarg, no AZURE_SANDBOX_REGION → endpoint cannot be
+        # built, provider stays unavailable.
+        monkeypatch.delenv("AZURE_SANDBOX_REGION", raising=False)
         p = ACASandboxProvider(resource_group="rg", sandbox_group="grp")
         assert p.is_available() is False
 
-    def test_ensure_group_location_constructs_mgmt_client(self, fake_clients):
-        _, mgmt_client = fake_clients
-        p = ACASandboxProvider(
-            resource_group="rg",
-            sandbox_group="grp",
-            ensure_group_location="westus2",
-        )
-        assert p.is_available() is True
-        assert p._mgmt_client is mgmt_client
-
-    def test_no_mgmt_client_when_ensure_location_unset(self, fake_clients):
+    def test_region_from_env(self, fake_sdk, monkeypatch):
+        monkeypatch.setenv("AZURE_SANDBOX_REGION", "westus2")
         p = ACASandboxProvider(resource_group="rg", sandbox_group="grp")
-        assert p._mgmt_client is None
+        assert p.is_available() is True
+        fake_sdk.sdk.endpoint_for_region.assert_called_with("westus2")
 
-    def test_mgmt_client_failure_does_not_kill_provider(self, monkeypatch):
-        import builtins
-
-        data_client = MagicMock()
-        sandbox_module = MagicMock()
-        sandbox_module.SandboxClient = MagicMock(return_value=data_client)
-
-        mgmt_module = MagicMock()
-        mgmt_module.SandboxGroupManagementClient = MagicMock(
-            side_effect=RuntimeError("mgmt-down")
+    def test_explicit_endpoint_bypasses_region(self, fake_sdk):
+        p = ACASandboxProvider(
+            resource_group="rg",
+            sandbox_group="grp",
+            endpoint="https://custom.example.com",
         )
+        assert p.is_available() is True
+        fake_sdk.sdk.endpoint_for_region.assert_not_called()
+        # SandboxGroupClient was constructed with the custom endpoint.
+        args, _ = fake_sdk.sdk.SandboxGroupClient.call_args
+        assert args[0] == "https://custom.example.com"
 
-        real_import = builtins.__import__
+    def test_group_client_construction_failure_marks_unavailable(self, fake_sdk):
+        fake_sdk.sdk.SandboxGroupClient.side_effect = RuntimeError("boom")
+        p = ACASandboxProvider(
+            resource_group="rg", sandbox_group="grp", region="eastus2"
+        )
+        assert p.is_available() is False
 
-        def fake_import(name, *a, **kw):
-            if name == "azure.sandbox":
-                return sandbox_module
-            if name == "azure.mgmt.sandbox":
-                return mgmt_module
-            return real_import(name, *a, **kw)
-
-        monkeypatch.setattr(builtins, "__import__", fake_import)
+    def test_ensure_group_location_constructs_mgmt_client(self, fake_sdk):
         p = ACASandboxProvider(
             resource_group="rg",
             sandbox_group="grp",
             ensure_group_location="westus2",
         )
-        # Data plane still works; mgmt client is None.
+        assert p.is_available() is True
+        assert p._mgmt_client is fake_sdk.mgmt
+
+    def test_ensure_group_location_defaults_region(self, fake_sdk):
+        # When `region` is omitted, `ensure_group_location` doubles as the
+        # data-plane region.
+        ACASandboxProvider(
+            resource_group="rg",
+            sandbox_group="grp",
+            ensure_group_location="westus2",
+        )
+        fake_sdk.sdk.endpoint_for_region.assert_called_with("westus2")
+
+    def test_no_mgmt_client_when_ensure_location_unset(self, fake_sdk):
+        p = ACASandboxProvider(
+            resource_group="rg", sandbox_group="grp", region="eastus2"
+        )
+        assert p._mgmt_client is None
+
+    def test_mgmt_client_failure_does_not_kill_provider(self, fake_sdk):
+        fake_sdk.sdk.SandboxGroupManagementClient.side_effect = RuntimeError(
+            "mgmt-down"
+        )
+        p = ACASandboxProvider(
+            resource_group="rg",
+            sandbox_group="grp",
+            ensure_group_location="westus2",
+        )
         assert p.is_available() is True
         assert p._mgmt_client is None
+
+    def test_mgmt_client_attributeerror_is_tolerated(self, fake_sdk, caplog):
+        # If a future SDK drops SandboxGroupManagementClient the provider
+        # must still come up — just without group bootstrap.
+        fake_sdk.sdk.SandboxGroupManagementClient.side_effect = AttributeError(
+            "no such attr"
+        )
+        with caplog.at_level("WARNING"):
+            p = ACASandboxProvider(
+                resource_group="rg",
+                sandbox_group="grp",
+                ensure_group_location="westus2",
+            )
+        assert p.is_available() is True
+        assert p._mgmt_client is None
+        assert "SandboxGroupManagementClient missing" in caplog.text
+
+    def test_custom_credential_skips_default_credential(self, fake_sdk):
+        custom = object()
+        ACASandboxProvider(
+            resource_group="rg",
+            sandbox_group="grp",
+            region="eastus2",
+            credential=custom,
+        )
+        fake_sdk.identity.DefaultAzureCredential.assert_not_called()
+        # The custom credential was forwarded to SandboxGroupClient.
+        args, _ = fake_sdk.sdk.SandboxGroupClient.call_args
+        assert args[1] is custom
 
 
 # =========================================================================
@@ -347,100 +578,185 @@ class TestConstruction:
 
 
 class TestCreateSession:
-    def test_ungoverned_session_writes_no_egress_policy(self, provider, fake_clients):
-        data_client, _ = fake_clients
+    def test_ungoverned_session_writes_no_egress_policy(self, provider, fake_sdk):
         handle = provider.create_session("agent-1")
         assert handle.status == SessionStatus.READY
         assert handle.session_id == "sb-abc123"
-        data_client.create_sandbox.assert_called_once()
-        # No policy → no egress configuration at all.
-        data_client.set_egress_policy.assert_not_called()
+        fake_sdk.group.begin_create_sandbox.assert_called_once()
+        # No policy → no egress configuration at all on the sandbox client.
+        fake_sdk.default_sandbox.set_egress_policy.assert_not_called()
 
     def test_validates_agent_id(self, provider):
         with pytest.raises(ValueError, match="agent_id"):
             provider.create_session("bad agent id!")
 
-    def test_governed_session_is_fail_closed_by_default(self, provider, fake_clients):
-        data_client, _ = fake_clients
+    def test_create_sandbox_kwargs_include_disk_and_labels(self, provider, fake_sdk):
+        provider.create_session("agent-1")
+        kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
+        assert kwargs["disk"] == "ubuntu"
+        assert kwargs["labels"] == {"agent_id": "agent-1"}
+
+    def test_governed_session_is_fail_closed_by_default(self, provider, fake_sdk):
         policy = _make_policy(network_allowlist=["pypi.org", "*.github.com"])
         provider.create_session("agent-1", policy=policy)
 
-        data_client.set_egress_policy.assert_called_once()
-        sandbox_id, group, body = data_client.set_egress_policy.call_args.args
-        assert sandbox_id == "sb-abc123"
-        assert group == "grp"
-        assert body["defaultAction"] == "Deny"
-        assert {r["pattern"] for r in body["hostRules"]} == {"pypi.org", "*.github.com"}
-        assert all(r["action"] == "Allow" for r in body["hostRules"])
+        sb = fake_sdk.default_sandbox
+        sb.set_egress_policy.assert_called_once()
+        body = sb.set_egress_policy.call_args.args[0]
+        assert body.default_action == "Deny"
+        assert {r.pattern for r in body.host_rules} == {
+            "pypi.org",
+            "*.github.com",
+        }
+        assert all(r.action == "Allow" for r in body.host_rules)
 
-    def test_empty_allowlist_plus_deny_is_total_lockdown(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        # Schema default for network_default is "deny"; an empty allowlist
-        # must still write a deny-all policy.
+    def test_empty_allowlist_plus_deny_is_total_lockdown(self, provider, fake_sdk):
         policy = _make_policy(network_allowlist=[])
         provider.create_session("agent-1", policy=policy)
 
-        data_client.set_egress_policy.assert_called_once()
-        body = data_client.set_egress_policy.call_args.args[2]
-        assert body == {"defaultAction": "Deny", "hostRules": []}
+        sb = fake_sdk.default_sandbox
+        sb.set_egress_policy.assert_called_once()
+        body = sb.set_egress_policy.call_args.args[0]
+        assert body.default_action == "Deny"
+        assert body.host_rules == []
 
-    def test_network_default_allow_skips_egress_api_call(self, provider, fake_clients):
-        data_client, _ = fake_clients
+    def test_network_default_allow_skips_egress_api_call(self, provider, fake_sdk):
         policy = _make_policy(
             network_allowlist=["pypi.org"],
             network_default="allow",
         )
         provider.create_session("agent-1", policy=policy)
-        data_client.set_egress_policy.assert_not_called()
+        fake_sdk.default_sandbox.set_egress_policy.assert_not_called()
 
-    def test_egress_policy_failure_is_logged_not_raised(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        data_client.set_egress_policy.side_effect = RuntimeError("egress 5xx")
+    def test_egress_policy_failure_is_logged_not_raised(self, provider, fake_sdk):
+        fake_sdk.default_sandbox.set_egress_policy.side_effect = RuntimeError(
+            "egress 5xx"
+        )
         policy = _make_policy(network_allowlist=["pypi.org"])
-        # Must not propagate — session creation still succeeds.
         handle = provider.create_session("agent-1", policy=policy)
         assert handle.status == SessionStatus.READY
 
-    def test_create_sandbox_failure_raises_runtime_error(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        data_client.create_sandbox.side_effect = RuntimeError("quota exceeded")
+    def test_egress_falls_back_to_dict_when_typed_models_missing(
+        self, provider, fake_sdk, monkeypatch
+    ):
+        # Some forked SDKs ship without the typed EgressPolicy /
+        # EgressHostRule models. Removing them should trigger the dict
+        # fallback path rather than crash.
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "azure.containerapps.sandbox" and fromlist and (
+                "EgressPolicy" in fromlist or "EgressHostRule" in fromlist
+            ):
+                raise ImportError("simulated missing typed models")
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        policy = _make_policy(network_allowlist=["pypi.org"])
+        provider.create_session("agent-1", policy=policy)
+
+        sb = fake_sdk.default_sandbox
+        sb.set_egress_policy.assert_called_once()
+        body = sb.set_egress_policy.call_args.args[0]
+        assert body == {
+            "defaultAction": "Deny",
+            "hostRules": [{"pattern": "pypi.org", "action": "Allow"}],
+        }
+
+    def test_create_sandbox_failure_raises_runtime_error(self, provider, fake_sdk):
+        fake_sdk.group.begin_create_sandbox.side_effect = RuntimeError(
+            "quota exceeded"
+        )
         with pytest.raises(RuntimeError, match="quota exceeded"):
             provider.create_session("agent-1")
 
-    def test_missing_sandbox_id_in_response_raises(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        data_client.create_sandbox.return_value = {}
-        with pytest.raises(RuntimeError, match="missing 'id'"):
+    def test_missing_sandbox_id_raises(self, provider, fake_sdk):
+        broken = MagicMock(spec=[])  # no sandbox_id, no id
+        fake_sdk.group.begin_create_sandbox.return_value = _make_poller(broken)
+        with pytest.raises(RuntimeError, match="sandbox_id"):
             provider.create_session("agent-1")
 
-    def test_uses_name_when_id_missing(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        data_client.create_sandbox.return_value = {"name": "sb-by-name"}
+    def test_falls_back_to_id_attribute_when_sandbox_id_absent(
+        self, provider, fake_sdk
+    ):
+        sb = MagicMock()
+        sb.sandbox_id = None
+        sb.id = "sb-from-id"
+        fake_sdk.group.begin_create_sandbox.return_value = _make_poller(sb)
         handle = provider.create_session("agent-1")
-        assert handle.session_id == "sb-by-name"
+        assert handle.session_id == "sb-from-id"
 
-    def test_policy_resource_caps_flow_into_create_sandbox(self, provider, fake_clients):
-        data_client, _ = fake_clients
+    def test_policy_resource_caps_flow_into_create_kwargs(self, provider, fake_sdk):
         policy = _make_policy(max_cpu=0.5, max_memory_mb=1024)
         provider.create_session("agent-1", policy=policy)
-        kwargs = data_client.create_sandbox.call_args.kwargs
+        kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
         assert kwargs["cpu"] == "500m"
         assert kwargs["memory"] == "1024Mi"
 
-    def test_cpu_floor_is_100m(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        policy = _make_policy(max_cpu=0.001)  # would round to 1m
+    def test_cpu_floor_is_100m(self, provider, fake_sdk):
+        policy = _make_policy(max_cpu=0.001)
         provider.create_session("agent-1", policy=policy)
-        assert data_client.create_sandbox.call_args.kwargs["cpu"] == "100m"
+        kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
+        assert kwargs["cpu"] == "100m"
 
-    def test_memory_floor_is_128mi(self, provider, fake_clients):
-        data_client, _ = fake_clients
+    def test_memory_floor_is_128mi(self, provider, fake_sdk):
         policy = _make_policy(max_memory_mb=16)
         provider.create_session("agent-1", policy=policy)
-        assert data_client.create_sandbox.call_args.kwargs["memory"] == "128Mi"
+        kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
+        assert kwargs["memory"] == "128Mi"
+
+    def test_resource_caps_omitted_when_no_policy(self, provider, fake_sdk):
+        # Without a policy the provider must not invent caps the user
+        # didn't ask for — let the sandbox image defaults apply.
+        provider.create_session("agent-1")
+        kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
+        assert "cpu" not in kwargs
+        assert "memory" not in kwargs
+
+    def test_typeerror_falls_back_to_minimal_kwargs(self, provider, fake_sdk):
+        # If the SDK rejects unknown kwargs (cpu/memory/environment),
+        # the provider retries with only disk + labels.
+        calls: list[dict] = []
+
+        def fake_create(**kwargs):
+            calls.append(dict(kwargs))
+            if "cpu" in kwargs:
+                raise TypeError("unexpected keyword 'cpu'")
+            return _make_poller(_make_sandbox_client("sb-fallback"))
+
+        fake_sdk.group.begin_create_sandbox.side_effect = fake_create
+        policy = _make_policy(max_cpu=0.5, max_memory_mb=256)
+        handle = provider.create_session("agent-1", policy=policy)
+        assert handle.session_id == "sb-fallback"
+        assert len(calls) == 2
+        assert "cpu" not in calls[1] and "memory" not in calls[1]
+
+    def test_typeerror_fallback_also_failing_raises(self, provider, fake_sdk):
+        # If even the minimal-kwargs retry blows up, the original-style
+        # RuntimeError must surface so callers see a real failure.
+        def fake_create(**kwargs):
+            if "cpu" in kwargs:
+                raise TypeError("unexpected keyword 'cpu'")
+            raise RuntimeError("backend down")
+
+        fake_sdk.group.begin_create_sandbox.side_effect = fake_create
+        policy = _make_policy(max_cpu=0.5, max_memory_mb=256)
+        with pytest.raises(RuntimeError, match="backend down"):
+            provider.create_session("agent-1", policy=policy)
+
+    def test_env_vars_forwarded_to_create(self, provider, fake_sdk):
+        cfg = SandboxConfig(env_vars={"OPENAI_API_KEY": "sk-test", "DEBUG": "1"})
+        provider.create_session("agent-1", config=cfg)
+        kwargs = fake_sdk.group.begin_create_sandbox.call_args.kwargs
+        assert kwargs["environment"] == {"OPENAI_API_KEY": "sk-test", "DEBUG": "1"}
+        # Caller's dict must not be aliased — provider stores a copy.
+        kwargs["environment"]["MUTATED"] = "yes"
+        assert "MUTATED" not in cfg.env_vars
 
     def test_runs_ungated_when_evaluator_missing(self, provider, monkeypatch, caplog):
-        # Simulate agent-os-kernel not being installed.
         import builtins
 
         real_import = builtins.__import__
@@ -458,7 +774,6 @@ class TestCreateSession:
         assert "agent-os-kernel not installed" in caplog.text
 
     def test_evaluator_construction_error_is_fatal(self, provider, monkeypatch):
-        # An *unexpected* evaluator error must not silently degrade to ungated.
         class BadEvaluator:
             def __init__(self, *a, **kw):
                 raise RuntimeError("evaluator broken")
@@ -473,30 +788,81 @@ class TestCreateSession:
         with pytest.raises(RuntimeError, match="PolicyEvaluator"):
             provider.create_session("agent-1", policy=_make_policy())
 
-    def test_ensure_group_idempotent_on_existing_group(self, fake_clients):
-        data_client, mgmt_client = fake_clients
-        data_client.create_sandbox.return_value = {"id": "sb-1"}
+    def test_ensure_group_idempotent_on_existing_group(self, fake_sdk):
         p = ACASandboxProvider(
             resource_group="rg",
             sandbox_group="grp",
             ensure_group_location="westus2",
         )
-        # get_group succeeds → no create_group call.
-        mgmt_client.get_group.return_value = {"name": "grp"}
+        # get_sandbox_group succeeds → no create call.
+        fake_sdk.mgmt.get_sandbox_group.return_value = {"name": "grp"}
         p.create_session("agent-1")
-        mgmt_client.create_group.assert_not_called()
+        fake_sdk.mgmt.begin_create_sandbox_group.assert_not_called()
+        fake_sdk.mgmt.create_sandbox_group.assert_not_called()
 
-    def test_ensure_group_creates_when_missing(self, fake_clients):
-        data_client, mgmt_client = fake_clients
-        data_client.create_sandbox.return_value = {"id": "sb-1"}
+    def test_ensure_group_creates_lro_when_missing(self, fake_sdk):
         p = ACASandboxProvider(
             resource_group="rg",
             sandbox_group="grp",
             ensure_group_location="westus2",
         )
-        mgmt_client.get_group.side_effect = RuntimeError("404")
+        fake_sdk.mgmt.get_sandbox_group.side_effect = RuntimeError("404")
         p.create_session("agent-1")
-        mgmt_client.create_group.assert_called_once()
+        fake_sdk.mgmt.begin_create_sandbox_group.assert_called_once()
+
+    def test_ensure_group_uses_legacy_method_names(self, fake_sdk):
+        # Older preview SDKs expose `get_group` / `begin_create_group`
+        # instead of the `_sandbox_group` variants.
+        mgmt = MagicMock(spec=["get_group", "begin_create_group", "close"])
+        mgmt.get_group.side_effect = RuntimeError("404")
+        poller = MagicMock()
+        poller.result.return_value = None
+        mgmt.begin_create_group.return_value = poller
+        fake_sdk.sdk.SandboxGroupManagementClient.return_value = mgmt
+
+        p = ACASandboxProvider(
+            resource_group="rg",
+            sandbox_group="grp",
+            ensure_group_location="westus2",
+        )
+        p.create_session("agent-1")
+        mgmt.begin_create_group.assert_called_once_with(
+            "grp", location="westus2"
+        )
+        poller.result.assert_called_once()
+
+    def test_ensure_group_falls_back_to_sync_create(self, fake_sdk):
+        # Some SDKs ship a synchronous `create_sandbox_group` without an
+        # LRO `begin_create_sandbox_group`. Cover that branch.
+        mgmt = MagicMock(spec=["get_sandbox_group", "create_sandbox_group", "close"])
+        mgmt.get_sandbox_group.side_effect = RuntimeError("404")
+        fake_sdk.sdk.SandboxGroupManagementClient.return_value = mgmt
+
+        p = ACASandboxProvider(
+            resource_group="rg",
+            sandbox_group="grp",
+            ensure_group_location="westus2",
+        )
+        p.create_session("agent-1")
+        mgmt.create_sandbox_group.assert_called_once_with(
+            "grp", location="westus2"
+        )
+
+    def test_ensure_group_noop_when_no_create_method_available(self, fake_sdk):
+        # Tolerate a mgmt client surface we don't recognize: log nothing,
+        # raise nothing, just leave the group untouched.
+        mgmt = MagicMock(spec=["get_sandbox_group", "close"])
+        mgmt.get_sandbox_group.side_effect = RuntimeError("404")
+        fake_sdk.sdk.SandboxGroupManagementClient.return_value = mgmt
+
+        p = ACASandboxProvider(
+            resource_group="rg",
+            sandbox_group="grp",
+            ensure_group_location="westus2",
+        )
+        # Must not raise even though no create method exists.
+        handle = p.create_session("agent-1")
+        assert handle.status == SessionStatus.READY
 
 
 # =========================================================================
@@ -543,16 +909,15 @@ class TestExecuteCode:
             provider.execute_code("agent-1", "nonexistent", "print(1)")
 
     def test_policy_deny_raises_before_any_azure_call(
-        self, provider_with_evaluator, fake_clients
+        self, provider_with_evaluator, fake_sdk
     ):
         provider, build = provider_with_evaluator
-        data_client, _ = fake_clients
         handle, _ev = build(allow=False, reason="rule X")
-        data_client.exec.reset_mock()
+        fake_sdk.default_sandbox.exec.reset_mock()
 
         with pytest.raises(PermissionError, match="rule X"):
             provider.execute_code(handle.agent_id, handle.session_id, "import os")
-        data_client.exec.assert_not_called()
+        fake_sdk.default_sandbox.exec.assert_not_called()
 
     def test_context_is_merged_into_eval_ctx(self, provider_with_evaluator):
         provider, build = provider_with_evaluator
@@ -568,28 +933,26 @@ class TestExecuteCode:
         assert ctx["step_index"] == 3
         assert ctx["intent"] == "test"
 
-    def test_code_is_base64_piped_into_python3(self, provider_with_evaluator, fake_clients):
+    def test_code_is_base64_piped_into_python3(
+        self, provider_with_evaluator, fake_sdk
+    ):
         provider, build = provider_with_evaluator
-        data_client, _ = fake_clients
         handle, _ = build(allow=True)
         src = "print('héllo \\n quote\"')"
         provider.execute_code(handle.agent_id, handle.session_id, src)
 
-        cmd = data_client.exec.call_args.args[2]
+        cmd = fake_sdk.default_sandbox.exec.call_args.args[0]
         assert "base64 -d | python3" in cmd
         encoded = cmd.split()[1]
         assert base64.b64decode(encoded).decode("utf-8") == src
 
-    def test_success_result_wraps_exit_code_and_streams(
-        self, provider_with_evaluator, fake_clients
+    def test_success_result_wraps_typed_response(
+        self, provider_with_evaluator, fake_sdk
     ):
         provider, build = provider_with_evaluator
-        data_client, _ = fake_clients
-        data_client.exec.return_value = {
-            "exitCode": 0,
-            "stdout": "hello\n",
-            "stderr": "",
-        }
+        fake_sdk.default_sandbox.exec.return_value = SimpleNamespace(
+            exit_code=0, stdout="hello\n", stderr=""
+        )
         handle, _ = build(allow=True)
         result = provider.execute_code(handle.agent_id, handle.session_id, "print(1)")
         assert result.status == ExecutionStatus.COMPLETED
@@ -598,15 +961,12 @@ class TestExecuteCode:
         assert result.result.stdout == "hello\n"
 
     def test_failure_result_when_exit_code_nonzero(
-        self, provider_with_evaluator, fake_clients
+        self, provider_with_evaluator, fake_sdk
     ):
         provider, build = provider_with_evaluator
-        data_client, _ = fake_clients
-        data_client.exec.return_value = {
-            "exitCode": 1,
-            "stdout": "",
-            "stderr": "boom",
-        }
+        fake_sdk.default_sandbox.exec.return_value = SimpleNamespace(
+            exit_code=1, stdout="", stderr="boom"
+        )
         handle, _ = build(allow=True)
         result = provider.execute_code(handle.agent_id, handle.session_id, "x")
         assert result.status == ExecutionStatus.FAILED
@@ -614,28 +974,40 @@ class TestExecuteCode:
         assert result.result.exit_code == 1
         assert result.result.stderr == "boom"
 
+    def test_legacy_dict_response_supported(
+        self, provider_with_evaluator, fake_sdk
+    ):
+        # Earlier preview builds returned a dict instead of a typed
+        # object; the provider must keep accepting that shape.
+        provider, build = provider_with_evaluator
+        fake_sdk.default_sandbox.exec.return_value = {
+            "exitCode": 0,
+            "stdout": "legacy",
+            "stderr": "",
+        }
+        handle, _ = build(allow=True)
+        result = provider.execute_code(handle.agent_id, handle.session_id, "p")
+        assert result.result.success is True
+        assert result.result.stdout == "legacy"
+
     def test_stdout_stderr_truncated_to_10k(
-        self, provider_with_evaluator, fake_clients
+        self, provider_with_evaluator, fake_sdk
     ):
         provider, build = provider_with_evaluator
-        data_client, _ = fake_clients
         big = "x" * 50000
-        data_client.exec.return_value = {
-            "exitCode": 0,
-            "stdout": big,
-            "stderr": big,
-        }
+        fake_sdk.default_sandbox.exec.return_value = SimpleNamespace(
+            exit_code=0, stdout=big, stderr=big
+        )
         handle, _ = build(allow=True)
         result = provider.execute_code(handle.agent_id, handle.session_id, "p")
         assert len(result.result.stdout) == 10000
         assert len(result.result.stderr) == 10000
 
     def test_exec_exception_returns_failed_handle(
-        self, provider_with_evaluator, fake_clients
+        self, provider_with_evaluator, fake_sdk
     ):
         provider, build = provider_with_evaluator
-        data_client, _ = fake_clients
-        data_client.exec.side_effect = RuntimeError("transport down")
+        fake_sdk.default_sandbox.exec.side_effect = RuntimeError("transport down")
         handle, _ = build(allow=True)
         result = provider.execute_code(handle.agent_id, handle.session_id, "p")
         assert result.status == ExecutionStatus.FAILED
@@ -643,18 +1015,14 @@ class TestExecuteCode:
         assert "transport down" in result.result.stderr
 
     def test_timeout_kill_when_duration_exceeds_session_cfg(
-        self, provider_with_evaluator, fake_clients, monkeypatch
+        self, provider_with_evaluator, fake_sdk, monkeypatch
     ):
         provider, build = provider_with_evaluator
-        data_client, _ = fake_clients
-
-        # Force timeout_seconds to a tiny value so any real duration trips it.
         handle, _ = build(allow=True)
         with provider._state_lock:
             cfg = provider._session_configs[(handle.agent_id, handle.session_id)]
             cfg.timeout_seconds = 0.001
 
-        # Fake time.monotonic so duration > timeout_seconds.
         from agent_sandbox.aca_sandbox_provider import (
             aca_sandbox_provider as mod,
         )
@@ -673,28 +1041,24 @@ class TestExecuteCode:
 
 
 class TestDestroyAndStatus:
-    def test_destroy_unknown_session_is_noop(self, provider, fake_clients):
-        data_client, _ = fake_clients
+    def test_destroy_unknown_session_is_noop(self, provider, fake_sdk):
         provider.destroy_session("ghost", "ghost")
-        data_client.delete_sandbox.assert_not_called()
+        fake_sdk.default_sandbox.delete.assert_not_called()
 
-    def test_destroy_calls_delete_sandbox_and_cleans_state(
-        self, provider, fake_clients
+    def test_destroy_calls_sandbox_delete_and_cleans_state(
+        self, provider, fake_sdk
     ):
-        data_client, _ = fake_clients
         handle = provider.create_session("agent-1")
         provider.destroy_session(handle.agent_id, handle.session_id)
-        data_client.delete_sandbox.assert_called_once_with(
-            "sb-abc123", "grp", resource_group="rg"
-        )
-        # Calling again must not crash and must not re-invoke delete.
-        data_client.delete_sandbox.reset_mock()
-        provider.destroy_session(handle.agent_id, handle.session_id)
-        data_client.delete_sandbox.assert_not_called()
+        fake_sdk.default_sandbox.delete.assert_called_once_with()
 
-    def test_destroy_swallows_delete_failure(self, provider, fake_clients, caplog):
-        data_client, _ = fake_clients
-        data_client.delete_sandbox.side_effect = RuntimeError("404 not found")
+        fake_sdk.default_sandbox.delete.reset_mock()
+        # Second destroy is idempotent — state is gone, no re-delete.
+        provider.destroy_session(handle.agent_id, handle.session_id)
+        fake_sdk.default_sandbox.delete.assert_not_called()
+
+    def test_destroy_swallows_delete_failure(self, provider, fake_sdk, caplog):
+        fake_sdk.default_sandbox.delete.side_effect = RuntimeError("404 not found")
         handle = provider.create_session("agent-1")
         with caplog.at_level("WARNING"):
             provider.destroy_session(handle.agent_id, handle.session_id)
@@ -712,21 +1076,20 @@ class TestDestroyAndStatus:
             == SessionStatus.DESTROYED
         )
 
-    def test_close_releases_clients(self, provider, fake_clients):
-        data_client, _ = fake_clients
+    def test_close_releases_group_client(self, provider, fake_sdk):
         provider.close()
-        data_client.close.assert_called_once()
+        fake_sdk.group.close.assert_called_once()
 
-    def test_close_tolerates_client_errors(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        data_client.close.side_effect = RuntimeError("dangling")
+    def test_close_tolerates_client_errors(self, provider, fake_sdk):
+        fake_sdk.group.close.side_effect = RuntimeError("dangling")
         provider.close()  # must not raise
 
-    def test_context_manager_calls_close(self, fake_clients):
-        data_client, _ = fake_clients
-        with ACASandboxProvider(resource_group="rg", sandbox_group="grp") as p:
+    def test_context_manager_calls_close(self, fake_sdk):
+        with ACASandboxProvider(
+            resource_group="rg", sandbox_group="grp", region="eastus2"
+        ) as p:
             assert p.is_available() is True
-        data_client.close.assert_called_once()
+        fake_sdk.group.close.assert_called_once()
 
 
 # =========================================================================
@@ -735,12 +1098,9 @@ class TestDestroyAndStatus:
 
 
 class TestAsyncWrappers:
-    def test_create_and_execute_and_destroy_async(self, provider, fake_clients):
-        data_client, _ = fake_clients
-
+    def test_create_and_execute_and_destroy_async(self, provider, fake_sdk):
         async def run():
             handle = await provider.create_session_async("agent-1")
-            # Inject a permissive evaluator to exercise the gate.
             with provider._state_lock:
                 provider._evaluators[(handle.agent_id, handle.session_id)] = (
                     _StubEvaluator(allow=True)
@@ -753,9 +1113,9 @@ class TestAsyncWrappers:
 
         exec_handle = asyncio.run(run())
         assert exec_handle.status == ExecutionStatus.COMPLETED
-        data_client.create_sandbox.assert_called_once()
-        data_client.exec.assert_called_once()
-        data_client.delete_sandbox.assert_called_once()
+        fake_sdk.group.begin_create_sandbox.assert_called_once()
+        fake_sdk.default_sandbox.exec.assert_called_once()
+        fake_sdk.default_sandbox.delete.assert_called_once()
 
 
 # =========================================================================
@@ -764,10 +1124,10 @@ class TestAsyncWrappers:
 
 
 class TestMultiSessionIsolation:
-    def test_two_agents_independent_state(self, provider, fake_clients):
-        data_client, _ = fake_clients
-        ids = iter([{"id": "sb-a"}, {"id": "sb-b"}])
-        data_client.create_sandbox.side_effect = lambda *a, **kw: next(ids)
+    def test_two_agents_independent_state(self, provider, fake_sdk):
+        sb_a = _make_sandbox_client("sb-a")
+        sb_b = _make_sandbox_client("sb-b")
+        fake_sdk.queue(sb_a, sb_b)
 
         h1 = provider.create_session("agent-1", policy=_make_policy(max_cpu=0.5))
         h2 = provider.create_session("agent-2", policy=_make_policy(max_cpu=2.0))
@@ -784,6 +1144,8 @@ class TestMultiSessionIsolation:
 
         # Destroying one must not touch the other.
         provider.destroy_session(h1.agent_id, h1.session_id)
+        sb_a.delete.assert_called_once()
+        sb_b.delete.assert_not_called()
         assert (
             provider.get_session_status(h2.agent_id, h2.session_id)
             == SessionStatus.READY

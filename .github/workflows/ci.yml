@@ -647,6 +647,8 @@ jobs:
               'agent-governance-toolkit-cli','agent-governance-toolkit-protocols',
               'agent-os-kernel','agentmesh-platform','agent-hypervisor',
               'agentmesh-runtime','agent-sre','agent-governance-toolkit',
+              'agent-governance-toolkit-core','agent-governance-toolkit-cli',
+              'agent-governance-toolkit-integrations','agent-governance-toolkit-protocols',
               'agentmesh-lightning','agentmesh-marketplace',
               'pydantic','pyyaml','cryptography','pynacl','click','rich',
               'httpx','aiohttp','fastapi','uvicorn','structlog','numpy',

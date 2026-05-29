@@ -6,39 +6,48 @@ End-to-end smoke test for the Step 5 walkthrough in
 
 What this script does, in order:
 
-  1. Builds an in-memory ``PolicyDocument`` that matches Step 5.1
-     (network allowlist, tool allowlist, three deny rules).
+  1. Loads the ``research-agent`` ``PolicyDocument`` from
+     ``examples/quickstart/policies/aca_research_agent.yaml`` (Step 5.1):
+     network allowlist, tool allowlist, deny rules for shell-out /
+     pip install / secret exfil, plus a deny-tool-not-in-allowlist rule.
   2. Constructs ``ACASandboxProvider`` with ``ensure_group_location``
      so the sandbox group is created on first use if it does not exist.
   3. Calls ``create_session_async`` — which under the covers calls
      ``SandboxClient.create_sandbox`` *and* ``set_egress_policy`` from
      the policy's ``network_allowlist``.
-  4. Runs four ``execute_code_async`` calls that exercise every code
-     path the article describes:
+  4. Runs ``execute_code_async`` calls that exercise every code path
+     the article describes:
         a. Allowed by policy AND inside the egress allowlist.
         b. Denied by an AGT rule (host-side) — never reaches Azure.
         c. Allowed by policy but blocked by the Azure egress proxy.
         d. Allowed by policy AND inside the egress allowlist (proves
            the session is still healthy after b/c).
-  5. Always destroys the sandbox in a ``finally`` block.
+        g. ``tool_name`` ON the tool_allowlist — passes host-side gate
+           and executes on Azure.
+        h. ``tool_name`` NOT on the tool_allowlist — denied host-side
+           by the deny-tool-not-in-allowlist rule; never reaches Azure.
+  5. Runs two verification passes:
+        e. Remote-execution proof (hostname / kernel / uid / cgroup
+           values that only an Azure sandbox container can produce).
+        f. Egress audit cross-check via ``get_egress_decisions`` (best
+           effort — skipped on SDK builds that don't expose it).
+  6. Always destroys the sandbox in a ``finally`` block.
 
 The script uses a verbose log format so each provider call, policy
 decision, and Azure round-trip is visible. Successful output looks like:
 
-  2026-05-05 14:02:11 INFO  step5-test bootstrap: policy=research-agent v=2
-  2026-05-05 14:02:11 INFO  agent_sandbox provisioning Azure sandbox in group 'agents-test'
-  2026-05-05 14:02:14 INFO  agent_sandbox applying egress policy (6 hosts, defaultAction=Deny)
-  2026-05-05 14:02:14 INFO  step5-test sandbox ready: sb-7f3a...
-  2026-05-05 14:02:14 INFO  step5-test [a] allowed-and-permitted...
-  2026-05-05 14:02:15 INFO  step5-test     => ok exit=0 stdout='200'
-  2026-05-05 14:02:15 INFO  step5-test [b] denied-by-policy-rule...
-  2026-05-05 14:02:15 INFO  step5-test     => PermissionError: Policy denied: shell-out blocked ...
-  2026-05-05 14:02:15 INFO  step5-test [c] blocked-by-egress...
-  2026-05-05 14:02:17 INFO  step5-test     => exit=non-zero stderr='... 403 Forbidden ...'
-  2026-05-05 14:02:17 INFO  step5-test [d] sanity-check...
-  2026-05-05 14:02:18 INFO  step5-test     => ok exit=0 stdout='200'
-  2026-05-05 14:02:18 INFO  step5-test destroying sandbox sb-7f3a...
-  2026-05-05 14:02:19 INFO  step5-test ALL ASSERTIONS PASSED
+  INFO  step5-test bootstrap: policy=research-agent v=2
+  INFO  step5-test sandbox ready: <sandbox-id>
+  INFO  step5-test [a. allowed-and-permitted]     => exit=0 stdout='200'
+  INFO  step5-test [b. denied-by-policy-rule]     => PermissionError: ...
+  INFO  step5-test [c. blocked-by-egress]         => stdout='... 403 Forbidden ...'
+  INFO  step5-test [d. sanity-check]              => exit=0 stdout='200'
+  INFO  step5-test [g. tool-allowed (fetch_arxiv)] => exit=0 stdout='tool-allowed-and-ran'
+  INFO  step5-test [h. tool-denied (evil_tool)]   => PermissionError: ...tool_allowlist...
+  INFO  step5-test [e. remote-proof] PROOF OK — remote host='adc-sandbox' ...
+  INFO  step5-test [f. egress-audit] ... (best effort)
+  INFO  step5-test destroying sandbox <sandbox-id>
+  INFO  step5-test ALL ASSERTIONS PASSED
 
 Run with:
 
@@ -46,7 +55,7 @@ Run with:
   $env:AZURE_RG              = "agents-rg"
   $env:AZURE_REGION          = "westus2"          # only needed first time
   az login
-  python examples/quickstart/azure_sandbox_step5_test.py
+  python examples/quickstart/aca_sandbox_test.py
 
 Pass ``--keep-sandbox`` to skip teardown for manual debugging via
 ``az sandbox`` or the portal.
@@ -60,99 +69,31 @@ import os
 import sys
 import time
 import uuid
+from pathlib import Path
 
 from agent_os.policies import PolicyDocument
-from agent_os.policies.schema import (
-    PolicyAction,
-    PolicyCondition,
-    PolicyDefaults,
-    PolicyOperator,
-    PolicyRule,
-)
 from agent_sandbox import ACASandboxProvider
 
 LOG = logging.getLogger("step5-test")
 
 
 # ---------------------------------------------------------------------------
-# Policy — all sandbox fields (network_allowlist, tool_allowlist,
-# defaults.max_cpu/max_memory_mb/timeout_seconds/network_default) are
-# native PolicyDocument fields as of AGT 3.3, so no SimpleNamespace
-# wrapper is required — the document is passed straight to the provider.
+# Policy — loaded straight from YAML. As of AGT 3.3, every sandbox field
+# (network_allowlist, tool_allowlist, defaults.max_cpu / max_memory_mb /
+# timeout_seconds / network_default) is a native PolicyDocument field, so
+# the policy lives entirely in
+# ``examples/quickstart/policies/aca_research_agent.yaml`` and is passed
+# straight to the provider — no SimpleNamespace wrapper required.
 # ---------------------------------------------------------------------------
 
-NETWORK_ALLOWLIST = [
-    "pypi.org",
-    "files.pythonhosted.org",
-    "api.arxiv.org",
-    "export.arxiv.org",
-    "*.github.com",
-    "api.openai.com",
-]
-
-TOOL_ALLOWLIST = ["fetch_arxiv", "fetch_github_readme"]
-
-# One PolicyRule per "code substring" pattern. The provider passes
-# eval_ctx={"action": "execute", "code": <code>, ...} on every
-# execute_code call; the evaluator runs `code CONTAINS <substring>` and
-# raises PermissionError on any match.
-_DENY_SUBSTRINGS = [
-    ("deny-shell-out-subprocess",  "subprocess",
-     "shell-out blocked by research-agent policy"),
-    ("deny-shell-out-os-system",   "os.system(",
-     "shell-out blocked by research-agent policy"),
-    ("deny-shell-out-pty",         "pty.spawn",
-     "shell-out blocked by research-agent policy"),
-    ("deny-shell-out-popen",       "popen(",
-     "shell-out blocked by research-agent policy"),
-    ("deny-pip-install",           "pip install",
-     "ad-hoc dependency installs are not permitted"),
-    ("deny-pip3-install",          "pip3 install",
-     "ad-hoc dependency installs are not permitted"),
-    ("deny-ensurepip",             "ensurepip",
-     "ad-hoc dependency installs are not permitted"),
-    ("deny-secret-azure",          "AZURE_CLIENT_SECRET",
-     "agents may not read host credentials"),
-    ("deny-secret-openai",         "OPENAI_API_KEY",
-     "agents may not read host credentials"),
-    ("deny-secret-ssh",            "/.ssh/",
-     "agents may not read host credentials"),
-    ("deny-secret-aws",            "/.aws/",
-     "agents may not read host credentials"),
-]
+POLICY_PATH = (
+    Path(__file__).resolve().parent / "policies" / "aca_research_agent.yaml"
+)
 
 
 def _build_policy() -> PolicyDocument:
-    """Build a PolicyDocument with sandbox fields populated natively."""
-    rules = [
-        PolicyRule(
-            name=name,
-            condition=PolicyCondition(
-                field="code",
-                operator=PolicyOperator.CONTAINS,
-                value=substring,
-            ),
-            action=PolicyAction.DENY,
-            priority=100,
-            message=message,
-        )
-        for name, substring, message in _DENY_SUBSTRINGS
-    ]
-
-    return PolicyDocument(
-        name="research-agent",
-        version="2",
-        rules=rules,
-        defaults=PolicyDefaults(
-            action=PolicyAction.ALLOW,
-            max_cpu=1.0,
-            max_memory_mb=1024,
-            timeout_seconds=60,
-            network_default="deny",   # fail-closed (also the schema default)
-        ),
-        network_allowlist=NETWORK_ALLOWLIST,
-        tool_allowlist=TOOL_ALLOWLIST,
-    )
+    """Load the research-agent policy from its YAML file."""
+    return PolicyDocument.from_yaml(str(POLICY_PATH))
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +129,17 @@ SNIPPET_SANITY = (
     "from urllib.request import urlopen\n"
     "with urlopen('https://pypi.org', timeout=10) as r:\n"
     "    print(r.status)\n"
+)
+
+# (g) Tool ON the allowlist — must pass the host-side gate and exec on Azure.
+SNIPPET_TOOL_ALLOWED = (
+    "print('tool-allowed-and-ran')\n"
+)
+
+# (h) Tool NOT on the allowlist — must be denied host-side before Azure
+#     ever sees the call.
+SNIPPET_TOOL_DENIED = (
+    "print('this should never run')\n"
 )
 
 # (e) Remote-execution proof (verification method 1 from the docs).
@@ -234,12 +186,16 @@ async def _run_one(
     expect_permission_error: bool = False,
     expect_success: bool = False,
     expect_egress_block: bool = False,
+    tool_name: str | None = None,
 ) -> None:
     """Execute one snippet and assert that its outcome matches the article."""
     LOG.info("[%s] running snippet (%d bytes)", label, len(code))
+    ctx: dict = {"label": label}
+    if tool_name is not None:
+        ctx["tool_name"] = tool_name
     try:
         handle = await provider.execute_code_async(
-            agent_id, session_id, code, context={"label": label},
+            agent_id, session_id, code, context=ctx,
         )
     except PermissionError as exc:
         LOG.info("[%s]     => PermissionError: %s", label, exc)
@@ -393,18 +349,21 @@ async def _verify_egress_audit(
     finished = time.time()
 
     LOG.info("[%s] querying SandboxClient.get_egress_decisions", label)
-    try:
-        decisions = await asyncio.to_thread(
-            provider._data_client.get_egress_decisions,
-            session_id,
-            provider._sandbox_group,
-        )
-    except AttributeError:
+    # The egress-decisions endpoint lives on the per-sandbox
+    # ``SandboxClient`` (not on the data-plane group client). The
+    # provider caches it in ``_sandboxes[(agent_id, session_id)]``.
+    sb_client = getattr(provider, "_sandboxes", {}).get(
+        (agent_id, session_id),
+    )
+    get_decisions = getattr(sb_client, "get_egress_decisions", None)
+    if not callable(get_decisions):
         LOG.warning(
             "[%s] this azure-sandbox SDK has no get_egress_decisions; "
             "skipping egress-audit verification", label,
         )
         return
+    try:
+        decisions = await asyncio.to_thread(get_decisions)
     except Exception as exc:  # noqa: BLE001
         LOG.warning(
             "[%s] get_egress_decisions raised %s: %s — skipping verification",
@@ -483,6 +442,7 @@ async def main(keep_sandbox: bool) -> int:
         return 2
     sandbox_group = os.environ.get("AZURE_SANDBOX_GROUP", "agents-test")
     region = os.environ.get("AZURE_REGION", "westus2")
+    subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
     # The provider hardcodes `python3` for execute_code; the default
     # public "ubuntu" image does NOT include it. Use the prebuilt
     # python-3.13 sandbox image instead. Override via env if needed.
@@ -498,14 +458,16 @@ async def main(keep_sandbox: bool) -> int:
     provider = ACASandboxProvider(
         resource_group=rg,
         sandbox_group=sandbox_group,
+        region=region,
+        subscription_id=subscription_id,
         disk=disk,
         ensure_group_location=region,
     )
 
     if not provider.is_available():
         LOG.error(
-            "ACASandboxProvider not available: install azure-sandbox "
-            "and run `az login`"
+            "ACASandboxProvider not available: %s",
+            provider.unavailable_reason,
         )
         return 2
 
@@ -534,6 +496,18 @@ async def main(keep_sandbox: bool) -> int:
             provider, agent_id, handle.session_id,
             "d. sanity-check", SNIPPET_SANITY,
             expect_success=True,
+        )
+        await _run_one(
+            provider, agent_id, handle.session_id,
+            "g. tool-allowed (fetch_arxiv)", SNIPPET_TOOL_ALLOWED,
+            tool_name="fetch_arxiv",
+            expect_success=True,
+        )
+        await _run_one(
+            provider, agent_id, handle.session_id,
+            "h. tool-denied (evil_tool)", SNIPPET_TOOL_DENIED,
+            tool_name="evil_tool",
+            expect_permission_error=True,
         )
         await _verify_remote_execution(
             provider, agent_id, handle.session_id,

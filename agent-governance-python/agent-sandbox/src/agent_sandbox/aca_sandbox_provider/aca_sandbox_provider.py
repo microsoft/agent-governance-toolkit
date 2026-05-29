@@ -3,17 +3,36 @@
 """Azure-backed sandbox provider implementing the ``SandboxProvider`` ABC.
 
 Each agent session maps to an Azure Container Apps **sandbox** inside a
-**sandbox group**.  The control plane (sandbox-group lifecycle) is handled
-by ``azure-mgmt-sandbox``; the data plane (sandbox CRUD, exec, files,
-egress policy) by ``azure-sandbox``.
+**sandbox group**. The provider drives the early-access
+``azure-containerapps-sandbox`` Python SDK (verified against
+``0.1.0b1``):
+
+* :class:`azure.containerapps.sandbox.SandboxGroupClient` — data plane,
+  scoped to one ``(resource_group, sandbox_group)`` pair. Used to create,
+  list, and delete sandboxes inside the group.
+* :class:`azure.containerapps.sandbox.SandboxClient` — per-sandbox client
+  returned by ``SandboxGroupClient.begin_create_sandbox(...).result()``.
+  Carries ``exec``, ``set_egress_policy``, ``delete``, ``get`` and the
+  other per-sandbox operations.
+* :class:`azure.containerapps.sandbox.SandboxGroupManagementClient` —
+  control plane (ARM), used only when ``ensure_group_location`` is set
+  so the provider can create the sandbox group on first use.
+
+Region selection follows the SDK's ``endpoint_for_region(region)``
+helper — supply ``region=`` (or set the ``AZURE_SANDBOX_REGION`` env
+var) so the data-plane client knows which regional endpoint to hit.
 
 Policy is loaded at session creation time:
 
-* ``defaults.max_memory_mb`` / ``defaults.max_cpu`` → sandbox CPU and memory.
-* ``network_allowlist`` → sandbox egress policy (defaultAction=Deny + per-host
-  Allow rules).
+* ``defaults.max_memory_mb`` / ``defaults.max_cpu`` →
+  :class:`SandboxConfig` caps used for host-side timeout enforcement and
+  forwarded to ``begin_create_sandbox`` as ``cpu`` / ``memory`` kwargs
+  when the SDK accepts them.
+* ``network_allowlist`` → sandbox egress policy
+  (``defaultAction=Deny`` + per-host ``Allow`` rules) applied via
+  :meth:`SandboxClient.set_egress_policy`.
 * ``tool_allowlist`` is host-side only and is enforced through the
-  ``PolicyEvaluator`` gate on every ``execute_code`` call.
+  ``PolicyEvaluator`` gate on every :meth:`execute_code` call.
 
 Example::
 
@@ -22,6 +41,7 @@ Example::
     provider = ACASandboxProvider(
         resource_group="my-rg",
         sandbox_group="agents",
+        region="eastus2",
     )
     handle = provider.create_session("agent-1")
     exec_handle = provider.execute_code(
@@ -35,6 +55,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import re
 import threading
 import time
@@ -55,6 +76,12 @@ if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
 
 logger = logging.getLogger(__name__)
+
+
+_IDENTITY_INSTALL_HINT = (
+    "Install azure-identity (or supply `credential=` explicitly):\n"
+    "  pip install 'agt-sandbox[azure]'"
+)
 
 
 # Sandbox-group / sandbox names are interpolated into ARM and data-plane
@@ -137,14 +164,54 @@ def _network_default(policy: Any) -> str:
     return "deny"
 
 
+def _unpack_exec_result(resp: Any) -> tuple[int, str, str]:
+    """Normalize an :meth:`SandboxClient.exec` response.
+
+    The 0.1.0b1 SDK returns a typed result object whose example usage is
+    ``out.stdout`` / ``out.stderr`` / ``out.exit_code``. Earlier preview
+    builds returned a dict (``{"exitCode": ..., "stdout": ..., ...}``).
+    Accept both shapes so the provider works across SDK revisions.
+    """
+    if resp is None:
+        return -1, "", ""
+    # Attribute style (typed result object).
+    if hasattr(resp, "exit_code") or hasattr(resp, "stdout"):
+        exit_code = getattr(resp, "exit_code", None)
+        if exit_code is None:
+            exit_code = getattr(resp, "exitCode", -1)
+        return (
+            int(exit_code if exit_code is not None else -1),
+            str(getattr(resp, "stdout", "") or ""),
+            str(getattr(resp, "stderr", "") or ""),
+        )
+    # Dict style (legacy preview).
+    if isinstance(resp, dict):
+        exit_code = resp.get("exit_code", resp.get("exitCode", -1))
+        return (
+            int(exit_code if exit_code is not None else -1),
+            str(resp.get("stdout") or ""),
+            str(resp.get("stderr") or ""),
+        )
+    return -1, "", str(resp)
+
+
 class ACASandboxProvider(SandboxProvider):
     """``SandboxProvider`` backed by Azure Container Apps sandboxes.
+
+    Uses the early-access ``azure-containerapps-sandbox`` SDK
+    (``0.1.0b1``+). The provider holds one
+    :class:`SandboxGroupClient <azure.containerapps.sandbox.SandboxGroupClient>`
+    for the whole ``(resource_group, sandbox_group)`` pair and caches the
+    per-sandbox :class:`SandboxClient
+    <azure.containerapps.sandbox.SandboxClient>` returned from
+    :meth:`begin_create_sandbox` so every operation goes through the
+    typed surface — no raw ARM URLs.
 
     .. note::
        The ``resource_group`` **must already exist** in the target
        subscription. This provider does not create or manage resource
        groups — create one out-of-band first (e.g.
-       ``az group create -n my-rg -l westus2``) and pass its name here.
+       ``az group create -n my-rg -l eastus2``) and pass its name here.
        Calling :meth:`create_session` against a non-existent resource
        group surfaces the Azure 404 as a ``RuntimeError`` wrapping the
        upstream ``ResourceGroupNotFound`` error.
@@ -155,24 +222,38 @@ class ACASandboxProvider(SandboxProvider):
     Parameters
     ----------
     resource_group:
-        Default resource group containing the sandbox group.  Must
+        Default resource group containing the sandbox group. Must
         already exist; see the note above.
     sandbox_group:
-        Sandbox group that holds per-agent sandboxes.  Must already exist
+        Sandbox group that holds per-agent sandboxes. Must already exist
         unless ``ensure_group_location`` is set, in which case the
-        provider creates it on first use via ``azure-mgmt-sandbox``.
+        provider creates it on first use via
+        ``azure-containerapps-sandbox``'s management client.
+    region:
+        Azure region for the data-plane endpoint, resolved with
+        :func:`azure.containerapps.sandbox.endpoint_for_region`. Falls
+        back to ``ensure_group_location`` (if set) or the
+        ``AZURE_SANDBOX_REGION`` environment variable. Required when
+        ``endpoint`` is not supplied.
+    endpoint:
+        Explicit data-plane endpoint URL. Use this in tests or against
+        non-public clouds where ``endpoint_for_region`` does not apply.
+        Takes precedence over ``region``.
     subscription_id:
-        Azure subscription ID.  Auto-detected from
-        ``AZURE_SUBSCRIPTION_ID`` (or ``az account show``) when omitted.
+        Azure subscription ID. Auto-detected by ``azure-identity`` /
+        ``DefaultAzureCredential`` when omitted, or read from
+        ``AZURE_SUBSCRIPTION_ID``.
     credential:
-        ``azure-identity`` credential.  Defaults to ``DefaultAzureCredential``.
+        ``azure-identity`` credential. Defaults to
+        :class:`DefaultAzureCredential`.
     disk:
         Public disk image name to provision sandboxes from
         (default ``"ubuntu"``).
     ensure_group_location:
         If set, the sandbox group will be created in this Azure region
-        when it does not already exist.  The enclosing
-        ``resource_group`` is **not** created — it must pre-exist.
+        when it does not already exist. The enclosing
+        ``resource_group`` is **not** created — it must pre-exist. Also
+        used as the default for ``region`` when ``region`` is omitted.
     """
 
     def __init__(
@@ -180,6 +261,8 @@ class ACASandboxProvider(SandboxProvider):
         resource_group: str,
         sandbox_group: str,
         *,
+        region: str | None = None,
+        endpoint: str | None = None,
         subscription_id: str | None = None,
         credential: "TokenCredential | None" = None,
         disk: str = "ubuntu",
@@ -189,53 +272,120 @@ class ACASandboxProvider(SandboxProvider):
 
         self._resource_group = resource_group
         self._sandbox_group = sandbox_group
+        self._subscription_id = subscription_id
         self._disk = disk
         self._ensure_group_location = ensure_group_location
 
+        # Resolve region/endpoint. The SDK's SandboxGroupClient needs a
+        # regional endpoint — derive it from `region` (preferred), then
+        # `ensure_group_location`, then $AZURE_SANDBOX_REGION.
+        resolved_region = (
+            region
+            or ensure_group_location
+            or os.environ.get("AZURE_SANDBOX_REGION")
+        )
+
         self._state_lock = threading.RLock()
-        self._sandboxes: dict[tuple[str, str], str] = {}
+        # Map (agent_id, session_id) → per-sandbox SandboxClient.
+        self._sandboxes: dict[tuple[str, str], Any] = {}
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], SandboxConfig] = {}
 
         self._available = False
-        self._data_client: Any = None
+        self._unavailable_reason: str | None = None
+        self._group_client: Any = None
         self._mgmt_client: Any = None
+        self._endpoint: str | None = endpoint
 
+        # Lazy import so the package stays importable without
+        # azure-containerapps-sandbox installed.
         try:
-            from azure.sandbox import SandboxClient
-
-            self._data_client = SandboxClient(
-                resource_group=resource_group,
-                subscription_id=subscription_id,
-                credential=credential,
-            )
+            from azure.containerapps import sandbox as _sdk
         except ImportError:
-            logger.warning(
-                "azure-sandbox is not installed — "
-                "ACASandboxProvider is unavailable"
+            self._unavailable_reason = (
+                "azure-containerapps-sandbox is not installed."
             )
+            logger.warning(self._unavailable_reason)
             return
         except Exception as exc:
-            logger.warning("Failed to construct SandboxClient: %s", exc)
+            self._unavailable_reason = (
+                f"Failed to import azure-containerapps-sandbox: {exc}."
+            )
+            logger.warning(self._unavailable_reason)
+            return
+
+        if self._endpoint is None:
+            if not resolved_region:
+                self._unavailable_reason = (
+                    "ACASandboxProvider needs `region=` (or "
+                    "ensure_group_location=, or $AZURE_SANDBOX_REGION) to "
+                    "construct the data-plane endpoint."
+                )
+                logger.warning(self._unavailable_reason)
+                return
+            try:
+                self._endpoint = _sdk.endpoint_for_region(resolved_region)
+            except Exception as exc:
+                self._unavailable_reason = (
+                    f"endpoint_for_region({resolved_region!r}) failed: {exc}"
+                )
+                logger.warning(self._unavailable_reason)
+                return
+
+        try:
+            # DefaultAzureCredential is the canonical fallback from the
+            # SDK's quick-start guide.
+            if credential is None:
+                from azure.identity import DefaultAzureCredential
+
+                credential = DefaultAzureCredential()
+        except ImportError:
+            self._unavailable_reason = (
+                "azure-identity is not installed.\n" + _IDENTITY_INSTALL_HINT
+            )
+            logger.warning(self._unavailable_reason)
+            return
+        except Exception as exc:
+            self._unavailable_reason = (
+                f"Failed to build DefaultAzureCredential: {exc}. "
+                "Run `az login` or supply `credential=` explicitly."
+            )
+            logger.warning(self._unavailable_reason)
+            return
+
+        self._credential = credential
+
+        try:
+            self._group_client = _sdk.SandboxGroupClient(
+                self._endpoint,
+                credential,
+                subscription_id=subscription_id,
+                resource_group=resource_group,
+                sandbox_group=sandbox_group,
+            )
+        except Exception as exc:
+            self._unavailable_reason = (
+                f"Failed to construct SandboxGroupClient: {exc}"
+            )
+            logger.warning(self._unavailable_reason)
             return
 
         if ensure_group_location:
             try:
-                from azure.mgmt.sandbox import SandboxGroupManagementClient
-
-                self._mgmt_client = SandboxGroupManagementClient(
-                    resource_group=resource_group,
+                self._mgmt_client = _sdk.SandboxGroupManagementClient(
+                    credential,
                     subscription_id=subscription_id,
-                    credential=credential,
+                    resource_group=resource_group,
                 )
-            except ImportError:
+            except AttributeError:
                 logger.warning(
-                    "azure-mgmt-sandbox is not installed — "
-                    "ensure_group_location ignored"
+                    "SandboxGroupManagementClient missing on this SDK "
+                    "version — ensure_group_location ignored"
                 )
             except Exception as exc:
                 logger.warning(
-                    "Failed to construct SandboxGroupManagementClient: %s", exc
+                    "Failed to construct SandboxGroupManagementClient: %s",
+                    exc,
                 )
 
         self._available = True
@@ -245,25 +395,58 @@ class ACASandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
 
     def _ensure_sandbox_group(self) -> None:
+        """Create the sandbox group on first use when configured.
+
+        Probes the mgmt client for the appropriate get/create methods —
+        the exact surface varies slightly across SDK previews. Falls
+        through silently when nothing matches so the group is assumed to
+        pre-exist.
+        """
         if self._mgmt_client is None or self._ensure_group_location is None:
             return
-        try:
-            self._mgmt_client.get_group(
-                self._sandbox_group, resource_group=self._resource_group
-            )
-            return
-        except Exception:
-            pass
+
+        get_method = (
+            getattr(self._mgmt_client, "get_sandbox_group", None)
+            or getattr(self._mgmt_client, "get_group", None)
+        )
+        if get_method is not None:
+            try:
+                get_method(self._sandbox_group)
+                return
+            except Exception:
+                # Treat any failure (404 or otherwise) as "needs creating".
+                pass
+
         logger.info(
             "Creating sandbox group '%s' in '%s'",
             self._sandbox_group,
             self._ensure_group_location,
         )
-        self._mgmt_client.create_group(
-            self._sandbox_group,
-            location=self._ensure_group_location,
-            resource_group=self._resource_group,
+        # Prefer the documented `begin_*` LRO form when present;
+        # fall back to the synchronous `create_*` form otherwise.
+        begin_create = (
+            getattr(self._mgmt_client, "begin_create_sandbox_group", None)
+            or getattr(self._mgmt_client, "begin_create_group", None)
         )
+        if begin_create is not None:
+            poller = begin_create(
+                self._sandbox_group,
+                location=self._ensure_group_location,
+            )
+            # LROPoller.result() blocks for the terminal state.
+            if hasattr(poller, "result"):
+                poller.result()
+            return
+
+        create_method = (
+            getattr(self._mgmt_client, "create_sandbox_group", None)
+            or getattr(self._mgmt_client, "create_group", None)
+        )
+        if create_method is not None:
+            create_method(
+                self._sandbox_group,
+                location=self._ensure_group_location,
+            )
 
     # ------------------------------------------------------------------
     # Helpers
@@ -280,7 +463,7 @@ class ACASandboxProvider(SandboxProvider):
 
     def _apply_egress_policy(
         self,
-        sandbox_id: str,
+        sb_client: Any,
         hosts: list[str],
         network_default: str = "deny",
     ) -> None:
@@ -300,18 +483,32 @@ class ACASandboxProvider(SandboxProvider):
             return
         # network_default == "deny" → fail-closed, always set the policy
         # (even with an empty hosts list, which produces a deny-all sandbox).
-        policy = {
-            "defaultAction": "Deny",
-            "hostRules": [
-                {"pattern": h, "action": "Allow"} for h in hosts
-            ],
-        }
+        # The SDK requires a typed ``EgressPolicy`` model (it calls
+        # ``_to_dict()`` on the argument); a plain dict will not work.
         try:
-            self._data_client.set_egress_policy(
-                sandbox_id, self._sandbox_group, policy,
-                resource_group=self._resource_group,
+            from azure.containerapps.sandbox import (
+                EgressHostRule,
+                EgressPolicy,
             )
+            policy: Any = EgressPolicy(
+                default_action="Deny",
+                host_rules=[
+                    EgressHostRule(pattern=h, action="Allow") for h in hosts
+                ],
+            )
+        except ImportError:
+            # Older/forked SDKs without typed models — fall back to a dict
+            # and let the SDK accept or reject it.
+            policy = {
+                "defaultAction": "Deny",
+                "hostRules": [
+                    {"pattern": h, "action": "Allow"} for h in hosts
+                ],
+            }
+        try:
+            sb_client.set_egress_policy(policy)
         except Exception as exc:
+            sandbox_id = getattr(sb_client, "sandbox_id", "<unknown>")
             logger.warning(
                 "Failed to apply egress policy on sandbox '%s': %s",
                 sandbox_id, exc,
@@ -328,7 +525,13 @@ class ACASandboxProvider(SandboxProvider):
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         if not self._available:
-            raise RuntimeError("ACASandboxProvider is not available")
+            reason = (
+                self._unavailable_reason
+                or "ACASandboxProvider is not available."
+            )
+            raise RuntimeError(
+                f"ACASandboxProvider is not available: {reason}"
+            )
 
         _validate_resource_name(agent_id, "agent_id")
 
@@ -359,25 +562,59 @@ class ACASandboxProvider(SandboxProvider):
         # Make sure the sandbox group exists (no-op unless requested).
         self._ensure_sandbox_group()
 
-        # Provision the sandbox.
+        # Provision the sandbox. `begin_create_sandbox` is an LRO that
+        # returns a poller; `.result()` blocks until the sandbox reaches
+        # Running and returns a per-sandbox SandboxClient.
+        #
+        # `cpu` / `memory` are passed as kwargs when the SDK accepts
+        # them. The 0.1.0b1 reference doc shows only `disk=` and
+        # `labels=`; forwarding the resource caps as kwargs is
+        # forward-compatible with later previews. If a future SDK
+        # rejects unknown kwargs we'll see TypeError here and fall back
+        # to a kwargs-free create.
+        create_kwargs: dict[str, Any] = {
+            "disk": self._disk,
+            "labels": {"agent_id": agent_id},
+        }
+        if policy_provided:
+            create_kwargs["cpu"] = self._cpu_millicores(cfg.cpu_limit)
+            create_kwargs["memory"] = self._memory_mib(cfg.memory_mb)
+        if cfg.env_vars:
+            create_kwargs["environment"] = dict(cfg.env_vars)
+
         try:
-            sbx = self._data_client.create_sandbox(
-                self._sandbox_group,
-                disk=self._disk,
-                cpu=self._cpu_millicores(cfg.cpu_limit),
-                memory=self._memory_mib(cfg.memory_mb),
-                environment=cfg.env_vars or None,
-                resource_group=self._resource_group,
-            )
+            poller = self._group_client.begin_create_sandbox(**create_kwargs)
+            sb_client = poller.result() if hasattr(poller, "result") else poller
+        except TypeError:
+            # Older SDK previews may not accept cpu/memory/environment.
+            # Retry with only the documented kwargs.
+            fallback_kwargs = {
+                "disk": self._disk,
+                "labels": create_kwargs["labels"],
+            }
+            try:
+                poller = self._group_client.begin_create_sandbox(
+                    **fallback_kwargs
+                )
+                sb_client = (
+                    poller.result() if hasattr(poller, "result") else poller
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to create Azure sandbox for agent "
+                    f"'{agent_id}': {exc}"
+                ) from exc
         except Exception as exc:
             raise RuntimeError(
                 f"Failed to create Azure sandbox for agent '{agent_id}': {exc}"
             ) from exc
 
-        sandbox_id = sbx.get("id") or sbx.get("name")
+        sandbox_id = getattr(sb_client, "sandbox_id", None) or getattr(
+            sb_client, "id", None
+        )
         if not sandbox_id:
             raise RuntimeError(
-                f"Azure sandbox response missing 'id': {sbx!r}"
+                f"Azure sandbox client missing 'sandbox_id': {sb_client!r}"
             )
 
         # Apply egress policy. We do this whenever a policy is supplied —
@@ -386,12 +623,12 @@ class ACASandboxProvider(SandboxProvider):
         # genuinely want a default-allow sandbox must set
         # `defaults.network_default: allow` in the policy.
         if policy_provided:
-            self._apply_egress_policy(sandbox_id, allow_hosts, net_default)
+            self._apply_egress_policy(sb_client, allow_hosts, net_default)
 
         session_id = sandbox_id
         key = (agent_id, session_id)
         with self._state_lock:
-            self._sandboxes[key] = sandbox_id
+            self._sandboxes[key] = sb_client
             self._session_configs[key] = cfg
             if evaluator is not None:
                 self._evaluators[key] = evaluator
@@ -412,11 +649,11 @@ class ACASandboxProvider(SandboxProvider):
     ) -> ExecutionHandle:
         key = (agent_id, session_id)
         with self._state_lock:
-            sandbox_id = self._sandboxes.get(key)
+            sb_client = self._sandboxes.get(key)
             evaluator = self._evaluators.get(key)
             session_cfg = self._session_configs.get(key) or SandboxConfig()
 
-        if sandbox_id is None:
+        if sb_client is None:
             raise RuntimeError(
                 f"No active session for agent '{agent_id}' with "
                 f"session_id '{session_id}'. Call create_session() first."
@@ -434,22 +671,16 @@ class ACASandboxProvider(SandboxProvider):
             if not decision.allowed:
                 raise PermissionError(f"Policy denied: {decision.reason}")
 
-        # Run the code over the data-plane exec endpoint.  We base64-encode
-        # the source so the body is opaque to the host shell and any code,
-        # including multi-line scripts and quotes, runs unmodified.
+        # Run the code over the per-sandbox `exec` endpoint. We
+        # base64-encode the source so the body is opaque to the host
+        # shell and any code, including multi-line scripts and quotes,
+        # runs unmodified.
         encoded = base64.b64encode(code.encode("utf-8")).decode("ascii")
-        command = (
-            f"echo {encoded} | base64 -d | python3"
-        )
+        command = f"echo {encoded} | base64 -d | python3"
 
         start = time.monotonic()
         try:
-            resp = self._data_client.exec(
-                sandbox_id,
-                self._sandbox_group,
-                command,
-                resource_group=self._resource_group,
-            )
+            resp = sb_client.exec(command)
         except Exception as exc:
             duration = time.monotonic() - start
             return ExecutionHandle(
@@ -466,14 +697,12 @@ class ACASandboxProvider(SandboxProvider):
             )
 
         duration = time.monotonic() - start
-        exit_code = int(resp.get("exitCode", -1))
-        stdout = (resp.get("stdout") or "")[:10000]
-        stderr = (resp.get("stderr") or "")[:10000]
+        exit_code, stdout, stderr = _unpack_exec_result(resp)
         result = SandboxResult(
             success=exit_code == 0,
             exit_code=exit_code,
-            stdout=stdout,
-            stderr=stderr,
+            stdout=stdout[:10000],
+            stderr=stderr[:10000],
             duration_seconds=round(duration, 3),
         )
         status = (
@@ -500,20 +729,17 @@ class ACASandboxProvider(SandboxProvider):
     def destroy_session(self, agent_id: str, session_id: str) -> None:
         key = (agent_id, session_id)
         with self._state_lock:
-            sandbox_id = self._sandboxes.pop(key, None)
+            sb_client = self._sandboxes.pop(key, None)
             self._evaluators.pop(key, None)
             self._session_configs.pop(key, None)
 
-        if sandbox_id is None:
+        if sb_client is None:
             return
 
         try:
-            self._data_client.delete_sandbox(
-                sandbox_id,
-                self._sandbox_group,
-                resource_group=self._resource_group,
-            )
+            sb_client.delete()
         except Exception as exc:
+            sandbox_id = getattr(sb_client, "sandbox_id", session_id)
             logger.warning(
                 "Failed to delete Azure sandbox '%s' for agent '%s': %s",
                 sandbox_id, agent_id, exc,
@@ -521,6 +747,16 @@ class ACASandboxProvider(SandboxProvider):
 
     def is_available(self) -> bool:
         return self._available
+
+    @property
+    def unavailable_reason(self) -> str | None:
+        """Human-readable reason the provider is unavailable, or ``None``.
+
+        Includes copy-pasteable install commands when the SDK or
+        ``azure-identity`` is missing. Useful for surfacing actionable
+        errors in CLIs and test ``skip`` messages.
+        """
+        return self._unavailable_reason
 
     def get_session_status(
         self, agent_id: str, session_id: str
@@ -536,7 +772,10 @@ class ACASandboxProvider(SandboxProvider):
 
     def close(self) -> None:
         """Release HTTP client resources."""
-        for client in (self._data_client, self._mgmt_client):
+        # Per-sandbox SandboxClient objects share the SandboxGroupClient's
+        # underlying HTTP pipeline; closing the group + mgmt clients
+        # tears the connections down for everyone.
+        for client in (self._group_client, self._mgmt_client):
             close = getattr(client, "close", None)
             if callable(close):
                 try:

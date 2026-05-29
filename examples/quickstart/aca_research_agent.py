@@ -22,7 +22,7 @@ Run with::
     $env:AZURE_REGION          = "westus2"
     $env:OPENAI_API_KEY        = "..."
     az login
-    python examples/quickstart/research_agent.py examples/quickstart/tickets/TKT-4821.json
+    python examples/quickstart/aca_research_agent.py examples/quickstart/tickets/TKT-4821.json
 """
 from __future__ import annotations
 
@@ -33,7 +33,6 @@ import os
 import sys
 import textwrap
 import time
-import types
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -205,14 +204,13 @@ class ResearchAgent:
     def __init__(
         self,
         provider: ACASandboxProvider,
-        policy: Any,                    # SimpleNamespace wrapper around PolicyDocument
+        policy: PolicyDocument,
         agent_id: str,
     ) -> None:
         self._provider = provider
         self._policy = policy
         self._agent_id = agent_id
         self._handle = None
-        self._sandbox_group = provider._sandbox_group  # needed for egress audit
 
     async def __aenter__(self) -> "ResearchAgent":
         self._handle = await self._provider.create_session_async(
@@ -278,23 +276,38 @@ class ResearchAgent:
 
         result = exec_handle.result
 
-        # 2. Pull the Azure egress audit trail for this step. The data-plane
-        #    SDK is sync today, so we hop to a worker thread to avoid blocking
-        #    the event loop.
-        egress = []
-        try:
-            decisions = await asyncio.to_thread(
-                self._provider._data_client.get_egress_decisions,
-                sid, self._sandbox_group,
-            )
-            egress = (decisions.get("decisions") or [])[-25:]
-        except Exception:  # noqa: BLE001
-            LOG.debug("egress decision audit unavailable", exc_info=True)
+        # 2. Best-effort pull of the Azure egress audit trail. Newer SDK
+        #    builds expose ``SandboxClient.get_egress_decisions``; the
+        #    0.1.0b1 preview does not. We probe via getattr and fall
+        #    back to scanning combined stdout/stderr for the proxy's
+        #    403 marker, which is sufficient to classify the step.
+        egress: list[dict[str, Any]] = []
+        sb_cache = getattr(self._provider, "_sandboxes", {})
+        sandbox_client = sb_cache.get((self._agent_id, sid))
+        get_decisions = getattr(sandbox_client, "get_egress_decisions", None)
+        if callable(get_decisions):
+            try:
+                decisions = await asyncio.to_thread(get_decisions)
+                if isinstance(decisions, dict):
+                    egress = (decisions.get("decisions") or [])[-25:]
+            except Exception:  # noqa: BLE001
+                LOG.debug("egress decision audit unavailable", exc_info=True)
+
+        combined = (result.stdout or "") + (result.stderr or "")
+        egress_denied_in_audit = any(
+            (d.get("action") or "").lower() == "deny" for d in egress
+        )
+        # The egress proxy returns HTTP 403; snippets that catch the
+        # urllib error also print an "egress-blocked" marker.
+        egress_denied_in_output = (
+            "egress-blocked" in combined
+            or "HTTP Error 403" in combined
+        )
 
         if getattr(result, "killed", False):
             decision = "timeout"
             reason = getattr(result, "kill_reason", "exceeded timeout_seconds")
-        elif any(d.get("action") == "Deny" for d in egress):
+        elif egress_denied_in_audit or egress_denied_in_output:
             decision = "blocked-at-egress"
             reason = "Azure egress proxy denied at least one host"
         elif result.success:
@@ -325,34 +338,29 @@ async def main(ticket_path: str) -> int:
     ticket = Ticket(**ticket_data)
 
     here = Path(__file__).resolve().parent
-    policy_path = here / "policies" / "research_agent.yaml"
-    document = PolicyDocument.from_yaml(str(policy_path))
-    # See Step 5.1 — sandbox-only fields are attached as a wrapper.
-    policy = types.SimpleNamespace(
-        name=document.name,
-        version=document.version,
-        rules=document.rules,
-        defaults=types.SimpleNamespace(
-            action=document.defaults.action,
-            max_cpu=1.0,
-            max_memory_mb=2048,
-            timeout_seconds=90,
-        ),
-        network_allowlist=[
-            "api.openai.com", "api.arxiv.org", "export.arxiv.org",
-            "*.github.com", "pypi.org", "files.pythonhosted.org",
-        ],
-        tool_allowlist=["fetch_arxiv", "fetch_github_readme", "search_index"],
-    )
+    policy_path = here / "policies" / "aca_research_agent.yaml"
+    # As of AGT 3.3 the YAML carries every sandbox field natively
+    # (network_allowlist, tool_allowlist, defaults.max_cpu/memory/
+    # timeout/network_default) so the document is passed straight
+    # to the provider -- no SimpleNamespace wrapper required.
+    policy = PolicyDocument.from_yaml(str(policy_path))
 
+    region = os.environ.get("AZURE_REGION", "westus2")
     provider = ACASandboxProvider(
         resource_group=os.environ["AZURE_RG"],
         sandbox_group=os.environ.get("AZURE_SANDBOX_GROUP", "agents-test"),
+        region=region,
+        subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         # Default "ubuntu" image has no python3; use a Python sandbox
-        # image so execute_code's `… | python3` invocation works.
+        # image so execute_code's `... | python3` invocation works.
         disk=os.environ.get("AZURE_SANDBOX_DISK", "python-3.13"),
-        ensure_group_location=os.environ.get("AZURE_REGION", "westus2"),
+        ensure_group_location=region,
     )
+    if not provider.is_available():
+        LOG.error(
+            "ACASandboxProvider not available: %s", provider.unavailable_reason,
+        )
+        return 2
 
     agent_id = f"research-{ticket.id}-{uuid.uuid4().hex[:6]}"
     receipts: list[StepReceipt] = []
