@@ -193,6 +193,40 @@ class OPABackend:
 
     def _evaluate_remote(self, context: dict[str, Any]) -> BackendDecision:
         import urllib.request
+        from urllib.parse import urlparse
+
+        # Plaintext HTTP to a remote OPA server is a man-in-the-middle
+        # vector: an on-path attacker can rewrite the response body and
+        # flip allow=true. Require HTTPS unless the operator has
+        # explicitly opted into plaintext for a local/dev environment.
+        parsed = urlparse(self._opa_url)
+        if parsed.scheme.lower() != "https":
+            allow_plaintext = os.environ.get(
+                "AGENT_OS_OPA_ALLOW_PLAINTEXT", ""
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            env_name = os.environ.get("AGENT_OS_ENV", "").strip().lower()
+            host = (parsed.hostname or "").lower()
+            is_loopback_host = host in {"localhost", "127.0.0.1", "::1"} or host.startswith("127.")
+            local_env = env_name in {"local", "dev", "development"}
+            if not (allow_plaintext and local_env) and not is_loopback_host:
+                return BackendDecision(
+                    allowed=False,
+                    action="deny",
+                    reason=(
+                        f"OPA remote URL uses non-HTTPS scheme ({parsed.scheme!r}). "
+                        "Set AGENT_OS_OPA_ALLOW_PLAINTEXT=1 with AGENT_OS_ENV=local/dev "
+                        "to permit plaintext, or use an https:// URL."
+                    ),
+                    backend="opa",
+                    error="plaintext_opa_blocked",
+                )
+            if not is_loopback_host:
+                logger.warning(
+                    "OPA remote URL is plaintext (%s); permitted by "
+                    "AGENT_OS_OPA_ALLOW_PLAINTEXT in local/dev environment. "
+                    "DO NOT use this in production.",
+                    self._opa_url,
+                )
 
         # Validate query to prevent path injection
         if not re.fullmatch(r'[a-zA-Z0-9._\-]+', self._query):
