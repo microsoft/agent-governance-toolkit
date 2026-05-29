@@ -45,8 +45,29 @@ Build **AGT Studio** as the single first-class UI for AGT.
   shells. The shells inject a transport (HTTP for standalone, postMessage for
   webview) so the SPA is host-agnostic.
 - Policy-first scope. Authoring, testing, simulation, and visibility for AGT
-  policies. Modelled on the Azure Policy experience in the Azure Portal:
-  browse definitions, see active assignments, author, test, assign.
+  policies. Inspired by Azure Policy's lifecycle shape, not a clone of Azure
+  Portal UX: browse definitions, inspect assignments, author, test, and
+  simulate decisions.
+
+### Scope boundary
+
+Studio is policy-first and read-only for runtime state. Visibility features
+may explain policy decisions, audit evidence, trust posture, and shadow-mode
+findings only insofar as they help author, test, debug, or validate policies.
+Studio must not perform operational write-path actions such as approvals,
+quarantine, credential rotation, production hot-reload, incident workflow
+changes, or runtime control. Any move from policy-adjacent visibility to
+operational control requires a separate ADR.
+
+### CLI ownership and version compatibility
+
+`agt ui` is the user-facing launcher. `agt serve` is the local engine sidecar
+used by Studio and any other local client. The `agent-compliance` maintainers
+own the policy and test API surface; `agent-mesh` maintainers own the
+dashboard and audit event sources; extension maintainers own the webview
+transport shells. Studio must detect incompatible engine/API versions on
+startup and fail with an actionable upgrade message rather than silently
+degrading.
 
 ### In scope
 
@@ -75,6 +96,12 @@ Build **AGT Studio** as the single first-class UI for AGT.
   interception logic stays where it is.
 - SRE, FinOps, incident management, deployment tooling. These belong in
   Grafana, Sentinel, Datadog, PagerDuty, ServiceNow, Argo, and similar.
+- Studio plugin or extension marketplace, or third-party Studio plugins.
+- Product telemetry, usage analytics, and phone-home behavior.
+- i18n and localization, theming and white-labeling, and offline-first mode.
+- Packaging and update channels beyond the initial agreed distribution path.
+- Any marketplace or community policy distribution model (deferred to a
+  follow-up ADR; see Consequences).
 
 ## Triage of existing dashboards
 
@@ -89,6 +116,12 @@ Build **AGT Studio** as the single first-class UI for AGT.
 
 Net effect: six dashboards collapse to one UI plus one Grafana template pack.
 `console.html` is deleted.
+
+These dispositions are proposed deprecation directions, not immediate
+removals. Because the change spans multiple packages, each affected
+maintainer must be notified before implementation. Deprecated dashboards
+receive migration notes and at least one release of overlap before archival
+or deletion.
 
 ## Alternatives considered
 
@@ -106,14 +139,21 @@ Net effect: six dashboards collapse to one UI plus one Grafana template pack.
 - **One canonical surface for AGT.** New features land in Studio, not in a
   new dashboard. The contributor question "where does this UI go" has one
   answer.
-- **Forces an engine API contract.** Studio needs a stable HTTP/WebSocket
-  surface from the engine. This contract benefits every SDK, not just the
-  UI, and unblocks a future conformance test suite for cross-SDK parity.
+- **Requires an engine API contract.** Studio depends on a stable local
+  HTTP/WebSocket API and a webview transport contract. This ADR does not
+  define that contract. Before Studio implementation lands, a follow-up ADR
+  or versioned spec must define endpoint and event schemas, transport
+  behavior, version negotiation, compatibility rules, and conformance tests.
+  Approving this ADR approves Studio as the canonical UI; it does not
+  approve the engine API surface, which is a separate gate.
 - **Demos improve immediately.** Sales, evaluator, and customer conversations
   gain a visual surface that does not require CLI familiarity.
-- **Ongoing cost.** A real product surface to maintain: accessibility,
-  browser matrix, dependency hygiene, release cadence, security review of a
-  new API. Owners and release cadence must be named before code lands.
+- **Ongoing cost.** Studio creates a maintained product surface:
+  accessibility review, browser compatibility, dependency and npm/PyPI CVE
+  response, API security review, local sidecar hardening, webview security
+  review, support load when browser or IDE updates break the UI, and
+  release/version compatibility management. Owners and release cadence must
+  be named before code lands.
 - **Deprecation work.** Six dashboards must be deprecated in sequence with
   clear migration notes and at least one release of overlap.
 - **Marketplace is a separate, later decision.** Studio is the prerequisite.
@@ -121,11 +161,36 @@ Net effect: six dashboards collapse to one UI plus one Grafana template pack.
   "awesome-policy" community hub) will be proposed as a follow-up ADR once
   Studio is shipping.
 
+## Success criteria
+
+This ADR is considered to have landed correctly when:
+
+- Policy authoring, testing, simulation, and regression workflows are usable
+  end-to-end in Studio without CLI-only steps.
+- All six existing dashboards have documented dispositions, owner sign-off,
+  migration paths, and at least one release of overlap with Studio.
+- Studio and engine version mismatches fail loudly with an actionable
+  upgrade message, never silently.
+- No new runtime write-path control is introduced as part of Studio.
+- The engine API contract referenced above ships as its own ADR or spec
+  before Studio MVP code merges.
+
 ## References
 
 - Policy replay engine: `agent-governance-python/agent-compliance/src/agent_compliance/policy_test.py`.
 - Dashboard backend: `agent-governance-python/agent-mesh/src/agentmesh/dashboard/api.py`.
 - Existing IDE extension UI surfaces under `agent-governance-python/agent-os/extensions/`.
 - Existing Streamlit dashboards listed in the triage table above.
-- Related ADR-0015 (pluggable external policy backends) and ADR-0022
-  (compliance framework auto-mapping).
+- ADR-0004 (deterministic policy evaluation): Studio's simulator and replay
+  views depend on this guarantee.
+- ADR-0015 (pluggable external policy backends): Studio must work uniformly
+  across YAML rules and external backends (OPA/Rego, Cedar).
+- ADR-0017 (Merkle chain for audit tamper evidence): Studio's audit-chain
+  integrity badge depends on this mechanism.
+- ADR-0021 (CloudEvents envelope for mesh audit): Studio's evidence export
+  uses this envelope.
+- ADR-0022 (compliance framework auto-mapping): Studio's compliance view
+  surfaces these mappings.
+- ADR-0025 (structural typing for sink and source protocols): Studio's
+  visibility panels consume `AuditSource`, `TrustSource`, `PolicySource`,
+  and `TraceSource` via these protocols.
