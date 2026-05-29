@@ -15,10 +15,10 @@ without reimplementing any lower-layer logic.
 """
 
 from .base_adapter import BaseLayerAdapter, AdapterProtocol
-from .scak_adapter import IntelligenceAdapter
-from .iatp_adapter import SecurityAdapter
-from .caas_adapter import ContextAdapter
-from .control_plane_adapter import ControlPlaneAdapter
+from .scak_adapter import IntelligenceAdapter, IntelligenceBackendUnavailable
+from .iatp_adapter import SecurityAdapter, SecurityBackendUnavailable
+from .caas_adapter import ContextAdapter, ContextBackendUnavailable
+from .control_plane_adapter import ControlPlaneAdapter, ControlPlaneBackendUnavailable
 
 __all__ = [
     # Base
@@ -26,7 +26,11 @@ __all__ = [
     "AdapterProtocol",
     # Layer adapters
     "IntelligenceAdapter",
+    "IntelligenceBackendUnavailable",
     "SecurityAdapter",
+    "SecurityBackendUnavailable",
     "ContextAdapter",
+    "ContextBackendUnavailable",
     "ControlPlaneAdapter",
+    "ControlPlaneBackendUnavailable",
 ]

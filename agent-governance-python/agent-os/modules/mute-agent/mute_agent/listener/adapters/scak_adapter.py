@@ -14,10 +14,15 @@ In the Listener context, this adapter is used to:
 The adapter delegates all intelligence to SCAK - no logic is reimplemented.
 """
 
+from importlib import import_module
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 from .base_adapter import BaseLayerAdapter
+
+
+class IntelligenceBackendUnavailable(RuntimeError):
+    """Raised when the SCAK intelligence backend is unavailable."""
 
 
 @dataclass
@@ -114,19 +119,30 @@ class IntelligenceAdapter(BaseLayerAdapter):
     def _create_client(self) -> Any:
         """
         Create the SCAK client.
-        
-        In production, this would import and instantiate the actual
-        scak library client. For now, returns mock.
+
+        Non-mock mode requires a configured or installed SCAK backend. The
+        permissive mock client (which validates everything) is only available
+        when mock_mode=True or an explicit ``client_factory`` is supplied.
         """
+        client_factory = self.config.get("client_factory")
+        if client_factory:
+            return client_factory(self.config)
+
         try:
-            # Attempt to import real SCAK client
-            # from scak import Client as SCAKClient
-            # return SCAKClient(self.config)
-            
-            # Fall back to mock if not available
-            return self._mock_client()
-        except ImportError:
-            return self._mock_client()
+            scak_module = import_module("scak")
+        except ImportError as exc:
+            raise IntelligenceBackendUnavailable(
+                "SCAK intelligence backend is required when mock_mode is False. "
+                "Install/configure scak or instantiate IntelligenceAdapter(mock_mode=True) "
+                "only in tests or demos."
+            ) from exc
+
+        client_class = getattr(scak_module, "Client", None)
+        if client_class is None:
+            raise IntelligenceBackendUnavailable(
+                "SCAK backend does not expose a Client class"
+            )
+        return client_class(self.config)
     
     def _mock_client(self) -> Any:
         """Create mock client for testing."""

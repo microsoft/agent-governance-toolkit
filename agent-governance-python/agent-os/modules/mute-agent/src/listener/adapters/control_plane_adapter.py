@@ -16,12 +16,17 @@ In the Listener context, this adapter is used to:
 The adapter delegates all orchestration to the control plane - no reimplementation.
 """
 
+from importlib import import_module
 from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
 
 from .base_adapter import BaseLayerAdapter
+
+
+class ControlPlaneBackendUnavailable(RuntimeError):
+    """Raised when the Agent Control Plane backend is unavailable."""
 
 
 class AgentLifecycleState(Enum):
@@ -198,19 +203,31 @@ class ControlPlaneAdapter(BaseLayerAdapter):
     def _create_client(self) -> Any:
         """
         Create the Control Plane client.
-        
-        In production, this would import and instantiate the actual
-        agent-control-plane library client. For now, returns mock.
+
+        Non-mock mode requires a configured or installed agent-control-plane
+        backend. The permissive mock client (which auto-confirms registrations,
+        heartbeats, and queue ops) is only available when mock_mode=True or an
+        explicit ``client_factory`` is supplied.
         """
+        client_factory = self.config.get("client_factory")
+        if client_factory:
+            return client_factory(self.config)
+
         try:
-            # Attempt to import real Control Plane client
-            # from agent_control_plane import Client as ControlPlaneClient
-            # return ControlPlaneClient(self.config)
-            
-            # Fall back to mock if not available
-            return self._mock_client()
-        except ImportError:
-            return self._mock_client()
+            cp_module = import_module("agent_control_plane")
+        except ImportError as exc:
+            raise ControlPlaneBackendUnavailable(
+                "agent-control-plane backend is required when mock_mode is False. "
+                "Install/configure agent_control_plane or instantiate "
+                "ControlPlaneAdapter(mock_mode=True) only in tests or demos."
+            ) from exc
+
+        client_class = getattr(cp_module, "Client", None)
+        if client_class is None:
+            raise ControlPlaneBackendUnavailable(
+                "agent-control-plane backend does not expose a Client class"
+            )
+        return client_class(self.config)
     
     def _mock_client(self) -> Any:
         """Create mock client for testing."""

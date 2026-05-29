@@ -16,11 +16,16 @@ In the Listener context, this adapter is used to:
 The adapter delegates all context logic to CAAS - no reimplementation.
 """
 
+from importlib import import_module
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from .base_adapter import BaseLayerAdapter
+
+
+class ContextBackendUnavailable(RuntimeError):
+    """Raised when the CAAS context backend is unavailable."""
 
 
 @dataclass
@@ -143,19 +148,31 @@ class ContextAdapter(BaseLayerAdapter):
     def _create_client(self) -> Any:
         """
         Create the CAAS client.
-        
-        In production, this would import and instantiate the actual
-        caas library client. For now, returns mock.
+
+        Non-mock mode requires a configured or installed CAAS backend. The
+        permissive mock client (which always reports zero drift / zero ambiguity)
+        is only available when mock_mode=True or an explicit ``client_factory``
+        is supplied.
         """
+        client_factory = self.config.get("client_factory")
+        if client_factory:
+            return client_factory(self.config)
+
         try:
-            # Attempt to import real CAAS client
-            # from caas import Client as CAASClient
-            # return CAASClient(self.config)
-            
-            # Fall back to mock if not available
-            return self._mock_client()
-        except ImportError:
-            return self._mock_client()
+            caas_module = import_module("caas")
+        except ImportError as exc:
+            raise ContextBackendUnavailable(
+                "CAAS context backend is required when mock_mode is False. "
+                "Install/configure caas or instantiate ContextAdapter(mock_mode=True) "
+                "only in tests or demos."
+            ) from exc
+
+        client_class = getattr(caas_module, "Client", None)
+        if client_class is None:
+            raise ContextBackendUnavailable(
+                "CAAS backend does not expose a Client class"
+            )
+        return client_class(self.config)
     
     def _mock_client(self) -> Any:
         """Create mock client for testing."""
