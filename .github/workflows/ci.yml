@@ -348,7 +348,15 @@ jobs:
               exit 1
               ;;
           esac
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
+          CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          if [ -f "$CI_TEST_REQS" ]; then
+            # Hash-pinned shared test deps. Previously swallowed errors with
+            # `|| true`, which masked real hash-mismatch / network failures.
+            # If the file exists, the install must succeed.
+            pip install --no-cache-dir --require-hashes -r "$CI_TEST_REQS"
+          else
+            echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
+          fi
           pip install --no-cache-dir pytest-cov==7.1.0  # Scorecard: version-pinned
       - name: Test ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
@@ -588,7 +596,15 @@ jobs:
           # All agentmesh-integrations packages declare a [dev] extra (audited
           # 2026-05). Deterministic install — no error-swallowing fallback.
           pip install --no-cache-dir -e ".[dev]"
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
+          CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          if [ -f "$CI_TEST_REQS" ]; then
+            # Hash-pinned shared test deps. Previously swallowed errors with
+            # `|| true`, which masked real hash-mismatch / network failures.
+            # If the file exists, the install must succeed.
+            pip install --no-cache-dir --require-hashes -r "$CI_TEST_REQS"
+          else
+            echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
+          fi
       - name: Validate Python syntax
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
