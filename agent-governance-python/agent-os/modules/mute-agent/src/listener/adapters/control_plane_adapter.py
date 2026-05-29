@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
 """
 Control Plane Adapter - Base Orchestration Layer Integration
 
@@ -197,6 +196,11 @@ class ControlPlaneAdapter(BaseLayerAdapter):
         ```
     """
 
+    _remediation_hint = (
+        "verify agent-control-plane backend is installed and reachable; "
+        "see adapter logs for full stack"
+    )
+
     def get_layer_name(self) -> str:
         return "agent-control-plane"
 
@@ -204,15 +208,11 @@ class ControlPlaneAdapter(BaseLayerAdapter):
         """
         Create the Control Plane client.
 
-        Non-mock mode requires a configured or installed agent-control-plane
-        backend. The permissive mock client (which auto-confirms registrations,
-        heartbeats, and queue ops) is only available when mock_mode=True or an
-        explicit ``client_factory`` is supplied.
+        Non-mock mode requires an installed agent-control-plane backend.
+        The ``config["client_factory"]`` hook is a *test-only* seam
+        handled in ``_mock_client``; it is NOT honored in this
+        production resolution path.
         """
-        client_factory = self.config.get("client_factory")
-        if client_factory:
-            return client_factory(self.config)
-
         try:
             cp_module = import_module("agent_control_plane")
         except ImportError as exc:
@@ -230,7 +230,13 @@ class ControlPlaneAdapter(BaseLayerAdapter):
         return client_class(self.config)
 
     def _mock_client(self) -> Any:
-        """Create mock client for testing."""
+        """Create mock client for testing.
+
+        Honors ``config["client_factory"]`` only in this mock-mode path.
+        """
+        client_factory = self.config.get("client_factory")
+        if client_factory:
+            return client_factory(self.config)
         return MockControlPlaneClient()
 
     def _health_ping(self) -> None:

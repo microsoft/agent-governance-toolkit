@@ -113,6 +113,11 @@ class IntelligenceAdapter(BaseLayerAdapter):
         ```
     """
 
+    _remediation_hint = (
+        "verify SCAK backend is installed and reachable; "
+        "see adapter logs for full stack"
+    )
+
     def get_layer_name(self) -> str:
         return "scak"
 
@@ -120,14 +125,11 @@ class IntelligenceAdapter(BaseLayerAdapter):
         """
         Create the SCAK client.
 
-        Non-mock mode requires a configured or installed SCAK backend. The
-        permissive mock client (which validates everything) is only available
-        when mock_mode=True or an explicit ``client_factory`` is supplied.
+        Non-mock mode requires an installed SCAK backend. The
+        ``config["client_factory"]`` hook is a *test-only* seam handled
+        in ``_mock_client``; it is NOT honored in this production
+        resolution path.
         """
-        client_factory = self.config.get("client_factory")
-        if client_factory:
-            return client_factory(self.config)
-
         try:
             scak_module = import_module("scak")
         except ImportError as exc:
@@ -145,7 +147,13 @@ class IntelligenceAdapter(BaseLayerAdapter):
         return client_class(self.config)
 
     def _mock_client(self) -> Any:
-        """Create mock client for testing."""
+        """Create mock client for testing.
+
+        Honors ``config["client_factory"]`` only in this mock-mode path.
+        """
+        client_factory = self.config.get("client_factory")
+        if client_factory:
+            return client_factory(self.config)
         return MockSCAKClient()
 
     def _health_ping(self) -> None:

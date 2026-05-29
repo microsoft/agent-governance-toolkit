@@ -145,6 +145,11 @@ class SecurityAdapter(BaseLayerAdapter):
         ```
     """
 
+    _remediation_hint = (
+        "verify IATP backend is installed and reachable; "
+        "see adapter logs for full stack"
+    )
+
     def get_layer_name(self) -> str:
         return "iatp"
 
@@ -152,13 +157,12 @@ class SecurityAdapter(BaseLayerAdapter):
         """
         Create the IATP client.
 
-        Non-mock mode requires a configured or installed IATP backend. The
-        permissive mock client is only available when mock_mode=True.
+        Non-mock mode requires an installed IATP backend. The
+        ``config["client_factory"]`` hook is a *test-only* seam and is
+        NOT honored here — see ``_mock_client``. This prevents a
+        malicious config from injecting a permissive client into the
+        production resolution path.
         """
-        client_factory = self.config.get("client_factory")
-        if client_factory:
-            return client_factory(self.config)
-
         try:
             iatp_module = import_module("iatp")
         except ImportError as exc:
@@ -175,7 +179,15 @@ class SecurityAdapter(BaseLayerAdapter):
         return client_class(self.config)
 
     def _mock_client(self) -> Any:
-        """Create mock client for testing."""
+        """Create mock client for testing.
+
+        Honors ``config["client_factory"]`` only here, in the mock-mode
+        path. The factory is invoked with the config dict and must
+        return a client object.
+        """
+        client_factory = self.config.get("client_factory")
+        if client_factory:
+            return client_factory(self.config)
         return MockIATPClient()
 
     def _health_ping(self) -> None:
