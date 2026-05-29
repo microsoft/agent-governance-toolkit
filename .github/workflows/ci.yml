@@ -328,8 +328,26 @@ jobs:
       - name: Install ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
+        env:
+          PKG: ${{ matrix.package }}
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
+          set -euo pipefail
+          # Deterministic install: each package gets exactly one extras spec, no
+          # error-swallowing fallback chain. Packages without a [dev] extra are
+          # listed explicitly. Adding a new package to the matrix without
+          # updating this case will hard-fail rather than silently degrade.
+          case "$PKG" in
+            agent-compliance|agent-runtime|agent-mcp-governance)
+              pip install --no-cache-dir -e .
+              ;;
+            agent-os|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
+              pip install --no-cache-dir -e ".[dev]"
+              ;;
+            *)
+              echo "::error::Unknown package '$PKG' — update the install case in ci.yml" >&2
+              exit 1
+              ;;
+          esac
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
           pip install --no-cache-dir pytest-cov==7.1.0  # Scorecard: version-pinned
       - name: Test ${{ matrix.package }}
@@ -567,7 +585,9 @@ jobs:
       - name: Install ${{ matrix.package }}
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
+          # All agentmesh-integrations packages declare a [dev] extra (audited
+          # 2026-05). Deterministic install — no error-swallowing fallback.
+          pip install --no-cache-dir -e ".[dev]"
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
       - name: Validate Python syntax
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
