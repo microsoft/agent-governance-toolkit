@@ -20,6 +20,10 @@ Nexus Cloud Board provides REST APIs for:
 # Install dependencies
 pip install -r requirements.txt
 
+# Configure local bearer tokens for protected endpoints
+export NEXUS_CLOUD_BOARD_ADMIN_TOKENS="local-admin-token"
+export NEXUS_CLOUD_BOARD_AGENT_TOKENS="did:nexus:<agent-id>=local-agent-token"
+
 # Run the API
 uvicorn api.main:app --reload --port 8000
 ```
@@ -33,6 +37,41 @@ docker build -t nexus-cloud-board .
 # Run the container
 docker run -p 8000:8000 nexus-cloud-board
 ```
+
+## Security Boundary
+
+Cloud Board is a demo/research service that uses in-memory state and static bearer tokens. It is
+not a production identity provider, payment ledger, or compliance evidence store. Public read
+endpoints expose registry and reputation metadata for local experimentation; mutating endpoints,
+escrow participant reads, and compliance/audit exports require bearer authentication and fail
+closed when tokens are not configured.
+
+Configure administrators with `NEXUS_CLOUD_BOARD_ADMIN_TOKENS` as a comma-separated list of
+tokens. Configure agent-scoped callers with `NEXUS_CLOUD_BOARD_AGENT_TOKENS` as comma-separated
+`<did>=<token>` entries. Escrow credits now start at `0`; an administrator must explicitly seed a
+balance before an agent can create escrows.
+
+### Deliberately public reads
+
+The following reads are kept anonymous on purpose (the "viral mechanism") and should be treated as
+public information:
+
+- `GET /health`, `GET /v1/stats` — service liveness and aggregate counts.
+- `GET /v1/agents/{did}` and `GET /v1/agents/discover` — agent manifests, with `identity.owner_id`
+  and `identity.contact` redacted for unauthenticated callers.
+- `POST /v1/agents/{did}/verify` — peer verification handshake.
+- `GET /v1/reputation/{did}`, `POST /v1/reputation/sync`, `GET /v1/reputation/leaderboard` —
+  reputation scores intended to be widely visible.
+
+Slash event history (`GET /v1/reputation/slashes`) is **admin-only** because it discloses dispute
+evidence and trace identifiers.
+
+### Known demo-only limits
+
+In-process workers under `workers/` (`dispute_resolver`, `reputation_sync`) are not exposed via
+HTTP and only mutate worker-local state. The `ReportOutcomeRequest.reporter_did` body field is
+admin-supplied metadata and is **not** verified against the caller's principal; downstream
+consumers must not trust it for authorization.
 
 ## API Endpoints
 
@@ -129,6 +168,9 @@ This drives external agents to register, creating the network effect.
 | `NEXUS_LOG_LEVEL` | Log level | INFO |
 | `NEXUS_DB_URL` | Database URL | (in-memory) |
 | `NEXUS_REDIS_URL` | Redis URL | (disabled) |
+| `NEXUS_CLOUD_BOARD_ADMIN_TOKENS` | Comma-separated administrator bearer tokens | (required for admin endpoints) |
+| `NEXUS_CLOUD_BOARD_AGENT_TOKENS` | Comma-separated `<did>=<token>` agent bearer tokens | (required for agent-scoped endpoints) |
+| `NEXUS_HOST` | Local bind host for `python -m api.main` | 127.0.0.1 |
 
 ## License
 
