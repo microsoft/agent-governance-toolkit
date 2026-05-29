@@ -226,24 +226,24 @@ class StateObserver:
         """Collect metrics from the handshake protocol."""
         metrics = {}
 
-        sessions = self.protocol.sessions
+        sessions = self.protocol.snapshot_sessions()
 
         active = sum(
-            1 for s in sessions.values()
+            1 for s in sessions
             if s.state in [HandshakeState.INITIATED, HandshakeState.NEGOTIATING,
                           HandshakeState.VALIDATED, HandshakeState.ACCEPTED,
                           HandshakeState.EXECUTING]
         )
         completed = sum(
-            1 for s in sessions.values()
+            1 for s in sessions
             if s.state == HandshakeState.COMPLETED
         )
         failed = sum(
-            1 for s in sessions.values()
+            1 for s in sessions
             if s.state == HandshakeState.FAILED
         )
         rejected = sum(
-            1 for s in sessions.values()
+            1 for s in sessions
             if s.state == HandshakeState.REJECTED
         )
 
@@ -332,7 +332,7 @@ class StateObserver:
 
         # Count rejected sessions in window
         violations = 0
-        for session in self.protocol.sessions.values():
+        for session in self.protocol.snapshot_sessions():
             if session.state == HandshakeState.REJECTED:
                 if session.updated_at >= cutoff:
                     violations += 1
