@@ -98,6 +98,15 @@ from hypervisor import (  # noqa: F401
     KillResult,
 )
 
+from agent_runtime.deploy import (  # noqa: E402
+    DeploymentResult,
+    DeploymentStatus,
+    DeploymentTarget,
+    DockerDeployer,
+    GovernanceConfig,
+    KubernetesDeployer,
+)
+
 __all__ = [
     "__version__",
     "Hypervisor",
@@ -158,24 +167,6 @@ __all__ = [
     "RateLimitExceeded",
     "KillSwitch",
     "KillResult",
-]
-
-# ============================================================================
-# Deployment Runtime (v3.0.2+)
-# ============================================================================
-
-from agent_runtime.deploy import (
-    DeploymentResult,
-    DeploymentStatus,
-    DeploymentTarget,
-    DockerDeployer,
-    GovernanceConfig,
-    KubernetesDeployer,
-)
-
-# Update __all__ to include new exports
-__all__ = [
-    *__all__,
     "DeploymentResult",
     "DeploymentStatus",
     "DeploymentTarget",

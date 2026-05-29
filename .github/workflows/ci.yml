@@ -303,6 +303,10 @@ jobs:
             python-version: "3.10"
           - package: agent-sandbox
             python-version: "3.10"
+          - package: agent-sre
+            python-version: "3.10"
+          - package: agent-rag-governance
+            python-version: "3.10"
     steps:
       - name: Determine if package changed
         id: gate
