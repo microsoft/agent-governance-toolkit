@@ -1,6 +1,5 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-
 """
 Listener Agent - Layer 5 Reference Implementation
 
@@ -194,6 +193,13 @@ class ListenerAgent:
         self._intervention_count_this_minute = 0
         self._minute_start = datetime.now()
         self._event_counter = 0
+        # Guards all reads/writes of the intervention rate counters and
+        # _event_counter. _interventions (a bounded deque) is also mutated
+        # under this lock so the count surfaced by get_statistics() is
+        # consistent with the in-window total. A non-reentrant Lock is
+        # sufficient because no code path under the lock calls back into
+        # methods that re-acquire it.
+        self._counter_lock = threading.Lock()
 
         # Callbacks
         self._intervention_callbacks: List[Callable[[InterventionEvent], None]] = []
@@ -353,12 +359,13 @@ class ListenerAgent:
         """Check if intervention is allowed (rate limiting)."""
         now = datetime.now()
 
-        # Reset counter if minute has passed
-        if (now - self._minute_start).total_seconds() >= 60:
-            self._intervention_count_this_minute = 0
-            self._minute_start = now
+        with self._counter_lock:
+            # Reset counter if minute has passed
+            if (now - self._minute_start).total_seconds() >= 60:
+                self._intervention_count_this_minute = 0
+                self._minute_start = now
 
-        return self._intervention_count_this_minute < self.config.max_interventions_per_minute
+            return self._intervention_count_this_minute < self.config.max_interventions_per_minute
 
     def _perform_intervention(
         self,
@@ -374,9 +381,11 @@ class ListenerAgent:
         self._set_state(ListenerState.INTERVENING)
         start_time = datetime.now()
 
-        # Generate event ID
-        self._event_counter += 1
-        event_id = f"intervention_{self._event_counter}_{start_time.timestamp()}"
+        # Generate event ID under the counter lock so concurrent intervention
+        # paths cannot collide on _event_counter.
+        with self._counter_lock:
+            self._event_counter += 1
+            event_id = f"intervention_{self._event_counter}_{start_time.timestamp()}"
 
         # Determine action based on intervention level
         action_taken = self._determine_action(intervention_level, triggered_rules)
@@ -407,9 +416,12 @@ class ListenerAgent:
             duration_ms=duration_ms,
         )
 
-        # Store and notify
-        self._interventions.append(event)
-        self._intervention_count_this_minute += 1
+        # Store and notify (deque append + counter increment must be atomic
+        # so observers reading get_statistics() never see a stale count
+        # relative to the latest stored event).
+        with self._counter_lock:
+            self._interventions.append(event)
+            self._intervention_count_this_minute += 1
 
         for callback in self._intervention_callbacks:
             try:
@@ -560,7 +572,8 @@ class ListenerAgent:
         count: Optional[int] = None
     ) -> List[InterventionEvent]:
         """Get recent intervention events."""
-        events = list(self._interventions)
+        with self._counter_lock:
+            events = list(self._interventions)
         if count is not None:
             events = events[-count:]
         return events
@@ -569,11 +582,15 @@ class ListenerAgent:
         """Get listener statistics."""
         observation_history = self.observer.get_observation_history()
 
+        with self._counter_lock:
+            total_interventions = len(self._interventions)
+            interventions_this_minute = self._intervention_count_this_minute
+
         return {
             "state": self._state.value,
             "total_observations": len(observation_history),
-            "total_interventions": len(self._interventions),
-            "interventions_this_minute": self._intervention_count_this_minute,
+            "total_interventions": total_interventions,
+            "interventions_this_minute": interventions_this_minute,
             "active_thresholds": len(self.config.thresholds.rules),
             "enabled_thresholds": sum(
                 1 for r in self.config.thresholds.rules.values() if r.enabled

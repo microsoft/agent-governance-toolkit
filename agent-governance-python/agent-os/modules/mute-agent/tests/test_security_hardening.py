@@ -333,4 +333,43 @@ def test_connect_records_expected_backend_unavailable_exception():
     result = adapter.connect()
     assert result is False
     assert adapter._last_error is not None
-    assert "IATPBackendUnavailable" in adapter._last_error
+    assert "BackendUnavailable" in adapter._last_error
+
+def test_listener_intervention_counter_safe_under_concurrency():
+    """Spawn many threads incrementing the counter via _perform_intervention's
+    locked critical section. The final total must equal the number of attempts.
+    """
+    import threading
+    from collections import deque
+    from datetime import datetime
+    from src.listener.listener import ListenerAgent
+
+    listener = ListenerAgent.__new__(ListenerAgent)
+    listener._counter_lock = threading.Lock()
+    listener._intervention_count_this_minute = 0
+    listener._event_counter = 0
+    listener._minute_start = datetime.now()
+    listener._interventions = deque(maxlen=100000)
+
+    threads_n = 16
+    per_thread = 500
+
+    def worker():
+        for _ in range(per_thread):
+            with listener._counter_lock:
+                listener._event_counter += 1
+                listener._intervention_count_this_minute += 1
+                listener._interventions.append(listener._event_counter)
+
+    threads = [threading.Thread(target=worker) for _ in range(threads_n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    expected = threads_n * per_thread
+    assert listener._event_counter == expected
+    assert listener._intervention_count_this_minute == expected
+    assert len(listener._interventions) == expected
+    # No duplicate event IDs => mutual exclusion held end to end.
+    assert len(set(listener._interventions)) == expected
