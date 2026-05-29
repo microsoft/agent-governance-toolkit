@@ -182,9 +182,15 @@ stages:
               displayName: 'Install build tools'
 
             - script: |
-                python -m build
+                # Consolidated packages use force-include with sibling paths,
+                # which only works when building a wheel directly from source.
+                if [[ "${{ pkg.name }}" == agent-governance-toolkit-* ]]; then
+                  python -m build --wheel
+                else
+                  python -m build
+                fi
               workingDirectory: '${{ pkg.path }}'
-              displayName: 'Build ${{ pkg.name }} (sdist + wheel)'
+              displayName: 'Build ${{ pkg.name }}'
 
             - script: |
                 echo "=== Built artifacts for ${{ pkg.name }} ==="

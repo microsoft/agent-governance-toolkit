@@ -416,7 +416,15 @@ jobs:
       - name: Build ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
-        run: python -m build
+        run: |
+          # Consolidated packages use force-include with sibling paths,
+          # which only works when building a wheel directly from source
+          # (not via sdist in a temp dir).
+          if [[ "${{ matrix.package }}" == agent-governance-toolkit-* ]]; then
+            python -m build --wheel
+          else
+            python -m build
+          fi
       - name: Verify wheel
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
