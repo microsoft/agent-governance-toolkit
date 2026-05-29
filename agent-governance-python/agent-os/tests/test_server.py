@@ -293,7 +293,7 @@ class TestExecuteEndpoint:
         monkeypatch.setenv("AGENT_OS_ENV", "local")
 
         server = GovServer()
-        client = TestClient(server.app)
+        client = TestClient(server.app, client=("127.0.0.1", 12345))
         resp = client.post(
             "/api/v1/execute",
             json={
@@ -312,7 +312,7 @@ class TestExecuteEndpoint:
         monkeypatch.setenv("AGENT_OS_ENV", "local")
 
         server = GovServer()
-        client = TestClient(server.app)
+        client = TestClient(server.app, client=("127.0.0.1", 12345))
         resp = client.post(
             "/api/v1/execute",
             json={
@@ -354,6 +354,54 @@ class TestExecuteEndpoint:
 
         with pytest.raises(ValueError, match="only allowed"):
             GovServer(allow_unauthenticated_execute=True)
+
+    def test_execute_unsafe_escape_hatch_rejects_non_loopback_peer(self, monkeypatch):
+        """When unsafe unauth mode is engaged, a non-loopback caller
+        must be rejected with HTTP 403 even though AGENT_OS_ENV=local.
+        This closes the case where an operator binds 0.0.0.0 by accident."""
+        monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+        monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.setenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.setenv("AGENT_OS_ENV", "local")
+
+        server = GovServer()
+        client = TestClient(server.app)
+        # TestClient sends ``testclient`` as the peer host. Spoof a
+        # routable address by passing a ``client`` tuple via the ASGI
+        # scope through a raw request.
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+            },
+            headers={"x-forwarded-for": "1.2.3.4"},  # irrelevant, just ensures normal req
+        )
+        # The default TestClient peer ("testclient") is non-loopback →
+        # must be denied.
+        assert resp.status_code == 403
+        assert "loopback" in resp.json()["detail"].lower()
+
+    def test_execute_unsafe_escape_hatch_accepts_loopback_peer(self, monkeypatch):
+        """A real loopback caller (127.0.0.1) must be accepted in
+        unsafe local mode."""
+        monkeypatch.delenv("AGENT_OS_EXECUTION_TOKENS", raising=False)
+        monkeypatch.delenv("AGENT_OS_ALLOW_UNAUTHENTICATED_EXECUTE", raising=False)
+        monkeypatch.setenv("AGENT_OS_UNSAFE_ALLOW_UNAUTHENTICATED_EXECUTE", "true")
+        monkeypatch.setenv("AGENT_OS_ENV", "local")
+
+        server = GovServer()
+        # Pass a synthetic 127.0.0.1 client tuple through the ASGI scope.
+        client = TestClient(server.app, client=("127.0.0.1", 12345))
+        resp = client.post(
+            "/api/v1/execute",
+            json={
+                "action": "database_query",
+                "params": {"query": "SELECT 1"},
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
 
     def test_execute_returns_503_when_auth_not_configured(self, client):
         resp = client.post(

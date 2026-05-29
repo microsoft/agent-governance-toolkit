@@ -121,6 +121,49 @@ class TestStatelessKernel:
         assert "ssn" in result.error.lower()
 
     @pytest.mark.asyncio
+    async def test_execute_global_approval_blocks_empty_policy_list(self):
+        """Empty/unknown ``policies`` list must NOT bypass the global
+        approval gate. ``file_write`` is in DEFAULT_POLICIES['strict']
+        require_approval set, so even an empty policy list denies it."""
+        from agent_os.stateless import ExecutionContext, StatelessKernel
+
+        kernel = StatelessKernel()
+        for policy_set in ([], ["nonexistent_policy_name"]):
+            context = ExecutionContext(agent_id="t", policies=policy_set)
+            result = await kernel.execute(
+                action="file_write",
+                params={"path": "/data/x", "approved": True},
+                context=context,
+            )
+            assert result.success is False, f"policies={policy_set!r}"
+            assert result.signal == "SIGKILL"
+            assert "requires approval" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_execute_global_approval_bypassed_with_trusted_intent(self):
+        """The global approval gate is satisfied by a trusted IntentManager
+        that returns ``allowed=True, was_planned=True``."""
+        from agent_os.stateless import ExecutionContext, StatelessKernel
+
+        class ApprovedIntentManager:
+            async def check_action(self, **kwargs):
+                return SimpleNamespace(
+                    allowed=True, reason=None, was_planned=True,
+                    trust_penalty=0.0, drift_policy_applied=None,
+                )
+
+        kernel = StatelessKernel(intent_manager=ApprovedIntentManager())
+        context = ExecutionContext(
+            agent_id="t", policies=[], intent_id="intent-ok",
+        )
+        result = await kernel.execute(
+            action="file_write",
+            params={"path": "/data/x"},
+            context=context,
+        )
+        assert result.success is True
+
+    @pytest.mark.asyncio
     async def test_execute_requires_trusted_approval_ignores_caller_flag(self):
         """Caller-controlled approved=True must not satisfy approval policy."""
         from agent_os.stateless import ExecutionContext, StatelessKernel
