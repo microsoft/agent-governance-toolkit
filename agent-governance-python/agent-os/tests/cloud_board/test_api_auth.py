@@ -247,19 +247,36 @@ def _seed_agent(did: str, owner_id: str = "owner-1", contact: str = "ops@example
     }
 
 
-def test_get_agent_redacts_pii_for_anonymous_callers(client: TestClient):
+def test_get_agent_redacts_pii_for_other_authenticated_callers(client: TestClient):
+    """F#3 — _view_manifest uses an allowlist and only the owner or admin
+    sees full identity. Other authenticated callers and anonymous callers
+    both see only the allowlisted fields.
+    """
     _seed_agent(REQUESTER_DID)
 
     anon = client.get(f"/v1/agents/{REQUESTER_DID}").json()
-    authed = client.get(
+    other = client.get(
         f"/v1/agents/{REQUESTER_DID}",
         headers=auth_header(PROVIDER_TOKEN),
     ).json()
+    owner = client.get(
+        f"/v1/agents/{REQUESTER_DID}",
+        headers=auth_header(REQUESTER_TOKEN),
+    ).json()
+    admin = client.get(
+        f"/v1/agents/{REQUESTER_DID}",
+        headers=auth_header(ADMIN_TOKEN),
+    ).json()
 
-    assert "owner_id" not in anon["identity"]
-    assert "contact" not in anon["identity"]
-    assert authed["identity"]["owner_id"] == "owner-1"
-    assert authed["identity"]["contact"] == "ops@example.com"
+    # Anonymous + other-authenticated both redact PII.
+    for view in (anon, other):
+        assert "owner_id" not in view["identity"]
+        assert "contact" not in view["identity"]
+    # Only the owning agent or admin sees full identity.
+    assert owner["identity"]["owner_id"] == "owner-1"
+    assert owner["identity"]["contact"] == "ops@example.com"
+    assert admin["identity"]["owner_id"] == "owner-1"
+    assert admin["identity"]["contact"] == "ops@example.com"
 
 
 def test_discover_agents_redacts_pii_for_anonymous_callers(client: TestClient):
@@ -902,3 +919,68 @@ def test_orphan_dispute_marked_terminal_when_escrow_gone(client: TestClient):
     assert response.status_code == 409
     assert arbiter._disputes[dispute_id]["resolved"] is True
     assert arbiter._disputes[dispute_id]["status"] == "unresolvable"
+
+# ---------------------------------------------------------------------------
+# F#3, F#11, F#16 — registry regression tests
+# ---------------------------------------------------------------------------
+
+
+def test_registration_rejects_naive_proof_timestamp(client: TestClient):
+    """F#11 — naive (tz-less) proof timestamps must 400 (not 500 or accept)."""
+    payload = signed_registration_request(
+        "did:nexus:0000000000000000000000000000000000000000000000000000000000000000"
+    )
+    payload["proof_timestamp"] = datetime.now().replace(tzinfo=None).isoformat()
+    response = client.post("/v1/agents", json=payload)
+    assert response.status_code == 400
+    assert response.json()["detail"]["error"] == "INVALID_TIMESTAMP"
+
+
+def test_did_now_uses_full_256_bit_sha256(client: TestClient):
+    """F#16 — derived DID uses full 64-hex-char SHA-256 (no 128-bit truncation)."""
+    signing_key = SigningKey.generate()
+    verification_key = base64.urlsafe_b64encode(bytes(signing_key.verify_key)).decode().rstrip("=")
+    proof_timestamp = datetime.now(timezone.utc).isoformat()
+    proof = (
+        base64.urlsafe_b64encode(
+            signing_key.sign(verification_key.encode() + proof_timestamp.encode()).signature
+        )
+        .decode()
+        .rstrip("=")
+    )
+    import hashlib as _hashlib
+    expected_did = "did:nexus:" + _hashlib.sha256(bytes(signing_key.verify_key)).hexdigest()
+    assert len(expected_did) == len("did:nexus:") + 64
+
+    response = client.post(
+        "/v1/agents",
+        json={
+            "identity": {
+                "did": expected_did,
+                "verification_key": verification_key,
+                "owner_id": "owner",
+            },
+            "proof": proof,
+            "proof_timestamp": proof_timestamp,
+        },
+    )
+    assert response.status_code == 200, response.json()
+    assert response.json()["agent_did"] == expected_did
+
+    # The legacy 32-char truncated DID must now be rejected.
+    short_did = expected_did[: len("did:nexus:") + 32]
+    response_short = client.post(
+        "/v1/agents",
+        json={
+            "identity": {
+                "did": short_did,
+                "verification_key": verification_key,
+                "owner_id": "owner",
+            },
+            "proof": proof,
+            "proof_timestamp": proof_timestamp,
+        },
+    )
+    assert response_short.status_code in (400, 409)
+    if response_short.status_code == 400:
+        assert response_short.json()["detail"]["error"] == "DID_MISMATCH"
