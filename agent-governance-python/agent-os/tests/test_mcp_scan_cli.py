@@ -1210,6 +1210,108 @@ class TestCommandAllowlist:
         _validate_command(sys.executable)  # Used by all stdio tests
 
 
+class TestLaunchEnvAndCwdGuards:
+    """Verify env-key blocklist and untrusted-cwd guard close the
+    config-controlled RCE class identified by the red-team review."""
+
+    def setup_method(self):
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=False)
+
+    def teardown_method(self):
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=False)
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "PYTHONPATH",
+            "PYTHONSTARTUP",
+            "LD_PRELOAD",
+            "NODE_OPTIONS",
+            "DYLD_INSERT_LIBRARIES",
+            "RUBYOPT",
+            "BASH_ENV",
+            "PERL5OPT",
+            "DOTNET_STARTUP_HOOKS",
+            "JAVA_TOOL_OPTIONS",
+            "PATH",
+            "PATHEXT",
+            "HOME",
+            "USERPROFILE",
+        ],
+    )
+    def test_runtime_hijack_env_key_is_blocked(self, key):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys, _validate_env
+
+        assert _blocked_command_env_keys({key: "x"}) == [key]
+        with pytest.raises(RuntimeError, match="hijack"):
+            _validate_env({key: "x"})
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "UV_INDEX_URL",
+            "NPM_CONFIG_REGISTRY",
+            "PIP_INDEX_URL",
+            "POETRY_HTTP_BASIC_FOO_USERNAME",
+            "GIT_SSH_COMMAND",
+            "GEM_HOME",
+        ],
+    )
+    def test_runtime_hijack_env_prefix_is_blocked(self, key):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys
+
+        assert _blocked_command_env_keys({key: "x"}) == [key]
+
+    def test_blocked_check_is_case_insensitive(self):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys
+
+        # Attacker tries lowercase to dodge the constant set.
+        assert _blocked_command_env_keys({"pythonpath": "x"}) == ["PYTHONPATH"]
+        assert _blocked_command_env_keys({"Ld_PreLoad": "x"}) == ["LD_PRELOAD"]
+
+    def test_benign_env_passes(self):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys, _validate_env
+
+        assert _blocked_command_env_keys({"MY_CONFIG": "x", "FOO": "bar"}) == []
+        _validate_env({"MY_CONFIG": "x"})  # must not raise
+
+    def test_empty_or_none_env_passes(self):
+        from agent_os.cli.mcp_scan import _validate_env
+
+        _validate_env(None)
+        _validate_env({})
+
+    def test_env_check_bypassed_under_allow_all(self):
+        from agent_os.cli.mcp_scan import _validate_env
+
+        _configure_command_policy(allow_all=True)
+        _validate_env({"LD_PRELOAD": "/tmp/evil.so"})  # must not raise
+
+    def test_untrusted_cwd_is_blocked_by_default(self, tmp_path):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        with pytest.raises(RuntimeError, match="comes from the MCP config"):
+            _validate_launch_cwd(tmp_path)
+
+    def test_untrusted_cwd_none_passes(self):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        _validate_launch_cwd(None)
+        _validate_launch_cwd("")
+
+    def test_untrusted_cwd_opt_in_flag_bypasses(self, tmp_path):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=True)
+        _validate_launch_cwd(tmp_path)  # must not raise
+
+    def test_untrusted_cwd_bypassed_under_allow_all(self, tmp_path):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        _configure_command_policy(allow_all=True)
+        _validate_launch_cwd(tmp_path)  # must not raise
+
+
 class TestCommandAllowlistCLI:
     """Test --unsafe-allow-all-commands flag (legacy --allow-commands alias) via CLI entry point."""
 
