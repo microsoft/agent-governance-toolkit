@@ -170,6 +170,8 @@ pub struct CustomPolicyConfig {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PreparedPolicyInvocation {
     Rego(RegoPolicyInvocation),
+    /// AGT D3 cedar invocation handed to a `CedarPolicyDispatcher`.
+    Cedar(CedarPolicyInvocation),
     Test(TestPolicyInvocation),
     Custom(CustomPolicyInvocation),
 }
@@ -178,6 +180,7 @@ impl PreparedPolicyInvocation {
     pub fn engine_type(&self) -> &'static str {
         match self {
             Self::Rego(_) => engine::REGO,
+            Self::Cedar(_) => engine::CEDAR,
             Self::Test(_) => engine::TEST,
             Self::Custom(_) => engine::CUSTOM,
         }
@@ -186,6 +189,7 @@ impl PreparedPolicyInvocation {
     pub fn policy_input(&self) -> Option<&JsonValue> {
         match self {
             Self::Rego(invocation) => Some(&invocation.input),
+            Self::Cedar(invocation) => Some(&invocation.input),
             Self::Test(invocation) => Some(&invocation.input),
             Self::Custom(invocation) => Some(&invocation.input),
         }
@@ -199,6 +203,29 @@ pub struct RegoPolicyInvocation {
     pub bundle: Option<String>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub adapter_config: BTreeMap<String, JsonValue>,
+    pub input: JsonValue,
+    pub canonical_input: String,
+}
+
+/// AGT D3 prepared cedar invocation. Carries the resolved cedar policy
+/// source (inline `policy_set` text or a `policy_path` location), the
+/// optional `entities_path` / `schema_path` artefacts, the optional
+/// request-template `query`, and the final policy input the runtime built
+/// for this intervention point.
+///
+/// The dispatcher owns Cedar evaluation per `SPECIFICATION.md` §12.3.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CedarPolicyInvocation {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_set: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entities_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query: Option<JsonValue>,
     pub input: JsonValue,
     pub canonical_input: String,
 }
@@ -319,9 +346,17 @@ pub fn prepare_policy_invocation(
             input: final_policy_input.clone(),
             canonical_input: canonical_policy_input(final_policy_input)?,
         })),
-        PolicyConfig::Cedar(_) => Err(RuntimeError::PolicyInvocationFailed(
-            "cedar policy invocation requires the cedar prepared-invocation variant added by AGT M2.S2 D2; manifest plumbing is wired but the prepared-invocation surface lands in the next commit".to_string(),
-        )),
+        PolicyConfig::Cedar(config) => {
+            Ok(PreparedPolicyInvocation::Cedar(CedarPolicyInvocation {
+                policy_set: config.policy_set.clone(),
+                policy_path: config.policy_path.clone(),
+                entities_path: config.entities_path.clone(),
+                schema_path: config.schema_path.clone(),
+                query: config.query.clone(),
+                input: final_policy_input.clone(),
+                canonical_input: canonical_policy_input(final_policy_input)?,
+            }))
+        }
         PolicyConfig::Test(config) => Ok(PreparedPolicyInvocation::Test(TestPolicyInvocation {
             adapter_config: merge_adapter_config(&config.adapter_config, &binding.adapter_config),
             input: final_policy_input.clone(),
