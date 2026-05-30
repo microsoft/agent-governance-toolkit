@@ -31,7 +31,10 @@ pub use effects::{Effect, EffectType, RedactionSpan};
 pub use error::RuntimeError;
 pub use intervention_point::{EnforcementMode, InterventionPoint};
 pub use limits::Limits;
-pub use manifest::{InterventionPointConfig, Manifest, ToolConfig};
+pub use manifest::{
+    ApprovalOnTimeout, ApprovalResolverConfig, ApprovalSection, InterventionPointConfig, Manifest,
+    ToolConfig,
+};
 pub use opa::{OpaPolicyDispatcher, OpaRegoRunner};
 pub use paths::{JsonPath, PathEnv, PathParseError, PathRoot, PathSegment};
 pub use perf_telemetry::PerfTelemetry;

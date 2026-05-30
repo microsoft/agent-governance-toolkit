@@ -28,6 +28,67 @@ pub struct Manifest {
     pub tools: BTreeMap<String, ToolConfig>,
     #[serde(default)]
     pub annotators: BTreeMap<String, AnnotatorConfig>,
+    /// AGT D5: optional top-level `approval` section that configures the
+    /// escalation backend used for `escalate` verdicts. The runtime
+    /// validates the shape per AGT-MANIFEST-1.0 §1 and SPECIFICATION-AGT-DELTA
+    /// §D5 but does not consult resolver configuration; that plumbing lives
+    /// in host SDKs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval: Option<ApprovalSection>,
+}
+
+/// AGT D5: parsed shape of the manifest's optional `approval` block.
+///
+/// The runtime treats this section as opaque host configuration. It is
+/// validated for structural well-formedness during manifest validation and
+/// then consulted only by the host approval path described in
+/// SPECIFICATION §17.1.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ApprovalSection {
+    /// Name of the resolver consulted by default. When absent the host
+    /// approval path defaults to `deny` per SPECIFICATION-AGT-DELTA §D5.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_resolver: Option<String>,
+    /// Maximum wait in seconds before `on_timeout` triggers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u64>,
+    /// Behaviour applied when `timeout_seconds` elapses without a decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_timeout: Option<ApprovalOnTimeout>,
+    /// Soft cap on approvals per agent within `fatigue_window_seconds`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fatigue_threshold: Option<u64>,
+    /// Window in seconds across which the fatigue counter accumulates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fatigue_window_seconds: Option<u64>,
+    /// Named resolver configurations. Keys are resolver names referenced by
+    /// `default_resolver`; values carry an opaque host-defined config plus a
+    /// discriminating `type` field.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub resolvers: BTreeMap<String, ApprovalResolverConfig>,
+}
+
+/// AGT D5: timeout behaviour enum for the `approval.on_timeout` field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ApprovalOnTimeout {
+    Deny,
+    Allow,
+    Suspend,
+}
+
+/// AGT D5: a single entry under `approval.resolvers`.
+///
+/// `type` is a discriminator preserved verbatim. All remaining keys are
+/// captured under `additional_properties` so host-defined resolver
+/// configuration round-trips without loss.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ApprovalResolverConfig {
+    #[serde(rename = "type")]
+    pub resolver_type: String,
+    #[serde(flatten)]
+    pub additional_properties: BTreeMap<String, JsonValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,6 +124,11 @@ impl ToolConfig {
 impl Manifest {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, RuntimeError> {
         ManifestLoader::default().load(path.as_ref())
+    }
+
+    /// AGT D5: accessor for the optional top-level `approval` section.
+    pub fn approval(&self) -> Option<&ApprovalSection> {
+        self.approval.as_ref()
     }
 
     /// Rewrite manifest-relative policy paths (rego `bundle`, adapter_config
@@ -183,6 +249,10 @@ impl Manifest {
             validate_point_config(*intervention_point, config, self)?;
         }
 
+        if let Some(approval) = &self.approval {
+            validate_approval_section(approval)?;
+        }
+
         Ok(())
     }
 }
@@ -261,6 +331,62 @@ fn validate_point_config(
         ))
     })?;
     validate_policy_binding(intervention_point, &config.policy, policy_config)?;
+
+    Ok(())
+}
+
+fn validate_approval_section(approval: &ApprovalSection) -> Result<(), RuntimeError> {
+    if let Some(default_resolver) = &approval.default_resolver {
+        if default_resolver.trim().is_empty() {
+            return Err(RuntimeError::ManifestInvalid(
+                "approval.default_resolver must not be empty".to_string(),
+            ));
+        }
+        if !approval.resolvers.is_empty()
+            && !approval.resolvers.contains_key(default_resolver.as_str())
+        {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "approval.default_resolver '{default_resolver}' does not match any entry under approval.resolvers"
+            )));
+        }
+    }
+
+    if let Some(timeout_seconds) = approval.timeout_seconds {
+        if timeout_seconds == 0 {
+            return Err(RuntimeError::ManifestInvalid(
+                "approval.timeout_seconds must be greater than zero".to_string(),
+            ));
+        }
+    }
+
+    if let Some(fatigue_threshold) = approval.fatigue_threshold {
+        if fatigue_threshold == 0 {
+            return Err(RuntimeError::ManifestInvalid(
+                "approval.fatigue_threshold must be greater than zero".to_string(),
+            ));
+        }
+    }
+
+    if let Some(fatigue_window_seconds) = approval.fatigue_window_seconds {
+        if fatigue_window_seconds == 0 {
+            return Err(RuntimeError::ManifestInvalid(
+                "approval.fatigue_window_seconds must be greater than zero".to_string(),
+            ));
+        }
+    }
+
+    for (resolver_name, resolver_config) in &approval.resolvers {
+        if resolver_name.trim().is_empty() {
+            return Err(RuntimeError::ManifestInvalid(
+                "approval.resolvers entries must have non-empty names".to_string(),
+            ));
+        }
+        if resolver_config.resolver_type.trim().is_empty() {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "approval.resolvers.{resolver_name}.type must not be empty"
+            )));
+        }
+    }
 
     Ok(())
 }
@@ -555,7 +681,26 @@ fn merge_manifest(
         incoming.intervention_points,
         source,
     )?;
+    merge_approval(&mut existing.approval, incoming.approval, source)?;
     Ok(())
+}
+
+fn merge_approval(
+    existing: &mut Option<ApprovalSection>,
+    incoming: Option<ApprovalSection>,
+    source: &ManifestSource,
+) -> Result<(), RuntimeError> {
+    let Some(incoming) = incoming else {
+        return Ok(());
+    };
+    match existing {
+        Some(existing_value) if existing_value == &incoming => Ok(()),
+        Some(_) => manifest_merge_conflict("approval", source),
+        None => {
+            *existing = Some(incoming);
+            Ok(())
+        }
+    }
 }
 
 fn merge_metadata(
@@ -648,4 +793,229 @@ fn manifest_merge_conflict<T>(field: &str, source: &ManifestSource) -> Result<T,
         "manifest extends conflict for {field} from '{}': duplicate definitions must be identical or additive",
         source.label()
     )))
+}
+
+#[cfg(test)]
+mod approval_section_tests {
+    use super::*;
+    use serde_json::json;
+
+    const MINIMAL_BASE: &str = r#"agent_control_specification_version: 0.3.0-alpha
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: test_policy
+    policy_target: $snap.input
+"#;
+
+    fn manifest_with(extra: &str) -> Result<Manifest, RuntimeError> {
+        let mut input = String::from(MINIMAL_BASE);
+        input.push_str(extra);
+        Manifest::from_yaml_str(&input)
+    }
+
+    #[test]
+    fn manifest_without_approval_section_parses_and_returns_none() {
+        let manifest = manifest_with("").expect("baseline manifest parses");
+        assert!(manifest.approval.is_none());
+        assert!(manifest.approval().is_none());
+    }
+
+    #[test]
+    fn minimal_approval_with_matching_default_resolver_parses() {
+        let manifest = manifest_with(
+            r#"approval:
+  default_resolver: webhook
+  resolvers:
+    webhook:
+      type: webhook
+"#,
+        )
+        .expect("minimal approval parses");
+        let approval = manifest.approval().expect("approval is present");
+        assert_eq!(approval.default_resolver.as_deref(), Some("webhook"));
+        assert_eq!(approval.resolvers.len(), 1);
+        assert_eq!(
+            approval.resolvers.get("webhook").unwrap().resolver_type,
+            "webhook"
+        );
+    }
+
+    #[test]
+    fn full_approval_section_parses_with_resolver_type_discriminator_preserved() {
+        let manifest = manifest_with(
+            r#"approval:
+  default_resolver: webhook
+  timeout_seconds: 300
+  on_timeout: suspend
+  fatigue_threshold: 5
+  fatigue_window_seconds: 3600
+  resolvers:
+    webhook:
+      type: webhook
+      url: https://example.com/approve
+      auth:
+        type: bearer
+        env: AGT_APPROVAL_TOKEN
+    local:
+      type: local
+      file: /var/lib/agt/approvals/
+"#,
+        )
+        .expect("full approval parses");
+        let approval = manifest.approval().expect("approval present");
+        assert_eq!(approval.default_resolver.as_deref(), Some("webhook"));
+        assert_eq!(approval.timeout_seconds, Some(300));
+        assert_eq!(approval.on_timeout, Some(ApprovalOnTimeout::Suspend));
+        assert_eq!(approval.fatigue_threshold, Some(5));
+        assert_eq!(approval.fatigue_window_seconds, Some(3600));
+
+        let webhook = approval.resolvers.get("webhook").expect("webhook resolver");
+        assert_eq!(webhook.resolver_type, "webhook");
+        assert_eq!(
+            webhook
+                .additional_properties
+                .get("url")
+                .and_then(|value| value.as_str()),
+            Some("https://example.com/approve")
+        );
+
+        let local = approval.resolvers.get("local").expect("local resolver");
+        assert_eq!(local.resolver_type, "local");
+        assert_eq!(
+            local
+                .additional_properties
+                .get("file")
+                .and_then(|value| value.as_str()),
+            Some("/var/lib/agt/approvals/")
+        );
+    }
+
+    #[test]
+    fn default_resolver_naming_missing_resolver_is_manifest_invalid() {
+        let error = manifest_with(
+            r#"approval:
+  default_resolver: missing
+  resolvers:
+    webhook:
+      type: webhook
+"#,
+        )
+        .expect_err("default_resolver must match a resolver entry");
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("missing"),
+            "detail names the missing resolver: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn unknown_on_timeout_value_is_manifest_invalid() {
+        let error = manifest_with(
+            r#"approval:
+  on_timeout: escalate
+"#,
+        )
+        .expect_err("on_timeout enum is restricted to deny | allow | suspend");
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    }
+
+    #[test]
+    fn zero_timeout_seconds_is_manifest_invalid() {
+        let error = manifest_with(
+            r#"approval:
+  timeout_seconds: 0
+"#,
+        )
+        .expect_err("zero timeout_seconds must reject");
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("timeout_seconds"));
+    }
+
+    #[test]
+    fn zero_fatigue_threshold_is_manifest_invalid() {
+        let error = manifest_with(
+            r#"approval:
+  fatigue_threshold: 0
+"#,
+        )
+        .expect_err("zero fatigue_threshold must reject");
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("fatigue_threshold"));
+    }
+
+    #[test]
+    fn zero_fatigue_window_seconds_is_manifest_invalid() {
+        let error = manifest_with(
+            r#"approval:
+  fatigue_window_seconds: 0
+"#,
+        )
+        .expect_err("zero fatigue_window_seconds must reject");
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("fatigue_window_seconds"));
+    }
+
+    #[test]
+    fn negative_numeric_fields_fail_to_parse_as_manifest_invalid() {
+        let error = manifest_with(
+            r#"approval:
+  timeout_seconds: -1
+"#,
+        )
+        .expect_err("negative timeout_seconds must reject");
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    }
+
+    #[test]
+    fn arbitrary_host_defined_resolver_keys_round_trip_without_loss() {
+        let yaml = r#"approval:
+  resolvers:
+    custom:
+      type: custom
+      backend:
+        kind: queue
+        topic: approvals
+      retries: 3
+      labels:
+        - high-trust
+        - secure
+"#;
+        let manifest = manifest_with(yaml).expect("custom resolver parses");
+        let resolver = manifest
+            .approval()
+            .unwrap()
+            .resolvers
+            .get("custom")
+            .expect("custom resolver present");
+        assert_eq!(resolver.resolver_type, "custom");
+        assert_eq!(
+            resolver.additional_properties.get("backend"),
+            Some(&json!({"kind": "queue", "topic": "approvals"}))
+        );
+        assert_eq!(
+            resolver.additional_properties.get("retries"),
+            Some(&json!(3))
+        );
+        assert_eq!(
+            resolver.additional_properties.get("labels"),
+            Some(&json!(["high-trust", "secure"]))
+        );
+
+        let serialized = serde_json::to_value(&manifest).expect("serialize round trip");
+        let approval_json = serialized
+            .get("approval")
+            .expect("approval present in serialized form");
+        let resolver_json = approval_json
+            .pointer("/resolvers/custom")
+            .expect("serialized resolver entry");
+        assert_eq!(resolver_json["type"], json!("custom"));
+        assert_eq!(resolver_json["backend"]["kind"], json!("queue"));
+        assert_eq!(resolver_json["labels"], json!(["high-trust", "secure"]));
+    }
 }
