@@ -45,13 +45,24 @@ Implementation requirements:
 
 ## 3. Telemetry-level evidence
 
-The runtime always propagates evidence to telemetry events when present:
+The runtime always propagates evidence to telemetry events when present. The
+events that MAY carry evidence are the upstream ACS-named events listed below;
+the names match `SPECIFICATION.md` §19 and `SPECIFICATION-AGT-DELTA.md` D2.
 
-- `policy.invoked` event: includes `evidence_artefact` (the verbatim artefact
-  string) and `evidence_verification_pointer_keys` (sorted list of the keys
-  only, not the URLs).
-- `intervention_point.allowed | denied | warned | escalated` events: same
-  fields, set when the originating verdict carried `evidence`.
+| Event | Carries evidence when |
+| --- | --- |
+| `policy.invoked` | Always when the verdict has `evidence`. |
+| `intervention_point.allowed` | Originating verdict carried `evidence`. |
+| `intervention_point.denied` | Originating verdict carried `evidence`. |
+| `intervention_point.warned` | Originating verdict carried `evidence`. |
+| `intervention_point.escalated` | Originating verdict carried `evidence`. |
+| `intervention_point.transformed` | Originating verdict carried `evidence`. |
+
+On each event the runtime emits:
+
+- `evidence_artefact`: the verbatim `artefact` string from the verdict.
+- `evidence_verification_pointer_keys`: the sorted list of
+  `verification_pointers` keys, not their URL values.
 
 The URL values are deliberately omitted from telemetry to keep telemetry
 cardinality bounded. Auditors retrieve the full pointer map from the audit
@@ -65,7 +76,8 @@ An AGT audit record SHOULD store:
 | --- | --- |
 | `evidence_artefact` | verbatim from verdict |
 | `verification_pointers` | full map from verdict |
-| `action_identity` | ACS §13 |
+| `input_identity` | `SPECIFICATION-AGT-DELTA.md` §D1.4 |
+| `enforced_identity` | `SPECIFICATION-AGT-DELTA.md` §D1.4 |
 | `intervention_point` | request |
 | `policy_id` | manifest |
 | `mode` | request |
@@ -77,7 +89,9 @@ The verification flow for an auditor is:
 
 1. Read `evidence_artefact` and `verification_pointers` from the audit record.
 2. Fetch the proof blob from the pointer URL or content registry.
-3. Verify the proof corresponds to `action_identity`.
+3. Verify the proof corresponds to `input_identity` (what the policy saw) and,
+   when the verdict was `transform`, that the published proof covers the
+   `enforced_identity` (what the host actually executed).
 4. If the proof verifies, the decision is reproducible.
 
 ## 5. Backwards-compat note

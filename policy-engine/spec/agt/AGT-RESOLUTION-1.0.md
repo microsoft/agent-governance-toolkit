@@ -29,11 +29,14 @@ host:
 2. At each directory level, look for `governance.yaml` (preferred) or
    `governance.yml`. If found, add to the candidate list.
 3. Stop at `root` (inclusive). If the resolved `action_path` is not under
-   `root` (symlinks, `..` segments, attacker-influenced inputs), refuse to
-   resolve and return the **empty manifest** (defined in §5).
+   `root` (symlinks, `..` segments, attacker-influenced inputs), the
+   resolution layer MUST fail closed with the reserved reason
+   `runtime_error:resolution_path_traversal` (see §3). The engine is then
+   never called for this evaluation.
 
 This matches the v4 `agent_os.policies.discovery.discover_policies` behaviour
-exactly.
+exactly except for the path-traversal handling: v4 returned an empty list,
+which let downstream code default to allow. v5 fails closed.
 
 ### 2.2 Inherit-truncation
 
@@ -69,23 +72,41 @@ Documents are merged root-first. Rules are merged per the v4 invariants:
 
 ### 2.5 Translation to ACS manifest
 
-The merged rule list is then translated into one ACS `policies.{id}` entry of
-type `rego`, plus an `intervention_points.<ip>` binding for each intervention
-point the v4 rule set targeted. The translation algorithm is described in
-detail in `AGT-RULES-TO-REGO-1.0.md` (M5 deliverable).
+The merged rule list is translated into a Rego bundle on disk, then bound
+through a `type: rego` policy that points at that bundle. The bundle layout
+is:
 
-Output:
+```
+.agt/resolved-bundle/
+├── manifest.yaml          # the produced ACS manifest
+├── policy/
+│   ├── agt_legacy.rego    # generated from merged rule list
+│   └── lib/               # stock library copied in by reference
+```
+
+`policies.{id}.bundle` points at `.agt/resolved-bundle/policy/`. The `query`
+member is `data.agt.legacy.verdict`. The generated `agt_legacy.rego` carries a
+`package agt.legacy` header and a `verdict` rule synthesized from the rule list.
+
+The full translation algorithm is described in `AGT-RULES-TO-REGO-1.0.md` (M5
+deliverable). The translation MUST preserve the deny-immutability invariant
+from §2.4 step 2 by emitting deny rules with explicit precedence over child
+rules that share a name.
+
+Output manifest:
 
 ```yaml
 agent_control_specification_version: "0.3.0-alpha-agt"
+metadata:
+  name: agt_resolved
+  resolved_from:
+    root: <root>
+    action_path: <action_path>
 extends: []                              # always empty after resolution
 policies:
   agt_legacy_rules:
     type: rego
-    policy_set: |
-      # generated Rego from merged rule list
-      package agt.legacy
-      ...
+    bundle: .agt/resolved-bundle/policy/
     query: data.agt.legacy.verdict
 intervention_points: { ... }              # bindings per v4 rule targets
 tools: { ... }                            # merged tools catalogs
@@ -93,6 +114,10 @@ annotators: { ... }                       # merged annotators
 limits: { ... }                           # merged limits
 approval: { ... }                         # merged approval config (last writer wins)
 ```
+
+The resolution layer MUST write the bundle to a host-writable directory and
+clean it up at session end. The bundle path SHOULD be inside the project's
+build directory, not the project's source tree.
 
 ## 3. Failure modes
 
@@ -116,24 +141,18 @@ input governance.yaml file contents. Cache eviction is host-defined.
 
 ## 5. Empty manifest
 
-The empty manifest is:
+There is no fallback empty manifest. A workspace with no `governance.yaml`
+files anywhere from `action_path` up to `root` SHOULD be configured with a
+single `governance.yaml` at the root that establishes a default verdict for
+all intervention points. A workspace whose discovery returns an empty
+candidate list MAY (host policy) either:
 
-```yaml
-agent_control_specification_version: "0.3.0-alpha-agt"
-metadata: { name: "agt_empty" }
-extends: []
-policies:
-  default_allow:
-    type: rego
-    policy_set: |
-      package agt.default
-      verdict := {"decision": "allow"}
-    query: data.agt.default.verdict
-intervention_points: {}
-```
+1. Fail closed with `runtime_error:resolution_invalid_governance` so that
+   missing governance is an explicit deployment error, or
+2. Substitute a host-supplied default manifest registered at host startup.
 
-An engine that receives the empty manifest evaluates every intervention point
-to `allow`.
+The previous "default to empty manifest that allows" behaviour from
+`plan v2` is removed because it implicitly opened a fail-open path.
 
 ## 6. Interaction with ACS `extends`
 

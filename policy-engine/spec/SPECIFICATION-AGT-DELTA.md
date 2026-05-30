@@ -30,6 +30,7 @@ The deltas reflect user decisions captured in
 | `message` | no | string | Free form text for a caller. |
 | `transform` | required when `decision == "transform"`; forbidden otherwise | object | `{ path: string, value: any }`. See §D1.1. |
 | `evidence` | no | object | See §D2. |
+| `result_labels` | no | array of string | Information-flow labels for the data produced at this sink. Carried through from upstream ACS unchanged. Host stores these on the produced data and supplies them as `input.ifc.source_labels` on subsequent intervention points. |
 
 ### D1.1 `transform` verdict body
 
@@ -86,11 +87,23 @@ Until then, hosts that need multi-step rewriting MUST use annotators.
 
 ### D1.4 Action identity (replacing §13)
 
-Action identity remains the SHA-256 digest of the canonical policy input
-JSON, prefixed with `sha256:`. The identity is unchanged by the verdict; for
-`transform` verdicts the identity reflects the input the policy evaluated, not
-the post-transform value. Hosts that require the post-transform identity
-SHOULD compute it themselves over the transformed snapshot.
+Action identity is **bisected** by the transform decision. Two SHA-256
+identities are produced, both prefixed with `sha256:`.
+
+| Identity | Computed over | Purpose |
+| --- | --- | --- |
+| `input_identity` | The canonical policy input that was evaluated | Pins what the policy actually saw. This is the value §13 originally called "the action identity". |
+| `enforced_identity` | The canonical policy input AFTER the transform path is applied to the policy target (no change for non-transform verdicts) | Pins what the host actually carried out. Equal to `input_identity` for `allow`, `warn`, `deny`, and `escalate`. |
+
+Both identities MUST appear in every audit record. The escalation approval
+path (§17.1) binds to `enforced_identity` because the approver consents to the
+action that will execute, not to the pre-transform proposal. A
+`runtime_error:approval_action_mismatch` is raised when the approved
+`enforced_identity` does not match the value recomputed from the current
+policy input.
+
+For `transform` verdicts, telemetry events MUST carry both identities.
+Single-identity telemetry consumers MAY default to `enforced_identity`.
 
 ---
 
@@ -117,10 +130,26 @@ The runtime treats `evidence` as opaque. It does not validate `artefact` or
 fetch `verification_pointers`. A dispatcher that emits a non-object `evidence`
 MUST fail closed with `runtime_error:policy_output_invalid`.
 
-The runtime MUST propagate `evidence` into telemetry events (§19). Specifically
-the `policy.invoked` and `intervention_point.decided` events carry the
-verbatim `artefact` value and the keys of `verification_pointers` (not their
-URLs, to keep cardinality bounded) when `evidence` is present.
+The runtime MUST propagate `evidence` into telemetry events (§19). The
+telemetry events keep their upstream ACS names. The events that MAY carry
+`evidence` are:
+
+- `policy.invoked`
+- `intervention_point.allowed`
+- `intervention_point.denied`
+- `intervention_point.warned`
+- `intervention_point.escalated`
+- `intervention_point.transformed` (added by §D1)
+
+On every event listed above the runtime emits two fields when the originating
+verdict carried `evidence`:
+
+- `evidence_artefact`: the verbatim `artefact` string.
+- `evidence_verification_pointer_keys`: the sorted list of `verification_pointers`
+  keys (not their URL values, to keep telemetry cardinality bounded).
+
+The URL values themselves MUST NOT appear in telemetry. They are recovered
+from the audit record per §D2 and `AGT-EVIDENCE-1.0.md` §4.
 
 ### Rationale
 
@@ -165,13 +194,14 @@ The default mapping when no explicit binding is given is:
 
 | Cedar field | Policy input source | Type |
 | --- | --- | --- |
-| `principal` | `$pi.snapshot.agent.id` resolved to `Agent::"<id>"` | `Agent` entity |
+| `principal` | `$pi.snapshot.envelope.agent.id` resolved to `Agent::"<id>"` | `Agent` entity |
 | `action` | The intervention point name, mapped as `Action::"<ip>"` (e.g., `Action::"pre_tool_call"`) | `Action` entity |
 | `resource` | `$pi.tool` projected as `Tool::"<name>"` for tool intervention points, otherwise `$pi.policy_target` projected as `PolicyTarget::"<kind>"` | entity |
-| `context` | `$pi.snapshot` (excluding `agent.id`) plus `$pi.annotations` | record |
+| `context` | `$pi.snapshot` (excluding `envelope.agent.id`) plus `$pi.annotations` | record |
 
 Hosts MAY override the mapping via the `query` member on either the policy
-definition or the binding.
+definition or the binding. The source paths above match `AGT-SNAPSHOT-1.0.md`
+§1's `envelope` shape.
 
 ### D3.3 Cedar verdict mapping
 
@@ -183,9 +213,26 @@ Cedar's authorization result is mapped to a verdict per:
 | `Deny` | `{decision: "deny", reason: <first policy id that contributed>}` |
 
 The Cedar policy author MAY produce `warn`, `escalate`, or `transform` by
-attaching an `advice` annotation to a Cedar policy and returning a structured
-result the dispatcher normalizes per §13. Cedar advice that does not match the
-verdict shape MUST fail closed with `runtime_error:policy_output_invalid`.
+attaching an `advice` annotation on a Cedar policy. The advice JSON MUST match
+this shape:
+
+```json
+{
+  "verdict": "warn" | "escalate" | "transform",
+  "reason": "<optional reason string>",
+  "message": "<optional human message>",
+  "transform": {"path": "$policy_target...", "value": <any>}
+}
+```
+
+The dispatcher extracts the advice from the Cedar response, validates the
+shape against `policy-engine/spec/schema/cedar_advice.schema.json` (M2
+deliverable), and produces the corresponding verdict. Advice that does not
+match the schema MUST fail closed with `runtime_error:policy_output_invalid`.
+A `transform` advice without a `transform` body or with a `transform.path`
+outside `$policy_target` MUST fail closed with
+`runtime_error:transform_invalid` or `runtime_error:transform_target_forbidden`
+respectively.
 
 ### D3.4 Dispatcher
 
@@ -225,11 +272,12 @@ root, filter by scope glob, and merge them.
 
 ---
 
-## D5. `approval` top-level manifest section (new §22)
+## D5. `approval` top-level manifest section (new §24)
 
 A manifest MAY include a top-level `approval` section that configures the
-escalation backend used for `escalate` verdicts. The schema for that section
-is:
+escalation backend used for `escalate` verdicts. The section is numbered §24
+to avoid colliding with upstream ACS §22 (Versioning and stability) and §23
+(References). The schema for that section is:
 
 ```yaml
 approval:
@@ -275,13 +323,17 @@ out-of-band human-approval channel.
 
 ## D6. Reserved reasons (additions to §16)
 
-Three reserved reasons are added:
+Six reserved reasons are added:
 
 | Reason | Cause |
 | --- | --- |
 | `runtime_error:transform_target_forbidden` | A `transform` verdict carried a `path` outside `$policy_target`. |
 | `runtime_error:transform_invalid` | A `transform` verdict's path did not resolve, the value could not be set, or `value` was missing. |
 | `runtime_error:approval_resolver_missing` | An `escalate` verdict was returned but no resolver matched the manifest's `approval.default_resolver`. |
+| `runtime_error:resolution_path_traversal` | AGT-side resolution refused because the action path resolved outside the workspace root (see `AGT-RESOLUTION-1.0.md` §3). |
+| `runtime_error:resolution_cycle` | AGT-side resolution detected a cycle while merging an extends chain. |
+| `runtime_error:resolution_invalid_governance` | AGT-side resolution failed to validate a `governance.yaml` during merge. |
+| `runtime_error:resolution_merge_conflict` | AGT-side resolution found two non-rule sections (e.g., conflicting `approval` blocks) that could not be merged. |
 
 Effects-related reasons (`runtime_error:effect_invalid`,
 `runtime_error:effect_target_forbidden`) are removed by §D1.
@@ -324,9 +376,11 @@ This delta has no impact on the spec; it documents the M2 workspace shape.
 | §14 Effects | **Replaced** by D1. The §14 effects section is removed wholesale. |
 | §15 Resource limits | Unchanged. |
 | §16 Reserved reasons | **Extended** per D6. |
-| §17 Host obligations | §17 unchanged; §17.1 now references `approval` section per D5. |
+| §17 Host obligations | §17 unchanged; §17.1 now references `approval` section per D5; approval identity binds to `enforced_identity` per D1.4. |
 | §18 Streaming and parallel tools | Unchanged. |
-| §19 Telemetry and audit | **Extended** per D2 (carries `evidence`). |
+| §19 Telemetry and audit | **Extended** per D2 (carries `evidence`). The set of intervention point decision events grows by `intervention_point.transformed`. |
 | §20 Conformance | Conformance text reads against the deltas. |
 | §21 Security considerations | Unchanged in principle. The `transform` verdict is bounded to `$policy_target`, preserving the security boundary §21 established for effects. |
-| §22 Approval (new) | **Added** per D5. |
+| §22 Versioning and stability | Unchanged. The version string in `AGT-MANIFEST-1.0.md` §2 is a backwards-compatible profile of upstream ACS versioning. |
+| §23 References | Unchanged. |
+| §24 Approval (new) | **Added** per D5. |

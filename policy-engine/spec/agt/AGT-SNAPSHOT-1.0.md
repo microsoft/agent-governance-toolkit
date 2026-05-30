@@ -77,7 +77,12 @@ intervention point.
 }
 ```
 
-The `ifc.source_labels` field is the IFC label-flow source labels per ACS §11.
+The `input.ifc.source_labels` field is the IFC label-flow source labels per
+ACS §11. Note the path: AGT stock IFC rules read `input.ifc.source_labels`
+(at `input`) and `response.ifc.result_labels` (at `output`), not
+`snapshot.ifc.*`. The upstream ACS `policy/lib/ifc.rego` library that reads
+`input.snapshot.ifc.source_labels` MUST be replaced by the AGT stock
+`policy/lib/ifc.rego` (M4 deliverable) which reads the AGT-correct paths.
 
 ### 2.3 `pre_model_call`
 
