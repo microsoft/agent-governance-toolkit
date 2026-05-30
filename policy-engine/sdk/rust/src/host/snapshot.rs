@@ -25,7 +25,15 @@ pub(super) fn enforce(
             let Some(resolver) = resolver else {
                 return Err(blocked(intervention_point, intervention_point_result));
             };
-            let original_identity = intervention_point_result.action_identity.clone();
+            // AGT D1.4: approval binding pins to `enforced_identity` so
+            // the approver consents to the action that will execute, not
+            // to the pre-transform proposal. `action_identity` is the
+            // backwards-compatible alias the SDK already exposes; the
+            // runtime guarantees it equals `enforced_identity`.
+            let original_identity = intervention_point_result
+                .enforced_identity
+                .clone()
+                .or_else(|| intervention_point_result.action_identity.clone());
             let resolution = match catch_unwind(AssertUnwindSafe(|| {
                 resolver(intervention_point, intervention_point_result)
             })) {
@@ -35,7 +43,7 @@ pub(super) fn enforce(
                     return Err(blocked(intervention_point, &error_result));
                 }
             };
-            let current_identity = current_action_identity(intervention_point_result);
+            let current_identity = current_enforced_identity(intervention_point_result);
             match resolution.outcome {
                 ApprovalOutcome::Allow => {
                     if approved_identity_matches(
@@ -75,11 +83,27 @@ pub(super) fn enforce(
     }
 }
 
-fn current_action_identity(intervention_point_result: &InterventionPointResult) -> Option<String> {
-    intervention_point_result
-        .policy_input
-        .as_ref()
-        .and_then(|policy_input| action_identity(policy_input).ok())
+fn current_enforced_identity(
+    intervention_point_result: &InterventionPointResult,
+) -> Option<String> {
+    // AGT D1.4: recompute `enforced_identity` from the live policy input
+    // and any transformed policy target so a late-arriving approval is
+    // checked against what the host will actually execute. Falls back to
+    // the input identity when no transform was emitted.
+    let policy_input = intervention_point_result.policy_input.as_ref()?;
+    if let Some(transformed) = intervention_point_result.transformed_policy_target.as_ref() {
+        let mut enforced_input = policy_input.clone();
+        if let Some(value_slot) = enforced_input
+            .get_mut("policy_target")
+            .and_then(JsonValue::as_object_mut)
+            .and_then(|object| object.get_mut("value"))
+        {
+            *value_slot = transformed.clone();
+        }
+        action_identity(&enforced_input).ok()
+    } else {
+        action_identity(policy_input).ok()
+    }
 }
 
 fn approved_identity_matches(
@@ -103,6 +127,8 @@ fn approval_action_mismatch_result() -> InterventionPointResult {
         transformed_policy_target: None,
         policy_input: None,
         action_identity: None,
+        input_identity: None,
+        enforced_identity: None,
     }
 }
 
@@ -112,12 +138,15 @@ fn approval_resolver_failed_result() -> InterventionPointResult {
             decision: Decision::Deny,
             reason: Some("runtime_error:approval_resolver_failed".to_string()),
             message: Some("Approval resolver failed closed.".to_string()),
-            effects: Vec::new(),
+            transform: None,
+            evidence: None,
             result_labels: Vec::new(),
         },
         transformed_policy_target: None,
         policy_input: None,
         action_identity: None,
+        input_identity: None,
+        enforced_identity: None,
     }
 }
 
@@ -136,8 +165,10 @@ pub(super) fn effective_policy_target(
     intervention_point_result: &InterventionPointResult,
     mode: EnforcementMode,
 ) -> JsonValue {
+    // AGT D1 retires `applies_effects`; the only value-changing decision
+    // is `Transform`. Surface the transformed policy target when present.
     if mode == EnforcementMode::Enforce
-        && intervention_point_result.verdict.decision.applies_effects()
+        && intervention_point_result.verdict.decision == Decision::Transform
     {
         intervention_point_result
             .transformed_policy_target

@@ -160,6 +160,8 @@ impl Runtime {
                 transformed_policy_target: None,
                 policy_input: failure.policy_input,
                 action_identity: None,
+                input_identity: None,
+                enforced_identity: None,
             },
         };
         let duration_ms = started_at.elapsed().as_secs_f64() * 1000.0;
@@ -346,19 +348,47 @@ impl Runtime {
             _ => None,
         };
 
-        let action_identity =
+        let input_identity =
             action_identity(&final_policy_input).map_err(|error| EvaluationFailure {
                 error: RuntimeError::PolicyOutputInvalid(format!(
-                    "failed to derive action identity: {error}"
+                    "failed to derive input_identity: {error}"
                 )),
                 policy_input: Some(final_policy_input.clone()),
             })?;
+
+        // AGT D1.4: enforced_identity is computed over the policy input
+        // with `policy_target.value` replaced by the transformed value when
+        // a Transform decision rewrites it. Non-transform decisions and
+        // evaluate-only mode (where `transformed_policy_target` is None by
+        // design) keep enforced_identity equal to input_identity, so audit
+        // consumers always see a stable two-field schema.
+        let enforced_identity = match &transformed_policy_target {
+            Some(transformed) => {
+                let mut enforced_policy_input = final_policy_input.clone();
+                if let Some(value_slot) = enforced_policy_input
+                    .get_mut(pi_key::POLICY_TARGET)
+                    .and_then(JsonValue::as_object_mut)
+                    .and_then(|object| object.get_mut(pi_key::VALUE))
+                {
+                    *value_slot = transformed.clone();
+                }
+                action_identity(&enforced_policy_input).map_err(|error| EvaluationFailure {
+                    error: RuntimeError::PolicyOutputInvalid(format!(
+                        "failed to derive enforced_identity: {error}"
+                    )),
+                    policy_input: Some(final_policy_input.clone()),
+                })?
+            }
+            None => input_identity.clone(),
+        };
 
         Ok(InterventionPointResult {
             verdict,
             transformed_policy_target,
             policy_input: Some(final_policy_input),
-            action_identity: Some(action_identity),
+            action_identity: Some(enforced_identity.clone()),
+            input_identity: Some(input_identity),
+            enforced_identity: Some(enforced_identity),
         })
     }
 
@@ -651,12 +681,34 @@ pub struct InterventionPointRequest {
     pub mode: EnforcementMode,
 }
 
+/// Result of evaluating a single intervention point.
+///
+/// Per AGT D1.4 the engine produces two SHA-256 identities for every
+/// successful evaluation:
+///
+/// - `input_identity` pins what the policy actually saw.
+/// - `enforced_identity` pins what the host will carry out. It differs
+///   from `input_identity` only when the verdict is `Decision::Transform`
+///   in `EnforcementMode::Enforce`; in every other case the two are equal.
+///
+/// `action_identity` is retained as a backwards-compatible alias that
+/// always equals `enforced_identity`, satisfying the AGT-EVIDENCE-1.0
+/// note that single-identity telemetry consumers MAY default to
+/// `enforced_identity`. New callers should reach for the bisected fields
+/// directly.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InterventionPointResult {
     pub verdict: Verdict,
     pub transformed_policy_target: Option<JsonValue>,
     pub policy_input: Option<JsonValue>,
+    /// Backwards-compatible alias for `enforced_identity` per AGT D1.4.
     pub action_identity: Option<String>,
+    /// AGT D1.4 SHA-256 of the canonical policy input as evaluated.
+    pub input_identity: Option<String>,
+    /// AGT D1.4 SHA-256 of the canonical policy input with the
+    /// transformed policy target applied. Equal to `input_identity` for
+    /// non-transform decisions and evaluate-only transforms.
+    pub enforced_identity: Option<String>,
 }
 
 fn normalize_annotator_error(annotator_name: &str, error: RuntimeError) -> RuntimeError {
@@ -997,5 +1049,95 @@ intervention_points:
             transformed.evidence_verification_pointer_keys,
             vec!["attestation"]
         );
+    }
+
+    // ── AGT D1.4 bisected action identity ─────────────────────────────
+
+    #[test]
+    fn non_transform_verdict_yields_equal_input_and_enforced_identities() {
+        let runtime = runtime(json!({"decision": "allow"}));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "data"}}),
+        );
+        assert!(result.input_identity.is_some());
+        assert!(result.enforced_identity.is_some());
+        assert_eq!(
+            result.input_identity, result.enforced_identity,
+            "non-transform decisions keep enforced_identity == input_identity"
+        );
+        assert_eq!(
+            result.action_identity, result.enforced_identity,
+            "action_identity is the back-compat alias for enforced_identity"
+        );
+    }
+
+    #[test]
+    fn transform_decision_diverges_input_and_enforced_identities() {
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "transform": {"path": "$policy_target.body", "value": "[REDACTED]"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "secret"}}),
+        );
+        let input = result.input_identity.expect("input_identity present");
+        let enforced = result.enforced_identity.expect("enforced_identity present");
+        assert_ne!(
+            input, enforced,
+            "transform that rewrites the policy target must shift enforced_identity"
+        );
+        assert_eq!(
+            result.action_identity.as_deref(),
+            Some(enforced.as_str()),
+            "action_identity stays aligned to enforced_identity"
+        );
+    }
+
+    #[test]
+    fn evaluate_only_transform_keeps_enforced_identity_equal_to_input() {
+        // Per AGT D1.1 §5 + D1.4: in evaluate_only mode the transform is
+        // validated but not applied; transformed_policy_target stays None,
+        // so enforced_identity must equal input_identity even though the
+        // verdict is Transform.
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "transform": {"path": "$policy_target.body", "value": "[REDACTED]"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::EvaluateOnly,
+            json!({"output": {"body": "secret"}}),
+        );
+        assert_eq!(result.verdict.decision, Decision::Transform);
+        assert!(result.transformed_policy_target.is_none());
+        assert_eq!(
+            result.input_identity, result.enforced_identity,
+            "evaluate_only transforms must not shift enforced_identity"
+        );
+    }
+
+    #[test]
+    fn runtime_error_clears_both_identities() {
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "transform": {"path": "$snap.output.body", "value": "x"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "data"}}),
+        );
+        assert_eq!(result.verdict.decision, Decision::Deny);
+        assert_eq!(
+            result.verdict.reason.as_deref(),
+            Some("runtime_error:transform_target_forbidden")
+        );
+        assert!(result.input_identity.is_none());
+        assert!(result.enforced_identity.is_none());
+        assert!(result.action_identity.is_none());
     }
 }

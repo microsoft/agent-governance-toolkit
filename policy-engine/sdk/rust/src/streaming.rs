@@ -127,7 +127,7 @@ impl AgentControl {
                 .post_model_call_intervention_point_result
                 .verdict
                 .decision
-                .applies_effects();
+                == Decision::Transform;
         let bytes = if transformed {
             synthesize_sse_stream(&model_run.value, &assembled_response)
                 .map_err(|error| streaming_fail_closed(error.message()))?
@@ -620,12 +620,15 @@ fn streaming_fail_closed(message: &str) -> AgentControlInterruption {
                 decision: Decision::Deny,
                 reason: Some("runtime_error:streaming_unsupported".to_string()),
                 message: Some(message.to_string()),
-                effects: Vec::new(),
+                transform: None,
+                evidence: None,
                 result_labels: Vec::new(),
             },
             transformed_policy_target: None,
             policy_input: None,
             action_identity: None,
+            input_identity: None,
+            enforced_identity: None,
         },
     ))
 }
