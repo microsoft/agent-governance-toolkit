@@ -61,6 +61,10 @@
       "additionalProperties": {
         "$ref": "#/$defs/annotator"
       }
+    },
+    "approval": {
+      "description": "AGT D5 optional top-level approval section. See approval.schema.json for the full shape.",
+      "$ref": "approval.schema.json"
     }
   },
   "$defs": {
