@@ -1,6 +1,7 @@
 pub type JsonValue = serde_json::Value;
 
 pub mod annotation;
+pub mod cedar;
 mod constants;
 #[cfg(feature = "default-dispatchers")]
 pub mod dispatchers;
@@ -22,6 +23,10 @@ pub mod verdict;
 
 pub use annotation::{
     AnnotationConfig, AnnotatorConfig, AnnotatorDispatcher, AnnotatorInvocation, AnnotatorType,
+};
+pub use cedar::{
+    build_cedar_request, translate_advice, CedarEntity, CedarPolicyDispatcher, CedarRequest,
+    CedarTestDispatcher,
 };
 #[cfg(feature = "default-dispatchers")]
 pub use dispatchers::{
