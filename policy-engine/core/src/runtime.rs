@@ -461,6 +461,15 @@ impl Runtime {
         annotators: Vec<String>,
         duration_ms: f64,
     ) {
+        // AGT D2 / AGT-EVIDENCE-1.0 §3: propagate the verbatim artefact
+        // string and the sorted pointer keys (not URL values) when the
+        // verdict carries `evidence`.
+        let (evidence_artefact, evidence_keys): (Option<String>, Vec<String>) =
+            match verdict.evidence.as_ref() {
+                Some(evidence) => (evidence.artefact.clone(), evidence.pointer_keys()),
+                None => (None, Vec::new()),
+            };
+
         self.emit_event(
             TelemetryEvent::new(TelemetryEventType::Decision, intervention_point)
                 .with_decision(verdict.decision)
@@ -468,10 +477,33 @@ impl Runtime {
                     safe_telemetry_reason_code(verdict.reason.as_deref()).as_deref(),
                 )
                 .with_optional_policy_id(policy_id)
+                .with_annotators(annotators.clone())
+                .with_enforcement_mode(mode)
+                .with_duration_ms(duration_ms)
+                .with_evidence(evidence_artefact.as_deref(), evidence_keys.clone()),
+        );
+
+        // AGT D2: when the decision is `Transform`, emit the dedicated
+        // `intervention_point.transformed` event in addition to the
+        // base Decision event so that single-event consumers and
+        // multi-event consumers both see the transformation.
+        if verdict.decision == Decision::Transform {
+            self.emit_event(
+                TelemetryEvent::new(
+                    TelemetryEventType::InterventionPointTransformed,
+                    intervention_point,
+                )
+                .with_decision(verdict.decision)
+                .with_optional_reason_code(
+                    safe_telemetry_reason_code(verdict.reason.as_deref()).as_deref(),
+                )
+                .with_optional_policy_id(policy_id)
                 .with_annotators(annotators)
                 .with_enforcement_mode(mode)
-                .with_duration_ms(duration_ms),
-        );
+                .with_duration_ms(duration_ms)
+                .with_evidence(evidence_artefact.as_deref(), evidence_keys),
+            );
+        }
     }
 
     fn emit_annotator_failed(
@@ -851,6 +883,119 @@ intervention_points:
         assert_eq!(
             result.verdict.reason.as_deref(),
             Some("runtime_error:transform_invalid")
+        );
+    }
+
+    // ── AGT D2 evidence propagation + Transformed event ───────────────
+
+    #[derive(Default)]
+    struct RecordingTelemetry {
+        events: Mutex<Vec<TelemetryEvent>>,
+    }
+
+    impl TelemetrySink for RecordingTelemetry {
+        fn emit(&self, event: TelemetryEvent) {
+            self.events.lock().unwrap().push(event);
+        }
+    }
+
+    fn runtime_with_recording_sink(policy_output: JsonValue) -> (Runtime, Arc<RecordingTelemetry>) {
+        let telemetry = Arc::new(RecordingTelemetry::default());
+        let runtime = Runtime::with_telemetry(
+            output_manifest(),
+            Arc::new(StaticAnnotator),
+            Arc::new(StaticPolicy::new(policy_output)),
+            telemetry.clone(),
+        )
+        .unwrap();
+        (runtime, telemetry)
+    }
+
+    #[test]
+    fn decision_event_carries_evidence_artefact_and_sorted_pointer_keys() {
+        let (runtime, telemetry) = runtime_with_recording_sink(json!({
+            "decision": "allow",
+            "evidence": {
+                "artefact": "sha256:abcd",
+                "verification_pointers": {
+                    "policy_registry": "https://x/policies",
+                    "issuer_pubkey": "https://x/keys"
+                }
+            }
+        }));
+        let _ = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "data"}}),
+        );
+
+        let events = telemetry.events.lock().unwrap();
+        let decision = events
+            .iter()
+            .find(|event| event.event_type == TelemetryEventType::Decision)
+            .expect("decision event emitted");
+        assert_eq!(decision.evidence_artefact.as_deref(), Some("sha256:abcd"));
+        // Sorted keys per AGT-EVIDENCE-1.0 §3 (BTreeMap iteration order).
+        assert_eq!(
+            decision.evidence_verification_pointer_keys,
+            vec!["issuer_pubkey", "policy_registry"]
+        );
+    }
+
+    #[test]
+    fn decision_event_evidence_metadata_is_clean_when_verdict_has_no_evidence() {
+        let (runtime, telemetry) = runtime_with_recording_sink(json!({"decision": "allow"}));
+        let _ = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "data"}}),
+        );
+
+        let events = telemetry.events.lock().unwrap();
+        let decision = events
+            .iter()
+            .find(|event| event.event_type == TelemetryEventType::Decision)
+            .expect("decision event emitted");
+        assert!(decision.evidence_artefact.is_none());
+        assert!(decision.evidence_verification_pointer_keys.is_empty());
+    }
+
+    #[test]
+    fn transform_decision_emits_dedicated_intervention_point_transformed_event() {
+        let (runtime, telemetry) = runtime_with_recording_sink(json!({
+            "decision": "transform",
+            "reason": "redacted",
+            "transform": {"path": "$policy_target.body", "value": "[REDACTED]"},
+            "evidence": {
+                "artefact": "sha256:cafe",
+                "verification_pointers": {"attestation": "https://x/att"}
+            }
+        }));
+        let _ = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "secret"}}),
+        );
+
+        let events = telemetry.events.lock().unwrap();
+        let event_types: Vec<_> = events.iter().map(|event| event.event_type).collect();
+        assert!(
+            event_types.contains(&TelemetryEventType::Decision),
+            "Decision event still emitted alongside Transformed event: {event_types:?}"
+        );
+        let transformed = events
+            .iter()
+            .find(|event| event.event_type == TelemetryEventType::InterventionPointTransformed)
+            .expect("AGT D2 intervention_point.transformed event must fire on Transform decision");
+        assert_eq!(transformed.decision, Some(Decision::Transform));
+        assert_eq!(transformed.reason_code.as_deref(), Some("redacted"));
+        assert_eq!(
+            transformed.evidence_artefact.as_deref(),
+            Some("sha256:cafe")
+        );
+        assert_eq!(
+            transformed.evidence_verification_pointer_keys,
+            vec!["attestation"]
         );
     }
 }

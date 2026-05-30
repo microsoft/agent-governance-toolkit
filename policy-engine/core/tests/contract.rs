@@ -1129,7 +1129,15 @@ annotators:
 
     let events = emitted.lock().unwrap().clone();
     let event_types: Vec<_> = events.iter().map(|event| event.event_type).collect();
-    assert_eq!(event_types, vec![TelemetryEventType::Decision]);
+    // AGT D2: a transform decision emits both the base Decision event
+    // and the dedicated InterventionPointTransformed event.
+    assert_eq!(
+        event_types,
+        vec![
+            TelemetryEventType::Decision,
+            TelemetryEventType::InterventionPointTransformed
+        ]
+    );
 
     let decision_event = &events[0];
     assert_eq!(decision_event.decision, Some(Decision::Transform));
@@ -1141,6 +1149,15 @@ annotators:
         Some(EnforcementMode::Enforce)
     );
     assert!(decision_event.duration_ms.unwrap() >= 0.0);
+
+    let transformed_event = &events[1];
+    assert_eq!(transformed_event.decision, Some(Decision::Transform));
+    assert_eq!(transformed_event.reason_code.as_deref(), Some("sanitized"));
+    assert_eq!(transformed_event.policy_id.as_deref(), Some("test_policy"));
+    assert_eq!(
+        transformed_event.enforcement_mode,
+        Some(EnforcementMode::Enforce)
+    );
 
     for event in events {
         assert!(!event.metadata.contains_key("policy_target"));

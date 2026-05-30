@@ -144,13 +144,18 @@
       ]
     },
     {
-      "name": "effect_applied",
+      "name": "intervention_point.transformed",
       "emitted_attribute_keys": [
         "event_type",
         "intervention_point",
         "policy_id",
         "enforcement_mode",
-        "metadata.effect_count"
+        "decision",
+        "duration_ms",
+        "reason_code",
+        "annotators",
+        "evidence_artefact",
+        "evidence_verification_pointer_keys"
       ],
       "guaranteed_withheld_fields": [
         "policy_target.value",
@@ -162,8 +167,8 @@
         "snapshot.tool_call.args",
         "snapshot.tool_result",
         "annotations.*",
-        "effect.value",
-        "effect.spans[].replacement",
+        "transform.value",
+        "evidence.verification_pointers.<url>",
         "secrets",
         "pii"
       ]
@@ -345,12 +350,14 @@
       ]
     },
     {
-      "name": "intervention_point.effect_applied",
+      "name": "intervention_point.transformed",
       "emitted_attribute_keys": [
         "intervention_point",
         "policy_type",
         "provider",
-        "effect_count"
+        "decision",
+        "evidence_artefact",
+        "evidence_verification_pointer_keys"
       ],
       "guaranteed_withheld_fields": [
         "policy_target.value",
@@ -362,8 +369,8 @@
         "snapshot.tool_call.args",
         "snapshot.tool_result",
         "annotations.*",
-        "effect.value",
-        "effect.spans[].replacement",
+        "transform.value",
+        "evidence.verification_pointers.<url>",
         "secrets",
         "pii"
       ]

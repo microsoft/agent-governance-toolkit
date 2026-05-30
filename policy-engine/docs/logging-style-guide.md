@@ -102,21 +102,32 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
       ]
     },
     {
-      "name": "effect_applied",
+      "name": "intervention_point.transformed",
       "required_fields": [
         "event_type",
         "intervention_point",
         "policy_id",
         "enforcement_mode",
-        "metadata.effect_count"
+        "decision",
+        "duration_ms"
       ],
-      "optional_fields": [],
+      "optional_fields": [
+        "reason_code",
+        "annotators",
+        "evidence_artefact",
+        "evidence_verification_pointer_keys"
+      ],
       "documented_attribute_keys": [
         "event_type",
         "intervention_point",
         "policy_id",
         "enforcement_mode",
-        "metadata.effect_count"
+        "decision",
+        "duration_ms",
+        "reason_code",
+        "annotators",
+        "evidence_artefact",
+        "evidence_verification_pointer_keys"
       ]
     },
     {

@@ -7,7 +7,10 @@ pub enum TelemetryEventType {
     AnnotatorDispatch,
     PolicyEvaluation,
     EvaluationTiming,
-    EffectApplied,
+    /// AGT D2: the runtime emits this event in addition to `Decision`
+    /// whenever the verdict is `Decision::Transform`. Wire name is
+    /// `intervention_point.transformed` per AGT-EVIDENCE-1.0 §3.
+    InterventionPointTransformed,
     AnnotatorFailed,
     PolicyFailed,
 }
@@ -19,7 +22,7 @@ impl TelemetryEventType {
             Self::AnnotatorDispatch => "annotator_dispatch",
             Self::PolicyEvaluation => "policy_evaluation",
             Self::EvaluationTiming => "evaluation_timing",
-            Self::EffectApplied => "effect_applied",
+            Self::InterventionPointTransformed => "intervention_point.transformed",
             Self::AnnotatorFailed => "annotator_failed",
             Self::PolicyFailed => "policy_failed",
         }
@@ -36,6 +39,16 @@ pub struct TelemetryEvent {
     pub annotators: Vec<String>,
     pub enforcement_mode: Option<EnforcementMode>,
     pub duration_ms: Option<f64>,
+    /// AGT D2 / AGT-EVIDENCE-1.0 §3 verbatim `artefact` string from the
+    /// originating verdict's `evidence` payload. `None` when the verdict
+    /// carried no evidence.
+    pub evidence_artefact: Option<String>,
+    /// AGT D2 / AGT-EVIDENCE-1.0 §3 sorted keys (not values) of the
+    /// originating verdict's `evidence.verification_pointers` map. Empty
+    /// when no pointers were attached. The URL values are intentionally
+    /// omitted to keep telemetry cardinality bounded; auditors recover
+    /// them from the audit record.
+    pub evidence_verification_pointer_keys: Vec<String>,
     pub metadata: BTreeMap<String, String>,
 }
 
@@ -50,6 +63,8 @@ impl TelemetryEvent {
             annotators: Vec::new(),
             enforcement_mode: None,
             duration_ms: None,
+            evidence_artefact: None,
+            evidence_verification_pointer_keys: Vec::new(),
             metadata: BTreeMap::new(),
         }
     }
@@ -103,6 +118,16 @@ impl TelemetryEvent {
         self.metadata.insert(key.to_string(), value.into());
         self
     }
+
+    /// Attach AGT D2 / AGT-EVIDENCE-1.0 §3 evidence fields from the
+    /// originating verdict. `artefact` is forwarded verbatim; the pointer
+    /// map is reduced to its sorted keys so the URL values never reach
+    /// telemetry sinks.
+    pub fn with_evidence(mut self, artefact: Option<&str>, pointer_keys: Vec<String>) -> Self {
+        self.evidence_artefact = artefact.map(str::to_string);
+        self.evidence_verification_pointer_keys = pointer_keys;
+        self
+    }
 }
 
 pub trait TelemetrySink: Send + Sync {
@@ -116,4 +141,40 @@ pub struct NoopTelemetrySink;
 
 impl TelemetrySink for NoopTelemetrySink {
     fn emit(&self, _event: TelemetryEvent) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evidence_metadata_carries_artefact_and_sorted_keys() {
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+            .with_evidence(
+                Some("sha256:abcd"),
+                vec!["issuer_pubkey".to_string(), "policy_registry".to_string()],
+            );
+        assert_eq!(event.evidence_artefact.as_deref(), Some("sha256:abcd"));
+        assert_eq!(
+            event.evidence_verification_pointer_keys,
+            vec!["issuer_pubkey", "policy_registry"]
+        );
+    }
+
+    #[test]
+    fn evidence_metadata_is_clean_when_no_evidence_attached() {
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input);
+        assert!(event.evidence_artefact.is_none());
+        assert!(event.evidence_verification_pointer_keys.is_empty());
+    }
+
+    #[test]
+    fn intervention_point_transformed_event_uses_spec_wire_name() {
+        // AGT D2 wire-name contract per AGT-EVIDENCE-1.0 §3.
+        let event = TelemetryEvent::new(
+            TelemetryEventType::InterventionPointTransformed,
+            InterventionPoint::Output,
+        );
+        assert_eq!(event.event_type.as_str(), "intervention_point.transformed");
+    }
 }

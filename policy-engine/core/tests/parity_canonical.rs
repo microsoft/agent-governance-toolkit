@@ -33,7 +33,7 @@ fn core_telemetry_event_names() -> BTreeSet<&'static str> {
         TelemetryEventType::AnnotatorDispatch,
         TelemetryEventType::PolicyEvaluation,
         TelemetryEventType::EvaluationTiming,
-        TelemetryEventType::EffectApplied,
+        TelemetryEventType::InterventionPointTransformed,
         TelemetryEventType::AnnotatorFailed,
         TelemetryEventType::PolicyFailed,
     ]
@@ -170,7 +170,7 @@ fn canonical_telemetry_redaction_matches_core_event_types() {
         TelemetryEventType::AnnotatorDispatch,
         TelemetryEventType::PolicyEvaluation,
         TelemetryEventType::EvaluationTiming,
-        TelemetryEventType::EffectApplied,
+        TelemetryEventType::InterventionPointTransformed,
         TelemetryEventType::AnnotatorFailed,
         TelemetryEventType::PolicyFailed,
     ]

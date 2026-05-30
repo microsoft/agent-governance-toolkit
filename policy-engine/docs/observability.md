@@ -6,7 +6,7 @@ ACS core emits structured telemetry through a synchronous `TelemetrySink` trait.
 
 `TelemetryEvent` carries a typed event kind plus ACS decision context. The common fields are intervention point, decision, reason code, policy id, annotator names, enforcement mode, duration in milliseconds, and a small metadata map for stable extensions. Decision events are emitted once for every intervention point evaluation. Perf events use the same shape.
 
-Known event kinds are `decision`, `annotator_dispatch`, `policy_evaluation`, `evaluation_timing`, `effect_applied`, `annotator_failed`, and `policy_failed`.
+Known event kinds are `decision`, `annotator_dispatch`, `policy_evaluation`, `evaluation_timing`, `intervention_point.transformed`, `annotator_failed`, and `policy_failed`. The `intervention_point.transformed` event is added by AGT D2 and fires in addition to the base `decision` event when the verdict is `transform` per `spec/SPECIFICATION-AGT-DELTA.md` D1. The upstream `effect_applied` event is removed by the same delta because effects are no longer part of the verdict surface.
 
 Default telemetry is content redacted. Core does not place raw policy targets, subject text, tool arguments, model output, annotation payload values, or redaction replacement contents into event attributes. Safe defaults include stable ids, names, modes, decisions, reason codes, durations, counts, lengths, and span counts. Policy reason text that is not shaped like a low cardinality code is reported as `policy_reason`.
 
