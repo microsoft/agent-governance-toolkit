@@ -15,6 +15,14 @@ pub enum RuntimeError {
     EffectTargetForbidden(String),
     ResourceLimitExceeded(String),
     ApprovalActionMismatch(String),
+    /// AGT D1.1: a `transform` verdict's `path` is outside `$policy_target`.
+    TransformTargetForbidden(String),
+    /// AGT D1.1: a `transform` verdict's path did not resolve, or value
+    /// could not be set.
+    TransformInvalid(String),
+    /// AGT D5: an `escalate` verdict was returned but no resolver matched
+    /// the manifest's `approval.default_resolver`.
+    ApprovalResolverMissing(String),
 }
 
 impl RuntimeError {
@@ -33,6 +41,9 @@ impl RuntimeError {
             Self::EffectTargetForbidden(_) => "runtime_error:effect_target_forbidden",
             Self::ResourceLimitExceeded(_) => "runtime_error:resource_limit_exceeded",
             Self::ApprovalActionMismatch(_) => "runtime_error:approval_action_mismatch",
+            Self::TransformTargetForbidden(_) => "runtime_error:transform_target_forbidden",
+            Self::TransformInvalid(_) => "runtime_error:transform_invalid",
+            Self::ApprovalResolverMissing(_) => "runtime_error:approval_resolver_missing",
         }
     }
 
@@ -50,7 +61,10 @@ impl RuntimeError {
             | Self::EffectInvalid(detail)
             | Self::EffectTargetForbidden(detail)
             | Self::ResourceLimitExceeded(detail)
-            | Self::ApprovalActionMismatch(detail) => detail,
+            | Self::ApprovalActionMismatch(detail)
+            | Self::TransformTargetForbidden(detail)
+            | Self::TransformInvalid(detail)
+            | Self::ApprovalResolverMissing(detail) => detail,
         }
     }
 }

@@ -1,7 +1,10 @@
-use crate::{effects::Effect, JsonValue, RuntimeError};
+use crate::{effects::Effect, paths::PathRoot, JsonPath, JsonValue, RuntimeError};
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 
+/// Verdict decision. The four values `Allow`, `Deny`, `Warn`, and `Escalate`
+/// match upstream ACS §13.1. The fifth value `Transform` is the AGT addition
+/// per `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` D1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Decision {
@@ -9,6 +12,7 @@ pub enum Decision {
     Deny,
     Warn,
     Escalate,
+    Transform,
 }
 
 impl Decision {
@@ -18,11 +22,23 @@ impl Decision {
             Self::Deny => "deny",
             Self::Warn => "warn",
             Self::Escalate => "escalate",
+            Self::Transform => "transform",
         }
     }
 
+    /// Whether the legacy `effects` array on the verdict is applied for this
+    /// decision. With AGT D1 the canonical path is the `Transform` decision;
+    /// `effects` remain accepted by the engine for upstream-ACS compatibility
+    /// in this iteration but are scheduled for removal once parity tests are
+    /// migrated.
     pub fn applies_effects(self) -> bool {
         matches!(self, Self::Allow | Self::Warn | Self::Escalate)
+    }
+
+    /// Whether this decision permits the action to proceed (after any
+    /// applicable transform).
+    pub fn permits(self) -> bool {
+        matches!(self, Self::Allow | Self::Warn | Self::Transform)
     }
 }
 
@@ -41,8 +57,50 @@ impl FromStr for Decision {
             "deny" => Ok(Self::Deny),
             "warn" => Ok(Self::Warn),
             "escalate" => Ok(Self::Escalate),
+            "transform" => Ok(Self::Transform),
             other => Err(format!("unsupported decision '{other}'")),
         }
+    }
+}
+
+/// Single-target replacement returned by a `Transform` verdict per
+/// `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` D1.1.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Transform {
+    /// Path rooted at `$policy_target`.
+    pub path: String,
+    /// New value to set at `path`.
+    pub value: JsonValue,
+}
+
+impl Transform {
+    pub fn from_value(value: &JsonValue) -> Result<Self, RuntimeError> {
+        let object = value.as_object().ok_or_else(|| {
+            RuntimeError::PolicyOutputInvalid("transform must be an object".to_string())
+        })?;
+        let path = object
+            .get("path")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| {
+                RuntimeError::PolicyOutputInvalid(
+                    "transform.path is required when decision is transform".to_string(),
+                )
+            })?;
+        let parsed = JsonPath::parse(path).map_err(|err| {
+            RuntimeError::PolicyOutputInvalid(format!("transform.path invalid: {err}"))
+        })?;
+        if parsed.root() != PathRoot::PolicyTarget {
+            return Err(RuntimeError::TransformTargetForbidden(path.to_string()));
+        }
+        let value = object.get("value").cloned().ok_or_else(|| {
+            RuntimeError::PolicyOutputInvalid(
+                "transform.value is required when decision is transform".to_string(),
+            )
+        })?;
+        Ok(Self {
+            path: path.to_string(),
+            value,
+        })
     }
 }
 
@@ -55,6 +113,15 @@ pub struct Verdict {
     pub message: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<Effect>,
+    /// AGT D1.1 single-target replacement payload. Present only when
+    /// `decision` is `Transform`. Forbidden on every other decision.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transform: Option<Transform>,
+    /// AGT D2 opaque evidence object that high-assurance dispatchers MAY
+    /// attach to the verdict. The runtime propagates the value verbatim and
+    /// performs no semantic validation on it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<Evidence>,
     /// Policy-supplied information-flow labels describing the data produced at
     /// this sink. The core stores nothing and propagates nothing; it returns
     /// these verbatim so the host can persist them with the produced data and
@@ -76,8 +143,80 @@ impl Verdict {
             reason: Some(error.reason().to_string()),
             message: Some(message),
             effects: Vec::new(),
+            transform: None,
+            evidence: None,
             result_labels: Vec::new(),
         }
+    }
+}
+
+/// AGT D2 evidence payload that high-assurance dispatchers MAY attach to a
+/// verdict. The runtime stores the payload verbatim and propagates it to
+/// telemetry events per AGT-EVIDENCE-1.0.
+///
+/// Total serialized size is bounded; oversized payloads MUST be rejected by
+/// the dispatcher boundary before reaching the verdict.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Evidence {
+    /// Content address or URI of an offline-verifiable proof artefact.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artefact: Option<String>,
+    /// Named pointers an auditor MAY consult to re-verify the decision.
+    #[serde(
+        default,
+        rename = "verification_pointers",
+        skip_serializing_if = "std::collections::BTreeMap::is_empty"
+    )]
+    pub verification_pointers: std::collections::BTreeMap<String, String>,
+}
+
+impl Evidence {
+    pub fn from_value(value: &JsonValue) -> Result<Self, RuntimeError> {
+        let object = value.as_object().ok_or_else(|| {
+            RuntimeError::PolicyOutputInvalid("evidence must be an object".to_string())
+        })?;
+
+        let artefact = match object.get("artefact") {
+            None | Some(JsonValue::Null) => None,
+            Some(JsonValue::String(value)) => Some(value.clone()),
+            _ => {
+                return Err(RuntimeError::PolicyOutputInvalid(
+                    "evidence.artefact must be a string".to_string(),
+                ))
+            }
+        };
+
+        let verification_pointers = match object.get("verification_pointers") {
+            None | Some(JsonValue::Null) => std::collections::BTreeMap::new(),
+            Some(JsonValue::Object(map)) => {
+                let mut out = std::collections::BTreeMap::new();
+                for (key, value) in map.iter() {
+                    let url = value.as_str().ok_or_else(|| {
+                        RuntimeError::PolicyOutputInvalid(format!(
+                            "evidence.verification_pointers.{key} must be a string"
+                        ))
+                    })?;
+                    out.insert(key.clone(), url.to_string());
+                }
+                out
+            }
+            _ => {
+                return Err(RuntimeError::PolicyOutputInvalid(
+                    "evidence.verification_pointers must be an object of strings".to_string(),
+                ))
+            }
+        };
+
+        Ok(Self {
+            artefact,
+            verification_pointers,
+        })
+    }
+
+    /// Sorted list of verification pointer keys, used as low-cardinality
+    /// telemetry metadata per AGT-EVIDENCE-1.0 §3.
+    pub fn pointer_keys(&self) -> Vec<String> {
+        self.verification_pointers.keys().cloned().collect()
     }
 }
 
@@ -154,11 +293,33 @@ pub fn normalize_policy_output(output: JsonValue) -> Result<Verdict, RuntimeErro
         }
     };
 
+    let transform = match (decision, object.get("transform")) {
+        (Decision::Transform, None | Some(JsonValue::Null)) => {
+            return Err(RuntimeError::PolicyOutputInvalid(
+                "transform decision requires a transform object".to_string(),
+            ))
+        }
+        (Decision::Transform, Some(value)) => Some(Transform::from_value(value)?),
+        (_, Some(JsonValue::Null)) | (_, None) => None,
+        (_, Some(_)) => {
+            return Err(RuntimeError::PolicyOutputInvalid(
+                "transform is only permitted on the transform decision".to_string(),
+            ))
+        }
+    };
+
+    let evidence = match object.get("evidence") {
+        None | Some(JsonValue::Null) => None,
+        Some(value) => Some(Evidence::from_value(value)?),
+    };
+
     Ok(Verdict {
         decision,
         reason,
         message,
         effects,
+        transform,
+        evidence,
         result_labels,
     })
 }
@@ -212,5 +373,154 @@ mod tests {
             normalize_policy_output(json!({"decision": "allow", "result_labels": ["ok", 7]}))
                 .unwrap_err();
         assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    // ── AGT D1 transform decision ─────────────────────────────────────
+
+    #[test]
+    fn transform_decision_round_trips() {
+        let verdict = normalize_policy_output(json!({
+            "decision": "transform",
+            "transform": {
+                "path": "$policy_target.body",
+                "value": "[REDACTED]"
+            }
+        }))
+        .unwrap();
+        assert_eq!(verdict.decision, Decision::Transform);
+        let transform = verdict.transform.as_ref().expect("transform present");
+        assert_eq!(transform.path, "$policy_target.body");
+        assert_eq!(transform.value, json!("[REDACTED]"));
+    }
+
+    #[test]
+    fn transform_decision_without_body_fails_closed() {
+        let error = normalize_policy_output(json!({"decision": "transform"})).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn transform_path_outside_policy_target_fails_closed() {
+        let error = normalize_policy_output(json!({
+            "decision": "transform",
+            "transform": {"path": "$snap.tool_call.args", "value": "x"}
+        }))
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:transform_target_forbidden");
+    }
+
+    #[test]
+    fn transform_on_non_transform_decision_fails_closed() {
+        let error = normalize_policy_output(json!({
+            "decision": "allow",
+            "transform": {"path": "$policy_target.x", "value": 1}
+        }))
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn transform_value_null_is_accepted() {
+        // null is a valid JSON value; transform.value = null sets the target
+        // to null, not a missing field. AGT D1.1 says value is required and
+        // valid JSON; null is required-and-valid.
+        let verdict = normalize_policy_output(json!({
+            "decision": "transform",
+            "transform": {"path": "$policy_target.field", "value": null}
+        }))
+        .unwrap();
+        assert_eq!(
+            verdict.transform.as_ref().unwrap().value,
+            serde_json::Value::Null
+        );
+    }
+
+    // ── AGT D2 evidence ───────────────────────────────────────────────
+
+    #[test]
+    fn evidence_round_trips() {
+        let verdict = normalize_policy_output(json!({
+            "decision": "allow",
+            "evidence": {
+                "artefact": "sha256:abcd",
+                "verification_pointers": {
+                    "issuer_pubkey": "https://x/keys",
+                    "policy_registry": "https://x/policies/v1/"
+                }
+            }
+        }))
+        .unwrap();
+        let evidence = verdict.evidence.as_ref().expect("evidence present");
+        assert_eq!(evidence.artefact.as_deref(), Some("sha256:abcd"));
+        assert_eq!(
+            evidence.pointer_keys(),
+            vec!["issuer_pubkey", "policy_registry"]
+        );
+    }
+
+    #[test]
+    fn evidence_missing_is_none() {
+        let verdict = normalize_policy_output(json!({"decision": "allow"})).unwrap();
+        assert!(verdict.evidence.is_none());
+    }
+
+    #[test]
+    fn evidence_non_object_fails_closed() {
+        let error =
+            normalize_policy_output(json!({"decision": "allow", "evidence": "sha256:bad"}))
+                .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn evidence_artefact_non_string_fails_closed() {
+        let error = normalize_policy_output(json!({
+            "decision": "allow",
+            "evidence": {"artefact": 42}
+        }))
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn evidence_pointer_value_must_be_string() {
+        let error = normalize_policy_output(json!({
+            "decision": "allow",
+            "evidence": {
+                "verification_pointers": {"issuer_pubkey": 42}
+            }
+        }))
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    // ── AGT D1.4 permits() helper ─────────────────────────────────────
+
+    #[test]
+    fn decision_permits_correctly() {
+        assert!(Decision::Allow.permits());
+        assert!(Decision::Warn.permits());
+        assert!(Decision::Transform.permits());
+        assert!(!Decision::Deny.permits());
+        assert!(!Decision::Escalate.permits());
+    }
+
+    // ── AGT D6 reserved reasons present in error.rs ───────────────────
+
+    #[test]
+    fn agt_reserved_reasons_exist() {
+        let reasons = [
+            RuntimeError::TransformTargetForbidden(String::new()).reason(),
+            RuntimeError::TransformInvalid(String::new()).reason(),
+            RuntimeError::ApprovalResolverMissing(String::new()).reason(),
+        ];
+        assert_eq!(
+            reasons,
+            [
+                "runtime_error:transform_target_forbidden",
+                "runtime_error:transform_invalid",
+                "runtime_error:approval_resolver_missing"
+            ]
+        );
     }
 }
