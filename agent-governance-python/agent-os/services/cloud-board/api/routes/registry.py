@@ -6,8 +6,8 @@ Registry Routes
 API endpoints for agent registration and discovery.
 """
 
-import hashlib
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256 as _sha256
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -166,7 +166,7 @@ async def register_agent(request: RegisterAgentRequest):
     # 256-bit (64 hex char) SHA-256 to avoid 64-bit collision resistance on a
     # truncated hash — keys are public, so collision search is feasible at
     # ~2^64 with 128-bit truncation.
-    key_hash = hashlib.sha256(key_bytes).hexdigest()
+    key_hash = _sha256(key_bytes).hexdigest()
     agent_did = f"did:nexus:{key_hash}"
     if request.identity.did != agent_did:
         raise HTTPException(
@@ -213,9 +213,8 @@ async def register_agent(request: RegisterAgentRequest):
     }
 
     # Generate manifest hash
-    manifest_hash = hashlib.sha256(
-        json.dumps(_agents[agent_did], sort_keys=True).encode()
-    ).hexdigest()
+    manifest_hash = _sha256(
+        json.dumps(_agents[agent_did], sort_keys=True).encode()).hexdigest()
 
     return RegisterAgentResponse(
         success=True,
@@ -366,7 +365,7 @@ async def update_agent(
         ) from None
 
     # Verify the derived DID matches the URL (full 256-bit SHA-256 hex).
-    derived_did = f"did:nexus:{hashlib.sha256(key_bytes).hexdigest()}"
+    derived_did = f"did:nexus:{_sha256(key_bytes).hexdigest()}"
     if derived_did != agent_did or request.identity.did != agent_did:
         raise HTTPException(
             status_code=403,
@@ -390,9 +389,8 @@ async def update_agent(
         }
     )
 
-    manifest_hash = hashlib.sha256(
-        json.dumps(_agents[agent_did], sort_keys=True).encode()
-    ).hexdigest()
+    manifest_hash = _sha256(
+        json.dumps(_agents[agent_did], sort_keys=True).encode()).hexdigest()
 
     return RegisterAgentResponse(
         success=True,
@@ -543,3 +541,5 @@ def _get_tier(score: int) -> str:
         return "probationary"
     else:
         return "untrusted"
+
+
