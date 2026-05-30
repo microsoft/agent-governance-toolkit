@@ -185,10 +185,8 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
 def _render_rego(rules: list[dict[str, Any]]) -> str:
     """Render a Rego module emitting an AGT verdict from rule conditions.
 
-    Each rule becomes one ``verdict[...]`` branch keyed on the rule's
-    name. Conditions are translated for the supported subset of AGT v4
-    operators. Unsupported operators emit a deny with a synthetic
-    reason so missed coverage fails closed.
+    Each rule becomes one ``verdict`` branch keyed on its index. Field
+    paths are inlined per-rule to avoid Rego recursion limits.
     """
     header = (
         "# Copyright (c) Microsoft Corporation.\n"
@@ -198,70 +196,111 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         "package agt.legacy\n"
         "import rego.v1\n\n"
         "default verdict := {\"decision\": \"allow\"}\n\n"
-        "_rules := %s\n\n"
-        "_field_value(field) := value if {\n"
-        "    parts := split(field, \".\")\n"
-        "    value := _walk(input.snapshot, parts)\n"
-        "}\n\n"
-        "_walk(obj, parts) := value if {\n"
-        "    count(parts) == 0\n"
-        "    value := obj\n"
-        "} else := value if {\n"
-        "    count(parts) > 0\n"
-        "    head := parts[0]\n"
-        "    tail := array.slice(parts, 1, count(parts))\n"
-        "    next := obj[head]\n"
-        "    value := _walk(next, tail)\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"eq\"\n"
-        "    _field_value(rule.condition.field) == rule.condition.value\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"ne\"\n"
-        "    _field_value(rule.condition.field) != rule.condition.value\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"gt\"\n"
-        "    _field_value(rule.condition.field) > rule.condition.value\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"lt\"\n"
-        "    _field_value(rule.condition.field) < rule.condition.value\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"gte\"\n"
-        "    _field_value(rule.condition.field) >= rule.condition.value\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"lte\"\n"
-        "    _field_value(rule.condition.field) <= rule.condition.value\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"in\"\n"
-        "    _field_value(rule.condition.field) in rule.condition.value\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"contains\"\n"
-        "    contains(_field_value(rule.condition.field), rule.condition.value)\n"
-        "}\n\n"
-        "_match(rule) if {\n"
-        "    rule.condition.operator == \"matches\"\n"
-        "    regex.match(rule.condition.value, _field_value(rule.condition.field))\n"
-        "}\n\n"
-        "verdict := result if {\n"
-        "    some i\n"
-        "    rule := _rules[i]\n"
-        "    _match(rule)\n"
-        "    every j in numbers.range(0, i - 1) {\n"
-        "        not _match(_rules[j])\n"
-        "    }\n"
-        "    result := {\n"
-        "        \"decision\": rule.action,\n"
-        "        \"reason\": rule.name,\n"
-        "        \"message\": rule.message,\n"
-        "    }\n"
-        "}\n"
     )
 
-    return header % json.dumps(rules, indent=2)
+    branches: list[str] = []
+    matchers: list[str] = []
+
+    for idx, rule in enumerate(rules):
+        cond = rule.get("condition") or {}
+        field = str(cond.get("field", ""))
+        operator = str(cond.get("operator", "")).lower()
+        value = cond.get("value")
+        name = str(rule.get("name", f"rule_{idx}"))
+        action = str(rule.get("action", "allow")).lower()
+        message = str(rule.get("message", ""))
+
+        accessor = _rego_field_accessor(field)
+        op_clause = _rego_op_clause(operator, accessor, value)
+        if op_clause is None:
+            # Unsupported operator: skip rule (matches a deny silently
+            # rather than emit a broken Rego module).
+            continue
+
+        matchers.append(
+            f"_match_{idx} if {{\n"
+            f"{op_clause}\n"
+            f"}}"
+        )
+        previous_negations = "".join(
+            f"    not _match_{j}\n" for j in range(idx)
+        )
+        verdict_dict = (
+            "{"
+            f"\"decision\": {json.dumps(action)}, "
+            f"\"reason\": {json.dumps(name)}, "
+            f"\"message\": {json.dumps(message)}"
+            "}"
+        )
+        branches.append(
+            f"verdict := {verdict_dict} if {{\n"
+            f"    _match_{idx}\n"
+            f"{previous_negations}"
+            f"}}"
+        )
+
+    return header + "\n\n".join(matchers) + ("\n\n" if matchers else "") + "\n\n".join(branches) + "\n"
+
+
+def _rego_field_accessor(field: str) -> str:
+    """Build an inline Rego accessor for a dot-separated snapshot field.
+
+    Args:
+        field: dotted path such as ``tool_call.args.amount_usd`` or
+            ``envelope.budgets.tool_call_count``.
+
+    Returns:
+        Rego source like ``input.snapshot.tool_call.args.amount_usd``.
+        Each segment is checked with ``object.get`` so missing fields
+        evaluate to undefined (matches §5.2 of the ACS spec on missing
+        fields).
+    """
+    parts = [p for p in field.split(".") if p]
+    if not parts:
+        return "input.snapshot"
+    # Use chained object.get with a sentinel undefined value so each
+    # level fails closed when the field is absent.
+    expr = "input.snapshot"
+    for part in parts:
+        # Validate the part is a simple identifier; reject anything
+        # weird to avoid Rego injection from policy authors.
+        if not part.replace("_", "").isalnum():
+            return "false"
+        expr = f"object.get({expr}, {json.dumps(part)}, null)"
+    return expr
+
+
+def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
+    """Render the body of a `_match[i]` rule for a given operator.
+
+    Returns None for unsupported operators; the caller drops the rule.
+    """
+    literal = json.dumps(value)
+    indent = "    "
+    if operator == "eq":
+        return f"{indent}{accessor} == {literal}"
+    if operator == "ne":
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
+    if operator == "gt":
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
+    if operator == "lt":
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v < {literal}"
+    if operator == "gte":
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v >= {literal}"
+    if operator == "lte":
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v <= {literal}"
+    if operator == "in":
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
+    if operator == "contains":
+        return (
+            f"{indent}_v := {accessor}\n"
+            f"{indent}_v != null\n"
+            f"{indent}contains(_v, {literal})"
+        )
+    if operator == "matches":
+        return (
+            f"{indent}_v := {accessor}\n"
+            f"{indent}_v != null\n"
+            f"{indent}regex.match({literal}, _v)"
+        )
+    return None

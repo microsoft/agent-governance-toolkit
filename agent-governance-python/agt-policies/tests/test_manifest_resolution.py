@@ -294,9 +294,10 @@ def test_resolve_inherit_false_truncates_chain(tmp_path: Path) -> None:
     assert len(metadata["chain"]) == 2  # discovery sees both, _apply_inheritance trims later
     bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
     rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
-    # Only the child's rule should be in the rendered rules array
-    assert '"name": "c"' in rego
-    assert '"name": "p"' not in rego
+    # Only the child's rule should be in the rendered rules; reason
+    # carries the rule name in the generated verdict body.
+    assert '"reason": "c"' in rego
+    assert '"reason": "p"' not in rego
 
 
 def test_resolve_scope_filter_drops_non_matching(tmp_path: Path) -> None:
@@ -314,8 +315,8 @@ def test_resolve_scope_filter_drops_non_matching(tmp_path: Path) -> None:
     manifest = resolve_manifest(root, action)
     bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
     rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
-    assert '"name": "p"' not in rego  # parent scope did not match
-    assert '"name": "c"' in rego
+    assert '"reason": "p"' not in rego  # parent scope did not match
+    assert '"reason": "c"' in rego
 
 
 def test_resolve_intervention_points_union_annotations(tmp_path: Path) -> None:
