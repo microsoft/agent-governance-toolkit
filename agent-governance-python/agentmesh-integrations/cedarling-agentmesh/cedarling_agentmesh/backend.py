@@ -10,6 +10,7 @@ pipeline without modifying AGT core.
 from __future__ import annotations
 
 import logging
+import warnings
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
@@ -18,9 +19,51 @@ import cedarling_python
 
 logger = logging.getLogger(__name__)
 
+_REMOVED_PARAMS: dict[str, str] = {
+    "mode": (
+        "The 'mode' parameter has been removed. HTTP evaluation is no longer supported. "
+        "Install cedarling-python and use the default in-process engine. "
+    ),
+    "cedarling_url": (
+        "The 'cedarling_url' parameter and HTTP evaluation mode have been removed. "
+        "The backend now requires cedarling-python bindings. "
+    ),
+    "tokens": (
+        "The 'tokens' constructor parameter has been removed. "
+        "Pass tokens per-request via the 'tokens' key in the evaluate() dict instead: "
+        "evaluator.evaluate({'tokens': {'Namespace::TokenType': '<jwt>'}, ...}). "
+    ),
+    "timeout_seconds": (
+        "The 'timeout_seconds' parameter has been removed along with HTTP evaluation mode. "
+        "There is no timeout applicable to the in-process cedarling-python engine."
+    ),
+}
+
 
 def _tool_to_cedar_action(tool_name: str) -> str:
     return "".join(part.capitalize() for part in tool_name.split("_"))
+
+
+def _validate_tokens(tokens: Any) -> dict[str, str]:
+    if not isinstance(tokens, dict):
+        raise TypeError(
+            f"'tokens' must be a dict mapping entity type names to JWT strings "
+            f"(e.g. {{'AGT::Access_Token': '<jwt>'}}), got {type(tokens).__name__!r}."
+        )
+    bad = {k: type(v).__name__ for k, v in tokens.items() if not isinstance(v, str)}
+    if bad:
+        raise TypeError(
+            f"All values in 'tokens' must be JWT strings. "
+            f"Non-string values found: {bad}. "
+            f"Expected shape: dict[str, str] e.g. {{'AGT::Access_Token': '<jwt>'}}."
+        )
+    bad_keys = [k for k in tokens if not isinstance(k, str)]
+    if bad_keys:
+        raise TypeError(
+            f"All keys in 'tokens' must be Cedar entity type name strings "
+            f"(e.g. 'AGT::Access_Token'). Non-string keys: {bad_keys!r}."
+        )
+    return tokens
 
 
 class CedarlingBackend:
@@ -39,7 +82,7 @@ class CedarlingBackend:
                              ``principal_attributes`` in the request dict.
         ``"multi-issuer"`` - authorize with JWT tokens from one or more
                              issuers. Include a ``tokens`` key in the
-                             request dict (``{"AGENT::TokenType": "jwt", ...}``).
+                             request dict (``{"AGT::TokenType": "<jwt>", ...}``).
     """
 
     def __init__(
@@ -52,7 +95,23 @@ class CedarlingBackend:
         resource_entity_type: str = "Resource",
         action_namespace: str = "Action",
         cedarling_instance: Optional[cedarling_python.Cedarling] = None,
+        **kwargs: Any,
     ) -> None:
+        for removed_param, guidance in _REMOVED_PARAMS.items():
+            if removed_param in kwargs:
+                warnings.warn(
+                    guidance,
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                kwargs.pop(removed_param)
+
+        if kwargs:
+            unknown = ", ".join(f"'{k}'" for k in sorted(kwargs))
+            raise TypeError(
+                f"CedarlingBackend.__init__() got unexpected keyword argument(s): {unknown}."
+            )
+
         cfg: dict[str, Any] = dict(bootstrap_config) if bootstrap_config else {}
         cfg.setdefault("CEDARLING_APPLICATION_NAME", application_name)
         self._bootstrap_config = cfg
@@ -72,10 +131,13 @@ class CedarlingBackend:
         return "cedarling"
 
     def evaluate(self, request: dict[str, Any]) -> BackendDecision:
-        if self._auth_type == "multi-issuer" and "tokens" not in request:
-            raise ValueError(
-                "multi-issuer auth requires a 'tokens' key in the request dict"
-            )
+        if self._auth_type == "multi-issuer":
+            if "tokens" not in request:
+                raise ValueError(
+                    "multi-issuer auth requires a 'tokens' key in the request dict. "
+                )
+            _validate_tokens(request["tokens"])
+
         start = datetime.now(timezone.utc)
         try:
             result = self._evaluate(request)
