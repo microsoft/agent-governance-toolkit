@@ -1,0 +1,199 @@
+{
+  "$id": "https://agent-control-specification.test/manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_control_specification_version",
+    "policies",
+    "intervention_points"
+  ],
+  "properties": {
+    "agent_control_specification_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": true,
+    "extends": {
+      "description": "Ordered array of manifest paths. File-based loaders resolve entries relative to the including manifest, merge additively, and validate the resolved manifest.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "policies": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/policy"
+      }
+    },
+    "intervention_points": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "agent_startup",
+          "input",
+          "pre_model_call",
+          "post_model_call",
+          "pre_tool_call",
+          "post_tool_call",
+          "output",
+          "agent_shutdown"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/intervention_point"
+      },
+      "minProperties": 1
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "annotators": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/annotator"
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "rego"
+            },
+            "query": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bundle": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "test"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "adapter"
+          ],
+          "properties": {
+            "type": {
+              "const": "custom"
+            },
+            "adapter": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "policy_binding": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "annotation": {
+      "type": "object",
+      "required": [
+        "from"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "additionalProperties": true
+    },
+    "annotator": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "classifier",
+            "llm",
+            "endpoint"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "intervention_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_target",
+        "policy"
+      ],
+      "properties": {
+        "policy_target": {
+          "$ref": "#/$defs/path"
+        },
+        "policy_target_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tool_name_from": {
+          "$ref": "#/$defs/path"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/annotation"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/policy_binding"
+        }
+      }
+    }
+  }
+}

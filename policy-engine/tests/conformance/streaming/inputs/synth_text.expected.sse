@@ -1,0 +1,4 @@
+data: {"id":"cmpl-1","created":1,"model":"gpt-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"[redacted]"},"finish_reason":"stop"}]}
+
+data: [DONE]
+

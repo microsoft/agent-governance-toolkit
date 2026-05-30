@@ -1,0 +1,26 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "cg-signal"
+extends: []
+policies:
+  cg_signal:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.cg_signal.verdict
+intervention_points:
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      message_dlp:
+        from: "$policy_target.message"
+    policy:
+      id: cg_signal
+      query: data.agent_control_specification.cg_signal.pre_tool_call_verdict
+tools:
+  signal.send_message: {}
+  signal.admin: {}
+annotators:
+  message_dlp:
+    type: classifier

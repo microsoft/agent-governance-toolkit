@@ -1,0 +1,569 @@
+import { createHash } from "node:crypto";
+import * as native from "../native.js";
+import {
+  AgentControlBlockedError,
+  AgentControlInterruptionError,
+  AgentControlSuspendedError,
+  transformedOr,
+} from "./adapter-helpers";
+
+export { AgentControlBlockedError, AgentControlInterruptionError, AgentControlSuspendedError };
+
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export const InterventionPoint = Object.freeze({
+  AgentStartup: "agent_startup",
+  Input: "input",
+  PreModelCall: "pre_model_call",
+  PostModelCall: "post_model_call",
+  PreToolCall: "pre_tool_call",
+  PostToolCall: "post_tool_call",
+  Output: "output",
+  AgentShutdown: "agent_shutdown",
+} as const);
+export type InterventionPoint = (typeof InterventionPoint)[keyof typeof InterventionPoint];
+
+export const EnforcementMode = Object.freeze({
+  Enforce: "enforce",
+  EvaluateOnly: "evaluate_only",
+} as const);
+export type EnforcementMode = (typeof EnforcementMode)[keyof typeof EnforcementMode];
+
+export const Decision = Object.freeze({
+  Allow: "allow",
+  Deny: "deny",
+  Warn: "warn",
+  Escalate: "escalate",
+} as const);
+export type Decision = (typeof Decision)[keyof typeof Decision];
+
+export const PerfTelemetry = Object.freeze({
+  Off: 0,
+  External: 1,
+  Full: 2,
+} as const);
+export type PerfTelemetry = (typeof PerfTelemetry)[keyof typeof PerfTelemetry];
+
+export const ApprovalOutcome = Object.freeze({
+  Allow: "allow",
+  Deny: "deny",
+  Suspend: "suspend",
+} as const);
+export type ApprovalOutcome = (typeof ApprovalOutcome)[keyof typeof ApprovalOutcome];
+
+export interface ApprovalResolution {
+  outcome: ApprovalOutcome;
+  handle?: JsonValue;
+  actionIdentity?: string;
+}
+
+export const ApprovalResolution = Object.freeze({
+  allow(actionIdentity: string): ApprovalResolution {
+    return { outcome: ApprovalOutcome.Allow, actionIdentity };
+  },
+  deny(): ApprovalResolution {
+    return { outcome: ApprovalOutcome.Deny };
+  },
+  suspend(handle: JsonValue | undefined, actionIdentity: string): ApprovalResolution {
+    return { outcome: ApprovalOutcome.Suspend, handle, actionIdentity };
+  },
+});
+
+export type ApprovalResolver = (
+  interventionPoint: InterventionPoint,
+  result: InterventionPointResult,
+) => Promise<ApprovalResolution> | ApprovalResolution;
+
+export interface Verdict {
+  decision: Decision;
+  reason?: string | null;
+  message?: string | null;
+  effects?: Array<Record<string, JsonValue>>;
+  result_labels?: string[];
+}
+
+export interface InterventionPointRequest {
+  interventionPoint: InterventionPoint;
+  snapshot: JsonValue;
+  mode?: EnforcementMode;
+}
+
+export interface InterventionPointResult {
+  verdict: Verdict;
+  transformedPolicyTarget?: JsonValue;
+  policyInput?: JsonValue;
+  actionIdentity?: string;
+}
+
+export interface RunResult<T = JsonValue> {
+  value: T;
+  inputResult: InterventionPointResult;
+  outputResult: InterventionPointResult;
+}
+
+export interface ToolRunResult<T = JsonValue> {
+  value: T;
+  preToolCallResult: InterventionPointResult;
+  postToolCallResult: InterventionPointResult;
+}
+
+export interface AnnotatorDispatcher {
+  dispatch(
+    annotatorName: string,
+    annotatorConfig: Record<string, JsonValue>,
+    preliminaryPolicyInput: JsonValue,
+  ): Promise<JsonValue> | JsonValue;
+}
+
+export interface PolicyDispatcher {
+  evaluate(invocation: Record<string, JsonValue>): Promise<Record<string, JsonValue>> | Record<string, JsonValue>;
+}
+
+export interface RuntimeClient {
+  evaluateInterventionPoint(request: InterventionPointRequest): Promise<InterventionPointResult>;
+}
+
+type NativeRuntime = {
+  evaluate(request: Record<string, JsonValue>): Promise<Record<string, JsonValue>>;
+};
+
+type NativeRuntimeCallback = (err: Error | null, argsJson: string) => Promise<string>;
+
+type NativeRuntimeConstructor = {
+  new (
+    manifest: string,
+    annotatorCallback: NativeRuntimeCallback | undefined,
+    policyCallback: NativeRuntimeCallback | undefined,
+    perfTelemetry?: PerfTelemetry,
+  ): NativeRuntime;
+  fromPath(
+    path: string,
+    annotatorCallback: NativeRuntimeCallback | undefined,
+    policyCallback: NativeRuntimeCallback | undefined,
+    perfTelemetry?: PerfTelemetry,
+  ): NativeRuntime;
+  fromManifestChain(
+    manifests: string[],
+    annotatorCallback: NativeRuntimeCallback | undefined,
+    policyCallback: NativeRuntimeCallback | undefined,
+    perfTelemetry?: PerfTelemetry,
+  ): NativeRuntime;
+};
+
+type NativeRuntimeLoader = (
+  nativeRuntimeClass: NativeRuntimeConstructor,
+  annotatorCallback: NativeRuntimeCallback | undefined,
+  policyCallback: NativeRuntimeCallback | undefined,
+) => NativeRuntime;
+
+export class NativeRuntimeClient implements RuntimeClient {
+  private readonly runtime: NativeRuntime;
+  private readonly annotatorDispatcher: AnnotatorDispatcher | undefined;
+  private readonly policyDispatcher: PolicyDispatcher | undefined;
+
+  constructor(
+    manifest: JsonValue | string,
+    annotatorDispatcher?: AnnotatorDispatcher,
+    policyDispatcher?: PolicyDispatcher,
+    perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    loader?: NativeRuntimeLoader,
+  ) {
+    this.annotatorDispatcher = annotatorDispatcher;
+    this.policyDispatcher = policyDispatcher;
+    const manifestString = typeof manifest === "string" ? manifest : JSON.stringify(manifest);
+    const NativeRuntimeClass = (native as { NativeRuntime: NativeRuntimeConstructor }).NativeRuntime;
+    // An undefined dispatcher opts into the bundled native default (OPA policy /
+    // classifier annotator) supplied by the Rust core.
+    const annotatorCallback: NativeRuntimeCallback | undefined = annotatorDispatcher
+      ? async (err, argsJson) => {
+        if (err) throw err;
+        const envelope = JSON.parse(argsJson) as {
+          annotator_name: string;
+          annotator: Record<string, JsonValue>;
+          preliminary_policy_input: JsonValue;
+        };
+        const result = await annotatorDispatcher.dispatch(
+          envelope.annotator_name,
+          envelope.annotator,
+          envelope.preliminary_policy_input,
+        );
+        return JSON.stringify(result);
+      }
+      : undefined;
+    const policyCallback: NativeRuntimeCallback | undefined = policyDispatcher
+      ? async (err, argsJson) => {
+        if (err) throw err;
+        const envelope = JSON.parse(argsJson) as { invocation: Record<string, JsonValue> };
+        const result = await policyDispatcher.evaluate(envelope.invocation);
+        return JSON.stringify(result);
+      }
+      : undefined;
+    this.runtime = loader
+      ? loader(NativeRuntimeClass, annotatorCallback, policyCallback)
+      : new NativeRuntimeClass(manifestString, annotatorCallback, policyCallback, perfTelemetry);
+  }
+
+  async evaluateInterventionPoint(request: InterventionPointRequest): Promise<InterventionPointResult> {
+    const raw = await this.runtime.evaluate({
+      intervention_point: request.interventionPoint,
+      snapshot: request.snapshot,
+      mode: request.mode ?? EnforcementMode.Enforce,
+    });
+    return mapResult(raw);
+  }
+}
+
+export class AgentControl {
+  private readonly runtimeClient: RuntimeClient;
+  private readonly approvalResolver: ApprovalResolver | undefined;
+
+  constructor(runtimeClient: RuntimeClient, approvalResolver?: ApprovalResolver) {
+    this.runtimeClient = runtimeClient;
+    this.approvalResolver = approvalResolver;
+  }
+
+  static fromNative(
+    manifest: JsonValue | string,
+    annotatorDispatcher?: AnnotatorDispatcher,
+    policyDispatcher?: PolicyDispatcher,
+    approvalResolver?: ApprovalResolver,
+    perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+  ): AgentControl {
+    return new AgentControl(
+      new NativeRuntimeClient(manifest, annotatorDispatcher, policyDispatcher, perfTelemetry),
+      approvalResolver,
+    );
+  }
+
+  static fromPath(
+    path: string,
+    annotatorDispatcher?: AnnotatorDispatcher,
+    policyDispatcher?: PolicyDispatcher,
+    approvalResolver?: ApprovalResolver,
+    perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+  ): AgentControl {
+    return new AgentControl(
+      new NativeRuntimeClient(path, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
+        NativeRuntimeClass.fromPath(path, annotator, policy, perfTelemetry),
+      ),
+      approvalResolver,
+    );
+  }
+
+  static fromManifestChain(
+    manifests: string[],
+    annotatorDispatcher?: AnnotatorDispatcher,
+    policyDispatcher?: PolicyDispatcher,
+    approvalResolver?: ApprovalResolver,
+    perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+  ): AgentControl {
+    return new AgentControl(
+      new NativeRuntimeClient("", annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
+        NativeRuntimeClass.fromManifestChain(manifests, annotator, policy, perfTelemetry),
+      ),
+      approvalResolver,
+    );
+  }
+
+  async evaluateInterventionPoint(
+    interventionPoint: InterventionPoint,
+    snapshot: Record<string, JsonValue>,
+    mode: EnforcementMode = EnforcementMode.Enforce,
+  ): Promise<InterventionPointResult> {
+    return this.runtimeClient.evaluateInterventionPoint({ interventionPoint, snapshot, mode });
+  }
+
+  async enforce(
+    interventionPoint: InterventionPoint,
+    result: InterventionPointResult,
+    mode: EnforcementMode = EnforcementMode.Enforce,
+    approvalResolver?: ApprovalResolver,
+  ): Promise<void> {
+    if (mode !== EnforcementMode.Enforce) return;
+    const decision = result.verdict.decision;
+    if (decision === Decision.Deny) {
+      throw new AgentControlBlockedError(interventionPoint, result);
+    }
+    if (decision !== Decision.Escalate) return;
+
+    const resolver = approvalResolver ?? this.approvalResolver;
+    if (resolver === undefined) {
+      throw new AgentControlBlockedError(interventionPoint, result);
+    }
+
+    const originalIdentity = result.actionIdentity;
+    let resolution: ApprovalResolution;
+    try {
+      resolution = await resolver(interventionPoint, result);
+    } catch (error) {
+      const blocked = new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult());
+      (blocked as { cause?: unknown }).cause = error;
+      throw blocked;
+    }
+
+    if (resolution === undefined || resolution === null) {
+      throw new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult());
+    }
+
+    switch (resolution.outcome) {
+      case ApprovalOutcome.Allow:
+        requireApprovedIdentity(interventionPoint, result, originalIdentity, resolution.actionIdentity);
+        return;
+      case ApprovalOutcome.Suspend:
+        requireApprovedIdentity(interventionPoint, result, originalIdentity, resolution.actionIdentity);
+        throw new AgentControlSuspendedError(interventionPoint, result, resolution.handle);
+      case ApprovalOutcome.Deny:
+        throw new AgentControlBlockedError(interventionPoint, result);
+      default:
+        throw new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult());
+    }
+  }
+
+  async run<TInput extends JsonValue, TOutput extends JsonValue>(
+    input: TInput,
+    execute: (input: JsonValue) => Promise<TOutput> | TOutput,
+    options: {
+      snapshot?: Record<string, JsonValue>;
+      mode?: EnforcementMode;
+      approvalResolver?: ApprovalResolver;
+    } = {},
+  ): Promise<RunResult<JsonValue>> {
+    const mode = options.mode ?? EnforcementMode.Enforce;
+    const resolver = options.approvalResolver;
+    const ambient = { ...(options.snapshot ?? {}) };
+    const inputResult = await this.evaluateInterventionPoint(
+      InterventionPoint.Input,
+      { ...ambient, input },
+      mode,
+    );
+    await this.enforce(InterventionPoint.Input, inputResult, mode, resolver);
+    const effectiveInput = transformedOr(inputResult, input, mode);
+    const output = await execute(effectiveInput);
+    const outputResult = await this.evaluateInterventionPoint(
+      InterventionPoint.Output,
+      { ...ambient, input: effectiveInput, output },
+      mode,
+    );
+    await this.enforce(InterventionPoint.Output, outputResult, mode, resolver);
+    return { value: transformedOr(outputResult, output, mode), inputResult, outputResult };
+  }
+
+  protectTool(
+    toolName: string,
+    execute: (args: JsonValue) => Promise<JsonValue> | JsonValue,
+    options: {
+      mode?: EnforcementMode;
+      snapshot?: Record<string, JsonValue>;
+      toolCallId?: string;
+      approvalResolver?: ApprovalResolver;
+    } = {},
+  ): (
+    args: JsonValue,
+    callOptions?: { toolCallId?: string; snapshot?: Record<string, JsonValue>; approvalResolver?: ApprovalResolver },
+  ) => Promise<ToolRunResult<JsonValue>> {
+    const defaultSnapshot = { ...(options.snapshot ?? {}) };
+    return async (args, callOptions = {}) => {
+      const snapshot = { ...defaultSnapshot, ...(callOptions.snapshot ?? {}) };
+      return this.runTool(toolName, args, execute, {
+        toolCallId: callOptions.toolCallId ?? options.toolCallId ?? syntheticToolCallId(toolName),
+        snapshot,
+        mode: options.mode,
+        approvalResolver: callOptions.approvalResolver ?? options.approvalResolver,
+      });
+    };
+  }
+
+  async runTool(
+    toolName: string,
+    args: JsonValue,
+    execute: (args: JsonValue) => Promise<JsonValue> | JsonValue,
+    options: {
+      toolCallId?: string;
+      snapshot?: Record<string, JsonValue>;
+      mode?: EnforcementMode;
+      approvalResolver?: ApprovalResolver;
+    } = {},
+  ): Promise<ToolRunResult<JsonValue>> {
+    const mode = options.mode ?? EnforcementMode.Enforce;
+    const resolver = options.approvalResolver;
+    const ambient = { ...(options.snapshot ?? {}) };
+    const toolCallId = requireToolCallId(options.toolCallId);
+    const toolCall = makeToolCall(toolName, args, toolCallId);
+    const preToolCallResult = await this.evaluateInterventionPoint(
+      InterventionPoint.PreToolCall,
+      { ...ambient, tool_call: toolCall },
+      mode,
+    );
+    await this.enforce(InterventionPoint.PreToolCall, preToolCallResult, mode, resolver);
+    const effectiveArgs = transformedOr(preToolCallResult, args, mode);
+    const toolResult = await execute(effectiveArgs);
+    const postToolCallResult = await this.evaluateInterventionPoint(
+      InterventionPoint.PostToolCall,
+      {
+        ...ambient,
+        tool_call: makeToolCall(toolName, effectiveArgs, toolCallId),
+        tool_result: toolResult,
+      },
+      mode,
+    );
+    await this.enforce(InterventionPoint.PostToolCall, postToolCallResult, mode, resolver);
+    return {
+      value: transformedOr(postToolCallResult, toolResult, mode),
+      preToolCallResult,
+      postToolCallResult,
+    };
+  }
+
+  async agentStartup(
+    agent: JsonValue,
+    options: {
+      snapshot?: Record<string, JsonValue>;
+      mode?: EnforcementMode;
+      approvalResolver?: ApprovalResolver;
+    } = {},
+  ): Promise<InterventionPointResult> {
+    const mode = options.mode ?? EnforcementMode.Enforce;
+    const resolver = options.approvalResolver;
+    const ambient = { ...(options.snapshot ?? {}) };
+    const result = await this.evaluateInterventionPoint(
+      InterventionPoint.AgentStartup,
+      { ...ambient, agent },
+      mode,
+    );
+    await this.enforce(InterventionPoint.AgentStartup, result, mode, resolver);
+    return result;
+  }
+
+  async agentShutdown(
+    summary: JsonValue,
+    options: {
+      snapshot?: Record<string, JsonValue>;
+      mode?: EnforcementMode;
+      approvalResolver?: ApprovalResolver;
+    } = {},
+  ): Promise<InterventionPointResult> {
+    const mode = options.mode ?? EnforcementMode.Enforce;
+    const resolver = options.approvalResolver;
+    const ambient = { ...(options.snapshot ?? {}) };
+    const result = await this.evaluateInterventionPoint(
+      InterventionPoint.AgentShutdown,
+      { ...ambient, summary },
+      mode,
+    );
+    await this.enforce(InterventionPoint.AgentShutdown, result, mode, resolver);
+    return result;
+  }
+
+  /**
+   * Framework-agnostic session seam: enforces `agent_startup` before `body`
+   * runs and `agent_shutdown` after it completes cleanly. Shutdown is skipped
+   * when `body` throws, so an in-session error is never masked by the shutdown
+   * verdict. Set `session.summary` inside `body` to supply the shutdown target.
+   */
+  async withSession<T>(
+    agent: JsonValue,
+    body: (session: { summary: JsonValue }) => Promise<T> | T,
+    options: {
+      snapshot?: Record<string, JsonValue>;
+      mode?: EnforcementMode;
+      approvalResolver?: ApprovalResolver;
+    } = {},
+  ): Promise<T> {
+    await this.agentStartup(agent, options);
+    const session: { summary: JsonValue } = { summary: {} };
+    const result = await body(session);
+    await this.agentShutdown(session.summary, options);
+    return result;
+  }
+
+}
+
+
+function approvalResolverFailedResult(): InterventionPointResult {
+  return {
+    verdict: {
+      decision: Decision.Deny,
+      reason: "runtime_error:approval_resolver_failed",
+      message: "Approval resolver failed closed.",
+    },
+  };
+}
+
+function requireApprovedIdentity(
+  interventionPoint: InterventionPoint,
+  result: InterventionPointResult,
+  originalIdentity: string | undefined,
+  approvedIdentity: string | undefined,
+): void {
+  const currentIdentity = result.policyInput === undefined ? undefined : actionIdentity(result.policyInput);
+  if (
+    originalIdentity !== undefined &&
+    currentIdentity !== undefined &&
+    approvedIdentity !== undefined &&
+    originalIdentity === currentIdentity &&
+    currentIdentity === approvedIdentity
+  ) {
+    return;
+  }
+  throw new AgentControlBlockedError(interventionPoint, {
+    verdict: { decision: Decision.Deny, reason: "runtime_error:approval_action_mismatch" },
+  });
+}
+
+export function actionIdentity(policyInput: JsonValue): string {
+  return `sha256:${createHash("sha256").update(canonicalJson(policyInput), "utf8").digest("hex")}`;
+}
+
+function canonicalJson(value: JsonValue): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, JsonValue>)[key])}`)
+    .join(",")}}`;
+}
+
+function mapResult(raw: Record<string, JsonValue>): InterventionPointResult {
+  return {
+    verdict: raw.verdict as unknown as Verdict,
+    transformedPolicyTarget: raw.transformed_policy_target === null ? undefined : raw.transformed_policy_target,
+    policyInput: raw.policy_input === null ? undefined : raw.policy_input,
+    actionIdentity: raw.action_identity === null ? undefined : raw.action_identity as string | undefined,
+  };
+}
+
+function requireToolCallId(toolCallId: string | undefined): string {
+  if (toolCallId === undefined) {
+    throw new Error("toolCallId is required for preToolCall/postToolCall snapshots.");
+  }
+  if (typeof toolCallId !== "string") {
+    throw new TypeError("toolCallId must be a string.");
+  }
+  if (toolCallId.length === 0) {
+    throw new Error("toolCallId must be a non-empty string.");
+  }
+  return toolCallId;
+}
+
+function makeToolCall(toolName: string, args: JsonValue, toolCallId: string): Record<string, JsonValue> {
+  return { id: toolCallId, name: toolName, args };
+}
+
+let syntheticToolCallCounter = 0;
+
+function syntheticToolCallId(toolName: string): string {
+  syntheticToolCallCounter += 1;
+  return `acs-${toolName.replace(/[^A-Za-z0-9_.:-]/g, "_")}-${syntheticToolCallCounter}`;
+}
+
+export * from "./adapters";
+export * from "./streaming";
+export * from "./integrations/ghcp";
+export * from "./integrations/opa-binary";
+export * from "./integrations/bootstrap";

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><IsPackable>true</IsPackable><PackageId>AgentControlSpecification.SemanticKernel</PackageId><Version>0.1.0</Version></PropertyGroup>
+  <ItemGroup><PackageReference Include="Microsoft.SemanticKernel" Version="1.*" /><PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.6" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\AgentControlSpecification\AgentControlSpecification.csproj" /><ProjectReference Include="..\AgentControlSpecification.AI\AgentControlSpecification.AI.csproj" /></ItemGroup>
+</Project>

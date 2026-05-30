@@ -1,0 +1,5 @@
+agent_control_specification_version: "0.3.0-alpha"
+extends:
+  - subdir/base.yaml
+metadata:
+  name: inside-child

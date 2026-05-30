@@ -1,0 +1,320 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "policy_target_only_effect_validation_application"
+  ],
+  "description": "Effects are validated as policy_target-only and apply only in enforce mode for allow/warn verdicts.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": {
+          "content": "hello [redacted] world",
+          "flag": true,
+          "items": [
+            0,
+            1,
+            2
+          ]
+        },
+        "verdict": {
+          "decision": "warn",
+          "effects": [
+            {
+              "path": "$policy_target.items",
+              "type": "append",
+              "value": 2
+            },
+            {
+              "path": "$policy_target.items",
+              "type": "prepend",
+              "value": 0
+            },
+            {
+              "path": "$policy_target.content",
+              "spans": [
+                {
+                  "end": 12,
+                  "replacement": "[redacted]",
+                  "start": 6
+                }
+              ],
+              "type": "redact"
+            },
+            {
+              "path": "$policy_target.flag",
+              "type": "replace",
+              "value": true
+            }
+          ],
+          "reason": "sanitized"
+        }
+      },
+      "mode": "enforce",
+      "name": "warn-enforce-applies-effects",
+      "policy_response": {
+        "ok": {
+          "decision": "warn",
+          "effects": [
+            {
+              "path": "$policy_target.items",
+              "type": "append",
+              "value": 2
+            },
+            {
+              "path": "$policy_target.items",
+              "type": "prepend",
+              "value": 0
+            },
+            {
+              "path": "$policy_target.content",
+              "spans": [
+                {
+                  "end": 12,
+                  "replacement": "[redacted]",
+                  "start": 6
+                }
+              ],
+              "type": "redact"
+            },
+            {
+              "path": "$policy_target.flag",
+              "type": "replace",
+              "value": true
+            }
+          ],
+          "reason": "sanitized"
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "allow",
+          "effects": [
+            {
+              "path": "$policy_target.content",
+              "type": "replace",
+              "value": "changed"
+            }
+          ]
+        }
+      },
+      "mode": "evaluate_only",
+      "name": "allow-evaluate-only-validates-without-applying",
+      "policy_response": {
+        "ok": {
+          "decision": "allow",
+          "effects": [
+            {
+              "path": "$policy_target.content",
+              "type": "replace",
+              "value": "changed"
+            }
+          ]
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "deny",
+          "effects": [
+            {
+              "path": "$policy_target.content",
+              "type": "replace",
+              "value": "changed"
+            }
+          ],
+          "reason": "blocked"
+        }
+      },
+      "mode": "enforce",
+      "name": "deny-enforce-does-not-apply-effects",
+      "policy_response": {
+        "ok": {
+          "decision": "deny",
+          "effects": [
+            {
+              "path": "$policy_target.content",
+              "type": "replace",
+              "value": "changed"
+            }
+          ],
+          "reason": "blocked"
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:effect_target_forbidden"
+        }
+      },
+      "mode": "enforce",
+      "name": "rejects-non-policy_target-effect-target",
+      "policy_response": {
+        "ok": {
+          "decision": "allow",
+          "effects": [
+            {
+              "path": "$snap.output.content",
+              "type": "replace",
+              "value": "blocked"
+            }
+          ]
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    }
+  ],
+  "id": "policy_target-only-effects",
+  "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  output:\n    policy_target_kind: assistant_output\n    policy:\n      id: test_policy\n    policy_target: $snap.output\n",
+  "schema_version": 1
+}

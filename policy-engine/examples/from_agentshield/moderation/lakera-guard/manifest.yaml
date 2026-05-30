@@ -1,0 +1,22 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "lakera-guard"
+extends: []
+policies:
+  lakera_guard:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.lakera_guard.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    annotations:
+      lakera:
+        from: "$policy_target.text"
+    policy:
+      id: lakera_guard
+      query: data.agent_control_specification.lakera_guard.input_verdict
+annotators:
+  lakera:
+    type: classifier

@@ -1,0 +1,470 @@
+{
+  "schema_version": 1,
+  "source": [
+    "docs/observability.md Event model",
+    "docs/stateless-runtime.md Telemetry",
+    "spec/SPECIFICATION.md section 16",
+    "core/src/telemetry.rs TelemetryEvent and TelemetryEventType",
+    "core/src/runtime.rs telemetry emission helpers"
+  ],
+  "redaction_contract": {
+    "guaranteed_withheld_fields": [
+      "policy_target.value",
+      "snapshot.input",
+      "snapshot.output",
+      "snapshot.model_request",
+      "snapshot.model_response",
+      "snapshot.messages",
+      "snapshot.tool_call.args",
+      "snapshot.tool_result",
+      "annotations.*",
+      "effect.value",
+      "effect.spans[].replacement",
+      "secrets",
+      "pii"
+    ],
+    "safe_attribute_classes": [
+      "stable ids",
+      "names",
+      "modes",
+      "decisions",
+      "reason codes",
+      "durations",
+      "counts",
+      "lengths",
+      "span counts"
+    ],
+    "free_text_policy_reasons": "reported as policy_reason unless shaped as a low cardinality identifier"
+  },
+  "events": [
+    {
+      "name": "decision",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "policy_id",
+        "annotators",
+        "enforcement_mode",
+        "duration_ms"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "annotator_dispatch",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "annotators",
+        "reason_code",
+        "duration_ms"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "policy_evaluation",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "policy_id",
+        "reason_code",
+        "duration_ms",
+        "metadata.policy_type"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "evaluation_timing",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "policy_id",
+        "enforcement_mode",
+        "duration_ms"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "effect_applied",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "policy_id",
+        "enforcement_mode",
+        "metadata.effect_count"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "annotator_failed",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "annotators",
+        "reason_code"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "policy_failed",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "policy_id",
+        "reason_code",
+        "metadata.policy_type"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    }
+  ],
+  "documented_low_cardinality_events": [
+    {
+      "name": "intervention_point.evaluated",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "decision",
+        "reason"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "intervention_point.allowed",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "decision",
+        "reason"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "intervention_point.denied",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "decision",
+        "reason"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "intervention_point.warned",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "decision",
+        "reason"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "intervention_point.escalated",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "decision",
+        "reason"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "intervention_point.effect_applied",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "effect_count"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "annotator.started",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "provider",
+        "annotator",
+        "duration_ms"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "annotator.failed",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "provider",
+        "annotator",
+        "reason"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "policy.invoked",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "policy_id",
+        "duration_ms"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "policy.failed",
+      "emitted_attribute_keys": [
+        "intervention_point",
+        "policy_type",
+        "provider",
+        "policy_id",
+        "reason"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    }
+  ]
+}

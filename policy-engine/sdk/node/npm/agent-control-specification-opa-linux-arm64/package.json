@@ -1,0 +1,10 @@
+{
+  "name": "agent-control-specification-opa-linux-arm64",
+  "version": "0.1.0",
+  "description": "Open Policy Agent (opa) binary for linux/arm64, bundled for agent-control-specification.",
+  "license": "Apache-2.0",
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "files": ["bin/opa"],
+  "preferUnplugged": true
+}

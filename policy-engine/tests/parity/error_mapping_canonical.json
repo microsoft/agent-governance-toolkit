@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "source": [
+    "core/src/error.rs RuntimeError::reason",
+    "spec/SPECIFICATION.md section 15"
+  ],
+  "runtime_errors": [
+    {
+      "variant": "ManifestInvalid",
+      "reason": "runtime_error:manifest_invalid"
+    },
+    {
+      "variant": "InterventionPointUnknown",
+      "reason": "runtime_error:intervention_point_unknown"
+    },
+    {
+      "variant": "PathMissing",
+      "reason": "runtime_error:path_missing"
+    },
+    {
+      "variant": "PathTypeMismatch",
+      "reason": "runtime_error:path_type_mismatch"
+    },
+    {
+      "variant": "ToolUnknown",
+      "reason": "runtime_error:tool_unknown"
+    },
+    {
+      "variant": "AnnotationFailed",
+      "reason": "runtime_error:annotation_failed"
+    },
+    {
+      "variant": "AnnotationTimeout",
+      "reason": "runtime_error:annotation_timeout"
+    },
+    {
+      "variant": "PolicyInvocationFailed",
+      "reason": "runtime_error:policy_invocation_failed"
+    },
+    {
+      "variant": "PolicyOutputInvalid",
+      "reason": "runtime_error:policy_output_invalid"
+    },
+    {
+      "variant": "EffectInvalid",
+      "reason": "runtime_error:effect_invalid"
+    },
+    {
+      "variant": "EffectTargetForbidden",
+      "reason": "runtime_error:effect_target_forbidden"
+    },
+    {
+      "variant": "ResourceLimitExceeded",
+      "reason": "runtime_error:resource_limit_exceeded"
+    },
+    {
+      "variant": "ApprovalActionMismatch",
+      "reason": "runtime_error:approval_action_mismatch"
+    }
+  ]
+}

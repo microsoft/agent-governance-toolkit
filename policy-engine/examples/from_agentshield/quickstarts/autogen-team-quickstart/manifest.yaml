@@ -1,0 +1,33 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "autogen-team-quickstart"
+extends: []
+policies:
+  autogen_team_quickstart:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.autogen_team_quickstart.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    policy:
+      id: autogen_team_quickstart
+      query: data.agent_control_specification.autogen_team_quickstart.input_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: autogen_team_quickstart
+      query: data.agent_control_specification.autogen_team_quickstart.pre_tool_call_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    policy:
+      id: autogen_team_quickstart
+      query: data.agent_control_specification.autogen_team_quickstart.output_verdict
+tools:
+  collect_customer_info: {}
+  verify_identity: {}
+  create_account: {}

@@ -1,0 +1,38 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-16-effects.case-04",
+  "spec_section": "16",
+  "title": "redaction pattern derives character spans",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
+  "intervention_point": "input",
+  "snapshot": {
+    "input": {
+      "text": "Email jane@example.com and john@example.org"
+    }
+  },
+  "policy_response": {
+    "decision": "warn",
+    "effects": [
+      {
+        "type": "redact",
+        "path": "$policy_target.text",
+        "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
+        "replacement": "[EMAIL]"
+      }
+    ]
+  },
+  "expected": {
+    "decision": "warn",
+    "transformed_policy_target": {
+      "text": "Email [EMAIL] and [EMAIL]"
+    }
+  }
+}

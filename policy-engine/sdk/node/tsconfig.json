@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "node"
+    ],
+    "outDir": "./dist",
+    "rootDir": ".",
+    "declaration": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "index.ts",
+    "src/index.ts",
+    "src/adapters.ts",
+    "src/adapter-helpers.ts",
+    "src/streaming.ts",
+    "src/integrations/ghcp.ts",
+    "src/integrations/opa-binary.ts",
+    "src/integrations/bootstrap.ts",
+    "native.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "target",
+    "dist",
+    "test"
+  ]
+}

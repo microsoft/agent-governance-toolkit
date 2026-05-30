@@ -1,0 +1,33 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "crewai-invoice-quickstart"
+extends: []
+policies:
+  crewai_invoice_quickstart:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.crewai_invoice_quickstart.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    policy:
+      id: crewai_invoice_quickstart
+      query: data.agent_control_specification.crewai_invoice_quickstart.input_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: crewai_invoice_quickstart
+      query: data.agent_control_specification.crewai_invoice_quickstart.pre_tool_call_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    policy:
+      id: crewai_invoice_quickstart
+      query: data.agent_control_specification.crewai_invoice_quickstart.output_verdict
+tools:
+  extract_invoice_fields: {}
+  check_fraud_risk: {}
+  approve_payment: {}

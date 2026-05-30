@@ -1,0 +1,73 @@
+{
+  "annotations": {
+    "tool_args_classifier": {
+      "amount_risk": "high",
+      "labels": [
+        "payment_instruction"
+      ],
+      "risk_score": 0.72
+    }
+  },
+  "intervention_point": "pre_tool_call",
+  "snapshot": {
+    "actor": {
+      "id": "customer-123",
+      "risk_tier": "standard",
+      "roles": [
+        "customer"
+      ]
+    },
+    "agent": {
+      "capabilities": [
+        "balance_lookup",
+        "wire_transfer"
+      ],
+      "id": "bank-agent-instance-001",
+      "mode": "production",
+      "name": "bank-agent",
+      "version": "1.0.0-demo"
+    },
+    "session": {
+      "created_at": "2025-02-03T10:15:00Z",
+      "id": "session-bank-001"
+    },
+    "tool_call": {
+      "args": {
+        "amount": 25000,
+        "currency": "USD",
+        "data_labels": [
+          "payment_instruction"
+        ],
+        "from_account_id": "CHK-00112233",
+        "to_account_id": "BRK-00445566"
+      },
+      "id": "call-transfer-001",
+      "name": "wire_transfer"
+    }
+  },
+  "policy_target": {
+    "kind": "tool_args",
+    "path": "$.tool_call.args",
+    "value": {
+      "amount": 25000,
+      "currency": "USD",
+      "data_labels": [
+        "payment_instruction"
+      ],
+      "from_account_id": "CHK-00112233",
+      "to_account_id": "BRK-00445566"
+    }
+  },
+  "tool": {
+    "clearance": [
+      "banking",
+      "payments"
+    ],
+    "id": "wire_transfer",
+    "name": "wire_transfer",
+    "security_labels": [
+      "payment_instruction"
+    ],
+    "type": "Tool"
+  }
+}

@@ -1,0 +1,41 @@
+[package]
+name = "agent_control_specification_core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Stateless Rust core for Agent Control Specification"
+license = "MIT"
+readme = "../README.md"
+keywords = ["agents", "policy", "security", "runtime"]
+categories = ["config"]
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[features]
+# Bundled reference dispatchers (networked OPA classifier annotators) used to
+# provide zero-config defaults through the FFI builder. OFF by default so the
+# pure deterministic core carries no networking dependency unless opted in.
+default-dispatchers = ["dep:ureq"]
+aacs = ["default-dispatchers"]
+openai_moderation = ["default-dispatchers"]
+perspective = ["default-dispatchers"]
+llama_guard = ["default-dispatchers"]
+lakera_guard = ["default-dispatchers"]
+auto = ["default-dispatchers"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+ureq = { version = "2", features = ["json"], optional = true }
+
+[dev-dependencies]
+jsonschema = { version = "0.17", default-features = false }
+criterion = { version = "0.7.0", features = ["html_reports"] }
+
+[[bench]]
+name = "evaluation"
+harness = false

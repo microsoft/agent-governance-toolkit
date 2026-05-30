@@ -1,0 +1,25 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "endpoint-governance"
+extends: []
+policies:
+  endpoint_governance:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.endpoint_governance.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    policy:
+      id: endpoint_governance
+      query: data.agent_control_specification.endpoint_governance.input_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: endpoint_governance
+      query: data.agent_control_specification.endpoint_governance.pre_tool_call_verdict
+tools:
+  http.request: {}

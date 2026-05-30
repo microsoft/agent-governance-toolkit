@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acs-agents
+  labels:
+    istio-injection: enabled
+    app.kubernetes.io/part-of: acs-sidecar-reference

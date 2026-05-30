@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "source": [
+    "core/src/verdict.rs Decision",
+    "core/src/verdict.rs normalize_policy_output",
+    "docs/stateless-runtime.md Evaluation flow"
+  ],
+  "rows": [
+    {
+      "id": "allow",
+      "input": {
+        "decision": "allow",
+        "effects": [
+          {
+            "type": "replace",
+            "path": "$policy_target.flag",
+            "value": true
+          }
+        ]
+      },
+      "normalized_decision": "allow",
+      "effects_applied_on_enforce": true,
+      "expected_error_reason": null
+    },
+    {
+      "id": "deny",
+      "input": {
+        "decision": "deny",
+        "effects": [
+          {
+            "type": "replace",
+            "path": "$policy_target.flag",
+            "value": true
+          }
+        ]
+      },
+      "normalized_decision": "deny",
+      "effects_applied_on_enforce": false,
+      "expected_error_reason": null
+    },
+    {
+      "id": "warn",
+      "input": {
+        "decision": "warn",
+        "effects": [
+          {
+            "type": "replace",
+            "path": "$policy_target.flag",
+            "value": true
+          }
+        ]
+      },
+      "normalized_decision": "warn",
+      "effects_applied_on_enforce": true,
+      "expected_error_reason": null
+    },
+    {
+      "id": "escalate",
+      "input": {
+        "decision": "escalate",
+        "effects": [
+          {
+            "type": "replace",
+            "path": "$policy_target.flag",
+            "value": true
+          }
+        ]
+      },
+      "normalized_decision": "escalate",
+      "effects_applied_on_enforce": true,
+      "expected_error_reason": null
+    },
+    {
+      "id": "invalid-decision",
+      "input": {
+        "decision": "block"
+      },
+      "normalized_decision": null,
+      "effects_applied_on_enforce": false,
+      "expected_error_reason": "runtime_error:policy_output_invalid"
+    }
+  ]
+}
