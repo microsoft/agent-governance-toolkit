@@ -74,11 +74,6 @@ fn runtime_errors() -> BTreeMap<&'static str, RuntimeError> {
             "PolicyOutputInvalid",
             RuntimeError::PolicyOutputInvalid(String::new()),
         ),
-        ("EffectInvalid", RuntimeError::EffectInvalid(String::new())),
-        (
-            "EffectTargetForbidden",
-            RuntimeError::EffectTargetForbidden(String::new()),
-        ),
         (
             "ResourceLimitExceeded",
             RuntimeError::ResourceLimitExceeded(String::new()),
@@ -86,6 +81,34 @@ fn runtime_errors() -> BTreeMap<&'static str, RuntimeError> {
         (
             "ApprovalActionMismatch",
             RuntimeError::ApprovalActionMismatch(String::new()),
+        ),
+        (
+            "ResolutionPathTraversal",
+            RuntimeError::ResolutionPathTraversal(String::new()),
+        ),
+        (
+            "ResolutionCycle",
+            RuntimeError::ResolutionCycle(String::new()),
+        ),
+        (
+            "ResolutionInvalidGovernance",
+            RuntimeError::ResolutionInvalidGovernance(String::new()),
+        ),
+        (
+            "ResolutionMergeConflict",
+            RuntimeError::ResolutionMergeConflict(String::new()),
+        ),
+        (
+            "TransformTargetForbidden",
+            RuntimeError::TransformTargetForbidden(String::new()),
+        ),
+        (
+            "TransformInvalid",
+            RuntimeError::TransformInvalid(String::new()),
+        ),
+        (
+            "ApprovalResolverMissing",
+            RuntimeError::ApprovalResolverMissing(String::new()),
         ),
     ])
 }
@@ -120,15 +143,20 @@ fn canonical_resource_limits_match_core_defaults() {
 fn canonical_error_mapping_matches_core_and_spec() {
     let fixture = fixture("error_mapping_canonical.json");
     let spec = std::fs::read_to_string("../spec/SPECIFICATION.md").expect("spec exists");
+    let agt_delta =
+        std::fs::read_to_string("../spec/SPECIFICATION-AGT-DELTA.md").expect("AGT delta exists");
     let actual = runtime_errors();
     let rows = fixture["runtime_errors"].as_array().unwrap();
 
-    assert_eq!(rows.len(), 13);
+    assert_eq!(rows.len(), 18);
     for row in rows {
         let variant = row["variant"].as_str().unwrap();
         let reason = row["reason"].as_str().unwrap();
         assert_eq!(actual[variant].reason(), reason, "{variant}");
-        assert!(spec.contains(reason), "spec section 15 contains {reason}");
+        assert!(
+            spec.contains(reason) || agt_delta.contains(reason),
+            "SPECIFICATION.md or SPECIFICATION-AGT-DELTA.md contains {reason}",
+        );
     }
 }
 
