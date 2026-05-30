@@ -39,7 +39,7 @@ pub use opa::{OpaPolicyDispatcher, OpaRegoRunner};
 pub use paths::{JsonPath, PathEnv, PathParseError, PathRoot, PathSegment};
 pub use perf_telemetry::PerfTelemetry;
 pub use policy::{
-    CustomPolicyConfig, CustomPolicyInvocation, PolicyBinding, PolicyConfig,
+    CedarPolicyConfig, CustomPolicyConfig, CustomPolicyInvocation, PolicyBinding, PolicyConfig,
     PreparedPolicyInvocation, RegoPolicyConfig, RegoPolicyInvocation, TestPolicyConfig,
     TestPolicyInvocation,
 };

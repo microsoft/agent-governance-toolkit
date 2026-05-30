@@ -1,4 +1,8 @@
-use crate::{canonical_json, constants::engine, InterventionPoint, JsonValue, RuntimeError};
+use crate::{
+    canonical_json,
+    constants::{cedar_field, engine},
+    InterventionPoint, JsonValue, RuntimeError,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -48,6 +52,9 @@ fn resolve_adapter_config_paths(adapter_config: &mut BTreeMap<String, JsonValue>
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PolicyConfig {
     Rego(RegoPolicyConfig),
+    /// AGT D3.1 built-in Cedar policy type. See
+    /// `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` §D3.
+    Cedar(CedarPolicyConfig),
     Test(TestPolicyConfig),
     Custom(CustomPolicyConfig),
 }
@@ -65,6 +72,7 @@ impl PolicyConfig {
     pub fn engine_type(&self) -> &'static str {
         match self {
             Self::Rego(_) => engine::REGO,
+            Self::Cedar(_) => engine::CEDAR,
             Self::Test(_) => engine::TEST,
             Self::Custom(_) => engine::CUSTOM,
         }
@@ -81,6 +89,19 @@ impl PolicyConfig {
                     }
                 }
                 resolve_adapter_config_paths(&mut config.adapter_config, base_dir);
+            }
+            Self::Cedar(config) => {
+                for path in [
+                    &mut config.policy_path,
+                    &mut config.entities_path,
+                    &mut config.schema_path,
+                ] {
+                    if let Some(value) = path.as_mut() {
+                        if let Some(resolved) = resolve_relative_string(value, base_dir) {
+                            *value = resolved;
+                        }
+                    }
+                }
             }
             Self::Test(config) => {
                 resolve_adapter_config_paths(&mut config.adapter_config, base_dir)
@@ -108,6 +129,28 @@ pub struct RegoPolicyConfig {
     pub bundle: Option<String>,
     #[serde(default, flatten, skip_serializing_if = "BTreeMap::is_empty")]
     pub adapter_config: BTreeMap<String, JsonValue>,
+}
+
+/// AGT D3.1 Cedar policy definition. Either `policy_set` (inline Cedar text)
+/// or `policy_path` (filesystem location) MUST be provided; never both.
+/// Unknown fields are rejected per ACS schema strictness.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CedarPolicyConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_set: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entities_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_path: Option<String>,
+    /// Optional Cedar request template object. The shape is intentionally
+    /// open for the AGT v5 milestone; dispatchers MAY interpret it to override
+    /// the default principal/action/resource/context mapping defined in
+    /// `SPECIFICATION-AGT-DELTA.md` §D3.2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query: Option<JsonValue>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -181,14 +224,48 @@ pub fn validate_policy_definition(name: &str, config: &PolicyConfig) -> Result<(
     match config {
         PolicyConfig::Rego(config) => {
             validate_optional_string("rego.query", config.query.as_deref())?;
-            validate_optional_string("rego.bundle", config.bundle.as_deref())
+            validate_optional_string("rego.bundle", config.bundle.as_deref())?;
+            for field in cedar_field::ALL {
+                if config.adapter_config.contains_key(field) {
+                    return Err(RuntimeError::ManifestInvalid(format!(
+                        "rego.{field} is reserved for the cedar policy type; rego policies declare a bundle"
+                    )));
+                }
+            }
+            Ok(())
         }
+        PolicyConfig::Cedar(config) => validate_cedar_config(config),
         PolicyConfig::Test(_) => Ok(()),
         PolicyConfig::Custom(config) => validate_required_string("custom.adapter", &config.adapter),
     }
     .map_err(|error| {
         RuntimeError::ManifestInvalid(format!("invalid policy '{name}': {}", error.detail()))
     })
+}
+
+fn validate_cedar_config(config: &CedarPolicyConfig) -> Result<(), RuntimeError> {
+    match (config.policy_set.as_deref(), config.policy_path.as_deref()) {
+        (Some(_), Some(_)) => Err(RuntimeError::ManifestInvalid(
+            "cedar policies must declare exactly one of policy_set or policy_path, not both"
+                .to_string(),
+        )),
+        (None, None) => Err(RuntimeError::ManifestInvalid(
+            "cedar policies must declare exactly one of policy_set or policy_path".to_string(),
+        )),
+        _ => Ok(()),
+    }?;
+    validate_optional_string("cedar.policy_set", config.policy_set.as_deref())?;
+    validate_optional_string("cedar.policy_path", config.policy_path.as_deref())?;
+    validate_optional_string("cedar.entities_path", config.entities_path.as_deref())?;
+    validate_optional_string("cedar.schema_path", config.schema_path.as_deref())?;
+    if let Some(query) = &config.query {
+        if !query.is_object() {
+            return Err(RuntimeError::ManifestInvalid(
+                "cedar.query must be a JSON object when present".to_string(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn validate_policy_binding(
@@ -242,6 +319,9 @@ pub fn prepare_policy_invocation(
             input: final_policy_input.clone(),
             canonical_input: canonical_policy_input(final_policy_input)?,
         })),
+        PolicyConfig::Cedar(_) => Err(RuntimeError::PolicyInvocationFailed(
+            "cedar policy invocation requires the cedar prepared-invocation variant added by AGT M2.S2 D2; manifest plumbing is wired but the prepared-invocation surface lands in the next commit".to_string(),
+        )),
         PolicyConfig::Test(config) => Ok(PreparedPolicyInvocation::Test(TestPolicyInvocation {
             adapter_config: merge_adapter_config(&config.adapter_config, &binding.adapter_config),
             input: final_policy_input.clone(),
