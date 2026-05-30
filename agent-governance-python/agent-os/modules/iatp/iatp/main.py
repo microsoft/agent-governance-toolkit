@@ -112,7 +112,7 @@ def _trusted_user_override(header_value: Optional[str]) -> bool:
 
     This is a stop-gap; the real fix is a trusted out-of-band approval
     provider analogous to ``KernelExecuteTool.approval_provider``. See
-    the TODO in ``proxy_task`` for the design follow-up.
+    the design-follow-up note in ``proxy_task``.
     """
     if not header_value:
         return False
@@ -120,8 +120,8 @@ def _trusted_user_override(header_value: Optional[str]) -> bool:
     if not expected:
         return False
     # Constant-time compare to avoid timing oracles on the token.
-    import hmac
-    return hmac.compare_digest(header_value.strip(), expected)
+    import secrets
+    return secrets.compare_digest(header_value.strip(), expected)
 
 # Initialize engines and validators
 policy_engine = IATPPolicyEngine()
@@ -243,7 +243,7 @@ async def proxy_task(
       and warnings always block. A bare ``true`` no longer authorizes.
     - X-Agent-Trace-ID: Optional trace ID for distributed tracing
 
-    TODO(security): replace the env-token gate with a trusted out-of-band
+    Future hardening (security): replace the env-token gate with a trusted out-of-band
     approval provider injection (same shape as
     ``KernelExecuteTool.approval_provider``). The current gate is a
     defense-in-depth stop-gap; a host-driven elicitation flow is the

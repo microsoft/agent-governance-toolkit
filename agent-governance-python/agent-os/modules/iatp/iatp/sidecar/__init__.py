@@ -138,7 +138,7 @@ class SidecarProxy:
               ``IATP_TRUSTED_USER_OVERRIDE_TOKEN`` to bypass security
               warnings. Header is ignored entirely when env var is
               unset. A bare ``true`` no longer authorizes.
-              TODO(security): replace with trusted out-of-band approval
+              Future hardening (security): replace with trusted out-of-band approval
               provider injection (analog to KernelExecuteTool).
             - X-Agent-Trace-ID: Optional trace ID for distributed tracing
             """

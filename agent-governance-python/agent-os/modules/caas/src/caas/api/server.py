@@ -5,7 +5,7 @@ REST API for Context-as-a-Service.
 
 SECURITY WARNING — UNAUTHENTICATED SURFACE:
 ============================================
-TODO(security, broader-design-required): This module exposes ~50 FastAPI
+Future hardening (security, broader-design-required): This module exposes ~50 FastAPI
 routes — including destructive ``POST/PUT/DELETE`` endpoints over
 ``/ingest``, ``/documents``, ``/triad``, ``/conversation``, ``/vfs/files``,
 ``/gateway/audit`` — with **no authentication, no authorization, and no

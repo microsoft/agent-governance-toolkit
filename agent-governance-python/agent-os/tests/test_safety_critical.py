@@ -317,13 +317,20 @@ class TestBoundedSemaphore:
 
 class TestPolicyEdgeCases:
     @pytest.mark.asyncio
-    async def test_empty_policies_list_allows(self):
+    async def test_empty_policies_list_denies_protected_actions(self):
+        """Empty policy list must NOT allow `requires_approval` actions.
+
+        Regression: an empty policies list previously allowed any action
+        because the policy loop had nothing to deny. file_write is a
+        ``requires_approval`` action; with no policies (and no caller-
+        side approval injection), the kernel must fail closed.
+        """
         kernel = StatelessKernel()
         ctx = StatelessContext(agent_id="a1", policies=[])
         result = await kernel.execute(
             action="file_write", params={"path": "/tmp/x"}, context=ctx
         )
-        assert result.success is True
+        assert result.success is False
 
     @pytest.mark.asyncio
     async def test_unknown_policy_name_gracefully_ignored(self):
