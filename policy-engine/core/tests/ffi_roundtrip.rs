@@ -131,10 +131,25 @@ unsafe extern "C" fn policy_callback(
             "transform": {
                 "path": "$policy_target.text",
                 "value": "Please summarize account [REDACTED]."
+            },
+            "evidence": {
+                "artefact": "sha256:proofblob",
+                "verification_pointers": {
+                    "issuer_pubkey": "https://example.com/keys/2026.pem",
+                    "policy_registry": "https://example.com/policies/v1/"
+                }
             }
         })
     } else {
-        json!({ "decision": "allow" })
+        json!({
+            "decision": "allow",
+            "evidence": {
+                "artefact": "sha256:allow-proof",
+                "verification_pointers": {
+                    "policy_registry": "https://example.com/policies/v1/"
+                }
+            }
+        })
     };
 
     CString::new(output.to_string())
@@ -214,6 +229,95 @@ fn ffi_roundtrip_transforms_policy_target() {
             result["transformed_policy_target"]["text"],
             "Please summarize account [REDACTED]."
         );
+        // AGT D1: the verdict carries the canonical transform payload so
+        // bindings can persist what the policy actually asked for.
+        assert_eq!(result["verdict"]["transform"]["path"], "$policy_target.text");
+        assert_eq!(
+            result["verdict"]["transform"]["value"],
+            "Please summarize account [REDACTED]."
+        );
+        // AGT D2: evidence rides through the FFI response verbatim.
+        assert_eq!(
+            result["verdict"]["evidence"]["artefact"],
+            "sha256:proofblob"
+        );
+        assert_eq!(
+            result["verdict"]["evidence"]["verification_pointers"]["issuer_pubkey"],
+            "https://example.com/keys/2026.pem"
+        );
+        // AGT D1.4: bisected identity. The transform mutates the policy
+        // target so enforced_identity must differ from input_identity, and
+        // action_identity must remain a backwards-compatible alias for
+        // enforced_identity.
+        let input_identity = result["input_identity"]
+            .as_str()
+            .expect("input_identity is a string");
+        let enforced_identity = result["enforced_identity"]
+            .as_str()
+            .expect("enforced_identity is a string");
+        let action_identity = result["action_identity"]
+            .as_str()
+            .expect("action_identity is a string");
+        assert!(input_identity.starts_with("sha256:"));
+        assert!(enforced_identity.starts_with("sha256:"));
+        assert_ne!(input_identity, enforced_identity);
+        assert_eq!(action_identity, enforced_identity);
+
+        acs_free_string(out);
+        acs_runtime_free(runtime);
+    }
+}
+
+#[test]
+fn ffi_roundtrip_allow_carries_evidence_and_matched_identities() {
+    unsafe {
+        let runtime = build_runtime();
+        let request = CString::new(
+            json!({
+                "intervention_point": "input",
+                "snapshot": {
+                    "input": {"text": "Please summarize the morning briefing."},
+                    "actor": {"id": "user-123"},
+                    "transport": {"kind": "api_gateway", "route": "/chat"}
+                },
+                "mode": "enforce"
+            })
+            .to_string(),
+        )
+        .expect("request contains no NUL");
+        let mut err = ptr::null_mut();
+        let out = acs_runtime_evaluate(runtime, request.as_ptr(), &mut err);
+        assert!(!out.is_null(), "evaluate error: {}", take_err(err));
+        let result: Value = serde_json::from_str(
+            CStr::from_ptr(out)
+                .to_str()
+                .expect("runtime output is UTF-8"),
+        )
+        .expect("runtime output is JSON");
+        // The dispatcher returns allow plus an evidence artefact.
+        assert_eq!(result["verdict"]["decision"], "allow");
+        assert!(result["verdict"]["transform"].is_null());
+        assert_eq!(
+            result["verdict"]["evidence"]["artefact"],
+            "sha256:allow-proof"
+        );
+        assert_eq!(
+            result["verdict"]["evidence"]["verification_pointers"]["policy_registry"],
+            "https://example.com/policies/v1/"
+        );
+        // AGT D1.4: non-transform verdicts MUST report equal identities, and
+        // action_identity MUST alias enforced_identity.
+        let input_identity = result["input_identity"]
+            .as_str()
+            .expect("input_identity is a string");
+        let enforced_identity = result["enforced_identity"]
+            .as_str()
+            .expect("enforced_identity is a string");
+        let action_identity = result["action_identity"]
+            .as_str()
+            .expect("action_identity is a string");
+        assert_eq!(input_identity, enforced_identity);
+        assert_eq!(action_identity, enforced_identity);
 
         acs_free_string(out);
         acs_runtime_free(runtime);

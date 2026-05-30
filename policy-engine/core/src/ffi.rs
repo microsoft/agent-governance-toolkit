@@ -642,11 +642,20 @@ pub unsafe extern "C" fn acs_runtime_evaluate(
                 snapshot,
                 mode,
             });
+        // AGT D1.4: surface both `input_identity` and `enforced_identity` so
+        // SDKs can persist them in audit records. `action_identity` is kept
+        // as a backwards-compatible alias for `enforced_identity` so older
+        // SDK bindings continue to work without a breaking shape change.
+        // AGT D1 + D2: `verdict.transform` and `verdict.evidence` already
+        // serialize via serde on the Verdict struct, so they ride through
+        // this response verbatim when present.
         let response = json!({
             "verdict": result.verdict,
             "transformed_policy_target": result.transformed_policy_target,
             "policy_input": result.policy_input,
             "action_identity": result.action_identity,
+            "input_identity": result.input_identity,
+            "enforced_identity": result.enforced_identity,
         });
         json_to_c(&response)
     })
