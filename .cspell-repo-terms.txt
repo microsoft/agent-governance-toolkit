@@ -28,6 +28,7 @@ asctime
 aspnet
 asyncio
 atexit
+attributeerror
 autobuild
 autogen
 autouse
@@ -59,6 +60,7 @@ cicd
 ciphertext
 CISA
 classmethod
+clientid
 clippy
 cmdshell
 CMVK
@@ -66,8 +68,11 @@ CODEOWNERS
 codepoint
 CommonMark
 comspec
+connectedservicename
 containerapps
 containerd
+contentsource
+contenttype
 contoso
 coro
 Cpus
@@ -102,6 +107,7 @@ digestmod
 dnssec
 Dockerfiles
 Docstrings
+domaintenantid
 DOTALL
 dpkg
 DYLD
@@ -118,8 +124,10 @@ eprintln
 Errno
 Errorf
 esrp
+ESRPRELPACMAN
 EUAI
 evilpypi
+exfil
 exfiltration
 expanduser
 fastapi
@@ -135,10 +143,12 @@ FLUSHALL
 FLUSHDB
 fmean
 fnmatch
+folderlocation
 Fprintf
 fria
 fromisoformat
 fromkeys
+fromlist
 fromtimestamp
 frontmatter
 frozenset
@@ -156,10 +166,12 @@ gomod
 GOPROXY
 governancepolicy
 gvisor
+h├⌐llo
 hasattr
 hashlib
 HEALTHCHECK
 healthz
+héllo
 helpdesk
 hexdigest
 HMAC
@@ -169,7 +181,7 @@ HTTPMCP
 httpx
 hypercall
 Hyperlight
-h├⌐llo
+hyperlightjs
 IATP
 idweb
 IGNORECASE
@@ -191,6 +203,7 @@ kevinkaylie
 keypair
 keypairs
 keyrings
+keyvaultname
 kubeconfigs
 kwarg
 kwargs
@@ -210,6 +223,7 @@ lockfile
 lockfiles
 lotl
 lstrip
+mainpublisher
 manylinux
 markdown
 Marp
@@ -221,6 +235,7 @@ Mevil
 mgmt
 microkernel
 Microsoft
+millicores
 mkdocs
 modelcontextprotocol
 Moltbook
@@ -244,6 +259,7 @@ netfilter
 networkx
 newpartner
 NNNN
+nonimport
 nonlocal
 noqa
 normalises
@@ -262,6 +278,7 @@ oxycodone
 paramref
 parseability
 parseable
+pasteable
 pathed
 pathext
 pathexts
@@ -337,6 +354,7 @@ seccomp
 SemanticKernel
 serde
 Serialise
+serviceendpointurl
 setattr
 setdefault
 setext
@@ -346,6 +364,7 @@ setuptools
 shutil
 siddique
 SIEM
+signcertname
 sitecustomize
 skipif
 Slidev
@@ -387,6 +406,7 @@ TOCTOU
 TOFU
 toolkits
 traceparent
+typeerror
 typer
 ufeff
 uncallable
@@ -406,6 +426,7 @@ urlopen
 urlparse
 urlsafe
 urlunparse
+usemanagedidentity
 USERPROFILE
 usize
 utcfromtimestamp
@@ -416,6 +437,9 @@ venv
 VIRTUALENVS
 vitest
 vnet
+waitforreleasecompletion
+webfetch
+websearch
 westus
 wfile
 windir
@@ -425,14 +449,3 @@ XACML
 xfail
 xunit
 ZDOTDIR
-webfetch
-websearch
-exfil
-fromlist
-hyperlightjs
-millicores
-nonimport
-pasteable
-héllo
-attributeerror
-typeerror

@@ -58,7 +58,7 @@ parameters:
   - name: rustVersion
     type: string
     displayName: 'Rust toolchain version'
-    default: '1.87.0'
+    default: '1.89.0'
 
   - name: goVersion
     type: string
@@ -215,177 +215,41 @@ stages:
                 publishLocation: 'pipeline'
               displayName: 'Publish ${{ pkg.name }} artifacts'
 
-  # Consolidated packages (new PyPI projects) must publish sequentially
-  # to avoid PyPI 429 "Too many new projects created" rate limits.
-  # Each package waits 5 minutes before publishing to let PyPI's rate
-  # limit window reset. Rapid retries are disabled (retryCount: 0)
-  # because a 1s retry just burns the rate limit budget faster.
-  # Once these projects exist on PyPI, this stage can be merged back
-  # into the parallel Publish_PyPI stage below.
-  - stage: Publish_PyPI_Consolidated
-    displayName: 'Publish Consolidated Packages to PyPI (sequential)'
+  # All PyPI packages publish in parallel after build completes.
+  - stage: Publish_PyPI
+    displayName: 'Publish All Packages to PyPI'
     dependsOn: Build_PyPI
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
     jobs:
-      - job: Publish_PyPI_agent_governance_toolkit_core
-        displayName: 'Publish agent-governance-toolkit-core to PyPI'
-        steps:
-          - task: DownloadPipelineArtifact@2
-            inputs:
-              artifact: 'pypi-agent-governance-toolkit-core'
-              targetPath: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-core'
-            displayName: 'Download agent-governance-toolkit-core artifacts'
-          - task: EsrpRelease@11
-            displayName: 'ESRP Publish agent-governance-toolkit-core to PyPI'
-            retryCountOnTaskFailure: 0
-            inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-              clientid: '$(ESRP_CLIENT_ID)'
-              intent: 'PackageDistribution'
-              contenttype: 'PyPi'
-              contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-core'
-              waitforreleasecompletion: true
-              owners: '$(ESRP_OWNERS)'
-              approvers: '$(ESRP_APPROVERS)'
-              serviceendpointurl: 'https://api.esrp.microsoft.com'
-              mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-      - job: Publish_PyPI_agent_governance_toolkit_integrations
-        displayName: 'Publish agent-governance-toolkit-integrations to PyPI'
-        dependsOn: Publish_PyPI_agent_governance_toolkit_core
-        steps:
-          - script: echo "Waiting 5 min for PyPI new-project rate-limit window..." && sleep 300
-            displayName: 'Rate-limit cooldown (5 min)'
-          - task: DownloadPipelineArtifact@2
-            inputs:
-              artifact: 'pypi-agent-governance-toolkit-integrations'
-              targetPath: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-integrations'
-            displayName: 'Download agent-governance-toolkit-integrations artifacts'
-          - task: EsrpRelease@11
-            displayName: 'ESRP Publish agent-governance-toolkit-integrations to PyPI'
-            retryCountOnTaskFailure: 0
-            inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-              clientid: '$(ESRP_CLIENT_ID)'
-              intent: 'PackageDistribution'
-              contenttype: 'PyPi'
-              contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-integrations'
-              waitforreleasecompletion: true
-              owners: '$(ESRP_OWNERS)'
-              approvers: '$(ESRP_APPROVERS)'
-              serviceendpointurl: 'https://api.esrp.microsoft.com'
-              mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-      - job: Publish_PyPI_agent_governance_toolkit_cli
-        displayName: 'Publish agent-governance-toolkit-cli to PyPI'
-        dependsOn: Publish_PyPI_agent_governance_toolkit_integrations
-        steps:
-          - script: echo "Waiting 5 min for PyPI new-project rate-limit window..." && sleep 300
-            displayName: 'Rate-limit cooldown (5 min)'
-          - task: DownloadPipelineArtifact@2
-            inputs:
-              artifact: 'pypi-agent-governance-toolkit-cli'
-              targetPath: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-cli'
-            displayName: 'Download agent-governance-toolkit-cli artifacts'
-          - task: EsrpRelease@11
-            displayName: 'ESRP Publish agent-governance-toolkit-cli to PyPI'
-            retryCountOnTaskFailure: 0
-            inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-              clientid: '$(ESRP_CLIENT_ID)'
-              intent: 'PackageDistribution'
-              contenttype: 'PyPi'
-              contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-cli'
-              waitforreleasecompletion: true
-              owners: '$(ESRP_OWNERS)'
-              approvers: '$(ESRP_APPROVERS)'
-              serviceendpointurl: 'https://api.esrp.microsoft.com'
-              mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-      - job: Publish_PyPI_agent_governance_toolkit_protocols
-        displayName: 'Publish agent-governance-toolkit-protocols to PyPI'
-        dependsOn: Publish_PyPI_agent_governance_toolkit_cli
-        steps:
-          - script: echo "Waiting 5 min for PyPI new-project rate-limit window..." && sleep 300
-            displayName: 'Rate-limit cooldown (5 min)'
-          - task: DownloadPipelineArtifact@2
-            inputs:
-              artifact: 'pypi-agent-governance-toolkit-protocols'
-              targetPath: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-protocols'
-            displayName: 'Download agent-governance-toolkit-protocols artifacts'
-          - task: EsrpRelease@11
-            displayName: 'ESRP Publish agent-governance-toolkit-protocols to PyPI'
-            retryCountOnTaskFailure: 0
-            inputs:
-              connectedservicename: 'Agent Governance Toolkit'
-              usemanagedidentity: true
-              keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-              signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-              clientid: '$(ESRP_CLIENT_ID)'
-              intent: 'PackageDistribution'
-              contenttype: 'PyPi'
-              contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/dist-agent-governance-toolkit-protocols'
-              waitforreleasecompletion: true
-              owners: '$(ESRP_OWNERS)'
-              approvers: '$(ESRP_APPROVERS)'
-              serviceendpointurl: 'https://api.esrp.microsoft.com'
-              mainpublisher: 'ESRPRELPACMAN'
-              domaintenantid: '$(MICROSOFT_TENANT_ID)'
-
-  # Standalone packages (already registered on PyPI) publish in parallel.
-  - stage: Publish_PyPI
-    displayName: 'Publish Standalone Packages to PyPI'
-    dependsOn:
-      - Build_PyPI
-      - Publish_PyPI_Consolidated
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
-    jobs:
       - ${{ each pkg in parameters.pypiPackages }}:
-        - ${{ if not(startsWith(pkg.name, 'agent-governance-toolkit-')) }}:
-          - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
-            displayName: 'Publish ${{ pkg.name }} to PyPI'
-            steps:
-              - task: DownloadPipelineArtifact@2
-                inputs:
-                  artifact: 'pypi-${{ pkg.name }}'
-                  targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                displayName: 'Download ${{ pkg.name }} artifacts'
+        - job: Publish_PyPI_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Publish ${{ pkg.name }} to PyPI'
+          steps:
+            - task: DownloadPipelineArtifact@2
+              inputs:
+                artifact: 'pypi-${{ pkg.name }}'
+                targetPath: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
+              displayName: 'Download ${{ pkg.name }} artifacts'
 
-              - task: EsrpRelease@11
-                displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
-                retryCountOnTaskFailure: 2
-                inputs:
-                  connectedservicename: 'Agent Governance Toolkit'
-                  usemanagedidentity: true
-                  keyvaultname: '$(ESRP_KEYVAULT_NAME)'
-                  signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
-                  clientid: '$(ESRP_CLIENT_ID)'
-                  intent: 'PackageDistribution'
-                  contenttype: 'PyPi'
-                  contentsource: 'Folder'
-                  folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
-                  waitforreleasecompletion: true
-                  owners: '$(ESRP_OWNERS)'
-                  approvers: '$(ESRP_APPROVERS)'
-                  serviceendpointurl: 'https://api.esrp.microsoft.com'
-                  mainpublisher: 'ESRPRELPACMAN'
-                  domaintenantid: '$(MICROSOFT_TENANT_ID)'
+            - task: EsrpRelease@11
+              displayName: 'ESRP Publish ${{ pkg.name }} to PyPI'
+              retryCountOnTaskFailure: 2
+              inputs:
+                connectedservicename: 'Agent Governance Toolkit'
+                usemanagedidentity: true
+                keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+                signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
+                clientid: '$(ESRP_CLIENT_ID)'
+                intent: 'PackageDistribution'
+                contenttype: 'PyPi'
+                contentsource: 'Folder'
+                folderlocation: '$(Pipeline.Workspace)/dist-${{ pkg.name }}'
+                waitforreleasecompletion: true
+                owners: '$(ESRP_OWNERS)'
+                approvers: '$(ESRP_APPROVERS)'
+                serviceendpointurl: 'https://api.esrp.microsoft.com'
+                mainpublisher: 'ESRPRELPACMAN'
+                domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
   # =======================================================
   # NPM — 7 packages (@microsoft scope)
