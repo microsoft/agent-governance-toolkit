@@ -380,7 +380,7 @@ jobs:
         working-directory: agent-governance-python/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
-            pytest tests/ -q --tb=short --cov=src --cov-report=xml:coverage.xml || true
+            pytest tests/ -q --tb=short --cov=src --cov-report=xml:coverage.xml
           else
             echo "No tests/ directory — skipping package tests"
           fi
