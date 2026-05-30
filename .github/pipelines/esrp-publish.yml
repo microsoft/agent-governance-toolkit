@@ -58,7 +58,7 @@ parameters:
   - name: rustVersion
     type: string
     displayName: 'Rust toolchain version'
-    default: '1.70.0'
+    default: '1.87.0'
 
   - name: goVersion
     type: string
