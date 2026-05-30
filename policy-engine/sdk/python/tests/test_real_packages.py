@@ -62,7 +62,11 @@ _HAS_LITELLM = (
 )
 
 
-def result(decision=Decision.ALLOW, transformed_policy_target=None):
+def result(decision=None, transformed_policy_target=None):
+    # AGT D1: TRANSFORM is the only mutating decision. Default to it when
+    # the caller supplied a transformed_policy_target.
+    if decision is None:
+        decision = Decision.TRANSFORM if transformed_policy_target is not None else Decision.ALLOW
     return InterventionPointResult(Verdict(decision), transformed_policy_target=transformed_policy_target)
 
 

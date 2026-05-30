@@ -37,7 +37,12 @@ else:
     _NATIVE_AVAILABLE = True
 
 
-def verdict(decision=Decision.ALLOW, transformed_policy_target=None, reason=None):
+def verdict(decision=None, transformed_policy_target=None, reason=None):
+    # AGT D1: TRANSFORM is the only mutating decision. Default to it when
+    # the caller supplied a transformed_policy_target so adapter tests
+    # exercise the canonical mutation path under the new gate.
+    if decision is None:
+        decision = Decision.TRANSFORM if transformed_policy_target is not None else Decision.ALLOW
     return InterventionPointResult(Verdict(decision, reason=reason), transformed_policy_target=transformed_policy_target)
 
 
@@ -49,13 +54,19 @@ class QueueRuntime:
     async def evaluate_intervention_point(self, request):
         self.requests.append(request)
         result = self.results.popleft()
-        if result.policy_input is not None and result.action_identity is not None:
+        if result.policy_input is not None and result.enforced_identity is not None:
             return result
         policy_input = {
             "intervention_point": request.intervention_point.value,
             "snapshot": dict(request.snapshot),
         }
-        return replace(result, policy_input=policy_input, action_identity=action_identity(policy_input))
+        identity = action_identity(policy_input)
+        return replace(
+            result,
+            policy_input=policy_input,
+            input_identity=identity,
+            enforced_identity=identity,
+        )
 
 
 class FailingRuntime:

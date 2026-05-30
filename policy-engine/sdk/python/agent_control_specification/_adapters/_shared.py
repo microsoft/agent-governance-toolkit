@@ -72,9 +72,20 @@ def _merge_snapshot(
 def _transformed_or(
     result: InterventionPointResult, fallback: JsonValue, mode: EnforcementMode
 ) -> JsonValue:
-    if mode != EnforcementMode.ENFORCE or not result.verdict.decision.applies_effects:
+    """Return the engine's transformed policy target when the verdict was
+    ``Decision.TRANSFORM`` in enforce mode, otherwise the fallback.
+
+    Mirrors `_orchestration._transformed_or`. Per AGT D1 only
+    ``Decision.TRANSFORM`` mutates the policy target.
+    """
+
+    if mode != EnforcementMode.ENFORCE:
         return fallback
-    return fallback if result.transformed_policy_target is None else result.transformed_policy_target
+    if not result.verdict.decision.applies_transform:
+        return fallback
+    if result.transformed_policy_target is None:
+        return fallback
+    return result.transformed_policy_target
 
 
 def _require_callable(target: Any, method_name: str, target_name: str) -> Execute:

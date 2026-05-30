@@ -33,7 +33,13 @@ from agent_control_specification import (
 )
 
 
-def result(decision=Decision.ALLOW, transformed_policy_target=None):
+def result(decision=None, transformed_policy_target=None):
+    # AGT D1: only Decision.TRANSFORM applies the engine's
+    # transformed_policy_target. Helper defaults to TRANSFORM when the
+    # caller supplied a transformed_policy_target so existing call sites
+    # exercise the canonical mutation path without spelling it out.
+    if decision is None:
+        decision = Decision.TRANSFORM if transformed_policy_target is not None else Decision.ALLOW
     return InterventionPointResult(Verdict(decision), transformed_policy_target=transformed_policy_target)
 
 

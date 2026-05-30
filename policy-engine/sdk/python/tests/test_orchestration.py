@@ -27,10 +27,15 @@ class QueueRuntime:
 
 class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_run_enforces_input_and_output(self):
+        # AGT D1: only Decision.TRANSFORM applies the engine's
+        # transformed_policy_target. Pre-AGT the SDK gated on
+        # applies_effects (allow|warn|escalate), so this fixture used
+        # ALLOW/WARN. Migrate to TRANSFORM so the SDK propagates the
+        # rewrite per AGT D1.1.
         runtime = QueueRuntime(
             [
-                InterventionPointResult(Verdict(Decision.ALLOW), transformed_policy_target={"text": "rewritten"}),
-                InterventionPointResult(Verdict(Decision.WARN), transformed_policy_target={"answer": "redacted"}),
+                InterventionPointResult(Verdict(Decision.TRANSFORM), transformed_policy_target={"text": "rewritten"}),
+                InterventionPointResult(Verdict(Decision.TRANSFORM), transformed_policy_target={"answer": "redacted"}),
             ]
         )
         control = AgentControl(runtime)
@@ -48,10 +53,11 @@ class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runtime.requests[1].snapshot["output"], {"answer": "raw"})
 
     async def test_protect_tool_enforces_pre_and_post_tool_call(self):
+        # AGT D1: TRANSFORM is the only mutating decision.
         runtime = QueueRuntime(
             [
-                InterventionPointResult(Verdict(Decision.ALLOW), transformed_policy_target={"x": 2}),
-                InterventionPointResult(Verdict(Decision.ALLOW), transformed_policy_target={"sum": 4}),
+                InterventionPointResult(Verdict(Decision.TRANSFORM), transformed_policy_target={"x": 2}),
+                InterventionPointResult(Verdict(Decision.TRANSFORM), transformed_policy_target={"sum": 4}),
             ]
         )
         control = AgentControl(runtime)

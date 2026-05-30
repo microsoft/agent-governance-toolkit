@@ -15,6 +15,7 @@ from agent_control_specification import (
     EnforcementMode,
     InterventionPoint,
     InterventionPointResult,
+    Transform,
     Verdict,
     mcp_approval_resolver,
     action_identity,
@@ -29,10 +30,18 @@ class QueueRuntime:
     async def evaluate_intervention_point(self, request):
         self.requests.append(request)
         result = self.results.popleft()
-        if result.policy_input is not None and result.action_identity is not None:
+        if result.policy_input is not None and result.enforced_identity is not None:
             return result
         policy_input = {"intervention_point": request.intervention_point.value, "snapshot": dict(request.snapshot)}
-        return replace(result, policy_input=policy_input, action_identity=action_identity(policy_input))
+        identity = action_identity(policy_input)
+        # AGT D1.4: non-transform fixtures keep input_identity ==
+        # enforced_identity; the property action_identity aliases enforced.
+        return replace(
+            result,
+            policy_input=policy_input,
+            input_identity=identity,
+            enforced_identity=identity,
+        )
 
 
 def _escalate():
@@ -103,17 +112,37 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
                 "Approval resolver failed closed.",
             )
 
-    async def test_escalate_allow_applies_effects_after_approval(self):
+    async def test_transform_verdict_routes_through_transformed_policy_target(self):
+        """AGT D1: Decision.TRANSFORM is the canonical mutation path.
+
+        Pre-AGT, this case exercised an ``escalate`` verdict that also
+        carried a transformed_policy_target (legacy effects[] semantics).
+        Per AGT D1.1 only TRANSFORM can produce a transformed_policy_target,
+        so the test now drives a TRANSFORM verdict end to end and asserts
+        the SDK uses the engine's transform value as the effective input
+        without consulting any approval resolver.
+        """
+
+        transform = Transform(path="$policy_target.text", value="redacted")
         runtime = QueueRuntime(
             [
                 InterventionPointResult(
-                    Verdict(Decision.ESCALATE), transformed_policy_target={"text": "transformed"}
+                    Verdict(
+                        Decision.TRANSFORM,
+                        reason="redacted_for_demo",
+                        transform=transform,
+                    ),
+                    transformed_policy_target={"text": "redacted"},
                 ),
                 _allow(),
             ]
         )
 
+        consulted = False
+
         async def resolver(intervention_point, result):
+            nonlocal consulted
+            consulted = True
             return ApprovalResolution.allow(result.action_identity)
 
         control = AgentControl(runtime, approval_resolver=resolver)
@@ -125,7 +154,8 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
 
         result = await control.run({"text": "original"}, execute)
 
-        self.assertEqual(seen, [{"text": "transformed"}])
+        self.assertFalse(consulted, "transform must not consult an approval resolver")
+        self.assertEqual(seen, [{"text": "redacted"}])
         self.assertEqual(result.value, {"answer": "ok"})
 
 

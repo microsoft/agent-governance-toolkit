@@ -133,9 +133,17 @@ class NativeRuntimeClient:
         }
         loop = asyncio.get_running_loop()
         raw = await loop.run_in_executor(None, self._native.evaluate, request_dict)
+        # AGT D1.4: prefer the new bisected identity fields when the native
+        # core exposes them. Older builds only emitted ``action_identity``;
+        # fall back to that single value for both slots so the SDK stays
+        # tolerant of older binaries during a rollout.
+        legacy_identity = raw.get("action_identity")
+        input_identity = raw.get("input_identity", legacy_identity)
+        enforced_identity = raw.get("enforced_identity", legacy_identity)
         return InterventionPointResult(
             verdict=Verdict.from_mapping(raw["verdict"]),
             transformed_policy_target=raw.get("transformed_policy_target"),
             policy_input=raw.get("policy_input"),
-            action_identity=raw.get("action_identity"),
+            input_identity=input_identity,
+            enforced_identity=enforced_identity,
         )

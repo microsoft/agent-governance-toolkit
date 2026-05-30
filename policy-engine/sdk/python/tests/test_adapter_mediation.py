@@ -25,7 +25,11 @@ from agent_control_specification import (
 )
 
 
-def verdict(decision=Decision.ALLOW, transformed_policy_target=None):
+def verdict(decision=None, transformed_policy_target=None):
+    # AGT D1: TRANSFORM is the only mutating decision; auto-pick it when
+    # the caller provided a transformed_policy_target.
+    if decision is None:
+        decision = Decision.TRANSFORM if transformed_policy_target is not None else Decision.ALLOW
     return InterventionPointResult(Verdict(decision), transformed_policy_target=transformed_policy_target)
 
 

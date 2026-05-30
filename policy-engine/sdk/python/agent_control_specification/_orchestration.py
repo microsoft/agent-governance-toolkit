@@ -413,9 +413,25 @@ async def _maybe_await(value: JsonValue | Awaitable[JsonValue]) -> JsonValue:
 def _transformed_or(
     result: InterventionPointResult, fallback: JsonValue, mode: EnforcementMode
 ) -> JsonValue:
-    if mode != EnforcementMode.ENFORCE or not result.verdict.decision.applies_effects:
+    """Return the engine's transformed policy target when the verdict was
+    ``Decision.TRANSFORM`` in enforce mode, otherwise the fallback.
+
+    Per AGT D1 only ``Decision.TRANSFORM`` is allowed to mutate the policy
+    target. The previous implementation gated on ``applies_effects`` which
+    also returned True for ``allow``, ``warn``, and ``escalate``; under AGT
+    those decisions never produce a transformed_policy_target, so the gate
+    is moved to the canonical ``applies_transform`` predicate. The behaviour
+    for non-transform verdicts is unchanged because the runtime guarantees
+    ``transformed_policy_target`` is ``None`` outside of TRANSFORM.
+    """
+
+    if mode != EnforcementMode.ENFORCE:
         return fallback
-    return fallback if result.transformed_policy_target is None else result.transformed_policy_target
+    if not result.verdict.decision.applies_transform:
+        return fallback
+    if result.transformed_policy_target is None:
+        return fallback
+    return result.transformed_policy_target
 
 
 def _require_tool_call_id(tool_call_id: str | None) -> str:

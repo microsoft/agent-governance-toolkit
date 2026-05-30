@@ -196,7 +196,7 @@ async def _guard_raw_sse_chat_completion(
     post_result = result.post_model_call_result
     applies = (
         EnforcementMode(mode) == EnforcementMode.ENFORCE
-        and post_result.verdict.decision.applies_effects
+        and post_result.verdict.decision.applies_transform
     )
     if not applies or post_result.transformed_policy_target is None:
         return captured["raw_sse"]
