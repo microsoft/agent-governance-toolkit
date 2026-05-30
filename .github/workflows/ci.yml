@@ -67,9 +67,9 @@ jobs:
               - 'agent-governance-typescript/**'
               - 'agent-governance-antigravity-cli/**'
               - 'agent-governance-opencode/**'
-              - 'packages/agent-os/extensions/**'
-              - 'packages/agentmesh-integrations/mastra-agentmesh/**'
-              - 'packages/agentmesh-integrations/copilot-governance/**'
+              - 'agent-governance-python/agent-os/extensions/**'
+              - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
+              - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
             integrations:
               - 'agent-governance-python/agentmesh-integrations/**'
             workflows:
