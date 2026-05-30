@@ -3,11 +3,12 @@ use crate::{
     constants::policy_input as pi_key,
     effects::validate_and_maybe_apply_effects,
     manifest::Manifest,
+    paths::PathRoot,
     policy::{prepare_policy_invocation, PolicyConfig, PreparedPolicyInvocation},
     policy_input::{action_identity, build_policy_input},
     telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetryEventType, TelemetrySink},
     tool_projection::project_tool,
-    verdict::normalize_policy_output,
+    verdict::{normalize_policy_output, Decision, Transform},
     EnforcementMode, InterventionPoint, JsonPath, JsonValue, Limits, PathEnv, PerfTelemetry,
     RuntimeError, Verdict,
 };
@@ -319,22 +320,53 @@ impl Runtime {
             }
         })?;
 
-        let should_apply =
-            request.mode == EnforcementMode::Enforce && verdict.decision.applies_effects();
-        let transformed_policy_target =
-            validate_and_maybe_apply_effects(&policy_target, &verdict.effects, should_apply)
+        let transformed_policy_target = match verdict.decision {
+            Decision::Transform => {
+                let transform = verdict
+                    .transform
+                    .as_ref()
+                    .ok_or_else(|| EvaluationFailure {
+                        error: RuntimeError::PolicyOutputInvalid(
+                            "transform decision missing transform body after normalization"
+                                .to_string(),
+                        ),
+                        policy_input: Some(final_policy_input.clone()),
+                    })?;
+                let applied = apply_transform(&policy_target, transform).map_err(|error| {
+                    EvaluationFailure {
+                        error,
+                        policy_input: Some(final_policy_input.clone()),
+                    }
+                })?;
+                if request.mode == EnforcementMode::Enforce {
+                    Some(applied)
+                } else {
+                    None
+                }
+            }
+            _ => {
+                let should_apply =
+                    request.mode == EnforcementMode::Enforce && verdict.decision.applies_effects();
+                let transformed = validate_and_maybe_apply_effects(
+                    &policy_target,
+                    &verdict.effects,
+                    should_apply,
+                )
                 .map_err(|error| EvaluationFailure {
                     error,
                     policy_input: Some(final_policy_input.clone()),
                 })?;
-        if should_apply && !verdict.effects.is_empty() {
-            self.emit_intervention_point_effect_applied(
-                request.intervention_point,
-                request.mode,
-                &point_config.policy.id,
-                verdict.effects.len(),
-            );
-        }
+                if should_apply && !verdict.effects.is_empty() {
+                    self.emit_intervention_point_effect_applied(
+                        request.intervention_point,
+                        request.mode,
+                        &point_config.policy.id,
+                        verdict.effects.len(),
+                    );
+                }
+                transformed
+            }
+        };
 
         let action_identity =
             action_identity(&final_policy_input).map_err(|error| EvaluationFailure {
@@ -582,6 +614,41 @@ fn is_identifier_reason_code(reason: &str) -> bool {
         })
 }
 
+/// Validate and apply an AGT D1.1 `transform` verdict body against the current
+/// policy target. The returned value is the rewritten policy target. The caller
+/// decides whether to surface the rewrite per the enforcement mode.
+///
+/// Per `SPECIFICATION-AGT-DELTA.md` D1.1 a transform whose path is outside
+/// `$policy_target` fails closed with `runtime_error:transform_target_forbidden`;
+/// a transform whose path does not resolve or whose value cannot be set fails
+/// closed with `runtime_error:transform_invalid`.
+fn apply_transform(
+    policy_target: &JsonValue,
+    transform: &Transform,
+) -> Result<JsonValue, RuntimeError> {
+    let path = JsonPath::parse(&transform.path)
+        .map_err(|err| RuntimeError::TransformInvalid(format!("invalid transform path: {err}")))?;
+    if path.root() != PathRoot::PolicyTarget {
+        return Err(RuntimeError::TransformTargetForbidden(
+            transform.path.clone(),
+        ));
+    }
+
+    let mut working = policy_target.clone();
+    match path.resolve_policy_target_mut(&mut working) {
+        Ok(slot) => {
+            *slot = transform.value.clone();
+            Ok(working)
+        }
+        Err(RuntimeError::EffectTargetForbidden(detail)) => {
+            Err(RuntimeError::TransformTargetForbidden(detail))
+        }
+        Err(error) => Err(RuntimeError::TransformInvalid(format!(
+            "transform could not be applied: {error}"
+        ))),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InterventionPointRequest {
     pub intervention_point: InterventionPoint,
@@ -631,5 +698,196 @@ impl From<RuntimeError> for EvaluationFailure {
             error,
             policy_input: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Decision, Manifest, RuntimeError};
+    use serde_json::json;
+    use std::sync::{Arc, Mutex};
+
+    struct StaticAnnotator;
+    impl AnnotatorDispatcher for StaticAnnotator {
+        fn dispatch(
+            &self,
+            _annotator_name: &str,
+            _annotator: &AnnotatorInvocation,
+            _preliminary_policy_input: &JsonValue,
+        ) -> Result<JsonValue, RuntimeError> {
+            Ok(JsonValue::Null)
+        }
+    }
+
+    struct StaticPolicy {
+        output: JsonValue,
+        seen: Mutex<Vec<JsonValue>>,
+    }
+
+    impl StaticPolicy {
+        fn new(output: JsonValue) -> Self {
+            Self {
+                output,
+                seen: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl PolicyDispatcher for StaticPolicy {
+        fn evaluate(
+            &self,
+            invocation: &PreparedPolicyInvocation,
+        ) -> Result<JsonValue, RuntimeError> {
+            self.seen
+                .lock()
+                .unwrap()
+                .push(invocation.policy_input().unwrap().clone());
+            Ok(self.output.clone())
+        }
+    }
+
+    fn output_manifest() -> Manifest {
+        Manifest::from_yaml_str(
+            r#"agent_control_specification_version: 0.3.0-alpha
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  output:
+    policy_target_kind: assistant_output
+    policy:
+      id: test_policy
+    policy_target: $snap.output"#,
+        )
+        .unwrap()
+    }
+
+    fn runtime(policy_output: JsonValue) -> Runtime {
+        Runtime::new(
+            output_manifest(),
+            Arc::new(StaticAnnotator),
+            Arc::new(StaticPolicy::new(policy_output)),
+        )
+        .unwrap()
+    }
+
+    fn evaluate(
+        runtime: &Runtime,
+        mode: EnforcementMode,
+        snapshot: JsonValue,
+    ) -> InterventionPointResult {
+        runtime.evaluate_intervention_point(InterventionPointRequest {
+            intervention_point: InterventionPoint::Output,
+            snapshot,
+            mode,
+        })
+    }
+
+    // ── AGT D1 transform application in evaluate_intervention_point ───────
+
+    #[test]
+    fn transform_decision_applied_in_enforce_mode() {
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "reason": "pii_redacted",
+            "transform": {"path": "$policy_target.body", "value": "[REDACTED]"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "secret data"}}),
+        );
+
+        assert_eq!(result.verdict.decision, Decision::Transform);
+        assert_eq!(
+            result.transformed_policy_target,
+            Some(json!({"body": "[REDACTED]"})),
+            "enforce mode must surface the transformed policy target"
+        );
+    }
+
+    #[test]
+    fn transform_decision_validated_only_in_evaluate_only_mode() {
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "reason": "pii_redacted",
+            "transform": {"path": "$policy_target.body", "value": "[REDACTED]"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::EvaluateOnly,
+            json!({"output": {"body": "secret data"}}),
+        );
+
+        assert_eq!(result.verdict.decision, Decision::Transform);
+        assert!(
+            result.transformed_policy_target.is_none(),
+            "evaluate_only mode must validate without applying transform"
+        );
+    }
+
+    #[test]
+    fn transform_with_invalid_path_fails_closed_with_transform_invalid() {
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "transform": {"path": "$policy_target.missing_field", "value": "x"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "data"}}),
+        );
+
+        assert_eq!(result.verdict.decision, Decision::Deny);
+        assert_eq!(
+            result.verdict.reason.as_deref(),
+            Some("runtime_error:transform_invalid")
+        );
+        assert!(result.transformed_policy_target.is_none());
+    }
+
+    #[test]
+    fn transform_with_path_outside_policy_target_fails_closed_with_target_forbidden() {
+        // The exclusivity rule is enforced in verdict::normalize_policy_output;
+        // we still verify the runtime surface returns the reserved reason on
+        // the produced verdict.
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "transform": {"path": "$snap.output.body", "value": "x"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "data"}}),
+        );
+
+        assert_eq!(result.verdict.decision, Decision::Deny);
+        assert_eq!(
+            result.verdict.reason.as_deref(),
+            Some("runtime_error:transform_target_forbidden")
+        );
+    }
+
+    #[test]
+    fn transform_with_type_mismatch_fails_closed_with_transform_invalid() {
+        // Target body is a string but transform tries to write to a nested key.
+        // resolve_policy_target_mut returns PathTypeMismatch which the runtime
+        // remaps to TransformInvalid.
+        let runtime = runtime(json!({
+            "decision": "transform",
+            "transform": {"path": "$policy_target.body.nested", "value": "x"}
+        }));
+        let result = evaluate(
+            &runtime,
+            EnforcementMode::Enforce,
+            json!({"output": {"body": "string value"}}),
+        );
+
+        assert_eq!(result.verdict.decision, Decision::Deny);
+        assert_eq!(
+            result.verdict.reason.as_deref(),
+            Some("runtime_error:transform_invalid")
+        );
     }
 }
