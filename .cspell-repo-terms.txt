@@ -26,6 +26,7 @@ appsettings
 argparse
 asctime
 aspnet
+asynccontextmanager
 asyncio
 atexit
 attributeerror
@@ -73,6 +74,7 @@ containerapps
 containerd
 contentsource
 contenttype
+contextlib
 contoso
 coro
 Cpus
@@ -108,6 +110,7 @@ dnssec
 Dockerfiles
 Docstrings
 domaintenantid
+doesnotexist
 DOTALL
 dpkg
 DYLD
@@ -128,6 +131,7 @@ ESRPRELPACMAN
 EUAI
 evilpypi
 exfil
+exfiltrated
 exfiltration
 expanduser
 fastapi
@@ -190,6 +194,7 @@ imran
 inheritdoc
 inspectable
 IPFS
+isfinite
 isinstance
 isoformat
 isort
@@ -250,6 +255,7 @@ myapp
 mynamespace
 mypod
 mypy
+nacl
 nameof
 Nanvix
 nargs
@@ -398,6 +404,7 @@ sybil
 syscall
 syscalls
 SYSTEMROOT
+testclient
 textwrap
 thiserror
 timedelta
@@ -414,6 +421,7 @@ unconfigured
 Ungated
 uninspectable
 Unmarshal
+unredacted
 Unregisters
 unrevocation
 unrevoke
