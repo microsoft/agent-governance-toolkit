@@ -28,6 +28,7 @@ from typing import Any
 
 import pytest
 
+from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.sandbox_provider import (
     ExecutionStatus,
     SandboxConfig,
@@ -547,6 +548,19 @@ class TestExecuteCode:
     def test_execute_without_session_raises(self, provider):
         with pytest.raises(RuntimeError, match="No active session"):
             provider.execute_code("agent-1", "missing", "print(1)")
+
+    def test_static_scan_blocks_subprocess_before_guest_run(self, provider):
+        h = provider.create_session("agent-1")
+        sb = _FakeSandbox.instances[-1]
+
+        with pytest.raises(SandboxCodeViolation, match="subprocess.Popen"):
+            provider.execute_code(
+                "agent-1",
+                h.session_id,
+                "import subprocess\nsubprocess.Popen(['terraform', 'plan'])",
+            )
+
+        assert sb.run_calls == []
 
     def test_run_exception_returns_failed_handle_not_raise(self, provider):
         h = provider.create_session("agent-1")

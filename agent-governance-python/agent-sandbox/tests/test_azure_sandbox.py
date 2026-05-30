@@ -35,6 +35,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.aca_sandbox_provider import (
     ACASandboxProvider,
     aca_config_from_policy,
@@ -932,6 +933,22 @@ class TestExecuteCode:
         assert ctx["code"] == "print(1)"
         assert ctx["step_index"] == 3
         assert ctx["intent"] == "test"
+
+    def test_static_scan_blocks_subprocess_before_any_azure_exec(
+        self, provider_with_evaluator, fake_sdk
+    ):
+        provider, build = provider_with_evaluator
+        handle, _ev = build(allow=True)
+        fake_sdk.default_sandbox.exec.reset_mock()
+
+        with pytest.raises(SandboxCodeViolation, match="os.system"):
+            provider.execute_code(
+                handle.agent_id,
+                handle.session_id,
+                "import os\nos.system('kubectl get secrets')",
+            )
+
+        fake_sdk.default_sandbox.exec.assert_not_called()
 
     def test_code_is_base64_piped_into_python3(
         self, provider_with_evaluator, fake_sdk
