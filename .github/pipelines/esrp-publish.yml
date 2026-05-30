@@ -217,6 +217,9 @@ stages:
 
   # Consolidated packages (new PyPI projects) must publish sequentially
   # to avoid PyPI 429 "Too many new projects created" rate limits.
+  # Each package waits 5 minutes before publishing to let PyPI's rate
+  # limit window reset. Rapid retries are disabled (retryCount: 0)
+  # because a 1s retry just burns the rate limit budget faster.
   # Once these projects exist on PyPI, this stage can be merged back
   # into the parallel Publish_PyPI stage below.
   - stage: Publish_PyPI_Consolidated
@@ -234,7 +237,7 @@ stages:
             displayName: 'Download agent-governance-toolkit-core artifacts'
           - task: EsrpRelease@11
             displayName: 'ESRP Publish agent-governance-toolkit-core to PyPI'
-            retryCountOnTaskFailure: 2
+            retryCountOnTaskFailure: 0
             inputs:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
@@ -256,8 +259,8 @@ stages:
         displayName: 'Publish agent-governance-toolkit-integrations to PyPI'
         dependsOn: Publish_PyPI_agent_governance_toolkit_core
         steps:
-          - script: echo "Waiting 90s for PyPI rate-limit window..." && sleep 90
-            displayName: 'Rate-limit cooldown'
+          - script: echo "Waiting 5 min for PyPI new-project rate-limit window..." && sleep 300
+            displayName: 'Rate-limit cooldown (5 min)'
           - task: DownloadPipelineArtifact@2
             inputs:
               artifact: 'pypi-agent-governance-toolkit-integrations'
@@ -265,7 +268,7 @@ stages:
             displayName: 'Download agent-governance-toolkit-integrations artifacts'
           - task: EsrpRelease@11
             displayName: 'ESRP Publish agent-governance-toolkit-integrations to PyPI'
-            retryCountOnTaskFailure: 2
+            retryCountOnTaskFailure: 0
             inputs:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
@@ -287,8 +290,8 @@ stages:
         displayName: 'Publish agent-governance-toolkit-cli to PyPI'
         dependsOn: Publish_PyPI_agent_governance_toolkit_integrations
         steps:
-          - script: echo "Waiting 90s for PyPI rate-limit window..." && sleep 90
-            displayName: 'Rate-limit cooldown'
+          - script: echo "Waiting 5 min for PyPI new-project rate-limit window..." && sleep 300
+            displayName: 'Rate-limit cooldown (5 min)'
           - task: DownloadPipelineArtifact@2
             inputs:
               artifact: 'pypi-agent-governance-toolkit-cli'
@@ -296,7 +299,7 @@ stages:
             displayName: 'Download agent-governance-toolkit-cli artifacts'
           - task: EsrpRelease@11
             displayName: 'ESRP Publish agent-governance-toolkit-cli to PyPI'
-            retryCountOnTaskFailure: 2
+            retryCountOnTaskFailure: 0
             inputs:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
@@ -318,8 +321,8 @@ stages:
         displayName: 'Publish agent-governance-toolkit-protocols to PyPI'
         dependsOn: Publish_PyPI_agent_governance_toolkit_cli
         steps:
-          - script: echo "Waiting 90s for PyPI rate-limit window..." && sleep 90
-            displayName: 'Rate-limit cooldown'
+          - script: echo "Waiting 5 min for PyPI new-project rate-limit window..." && sleep 300
+            displayName: 'Rate-limit cooldown (5 min)'
           - task: DownloadPipelineArtifact@2
             inputs:
               artifact: 'pypi-agent-governance-toolkit-protocols'
@@ -327,7 +330,7 @@ stages:
             displayName: 'Download agent-governance-toolkit-protocols artifacts'
           - task: EsrpRelease@11
             displayName: 'ESRP Publish agent-governance-toolkit-protocols to PyPI'
-            retryCountOnTaskFailure: 2
+            retryCountOnTaskFailure: 0
             inputs:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
