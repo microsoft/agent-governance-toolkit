@@ -1,4 +1,5 @@
 AAIF
+abspath
 abstractmethod
 Acta
 addinfourl
@@ -24,6 +25,7 @@ APIM
 apiserver
 appsettings
 argparse
+arrowsize
 asctime
 aspnet
 asyncio
@@ -35,6 +37,7 @@ autouse
 AWSIAM
 axios
 aymenhmaidiwastaken
+backendunavailable
 backpressure
 baselined
 behaviour
@@ -68,7 +71,11 @@ CODEOWNERS
 codepoint
 CommonMark
 comspec
+<<<<<<< HEAD
 connectedservicename
+=======
+confirmer
+>>>>>>> 019325ce (chore: add mute-agent red-team test terms to spell-check allowlist)
 containerapps
 containerd
 contentsource
@@ -223,13 +230,18 @@ lockfile
 lockfiles
 lotl
 lstrip
+<<<<<<< HEAD
 mainpublisher
+=======
+madmin
+>>>>>>> 019325ce (chore: add mute-agent red-team test terms to spell-check allowlist)
 manylinux
 markdown
 Marp
 masquerade
 mastra
 materialised
+matplotlib
 maxlen
 Mevil
 mgmt
@@ -241,7 +253,9 @@ modelcontextprotocol
 Moltbook
 Molty
 monkeypatch
+monkeypatched
 monkeypatching
+mpatches
 MSHV
 msinternal
 MSRC
@@ -269,6 +283,7 @@ npmjs
 numpy
 octo
 omitempty
+oncall
 OpenAI
 OpenClaw
 opencode
@@ -323,10 +338,12 @@ Ravande
 readouterr
 recognised
 recognising
+redteam
 Rego
 relativedelta
 removeprefix
 removesuffix
+repr
 repudiable
 requireapproval
 reqwest
