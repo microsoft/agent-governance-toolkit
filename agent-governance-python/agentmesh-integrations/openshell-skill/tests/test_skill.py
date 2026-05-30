@@ -1,8 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-import yaml, pytest, json
+import json
+import os
 from pathlib import Path
-from openshell_agentmesh.skill import GovernanceSkill
+import subprocess
+import sys
+
+import pytest
+import yaml
+
+from openshell_agentmesh.skill import GovernanceSkill, ShellPolicyViolation, governed_shell
 from openshell_agentmesh.cli import main as cli_main
 
 SAMPLE = {"apiVersion": "governance.toolkit/v1", "rules": [{"name": "allow-read", "condition": {"field": "action", "operator": "starts_with", "value": "file:read"}, "action": "allow", "priority": 90},{"name": "allow-shell", "condition": {"field": "action", "operator": "in", "value": ["shell:ls", "shell:python", "shell:git"]}, "action": "allow", "priority": 80},{"name": "block-danger", "condition": {"field": "action", "operator": "matches", "value": "shell:(rm|dd|curl)"}, "action": "deny", "priority": 100, "message": "Blocked"}]}
@@ -105,6 +112,15 @@ class TestEdgeCases:
         assert len(skill.get_audit_log(limit=10)) == 10
         assert len(skill.get_audit_log()) == 50
 
+    def test_audit_path_writes_jsonl(self, policy_dir, tmp_path):
+        audit_path = tmp_path / "audit.jsonl"
+        skill = GovernanceSkill(policy_dir=policy_dir, audit_path=audit_path)
+        skill.check_policy("file:read:/t")
+
+        row = json.loads(audit_path.read_text(encoding="utf-8").strip())
+        assert row["action"] == "file:read:/t"
+        assert row["decision"] == "allow"
+
     def test_audit_entry_has_timestamp(self, policy_dir):
         skill = GovernanceSkill(policy_dir=policy_dir)
         skill.check_policy("file:read:/t")
@@ -120,6 +136,71 @@ class TestEdgeCases:
             Path(fresh_dir, "one.yaml").write_text("rules:\n- name: only\n  condition:\n    field: action\n    operator: equals\n    value: test\n  action: allow\n", encoding="utf-8")
             skill.load_policies(Path(fresh_dir))
             assert len(skill._rules) == 1
+
+
+class TestShellInterception:
+    def test_governed_shell_blocks_subprocess_run_before_execution(self, policy_dir):
+        skill = GovernanceSkill(policy_dir=policy_dir)
+        with governed_shell(skill):
+            with pytest.raises(ShellPolicyViolation) as exc:
+                subprocess.run(["curl", "https://example.invalid"], check=False)
+
+        assert exc.value.decision.action == "shell:curl"
+        assert exc.value.decision.policy_name == "block-danger"
+        log = skill.get_audit_log()
+        assert log[-1]["decision"] == "deny"
+        assert log[-1]["context"]["shell_api"] == "subprocess.run"
+        assert log[-1]["context"]["shell_binary"] == "curl"
+
+    def test_governed_shell_allows_subprocess_run(self, tmp_path):
+        python_action = f"shell:{Path(sys.executable).name}"
+        policy = {"rules": [{"name": "allow-python", "condition": {"field": "action", "operator": "equals", "value": python_action}, "action": "allow"}]}
+        with open(tmp_path / "python.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(policy, f)
+
+        skill = GovernanceSkill(policy_dir=tmp_path)
+        with governed_shell(skill):
+            result = subprocess.run([sys.executable, "-c", "print('ok')"], capture_output=True, text=True, check=True)
+
+        assert result.stdout.strip() == "ok"
+        assert skill.get_audit_log()[-1]["action"] == python_action
+
+    def test_governed_shell_blocks_subprocess_popen(self, policy_dir):
+        skill = GovernanceSkill(policy_dir=policy_dir)
+        with governed_shell(skill):
+            with pytest.raises(ShellPolicyViolation):
+                subprocess.Popen(["rm", "-rf", "/"])
+
+        assert skill.get_audit_log()[-1]["context"]["shell_api"] == "subprocess.Popen"
+
+    def test_governed_shell_blocks_os_system(self, policy_dir):
+        skill = GovernanceSkill(policy_dir=policy_dir)
+        with governed_shell(skill):
+            with pytest.raises(ShellPolicyViolation):
+                os.system("curl https://example.invalid")
+
+        assert skill.get_audit_log()[-1]["action"] == "shell:curl"
+        assert skill.get_audit_log()[-1]["context"]["shell"] is True
+
+    def test_governed_shell_blocks_os_popen(self, policy_dir):
+        skill = GovernanceSkill(policy_dir=policy_dir)
+        with governed_shell(skill):
+            with pytest.raises(ShellPolicyViolation):
+                os.popen("rm -rf /")
+
+        assert skill.get_audit_log()[-1]["context"]["shell_api"] == "os.popen"
+
+    def test_activate_deactivate_restore_shell_apis(self, policy_dir):
+        skill = GovernanceSkill(policy_dir=policy_dir)
+        original_run = subprocess.run
+
+        skill.activate()
+        try:
+            assert subprocess.run is not original_run
+        finally:
+            skill.deactivate()
+
+        assert subprocess.run is original_run
 
 
 class TestCLI:
