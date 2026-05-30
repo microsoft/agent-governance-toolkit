@@ -449,3 +449,11 @@ XACML
 xfail
 xunit
 ZDOTDIR
+kars
+refetch
+refetches
+unmigrated
+sess
+unreachability
+pyjwt
+sdist

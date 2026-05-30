@@ -39,6 +39,33 @@ class AgentRecord:
     # Reputation
     reputation_score: float = 0.5
 
+    # Session counters (Phase 6.c follow-up). The EMA above is a
+    # rolling average — operators also want to see how many sessions
+    # contributed to it. Counters are bumped exclusively by
+    # `submit_session_reputation` (POST /v1/registry/reputation/session).
+    # Resetting requires `delete_agent` followed by re-registration —
+    # this is intentional so a buggy peer can't roll back its own
+    # history.
+    total_sessions: int = 0
+    successful_sessions: int = 0
+    failed_sessions: int = 0
+    timeout_sessions: int = 0
+    # ISO-8601 timestamp of the most recent session that scored this
+    # agent (initiator OR receiver). `None` until the first session.
+    last_session_at: datetime | None = None
+
+    # Entra Agent ID verification (Phase 6.c). Set by
+    # `POST /v1/registry/verify` after the verifier confirms an Entra
+    # JWT against tenant JWKS. `verified_app_id` is the Entra `appid`
+    # claim from the verified token; `tier` is bumped to "verified"
+    # so trust-scoring downstream can prefer cryptographically
+    # identified peers over anonymous ones. Both stay `None` for
+    # anonymous-tier agents and for clusters that haven't opted in.
+    verified_app_id: str | None = None
+    verified_tenant_id: str | None = None
+    verified_at: datetime | None = None
+    tier: str = "anonymous"
+
 
 class RegistryStore(Protocol):
     """Protocol for registry persistence backends."""

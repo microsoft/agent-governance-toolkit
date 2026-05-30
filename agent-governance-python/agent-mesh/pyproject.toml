@@ -83,6 +83,10 @@ redis = [
 server = [
     "fastapi>=0.115.0,<1.0",
     "uvicorn[standard]>=0.27.0,<1.0",
+    # Phase 6.c — Entra-signed JWT verification at the relay's
+    # connect-frame seam. `crypto` extra brings cryptography (already
+    # a core dep) wired up with PyJWT's RS{256,384,512} verifiers.
+    "PyJWT[crypto]>=2.8.0,<3.0",
 ]
 storage = [
     "redis[asyncio]>=5.0.0,<8.0",

@@ -65,6 +65,9 @@ REGISTERED_PACKAGES = {
     "google-adk", "safety", "jupyter", "vitest", "tsup", "typescript",
     "requests",
     "twine",
+    # PyJWT — required by agent-mesh/identity/entra_verifier.py for
+    # Entra-signed JWT verification (PR #2659). Real package, on PyPI.
+    "pyjwt", "PyJWT",
     # Dashboard / visualization (used in examples)
     "streamlit", "plotly", "pandas", "networkx", "matplotlib", "pyvis",
     # Async / caching (used in examples)
