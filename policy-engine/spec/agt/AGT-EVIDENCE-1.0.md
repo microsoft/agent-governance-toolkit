@@ -70,12 +70,12 @@ log (per §4).
 
 ## 4. Audit record
 
-An AGT audit record SHOULD store:
+An AGT audit record MUST store:
 
 | Field | Source |
 | --- | --- |
-| `evidence_artefact` | verbatim from verdict |
-| `verification_pointers` | full map from verdict |
+| `evidence_artefact` | verbatim from verdict, when the verdict carried `evidence.artefact` |
+| `verification_pointers` | full map from verdict, when the verdict carried `evidence.verification_pointers` |
 | `input_identity` | `SPECIFICATION-AGT-DELTA.md` §D1.4 |
 | `enforced_identity` | `SPECIFICATION-AGT-DELTA.md` §D1.4 |
 | `intervention_point` | request |
@@ -84,6 +84,11 @@ An AGT audit record SHOULD store:
 | `verdict` | runtime |
 | `reason` | verdict |
 | `dispatcher` | configured for the policy |
+
+The MUST applies to every audit record an AGT host writes for an engine
+evaluation. `input_identity` and `enforced_identity` are equal for
+non-transform verdicts but the record carries both fields anyway, so audit
+consumers can rely on a stable schema.
 
 The verification flow for an auditor is:
 

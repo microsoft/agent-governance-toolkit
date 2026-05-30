@@ -364,13 +364,13 @@ This delta has no impact on the spec; it documents the M2 workspace shape.
 | §2 Manifest | Unchanged; D4 adds host-layer guidance. |
 | §3 Paths | Unchanged. |
 | §4 Intervention points | Unchanged. |
-| §5 Modes | Unchanged. |
-| §6 Evaluation order | Step 9 ("validate effects") becomes "apply transform if any". |
+| §5 Modes | **Adjusted.** Mode semantics still distinguish `enforce` from `evaluate_only`, but the apply/validate distinction now applies to the `transform` decision payload per §D1.1 (not to an effects array). In `evaluate_only` mode the runtime validates a `transform` verdict (path rooted at `$policy_target`, value present, path resolvable) without applying it. |
+| §6 Evaluation order | Step 9 ("validate effects") becomes "apply transform if any (only when `decision == transform` and `mode == enforce`); otherwise validate transform if present". |
 | §7 Policy input | Unchanged. |
 | §8 Canonical serialization | Unchanged. |
 | §9 Tools | Unchanged. |
 | §10 Annotators | Unchanged. |
-| §11 IFC | Unchanged. |
+| §11 IFC | **Path-clarified.** The IFC label-flow contract is preserved (lattice, dominance, deny-on-flow-down). AGT hosts emit source labels at `input.ifc.source_labels` and result labels at `response.ifc.result_labels` per `AGT-SNAPSHOT-1.0.md` §2.2 / §2.7, **not** at `input.snapshot.ifc.source_labels`. The AGT stock `policy/lib/ifc.rego` (M4 deliverable) MUST replace the upstream library to read the AGT-correct paths; the upstream library reads paths that the AGT snapshot does not populate and would therefore fail closed on every call. |
 | §12 Policies | **Extended** — adds `cedar` type per D3. |
 | §13 Verdicts | **Replaced** by D1 + D2. |
 | §14 Effects | **Replaced** by D1. The §14 effects section is removed wholesale. |
@@ -378,7 +378,7 @@ This delta has no impact on the spec; it documents the M2 workspace shape.
 | §16 Reserved reasons | **Extended** per D6. |
 | §17 Host obligations | §17 unchanged; §17.1 now references `approval` section per D5; approval identity binds to `enforced_identity` per D1.4. |
 | §18 Streaming and parallel tools | Unchanged. |
-| §19 Telemetry and audit | **Extended** per D2 (carries `evidence`). The set of intervention point decision events grows by `intervention_point.transformed`. |
+| §19 Telemetry and audit | **Extended** per D2 (carries `evidence`). The set of intervention point decision events grows by `intervention_point.transformed`. The upstream `intervention_point.effect_applied` event is **removed** because effects no longer exist; hosts that consumed it MUST migrate to `intervention_point.transformed`. |
 | §20 Conformance | Conformance text reads against the deltas. |
 | §21 Security considerations | Unchanged in principle. The `transform` verdict is bounded to `$policy_target`, preserving the security boundary §21 established for effects. |
 | §22 Versioning and stability | Unchanged. The version string in `AGT-MANIFEST-1.0.md` §2 is a backwards-compatible profile of upstream ACS versioning. |
