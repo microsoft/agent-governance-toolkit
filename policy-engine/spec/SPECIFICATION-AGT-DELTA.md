@@ -370,7 +370,7 @@ This delta has no impact on the spec; it documents the M2 workspace shape.
 | §8 Canonical serialization | Unchanged. |
 | §9 Tools | Unchanged. |
 | §10 Annotators | Unchanged. |
-| §11 IFC | **Path-clarified.** The IFC label-flow contract is preserved (lattice, dominance, deny-on-flow-down). AGT hosts emit source labels at `input.ifc.source_labels` and result labels at `response.ifc.result_labels` per `AGT-SNAPSHOT-1.0.md` §2.2 / §2.7, **not** at `input.snapshot.ifc.source_labels`. The AGT stock `policy/lib/ifc.rego` (M4 deliverable) MUST replace the upstream library to read the AGT-correct paths; the upstream library reads paths that the AGT snapshot does not populate and would therefore fail closed on every call. |
+| §11 IFC | **Augmented.** The IFC label-flow contract is preserved (lattice, dominance, deny-on-flow-down). AGT hosts emit source labels at `input.ifc.source_labels` and result labels at `response.ifc.result_labels` per `AGT-SNAPSHOT-1.0.md` §2.2 / §2.7, **not** at `input.snapshot.ifc.source_labels`. AGT ships an `agt.ifc` stock library at `policy/lib/agt_ifc.rego` that reads the AGT-correct paths; the upstream `agent_control_specification.lib.ifc` library remains in `policy/lib/ifc.rego` so callers that bring the upstream snapshot shape continue to work. AGT manifest authors MUST import `data.agt.ifc`; importing the upstream library against an AGT host will fail closed on every call because the AGT host does not populate the upstream paths. |
 | §12 Policies | **Extended** — adds `cedar` type per D3. |
 | §13 Verdicts | **Replaced** by D1 + D2. |
 | §14 Effects | **Replaced** by D1. The §14 effects section is removed wholesale. |

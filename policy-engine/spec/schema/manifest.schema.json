@@ -109,6 +109,42 @@
         {
           "type": "object",
           "required": [
+            "type"
+          ],
+          "description": "AGT D3: cedar is a built-in policy type. Exactly one of policy_set or policy_path is required.",
+          "properties": {
+            "type": {
+              "const": "cedar"
+            },
+            "policy_set": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entities_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "schema_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "query": {
+              "type": "object"
+            }
+          },
+          "oneOf": [
+            { "required": [ "policy_set" ], "not": { "required": [ "policy_path" ] } },
+            { "required": [ "policy_path" ], "not": { "required": [ "policy_set" ] } }
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": [
             "type",
             "adapter"
           ],

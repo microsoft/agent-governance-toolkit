@@ -294,5 +294,12 @@ fn decision_enum_effect_dispatch_is_closed() {
     assert!(Decision::Allow.applies_effects());
     assert!(Decision::Warn.applies_effects());
     assert!(!Decision::Deny.applies_effects());
-    assert!(Decision::Escalate.applies_effects());
+    // AGT D1 + spec §13.1: escalate carries no effects. Defers the
+    // action to the host approval path; the host MUST use the original
+    // policy target. Aligning the enum with the spec closes Opus's
+    // M2+M3+M4 warning #7.
+    assert!(!Decision::Escalate.applies_effects());
+    // AGT D1 transform: the transform decision uses verdict.transform,
+    // not verdict.effects; applies_effects therefore returns false for it.
+    assert!(!Decision::Transform.applies_effects());
 }

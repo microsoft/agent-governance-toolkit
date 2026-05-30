@@ -200,6 +200,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
 
     branches: list[str] = []
     matchers: list[str] = []
+    unsupported_drops: list[str] = []
 
     for idx, rule in enumerate(rules):
         cond = rule.get("condition") or {}
@@ -213,8 +214,25 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         accessor = _rego_field_accessor(field)
         op_clause = _rego_op_clause(operator, accessor, value)
         if op_clause is None:
-            # Unsupported operator: skip rule (matches a deny silently
-            # rather than emit a broken Rego module).
+            # An unsupported operator MUST fail closed. We render an
+            # always-matching deny rule so any evaluation routes to deny
+            # with a reserved reason rather than silently falling through
+            # to default-allow. The merge layer should ideally catch
+            # this at validation, but this is the last line of defense.
+            unsupported_drops.append(name)
+            matchers.append(
+                f"_match_{idx} if {{\n"
+                f"    true\n"
+                f"}}"
+            )
+            branches.append(
+                f"verdict := {{\"decision\": \"deny\", "
+                f"\"reason\": \"runtime_error:manifest_invalid\", "
+                f"\"message\": {json.dumps(f'rule {name!r} uses unsupported operator {operator!r}; fail-closed deny')}}} if {{\n"
+                f"    _match_{idx}\n"
+                + "".join(f"    not _match_{j}\n" for j in range(idx))
+                + "}"
+            )
             continue
 
         matchers.append(
@@ -237,6 +255,14 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
             f"    _match_{idx}\n"
             f"{previous_negations}"
             f"}}"
+        )
+
+    if unsupported_drops:
+        import logging
+        logging.getLogger(__name__).warning(
+            "agt.manifest_resolution: %d rule(s) with unsupported operator now fail-closed: %s",
+            len(unsupported_drops),
+            unsupported_drops,
         )
 
     return header + "\n\n".join(matchers) + ("\n\n" if matchers else "") + "\n\n".join(branches) + "\n"

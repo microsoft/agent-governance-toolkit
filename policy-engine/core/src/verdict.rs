@@ -30,9 +30,11 @@ impl Decision {
     /// decision. With AGT D1 the canonical path is the `Transform` decision;
     /// `effects` remain accepted by the engine for upstream-ACS compatibility
     /// in this iteration but are scheduled for removal once parity tests are
-    /// migrated.
+    /// migrated. Per spec §13.1 escalate carries no effects, so it is
+    /// excluded here even though the function name predates the AGT
+    /// transform decision.
     pub fn applies_effects(self) -> bool {
-        matches!(self, Self::Allow | Self::Warn | Self::Escalate)
+        matches!(self, Self::Allow | Self::Warn)
     }
 
     /// Whether this decision permits the action to proceed (after any
@@ -171,10 +173,27 @@ pub struct Evidence {
 }
 
 impl Evidence {
+    /// AGT-EVIDENCE-1.0 §2: total serialized evidence MUST NOT exceed
+    /// 4 KiB. A dispatcher that produces a larger payload is treated as
+    /// having failed.
+    pub const MAX_SERIALIZED_BYTES: usize = 4 * 1024;
+
     pub fn from_value(value: &JsonValue) -> Result<Self, RuntimeError> {
         let object = value.as_object().ok_or_else(|| {
             RuntimeError::PolicyOutputInvalid("evidence must be an object".to_string())
         })?;
+
+        // Bound the serialized size BEFORE we look at the fields, so that
+        // a dispatcher cannot ship a 1 MiB pointer URL or a huge artefact
+        // string and have it propagate verbatim through telemetry/audit.
+        if let Ok(serialized) = serde_json::to_string(value) {
+            if serialized.len() > Self::MAX_SERIALIZED_BYTES {
+                return Err(RuntimeError::PolicyOutputInvalid(format!(
+                    "evidence object exceeds {} bytes when serialized",
+                    Self::MAX_SERIALIZED_BYTES
+                )));
+            }
+        }
 
         let artefact = match object.get("artefact") {
             None | Some(JsonValue::Null) => None,
@@ -494,6 +513,17 @@ mod tests {
         assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
     }
 
+    #[test]
+    fn evidence_over_4kib_fails_closed() {
+        let huge = "x".repeat(5000);
+        let error = normalize_policy_output(json!({
+            "decision": "allow",
+            "evidence": {"artefact": huge}
+        }))
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
     // ── AGT D1.4 permits() helper ─────────────────────────────────────
 
     #[test]
@@ -513,13 +543,21 @@ mod tests {
             RuntimeError::TransformTargetForbidden(String::new()).reason(),
             RuntimeError::TransformInvalid(String::new()).reason(),
             RuntimeError::ApprovalResolverMissing(String::new()).reason(),
+            RuntimeError::ResolutionPathTraversal(String::new()).reason(),
+            RuntimeError::ResolutionCycle(String::new()).reason(),
+            RuntimeError::ResolutionInvalidGovernance(String::new()).reason(),
+            RuntimeError::ResolutionMergeConflict(String::new()).reason(),
         ];
         assert_eq!(
             reasons,
             [
                 "runtime_error:transform_target_forbidden",
                 "runtime_error:transform_invalid",
-                "runtime_error:approval_resolver_missing"
+                "runtime_error:approval_resolver_missing",
+                "runtime_error:resolution_path_traversal",
+                "runtime_error:resolution_cycle",
+                "runtime_error:resolution_invalid_governance",
+                "runtime_error:resolution_merge_conflict"
             ]
         );
     }

@@ -67,7 +67,7 @@
         ]
       },
       "normalized_decision": "escalate",
-      "effects_applied_on_enforce": true,
+      "effects_applied_on_enforce": false,
       "expected_error_reason": null
     },
     {
