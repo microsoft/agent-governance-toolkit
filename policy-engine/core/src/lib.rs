@@ -256,8 +256,7 @@ intervention_points:
         let verdict = normalize_policy_output(json!({
             "decision": "warn",
             "reason": "needs_review",
-            "message": "Proceeding with warning",
-            "effects": []
+            "message": "Proceeding with warning"
         }))
         .unwrap();
         assert_eq!(verdict.decision, Decision::Warn);

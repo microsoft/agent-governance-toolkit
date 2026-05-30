@@ -42,20 +42,40 @@
       "reason": "runtime_error:policy_output_invalid"
     },
     {
-      "variant": "EffectInvalid",
-      "reason": "runtime_error:effect_invalid"
-    },
-    {
-      "variant": "EffectTargetForbidden",
-      "reason": "runtime_error:effect_target_forbidden"
-    },
-    {
       "variant": "ResourceLimitExceeded",
       "reason": "runtime_error:resource_limit_exceeded"
     },
     {
       "variant": "ApprovalActionMismatch",
       "reason": "runtime_error:approval_action_mismatch"
+    },
+    {
+      "variant": "ResolutionPathTraversal",
+      "reason": "runtime_error:resolution_path_traversal"
+    },
+    {
+      "variant": "ResolutionCycle",
+      "reason": "runtime_error:resolution_cycle"
+    },
+    {
+      "variant": "ResolutionInvalidGovernance",
+      "reason": "runtime_error:resolution_invalid_governance"
+    },
+    {
+      "variant": "ResolutionMergeConflict",
+      "reason": "runtime_error:resolution_merge_conflict"
+    },
+    {
+      "variant": "TransformTargetForbidden",
+      "reason": "runtime_error:transform_target_forbidden"
+    },
+    {
+      "variant": "TransformInvalid",
+      "reason": "runtime_error:transform_invalid"
+    },
+    {
+      "variant": "ApprovalResolverMissing",
+      "reason": "runtime_error:approval_resolver_missing"
     }
   ]
 }

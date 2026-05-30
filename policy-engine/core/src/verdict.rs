@@ -267,28 +267,19 @@ pub fn normalize_policy_output(output: JsonValue) -> Result<Verdict, RuntimeErro
         }
     };
 
-    // AGT D1: the `effects` array on a verdict MUST be rejected. Accept
-    // `null` and empty `[]` for back-compat (they are functionally
-    // identical to absent) so that dispatchers in the middle of migrating
-    // away from upstream ACS effects keep working. A non-empty array fails
-    // closed with `runtime_error:policy_output_invalid`. Multi-step
-    // transformation must move upstream to annotators per D1.3.
-    match object.get("effects") {
-        None | Some(JsonValue::Null) => {}
-        Some(JsonValue::Array(items)) if items.is_empty() => {}
-        Some(JsonValue::Array(_)) => {
-            return Err(RuntimeError::PolicyOutputInvalid(
-                "verdict 'effects' is no longer supported; use the transform decision \
-                 per SPECIFICATION-AGT-DELTA D1. Migrate multi-step rewriting to an \
-                 annotator per D1.3"
-                    .to_string(),
-            ))
-        }
-        _ => {
-            return Err(RuntimeError::PolicyOutputInvalid(
-                "policy output effects must be an array".to_string(),
-            ))
-        }
+    // AGT D1: the `effects` array on a verdict MUST be rejected. The
+    // earlier "accept empty[] / null for back-compat" carve-out is
+    // removed because D1 specifies a strict reject on any presence of
+    // the key, not just on non-empty arrays. Dispatchers in the middle
+    // of migrating away from upstream ACS effects MUST drop the key
+    // entirely; multi-step transformation moves to annotators per D1.3.
+    if object.contains_key("effects") {
+        return Err(RuntimeError::PolicyOutputInvalid(
+            "verdict 'effects' is no longer supported; remove the effects key and \
+             use the transform decision per SPECIFICATION-AGT-DELTA D1. Migrate \
+             multi-step rewriting to an annotator per D1.3"
+                .to_string(),
+        ));
     }
 
     let result_labels = match object.get("result_labels") {
@@ -411,23 +402,27 @@ mod tests {
     }
 
     #[test]
-    fn empty_effects_array_still_parses_for_back_compat() {
-        let verdict = normalize_policy_output(json!({
+    fn empty_effects_array_now_fails_closed_per_strict_agt_d1() {
+        // Round-2 review tightened the AGT D1 reading: any presence of
+        // the effects key MUST be rejected, including empty arrays and
+        // explicit nulls. Dispatchers that historically emitted
+        // `effects: []` MUST drop the key.
+        let error = normalize_policy_output(json!({
             "decision": "allow",
             "effects": []
         }))
-        .expect("empty effects array is treated as absent per AGT D1 back-compat");
-        assert_eq!(verdict.decision, Decision::Allow);
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
     }
 
     #[test]
-    fn null_effects_still_parses_for_back_compat() {
-        let verdict = normalize_policy_output(json!({
+    fn null_effects_now_fails_closed_per_strict_agt_d1() {
+        let error = normalize_policy_output(json!({
             "decision": "allow",
             "effects": null
         }))
-        .expect("null effects is treated as absent per AGT D1 back-compat");
-        assert_eq!(verdict.decision, Decision::Allow);
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
     }
 
     #[test]
