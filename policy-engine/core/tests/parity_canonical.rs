@@ -153,8 +153,8 @@ fn canonical_verdict_dispatch_matches_normalization() {
                     "{id}"
                 );
                 assert_eq!(
-                    verdict.decision.applies_effects(),
-                    row["effects_applied_on_enforce"].as_bool().unwrap(),
+                    verdict.decision.permits(),
+                    row["permits"].as_bool().unwrap(),
                     "{id}"
                 );
             }
@@ -290,16 +290,15 @@ fn drift_catalog_validates_against_schema() {
 }
 
 #[test]
-fn decision_enum_effect_dispatch_is_closed() {
-    assert!(Decision::Allow.applies_effects());
-    assert!(Decision::Warn.applies_effects());
-    assert!(!Decision::Deny.applies_effects());
-    // AGT D1 + spec §13.1: escalate carries no effects. Defers the
-    // action to the host approval path; the host MUST use the original
-    // policy target. Aligning the enum with the spec closes Opus's
-    // M2+M3+M4 warning #7.
-    assert!(!Decision::Escalate.applies_effects());
-    // AGT D1 transform: the transform decision uses verdict.transform,
-    // not verdict.effects; applies_effects therefore returns false for it.
-    assert!(!Decision::Transform.applies_effects());
+fn decision_enum_permits_dispatch_is_closed() {
+    // AGT D1 removed `effects` from the verdict surface. The remaining
+    // mutating decision is `Transform`; `permits` documents which decisions
+    // allow the action to proceed (after any applicable transform).
+    assert!(Decision::Allow.permits());
+    assert!(Decision::Warn.permits());
+    assert!(Decision::Transform.permits());
+    // AGT D1 + spec §13.1: deny refuses the action.
+    assert!(!Decision::Deny.permits());
+    // AGT D1 + spec §13.1: escalate defers to the host approval path.
+    assert!(!Decision::Escalate.permits());
 }

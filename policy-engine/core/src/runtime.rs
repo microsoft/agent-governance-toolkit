@@ -1,7 +1,6 @@
 use crate::{
     annotation::{AnnotatorDispatcher, AnnotatorInvocation},
     constants::policy_input as pi_key,
-    effects::validate_and_maybe_apply_effects,
     manifest::Manifest,
     paths::PathRoot,
     policy::{prepare_policy_invocation, PolicyConfig, PreparedPolicyInvocation},
@@ -344,28 +343,7 @@ impl Runtime {
                     None
                 }
             }
-            _ => {
-                let should_apply =
-                    request.mode == EnforcementMode::Enforce && verdict.decision.applies_effects();
-                let transformed = validate_and_maybe_apply_effects(
-                    &policy_target,
-                    &verdict.effects,
-                    should_apply,
-                )
-                .map_err(|error| EvaluationFailure {
-                    error,
-                    policy_input: Some(final_policy_input.clone()),
-                })?;
-                if should_apply && !verdict.effects.is_empty() {
-                    self.emit_intervention_point_effect_applied(
-                        request.intervention_point,
-                        request.mode,
-                        &point_config.policy.id,
-                        verdict.effects.len(),
-                    );
-                }
-                transformed
-            }
+            _ => None,
         };
 
         let action_identity =
@@ -493,21 +471,6 @@ impl Runtime {
                 .with_annotators(annotators)
                 .with_enforcement_mode(mode)
                 .with_duration_ms(duration_ms),
-        );
-    }
-
-    fn emit_intervention_point_effect_applied(
-        &self,
-        intervention_point: InterventionPoint,
-        mode: EnforcementMode,
-        policy_id: &str,
-        effect_count: usize,
-    ) {
-        self.emit_event(
-            TelemetryEvent::new(TelemetryEventType::EffectApplied, intervention_point)
-                .with_policy_id(policy_id)
-                .with_enforcement_mode(mode)
-                .with_metadata("effect_count", effect_count.to_string()),
         );
     }
 

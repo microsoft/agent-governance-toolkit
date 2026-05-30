@@ -2,7 +2,7 @@
   "$schema": "../cases.schema.json",
   "id": "spec-16-effects.case-05",
   "spec_section": "16",
-  "title": "redaction values derive and merge character spans",
+  "title": "AGT D1: dispatcher output with redaction-values effects is rejected",
   "claimable": true,
   "operation": "evaluate",
   "sdk_support": {
@@ -30,9 +30,8 @@
     ]
   },
   "expected": {
-    "decision": "allow",
-    "transformed_policy_target": {
-      "text": "[VALUE] clear [VALUE] [VALUE]"
-    }
+    "decision": "deny",
+    "reason": "runtime_error:policy_output_invalid",
+    "transformed_policy_target": null
   }
 }

@@ -1,7 +1,7 @@
 use agent_control_specification_core::{
-    canonical_json, AnnotatorDispatcher, AnnotatorInvocation, EffectType, EnforcementMode,
-    InterventionPoint, InterventionPointRequest, InterventionPointResult, JsonValue, Manifest,
-    OpaPolicyDispatcher, OpaRegoRunner, Runtime, RuntimeError,
+    canonical_json, AnnotatorDispatcher, AnnotatorInvocation, EnforcementMode, InterventionPoint,
+    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, OpaPolicyDispatcher,
+    OpaRegoRunner, Runtime, RuntimeError,
 };
 use serde_json::json;
 use std::{
@@ -53,7 +53,7 @@ const SCENARIOS: &[Scenario] = &[
         name: "pre_model_call",
         intervention_point: InterventionPoint::PreModelCall,
         fixture_stem: "pre_model_call",
-        decision: "warn",
+        decision: "transform",
         reason: Some("large_transfer_instruction_added"),
         transform: ExpectedTransform::AppendLargeTransferInstruction,
     },
@@ -85,7 +85,7 @@ const SCENARIOS: &[Scenario] = &[
         name: "post_tool_call",
         intervention_point: InterventionPoint::PostToolCall,
         fixture_stem: "post_tool_call",
-        decision: "warn",
+        decision: "transform",
         reason: Some("tool_result_account_identifier_redacted"),
         transform: ExpectedTransform::ReplaceToolAccountId,
     },
@@ -93,7 +93,7 @@ const SCENARIOS: &[Scenario] = &[
         name: "output",
         intervention_point: InterventionPoint::Output,
         fixture_stem: "output",
-        decision: "warn",
+        decision: "transform",
         reason: Some("output_account_identifier_redacted"),
         transform: ExpectedTransform::RedactOutputAccountId,
     },
@@ -204,8 +204,8 @@ fn assert_result(
     match scenario.transform {
         ExpectedTransform::None => {
             assert!(
-                result.verdict.effects.is_empty(),
-                "{} effects",
+                result.verdict.transform.is_none(),
+                "{} transform",
                 scenario.name
             );
             assert!(
@@ -215,31 +215,37 @@ fn assert_result(
             );
         }
         ExpectedTransform::AppendLargeTransferInstruction => {
-            assert_eq!(result.verdict.effects.len(), 1, "{} effects", scenario.name);
-            let effect = &result.verdict.effects[0];
-            assert_eq!(effect.effect_type, EffectType::Append);
-            assert_eq!(effect.path, "$policy_target.messages");
-            assert_eq!(
-                effect.value.as_ref(),
-                Some(&json!({"role": "system", "content": LARGE_TRANSFER_INSTRUCTION}))
-            );
-
-            let mut transformed = expected_policy_input["policy_target"]["value"].clone();
-            transformed["messages"].as_array_mut().unwrap().push(json!({
+            let transform = result
+                .verdict
+                .transform
+                .as_ref()
+                .unwrap_or_else(|| panic!("{} transform missing", scenario.name));
+            assert_eq!(transform.path, "$policy_target.messages");
+            let mut expected_messages = expected_policy_input["policy_target"]["value"]["messages"]
+                .as_array()
+                .unwrap()
+                .clone();
+            expected_messages.push(json!({
                 "role": "system",
                 "content": LARGE_TRANSFER_INSTRUCTION
             }));
+            assert_eq!(transform.value, JsonValue::Array(expected_messages.clone()));
+
+            let mut transformed = expected_policy_input["policy_target"]["value"].clone();
+            transformed["messages"] = JsonValue::Array(expected_messages);
             assert_eq!(
                 result.transformed_policy_target.as_ref(),
                 Some(&transformed)
             );
         }
         ExpectedTransform::ReplaceToolAccountId => {
-            assert_eq!(result.verdict.effects.len(), 1, "{} effects", scenario.name);
-            let effect = &result.verdict.effects[0];
-            assert_eq!(effect.effect_type, EffectType::Replace);
-            assert_eq!(effect.path, "$policy_target.account_id");
-            assert_eq!(effect.value.as_ref(), Some(&json!(REDACTED_ACCOUNT_ID)));
+            let transform = result
+                .verdict
+                .transform
+                .as_ref()
+                .unwrap_or_else(|| panic!("{} transform missing", scenario.name));
+            assert_eq!(transform.path, "$policy_target.account_id");
+            assert_eq!(transform.value, json!(REDACTED_ACCOUNT_ID));
 
             let mut transformed = expected_policy_input["policy_target"]["value"].clone();
             transformed["account_id"] = json!(REDACTED_ACCOUNT_ID);
@@ -249,17 +255,20 @@ fn assert_result(
             );
         }
         ExpectedTransform::RedactOutputAccountId => {
-            assert_eq!(result.verdict.effects.len(), 1, "{} effects", scenario.name);
-            let effect = &result.verdict.effects[0];
-            assert_eq!(effect.effect_type, EffectType::Redact);
-            assert_eq!(effect.path, "$policy_target.text");
-            assert_eq!(effect.value, None);
-            assert_eq!(effect.spans.len(), 1);
-            assert_eq!(effect.spans[0].replacement, REDACTED_ACCOUNT_ID);
+            let transform = result
+                .verdict
+                .transform
+                .as_ref()
+                .unwrap_or_else(|| panic!("{} transform missing", scenario.name));
+            assert_eq!(transform.path, "$policy_target.text");
+            let original_text = expected_policy_input["policy_target"]["value"]["text"]
+                .as_str()
+                .unwrap();
+            let expected_text = original_text.replace("CHK-00112233", REDACTED_ACCOUNT_ID);
+            assert_eq!(transform.value, json!(expected_text));
 
             let mut transformed = expected_policy_input["policy_target"]["value"].clone();
-            let text = transformed["text"].as_str().unwrap();
-            transformed["text"] = json!(text.replace("CHK-00112233", REDACTED_ACCOUNT_ID));
+            transformed["text"] = json!(expected_text);
             assert_eq!(
                 result.transformed_policy_target.as_ref(),
                 Some(&transformed)

@@ -3,7 +3,7 @@
   "covers": [
     "policy_target_only_effect_validation_application"
   ],
-  "description": "Effects are validated as policy_target-only and apply only in enforce mode for allow/warn verdicts.",
+  "description": "AGT D1 migration: the policy_target-only invariant is now enforced on the transform decision. Effects are removed from the verdict surface; the same property (only $policy_target may be rewritten; rewrites apply only in enforce mode; deny carries no rewrite) holds on the transform path.",
   "evaluations": [
     {
       "expected": {
@@ -34,81 +34,31 @@
         },
         "policy_invoked": true,
         "transformed_policy_target": {
-          "content": "hello [redacted] world",
+          "content": "hello secret world",
           "flag": true,
           "items": [
-            0,
-            1,
-            2
+            1
           ]
         },
         "verdict": {
-          "decision": "warn",
-          "effects": [
-            {
-              "path": "$policy_target.items",
-              "type": "append",
-              "value": 2
-            },
-            {
-              "path": "$policy_target.items",
-              "type": "prepend",
-              "value": 0
-            },
-            {
-              "path": "$policy_target.content",
-              "spans": [
-                {
-                  "end": 12,
-                  "replacement": "[redacted]",
-                  "start": 6
-                }
-              ],
-              "type": "redact"
-            },
-            {
-              "path": "$policy_target.flag",
-              "type": "replace",
-              "value": true
-            }
-          ],
-          "reason": "sanitized"
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.flag",
+            "value": true
+          }
         }
       },
       "mode": "enforce",
-      "name": "warn-enforce-applies-effects",
+      "name": "transform-enforce-applies-policy_target-rewrite",
       "policy_response": {
         "ok": {
-          "decision": "warn",
-          "effects": [
-            {
-              "path": "$policy_target.items",
-              "type": "append",
-              "value": 2
-            },
-            {
-              "path": "$policy_target.items",
-              "type": "prepend",
-              "value": 0
-            },
-            {
-              "path": "$policy_target.content",
-              "spans": [
-                {
-                  "end": 12,
-                  "replacement": "[redacted]",
-                  "start": 6
-                }
-              ],
-              "type": "redact"
-            },
-            {
-              "path": "$policy_target.flag",
-              "type": "replace",
-              "value": true
-            }
-          ],
-          "reason": "sanitized"
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.flag",
+            "value": true
+          }
         }
       },
       "snapshot": {
@@ -152,28 +102,24 @@
         "policy_invoked": true,
         "transformed_policy_target": null,
         "verdict": {
-          "decision": "allow",
-          "effects": [
-            {
-              "path": "$policy_target.content",
-              "type": "replace",
-              "value": "changed"
-            }
-          ]
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.content",
+            "value": "changed"
+          }
         }
       },
       "mode": "evaluate_only",
-      "name": "allow-evaluate-only-validates-without-applying",
+      "name": "transform-evaluate-only-validates-without-applying",
       "policy_response": {
         "ok": {
-          "decision": "allow",
-          "effects": [
-            {
-              "path": "$policy_target.content",
-              "type": "replace",
-              "value": "changed"
-            }
-          ]
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.content",
+            "value": "changed"
+          }
         }
       },
       "snapshot": {
@@ -218,28 +164,14 @@
         "transformed_policy_target": null,
         "verdict": {
           "decision": "deny",
-          "effects": [
-            {
-              "path": "$policy_target.content",
-              "type": "replace",
-              "value": "changed"
-            }
-          ],
           "reason": "blocked"
         }
       },
       "mode": "enforce",
-      "name": "deny-enforce-does-not-apply-effects",
+      "name": "deny-enforce-carries-no-rewrite",
       "policy_response": {
         "ok": {
           "decision": "deny",
-          "effects": [
-            {
-              "path": "$policy_target.content",
-              "type": "replace",
-              "value": "changed"
-            }
-          ],
           "reason": "blocked"
         }
       },
@@ -285,21 +217,18 @@
         "verdict": {
           "decision": "deny",
           "message": "Request blocked by Agent Control Specification.",
-          "reason": "runtime_error:effect_target_forbidden"
+          "reason": "runtime_error:transform_target_forbidden"
         }
       },
       "mode": "enforce",
-      "name": "rejects-non-policy_target-effect-target",
+      "name": "rejects-non-policy_target-transform-path",
       "policy_response": {
         "ok": {
-          "decision": "allow",
-          "effects": [
-            {
-              "path": "$snap.output.content",
-              "type": "replace",
-              "value": "blocked"
-            }
-          ]
+          "decision": "transform",
+          "transform": {
+            "path": "$snap.output.content",
+            "value": "blocked"
+          }
         }
       },
       "snapshot": {
@@ -314,7 +243,7 @@
       "intervention_point": "output"
     }
   ],
-  "id": "policy_target-only-effects",
+  "id": "policy_target-only-transform",
   "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  output:\n    policy_target_kind: assistant_output\n    policy:\n      id: test_policy\n    policy_target: $snap.output\n",
   "schema_version": 1
 }

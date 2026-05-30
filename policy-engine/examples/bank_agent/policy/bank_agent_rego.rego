@@ -33,17 +33,16 @@ input_verdict := {
 }
 
 pre_model_call_verdict := {
-    "decision": "warn",
+    "decision": "transform",
     "reason": "large_transfer_instruction_added",
     "message": "A high-value transfer reminder was added before the model call.",
-    "effects": [{
-        "type": "append",
+    "transform": {
         "path": "$policy_target.messages",
-        "value": {
+        "value": array.concat(input.policy_target.value.messages, [{
             "role": "system",
             "content": "Do not execute high-value transfers without explicit approval."
-        }
-    }]
+        }])
+    }
 } if {
     input.intervention_point == "pre_model_call"
     input.annotations.model_request_classifier.contains_large_transfer == true
@@ -69,35 +68,30 @@ pre_tool_call_verdict := {
 }
 
 post_tool_call_verdict := {
-    "decision": "warn",
+    "decision": "transform",
     "reason": "tool_result_account_identifier_redacted",
     "message": "The account identifier was redacted before the result returned to the agent.",
-    "effects": [{
-        "type": "replace",
+    "transform": {
         "path": "$policy_target.account_id",
         "value": "ACCOUNT-REDACTED"
-    }]
+    }
 } if {
     input.intervention_point == "post_tool_call"
     input.policy_target.value.account_id != ""
 }
 
 output_verdict := {
-    "decision": "warn",
+    "decision": "transform",
     "reason": "output_account_identifier_redacted",
     "message": "The final response contained an account identifier and was redacted.",
-    "effects": [{
-        "type": "redact",
+    "transform": {
         "path": "$policy_target.text",
-        "spans": [{"start": start, "end": end, "replacement": "ACCOUNT-REDACTED"}]
-    }]
+        "value": regex.replace(input.policy_target.value.text, "CHK-[0-9]+", "ACCOUNT-REDACTED")
+    }
 } if {
     input.intervention_point == "output"
     matches := regex.find_n("CHK-[0-9]+", input.policy_target.value.text, 1)
     count(matches) > 0
-    account_id := matches[0]
-    start := indexof(input.policy_target.value.text, account_id)
-    end := start + count(account_id)
 }
 
 agent_shutdown_verdict := {

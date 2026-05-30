@@ -5,7 +5,11 @@ pub mod cedar;
 mod constants;
 #[cfg(feature = "default-dispatchers")]
 pub mod dispatchers;
-pub mod effects;
+// AGT D1: effects are no longer part of the public verdict surface. The
+// module stays compiled so its types remain available to internal callers
+// during the M2 sunset, but it is not exported. See
+// `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` D1.
+pub(crate) mod effects;
 pub mod error;
 pub mod ffi;
 pub mod intervention_point;
@@ -32,7 +36,6 @@ pub use cedar::{
 pub use dispatchers::{
     ClassifierAnnotator, DefaultAnnotatorDispatcher, EndpointAnnotator, LlmAnnotator,
 };
-pub use effects::{Effect, EffectType, RedactionSpan};
 pub use error::RuntimeError;
 pub use intervention_point::{EnforcementMode, InterventionPoint};
 pub use limits::Limits;
@@ -51,7 +54,7 @@ pub use policy::{
 pub use policy_input::{action_identity, build_policy_input, canonical_json};
 pub use runtime::{InterventionPointRequest, InterventionPointResult, PolicyDispatcher, Runtime};
 pub use telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetryEventType, TelemetrySink};
-pub use verdict::{normalize_policy_output, Decision, Verdict};
+pub use verdict::{normalize_policy_output, Decision, Evidence, Transform, Verdict};
 
 #[cfg(test)]
 mod tests {
@@ -269,7 +272,10 @@ intervention_points:
     }
 
     #[test]
-    fn evaluate_only_validates_effects_without_applying_them() {
+    fn evaluate_only_validates_transform_without_applying_it() {
+        // AGT D1 migration: the legacy effects-based evaluate-only test now
+        // exercises the transform decision per `SPECIFICATION-AGT-DELTA.md`
+        // D1.1 §5. Effects are removed from the verdict surface.
         let manifest = manifest(
             r#"agent_control_specification_version: 0.3.0-alpha
 policies:
@@ -283,10 +289,8 @@ intervention_points:
     policy_target: $snap.input"#,
         );
         let policy = Arc::new(StaticPolicy::with_output(json!({
-            "decision": "allow",
-            "effects": [
-                {"type": "replace", "path": "$policy_target.message", "value": "changed"}
-            ]
+            "decision": "transform",
+            "transform": {"path": "$policy_target.message", "value": "changed"}
         })));
         let runtime = runtime(manifest, no_annotations(), policy);
 
@@ -296,7 +300,7 @@ intervention_points:
             mode: EnforcementMode::EvaluateOnly,
         });
 
-        assert_eq!(result.verdict.decision, Decision::Allow);
+        assert_eq!(result.verdict.decision, Decision::Transform);
         assert_eq!(result.transformed_policy_target, None);
         assert_eq!(
             result.policy_input.unwrap()["policy_target"]["value"],
@@ -305,7 +309,11 @@ intervention_points:
     }
 
     #[test]
-    fn enforce_applies_policy_target_only_effects() {
+    fn enforce_applies_policy_target_only_transform() {
+        // AGT D1 migration: replaced multi-effect (append + prepend + redact
+        // + replace) on a single warn verdict with a single transform that
+        // rewrites the entire policy target object. Multi-step rewriting is
+        // moving to annotators per D1.3.
         let manifest = manifest(
             r#"agent_control_specification_version: 0.3.0-alpha
 policies:
@@ -319,15 +327,15 @@ intervention_points:
     policy_target: $snap.output"#,
         );
         let policy = Arc::new(StaticPolicy::with_output(json!({
-            "decision": "warn",
-            "effects": [
-                {"type": "append", "path": "$policy_target.items", "value": 2},
-                {"type": "prepend", "path": "$policy_target.items", "value": 0},
-                {"type": "redact", "path": "$policy_target.content", "spans": [
-                    {"start": 6, "end": 12, "replacement": "[x]"}
-                ]},
-                {"type": "replace", "path": "$policy_target.flag", "value": true}
-            ]
+            "decision": "transform",
+            "transform": {
+                "path": "$policy_target",
+                "value": {
+                    "items": [0, 1, 2],
+                    "content": "hello [x] world",
+                    "flag": true
+                }
+            }
         })));
         let runtime = runtime(manifest, no_annotations(), policy);
 
@@ -343,7 +351,7 @@ intervention_points:
             mode: EnforcementMode::Enforce,
         });
 
-        assert_eq!(result.verdict.decision, Decision::Warn);
+        assert_eq!(result.verdict.decision, Decision::Transform);
         assert_eq!(
             result.transformed_policy_target.unwrap(),
             json!({

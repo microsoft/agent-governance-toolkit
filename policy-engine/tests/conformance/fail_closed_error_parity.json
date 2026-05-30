@@ -10,8 +10,8 @@
     "runtime_error:annotation_timeout",
     "runtime_error:policy_invocation_failed",
     "runtime_error:policy_output_invalid",
-    "runtime_error:effect_invalid",
-    "runtime_error:effect_target_forbidden",
+    "runtime_error:transform_invalid",
+    "runtime_error:transform_target_forbidden",
     "runtime_error:resource_limit_exceeded"
   ],
   "cases": [
@@ -165,9 +165,9 @@
       }
     },
     {
-      "id": "effect-invalid",
+      "id": "transform-invalid",
       "operation": "evaluate",
-      "expected_reason": "runtime_error:effect_invalid",
+      "expected_reason": "runtime_error:transform_invalid",
       "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  p:\n    type: test\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
       "intervention_point": "input",
       "snapshot": {
@@ -176,20 +176,17 @@
         }
       },
       "policy_response": {
-        "decision": "allow",
-        "effects": [
-          {
-            "type": "append",
-            "path": "$policy_target.count",
-            "value": "x"
-          }
-        ]
+        "decision": "transform",
+        "transform": {
+          "path": "$policy_target.missing.nested",
+          "value": "x"
+        }
       }
     },
     {
-      "id": "effect-target-forbidden",
+      "id": "transform-target-forbidden",
       "operation": "evaluate",
-      "expected_reason": "runtime_error:effect_target_forbidden",
+      "expected_reason": "runtime_error:transform_target_forbidden",
       "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  p:\n    type: test\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
       "intervention_point": "input",
       "snapshot": {
@@ -198,14 +195,11 @@
         }
       },
       "policy_response": {
-        "decision": "allow",
-        "effects": [
-          {
-            "type": "replace",
-            "path": "$snap.input.text",
-            "value": "blocked"
-          }
-        ]
+        "decision": "transform",
+        "transform": {
+          "path": "$snap.input.text",
+          "value": "blocked"
+        }
       }
     },
     {

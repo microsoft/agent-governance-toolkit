@@ -2,7 +2,7 @@
   "$schema": "../cases.schema.json",
   "id": "spec-16-effects.case-02",
   "spec_section": "16",
-  "title": "append to non string and non array fails closed",
+  "title": "AGT D1: dispatcher output with append effects is rejected",
   "claimable": true,
   "operation": "evaluate",
   "sdk_support": {
@@ -30,7 +30,7 @@
   },
   "expected": {
     "decision": "deny",
-    "reason": "runtime_error:effect_invalid",
+    "reason": "runtime_error:policy_output_invalid",
     "transformed_policy_target": null
   }
 }

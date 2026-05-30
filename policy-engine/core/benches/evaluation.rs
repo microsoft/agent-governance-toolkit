@@ -1,6 +1,5 @@
 use agent_control_specification_core::{
-    build_policy_input, effects::validate_and_maybe_apply_effects, normalize_policy_output, Effect,
-    InterventionPoint, Manifest,
+    build_policy_input, normalize_policy_output, InterventionPoint, Manifest,
 };
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use serde_json::{json, Value};
@@ -137,35 +136,22 @@ fn policy_target_value(snapshot: &Value) -> Value {
     snapshot["tool_call"]["args"].clone()
 }
 
-fn policy_output_with_effects() -> Value {
+fn policy_output_with_transform() -> Value {
+    // AGT D1 replaces the multi-effect `warn` verdict with a single
+    // `transform` decision that rewrites `$policy_target` in one step.
     json!({
-        "decision": "warn",
+        "decision": "transform",
         "reason": "sensitive_account",
-        "message": "Proceed after redacting account identifiers.",
-        "effects": [
-            {"type": "prepend", "path": "$policy_target.items", "value": "head"},
-            {"type": "append", "path": "$policy_target.items", "value": "tail"},
-            {"type": "redact", "path": "$policy_target.content", "spans": [
-                {"start": 8, "end": 17, "replacement": "[account]"},
-                {"start": 32, "end": 41, "replacement": "[account]"}
-            ]},
-            {"type": "replace", "path": "$policy_target.flag", "value": true}
-        ]
+        "message": "Replaced account identifiers.",
+        "transform": {
+            "path": "$policy_target",
+            "value": {
+                "items": ["head", "existing", "tail"],
+                "content": "Account [account] linked to [account] requires review.",
+                "flag": true
+            }
+        }
     })
-}
-
-fn policy_target_for_effects() -> Value {
-    json!({
-        "items": ["existing"],
-        "content": "Account 123456789 linked to 987654321 requires review.",
-        "flag": false
-    })
-}
-
-fn effects_for_redaction() -> Vec<Effect> {
-    normalize_policy_output(policy_output_with_effects())
-        .expect("policy output should normalize")
-        .effects
 }
 
 fn bench_build_policy_input(c: &mut Criterion) {
@@ -216,28 +202,10 @@ fn bench_manifest_parse_extends_merge(c: &mut Criterion) {
 }
 
 fn bench_verdict_normalization(c: &mut Criterion) {
-    c.bench_function("normalize_verdict_with_effects", |b| {
+    c.bench_function("normalize_verdict_with_transform", |b| {
         b.iter_batched(
-            policy_output_with_effects,
+            policy_output_with_transform,
             |output| black_box(normalize_policy_output(output).expect("verdict should normalize")),
-            BatchSize::SmallInput,
-        )
-    });
-}
-
-fn bench_redaction_effect_application(c: &mut Criterion) {
-    let effects = effects_for_redaction();
-    let target = policy_target_for_effects();
-
-    c.bench_function("apply_redaction_effects", |b| {
-        b.iter_batched(
-            || target.clone(),
-            |target| {
-                black_box(
-                    validate_and_maybe_apply_effects(&target, black_box(&effects), true)
-                        .expect("effects should apply"),
-                )
-            },
             BatchSize::SmallInput,
         )
     });
@@ -247,7 +215,6 @@ criterion_group!(
     benches,
     bench_build_policy_input,
     bench_manifest_parse_extends_merge,
-    bench_verdict_normalization,
-    bench_redaction_effect_application
+    bench_verdict_normalization
 );
 criterion_main!(benches);

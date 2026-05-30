@@ -195,6 +195,10 @@ fn runtime_error_reason_table_matches_spec_section_15() {
 
 #[test]
 fn every_runtime_error_reason_maps_to_deny_without_effects() {
+    // AGT D1 removed `effects` from the verdict surface. This test now
+    // verifies that runtime-error verdicts carry no transform and no
+    // mutated policy target, preserving the same fail-closed invariant
+    // ("a runtime error never rewrites the policy target") under D1.
     for error in [
         RuntimeError::ManifestInvalid(String::new()),
         RuntimeError::InterventionPointUnknown(String::new()),
@@ -213,7 +217,7 @@ fn every_runtime_error_reason_maps_to_deny_without_effects() {
         let verdict = Verdict::runtime_error(&error);
         assert_eq!(verdict.decision, Decision::Deny, "{}", error.reason());
         assert_eq!(verdict.reason.as_deref(), Some(error.reason()));
-        assert!(verdict.effects.is_empty(), "{}", error.reason());
+        assert!(verdict.transform.is_none(), "{}", error.reason());
     }
 }
 
@@ -288,20 +292,23 @@ fn executable_parity_fixture_fails_closed_for_build_and_evaluate_reasons() {
 
 #[test]
 fn error_paths_never_apply_policy_effects() {
+    // AGT D1 sunsets effects on verdicts. The same invariant ("a policy
+    // cannot mutate state outside `$policy_target`") is now enforced on
+    // the transform decision path, surfaced as `transform_target_forbidden`.
     let yaml = manifest_yaml("");
     let runtime = runtime_with_limits(
         &yaml,
         FixtureAnnotator::empty(),
         FixturePolicy::output(json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$snap.input.text", "value": "mutated"}]
+            "decision": "transform",
+            "transform": {"path": "$snap.input.text", "value": "mutated"}
         })),
         Limits::default(),
     );
 
     let result = evaluate_input(&runtime, json!({"input": {"text": "original"}}));
 
-    assert_deny_reason(&result, "runtime_error:effect_target_forbidden");
+    assert_deny_reason(&result, "runtime_error:transform_target_forbidden");
     assert_eq!(
         result.policy_input.unwrap()["policy_target"]["value"]["text"],
         "original"
@@ -534,6 +541,12 @@ fn approval_invariant_has_stable_core_action_identity_and_fail_closed_reason() {
 
 #[test]
 fn evaluate_only_records_would_be_deny_without_transforming_target() {
+    // AGT D1: a deny verdict that previously rode with effects (and got
+    // them rejected at the runtime layer) is now rejected at the
+    // normalization layer because `effects` is no longer permitted at all.
+    // The test preserves the original "deny + would-be effects do not
+    // mutate state" invariant by sending the deny verdict alone and
+    // confirming the policy target is untouched in evaluate-only mode.
     let events = Arc::new(Mutex::new(Vec::new()));
     let telemetry = Arc::new(RecordingTelemetry {
         events: events.clone(),
@@ -543,8 +556,7 @@ fn evaluate_only_records_would_be_deny_without_transforming_target() {
         FixtureAnnotator::empty(),
         FixturePolicy::output(json!({
             "decision": "deny",
-            "reason": "policy_denied",
-            "effects": [{"type": "replace", "path": "$policy_target", "value": "mutated"}]
+            "reason": "policy_denied"
         })),
         telemetry,
     )

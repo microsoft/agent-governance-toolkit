@@ -125,16 +125,13 @@ unsafe extern "C" fn policy_callback(
 
     let output = if contains_account_number {
         json!({
-            "decision": "warn",
+            "decision": "transform",
             "reason": "account_number_redacted",
             "message": "Account number was redacted before continuing.",
-            "effects": [
-                {
-                    "type": "replace",
-                    "path": "$policy_target.text",
-                    "value": "Please summarize account [REDACTED]."
-                }
-            ]
+            "transform": {
+                "path": "$policy_target.text",
+                "value": "Please summarize account [REDACTED]."
+            }
         })
     } else {
         json!({ "decision": "allow" })
@@ -186,7 +183,7 @@ unsafe fn build_runtime_from_builder(
 }
 
 #[test]
-fn ffi_roundtrip_warns_and_transforms_policy_target() {
+fn ffi_roundtrip_transforms_policy_target() {
     unsafe {
         let runtime = build_runtime();
         let request = CString::new(
@@ -212,7 +209,7 @@ fn ffi_roundtrip_warns_and_transforms_policy_target() {
                 .expect("runtime output is UTF-8"),
         )
         .expect("runtime output is JSON");
-        assert_eq!(result["verdict"]["decision"], "warn");
+        assert_eq!(result["verdict"]["decision"], "transform");
         assert_eq!(
             result["transformed_policy_target"]["text"],
             "Please summarize account [REDACTED]."
@@ -287,7 +284,7 @@ fn ffi_yaml_chain_merges_positionally_and_builds_runtime() {
                 .expect("runtime output is UTF-8"),
         )
         .expect("runtime output is JSON");
-        assert_eq!(result["verdict"]["decision"], "warn");
+        assert_eq!(result["verdict"]["decision"], "transform");
         acs_free_string(out);
         acs_runtime_free(runtime);
     }

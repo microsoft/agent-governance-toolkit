@@ -822,11 +822,12 @@ fn runtime_flow_uses_preliminary_annotations_final_policy_input_and_effects_in_o
     );
     let policy = RecordingPolicy::with_output(
         json!({
-            "decision": "allow",
+            "decision": "transform",
             "reason": "sanitized",
-            "effects": [
-                {"type": "replace", "path": "$policy_target.query", "value": "find [redacted]"}
-            ]
+            "transform": {
+                "path": "$policy_target.query",
+                "value": "find [redacted]"
+            }
         }),
         events.clone(),
     );
@@ -882,7 +883,7 @@ annotators:
         mode: EnforcementMode::Enforce,
     });
 
-    assert_eq!(result.verdict.decision, Decision::Allow);
+    assert_eq!(result.verdict.decision, Decision::Transform);
     assert_eq!(result.verdict.reason.as_deref(), Some("sanitized"));
     assert_eq!(
         result.transformed_policy_target.unwrap(),
@@ -1076,16 +1077,19 @@ intervention_points:
 
 #[test]
 fn telemetry_sink_receives_structured_low_cardinality_events() {
+    // AGT D1 migration: the warn-with-effects scenario is now a single
+    // transform decision. Effects are no longer emitted on the verdict;
+    // the runtime exposes the rewritten policy target through
+    // `transformed_policy_target` and the dedicated Transformed event is
+    // added by AGT D2 in a follow-up commit.
     let callback_events = no_events();
     let annotations = RecordingAnnotator::new(callback_events.clone());
     annotations.set_output("classifier", json!({"risk": "low"}));
     let policy = RecordingPolicy::with_output(
         json!({
-            "decision": "warn",
+            "decision": "transform",
             "reason": "sanitized",
-            "effects": [
-                {"type": "replace", "path": "$policy_target.text", "value": "safe"}
-            ]
+            "transform": {"path": "$policy_target.text", "value": "safe"}
         }),
         callback_events,
     );
@@ -1117,7 +1121,7 @@ annotators:
         mode: EnforcementMode::Enforce,
     });
 
-    assert_eq!(result.verdict.decision, Decision::Warn);
+    assert_eq!(result.verdict.decision, Decision::Transform);
     assert_eq!(
         result.transformed_policy_target,
         Some(json!({"text": "safe"}))
@@ -1125,29 +1129,18 @@ annotators:
 
     let events = emitted.lock().unwrap().clone();
     let event_types: Vec<_> = events.iter().map(|event| event.event_type).collect();
-    assert_eq!(
-        event_types,
-        vec![
-            TelemetryEventType::EffectApplied,
-            TelemetryEventType::Decision
-        ]
-    );
+    assert_eq!(event_types, vec![TelemetryEventType::Decision]);
 
-    let effect_event = &events[0];
-    assert_eq!(effect_event.intervention_point, InterventionPoint::Input);
-    assert_eq!(effect_event.policy_id.as_deref(), Some("test_policy"));
-    assert_eq!(effect_event.metadata.get("effect_count").unwrap(), "1");
-
-    let warning_event = &events[1];
-    assert_eq!(warning_event.decision, Some(Decision::Warn));
-    assert_eq!(warning_event.reason_code.as_deref(), Some("sanitized"));
-    assert_eq!(warning_event.policy_id.as_deref(), Some("test_policy"));
-    assert_eq!(warning_event.annotators, vec!["classifier".to_string()]);
+    let decision_event = &events[0];
+    assert_eq!(decision_event.decision, Some(Decision::Transform));
+    assert_eq!(decision_event.reason_code.as_deref(), Some("sanitized"));
+    assert_eq!(decision_event.policy_id.as_deref(), Some("test_policy"));
+    assert_eq!(decision_event.annotators, vec!["classifier".to_string()]);
     assert_eq!(
-        warning_event.enforcement_mode,
+        decision_event.enforcement_mode,
         Some(EnforcementMode::Enforce)
     );
-    assert!(warning_event.duration_ms.unwrap() >= 0.0);
+    assert!(decision_event.duration_ms.unwrap() >= 0.0);
 
     for event in events {
         assert!(!event.metadata.contains_key("policy_target"));
@@ -1170,9 +1163,7 @@ fn telemetry_decision_event_omits_raw_subject_data_by_default() {
         json!({
             "decision": "deny",
             "reason": format!("blocked {raw_subject}"),
-            "effects": [
-                {"type": "replace", "path": "$policy_target.text", "value": raw_replacement}
-            ]
+            "message": format!("would have replaced with: {raw_replacement}")
         }),
         callback_events,
     );
@@ -1421,7 +1412,15 @@ annotators:
 }
 
 #[test]
-fn effects_apply_for_enforced_allow_warn_and_escalate_but_validate_in_all_modes() {
+fn transform_applies_for_enforce_and_validates_in_evaluate_only() {
+    // AGT D1 migration of the legacy multi-effect contract test. Effects are
+    // sunset by `SPECIFICATION-AGT-DELTA.md` D1; the only mutating decision
+    // is `transform`, which carries a single replacement at one path. The
+    // multi-step rewriting that this test originally covered now flows
+    // through annotators per D1.3 (slated for M5). This test verifies the
+    // transform decision honors enforce vs evaluate_only and that the
+    // transform-invalid and transform-target-forbidden reasons surface on
+    // the runtime path.
     let manifest_yaml = r#"agent_control_specification_version: 0.3.0-alpha
 policies:
   test_policy:
@@ -1432,16 +1431,6 @@ intervention_points:
     policy:
       id: test_policy
     policy_target: $snap.output"#;
-    let effects = json!([
-        {"type": "append", "path": "$policy_target.items", "value": "tail"},
-        {"type": "prepend", "path": "$policy_target.items", "value": "head"},
-        {"type": "append", "path": "$policy_target.note", "value": "!"},
-        {"type": "prepend", "path": "$policy_target.note", "value": "prefix "},
-        {"type": "redact", "path": "$policy_target.content", "spans": [
-            {"start": 6, "end": 12, "replacement": "[redacted]"}
-        ]},
-        {"type": "replace", "path": "$policy_target.flag", "value": true}
-    ]);
     let snapshot = json!({
         "output": {
             "items": ["middle"],
@@ -1451,26 +1440,29 @@ intervention_points:
         }
     });
 
-    let warn_runtime = runtime(
+    let transform_runtime = runtime(
         manifest_yaml,
         RecordingAnnotator::new(no_events()),
         RecordingPolicy::with_output(
-            json!({"decision": "warn", "effects": effects.clone()}),
+            json!({
+                "decision": "transform",
+                "transform": {"path": "$policy_target.flag", "value": true}
+            }),
             no_events(),
         ),
     );
-    let warn = warn_runtime.evaluate_intervention_point(InterventionPointRequest {
+    let transformed = transform_runtime.evaluate_intervention_point(InterventionPointRequest {
         intervention_point: InterventionPoint::Output,
         snapshot: snapshot.clone(),
         mode: EnforcementMode::Enforce,
     });
-    assert_eq!(warn.verdict.decision, Decision::Warn);
+    assert_eq!(transformed.verdict.decision, Decision::Transform);
     assert_eq!(
-        warn.transformed_policy_target.unwrap(),
+        transformed.transformed_policy_target.unwrap(),
         json!({
-            "items": ["head", "middle", "tail"],
-            "note": "prefix ok!",
-            "content": "héllo [redacted]",
+            "items": ["middle"],
+            "note": "ok",
+            "content": "héllo secret",
             "flag": true
         })
     );
@@ -1479,7 +1471,10 @@ intervention_points:
         manifest_yaml,
         RecordingAnnotator::new(no_events()),
         RecordingPolicy::with_output(
-            json!({"decision": "allow", "effects": effects}),
+            json!({
+                "decision": "transform",
+                "transform": {"path": "$policy_target.flag", "value": true}
+            }),
             no_events(),
         ),
     );
@@ -1489,7 +1484,7 @@ intervention_points:
             snapshot: snapshot.clone(),
             mode: EnforcementMode::EvaluateOnly,
         });
-    assert_eq!(evaluate_only.verdict.decision, Decision::Allow);
+    assert_eq!(evaluate_only.verdict.decision, Decision::Transform);
     assert!(evaluate_only.transformed_policy_target.is_none());
     assert_eq!(
         evaluate_only.policy_input.unwrap()["policy_target"]["value"],
@@ -1499,13 +1494,7 @@ intervention_points:
     let deny_runtime = runtime(
         manifest_yaml,
         RecordingAnnotator::new(no_events()),
-        RecordingPolicy::with_output(
-            json!({
-                "decision": "deny",
-                "effects": [{"type": "replace", "path": "$policy_target.flag", "value": true}]
-            }),
-            no_events(),
-        ),
+        RecordingPolicy::with_output(json!({"decision": "deny"}), no_events()),
     );
     let deny = deny_runtime.evaluate_intervention_point(InterventionPointRequest {
         intervention_point: InterventionPoint::Output,
@@ -1515,29 +1504,27 @@ intervention_points:
     assert_eq!(deny.verdict.decision, Decision::Deny);
     assert!(deny.transformed_policy_target.is_none());
 
-    let invalid_effect_runtime = runtime(
+    let invalid_transform_runtime = runtime(
         manifest_yaml,
         RecordingAnnotator::new(no_events()),
         RecordingPolicy::with_output(
             json!({
-                "decision": "allow",
-                "effects": [{"type": "redact", "path": "$policy_target.content", "spans": [
-                    {"start": 0, "end": 99, "replacement": "x"}
-                ]}]
+                "decision": "transform",
+                "transform": {"path": "$policy_target.missing_field", "value": "x"}
             }),
             no_events(),
         ),
     );
-    let invalid_effect =
-        invalid_effect_runtime.evaluate_intervention_point(InterventionPointRequest {
+    let invalid_transform =
+        invalid_transform_runtime.evaluate_intervention_point(InterventionPointRequest {
             intervention_point: InterventionPoint::Output,
             snapshot: snapshot.clone(),
             mode: EnforcementMode::EvaluateOnly,
         });
-    assert_eq!(invalid_effect.verdict.decision, Decision::Deny);
+    assert_eq!(invalid_transform.verdict.decision, Decision::Deny);
     assert_eq!(
-        invalid_effect.verdict.reason.as_deref(),
-        Some("runtime_error:effect_invalid")
+        invalid_transform.verdict.reason.as_deref(),
+        Some("runtime_error:transform_invalid")
     );
 
     let forbidden_target_runtime = runtime(
@@ -1545,8 +1532,8 @@ intervention_points:
         RecordingAnnotator::new(no_events()),
         RecordingPolicy::with_output(
             json!({
-                "decision": "allow",
-                "effects": [{"type": "replace", "path": "$pi.policy_target.value.flag", "value": true}]
+                "decision": "transform",
+                "transform": {"path": "$pi.policy_target.value.flag", "value": true}
             }),
             no_events(),
         ),
@@ -1560,7 +1547,7 @@ intervention_points:
     assert_eq!(forbidden_target.verdict.decision, Decision::Deny);
     assert_eq!(
         forbidden_target.verdict.reason.as_deref(),
-        Some("runtime_error:effect_target_forbidden")
+        Some("runtime_error:transform_target_forbidden")
     );
 }
 

@@ -1,3 +1,11 @@
+// AGT D1: the effects pipeline is sunset by `SPECIFICATION-AGT-DELTA.md` D1.
+// The module remains crate-private to keep the parsing and application
+// helpers available for internal callers during the M2 transition; nothing
+// in this module is part of the public surface. Dead-code warnings are
+// suppressed because the runtime now drives transformations through the
+// `Decision::Transform` path in `runtime::apply_transform`.
+#![allow(dead_code)]
+
 use crate::{paths::PathRoot, JsonPath, JsonValue, RuntimeError};
 use regex::Regex;
 use serde::Serialize;

@@ -2,7 +2,7 @@
   "$schema": "../cases.schema.json",
   "id": "spec-16-effects.case-01",
   "spec_section": "16",
-  "title": "redaction spans use character offsets",
+  "title": "AGT D1: dispatcher output with redaction-span effects is rejected",
   "claimable": true,
   "operation": "evaluate",
   "sdk_support": {
@@ -35,9 +35,8 @@
     ]
   },
   "expected": {
-    "decision": "warn",
-    "transformed_policy_target": {
-      "text": "🔥[REDACTED] tail"
-    }
+    "decision": "deny",
+    "reason": "runtime_error:policy_output_invalid",
+    "transformed_policy_target": null
   }
 }

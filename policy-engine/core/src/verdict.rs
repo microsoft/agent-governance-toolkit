@@ -1,4 +1,4 @@
-use crate::{effects::Effect, paths::PathRoot, JsonPath, JsonValue, RuntimeError};
+use crate::{paths::PathRoot, JsonPath, JsonValue, RuntimeError};
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 
@@ -26,19 +26,9 @@ impl Decision {
         }
     }
 
-    /// Whether the legacy `effects` array on the verdict is applied for this
-    /// decision. With AGT D1 the canonical path is the `Transform` decision;
-    /// `effects` remain accepted by the engine for upstream-ACS compatibility
-    /// in this iteration but are scheduled for removal once parity tests are
-    /// migrated. Per spec §13.1 escalate carries no effects, so it is
-    /// excluded here even though the function name predates the AGT
-    /// transform decision.
-    pub fn applies_effects(self) -> bool {
-        matches!(self, Self::Allow | Self::Warn)
-    }
-
     /// Whether this decision permits the action to proceed (after any
-    /// applicable transform).
+    /// applicable transform). Per AGT D1, effects no longer exist on the
+    /// verdict; the only value-changing decision is `Transform`.
     pub fn permits(self) -> bool {
         matches!(self, Self::Allow | Self::Warn | Self::Transform)
     }
@@ -113,8 +103,6 @@ pub struct Verdict {
     pub reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub effects: Vec<Effect>,
     /// AGT D1.1 single-target replacement payload. Present only when
     /// `decision` is `Transform`. Forbidden on every other decision.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -144,7 +132,6 @@ impl Verdict {
             decision: Decision::Deny,
             reason: Some(error.reason().to_string()),
             message: Some(message),
-            effects: Vec::new(),
             transform: None,
             evidence: None,
             result_labels: Vec::new(),
@@ -280,18 +267,29 @@ pub fn normalize_policy_output(output: JsonValue) -> Result<Verdict, RuntimeErro
         }
     };
 
-    let effects = match object.get("effects") {
-        None | Some(JsonValue::Null) => Vec::new(),
-        Some(JsonValue::Array(items)) => items
-            .iter()
-            .map(Effect::from_value)
-            .collect::<Result<Vec<_>, _>>()?,
+    // AGT D1: the `effects` array on a verdict MUST be rejected. Accept
+    // `null` and empty `[]` for back-compat (they are functionally
+    // identical to absent) so that dispatchers in the middle of migrating
+    // away from upstream ACS effects keep working. A non-empty array fails
+    // closed with `runtime_error:policy_output_invalid`. Multi-step
+    // transformation must move upstream to annotators per D1.3.
+    match object.get("effects") {
+        None | Some(JsonValue::Null) => {}
+        Some(JsonValue::Array(items)) if items.is_empty() => {}
+        Some(JsonValue::Array(_)) => {
+            return Err(RuntimeError::PolicyOutputInvalid(
+                "verdict 'effects' is no longer supported; use the transform decision \
+                 per SPECIFICATION-AGT-DELTA D1. Migrate multi-step rewriting to an \
+                 annotator per D1.3"
+                    .to_string(),
+            ))
+        }
         _ => {
             return Err(RuntimeError::PolicyOutputInvalid(
                 "policy output effects must be an array".to_string(),
             ))
         }
-    };
+    }
 
     let result_labels = match object.get("result_labels") {
         None | Some(JsonValue::Null) => Vec::new(),
@@ -336,7 +334,6 @@ pub fn normalize_policy_output(output: JsonValue) -> Result<Verdict, RuntimeErro
         decision,
         reason,
         message,
-        effects,
         transform,
         evidence,
         result_labels,
@@ -391,6 +388,55 @@ mod tests {
         let error =
             normalize_policy_output(json!({"decision": "allow", "result_labels": ["ok", 7]}))
                 .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    // ── AGT D1 effects rejection ──────────────────────────────────────
+
+    #[test]
+    fn non_empty_effects_array_fails_closed_per_agt_d1() {
+        let error = normalize_policy_output(json!({
+            "decision": "allow",
+            "effects": [
+                {"type": "replace", "path": "$policy_target.body", "value": "x"}
+            ]
+        }))
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+        assert!(
+            error.detail().contains("transform decision"),
+            "rejection message must point at the AGT D1 transform path: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn empty_effects_array_still_parses_for_back_compat() {
+        let verdict = normalize_policy_output(json!({
+            "decision": "allow",
+            "effects": []
+        }))
+        .expect("empty effects array is treated as absent per AGT D1 back-compat");
+        assert_eq!(verdict.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn null_effects_still_parses_for_back_compat() {
+        let verdict = normalize_policy_output(json!({
+            "decision": "allow",
+            "effects": null
+        }))
+        .expect("null effects is treated as absent per AGT D1 back-compat");
+        assert_eq!(verdict.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn non_array_effects_still_reports_policy_output_invalid() {
+        let error = normalize_policy_output(json!({
+            "decision": "allow",
+            "effects": "not-an-array"
+        }))
+        .unwrap_err();
         assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
     }
 
@@ -485,9 +531,8 @@ mod tests {
 
     #[test]
     fn evidence_non_object_fails_closed() {
-        let error =
-            normalize_policy_output(json!({"decision": "allow", "evidence": "sha256:bad"}))
-                .unwrap_err();
+        let error = normalize_policy_output(json!({"decision": "allow", "evidence": "sha256:bad"}))
+            .unwrap_err();
         assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
     }
 
