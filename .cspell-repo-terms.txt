@@ -23,10 +23,13 @@ anomalyco
 antigravity
 APIM
 apiserver
+approv
+approvеd
 appsettings
 argparse
 arrowsize
 asctime
+ASGI
 aspnet
 asynccontextmanager
 asyncio
@@ -40,6 +43,7 @@ axios
 aymenhmaidiwastaken
 backendunavailable
 backpressure
+baseexception
 baselined
 behaviour
 behavioural
@@ -52,9 +56,11 @@ capsys
 carloshvp
 carryforward
 carveout
+casefold
 CCPA
 cedarling
 cedarpy
+changeme
 chdir
 cheatsheet
 checkpointed
@@ -72,11 +78,9 @@ CODEOWNERS
 codepoint
 CommonMark
 comspec
-<<<<<<< HEAD
-connectedservicename
-=======
 confirmer
->>>>>>> 019325ce (chore: add mute-agent red-team test terms to spell-check allowlist)
+confusables
+connectedservicename
 containerapps
 containerd
 contentsource
@@ -116,8 +120,8 @@ digestmod
 dnssec
 Dockerfiles
 Docstrings
-domaintenantid
 doesnotexist
+domaintenantid
 DOTALL
 dpkg
 DYLD
@@ -180,6 +184,7 @@ gvisor
 h├⌐llo
 hasattr
 hashlib
+hdrs
 HEALTHCHECK
 healthz
 héllo
@@ -209,6 +214,7 @@ itertools
 javaagent
 jwkjwks
 kanish
+kars
 kata
 kayalopez
 kevinkaylie
@@ -235,11 +241,8 @@ lockfile
 lockfiles
 lotl
 lstrip
-<<<<<<< HEAD
-mainpublisher
-=======
 madmin
->>>>>>> 019325ce (chore: add mute-agent red-team test terms to spell-check allowlist)
+mainpublisher
 manylinux
 markdown
 Marp
@@ -265,6 +268,7 @@ MSHV
 msinternal
 MSRC
 mTLS
+multitenant
 myapp
 mynamespace
 mypod
@@ -278,10 +282,12 @@ Nemotron
 netfilter
 networkx
 newpartner
+NFKC
 NNNN
 nonimport
 nonlocal
 noqa
+normalisation
 normalises
 nostr
 nother
@@ -328,6 +334,7 @@ PSMODULEPATH
 psmodules
 pycache
 Pydantic
+pyjwt
 pypdf
 pypistats
 pyproject
@@ -345,6 +352,8 @@ readouterr
 recognised
 recognising
 redteam
+refetch
+refetches
 Rego
 relativedelta
 removeprefix
@@ -360,6 +369,7 @@ rglob
 rmtree
 Rootfs
 rrdatas
+rsplit
 rstrip
 RUBYOPT
 run_results
@@ -369,21 +379,25 @@ RustSec
 Sandboxed
 sandboxing
 sandboxprovider
+sanitised
 sarif
 SCAK
 scikit
 scipy
+sdist
 seccomp
 SemanticKernel
 serde
 Serialise
 serviceendpointurl
+sess
 setattr
 setdefault
 setext
 setitem
 setuid
 setuptools
+shortone
 shutil
 siddique
 SIEM
@@ -436,8 +450,11 @@ ufeff
 uncallable
 unconfigured
 Ungated
+unicodedata
 uninspectable
 Unmarshal
+unmigrated
+unreachability
 unredacted
 Unregisters
 unrevocation
@@ -474,24 +491,3 @@ XACML
 xfail
 xunit
 ZDOTDIR
-
-ASGI
-approv
-backendunavailable
-baseexception
-casefold
-changeme
-confusables
-hdrs
-madmin
-monkeypatched
-multitenant
-NFKC
-normalisation
-oncall
-rsplit
-sanitised
-shortone
-testclient
-unicodedata
-approvеd

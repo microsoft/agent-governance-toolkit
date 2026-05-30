@@ -9,6 +9,7 @@ Independent design: implements against wire spec only.
 from __future__ import annotations
 
 import base64
+import os
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -70,6 +71,24 @@ class SessionReputationRequest(BaseModel):
     reporter_amid: str
     timestamp: str = ""
     signature: str = ""
+
+
+class IdentityVerifyRequest(BaseModel):
+    """Body for POST /v1/registry/verify (Phase 6.c).
+
+    Used by the kars mesh plugin (and any future AGT-SDK client) to
+    upgrade a registered agent from anonymous-tier to verified-tier
+    by presenting an Entra-signed JWT. The verifier validates the
+    token against the tenant's JWKS, then stamps the verified appId
+    + tenantId + timestamp + tier onto the agent record.
+
+    Fail-closed: invalid/expired/wrong-aud/wrong-tid tokens return
+    401 and leave the agent's existing tier unchanged (so a failed
+    re-verify can't accidentally downgrade a previously-verified peer).
+    """
+
+    amid: str
+    verification_token: str
 
 
 # ── Auth ─────────────────────────────────────────────────────────────
@@ -219,6 +238,43 @@ class RegistryServer:
                 "registered_at": agent.registered_at.isoformat(),
                 "last_seen": agent.last_seen.isoformat(),
                 "reputation_score": agent.reputation_score,
+                # Phase 6.c follow-up — session counters. Old clients
+                # that don't know about these keys ignore them; new
+                # clients (kars router → operator CLI) surface them as
+                # total_sessions / successful / failed / timeout in
+                # the AGT detail overlay's Reputation block.
+                "total_sessions": agent.total_sessions,
+                "successful_sessions": agent.successful_sessions,
+                "failed_sessions": agent.failed_sessions,
+                "timeout_sessions": agent.timeout_sessions,
+                "last_session_at": (
+                    agent.last_session_at.isoformat()
+                    if agent.last_session_at is not None
+                    else None
+                ),
+                # Derived field: success / total. -1.0 sentinel means
+                # "no sessions yet" so consumers can distinguish from
+                # "0 of N succeeded". Computing it server-side keeps
+                # clients honest (no risk of a stale client computing
+                # 0.0 because it doesn't know about the new fields).
+                "completion_rate": (
+                    agent.successful_sessions / agent.total_sessions
+                    if agent.total_sessions > 0 else -1.0
+                ),
+                # Phase 6.c identity verification — populated when the
+                # agent has POSTed a valid Entra-signed JWT to
+                # /v1/registry/verify. All three are None for anonymous
+                # tier and for clusters that have not opted in to
+                # verification. `tier` is the human-readable label
+                # operators see in the AGT overlay.
+                "tier": agent.tier,
+                "verified_app_id": agent.verified_app_id,
+                "verified_tenant_id": agent.verified_tenant_id,
+                "verified_at": (
+                    agent.verified_at.isoformat()
+                    if agent.verified_at is not None
+                    else None
+                ),
             }
 
         @app.delete("/v1/agents/{did}", status_code=204)
@@ -371,6 +427,23 @@ class RegistryServer:
             ``Ed25519-Timestamp`` header so the reporter is bound to an
             authenticated identity. Self-reporting is rejected — agents
             cannot inflate their own reputation.
+
+            Phase 6.c follow-up: ALSO bumps the per-agent session
+            counters. This endpoint is the only path AGT mesh peers
+            currently take to record session feedback
+            (POST /v1/registry/reputation/session is reserved for
+            initiator/receiver pairs with explicit outcome buckets and
+            is not what the mesh SDK calls today). Without this bump,
+            `total_sessions` would stay at 0 even as `reputation_score`
+            drifts from the default 0.5 over hundreds of session
+            replies, leaving operators unable to gauge sample size.
+
+            Score → bucket mapping uses the same thresholds as the
+            session endpoint's outcome semantics for consistency with
+            the existing 5-band tier ladder:
+              score >= 0.7 → successful (peer responded well)
+              score <  0.3 → failed     (peer responded badly)
+              else         → timeout    (partial / ambiguous)
             """
             authed_did = verify_ed25519_timestamp_auth(authorization, store)
             if authed_did == did:
@@ -385,6 +458,17 @@ class RegistryServer:
             # Simple exponential moving average
             alpha = 0.3
             agent.reputation_score = alpha * req.score + (1 - alpha) * agent.reputation_score
+            # Bump counters in lockstep with the EMA so total_sessions
+            # always reflects the number of EMA updates and consumers
+            # can compute a confidence interval.
+            agent.total_sessions += 1
+            if req.score >= 0.7:
+                agent.successful_sessions += 1
+            elif req.score < 0.3:
+                agent.failed_sessions += 1
+            else:
+                agent.timeout_sessions += 1
+            agent.last_session_at = _utcnow()
             store.put_agent(agent)
             return {"did": did, "reputation_score": round(agent.reputation_score, 4)}
 
@@ -408,6 +492,14 @@ class RegistryServer:
             a session participant (initiator or receiver). Together this
             stops any party — authenticated or not — from forging session
             telemetry as another agent.
+
+            Phase 6.c follow-up: in addition to bumping the EMA, this
+            handler also increments per-outcome session counters on the
+            same agent records. Operators querying `GET /v1/agents/{did}`
+            can then distinguish "0.7 from 2 sessions" (noisy) from
+            "0.7 from 200 sessions" (confident). Counters and EMA are
+            updated together inside `_apply` so they stay coherent —
+            you can't get one without the other.
             """
             authed_did = verify_ed25519_timestamp_auth(authorization, store)
             if authed_did != req.reporter_amid:
@@ -430,12 +522,25 @@ class RegistryServer:
             outcome = (req.outcome or "").lower()
             alpha = 0.2
             updated: dict[str, float] = {}
+            now = _utcnow()
 
             def _apply(did: str, target_score: float) -> None:
                 agent = store.get_agent(did)
                 if not agent:
                     return
                 agent.reputation_score = alpha * target_score + (1 - alpha) * agent.reputation_score
+                # Always bump the totals — every reputation update is a
+                # session, regardless of which side initiated. Per-outcome
+                # buckets are stored only for the SAME outcome the EMA
+                # was nudged with, so success/fail/timeout sum to total.
+                agent.total_sessions += 1
+                if outcome == "success":
+                    agent.successful_sessions += 1
+                elif outcome == "failed":
+                    agent.failed_sessions += 1
+                elif outcome == "timeout":
+                    agent.timeout_sessions += 1
+                agent.last_session_at = now
                 store.put_agent(agent)
                 updated[did] = round(agent.reputation_score, 4)
 
@@ -456,6 +561,116 @@ class RegistryServer:
                 "session_id": req.session_id,
                 "outcome": outcome,
                 "reputation": updated,
+            }
+
+        # ── Identity Verification (Phase 6.c) ────────────────────
+
+        @app.post("/v1/registry/verify")
+        async def verify_identity(req: IdentityVerifyRequest) -> dict:
+            """Upgrade a registered agent from anonymous → verified tier
+            by validating an Entra-signed JWT against tenant JWKS.
+
+            Opt-in: when AGENTMESH_ENTRA_AUDIENCE + AGENTMESH_ENTRA_TENANT_ID
+            are unset on the registry deployment, this endpoint returns
+            503 (verification disabled). Clusters that haven't opted in
+            keep all agents at anonymous tier — preserving full backward
+            compat with v3.7.0.
+
+            On success: stamps verified_app_id (Entra `appid` claim),
+            verified_tenant_id (`tid`), verified_at (server time), and
+            tier='verified' onto the agent record. Subsequent
+            GET /v1/agents/{did} reflects the new tier.
+
+            Fail-closed: invalid/expired/wrong-aud/wrong-tid tokens
+            return 401 and leave the agent's existing tier unchanged.
+            A previously-verified peer keeps its tier on re-verify
+            failure (defense against transient JWKS-fetch flakes that
+            could otherwise demote a legitimate peer mid-session).
+            """
+            from agentmesh.identity.entra_verifier import (
+                EntraTokenError,
+                get_verifier,
+            )
+
+            # Phase 6.c — the openclaw plugin's `agtIdentity.amid` is
+            # the bare base64-encoded public-key blob, NOT the
+            # DID-prefixed form the registry stores under. We accept
+            # both shapes via a two-step lookup: literal-amid first,
+            # then linear scan keyed by the agent's identity_key
+            # (X25519 32-byte public key) when the literal lookup
+            # misses. Linear scan is O(n) but the registry is in-
+            # memory and rarely holds >100 agents in practice — well
+            # below any threshold where this would matter.
+            agent = store.get_agent(req.amid)
+            if not agent and not req.amid.startswith("did:"):
+                # Look up by raw public-key bytes
+                import base64
+                try:
+                    pub = base64.urlsafe_b64decode(req.amid + "==")
+                except Exception:
+                    pub = None
+                if pub is not None and hasattr(store, "_agents"):
+                    for stored in store._agents.values():
+                        if (
+                            stored.identity_key == pub
+                            or stored.identity_key_ed == pub
+                        ):
+                            agent = stored
+                            req = req.copy(update={"amid": stored.did})
+                            break
+            if not agent:
+                logger.warning(
+                    "verify_identity got 404 for amid=%r (request body amid). "
+                    "Known agent count=%d. This usually means the plugin sent "
+                    "a different amid from the one it registered with — check "
+                    "agtIdentity.amid vs RegistryClient.register payload.",
+                    req.amid,
+                    len(store._agents) if hasattr(store, "_agents") else -1,
+                )
+                raise HTTPException(status_code=404, detail="Agent not registered")
+
+            verifier = await get_verifier()
+            if verifier is None:
+                # Opt-out path: registry deployed without env vars →
+                # verification disabled cluster-wide. Distinct from
+                # "token rejected" so clients can log/skip cleanly.
+                raise HTTPException(
+                    status_code=503,
+                    detail="Entra verification not configured on this registry",
+                )
+
+            try:
+                claims = await verifier.verify(req.verification_token)
+            except EntraTokenError as exc:
+                logger.warning(
+                    "verify_identity rejected token for %s: %s",
+                    req.amid, exc,
+                )
+                raise HTTPException(status_code=401, detail="Token verification failed")
+
+            app_id = str(claims.get("appid") or claims.get("azp") or "").strip()
+            tenant_id = str(claims.get("tid", "")).strip()
+            if not app_id:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Verified token missing appid/azp claim",
+                )
+
+            agent.verified_app_id = app_id
+            agent.verified_tenant_id = tenant_id
+            agent.verified_at = _utcnow()
+            agent.tier = "verified"
+            store.put_agent(agent)
+            logger.info(
+                "verify_identity: %s upgraded to verified tier (appid=%s tenant=%s)",
+                req.amid, app_id, tenant_id,
+            )
+            return {
+                "did": req.amid,
+                "tier": agent.tier,
+                "verified_app_id": app_id,
+                "verified_tenant_id": tenant_id,
+                "verified_at": agent.verified_at.isoformat(),
             }
 
         # ── Discovery ────────────────────────────────────────────
@@ -484,6 +699,17 @@ class RegistryServer:
 
         @app.get("/health")
         async def health() -> dict:
-            return {"status": "healthy", "service": "agentmesh-registry"}
+            # Phase 6.c — surface the verification toggle so the kars
+            # operator CLI can tell whether the cluster has opted in
+            # to verified-tier mesh peers. Same shape as relay /health.
+            entra_enabled = bool(
+                os.environ.get("AGENTMESH_ENTRA_AUDIENCE", "").strip()
+                and os.environ.get("AGENTMESH_ENTRA_TENANT_ID", "").strip()
+            )
+            return {
+                "status": "healthy",
+                "service": "agentmesh-registry",
+                "entra_verify_enabled": entra_enabled,
+            }
 
         return app

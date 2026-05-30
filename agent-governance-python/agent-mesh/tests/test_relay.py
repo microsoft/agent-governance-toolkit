@@ -382,6 +382,145 @@ class TestGhostConnectionCleanup:
         assert len(server._connections) == 0
 
 
+
+# ── PR #2659 review fix: Entra-enabled connect MUST require a token ──
+
+
+class TestEntraAuthBypassFix:
+    """When ``_ENTRA_VERIFY_ENABLED`` is true, the relay must REQUIRE
+    a valid Entra JWT on connect. Specifically:
+
+      * Empty/missing ``token`` field MUST NOT silently fall through
+        to the shared-secret check or to open-acceptance.
+      * Verifier-init failure MUST NOT downgrade to shared-secret.
+
+    Regression guard for the bypass flagged in PR #2659 review:
+      _ENTRA_VERIFY_ENABLED and client_token  →  if either side
+      is falsy, the if-branch is skipped entirely and execution
+      falls through to the legacy auth path or to open-accept.
+    """
+
+    def _connect_with_entra_enabled(
+        self,
+        monkeypatch,
+        frame: dict,
+    ) -> tuple[str, dict | None]:
+        """Connect with Entra enabled. Returns (close_reason, error_payload)."""
+        from agentmesh.relay import app as relay_app
+        monkeypatch.setattr(relay_app, "_ENTRA_VERIFY_ENABLED", True)
+        # Disable upstream DID proof-of-possession for these tests —
+        # PoP and Entra auth are independent layers; we're testing the
+        # Entra-bypass fix here, not PoP. PoP is exercised in the
+        # dedicated TestRelayDIDProofOfPossession class.
+        monkeypatch.setattr(relay_app, "_REQUIRE_DID_POP", False)
+        # Force get_verifier() to return None so we don't actually
+        # try to validate — the bypass we care about happens BEFORE
+        # any JWT decode work.
+        async def _no_verifier():
+            return None
+        monkeypatch.setattr(
+            "agentmesh.identity.entra_verifier.get_verifier",
+            _no_verifier,
+        )
+        server = RelayServer()
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json(frame)
+            try:
+                resp = ws.receive_json()
+            except Exception:
+                resp = None
+            return ("ok", resp)
+
+    def test_missing_token_field_rejected_when_entra_enabled(self, monkeypatch):
+        """A connect frame with no ``token`` field must be rejected."""
+        _, resp = self._connect_with_entra_enabled(
+            monkeypatch,
+            {"v": 1, "type": "connect", "from": "did:agentmesh:attacker"},
+        )
+        assert resp is not None
+        assert resp["type"] == "error"
+        assert "Entra" in resp["detail"], (
+            "Error must distinguish Entra-required from generic auth-failed"
+        )
+
+    def test_empty_token_rejected_when_entra_enabled(self, monkeypatch):
+        """``token: \"\"`` is a bypass attempt — reject."""
+        _, resp = self._connect_with_entra_enabled(
+            monkeypatch,
+            {"v": 1, "type": "connect", "from": "did:agentmesh:attacker", "token": ""},
+        )
+        assert resp is not None
+        assert resp["type"] == "error"
+        assert "Entra" in resp["detail"]
+
+    def test_null_token_rejected_when_entra_enabled(self, monkeypatch):
+        """``token: null`` is also a bypass attempt — reject."""
+        _, resp = self._connect_with_entra_enabled(
+            monkeypatch,
+            {"v": 1, "type": "connect", "from": "did:agentmesh:attacker", "token": None},
+        )
+        assert resp is not None
+        assert resp["type"] == "error"
+        assert "Entra" in resp["detail"]
+
+    def test_verifier_init_failure_fails_closed(self, monkeypatch):
+        """If Entra is enabled but ``get_verifier()`` returns None
+        (e.g. post-boot JWKS reachability issue), MUST fail closed.
+        Falling through to shared-secret would let an attacker
+        downgrade auth by triggering JWKS unavailability."""
+        from agentmesh.relay import app as relay_app
+        monkeypatch.setattr(relay_app, "_ENTRA_VERIFY_ENABLED", True)
+        # PoP is an independent upstream gate; disable for this test.
+        monkeypatch.setattr(relay_app, "_REQUIRE_DID_POP", False)
+        # Set a legacy shared-secret too — even with the secret
+        # present, Entra-enabled mode must NOT silently downgrade.
+        monkeypatch.setattr(relay_app, "_RELAY_TOKEN", "legacy-shared-secret")
+        async def _no_verifier():
+            return None
+        monkeypatch.setattr(
+            "agentmesh.identity.entra_verifier.get_verifier",
+            _no_verifier,
+        )
+        server = RelayServer()
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws:
+            # Attacker presents the legacy shared secret hoping for
+            # silent downgrade.
+            ws.send_json({
+                "v": 1,
+                "type": "connect",
+                "from": "did:agentmesh:attacker",
+                "token": "legacy-shared-secret",
+            })
+            resp = ws.receive_json()
+        assert resp["type"] == "error", "shared-secret downgrade must be rejected"
+
+    def test_shared_secret_still_works_when_entra_disabled(self, monkeypatch):
+        """Backward compat: when ENTRA is OFF, the legacy shared-secret
+        path is unchanged. (This guards against over-tightening: we
+        only want to block the bypass under the new Entra-enabled
+        contract, not change behavior for unmigrated clusters.)"""
+        from agentmesh.relay import app as relay_app
+        monkeypatch.setattr(relay_app, "_ENTRA_VERIFY_ENABLED", False)
+        # PoP is an independent upstream gate; disable for this back-compat test.
+        monkeypatch.setattr(relay_app, "_REQUIRE_DID_POP", False)
+        monkeypatch.setattr(relay_app, "_RELAY_TOKEN", "legacy-shared-secret")
+        server = RelayServer()
+        client = TestClient(server.app)
+        with client.websocket_connect("/ws") as ws:
+            ws.send_json({
+                "v": 1,
+                "type": "connect",
+                "from": "did:agentmesh:legit",
+                "token": "legacy-shared-secret",
+            })
+            # No error response — connect accepted.
+            ws.send_json({
+                "v": 1, "type": "heartbeat", "from": "did:agentmesh:legit",
+            })
+
+
 # -- DID Proof-of-Possession (security regression) -------------------
 
 

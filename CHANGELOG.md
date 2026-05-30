@@ -13,13 +13,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - **Broadened SSN PII regex across integration adapters** ([#2635](https://github.com/microsoft/agent-governance-toolkit/issues/2635), [#2636](https://github.com/microsoft/agent-governance-toolkit/pull/2636)) — the dashed-only `\b\d{3}-\d{2}-\d{4}\b` regex used by the LangChain, AutoGen, CrewAI, and Bedrock adapters to detect SSNs in memory writes and outbound messages was trivially bypassed by space-, dot-, or no-separator variants such as `123 45 6789`, `123.45.6789`, and `123456789`. The pattern is now `\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b`, matching the YAML policy pack fix from [#2594](https://github.com/microsoft/agent-governance-toolkit/pull/2594) / [#2469](https://github.com/microsoft/agent-governance-toolkit/issues/2469).
+- **mesh-relay**: when Entra verification is enabled
+  (`AGENTMESH_ENTRA_AUDIENCE` set), the `connect` frame MUST carry a
+  valid Entra JWT. Empty/missing `token` is rejected immediately —
+  there is no silent fallback to the legacy shared-secret path. Closes
+  an auth-bypass surfaced in PR #2659 review where a peer could skip
+  JWT verification by omitting the `token` field.
+- **mesh-identity (entra_verifier)**: hard upper bound on stale JWKS
+  cache via `AGENTMESH_ENTRA_JWKS_MAX_STALE_SECS` (default 24h).
+  Beyond the budget, refetch failures fail closed rather than serving
+  from an indefinitely-stale cache. Bounds the window in which a key
+  rotated OUT of the live JWKS remains usable.
+- **mesh-identity (entra_verifier)**: pre-validate the JWT header
+  `alg` against `ALLOWED_SIGNING_ALGORITHMS` BEFORE the JWKS lookup.
+  Defense-in-depth against algorithm-confusion attacks (e.g. attacker
+  presents `alg: HS256` hoping the JWK public-key bytes get reused as
+  an HMAC secret); also avoids a wasted network round-trip on
+  obviously-bad tokens.
 
 ### Changed
 - **Consolidated PII detection patterns into a single shared constant** in `agent_os.integrations.base` ([#2635](https://github.com/microsoft/agent-governance-toolkit/issues/2635)). The four per-adapter copies (`langchain_adapter`, `autogen_adapter`, `crewai_adapter`, `bedrock_adapter`) now import the shared `PII_PATTERNS` tuple so future adapters cannot silently drift out of sync. The shared constant is the union of patterns previously used across all four adapters, which means LangChain, AutoGen, and CrewAI now also block credit-card PII (previously a Bedrock-only check). `bedrock_adapter._PII_RE` remains as a back-compat alias to the shared constant.
+- **mesh-registry**: `POST /reputation` now also increments session
+  counters via the same dispatch path, so a simple reputation update
+  is equivalent to a session start + complete pair.
+  ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
 
 ### Added
 - **OpenCode CLI governance package** — new `@microsoft/agent-governance-opencode` package: in-process OpenCode plugin enforcing AGT prompt, tool, and tool-output policy with secret redaction, plus bundled stdio MCP server, default policy, docs, tutorial, runnable example, CI, and ESRP release wiring.
 - **Antigravity CLI governance package** — new `@microsoft/agent-governance-antigravity-cli` package with Antigravity-native hooks, MCP helpers, custom commands, docs, CI, and release wiring.
+- **mesh-relay**: opt-in Entra-signed JWT verification on the WebSocket
+  `connect` frame, with claim allow-list enforcement (`aud`, `tid`,
+  `exp`, `iat`) and JWKS caching. Opt in via `AGENTMESH_ENTRA_AUDIENCE`
+  + `AGENTMESH_ENTRA_TENANT_ID`. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
+- **mesh-registry**: `POST /v1/registry/verify` endpoint for upgrading
+  agents from anonymous to verified tier via Entra-signed JWTs.
+  Stamps `verified_app_id`, `verified_tenant_id`, `verified_at`, and
+  `tier='verified'` on the agent record. Opt-in via the same env vars
+  as the relay. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
+- **mesh-registry**: per-agent session counters (`sessions_started`,
+  `sessions_completed`, `sessions_aborted`) plus derived
+  `completion_rate`. Surfaces commitment-quality as a signal distinct
+  from the reputation scalar. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
+- **mesh-registry**: `/v1/registry/verify` pubkey-fallback for clients
+  sending bare AMID (the unprefixed base64 public-key blob) instead of
+  the DID-prefixed form. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
 
 ## [3.2.1] - 2026-04-22
 
