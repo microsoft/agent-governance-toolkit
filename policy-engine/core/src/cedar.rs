@@ -12,9 +12,11 @@
 //!    compiled, that parses a small JSON pseudo-cedar policy set, builds a
 //!    cedar [`CedarRequest`] from the policy input per D3.2, and emits an
 //!    `allow`, `deny`, or advice-translated verdict per D3.3.
-//! 3. [`CedarBuiltinDispatcher`] is a feature-gated wrapper around the
-//!    upstream `cedar-policy` crate. It links only when the `cedar` cargo
-//!    feature is enabled; the trait surface above stays available either way.
+//! 3. A feature-gated `CedarBuiltinDispatcher` backed by the upstream
+//!    `cedar-policy` crate is deferred to a follow-up milestone per the
+//!    AGT M2.S2 prompt fallback; hosts that need real cedar evaluation
+//!    today implement [`CedarPolicyDispatcher`] themselves and link
+//!    `cedar-policy` at the host crate level.
 //!
 //! The dispatcher returns a verdict-shaped `JsonValue` exactly like the OPA
 //! dispatcher does, and the runtime then normalizes the value via
@@ -465,3 +467,332 @@ pub fn translate_advice(advice: JsonValue) -> Result<JsonValue, RuntimeError> {
 /// today implement [`CedarPolicyDispatcher`] themselves and link the
 /// `cedar-policy` crate at the host crate level.
 const _: () = ();
+
+#[cfg(test)]
+mod tests {
+    //! AGT M2.S2 D3.3 dispatcher behaviour tests. Each test drives the
+    //! [`CedarTestDispatcher`] against a hand-crafted policy input that
+    //! mirrors the AGT snapshot shape from `spec/agt/AGT-SNAPSHOT-1.0.md` §1
+    //! and asserts the verdict the runtime would emit after normalizing the
+    //! dispatcher's JsonValue through [`crate::normalize_policy_output`].
+
+    use super::*;
+    use crate::{normalize_policy_output, Decision};
+    use serde_json::json;
+
+    fn invocation(policy_set: &str, input: JsonValue) -> CedarPolicyInvocation {
+        CedarPolicyInvocation {
+            policy_set: Some(policy_set.to_string()),
+            policy_path: None,
+            entities_path: None,
+            schema_path: None,
+            query: None,
+            input: input.clone(),
+            canonical_input: serde_json::to_string(&input).unwrap(),
+        }
+    }
+
+    fn tool_input(agent_id: &str, tool_name: &str) -> JsonValue {
+        json!({
+            "intervention_point": "pre_tool_call",
+            "policy_target": {
+                "kind": "tool_args",
+                "path": "$snap.tool_call.args",
+                "value": {"q": "hello"}
+            },
+            "snapshot": {
+                "envelope": {
+                    "agent": {"id": agent_id, "version": "1.0", "name": agent_id},
+                    "session": {"id": "sess-1", "started_at": "2026-01-01T00:00:00Z"},
+                    "intervention_point": "pre_tool_call",
+                    "timestamp": "2026-01-01T00:00:01Z",
+                    "budgets": {"tool_call_count": 0, "token_count": 0, "elapsed_seconds": 0.0, "cost_usd": 0.0}
+                },
+                "tool_call": {"name": tool_name, "args": {"q": "hello"}, "id": "call-1"}
+            },
+            "annotations": {},
+            "tool": {"name": tool_name}
+        })
+    }
+
+    // ── D3.2 request mapping ──────────────────────────────────────────
+
+    #[test]
+    fn build_cedar_request_maps_principal_action_resource_per_d32() {
+        let input = tool_input("agent-x", "hello");
+        let request = build_cedar_request(&input).expect("request built");
+        assert_eq!(request.principal, CedarEntity::new("Agent", "agent-x"));
+        assert_eq!(request.action, CedarEntity::new("Action", "pre_tool_call"));
+        assert_eq!(request.resource, CedarEntity::new("Tool", "hello"));
+        assert!(request.context_keys.contains(&"tool_call".to_string()));
+    }
+
+    #[test]
+    fn build_cedar_request_uses_policy_target_kind_when_no_tool() {
+        let input = json!({
+            "intervention_point": "output",
+            "policy_target": {"kind": "assistant_output", "path": "$snap.response", "value": {}},
+            "snapshot": {
+                "envelope": {
+                    "agent": {"id": "agent-y"},
+                    "session": {"id": "s"},
+                    "intervention_point": "output",
+                    "timestamp": "t",
+                    "budgets": {}
+                },
+                "response": {"content": ""}
+            },
+            "annotations": {},
+            "tool": null
+        });
+        let request = build_cedar_request(&input).expect("request built");
+        assert_eq!(request.principal, CedarEntity::new("Agent", "agent-y"));
+        assert_eq!(request.action, CedarEntity::new("Action", "output"));
+        assert_eq!(
+            request.resource,
+            CedarEntity::new("PolicyTarget", "assistant_output")
+        );
+    }
+
+    #[test]
+    fn build_cedar_request_fails_closed_when_envelope_missing_agent_id() {
+        let input = json!({
+            "intervention_point": "input",
+            "policy_target": {"kind": "user_input", "path": "$snap.input", "value": {}},
+            "snapshot": {"envelope": {"agent": {}}},
+            "annotations": {},
+            "tool": null
+        });
+        let error = build_cedar_request(&input).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    }
+
+    // ── D3.3 allow / deny ─────────────────────────────────────────────
+
+    #[test]
+    fn test_dispatcher_allow_path() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any"}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let output = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap();
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_dispatcher_deny_path() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "forbid", "principal": "any", "action": "Action::\"pre_tool_call\"", "resource": "Tool::\"banned\"", "reason": "tool_banned"},
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any"}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "banned"));
+        let output = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap();
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Deny);
+        assert_eq!(verdict.reason.as_deref(), Some("tool_banned"));
+    }
+
+    #[test]
+    fn test_dispatcher_no_matching_rule_denies() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "Agent::\"alice\"", "action": "any", "resource": "any"}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("bob", "hello"));
+        let output = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap();
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Deny);
+        assert_eq!(verdict.reason.as_deref(), Some("no_matching_policy"));
+    }
+
+    // ── D3.3 advice translation ───────────────────────────────────────
+
+    #[test]
+    fn test_dispatcher_advice_translates_to_transform() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"verdict": "transform", "reason": "scrub_pii",
+                            "transform": {"path": "$policy_target.value.q", "value": "[REDACTED]"}}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let output = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap();
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Transform);
+        let transform = verdict.transform.as_ref().expect("transform present");
+        assert_eq!(transform.path, "$policy_target.value.q");
+        assert_eq!(transform.value, json!("[REDACTED]"));
+        assert_eq!(verdict.reason.as_deref(), Some("scrub_pii"));
+    }
+
+    #[test]
+    fn test_dispatcher_advice_translates_to_escalate() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"verdict": "escalate", "reason": "human_review", "message": "needs sign-off"}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let output = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap();
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Escalate);
+        assert_eq!(verdict.reason.as_deref(), Some("human_review"));
+        assert_eq!(verdict.message.as_deref(), Some("needs sign-off"));
+    }
+
+    #[test]
+    fn test_dispatcher_advice_translates_to_warn() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"verdict": "warn", "reason": "low_confidence"}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let output = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap();
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Warn);
+        assert_eq!(verdict.reason.as_deref(), Some("low_confidence"));
+    }
+
+    // ── D3.3 malformed advice ─────────────────────────────────────────
+
+    #[test]
+    fn test_dispatcher_malformed_advice_missing_verdict_fails_closed() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"reason": "no_verdict_field"}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let error = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn test_dispatcher_malformed_advice_unknown_verdict_fails_closed() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"verdict": "approve"}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let error = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn test_dispatcher_transform_advice_without_body_fails_closed() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"verdict": "transform"}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let error = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn test_dispatcher_warn_advice_with_transform_body_fails_closed() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"verdict": "warn",
+                            "transform": {"path": "$policy_target.value", "value": "x"}}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let error = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    // ── D1.1 transform target confinement ─────────────────────────────
+
+    #[test]
+    fn test_dispatcher_transform_path_outside_policy_target_fails_closed() {
+        let policy_set = r#"{
+            "rules": [
+                {"effect": "permit", "principal": "any", "action": "any", "resource": "any",
+                 "advice": {"verdict": "transform",
+                            "transform": {"path": "$snap.tool_call.args.q", "value": "[REDACTED]"}}}
+            ]
+        }"#;
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        // The dispatcher emits the verdict JSON verbatim; the runtime's
+        // normalize_policy_output is what enforces $policy_target confinement
+        // per AGT D1.1, returning runtime_error:transform_target_forbidden.
+        let output = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap();
+        let error = normalize_policy_output(output).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:transform_target_forbidden");
+    }
+
+    // ── Dispatcher error paths ────────────────────────────────────────
+
+    #[test]
+    fn test_dispatcher_requires_inline_policy_set() {
+        let inv = CedarPolicyInvocation {
+            policy_set: None,
+            policy_path: Some("/no/such/file.cedar".to_string()),
+            entities_path: None,
+            schema_path: None,
+            query: None,
+            input: tool_input("agent-1", "hello"),
+            canonical_input: "{}".to_string(),
+        };
+        let error = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    }
+
+    #[test]
+    fn test_dispatcher_invalid_policy_set_json_fails_closed() {
+        let inv = invocation("not json", tool_input("agent-1", "hello"));
+        let error = CedarTestDispatcher::new().evaluate_cedar(&inv).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    }
+
+    #[test]
+    fn test_dispatcher_rejects_non_cedar_invocation_through_policy_dispatcher() {
+        use crate::{PolicyDispatcher, PreparedPolicyInvocation, TestPolicyInvocation};
+
+        let other = PreparedPolicyInvocation::Test(TestPolicyInvocation {
+            adapter_config: Default::default(),
+            input: json!({}),
+            canonical_input: "{}".to_string(),
+        });
+        let error = CedarTestDispatcher::new().evaluate(&other).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    }
+
+    // ── translate_advice unit checks (independent of the dispatcher) ──
+
+    #[test]
+    fn translate_advice_rejects_non_object() {
+        let error = translate_advice(json!("warn")).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn translate_advice_rejects_non_string_reason() {
+        let error =
+            translate_advice(json!({"verdict": "warn", "reason": 7})).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
+    }
+
+    #[test]
+    fn translate_advice_round_trips_warn() {
+        let value = translate_advice(json!({"verdict": "warn"})).unwrap();
+        assert_eq!(value["decision"], json!("warn"));
+    }
+}

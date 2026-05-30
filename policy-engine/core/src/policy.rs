@@ -483,3 +483,180 @@ mod path_resolution_tests {
         assert_eq!(binding.adapter_config["data"], json!("/base/rules.json"));
     }
 }
+
+#[cfg(test)]
+mod cedar_manifest_tests {
+    //! AGT M2.S2 D1 manifest-side validation for the cedar policy type, per
+    //! `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` §D3.1. These tests
+    //! cover the strict cross-type rules: a rego policy that carries a
+    //! cedar-reserved field is rejected, a cedar policy that declares the
+    //! rego-shaped `bundle` field is rejected, and a cedar policy that
+    //! declares either zero or two of `policy_set` / `policy_path` is
+    //! rejected.
+
+    use crate::Manifest;
+
+    fn parse(yaml: &str) -> Result<Manifest, crate::RuntimeError> {
+        Manifest::from_yaml_str(yaml)
+    }
+
+    fn cedar_manifest(policy_body: &str) -> String {
+        format!(
+            r#"agent_control_specification_version: 0.3.0-alpha
+policies:
+  guard:
+    type: cedar
+{policy_body}
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: guard
+    policy_target: $snap.input
+"#
+        )
+    }
+
+    #[test]
+    fn rego_with_cedar_policy_set_field_is_rejected() {
+        let yaml = r#"agent_control_specification_version: 0.3.0-alpha
+policies:
+  bad_rego:
+    type: rego
+    query: data.x.verdict
+    bundle: ./policy
+    policy_set: "permit(principal, action, resource);"
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: bad_rego
+    policy_target: $snap.input
+"#;
+        let error = parse(yaml).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("policy_set"),
+            "error detail should mention the reserved cedar field, got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn rego_with_cedar_policy_path_field_is_rejected() {
+        let yaml = r#"agent_control_specification_version: 0.3.0-alpha
+policies:
+  bad_rego:
+    type: rego
+    query: data.x.verdict
+    bundle: ./policy
+    policy_path: ./cedar/policy.cedar
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: bad_rego
+    policy_target: $snap.input
+"#;
+        let error = parse(yaml).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("policy_path"));
+    }
+
+    #[test]
+    fn cedar_with_rego_bundle_field_is_rejected() {
+        let yaml = cedar_manifest(
+            r#"    policy_set: "permit(principal, action, resource);"
+    bundle: ./rego/bundle
+"#,
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("bundle") || error.detail().contains("unknown field"),
+            "expected error to mention the rejected bundle field, got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn cedar_with_neither_policy_set_nor_policy_path_is_rejected() {
+        let yaml = cedar_manifest("");
+        let error = parse(&yaml).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("policy_set") && error.detail().contains("policy_path"),
+            "expected error to require exactly one of policy_set or policy_path, got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn cedar_with_both_policy_set_and_policy_path_is_rejected() {
+        let yaml = cedar_manifest(
+            r#"    policy_set: "permit(principal, action, resource);"
+    policy_path: ./cedar/policy.cedar
+"#,
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("not both"),
+            "expected error to forbid declaring both fields, got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn cedar_with_only_policy_set_is_accepted() {
+        let yaml = cedar_manifest(
+            r#"    policy_set: "permit(principal, action, resource);"
+"#,
+        );
+        let manifest = parse(&yaml).expect("cedar manifest should parse");
+        let policy = manifest
+            .policies
+            .get("guard")
+            .expect("guard policy present");
+        assert_eq!(policy.engine_type(), "cedar");
+    }
+
+    #[test]
+    fn cedar_with_only_policy_path_is_accepted() {
+        let yaml = cedar_manifest(
+            r#"    policy_path: ./cedar/policy.cedar
+    entities_path: ./cedar/entities.json
+    schema_path: ./cedar/schema.cedarschema
+"#,
+        );
+        let manifest = parse(&yaml).expect("cedar manifest should parse");
+        let policy = manifest
+            .policies
+            .get("guard")
+            .expect("guard policy present");
+        assert_eq!(policy.engine_type(), "cedar");
+    }
+
+    #[test]
+    fn cedar_with_unknown_field_is_rejected() {
+        let yaml = cedar_manifest(
+            r#"    policy_set: "permit(principal, action, resource);"
+    not_a_cedar_field: surprise
+"#,
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    }
+
+    #[test]
+    fn cedar_non_object_query_is_rejected() {
+        let yaml = cedar_manifest(
+            r#"    policy_set: "permit(principal, action, resource);"
+    query: "not-an-object"
+"#,
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("query"));
+    }
+}
