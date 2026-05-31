@@ -73,9 +73,7 @@ impl PolicyDispatcher for CompletingOpaPolicy {
             ));
         };
 
-        let mut output = self.runner.evaluate(rego)?;
-        complete_generated_redaction_effects(&rego.input, &mut output);
-        Ok(output)
+        self.runner.evaluate(rego)
     }
 }
 
@@ -349,8 +347,8 @@ fn print_result(label: &str, result: &InterventionPointResult) {
         result.verdict.decision,
         result.verdict.reason.as_deref().unwrap_or("ok")
     );
-    if !result.verdict.effects.is_empty() {
-        println!("    effects applied: {}", result.verdict.effects.len());
+    if result.transformed_policy_target.is_some() {
+        println!("    transform applied");
     }
     if let Some(value) = &result.transformed_policy_target {
         println!("    transformed_policy_target: {value}");
@@ -465,40 +463,6 @@ fn contains_secret(text: &str) -> bool {
     !secret_spans(text).is_empty()
 }
 
-fn complete_generated_redaction_effects(policy_input: &JsonValue, policy_output: &mut JsonValue) {
-    let Some(effects) = policy_output
-        .get_mut("effects")
-        .and_then(JsonValue::as_array_mut)
-    else {
-        return;
-    };
-
-    let target = &policy_input["policy_target"]["value"];
-    let (path, text) = if let Some(text) = target.as_str() {
-        ("$policy_target".to_string(), text.to_string())
-    } else if let Some(text) = target.get("text").and_then(JsonValue::as_str) {
-        ("$policy_target.text".to_string(), text.to_string())
-    } else {
-        return;
-    };
-    let spans = spans_json(&text);
-    if spans.is_empty() {
-        return;
-    }
-
-    for effect in effects {
-        let Some(object) = effect.as_object_mut() else {
-            continue;
-        };
-        if object.get("type").and_then(JsonValue::as_str) == Some("redact")
-            && !object.contains_key("spans")
-        {
-            object.insert("path".to_string(), JsonValue::String(path.clone()));
-            object.insert("spans".to_string(), JsonValue::Array(spans.clone()));
-        }
-    }
-}
-
 fn secret_spans(text: &str) -> Vec<(usize, usize)> {
     let mut spans = Vec::new();
     for marker in ["TOKEN=", "SECRET=", "sk-"] {
@@ -517,13 +481,6 @@ fn secret_spans(text: &str) -> Vec<(usize, usize)> {
     spans.sort_unstable();
     spans.dedup();
     spans
-}
-
-fn spans_json(text: &str) -> Vec<JsonValue> {
-    secret_spans(text)
-        .into_iter()
-        .map(|(start, end)| json!({"start": start, "end": end, "replacement": "[REDACTED_SECRET]"}))
-        .collect()
 }
 
 fn byte_to_char(text: &str, byte_index: usize) -> usize {
