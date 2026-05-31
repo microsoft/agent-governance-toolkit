@@ -741,9 +741,19 @@ class GoogleADKKernel(BaseIntegration):
             )
             return {"error": str(error)}
 
-        # Track budget spend
+        # Track budget spend. Increment the ExecutionContext counter so both
+        # the default `_bridge` and the sensitive-tools `_approval_bridge`
+        # observe the same running tool-call budget (each bridge's
+        # SnapshotBuilder mirrors `ctx.call_count` via `builder_for`).
+        # Without this, the two-bridge split caused budget divergence —
+        # GPT round-3 regression on AGT-M3 BLOCK B.
         self._budget_spent += cost
+        self._adapter_ctx.call_count += 1
         self._bridge.record_post_execute(self._adapter_ctx, tool_calls=1)
+        if self._approval_bridge_instance is not None:
+            self._approval_bridge_instance.record_post_execute(
+                self._adapter_ctx, tool_calls=1
+            )
 
         return None  # Allow execution
 

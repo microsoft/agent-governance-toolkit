@@ -2069,13 +2069,18 @@ tools:
 """
 
 
-def _build_scenario_runtime(tmp_path, verdicts, *, approval_resolver=None):
-    """Build an :class:`AgtRuntime` over a scripted dispatcher."""
+def _build_scenario_runtime(
+    tmp_path, verdicts, *, approval_resolver=None, dispatcher=None
+):
+    """Build an :class:`AgtRuntime` over a scripted or custom dispatcher."""
     from agt.policies.runtime import AgtRuntime
 
     manifest_path = tmp_path / "manifest.yaml"
     manifest_path.write_text(_SCENARIO_MANIFEST, encoding="utf-8")
-    policy = _ScriptedPolicy(verdicts)
+    if dispatcher is None:
+        policy = _ScriptedPolicy(verdicts)
+    else:
+        policy = dispatcher
     runtime = AgtRuntime(
         manifest_path,
         policy_dispatcher=policy,
@@ -2839,6 +2844,88 @@ class TestGoogleADKBridgeScenarios:
         assert invocations == ["pre_tool_call"], (
             f"resolver MUST be invoked exactly once (for the sensitive "
             f"tool), got: {invocations!r}"
+        )
+        # AGT-M3 round-3 GPT regression pin: the bridge.policy invariant
+        # is what actually drives the production rego — assert it
+        # directly so a future regression that reintroduces the round-1
+        # "set bridge_require_approval=True for all tools" wiring is
+        # caught even if the scripted dispatcher hides the rego path.
+        assert kernel._bridge.policy.require_human_approval is False, (
+            "default _bridge MUST have require_human_approval=False when "
+            "sensitive_tools is configured; the sibling _approval_bridge "
+            "is the one that keeps approval on"
+        )
+
+    def test_two_bridge_split_keeps_tool_call_budget_in_sync(self, tmp_path):
+        """AGT-M3 round-3 GPT regression: after one non-sensitive call
+        followed by one sensitive call, the sensitive bridge MUST see
+        ``tool_call_count >= 1`` (the prior non-sensitive call). Pre-fix
+        the two bridges had separate :class:`SnapshotBuilder` instances
+        and only ``self._bridge.record_post_execute`` was wired, so the
+        approval bridge saw stale ``tool_call_count=0`` and any policy
+        gated on running budgets diverged across the sensitive vs
+        non-sensitive split.
+        """
+        seen_budgets: list[int] = []
+
+        class _BudgetRecorderPolicy:
+            """ACS PolicyDispatcher that records the snapshot budget."""
+
+            def __init__(self):
+                self.invocations: list[dict] = []
+
+            def evaluate(self, invocation):
+                self.invocations.append(dict(invocation))
+                inp = invocation.get("input") or {}
+                snapshot = inp.get("snapshot") if isinstance(inp, dict) else None
+                budgets = (
+                    snapshot.get("envelope", {}).get("budgets", {})
+                    if isinstance(snapshot, dict)
+                    else {}
+                )
+                seen_budgets.append(int(budgets.get("tool_call_count", -1)))
+                return {"decision": "allow"}
+
+        recorder = _BudgetRecorderPolicy()
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [],
+            dispatcher=recorder,
+        )
+
+        def _resolver(ip, result):
+            from agt.policies.runtime import ApprovalDecision
+
+            return ApprovalDecision.allow(result.enforced_identity)
+
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=_resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+
+        non_sensitive_ctx = _ADKFakeToolContext(
+            tool_name="get_weather", tool_args={"q": "AI"}
+        )
+        sensitive_ctx = _ADKFakeToolContext(
+            tool_name="scenario_tool", tool_args={"q": "AI"}
+        )
+
+        kernel.before_tool_callback(non_sensitive_ctx)
+        kernel.before_tool_callback(sensitive_ctx)
+
+        assert len(seen_budgets) == 2, (
+            f"expected two budget snapshots, got {seen_budgets!r}"
+        )
+        assert seen_budgets[0] == 0, (
+            f"first call MUST see tool_call_count=0, got {seen_budgets[0]}"
+        )
+        assert seen_budgets[1] == 1, (
+            f"second call (sensitive) MUST see tool_call_count=1 from the "
+            f"prior non-sensitive call; got {seen_budgets[1]}. The two-bridge "
+            f"split is leaking budget state between sensitive and "
+            f"non-sensitive paths."
         )
 
 

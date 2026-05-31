@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 ACS_VERSION = "0.3.0-alpha"
 ANNOTATOR_TYPES = frozenset({"classifier", "llm", "endpoint"})
-DECISIONS = frozenset({"allow", "warn", "deny", "escalate"})
+DECISIONS = frozenset({"allow", "warn", "deny", "escalate", "transform"})
 EFFECT_TYPES = frozenset({"append", "replace", "redact"})
 POLICY_BUNDLE = "./policy"
 POLICY_TYPE = "rego"
