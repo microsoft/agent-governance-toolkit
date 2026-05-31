@@ -21,4 +21,4 @@ if ! command -v "$OPA_BIN" >/dev/null 2>&1; then
   fi
 fi
 
-exec "$OPA_BIN" test . -v
+exec "$OPA_BIN" test . -v --ignore cedar
