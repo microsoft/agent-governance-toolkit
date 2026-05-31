@@ -250,22 +250,19 @@ class AdapterRuntimeBridge:
             tool_name=tool_name, args=dict(args), call_id=call_id
         )
         result = self._evaluate("pre_tool_call", snapshot)
-        # The AGT manifest bridge only binds ``pre_tool_call`` when
-        # ``max_tool_calls > 0`` or ``allowed_tools`` is set or
-        # ``require_human_approval`` is true (see
-        # agt.policies.bridge._build_intervention_points). The corner
-        # case that survived the AGT-M3 fix is a policy with
-        # ``max_tool_calls == 0`` (the v4 "deny on every tool call"
-        # contract) and an empty allowlist: the bridge generates no
-        # ``pre_tool_call`` binding, the engine returns
-        # ``runtime_error:intervention_point_unknown``, and the bridge
-        # rewrites that to ``allow`` with
-        # ``v5_fallback=unbound_intervention_point``. ``empty_allowed_tools``
-        # never fires on this intervention point because
-        # ``bind_tools_with_catalog`` is only true when ``allowed_tools``
-        # is non-empty, in which case ``not self._policy.allowed_tools``
-        # is false. Guard the corner case here so the v4 contract still
-        # holds for the ``max_tool_calls == 0`` policy.
+        # AGT-M3 round-2 BLOCK A: after the bridge fix the manifest now
+        # binds ``pre_tool_call`` whenever ``max_tool_calls >= 0`` (i.e.
+        # always, since the field is a non-negative int) and emits the
+        # stock ``budgets.deny_if_budget_exceeded`` rule even for
+        # ``max_tool_calls == 0``. The engine therefore denies on the
+        # very first call with ``budget_tool_calls_exceeded``; there is
+        # no live execution path that leaves a v4 budget breach as
+        # ``allow`` here. The fallback below is retained as
+        # defense-in-depth only: it still fires if a future bridge
+        # regression reintroduces the ``unbound_intervention_point``
+        # rewrite for the v4 budget contract. Removing it would make
+        # such a regression silent again, which is precisely the
+        # round-2 BLOCK A failure mode.
         fallback = result.evaluation.audit_entry.get("v5_fallback")
         if result.verdict == "allow" and fallback == "unbound_intervention_point":
             host_check = _host_budget_check(self._policy, ctx)
@@ -481,18 +478,19 @@ def _host_budget_check(
 ) -> Optional[BridgeResult]:
     """Return a deny :class:`BridgeResult` when the v4 budgets fail.
 
-    Reachable on the ``pre_tool_call`` intervention point only when
-    ``policy.max_tool_calls == 0`` (the v4 "deny on every tool call"
-    contract). With ``max_tool_calls > 0`` the AGT manifest bridge
-    emits the budget rule inline in the generated Rego and the engine
-    enforces it directly; with ``max_tool_calls == 0`` the bridge
-    binds no ``pre_tool_call`` and the engine returns
-    ``runtime_error:intervention_point_unknown`` which the bridge
-    rewrites to ``allow`` (``v5_fallback=unbound_intervention_point``).
-    The token branch covers the symmetric ``max_tokens`` corner case.
-    Mirrors the v4 semantics (the v4 base.py compared
-    ``ctx.call_count`` and ``ctx.total_tokens`` directly). Returns
-    ``None`` when the budgets are still within limits.
+    AGT-M3 round-2 BLOCK A defense-in-depth. The bridge fix now binds
+    ``pre_tool_call`` and emits the stock
+    ``budgets.deny_if_budget_exceeded`` rule for ``max_tool_calls >= 0``
+    (any non-negative limit, including the v4 deny-every-call sentinel
+    ``max_tool_calls == 0``), so the engine itself denies with the v5
+    wire reason ``budget_tool_calls_exceeded`` before this fallback can
+    run. Kept here so that a future bridge regression that drops the
+    pre_tool_call binding back to the synthetic ``allow`` fallback
+    cannot silently restore the round-2 BLOCK A failure mode where a
+    v4 budget breach slipped through as ``allow``. Mirrors the v4
+    semantics (the v4 base.py compared ``ctx.call_count`` and
+    ``ctx.total_tokens`` directly). Returns ``None`` when the budgets
+    are still within limits.
     """
     from agt.policies.result import EvaluationResult
 

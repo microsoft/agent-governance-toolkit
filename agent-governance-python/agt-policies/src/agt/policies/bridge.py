@@ -312,10 +312,24 @@ def governance_to_acs_manifest(
 
     blocked_pattern_regexes = [_pattern_to_regex(p) for p in policy.blocked_patterns]
 
+    # AGT-M3 round-2 BLOCK A: ``max_tool_calls=0`` is the v4 sentinel for
+    # "deny every tool call", not "no constraint". Forward 0 through to the
+    # ``budgets.deny_if_budget_exceeded`` helper. The helper compares
+    # ``tool_call_count >= limit`` so with ``limit=0`` and the default
+    # ``tool_call_count=0`` the first call is denied with
+    # ``budget_tool_calls_exceeded``, which preserves the v4 contract end-to-end
+    # for any caller that loads the bridge manifest into AgtRuntime directly
+    # (not just through the AdapterRuntimeBridge host fallback). Previously a
+    # ``GovernancePolicy(max_tool_calls=0, confidence_threshold=0.0)`` slipped
+    # through to the default ``allow`` verdict because the budget rule was
+    # omitted and the fallback ``pre_tool_call`` binding (no ``tool_name_from``)
+    # never tripped any deny rule. Keep ``max_tokens`` at ``> 0`` because the v4
+    # dataclass validation rejects ``max_tokens <= 0`` and there is no v4 wire
+    # value to preserve there.
     rego_source = _render_rego(
         package="agt.governance_policy",
         max_tokens=policy.max_tokens if policy.max_tokens > 0 else None,
-        max_tool_calls=policy.max_tool_calls if policy.max_tool_calls > 0 else None,
+        max_tool_calls=policy.max_tool_calls if policy.max_tool_calls >= 0 else None,
         confidence_threshold=(
             policy.confidence_threshold
             if policy.confidence_threshold and policy.confidence_threshold > 0
@@ -330,10 +344,14 @@ def governance_to_acs_manifest(
     # bind_tools must also cover the case where the policy has a budget
     # or human-approval requirement but no explicit tool allowlist; without
     # this the pre_tool_call binding is never created and the host's tool
-    # calls bypass enforcement (AGT-M3 bridge gap fix).
+    # calls bypass enforcement (AGT-M3 bridge gap fix). ``max_tool_calls >= 0``
+    # covers the AGT-M3 round-2 BLOCK A case where ``max_tool_calls == 0`` is a
+    # v4 deny-every-call constraint that previously did not bind the
+    # intervention point (and thereby silently allowed every call when no other
+    # rule fired).
     bind_tools = (
         bool(policy.allowed_tools)
-        or policy.max_tool_calls > 0
+        or policy.max_tool_calls >= 0
         or policy.require_human_approval
     )
     # Only enable the engine's fail-closed tool-known check when the v4

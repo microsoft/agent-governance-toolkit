@@ -353,3 +353,96 @@ def test_bridge_end_to_end_approval_path_loads_manifest(tmp_path: Path) -> None:
     assert result.verdict == "escalate", (
         f"expected escalate verdict, got {result.verdict!r} (reason={result.reason!r})"
     )
+
+
+# ── AGT-M3 round-2 BLOCK A regression tests ─────────────────────────
+
+
+def test_bridge_max_tool_calls_zero_emits_budget_rule(tmp_path: Path) -> None:
+    """AGT-M3 round-2 BLOCK A: ``max_tool_calls=0`` is a v4 deny-every-call
+    sentinel, not "no constraint". The bridge MUST render the budget rule
+    with ``tool_call_count: 0`` so the stock helper denies on the very
+    first call. Before the fix the bridge dropped the rule entirely
+    because the threshold guard was ``> 0``, leaving every call to fall
+    through to the synthetic ``pre_tool_call`` fallback (allow)."""
+    manifest = _bridge(tmp_path, max_tool_calls=0)
+
+    rego = (
+        Path(manifest["policies"]["agt_governance_policy"]["bundle"])
+        / "agt_governance_policy.rego"
+    )
+    body = rego.read_text(encoding="utf-8")
+    assert "budgets.deny_if_budget_exceeded" in body
+    assert '"tool_call_count": 0' in body
+    # And the pre_tool_call binding must exist so the rule actually fires.
+    assert "pre_tool_call" in manifest["intervention_points"]
+
+
+def test_bridge_max_tool_calls_zero_with_zero_confidence_denies_every_call(
+    tmp_path: Path,
+) -> None:
+    """AGT-M3 round-2 BLOCK A end-to-end through AgtRuntime: a v4
+    ``GovernancePolicy(max_tool_calls=0, confidence_threshold=0.0)``
+    must deny EVERY tool call when the manifest is loaded into the AGT
+    runtime directly. ``confidence_threshold=0.0`` is the critical
+    masking case the existing ``test_tool_call_limit_cancels_run`` did
+    not exercise because that test relied on the default 0.8 confidence
+    threshold to hide the bug."""
+    import shutil
+
+    if shutil.which("opa") is None:
+        pytest.skip("opa binary required for runtime end-to-end test")
+
+    from agt.policies.runtime import AgtRuntime
+
+    manifest = _bridge(
+        tmp_path,
+        max_tokens=1000,
+        max_tool_calls=0,
+        allowed_tools=[],
+        blocked_patterns=[],
+        require_human_approval=False,
+        confidence_threshold=0.0,
+    )
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+
+    runtime = AgtRuntime(manifest_path)
+
+    snap = SnapshotBuilder(agent_id="bot").pre_tool_call(
+        tool_name="any_tool", args={"x": 1}
+    )
+    denied = runtime.evaluate_intervention_point("pre_tool_call", snap)
+    assert denied.verdict == "deny", (
+        f"expected deny for max_tool_calls=0 + confidence_threshold=0.0, "
+        f"got {denied.verdict!r} (reason={denied.reason!r})"
+    )
+    assert "budget_tool_calls_exceeded" in (denied.reason or "")
+
+
+def test_bridge_max_tool_calls_zero_alone_denies(tmp_path: Path) -> None:
+    """AGT-M3 round-2 BLOCK A: ``GovernancePolicy(max_tool_calls=0)``
+    with the default ``confidence_threshold=0.8`` must still deny on
+    the ``pre_tool_call`` intervention point because of the budget
+    rule, not because of the confidence rule (which fires at
+    ``post_model_call``). The previous bridge fallback returned
+    ``allow`` for ``pre_tool_call`` here."""
+    import shutil
+
+    if shutil.which("opa") is None:
+        pytest.skip("opa binary required for runtime end-to-end test")
+
+    from agt.policies.runtime import AgtRuntime
+
+    manifest = _bridge(tmp_path, max_tool_calls=0)
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+
+    runtime = AgtRuntime(manifest_path)
+
+    snap = SnapshotBuilder(agent_id="bot").pre_tool_call(
+        tool_name="any_tool", args={}
+    )
+    denied = runtime.evaluate_intervention_point("pre_tool_call", snap)
+    assert denied.verdict == "deny"
+    assert "budget_tool_calls_exceeded" in (denied.reason or "")
