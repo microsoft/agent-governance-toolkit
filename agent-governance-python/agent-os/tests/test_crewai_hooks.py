@@ -256,15 +256,26 @@ class TestBeforeToolCall:
         assert hook_fn(ctx) is False  # call 3 blocked
 
     def test_cedar_deny_blocks_tool(self):
-        """Cedar evaluator deny blocks tool call."""
-        evaluator = MagicMock()
-        evaluator.evaluate.return_value = MagicMock(allowed=False, reason="Cedar denied")
-        kernel = CrewAIKernel(GovernancePolicy(), evaluator=evaluator)
+        """A deny BridgeResult on the AGT pre_tool_call hook blocks the tool call."""
+        from agt.policies.result import EvaluationResult
+        from agent_os.integrations._v5_runtime_bridge import BridgeResult
+
+        kernel = CrewAIKernel(GovernancePolicy())
         kernel.as_hooks()
         hook_fn = _registered_hooks["before_tool_call"][0]
-        ctx = _make_tool_context()
-        result = hook_fn(ctx)
-        assert result is False
+
+        evaluation = EvaluationResult(
+            allowed=False, verdict="deny", reason="cedar_denied"
+        )
+        deny = BridgeResult(
+            evaluation=evaluation,
+            check_result=evaluation.to_v4_check_result(),
+            transform=None,
+        )
+        with patch.object(kernel, "evaluate_pre_tool_call", return_value=deny):
+            ctx = _make_tool_context()
+            result = hook_fn(ctx)
+            assert result is False
 
     def test_no_policy_restrictions_allows_all(self):
         """Default policy allows all tools."""
@@ -373,15 +384,26 @@ class TestBeforeLLMCall:
         assert result is None
 
     def test_cedar_deny_blocks_llm_input(self):
-        """Cedar evaluator deny blocks LLM call."""
-        evaluator = MagicMock()
-        evaluator.evaluate.return_value = MagicMock(allowed=False, reason="Cedar denied")
-        kernel = CrewAIKernel(GovernancePolicy(), evaluator=evaluator)
+        """A deny BridgeResult on the AGT input hook blocks the LLM call."""
+        from agt.policies.result import EvaluationResult
+        from agent_os.integrations._v5_runtime_bridge import BridgeResult
+
+        kernel = CrewAIKernel(GovernancePolicy())
         kernel.as_hooks()
         hook_fn = _registered_hooks["before_llm_call"][0]
-        ctx = _make_llm_context(messages=[{"role": "user", "content": "Hello"}])
-        result = hook_fn(ctx)
-        assert result is False
+
+        evaluation = EvaluationResult(
+            allowed=False, verdict="deny", reason="cedar_denied"
+        )
+        deny = BridgeResult(
+            evaluation=evaluation,
+            check_result=evaluation.to_v4_check_result(),
+            transform=None,
+        )
+        with patch.object(kernel, "evaluate_input", return_value=deny):
+            ctx = _make_llm_context(messages=[{"role": "user", "content": "Hello"}])
+            result = hook_fn(ctx)
+            assert result is False
 
     def test_message_with_object_content(self):
         """Message objects with .content attribute are scanned."""
