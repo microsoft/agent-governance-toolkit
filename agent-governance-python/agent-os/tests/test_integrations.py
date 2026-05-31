@@ -2928,6 +2928,53 @@ class TestGoogleADKBridgeScenarios:
             f"non-sensitive paths."
         )
 
+    def test_repeated_non_sensitive_calls_do_not_double_count_budget(
+        self, tmp_path
+    ):
+        """AGT-M3 round-4 Opus regression: three sequential non-sensitive
+        calls (all routed through the SAME `_bridge`) MUST advance the
+        builder's `tool_call_count` by 1 per call, not 2. Pre-fix the
+        adapter incremented `ctx.call_count` AND called
+        `record_post_execute(tool_calls=1)`, which double-counted because
+        `builder_for(ctx)` mirrors `ctx.call_count` via `max(...)` and
+        `record_post_execute` then bumps the builder again. Result: a
+        `max_tool_calls=N` policy denied on call N instead of call N+1.
+        """
+        seen_budgets: list[int] = []
+
+        class _BudgetRecorderPolicy:
+            def __init__(self):
+                self.invocations: list[dict] = []
+
+            def evaluate(self, invocation):
+                self.invocations.append(dict(invocation))
+                inp = invocation.get("input") or {}
+                snapshot = inp.get("snapshot") if isinstance(inp, dict) else None
+                budgets = (
+                    snapshot.get("envelope", {}).get("budgets", {})
+                    if isinstance(snapshot, dict)
+                    else {}
+                )
+                seen_budgets.append(int(budgets.get("tool_call_count", -1)))
+                return {"decision": "allow"}
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [], dispatcher=_BudgetRecorderPolicy()
+        )
+        kernel = self._kernel(runtime)
+
+        for _ in range(3):
+            ctx = _ADKFakeToolContext(
+                tool_name="get_weather", tool_args={"q": "AI"}
+            )
+            kernel.before_tool_callback(ctx)
+
+        assert seen_budgets == [0, 1, 2], (
+            f"three sequential calls MUST advance tool_call_count by 1 per "
+            f"call (expected [0, 1, 2]); got {seen_budgets!r}. The adapter "
+            f"is double-counting against the builder's tool_call_count."
+        )
+
 
 # =============================================================================
 # Bridge-scenario coverage for the remaining adapters (CONCERN 5 from the
