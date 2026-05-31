@@ -1986,3 +1986,247 @@ class TestGovernancePipelineIntegration:
         checkpoint_events = [e for e in audit_log if e[0] == GovernanceEventType.CHECKPOINT_CREATED]
         assert len(check_events) >= 2
         assert len(checkpoint_events) == 1
+
+
+# =============================================================================
+# AGT v5 bridge — per-adapter scenario tests (allow / deny / escalate / transform)
+# =============================================================================
+#
+# These tests exercise each adapter through the AdapterRuntimeBridge with a
+# pre-built :class:`AgtRuntime` injected via the ``_runtime`` test seam. They
+# do NOT depend on the underlying framework SDK (google.generativeai,
+# google.adk, guardrails, llama_index) being importable — the wrapped object
+# is a ``MagicMock``. The point is to verify the bridge wiring, not the
+# framework client.
+# -----------------------------------------------------------------------------
+
+
+def _v5_bridge_available() -> bool:
+    """Return True when the AGT 5.0 ACS bridge can construct a runtime."""
+    try:
+        import agt.policies.runtime  # noqa: F401
+        import agent_control_specification  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+_V5_BRIDGE_REQUIRED = pytest.mark.skipif(
+    not _v5_bridge_available(),
+    reason="agt-policies and agent_control_specification SDK required",
+)
+
+
+class _ScriptedPolicy:
+    """Tiny ACS PolicyDispatcher that returns a scripted verdict per call."""
+
+    def __init__(self, verdicts):
+        self._verdicts = list(verdicts)
+        self.invocations: list[dict] = []
+
+    def evaluate(self, invocation):
+        self.invocations.append(dict(invocation))
+        if not self._verdicts:
+            raise AssertionError(
+                "ScriptedPolicy ran out of verdicts; test wired too few."
+            )
+        return self._verdicts.pop(0)
+
+
+_SCENARIO_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+metadata:
+  name: integration_scenarios
+extends: []
+policies:
+  scenario_policy:
+    type: custom
+    adapter: integration_scenarios_adapter
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy_target_kind: user_input
+    policy:
+      id: scenario_policy
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: scenario_policy
+  output:
+    policy_target: $.response.content
+    policy_target_kind: assistant_output
+    policy:
+      id: scenario_policy
+tools:
+  scenario_tool:
+    clearance: public
+  get_weather:
+    clearance: public
+"""
+
+
+def _build_scenario_runtime(tmp_path, verdicts, *, approval_resolver=None):
+    """Build an :class:`AgtRuntime` over a scripted dispatcher."""
+    from agt.policies.runtime import AgtRuntime
+
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text(_SCENARIO_MANIFEST, encoding="utf-8")
+    policy = _ScriptedPolicy(verdicts)
+    runtime = AgtRuntime(
+        manifest_path,
+        policy_dispatcher=policy,
+        approval_resolver=approval_resolver,
+    )
+    return runtime, policy
+
+
+def _approving_resolver(captured: dict):
+    """Return an approval_resolver that always approves and records the IP."""
+    from agt.policies.runtime import ApprovalDecision
+
+    def resolver(ip, result):
+        captured["ip"] = ip
+        captured["enforced_identity"] = result.enforced_identity
+        return ApprovalDecision.allow(result.enforced_identity)
+
+    return resolver
+
+
+# ── Gemini scenario coverage ─────────────────────────────────────────
+
+
+def _make_gemini_response_with_function_call(name, args):
+    """Build a Gemini-shaped response containing a single function call."""
+    from types import SimpleNamespace
+
+    fn_call = SimpleNamespace(name=name, args=args)
+    part = SimpleNamespace(function_call=fn_call)
+    content = SimpleNamespace(parts=[part])
+    candidate = SimpleNamespace(content=content)
+    return SimpleNamespace(candidates=[candidate], usage_metadata=None)
+
+
+def _make_gemini_model():
+    """Return a mock Gemini ``GenerativeModel`` (no SDK required)."""
+    from types import SimpleNamespace
+
+    model = MagicMock()
+    model.model_name = "gemini-pro"
+    model.generate_content.return_value = SimpleNamespace(
+        candidates=[], usage_metadata=None
+    )
+    return model
+
+
+@_V5_BRIDGE_REQUIRED
+class TestGeminiBridgeScenarios:
+    """Verify GeminiKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, approval_resolver=None):
+        from agent_os.integrations import gemini_adapter as gemini_mod
+        from agent_os.integrations.gemini_adapter import GeminiKernel
+
+        gemini_mod._HAS_GENAI = True
+        return GeminiKernel(_runtime=runtime, approval_resolver=approval_resolver)
+
+    def test_allow_path_forwards_prompt(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        kernel = self._kernel(runtime)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        governed.generate_content("what is the weather?")
+
+        assert len(policy.invocations) == 1
+        model.generate_content.assert_called_once()
+        assert model.generate_content.call_args.args[0] == "what is the weather?"
+
+    def test_deny_path_raises_policy_violation(self, tmp_path):
+        from agent_os.integrations.gemini_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "blocked_topic"}],
+        )
+        kernel = self._kernel(runtime)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        with pytest.raises(PolicyViolationError) as excinfo:
+            governed.generate_content("blocked content")
+
+        assert excinfo.value.check_result.reason == "blocked_topic"
+        model.generate_content.assert_not_called()
+
+    def test_transform_path_rewrites_prompt(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        governed.generate_content("Customer SSN is 123-45-6789")
+
+        model.generate_content.assert_called_once()
+        # Gemini SDK MUST see the redacted text.
+        assert (
+            model.generate_content.call_args.args[0]
+            == "Customer SSN is [REDACTED]"
+        )
+
+    def test_escalate_with_approving_resolver_forwards(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        governed.generate_content("needs approval")
+
+        assert captured["ip"] == "input"
+        model.generate_content.assert_called_once()
+
+    def test_function_call_transform_rewrites_args(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "args_sanitized",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": {"city": "[REDACTED]"},
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        response = _make_gemini_response_with_function_call(
+            "get_weather", {"city": "Seattle"}
+        )
+        model = _make_gemini_model()
+        model.generate_content.return_value = response
+        governed = kernel.wrap(model)
+
+        governed.generate_content("weather please")
+
+        fn_call = response.candidates[0].content.parts[0].function_call
+        assert fn_call.args == {"city": "[REDACTED]"}
