@@ -91,4 +91,69 @@ describe('AuditLogger', () => {
     expect(deniedEntry.data.mitigates).toEqual(['ASI02', 'ASI05']);
     expect(allowedEntry.data).not.toHaveProperty('mitigates');
   });
+
+  it('redacts credential-looking values in CloudEvents arguments', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'mcp-proxy-audit-'));
+    tempDirs.push(tempDir);
+
+    const logPath = join(tempDir, 'audit.log');
+    const logger = new AuditLogger({ path: logPath });
+
+    logger.log({
+      type: 'ai.agentmesh.tool.invoked',
+      tool: 'echo',
+      decision: 'allow',
+      arguments: {
+        publicField: 'github_pat_FAKE_FOR_TESTING_0000000000000000000000',
+        nested: {
+          note: '-----BEGIN DSA PRIVATE KEY-----\nZmFrZQ==\n-----END DSA PRIVATE KEY-----',
+        },
+      },
+    });
+
+    logger.close();
+
+    const stream = Reflect.get(logger, 'stream');
+    if (stream) {
+      await once(stream, 'finish');
+    }
+
+    const [entry] = readFileSync(logPath, 'utf-8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { data: { arguments: Record<string, any> } });
+
+    expect(entry.data.arguments.publicField).toBe('[REDACTED]');
+    expect(entry.data.arguments.nested.note).toBe('[REDACTED]');
+  });
+
+  it('redacts arguments in plain json audit format', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'mcp-proxy-audit-'));
+    tempDirs.push(tempDir);
+
+    const logPath = join(tempDir, 'audit.log');
+    const logger = new AuditLogger({ path: logPath, format: 'json' });
+
+    logger.log({
+      type: 'ai.agentmesh.tool.invoked',
+      tool: 'echo',
+      decision: 'allow',
+      arguments: {
+        publicField: 'gho_FAKEFORTESTING000000000000000000',
+      },
+    });
+
+    logger.close();
+
+    const stream = Reflect.get(logger, 'stream');
+    if (stream) {
+      await once(stream, 'finish');
+    }
+
+    const entry = JSON.parse(readFileSync(logPath, 'utf-8').trim()) as {
+      arguments: Record<string, unknown>;
+    };
+
+    expect(entry.arguments.publicField).toBe('[REDACTED]');
+  });
 });
