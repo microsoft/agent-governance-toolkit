@@ -1,0 +1,24 @@
+{
+  "id": "conflicting-rule-priority-resolution",
+  "description": "Two rules with equal priority conflict on tool access; first-match strategy should resolve by rule order.",
+  "input": {
+    "action": "tool_call",
+    "resource": "external-api",
+    "agent_id": "agent-general-01",
+    "tool_name": "http_client",
+    "parameters": {
+      "url": "https://api.example.com/data"
+    }
+  },
+  "expected_verdict": "deny",
+  "expected_rule": "restrict-external-api",
+  "resolution_metadata": {
+    "rule_id": "restrict-external-api",
+    "strategy": "first-match"
+  },
+  "tags": [
+    "conflict-resolution",
+    "first-match",
+    "priority"
+  ]
+}
