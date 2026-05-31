@@ -95,15 +95,24 @@ identities are produced, both prefixed with `sha256:`.
 | `input_identity` | The canonical policy input that was evaluated | Pins what the policy actually saw. This is the value §13 originally called "the action identity". |
 | `enforced_identity` | The canonical policy input AFTER the transform path is applied to the policy target (no change for non-transform verdicts) | Pins what the host actually carried out. Equal to `input_identity` for `allow`, `warn`, `deny`, and `escalate`. |
 
-Both identities MUST appear in every audit record. The escalation approval
-path (§17.1) binds to `enforced_identity` because the approver consents to the
-action that will execute, not to the pre-transform proposal. A
+Both identities MUST appear in every audit record per
+`AGT-EVIDENCE-1.0.md` §4 and on every `InterventionPointResult`
+returned by the runtime. The escalation approval path (§17.1) binds to
+`enforced_identity` because the approver consents to the action that
+will execute, not to the pre-transform proposal. A
 `runtime_error:approval_action_mismatch` is raised when the approved
-`enforced_identity` does not match the value recomputed from the current
-policy input.
+`enforced_identity` does not match the value recomputed from the
+current policy input.
 
-For `transform` verdicts, telemetry events MUST carry both identities.
-Single-identity telemetry consumers MAY default to `enforced_identity`.
+Telemetry events MAY include `input_identity` and `enforced_identity`,
+but the runtime does not emit them by default. `AGT-EVIDENCE-1.0.md`
+§3 fixes the canonical telemetry attribute list (decision, reason,
+mode, annotators, plus the AGT D2 evidence fields) and intentionally
+omits identities to keep cardinality bounded; hosts that need
+identities on telemetry MUST opt in through host-side audit
+configuration that copies the values from the `InterventionPointResult`
+before forwarding. Single-identity telemetry consumers MAY default to
+`enforced_identity`.
 
 ---
 
