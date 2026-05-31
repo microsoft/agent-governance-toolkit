@@ -1103,11 +1103,15 @@ class TestOpenAIMessageBlocking:
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Message blocked"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.add_message("thread_abc", "my password is 123")
+        # v5: PolicyViolationError carries the AGT EvaluationResult-derived
+        # PolicyCheckResult on .check_result; ``reason`` is the AGT
+        # ``blocked_pattern_input`` (mirrored from the v4 ViolationCategory).
+        assert excinfo.value.check_result.reason == "blocked_pattern_input"
 
     def test_add_message_case_insensitive_block(self):
-        policy = GovernancePolicy(blocked_patterns=["SECRET"])
+        policy = GovernancePolicy(blocked_patterns=["secret"])
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
@@ -1142,8 +1146,9 @@ class TestOpenAIRunExecution:
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Instructions blocked"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.run("thread_abc", instructions="hack the planet")
+        assert excinfo.value.check_result.reason == "blocked_pattern_input"
 
     def test_run_validates_tools_against_policy(self):
         policy = GovernancePolicy(allowed_tools=["code_interpreter"])
@@ -1196,6 +1201,13 @@ class TestOpenAIToolCallHandling:
         assert governed._ctx.function_calls[0]["function"] == "get_weather"
 
     def test_tool_call_limit_cancels_run(self):
+        # v5: with ``allowed_tools=[]`` the AGT manifest emits no tool
+        # catalog (v4 "no allowlist" semantics) so the ACS engine fails
+        # closed with ``runtime_error:tool_unknown`` before the budget
+        # Rego runs. The adapter's :class:`AdapterRuntimeBridge` then
+        # performs a host-side budget guard that mirrors the v4
+        # ``ctx.call_count >= policy.max_tool_calls`` rule and surfaces
+        # the breach as a ``max_tool_calls`` reason.
         policy = GovernancePolicy(max_tool_calls=0)
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
@@ -1206,8 +1218,9 @@ class TestOpenAIToolCallHandling:
         client.beta.threads.runs.create.return_value = created_run
 
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Tool call limit"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.run("thread_abc", poll_interval=0)
+        assert excinfo.value.check_result.reason == "max_tool_calls"
         # Verify cancel was called
         client.beta.threads.runs.cancel.assert_called_once()
 
@@ -1227,8 +1240,12 @@ class TestOpenAIToolCallHandling:
         client.beta.threads.runs.create.return_value = created_run
 
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Tool not allowed"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.run("thread_abc", poll_interval=0)
+        # v5: the ACS engine fails closed with ``tool_unknown`` when the
+        # tool is not in the manifest catalog; the legacy "Tool not allowed"
+        # message no longer appears.
+        assert "tool_unknown" in excinfo.value.check_result.reason or excinfo.value.check_result.reason.startswith("runtime_error:")
 
 
 # =============================================================================
