@@ -2523,13 +2523,23 @@ class _ADKFakeCallbackContext:
 class TestGoogleADKBridgeScenarios:
     """Verify GoogleADKKernel routes through the AGT 5.0 ACS runtime."""
 
-    def _kernel(self, runtime, *, approval_resolver=None, allowed_tools=None):
+    def _kernel(
+        self,
+        runtime,
+        *,
+        approval_resolver=None,
+        allowed_tools=None,
+        require_human_approval=False,
+        sensitive_tools=None,
+    ):
         from agent_os.integrations.google_adk_adapter import GoogleADKKernel
 
         return GoogleADKKernel(
             allowed_tools=allowed_tools or [],
             _runtime=runtime,
             approval_resolver=approval_resolver,
+            require_human_approval=require_human_approval,
+            sensitive_tools=sensitive_tools or [],
         )
 
     def test_before_tool_callback_allow_path(self, tmp_path):
@@ -2673,3 +2683,50 @@ class TestGoogleADKBridgeScenarios:
         )
 
         assert result == "[SANITISED AGENT OUTPUT]"
+
+    def test_sensitive_tool_routes_through_agt_resolver_not_local_short_circuit(
+        self, tmp_path
+    ):
+        """AGT-DELTA D5 regression: when ``approval_resolver`` is wired,
+        the AGT escalate path MUST drive approval for a sensitive tool.
+        Previously the local ``_needs_approval`` short-circuit returned
+        ``{"needs_approval": True}`` BEFORE the bridge ran, so the
+        resolver was never consulted and the bisected enforced_identity
+        never reached audit.
+        """
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+        ctx = _ADKFakeToolContext(
+            tool_name="scenario_tool", tool_args={"q": "AI"}
+        )
+
+        result = kernel.before_tool_callback(ctx)
+
+        # No legacy ``needs_approval`` short-circuit dict — the bridge ran.
+        assert result is None, f"expected bridge-allow None, got {result!r}"
+        # Resolver invoked exactly once at pre_tool_call.
+        assert captured.get("ip") == "pre_tool_call"
+        assert captured.get("enforced_identity"), (
+            "AGT D1.4 enforced_identity must be handed to the resolver"
+        )
+        # And it propagates to audit so downstream consumers can pin
+        # what was actually approved.
+        agt_audit = [
+            event for event in kernel.get_audit_log()
+            if event.event_type == "agt_pre_tool_call"
+        ]
+        assert agt_audit, "AGT bridge result must emit an audit record"
+        assert agt_audit[-1].details.get("enforced_identity") == captured.get(
+            "enforced_identity"
+        )

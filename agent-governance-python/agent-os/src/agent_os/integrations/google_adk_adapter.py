@@ -236,9 +236,14 @@ class GoogleADKKernel(BaseIntegration):
         # to avoid the AGT runtime escalating every non-sensitive tool
         # call as well. The local approval workflow continues to fire
         # for sensitive tools exactly as before.
-        bridge_require_approval = (
-            self._adk_config.require_human_approval
-            and not self._adk_config.sensitive_tools
+        #
+        # AGT-DELTA D5: when an ``approval_resolver`` is wired we ALWAYS
+        # let the bridge own approval so the AGT escalate path drives
+        # the resolver and the enforced_identity propagates to audit.
+        # The ``_needs_approval`` filter still gates whether the local
+        # short-circuit fires for the non-resolver v4 path.
+        bridge_require_approval = self._adk_config.require_human_approval and (
+            approval_resolver is not None or not self._adk_config.sensitive_tools
         )
         governance_policy = GovernancePolicy(
             max_tool_calls=self._adk_config.max_tool_calls,
@@ -586,7 +591,21 @@ class GoogleADKKernel(BaseIntegration):
         # Human approval check (legacy v4 workflow preserved verbatim so
         # the existing pending_approvals / approve / deny surface keeps
         # the same shape that callers expect).
-        if self._needs_approval(tool_name):
+        #
+        # AGT-DELTA D5: when the v5 bridge is present AND the policy has
+        # ``require_human_approval=True`` AND an approval resolver is
+        # wired, defer approval routing entirely to the bridge so the
+        # AGT escalate path drives the resolver and propagates the
+        # bisected enforced_identity (AGT-DELTA D1.4) into audit. The
+        # local short-circuit only fires in the v4-only mode (no
+        # bridge or no resolver), where the bridge cannot route the
+        # approval.
+        defer_approval_to_bridge = (
+            self._bridge is not None
+            and self._adk_config.require_human_approval
+            and self._approval_resolver is not None
+        )
+        if not defer_approval_to_bridge and self._needs_approval(tool_name):
             call_id = f"{agent_name}:{tool_name}:{self._tool_call_count}"
             if call_id not in self._approved_calls:
                 self._pending_approvals[call_id] = {
@@ -616,6 +635,25 @@ class GoogleADKKernel(BaseIntegration):
             args=bridge_args,
             call_id=f"call-{self._tool_call_count}",
         )
+        # AGT-DELTA D1.4: propagate the bisected input_identity /
+        # enforced_identity from the bridge evaluation into the kernel
+        # audit log so resolver-driven approvals are auditable.
+        audit_entry = getattr(bridge_result.evaluation, "audit_entry", None) or {}
+        identity_audit = {
+            key: audit_entry[key]
+            for key in ("input_identity", "enforced_identity")
+            if key in audit_entry
+        }
+        if identity_audit:
+            self._record(
+                "agt_pre_tool_call",
+                agent_name,
+                {
+                    "tool": tool_name,
+                    "verdict": bridge_result.verdict,
+                    **identity_audit,
+                },
+            )
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, dict
         ):
