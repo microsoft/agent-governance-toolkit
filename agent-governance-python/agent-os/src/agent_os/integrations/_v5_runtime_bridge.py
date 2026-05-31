@@ -538,15 +538,16 @@ def _build_runtime(
 
     bundle_dir = Path(tempfile.mkdtemp(prefix="agt_adapter_bundle_"))
     manifest = governance_to_acs_manifest(policy, bundle_dir=bundle_dir)
-    # The AGT manifest bridge emits an ``approval`` section with v4
-    # field names (``required``, ``approvers``, ``reason``) which the
-    # ACS native binding does not recognise. The rego module already
-    # encodes the ``require_human_approval`` rule via
-    # ``approval.escalate_if_approver_required``; the host-side approval
-    # routing is wired through the ``approval_resolver`` parameter on
-    # :class:`AgtRuntime` per AGT-DELTA D1.4. Drop the malformed
-    # section so the manifest validates against the ACS schema.
-    manifest.pop("approval", None)
+    # AGT-DELTA D5: the manifest bridge now emits a v5-valid ``approval``
+    # section (an empty object) when ``require_human_approval=True``
+    # (see agt.policies.bridge.governance_to_acs_manifest after commit
+    # a19a7e09). The host wires the resolver on the AgtRuntime
+    # constructor, and the Rego's ``approval.escalate_if_approver_required``
+    # rule fires the escalate verdict that the runtime routes through
+    # that resolver. Forwarding the section verbatim is required; the
+    # earlier ``manifest.pop("approval", None)`` defense stripped the
+    # section before the runtime could see it, which suppressed the
+    # escalate path for every adapter using the bridge.
     manifest_path = bundle_dir / "manifest.yaml"
     manifest_path.write_text(
         yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8"
