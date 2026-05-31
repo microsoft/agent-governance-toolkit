@@ -15,15 +15,21 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+# AGT D1: warn/escalate/deny no longer carry transformations (the
+# strict runtime rejects effects[] per 1d8fcb64). The rego template
+# under policy/bank_agent_rego.rego now returns transform decisions
+# for pre_model_call, post_tool_call, and output; the demo mirrors
+# the new shape so STAGE_FIXTURES asserts what the policy actually
+# produces.
 STAGE_FIXTURES = [
     ("agent_startup", "agent_startup.canonical.json", "allow", False),
     ("input", "input.canonical.json", "allow", False),
-    ("pre_model_call", "pre_model_call.canonical.json", "warn", True),
+    ("pre_model_call", "pre_model_call.canonical.json", "transform", True),
     ("post_model_call", "post_model_call.canonical.json", "allow", False),
     ("pre_tool_call", "pre_tool_call.canonical.json", "escalate", False),
     ("pre_tool_call", "pre_tool_call.safe.canonical.json", "allow", False),
-    ("post_tool_call", "post_tool_call.canonical.json", "warn", True),
-    ("output", "output.canonical.json", "warn", True),
+    ("post_tool_call", "post_tool_call.canonical.json", "transform", True),
+    ("output", "output.canonical.json", "transform", True),
     ("agent_shutdown", "agent_shutdown.canonical.json", "warn", False),
 ]
 
@@ -67,69 +73,44 @@ def target_parent(policy_target: Any, path: str) -> tuple[Any, str | int | None]
 
 
 def apply_effect(policy_target: Any, effect: dict[str, Any]) -> Any:
-    updated = copy.deepcopy(policy_target)
-    parent, key = target_parent(updated, effect["path"])
-    target = updated if key is None else parent[key]
-    effect_type = effect["type"]
-
-    if effect_type == "replace":
-        if key is None:
-            updated = copy.deepcopy(effect["value"])
-        else:
-            parent[key] = copy.deepcopy(effect["value"])
-    elif effect_type == "append":
-        if isinstance(target, list):
-            target.append(copy.deepcopy(effect["value"]))
-        elif isinstance(target, str):
-            parent[key] = target + str(effect["value"])
-        else:
-            raise ValueError("append target must be a list or string")
-    elif effect_type == "prepend":
-        if isinstance(target, list):
-            target.insert(0, copy.deepcopy(effect["value"]))
-        elif isinstance(target, str):
-            parent[key] = str(effect["value"]) + target
-        else:
-            raise ValueError("prepend target must be a list or string")
-    elif effect_type == "redact":
-        if not isinstance(target, str):
-            raise ValueError("redact target must be a string")
-        chars = list(target)
-        output: list[str] = []
-        last_end = 0
-        for span in effect["spans"]:
-            output.extend(chars[last_end:span["start"]])
-            output.append(span["replacement"])
-            last_end = span["end"]
-        output.extend(chars[last_end:])
-        if key is None:
-            updated = "".join(output)
-        else:
-            parent[key] = "".join(output)
-    else:
-        raise ValueError(f"unsupported effect type: {effect_type}")
-
-    return updated
+    raise AssertionError(
+        "AGT D1 rejected effects[]; use a transform decision with a "
+        "transform payload instead."
+    )
 
 
 def apply_effects(policy_target: Any, effects: list[dict[str, Any]]) -> Any:
-    updated = copy.deepcopy(policy_target)
-    for effect in effects:
-        updated = apply_effect(updated, effect)
-    return updated
+    raise AssertionError(
+        "AGT D1 rejected effects[]; use a transform decision with a "
+        "transform payload instead."
+    )
 
 
 def account_redaction_effect(text: str) -> dict[str, Any] | None:
-    match = re.search(r"CHK-[0-9]+", text)
-    if not match:
-        return None
-    return {
-        "type": "redact",
-        "path": "$policy_target.text",
-        "spans": [
-            {"start": match.start(), "end": match.end(), "replacement": "ACCOUNT-REDACTED"}
-        ],
-    }
+    raise AssertionError(
+        "AGT D1 rejected effects[]; the output stage now emits a "
+        "transform decision that replaces $policy_target.text."
+    )
+
+
+def apply_transform(policy_target: Any, transform: dict[str, Any]) -> Any:
+    """AGT D1.1: apply a single-target transform payload.
+
+    `transform` is the canonical mutation payload returned by AGT
+    `transform` decisions. The runtime applies `value` at `path` and
+    propagates the result; the demo reuses the same path-walking
+    utility as the legacy effects path but only supports a single
+    transform per verdict (no append/prepend/redact list semantics).
+    """
+
+    updated = copy.deepcopy(policy_target)
+    path = transform["path"]
+    value = transform["value"]
+    parent, key = target_parent(updated, path)
+    if key is None:
+        return copy.deepcopy(value)
+    parent[key] = copy.deepcopy(value)
+    return updated
 
 
 def evaluate_policy(policy_input: dict[str, Any]) -> dict[str, Any]:
@@ -146,20 +127,23 @@ def evaluate_policy(policy_input: dict[str, Any]) -> dict[str, Any]:
         }
 
     if stage == "pre_model_call" and annotations["model_request_classifier"].get("contains_large_transfer"):
+        # AGT D1.1: append the system reminder via a single-target
+        # transform that replaces `messages` with the appended list,
+        # mirroring policy/bank_agent_rego.rego.
+        appended = list(policy_target["messages"]) + [
+            {
+                "role": "system",
+                "content": "Do not execute high-value transfers without explicit approval.",
+            }
+        ]
         return {
-            "decision": "warn",
+            "decision": "transform",
             "reason": "large_transfer_instruction_added",
             "message": "A high-value transfer reminder was added before the model call.",
-            "effects": [
-                {
-                    "type": "append",
-                    "path": "$policy_target.messages",
-                    "value": {
-                        "role": "system",
-                        "content": "Do not execute high-value transfers without explicit approval.",
-                    },
-                }
-            ],
+            "transform": {
+                "path": "$policy_target.messages",
+                "value": appended,
+            },
         }
 
     if stage == "post_model_call" and "bypass approval" in policy_target["message"]["content"].lower():
@@ -177,23 +161,32 @@ def evaluate_policy(policy_input: dict[str, Any]) -> dict[str, Any]:
         }
 
     if stage == "post_tool_call" and policy_target.get("account_id"):
+        # AGT D1.1: single-target replace of account_id mirrors the
+        # rego post_tool_call_verdict transform.
         return {
-            "decision": "warn",
+            "decision": "transform",
             "reason": "tool_result_account_identifier_redacted",
             "message": "The account identifier was redacted before the result returned to the agent.",
-            "effects": [
-                {"type": "replace", "path": "$policy_target.account_id", "value": "ACCOUNT-REDACTED"}
-            ],
+            "transform": {
+                "path": "$policy_target.account_id",
+                "value": "ACCOUNT-REDACTED",
+            },
         }
 
     if stage == "output":
-        effect = account_redaction_effect(policy_target.get("text", ""))
-        if effect:
+        text = policy_target.get("text", "")
+        if re.search(r"CHK-[0-9]+", text):
+            # AGT D1.1: regex-replace via a single-target transform
+            # that replaces `text` with the redacted string, mirroring
+            # the rego output_verdict transform.
             return {
-                "decision": "warn",
+                "decision": "transform",
                 "reason": "output_account_identifier_redacted",
                 "message": "The final response contained an account identifier and was redacted.",
-                "effects": [effect],
+                "transform": {
+                    "path": "$policy_target.text",
+                    "value": re.sub(r"CHK-[0-9]+", "ACCOUNT-REDACTED", text),
+                },
             }
 
     if stage == "agent_shutdown" and policy_target.get("blocked_actions"):
@@ -207,14 +200,35 @@ def evaluate_policy(policy_input: dict[str, Any]) -> dict[str, Any]:
 
 
 def enforce(policy_input: dict[str, Any], verdict: dict[str, Any]) -> tuple[bool, Any | None]:
-    blocked = verdict["decision"] in {"deny", "escalate"}
-    effects = verdict.get("effects", [])
+    """Apply the demo's host-side enforcement of an AGT verdict.
+
+    Returns ``(blocked, transformed_policy_target)``.
+
+    AGT D1 strictly rejects ``effects[]``; the canonical mutation
+    payload is ``transform`` on a ``transform`` verdict. Non-transform
+    decisions MUST NOT carry a transform; this helper asserts that
+    invariant so a host-side mistake fails closed.
+    """
+
+    decision = verdict["decision"]
+    blocked = decision in {"deny", "escalate"}
+    if "effects" in verdict:
+        raise AssertionError(
+            "AGT D1 rejected effects[]; the policy MUST emit a transform decision",
+        )
+    transform = verdict.get("transform")
     if blocked:
-        if effects:
-            raise AssertionError("deny/escalate verdicts must not transform policy_targets")
+        if transform is not None:
+            raise AssertionError("deny/escalate verdicts MUST NOT transform policy_targets")
         return True, None
-    if effects:
-        return False, apply_effects(policy_input["policy_target"]["value"], effects)
+    if decision == "transform":
+        if transform is None:
+            raise AssertionError("transform verdicts MUST carry a transform payload")
+        return False, apply_transform(policy_input["policy_target"]["value"], transform)
+    if transform is not None:
+        raise AssertionError(
+            f"{decision} verdicts MUST NOT carry a transform payload per AGT D1.1",
+        )
     return False, None
 
 
