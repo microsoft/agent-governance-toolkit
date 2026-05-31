@@ -437,11 +437,18 @@ class PydanticAIKernel(BaseIntegration):
         # Handle legacy v4 human approval callback before the AGT engine
         # evaluates the call. The v4 ``require_human_approval`` field
         # has a callback-based path that pre-dates AGT-DELTA D1.4 and is
-        # still part of the public contract. When the callback approves,
-        # route the rest of the evaluation through a sibling bridge
-        # built over a no-approval-required policy copy so the engine's
-        # tool allowlist / budget rules still fire.
-        if self.policy.require_human_approval:
+        # still part of the public contract.
+        #
+        # AGT-DELTA D5: when an ``approval_resolver`` is wired, defer
+        # the whole approval decision to the AGT runtime. The bridge's
+        # ``evaluate_pre_tool_call`` returns escalate, the AgtRuntime
+        # consults the resolver, and the verdict resolves to allow with
+        # a bisected enforced_identity (D1.4). The legacy callback path
+        # is preserved only for v4-only kernels (no resolver wired).
+        if (
+            self.policy.require_human_approval
+            and self._approval_resolver is None
+        ):
             if self._approval_callback is None:
                 return ToolCallResult(
                     allowed=False,

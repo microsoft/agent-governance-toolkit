@@ -242,3 +242,87 @@ def test_before_tool_execute_transform_rewrites_arguments(tmp_path: Path) -> Non
     # The capability returns the AGT-rewritten arguments dict so
     # PydanticAI invokes the tool with the redacted payload.
     assert rewritten == {"query": "[SANITIZED]"}
+
+
+def test_before_tool_execute_escalate_routes_through_resolver(
+    tmp_path: Path,
+) -> None:
+    """AGT-DELTA D5 regression: when ``require_human_approval=True`` and
+    an ``approval_resolver`` is wired, the AGT escalate path MUST drive
+    the resolver at ``pre_tool_call``. Previously the adapter swapped to
+    a no-approval ``_approved_bridge`` after the legacy
+    ``approval_callback`` ran, so the AGT resolver never saw the call
+    and the bisected enforced_identity (AGT-DELTA D1.4) never propagated.
+    """
+    from agent_os.integrations.base import GovernancePolicy
+    from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
+
+    captured: dict[str, Any] = {}
+
+    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+        captured.setdefault("calls", 0)
+        captured["calls"] += 1
+        captured["ip"] = ip
+        captured["enforced_identity"] = result.enforced_identity
+        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
+
+    runtime, _policy = _build_runtime(
+        tmp_path,
+        [{"decision": "escalate", "reason": "human_approval_required"}],
+        approval_resolver=resolver,
+    )
+    policy = GovernancePolicy(require_human_approval=True)
+    kernel = PydanticAIKernel(
+        policy=policy,
+        _runtime=runtime,
+        approval_resolver=resolver,
+        approval_callback=None,
+    )
+    capability = kernel.as_capability()
+
+    forwarded = capability.before_tool_execute("search", {"q": "weather"})
+
+    # The bridge returned escalate, the resolver approved, and the
+    # capability forwards the arguments unchanged because the bridge
+    # never swapped to a sibling no-approval bridge.
+    assert forwarded == {"q": "weather"}
+    assert captured.get("calls") == 1, (
+        "AGT resolver must be invoked exactly once for the escalate verdict"
+    )
+    assert captured.get("ip") == "pre_tool_call"
+    assert captured.get("enforced_identity"), (
+        "AGT D1.4 enforced_identity must be handed to the resolver"
+    )
+
+
+def test_before_tool_execute_no_resolver_falls_back_to_legacy_callback(
+    tmp_path: Path,
+) -> None:
+    """When ``approval_resolver`` is absent, the v4 ``approval_callback``
+    path remains in effect. This preserves backwards compatibility for
+    kernels that only configured the legacy callback.
+    """
+    from agent_os.integrations.base import GovernancePolicy
+    from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
+
+    callback_calls: dict[str, Any] = {}
+
+    def callback(tool_name: str, args: dict[str, Any]) -> bool:
+        callback_calls["tool"] = tool_name
+        callback_calls["args"] = args
+        return True
+
+    runtime, _policy = _build_runtime(tmp_path, [{"decision": "allow"}])
+    policy = GovernancePolicy(require_human_approval=True)
+    kernel = PydanticAIKernel(
+        policy=policy,
+        _runtime=runtime,
+        approval_callback=callback,
+        approval_resolver=None,
+    )
+    capability = kernel.as_capability()
+
+    forwarded = capability.before_tool_execute("search", {"q": "weather"})
+
+    assert forwarded is None or forwarded == {"q": "weather"}
+    assert callback_calls.get("tool") == "search"
