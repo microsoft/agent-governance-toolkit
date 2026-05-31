@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 
 from agentmesh.governance.backend import (
@@ -13,7 +15,10 @@ from agentmesh.governance.backend import (
 )
 from agentmesh.governance.opa import OPAEvaluator, OPAPolicyBackend
 from agentmesh.governance.cedar import CedarEvaluator, CedarPolicyBackend
-from conftest import requires_cedar, requires_opa
+
+requires_opa = pytest.mark.skipif(
+    not shutil.which("opa"), reason="opa CLI not installed"
+)
 
 
 # ── Sample policies ───────────────────────────────────────────

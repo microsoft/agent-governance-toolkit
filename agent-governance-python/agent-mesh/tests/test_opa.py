@@ -2,10 +2,16 @@
 # Licensed under the MIT License.
 """Tests for OPA/Rego policy adapter and PolicyEngine integration."""
 
+import shutil
+
 import pytest
+
 from agentmesh.governance.opa import OPAEvaluator, OPADecision
 from agentmesh.governance.policy import PolicyEngine
-from conftest import requires_opa
+
+requires_opa = pytest.mark.skipif(
+    not shutil.which("opa"), reason="opa CLI not installed"
+)
 
 
 # ── Sample Rego policies ──────────────────────────────────────
