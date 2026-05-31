@@ -279,8 +279,10 @@ class RelayServer:
                         get_verifier,
                     )
 
-                    if not client_token:
-                        # Reject empty/missing tokens IMMEDIATELY when
+                    if not client_token or (
+                        isinstance(client_token, str) and len(client_token) > 16384
+                    ):
+                        # Reject empty/missing/oversized tokens IMMEDIATELY when
                         # Entra is enabled. Falling through to the
                         # shared-secret branch (or open-acceptance)
                         # would let a peer skip the JWT presentation

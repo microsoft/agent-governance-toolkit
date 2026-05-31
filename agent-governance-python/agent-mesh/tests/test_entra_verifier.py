@@ -60,10 +60,10 @@ def _good_claims(now: int | None = None) -> dict:
     return {
         "aud": VALID_AUDIENCE,
         "tid": VALID_TENANT,
+        "iss": f"https://login.microsoftonline.com/{VALID_TENANT}/v2.0",
         "appid": VALID_APPID,
         "iat": now,
         "exp": now + 3600,
-        "iss": f"https://login.microsoftonline.com/{VALID_TENANT}/v2.0",
     }
 
 
@@ -216,6 +216,21 @@ class TestVerify:
         token = _sign_token(rsa_keypair, claims)
         out = await v.verify(token)
         assert out.get("azp") == "00000000-1111-2222-3333-444444444444"
+
+    @pytest.mark.asyncio
+    async def test_oversized_token_rejected(self, rsa_keypair):
+        v = _build_verifier(rsa_keypair)
+        with pytest.raises(EntraTokenError, match="maximum length"):
+            await v.verify("x" * 16385)
+
+    @pytest.mark.asyncio
+    async def test_wrong_issuer_rejected(self, rsa_keypair):
+        v = _build_verifier(rsa_keypair)
+        claims = _good_claims()
+        claims["iss"] = "https://evil.example.com/v2.0"
+        token = _sign_token(rsa_keypair, claims)
+        with pytest.raises(EntraTokenError):
+            await v.verify(token)
 
 
 # ── PR #2659 review fixes: stale-JWKS hard ceiling + alg-confusion guard ──

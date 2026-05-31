@@ -239,6 +239,10 @@ class EntraTokenVerifier:
         """
         if not token or not isinstance(token, str):
             raise EntraTokenError("empty or non-string token")
+        # Cap token length to prevent DoS via excessively large JWTs.
+        # Entra v2.0 tokens are typically 1-2KB; 16KB is generous.
+        if len(token) > 16384:
+            raise EntraTokenError("token exceeds maximum length (16384 bytes)")
         # Defense-in-depth: validate the JWT header `alg` against our
         # allowlist BEFORE the JWKS lookup. PyJWT's `jwt.decode(...,
         # algorithms=...)` would also reject mismatches, but checking
@@ -268,11 +272,13 @@ class EntraTokenVerifier:
                 signing_key.key,
                 algorithms=list(ALLOWED_SIGNING_ALGORITHMS),
                 audience=self._cfg.audience,
+                issuer=f"{self._cfg.authority}/{self._cfg.tenant_id}/v2.0",
                 options={
                     "require": ["exp", "iat", "aud", "tid"],
                     "verify_aud": True,
                     "verify_exp": True,
                     "verify_iat": True,
+                    "verify_iss": True,
                     "verify_signature": True,
                 },
             )

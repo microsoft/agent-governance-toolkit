@@ -88,7 +88,7 @@ class IdentityVerifyRequest(BaseModel):
     """
 
     amid: str
-    verification_token: str
+    verification_token: str = Field(..., max_length=8192)
 
 
 # ── Auth ─────────────────────────────────────────────────────────────
@@ -616,7 +616,7 @@ class RegistryServer:
                             or stored.identity_key_ed == pub
                         ):
                             agent = stored
-                            req = req.copy(update={"amid": stored.did})
+                            req = req.model_copy(update={"amid": stored.did})
                             break
             if not agent:
                 logger.warning(
