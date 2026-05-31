@@ -2379,3 +2379,121 @@ class TestLlamaIndexBridgeScenarios:
 
         # The result object's response attribute MUST be rewritten
         assert result.response == "[REDACTED OUTPUT]"
+
+
+# ── Guardrails scenario coverage ─────────────────────────────────────
+
+
+@_V5_BRIDGE_REQUIRED
+class TestGuardrailsBridgeScenarios:
+    """Verify GuardrailsKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, approval_resolver=None, validators=None):
+        from agent_os.integrations.base import GovernancePolicy
+        from agent_os.integrations.guardrails_adapter import GuardrailsKernel
+
+        return GuardrailsKernel(
+            validators=validators or [],
+            on_fail="fix",
+            policy=GovernancePolicy(),
+            approval_resolver=approval_resolver,
+            _runtime=runtime,
+        )
+
+    def test_validate_input_allow_path_passes(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "allow"}],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_input("safe query")
+
+        assert result.passed is True
+        assert result.final_value == "safe query"
+        # The synthetic AGT outcome MUST be present
+        names = [o.validator_name for o in result.outcomes]
+        assert "agt_runtime_bridge" in names
+        assert len(policy.invocations) == 1
+
+    def test_validate_input_deny_path_fails(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "blocked_topic"}],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_input("blocked content")
+
+        assert result.passed is False
+        # The synthetic AGT outcome MUST carry the deny reason
+        agt_outcomes = [
+            o for o in result.outcomes if o.validator_name == "agt_runtime_bridge"
+        ]
+        assert len(agt_outcomes) == 1
+        assert agt_outcomes[0].passed is False
+        assert "blocked_topic" in agt_outcomes[0].error_message
+
+    def test_validate_input_transform_rewrites_final_value(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_input("Customer SSN is 123-45-6789")
+
+        # The final_value MUST be the AGT-redacted text per AGT D1.1
+        assert result.final_value == "Customer SSN is [REDACTED]"
+        assert result.passed is True
+
+    def test_validate_input_escalate_with_approving_resolver_passes(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+
+        result = kernel.validate_input("needs approval")
+
+        assert captured["ip"] == "input"
+        assert result.passed is True
+
+    def test_validate_output_routes_to_output_intervention_point(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "allow"}],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_output("safe response")
+
+        assert result.passed is True
+        # The bridge MUST evaluate at the output intervention point.
+        assert (
+            policy.invocations[0]["input"]["intervention_point"] == "output"
+        )
+
+    def test_no_policy_skips_bridge(self):
+        from agent_os.integrations.guardrails_adapter import GuardrailsKernel
+
+        kernel = GuardrailsKernel()
+        # When no policy is supplied the bridge is disabled and behaviour
+        # matches the v4-only contract (no AGT outcome appended).
+        assert kernel.bridge is None
+        result = kernel.validate_input("anything")
+        assert result.passed is True
+        names = [o.validator_name for o in result.outcomes]
+        assert "agt_runtime_bridge" not in names
