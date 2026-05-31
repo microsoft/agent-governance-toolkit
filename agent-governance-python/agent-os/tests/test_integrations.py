@@ -2497,3 +2497,179 @@ class TestGuardrailsBridgeScenarios:
         assert result.passed is True
         names = [o.validator_name for o in result.outcomes]
         assert "agt_runtime_bridge" not in names
+
+
+# ── Google ADK scenario coverage ─────────────────────────────────────
+
+
+class _ADKFakeToolContext:
+    """Minimal fake of ADK's ``ToolContext`` for kernel callback tests."""
+
+    def __init__(self, tool_name="search", tool_args=None, agent_name="agent"):
+        self.tool_name = tool_name
+        self.tool_args = tool_args if tool_args is not None else {}
+        self.agent_name = agent_name
+
+
+class _ADKFakeCallbackContext:
+    """Minimal fake of ADK's ``CallbackContext``."""
+
+    def __init__(self, agent_name="root-agent", invocation_id="inv-001"):
+        self.agent_name = agent_name
+        self.invocation_id = invocation_id
+
+
+@_V5_BRIDGE_REQUIRED
+class TestGoogleADKBridgeScenarios:
+    """Verify GoogleADKKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, *, approval_resolver=None, allowed_tools=None):
+        from agent_os.integrations.google_adk_adapter import GoogleADKKernel
+
+        return GoogleADKKernel(
+            allowed_tools=allowed_tools or [],
+            _runtime=runtime,
+            approval_resolver=approval_resolver,
+        )
+
+    def test_before_tool_callback_allow_path(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "allow"}]
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is None
+        # The bridge MUST have been called once with the tool name.
+        assert len(policy.invocations) == 1
+        assert (
+            policy.invocations[0]["input"]["intervention_point"]
+            == "pre_tool_call"
+        )
+
+    def test_before_tool_callback_deny_path(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "tool_args_forbidden"}],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is not None
+        assert "error" in result
+        assert "agt_pre_tool_call_deny" in result["error"]
+
+    def test_before_tool_callback_transform_rewrites_args(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "args_sanitized",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": {"q": "[REDACTED]"},
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is None
+        # The ToolContext.tool_args MUST be rewritten per AGT D1.1.
+        assert ctx.tool_args == {"q": "[REDACTED]"}
+
+    def test_before_tool_callback_escalate_with_resolver_passes(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert captured["ip"] == "pre_tool_call"
+        assert result is None
+
+    def test_after_tool_callback_transform_rewrites_result(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "output_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED OUTPUT]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="search")
+
+        result = kernel.after_tool_callback(ctx, tool_result="leaked secret")
+
+        assert result == "[REDACTED OUTPUT]"
+
+    def test_after_tool_callback_deny_path(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "output_blocked"}],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="search")
+
+        result = kernel.after_tool_callback(ctx, tool_result="secret data")
+
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "agt_output_deny" in result["error"]
+
+    def test_before_agent_callback_deny_path(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "agent_blocked"}],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeCallbackContext(agent_name="suspicious-agent")
+
+        result = kernel.before_agent_callback(callback_context=ctx)
+
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "agt_input_deny" in result["error"]
+
+    def test_after_agent_callback_transform_rewrites_content(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "output_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[SANITISED AGENT OUTPUT]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeCallbackContext()
+
+        result = kernel.after_agent_callback(
+            callback_context=ctx, content="leaked secret"
+        )
+
+        assert result == "[SANITISED AGENT OUTPUT]"
