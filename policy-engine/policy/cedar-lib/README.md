@@ -57,7 +57,7 @@ Example.
 policies:
   default:
     type: cedar
-    policy_path: ./policy/lib/cedar/agt_default.cedar
+    policy_path: ./policy/cedar-lib/agt_default.cedar
     entities_path: ./policy/data/resources.json
 hooks:
   pre_tool_call:

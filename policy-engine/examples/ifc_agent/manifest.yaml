@@ -7,9 +7,9 @@ policies:
     bundle: ./policy
     data_paths:
       # Point at the specific upstream IFC library file rather than
-      # the whole policy/lib/ directory, because the AGT stock library
-      # now ships sibling subdirectories (cedar/) and *_test.rego files
-      # that OPA's data loader cannot reconcile with the Rego bundle.
+      # the whole policy/lib/ directory, because policy/lib/ ships
+      # *_test.rego sibling files that get loaded by OPA's data
+      # loader when the directory is passed in.
       - ../../policy/lib/ifc.rego
     query: data.agent_control_specification.ifc_agent.verdict
 intervention_points:
