@@ -42,16 +42,13 @@ impl PolicyDispatcher for MockPolicy {
 
         if contains_account_number {
             Ok(json!({
-                "decision": "warn",
+                "decision": "transform",
                 "reason": "account_number_redacted",
                 "message": "Account number was redacted before continuing.",
-                "effects": [
-                    {
-                        "type": "replace",
-                        "path": "$policy_target.text",
-                        "value": "Please summarize account [REDACTED]."
-                    }
-                ]
+                "transform": {
+                    "path": "$policy_target.text",
+                    "value": "Please summarize account [REDACTED]."
+                }
             }))
         } else {
             Ok(json!({ "decision": "allow" }))
@@ -104,7 +101,7 @@ annotators:
         .unwrap_or_else(|| result.policy_input.as_ref().unwrap()["policy_target"]["value"].clone());
     println!("policy_target used by host: {transformed}");
 
-    assert_eq!(result.verdict.decision, Decision::Warn);
+    assert_eq!(result.verdict.decision, Decision::Transform);
     assert_eq!(
         transformed,
         json!({"text": "Please summarize account [REDACTED]."})
