@@ -260,3 +260,50 @@ def test_filter_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         asyncio.run(sk_filter(ctx, next_fn))
 
     next_fn.assert_not_awaited()
+
+
+def test_governed_invoke_output_transform_rewrites_result(tmp_path: Path) -> None:
+    """AGT-DELTA D1.1 regression: GovernedSemanticKernel.invoke MUST
+    consume a Transform verdict at the output intervention point.
+    Previously the post hook only consulted ``post_result.allowed`` and
+    silently returned the original ``result``, so an output transform
+    never reached the caller.
+    """
+    from agent_os.integrations.semantic_kernel_adapter import (
+        SemanticKernelWrapper,
+    )
+
+    # Only the ``output`` intervention point reaches the scripted
+    # dispatcher; ``pre_tool_call`` for the bare ``safe_func`` name
+    # fails closed as ``runtime_error:tool_unknown`` and the bridge
+    # rewrites it to allow because ``allowed_tools`` is empty (see
+    # _v5_runtime_bridge._evaluate rewrite_as_allow branch).
+    runtime, _policy = _build_runtime(
+        tmp_path,
+        [
+            {
+                "decision": "transform",
+                "reason": "output_redaction",
+                "transform": {
+                    "path": "$policy_target",
+                    "value": "[REDACTED OUTPUT]",
+                },
+            },
+        ],
+    )
+    wrapper = SemanticKernelWrapper(_runtime=runtime)
+
+    fake_function = SimpleNamespace(name="safe_func", plugin_name="MyPlugin")
+    fake_result = "leaked secret"
+
+    class _FakeKernel:
+        async def invoke(self, function, **kwargs):  # noqa: ARG002
+            return fake_result
+
+    governed = wrapper.wrap(_FakeKernel())
+    out = asyncio.run(governed.invoke(function=fake_function, input="hi"))
+
+    assert out == "[REDACTED OUTPUT]", (
+        f"AGT D1.1 output transform was dropped; got {out!r}"
+    )
+

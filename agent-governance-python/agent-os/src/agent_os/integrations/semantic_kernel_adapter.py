@@ -433,7 +433,10 @@ class GovernedSemanticKernel:
                 raise ValueError("Must provide either function or plugin_name+function_name")
 
             # AGT output intervention point evaluation on the function
-            # result.
+            # result. AGT-DELTA D1.1: a transform verdict rewrites the
+            # value the caller sees, mirroring the GovernanceFunctionFilter
+            # path (semantic_kernel_adapter.py:1161-1167) and the
+            # llamaindex_adapter post hook (llamaindex_adapter.py:187-203).
             post_result = self._wrapper.bridge.evaluate_output(
                 self._ctx, content=str(result)
             )
@@ -441,6 +444,16 @@ class GovernedSemanticKernel:
                 raise PolicyViolationError.from_check_result(
                     post_result.check_result
                 )
+            if post_result.transform is not None and isinstance(
+                post_result.transform.value, str
+            ):
+                if hasattr(result, "value"):
+                    try:
+                        result.value = post_result.transform.value
+                        return result
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
+                return post_result.transform.value
 
             return result
 
@@ -697,7 +710,9 @@ class GovernedSemanticKernel:
         # This works with SK's chat completion service pattern
         result = await self._kernel.invoke_prompt(prompt, **kwargs)
 
-        # AGT output intervention point evaluation on the result
+        # AGT output intervention point evaluation on the result.
+        # AGT-DELTA D1.1: a transform verdict rewrites the value the
+        # caller sees.
         post_result = self._wrapper.bridge.evaluate_output(
             self._ctx, content=str(result)
         )
@@ -705,6 +720,16 @@ class GovernedSemanticKernel:
             raise PolicyViolationError.from_check_result(
                 post_result.check_result
             )
+        if post_result.transform is not None and isinstance(
+            post_result.transform.value, str
+        ):
+            if hasattr(result, "value"):
+                try:
+                    result.value = post_result.transform.value
+                    return result
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
+            return post_result.transform.value
 
         return result
 
