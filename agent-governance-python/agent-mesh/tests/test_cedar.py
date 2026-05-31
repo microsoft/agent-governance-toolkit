@@ -55,51 +55,51 @@ forbid(
 """
 
     def test_permit_matching_action(self):
-        evaluator = CedarEvaluator(policy_content=self.SIMPLE_POLICY)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.SIMPLE_POLICY)
         decision = evaluator.evaluate('Action::"ReadData"', {"agent_did": "did:example:1"})
         assert decision.allowed is True
         assert decision.source in ("cedarpy", "cli", "builtin")
         assert decision.error is None
 
     def test_forbid_matching_action(self):
-        evaluator = CedarEvaluator(policy_content=self.SIMPLE_POLICY)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.SIMPLE_POLICY)
         decision = evaluator.evaluate('Action::"DeleteFile"', {"agent_did": "did:example:1"})
         assert decision.allowed is False
 
     def test_default_deny_no_match(self):
-        evaluator = CedarEvaluator(policy_content=self.SIMPLE_POLICY)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.SIMPLE_POLICY)
         decision = evaluator.evaluate('Action::"ExecuteCode"', {"agent_did": "did:example:1"})
         assert decision.allowed is False
 
     def test_permit_all_catchall(self):
-        evaluator = CedarEvaluator(policy_content=self.PERMIT_ALL)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.PERMIT_ALL)
         decision = evaluator.evaluate('Action::"Anything"', {})
         assert decision.allowed is True
 
     def test_forbid_all_catchall(self):
-        evaluator = CedarEvaluator(policy_content=self.FORBID_ALL)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.FORBID_ALL)
         decision = evaluator.evaluate('Action::"Anything"', {})
         assert decision.allowed is False
 
     def test_evaluation_ms_tracked(self):
-        evaluator = CedarEvaluator(policy_content=self.SIMPLE_POLICY)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.SIMPLE_POLICY)
         decision = evaluator.evaluate('Action::"ReadData"', {})
         assert decision.evaluation_ms >= 0
 
     def test_no_content_returns_error(self):
-        evaluator = CedarEvaluator()
+        evaluator = CedarEvaluator(mode="builtin")
         decision = evaluator.evaluate('Action::"Test"', {})
         assert decision.allowed is False
         assert decision.error is not None
 
     def test_action_without_namespace_prefix(self):
         """Action strings without '::' get auto-wrapped."""
-        evaluator = CedarEvaluator(policy_content=self.SIMPLE_POLICY)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.SIMPLE_POLICY)
         decision = evaluator.evaluate("ReadData", {})
         assert decision.allowed is True
 
     def test_multiple_permits(self):
-        evaluator = CedarEvaluator(policy_content=self.SIMPLE_POLICY)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.SIMPLE_POLICY)
         assert evaluator.evaluate('Action::"ReadData"', {}).allowed is True
         assert evaluator.evaluate('Action::"ListFiles"', {}).allowed is True
 
@@ -109,12 +109,12 @@ forbid(
 permit(principal, action == Action::"Export", resource);
 forbid(principal, action == Action::"Export", resource);
 """
-        evaluator = CedarEvaluator(policy_content=policy)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=policy)
         decision = evaluator.evaluate('Action::"Export"', {})
         assert decision.allowed is False
 
     def test_build_request_normalizes_entities(self):
-        evaluator = CedarEvaluator(policy_content=self.PERMIT_ALL)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=self.PERMIT_ALL)
         request = evaluator._build_request('Action::"Test"', {
             "agent_did": "did:example:agent1",
             "resource": "dataset-A",
@@ -174,7 +174,7 @@ class TestPolicyEngineWithCedar:
 
     def test_load_cedar_registers_evaluator(self):
         engine = PolicyEngine()
-        evaluator = engine.load_cedar(cedar_content="""
+        evaluator = engine.load_cedar(mode="builtin", cedar_content="""
 permit(principal, action == Action::"ReadData", resource);
 """)
         assert isinstance(evaluator, CedarEvaluator)
@@ -192,7 +192,7 @@ rules:
     action: deny
     priority: 100
 """)
-        engine.load_cedar(cedar_content="""
+        engine.load_cedar(mode="builtin", cedar_content="""
 permit(principal, action == Action::"read_data", resource);
 """)
         # YAML matches → deny
@@ -207,7 +207,7 @@ permit(principal, action == Action::"read_data", resource);
         """Cedar policies are checked after Rego when Rego has errors."""
         engine = PolicyEngine()
         # Load Cedar (no Rego)
-        engine.load_cedar(cedar_content="""
+        engine.load_cedar(mode="builtin", cedar_content="""
 permit(principal, action == Action::"analyze", resource);
 """)
         decision = engine.evaluate("did:example:1", {"tool_name": "analyze"})
@@ -215,8 +215,8 @@ permit(principal, action == Action::"analyze", resource);
 
     def test_multiple_cedar_evaluators(self):
         engine = PolicyEngine()
-        engine.load_cedar(cedar_content='forbid(principal, action == Action::"dangerous", resource);')
-        engine.load_cedar(cedar_content='permit(principal, action, resource);')
+        engine.load_cedar(mode="builtin", cedar_content='forbid(principal, action == Action::"dangerous", resource);')
+        engine.load_cedar(mode="builtin", cedar_content='permit(principal, action, resource);')
 
         # First Cedar evaluator forbids
         decision = engine.evaluate("did:example:1", {"tool_name": "dangerous"})

@@ -34,6 +34,18 @@ import pytest
 
 from agent_os.integrations.base import GovernancePolicy, PolicyViolationError
 
+# langgraph is an optional extra. Most test classes require it; TestImportGuard
+# exercises the graceful-error path and works regardless.
+_HAS_LANGGRAPH = True
+try:
+    import langgraph  # noqa: F401
+except ImportError:
+    _HAS_LANGGRAPH = False
+
+requires_langgraph = pytest.mark.skipif(
+    not _HAS_LANGGRAPH, reason="langgraph not installed"
+)
+
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -68,6 +80,7 @@ class TestImportGuard:
 # before_tool_call
 # ══════════════════════════════════════════════════════════════════════
 
+@requires_langgraph
 class TestBeforeToolCall:
     def test_allows_tool_on_allowlist(self):
         kernel = _kernel(allowed_tools=["search"])
@@ -130,6 +143,7 @@ class TestBeforeToolCall:
 # before_node_execution
 # ══════════════════════════════════════════════════════════════════════
 
+@requires_langgraph
 class TestBeforeNodeExecution:
     def test_allows_clean_state(self):
         kernel = _kernel()
@@ -162,6 +176,7 @@ class TestBeforeNodeExecution:
 # wrap_graph
 # ══════════════════════════════════════════════════════════════════════
 
+@requires_langgraph
 class TestWrapGraph:
     def test_wrap_graph_returns_governed_graph(self):
         from agent_os.integrations.langgraph_adapter import GovernedGraph, LangGraphKernel
@@ -236,6 +251,7 @@ class TestWrapGraph:
 # Checkpoint fingerprint
 # ══════════════════════════════════════════════════════════════════════
 
+@requires_langgraph
 class TestCheckpointFingerprint:
     def test_fingerprint_stored_in_metadata_not_state(self):
         from agent_os.integrations.langgraph_adapter import LangGraphKernel
@@ -353,6 +369,7 @@ class TestCheckpointFingerprint:
 # ctx.policy isolation
 # ══════════════════════════════════════════════════════════════════════
 
+@requires_langgraph
 class TestContextPolicyIsolation:
     def test_mid_run_self_policy_mutation_does_not_affect_ctx(self):
         """Changing kernel.policy mid-run does not affect the pinned ctx.policy."""
@@ -374,6 +391,7 @@ class TestContextPolicyIsolation:
 # Health check
 # ══════════════════════════════════════════════════════════════════════
 
+@requires_langgraph
 class TestHealthCheck:
     def test_health_check_healthy(self):
         from agent_os.integrations.langgraph_adapter import LangGraphKernel
@@ -395,6 +413,7 @@ class TestHealthCheck:
 # End-to-end: 2-node StateGraph
 # ══════════════════════════════════════════════════════════════════════
 
+@requires_langgraph
 class TestEndToEnd:
     def test_2node_graph_both_nodes_run(self):
         """Wrap -> compile -> invoke: both nodes execute under governance."""

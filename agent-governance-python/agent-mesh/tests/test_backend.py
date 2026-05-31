@@ -13,6 +13,7 @@ from agentmesh.governance.backend import (
 )
 from agentmesh.governance.opa import OPAEvaluator, OPAPolicyBackend
 from agentmesh.governance.cedar import CedarEvaluator, CedarPolicyBackend
+from conftest import requires_cedar, requires_opa
 
 
 # ── Sample policies ───────────────────────────────────────────
@@ -116,6 +117,7 @@ class TestProtocolConformance:
 # ── OPAPolicyBackend ──────────────────────────────────────────
 
 
+@requires_opa
 class TestOPAPolicyBackend:
     """Tests for the OPA adapter."""
 
@@ -179,11 +181,11 @@ class TestCedarPolicyBackend:
     """Tests for the Cedar adapter."""
 
     def test_name(self):
-        backend = CedarPolicyBackend(policy_content=BASIC_CEDAR)
+        backend = CedarPolicyBackend(mode="builtin", policy_content=BASIC_CEDAR)
         assert backend.name == "cedar"
 
     def test_evaluate_allowed(self):
-        backend = CedarPolicyBackend(policy_content=BASIC_CEDAR)
+        backend = CedarPolicyBackend(mode="builtin", policy_content=BASIC_CEDAR)
         result = backend.evaluate('Action::"ReadData"', {"agent_did": "did:example:1"})
         assert isinstance(result, PolicyDecisionResult)
         assert result.allowed is True
@@ -191,17 +193,17 @@ class TestCedarPolicyBackend:
         assert result.latency_ms >= 0
 
     def test_evaluate_denied(self):
-        backend = CedarPolicyBackend(policy_content=BASIC_CEDAR)
+        backend = CedarPolicyBackend(mode="builtin", policy_content=BASIC_CEDAR)
         result = backend.evaluate('Action::"DeleteFile"', {"agent_did": "did:example:1"})
         assert result.allowed is False
         assert result.backend == "cedar"
 
     def test_healthy_with_content(self):
-        backend = CedarPolicyBackend(policy_content=BASIC_CEDAR)
+        backend = CedarPolicyBackend(mode="builtin", policy_content=BASIC_CEDAR)
         assert backend.healthy() is True
 
     def test_wraps_existing_evaluator(self):
-        evaluator = CedarEvaluator(policy_content=BASIC_CEDAR)
+        evaluator = CedarEvaluator(mode="builtin", policy_content=BASIC_CEDAR)
         backend = CedarPolicyBackend(evaluator=evaluator)
         result = backend.evaluate('Action::"ReadData"', {"agent_did": "did:example:1"})
         assert result.allowed is True
@@ -268,6 +270,7 @@ class TestBackendRegistry:
 # ── Integration: end-to-end via registry ──────────────────────
 
 
+@requires_opa
 class TestEndToEnd:
     """Integration test: register, discover, evaluate."""
 
@@ -279,7 +282,7 @@ class TestEndToEnd:
 
     def test_evaluate_through_registry(self):
         BackendRegistry.register(OPAPolicyBackend(rego_content=BASIC_REGO))
-        BackendRegistry.register(CedarPolicyBackend(policy_content=BASIC_CEDAR))
+        BackendRegistry.register(CedarPolicyBackend(mode="builtin", policy_content=BASIC_CEDAR))
 
         opa = BackendRegistry.get("opa")
         result = opa.evaluate("allow", {"agent": {"role": "admin"}})
@@ -291,7 +294,7 @@ class TestEndToEnd:
 
     def test_all_backends_report_healthy(self):
         BackendRegistry.register(OPAPolicyBackend(rego_content=BASIC_REGO))
-        BackendRegistry.register(CedarPolicyBackend(policy_content=BASIC_CEDAR))
+        BackendRegistry.register(CedarPolicyBackend(mode="builtin", policy_content=BASIC_CEDAR))
 
         for name in BackendRegistry.list_backends():
             backend = BackendRegistry.get(name)
