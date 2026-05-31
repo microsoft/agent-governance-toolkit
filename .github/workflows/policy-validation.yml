@@ -3,23 +3,32 @@ name: Policy Validation
 on:
   push:
     branches: [main]
-    paths:
-      - "**/*.yaml"
-      - "**/*.yml"
-      - "packages/agent-os/src/agent_os/policies/**"
   pull_request:
     branches: [main]
-    paths:
-      - "**/*.yaml"
-      - "**/*.yml"
-      - "packages/agent-os/src/agent_os/policies/**"
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      policies: ${{ steps.filter.outputs.policies }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            policies:
+              - '**/*.yaml'
+              - '**/*.yml'
+              - 'agent-governance-python/agent-os/src/agent_os/policies/**'
+
   validate-policies:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.policies == 'true'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -27,13 +36,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install agent-os-kernel
-        working-directory: packages/agent-os
+      - name: Install consolidated v4 packages (local, --no-deps)
+        # The deprecated shim packages (agent-primitives, agent-os, ...) all
+        # declare a hard dep on agent-governance-toolkit-core>=4.0, which is
+        # not yet on PyPI. Pre-install the local consolidated packages with
+        # --no-deps so the subsequent shim installs resolve without pip
+        # reaching out to PyPI for the unpublished names.
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir --require-hashes \
-            pyyaml==6.0.2 --hash=sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563 \
-            2>/dev/null || pip install --no-cache-dir pyyaml==6.0.2
+          pip install --no-cache-dir --no-deps \
+            -e agent-governance-python/agent-governance-toolkit-core \
+            -e agent-governance-python/agent-governance-toolkit-cli \
+            -e agent-governance-python/agent-governance-toolkit-integrations \
+            -e agent-governance-python/agent-governance-toolkit-protocols
+
+      - name: Install agent-primitives (local sibling)
+        run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
+
+      - name: Install agent-os-kernel
+        working-directory: agent-governance-python/agent-os
+        run: |
+          pip install --no-cache-dir -e ".[dev]"
+          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-yaml.txt"
 
       - name: Find and validate policy files
         run: |
@@ -48,27 +71,104 @@ jobs:
             python -m agent_os.policies.cli validate "$f" || EXIT_CODE=1
           done
           echo "::endgroup::"
-          exit $EXIT_CODE
+          exit "$EXIT_CODE"
 
   test-policies:
     runs-on: ubuntu-latest
-    needs: validate-policies
+    needs: [changes, validate-policies]
+    if: always() && needs.validate-policies.result != 'failure'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: needs.changes.outputs.policies == 'true'
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: needs.changes.outputs.policies == 'true'
         with:
           python-version: "3.11"
 
-      - name: Install agent-os-kernel
-        working-directory: packages/agent-os
+      - name: Install consolidated v4 packages (local, --no-deps)
+        if: needs.changes.outputs.policies == 'true'
+        # The deprecated shim packages (agent-primitives, agent-os, ...) all
+        # declare a hard dep on agent-governance-toolkit-core>=4.0, which is
+        # not yet on PyPI. Pre-install the local consolidated packages with
+        # --no-deps so the subsequent shim installs resolve without pip
+        # reaching out to PyPI for the unpublished names.
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir --require-hashes \
-            pyyaml==6.0.2 --hash=sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563 \
-            pytest==8.4.1 --hash=sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7 \
-            2>/dev/null || pip install --no-cache-dir pyyaml==6.0.2 pytest==8.4.1
+          pip install --no-cache-dir --no-deps \
+            -e agent-governance-python/agent-governance-toolkit-core \
+            -e agent-governance-python/agent-governance-toolkit-cli \
+            -e agent-governance-python/agent-governance-toolkit-integrations \
+            -e agent-governance-python/agent-governance-toolkit-protocols
+
+      - name: Install agent-primitives (local sibling)
+        if: needs.changes.outputs.policies == 'true'
+        run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
+
+      - name: Install agent-os-kernel
+        if: needs.changes.outputs.policies == 'true'
+        working-directory: agent-governance-python/agent-os
+        run: |
+          pip install --no-cache-dir -e ".[dev]"
+          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-policy-test.txt"
 
       - name: Run policy CLI tests
-        working-directory: packages/agent-os
+        if: needs.changes.outputs.policies == 'true'
+        working-directory: agent-governance-python/agent-os
         run: pytest tests/test_policy_cli.py -v --tb=short
+
+      - name: Skip (no policy changes)
+        if: needs.changes.outputs.policies != 'true'
+        run: echo "No policy file changes detected, skipping."
+
+  policy-replay-fixtures:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-policies]
+    if: always() && needs.validate-policies.result != 'failure'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: needs.changes.outputs.policies == 'true'
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: needs.changes.outputs.policies == 'true'
+        with:
+          python-version: "3.11"
+
+      - name: Install consolidated v4 packages (local, --no-deps)
+        if: needs.changes.outputs.policies == 'true'
+        run: |
+          pip install --no-cache-dir --no-deps \
+            -e agent-governance-python/agent-governance-toolkit-core \
+            -e agent-governance-python/agent-governance-toolkit-cli \
+            -e agent-governance-python/agent-governance-toolkit-integrations \
+            -e agent-governance-python/agent-governance-toolkit-protocols
+
+      - name: Install agent-primitives (local sibling)
+        if: needs.changes.outputs.policies == 'true'
+        run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
+
+      - name: Install agent-os-kernel
+        if: needs.changes.outputs.policies == 'true'
+        working-directory: agent-governance-python/agent-os
+        run: |
+          pip install --no-cache-dir -e ".[dev]"
+          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-policy-test.txt"
+
+
+      - name: Validate fixture schemas
+        if: needs.changes.outputs.policies == 'true'
+        run: python schemas/validate_fixture.py agent-governance-python/agent-os/tests/fixtures/policy_replay/*.json
+
+      - name: Verify fixtures exist
+        if: needs.changes.outputs.policies == 'true'
+        run: |
+          count=$(find agent-governance-python/agent-os/tests/fixtures/policy_replay/ -name '*.json' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No fixture files found in policy_replay/"
+            exit 1
+          fi
+          echo "Found $count fixture(s)"
+
+      - name: Run policy replay fixtures
+        if: needs.changes.outputs.policies == 'true'
+        run: agt test agent-governance-python/agent-os/src/agent_os/policies/ agent-governance-python/agent-os/tests/fixtures/policy_replay/
+        continue-on-error: true  # TODO: remove after 2 weeks of green runs (sample fixtures may reference rules not in sample policies)
