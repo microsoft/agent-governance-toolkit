@@ -37,6 +37,27 @@ public sealed class AgentControl
         PerfTelemetry perfTelemetry = PerfTelemetry.Off) =>
         new(NativeAgentControlRuntime.FromPath(path, annotatorDispatcher, policyDispatcher, perfTelemetry), approvalResolver);
 
+    /// <summary>
+    /// Async counterpart to <see cref="FromPath"/>. Native runtime construction
+    /// still happens off the calling thread so a manifest with a large bundle
+    /// or many <c>extends</c> rolls do not stall an async caller. Mirrors the
+    /// Rust SDK's <c>AgentControl::from_path</c> ergonomics.
+    /// </summary>
+    public static ValueTask<AgentControl> FromPathAsync(
+        string path,
+        IAnnotatorDispatcher? annotatorDispatcher = null,
+        IPolicyDispatcher? policyDispatcher = null,
+        ApprovalResolver? approvalResolver = null,
+        PerfTelemetry perfTelemetry = PerfTelemetry.Off,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<AgentControl>(Task.Run(
+            () => FromPath(path, annotatorDispatcher, policyDispatcher, approvalResolver, perfTelemetry),
+            cancellationToken));
+    }
+
     public static AgentControl FromManifestChain(
         IReadOnlyList<string> manifests,
         IAnnotatorDispatcher? annotatorDispatcher = null,
