@@ -16,7 +16,11 @@ public enum CredentialKind
     /// <summary>Connection string with password or shared access key.</summary>
     ConnectionString,
     /// <summary>Generic secret assignment (password=, secret=, token=).</summary>
-    SecretAssignment
+    SecretAssignment,
+    /// <summary>GitHub access token.</summary>
+    GitHubToken,
+    /// <summary>RFC 7468 PEM private key block.</summary>
+    PemPrivateKey
 }
 
 /// <summary>
@@ -59,7 +63,15 @@ public sealed class McpCredentialRedactor
 
         (CredentialKind.SecretAssignment,
          new Regex(@"(?i)\b(?:password|secret|token)\s*[:=]\s*[""']?[^\s""';,]{4,}[""']?", RegexOptions.Compiled, RegexTimeout),
-         "[REDACTED_SECRET]")
+         "[REDACTED_SECRET]"),
+
+        (CredentialKind.GitHubToken,
+         new Regex(@"(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])", RegexOptions.Compiled, RegexTimeout),
+         "[REDACTED_GITHUB_TOKEN]"),
+
+        (CredentialKind.PemPrivateKey,
+         new Regex(@"-----BEGIN (?<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----(?:\r?\n[!-~ \t]*)*?\r?\n-----END \k<label>-----", RegexOptions.Compiled, RegexTimeout),
+         "[REDACTED_PEM_PRIVATE_KEY]")
     ];
 
     private static readonly Dictionary<string, CredentialKind> KeyHints = new(StringComparer.OrdinalIgnoreCase)
@@ -112,6 +124,8 @@ public sealed class McpCredentialRedactor
         CredentialKind.BearerToken => "[REDACTED_BEARER_TOKEN]",
         CredentialKind.ConnectionString => "[REDACTED_CONNECTION_STRING]",
         CredentialKind.SecretAssignment => "[REDACTED_SECRET]",
+        CredentialKind.GitHubToken => "[REDACTED_GITHUB_TOKEN]",
+        CredentialKind.PemPrivateKey => "[REDACTED_PEM_PRIVATE_KEY]",
         _ => "[REDACTED]"
     };
 

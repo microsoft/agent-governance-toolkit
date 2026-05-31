@@ -99,10 +99,18 @@ AGENT_SIGNATURES: list[dict[str, Any]] = [
 # Regex for secrets we must redact in process args
 SECRET_PATTERNS = [
     re.compile(r"((?:api[_-]?key|token|secret|password|credential|auth)[=:\s]+)\S+", re.IGNORECASE),
-    re.compile(r"(sk-[a-zA-Z0-9]{20,})"),
-    re.compile(r"(ghp_[a-zA-Z0-9]{36,})"),
-    re.compile(r"(gho_[a-zA-Z0-9]{36,})"),
-    re.compile(r"(xox[bpors]-[a-zA-Z0-9\-]+)"),
+    re.compile(r"(sk-[a-zA-Z0-9][a-zA-Z0-9_-]{18,})"),
+    re.compile(
+        r"(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])"
+    ),
+    re.compile(r"(xox[abprs]-[a-zA-Z0-9\-]+)"),
+    re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"),
+    re.compile(
+        r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
+        r"(?:\r?\n[!-~ \t]*)*?"
+        r"\r?\n-----END (?P=label)-----"
+    ),
     re.compile(r"(eyJ[a-zA-Z0-9\-_]+\.eyJ[a-zA-Z0-9\-_]+)"),  # JWT
 ]
 
