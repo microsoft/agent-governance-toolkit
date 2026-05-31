@@ -1,0 +1,24 @@
+{
+  "id": "deny-overrides-production-sql",
+  "description": "When one rule allows and another denies SQL execution on production, deny-overrides strategy must select the deny rule.",
+  "input": {
+    "action": "sql_execute",
+    "resource": "production-db",
+    "agent_id": "agent-analytics-01",
+    "tool_name": "sql_executor",
+    "parameters": {
+      "query": "SELECT * FROM users"
+    }
+  },
+  "expected_verdict": "deny",
+  "expected_rule": "deny-prod-sql",
+  "resolution_metadata": {
+    "rule_id": "deny-prod-sql",
+    "strategy": "deny-overrides"
+  },
+  "tags": [
+    "conflict-resolution",
+    "deny-overrides",
+    "production"
+  ]
+}
