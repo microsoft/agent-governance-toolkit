@@ -126,7 +126,7 @@ def save_audit_csv(path: str) -> None:
     ]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
+        writer.writheeader()
         for entry in audit_log:
             writer.writerow(entry)
 

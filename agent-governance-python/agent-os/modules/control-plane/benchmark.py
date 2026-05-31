@@ -468,7 +468,7 @@ def save_results_csv(
             'response'
         ]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+        writer.writheeader()
         
         # Write baseline results
         for result in baseline_results:
@@ -517,7 +517,7 @@ def save_summary_csv(
             'total_blocked', 'total_allowed'
         ]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+        writer.writheeader()
         
         writer.writerow(asdict(baseline_metrics))
         writer.writerow(asdict(cp_metrics))
