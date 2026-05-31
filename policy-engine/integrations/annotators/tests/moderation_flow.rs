@@ -78,10 +78,38 @@ impl PolicyDispatcher for ModerationPolicy {
         }
         let spans = annotations["pii"]["spans"].clone();
         if spans.as_array().is_some_and(|items| !items.is_empty()) {
+            // AGT D1.3: multi-span redaction moves to annotators. The
+            // annotator (or the policy on top of its data) computes the
+            // final redacted text, and the policy returns a single
+            // transform replacement instead of an effects array.
+            let text = input["policy_target"]["value"]["text"]
+                .as_str()
+                .unwrap_or("");
+            let chars: Vec<char> = text.chars().collect();
+            let mut out = String::new();
+            let mut idx = 0usize;
+            let spans_arr = spans.as_array().unwrap();
+            // Spans are byte-offset but in this test fixture they are
+            // also character-offset because the test text is ASCII.
+            for span in spans_arr {
+                let start = span["start"].as_u64().unwrap_or(0) as usize;
+                let end = span["end"].as_u64().unwrap_or(0) as usize;
+                let replacement = span["replacement"].as_str().unwrap_or("[redacted]");
+                while idx < start && idx < chars.len() {
+                    out.push(chars[idx]);
+                    idx += 1;
+                }
+                out.push_str(replacement);
+                idx = end;
+            }
+            while idx < chars.len() {
+                out.push(chars[idx]);
+                idx += 1;
+            }
             return Ok(json!({
-                "decision": "warn",
+                "decision": "transform",
                 "reason": "moderation.redacted",
-                "effects": [{"type": "redact", "path": "$policy_target.text", "spans": spans}]
+                "transform": {"path": "$policy_target.text", "value": out}
             }));
         }
         Ok(json!({"decision": "allow"}))
@@ -155,7 +183,7 @@ fn realistic_support_moderation_annotations_drive_policy_and_redaction() {
 
     let result = evaluate(&runtime, "hello secret world");
 
-    assert_eq!(result.verdict.decision, Decision::Warn);
+    assert_eq!(result.verdict.decision, Decision::Transform);
     assert_eq!(
         result.transformed_policy_target,
         Some(json!({"text": "hello [redacted] world"}))

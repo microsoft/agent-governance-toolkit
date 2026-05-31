@@ -215,7 +215,9 @@ fn smoke_control() -> AgentControl {
 }
 
 fn replace(path: &str, value: JsonValue) -> JsonValue {
-    json!({ "decision": "allow", "effects": [{ "type": "replace", "path": path, "value": value }] })
+    // AGT D1: effects[] is rejected; the canonical single-target
+    // replacement is decision: "transform" + transform body.
+    json!({ "decision": "transform", "transform": { "path": path, "value": value } })
 }
 
 fn allow_resolver() -> ApprovalResolver {
@@ -393,12 +395,12 @@ async fn escalate_without_resolver_fails_closed() {
 }
 
 #[tokio::test]
-async fn escalate_allow_resolver_applies_escalate_effects() {
+async fn escalate_after_resolver_proceeds_with_original_args() {
+    // AGT D1 + §13.1: escalate carries no effects. After approval, the
+    // tool runs with the original args; there is no way to bundle a
+    // deferred transform with the escalate decision.
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let guarded = control([json!({
-        "decision": "escalate",
-        "effects": [{ "type": "replace", "path": "$policy_target.query", "value": "rewritten" }]
-    })])
+    let guarded = control([json!({"decision": "escalate", "reason": "needs review"})])
     .with_approval_resolver(allow_resolver())
     .guard_rig_tool(Arc::new(EchoTool { seen: seen.clone() }));
 
@@ -407,8 +409,8 @@ async fn escalate_allow_resolver_applies_escalate_effects() {
         .await
         .unwrap();
 
-    assert_eq!(output, "result for rewritten");
-    assert_eq!(*seen.lock().unwrap(), vec![json!({ "query": "rewritten" })]);
+    assert_eq!(output, "result for raw");
+    assert_eq!(*seen.lock().unwrap(), vec![json!({ "query": "raw" })]);
 }
 
 #[tokio::test]

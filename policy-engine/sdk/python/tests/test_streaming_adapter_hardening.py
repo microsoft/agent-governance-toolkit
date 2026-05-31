@@ -426,11 +426,14 @@ annotators:
             def evaluate(self, invocation):
                 normalized = invocation["input"]["annotations"]["normalize"]["normalized"]
                 if normalized == "secret":
+                    # AGT D1: effects[] rejected; use transform decision
+                    # for single-target replacement.
                     return {
-                        "decision": "allow",
-                        "effects": [
-                            {"type": "replace", "path": "$policy_target.choices[0].message.content", "value": "[redacted]"}
-                        ],
+                        "decision": "transform",
+                        "transform": {
+                            "path": "$policy_target.choices[0].message.content",
+                            "value": "[redacted]",
+                        },
                     }
                 return {"decision": "allow"}
 

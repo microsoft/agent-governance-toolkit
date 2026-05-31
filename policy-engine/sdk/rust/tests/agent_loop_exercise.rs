@@ -61,13 +61,12 @@ impl PolicyDispatcher for ScenarioPolicy {
         let point = input["intervention_point"].as_str().unwrap();
         match point {
             "pre_model_call" => Ok(json!({
-                "decision": "warn",
+                "decision": "transform",
                 "reason": "prompt_rewritten",
-                "effects": [{"type": "replace", "path": "$policy_target.prompt", "value": "safe research"}]
+                "transform": {"path": "$policy_target.prompt", "value": "safe research"}
             })),
             "post_model_call" => Ok(json!({
-                "decision": "allow",
-                "effects": [{"type": "replace", "path": "$policy_target.text", "value": "model secret redacted"}]
+                "decision": "transform", "transform": {"path": "$policy_target.text", "value": "model secret redacted"}
             })),
             "pre_tool_call" => {
                 let tool = input["tool"]["name"].as_str().unwrap();
@@ -77,18 +76,16 @@ impl PolicyDispatcher for ScenarioPolicy {
                         Ok(json!({"decision": "escalate", "reason": "sensitive_action"}))
                     }
                     _ => Ok(json!({
-                        "decision": "allow",
-                        "effects": [{
-                            "type": "redact",
-                            "path": "$policy_target.query",
-                            "spans": [{"start": 6, "end": 15, "replacement": "[redacted]"}]
-                        }]
+                        // AGT D1: multi-span redaction migrates to a single
+                        // transform; for this test we collapse the redaction
+                        // to its final value.
+                        "decision": "transform",
+                        "transform": {"path": "$policy_target.query", "value": "search [redacted]"}
                     })),
                 }
             }
             "post_tool_call" => Ok(json!({
-                "decision": "allow",
-                "effects": [{"type": "replace", "path": "$policy_target.answer", "value": "tool secret redacted"}]
+                "decision": "transform", "transform": {"path": "$policy_target.answer", "value": "tool secret redacted"}
             })),
             _ => Ok(json!({"decision": "allow"})),
         }
@@ -177,7 +174,7 @@ fn realistic_agent_loop_exercises_model_tool_and_approval_paths() {
             .pre_model_call_intervention_point_result
             .verdict
             .decision,
-        Decision::Warn
+        Decision::Transform
     );
     assert_eq!(
         *model_seen.lock().unwrap(),
@@ -194,7 +191,7 @@ fn realistic_agent_loop_exercises_model_tool_and_approval_paths() {
     let tool_result = tool.run(json!({"query": "token SECRET123"})).unwrap();
     assert_eq!(
         *tool_seen.lock().unwrap(),
-        vec![json!({"query": "token [redacted]"})]
+        vec![json!({"query": "search [redacted]"})]
     );
     assert_eq!(tool_result.value, json!({"answer": "tool secret redacted"}));
 
@@ -349,7 +346,7 @@ fn retained_unwrapped_rig_like_tool_reference_is_host_contract_bypass() {
     assert_eq!(guarded_output, json!({"answer": "tool secret redacted"}));
     assert_eq!(
         *seen.lock().unwrap(),
-        vec![json!({"query": "token [redacted]"})]
+        vec![json!({"query": "search [redacted]"})]
     );
 
     let bypass_output = inner.call(json!({"query": "token SECRET123"})).unwrap();
@@ -436,8 +433,12 @@ impl PolicyDispatcher for PaymentPolicy {
         {
             return Ok(json!({
                 "decision": "escalate",
-                "reason": "high_value_transfer",
-                "effects": [{"type": "replace", "path": "$policy_target.memo", "value": "[redacted]"}]
+                "reason": "high_value_transfer"
+                // AGT D1 + §13.1: escalate carries no effects. The
+                // memo redaction this used to do can no longer ride the
+                // escalate decision; if the host needs to pre-sanitise
+                // the memo it must use a separate transform at an
+                // earlier intervention point.
             }));
         }
         Ok(json!({"decision": "allow"}))
@@ -507,11 +508,15 @@ fn payment_escalation_hitl_exercises_identity_effects_and_isolation() {
         .unwrap();
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert_eq!(executed_with.lock().unwrap().len(), 1);
+    // AGT D1 + §13.1: escalate carries no effects. The host that
+    // wants to redact the memo before execution must do so via a
+    // transform at an earlier intervention point; the action proceeds
+    // with the original payload after approval.
     assert_eq!(
         executed_with.lock().unwrap()[0]["memo"],
-        json!("[redacted]")
+        json!("payroll secret")
     );
-    assert_eq!(approved.value["charged"]["memo"], json!("[redacted]"));
+    assert_eq!(approved.value["charged"]["memo"], json!("payroll secret"));
 
     let rejected_executed = Arc::new(Mutex::new(false));
     let rejected_executed_for_closure = rejected_executed.clone();
@@ -618,7 +623,12 @@ fn concurrent_payment_escalations_do_not_cross_authorize() {
                 )
                 .unwrap();
             assert_eq!(result.value["charged"]["amount"], json!(amount));
-            assert_eq!(result.value["charged"]["memo"], json!("[redacted]"));
+            // AGT D1 + §13.1: escalate carries no effects; the action
+            // proceeds with the original memo after approval.
+            assert_eq!(
+                result.value["charged"]["memo"],
+                json!(format!("concurrent"))
+            );
         }));
     }
     for handle in handles {

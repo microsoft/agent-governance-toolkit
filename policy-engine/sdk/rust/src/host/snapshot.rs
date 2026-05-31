@@ -19,7 +19,10 @@ pub(super) fn enforce(
         return Ok(());
     }
     match intervention_point_result.verdict.decision {
-        Decision::Allow | Decision::Warn => Ok(()),
+        // AGT D1: transform permits the action; the runtime has already
+        // applied the transform to the policy target before reaching
+        // here. The host MUST use `transformed_policy_target` if present.
+        Decision::Allow | Decision::Warn | Decision::Transform => Ok(()),
         Decision::Deny => Err(blocked(intervention_point, intervention_point_result)),
         Decision::Escalate => {
             let Some(resolver) = resolver else {

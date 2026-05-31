@@ -186,8 +186,7 @@ fn streaming_guard_transforms_to_single_synthesized_chunk() {
             let input = invocation.policy_input().unwrap();
             if input["intervention_point"] == "post_model_call" {
                 Ok(json!({
-                    "decision": "allow",
-                    "effects": [{"type": "replace", "path": "$policy_target.choices[0].message.content", "value": "[redacted]"}]
+                    "decision": "transform", "transform": {"path": "$policy_target.choices[0].message.content", "value": "[redacted]"}
                 }))
             } else {
                 Ok(json!({"decision": "allow"}))

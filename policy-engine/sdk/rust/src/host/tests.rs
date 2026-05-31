@@ -229,12 +229,10 @@ fn run_allows_and_blocks_input_denial_before_execute() {
 fn run_uses_transformed_input_and_output_in_enforce_mode() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.text", "value": "sanitized"}]
+            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "sanitized"}
         }),
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.text", "value": "final"}]
+            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "final"}
         }),
     ]));
     let control = AgentControl::new(runtime(run_manifest(), policy));
@@ -269,8 +267,7 @@ fn run_uses_transformed_input_and_output_in_enforce_mode() {
 fn evaluate_only_does_not_block_or_apply_transforms() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.text", "value": "changed"}]
+            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "changed"}
         }),
         json!({"decision": "deny", "reason": "observed_only"}),
     ]));
@@ -323,12 +320,10 @@ fn try_run_preserves_execute_errors() {
 fn protected_tool_enforces_pre_and_post_with_stored_execute_repeatedly() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.query", "value": "safe"}]
+            "decision": "transform", "transform": {"path": "$policy_target.query", "value": "safe"}
         }),
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.answer", "value": "redacted"}]
+            "decision": "transform", "transform": {"path": "$policy_target.answer", "value": "redacted"}
         }),
     ]));
     let control = AgentControl::new(runtime(&tool_manifest("$snap.tool_call.args"), policy));
@@ -411,8 +406,7 @@ fn run_model_allows_and_emits_model_snapshots() {
 fn run_model_uses_pre_transform_for_execute_and_post_snapshot() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.prompt", "value": "safe"}]
+            "decision": "transform", "transform": {"path": "$policy_target.prompt", "value": "safe"}
         }),
         json!({"decision": "allow"}),
     ]));
@@ -446,8 +440,7 @@ fn run_model_uses_post_transform_for_returned_value() {
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({"decision": "allow"}),
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.text", "value": "redacted"}]
+            "decision": "transform", "transform": {"path": "$policy_target.text", "value": "redacted"}
         }),
     ]));
     let control = AgentControl::new(runtime(
@@ -593,12 +586,10 @@ fn rig_like_tool_wrapper_guards_tool_without_rig_dependency() {
 
     let policy = Arc::new(QueuePolicy::with_responses([
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.query", "value": "safe"}]
+            "decision": "transform", "transform": {"path": "$policy_target.query", "value": "safe"}
         }),
         json!({
-            "decision": "allow",
-            "effects": [{"type": "replace", "path": "$policy_target.answer", "value": "redacted"}]
+            "decision": "transform", "transform": {"path": "$policy_target.answer", "value": "redacted"}
         }),
     ]));
     let control = AgentControl::new(runtime(&tool_manifest("$snap.tool_call.args"), policy));
@@ -654,12 +645,13 @@ fn escalate_without_resolver_fails_closed() {
 }
 
 #[test]
-fn escalate_allow_applies_escalate_effects_after_approval() {
+fn escalate_after_approval_proceeds_with_original_input() {
+    // AGT D1 + spec §13.1: escalate carries no effects. The host
+    // approval path either allows the action (it proceeds with the
+    // original policy target) or denies it. There is no "approval
+    // applies a deferred transform" path.
     let policy = Arc::new(QueuePolicy::with_responses([
-        json!({
-            "decision": "escalate",
-            "effects": [{"type": "replace", "path": "$policy_target.text", "value": "leaked"}]
-        }),
+        json!({"decision": "escalate", "reason": "needs_approval"}),
         json!({"decision": "allow"}),
     ]));
     let control =
@@ -674,7 +666,9 @@ fn escalate_allow_applies_escalate_effects_after_approval() {
         })
         .unwrap();
 
-    assert_eq!(*executed_with.lock().unwrap(), json!({"text": "leaked"}));
+    // Per §13.1 escalate applies NO effects; the action executes with
+    // the original policy target value, not a transformed one.
+    assert_eq!(*executed_with.lock().unwrap(), json!({"text": "original"}));
     assert_eq!(result.value, json!({"answer": "ok"}));
 }
 

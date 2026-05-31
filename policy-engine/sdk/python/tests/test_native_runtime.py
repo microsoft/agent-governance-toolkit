@@ -51,17 +51,16 @@ class MockPolicy:
             "contains_account_number"
         ]
         if contains_account_number:
+            # AGT D1: effects[] is rejected; canonical mutation path is
+            # the transform decision with a single-target replacement.
             return {
-                "decision": "warn",
+                "decision": "transform",
                 "reason": "account_number_redacted",
                 "message": "Account number was redacted before continuing.",
-                "effects": [
-                    {
-                        "type": "replace",
-                        "path": "$policy_target.text",
-                        "value": "Please summarize account [REDACTED].",
-                    }
-                ],
+                "transform": {
+                    "path": "$policy_target.text",
+                    "value": "Please summarize account [REDACTED].",
+                },
             }
         return {"decision": "allow"}
 
@@ -82,7 +81,7 @@ class NativeRuntimeTests(unittest.TestCase):
 
         result = asyncio.run(run())
 
-        self.assertEqual(result.verdict.decision, Decision.WARN)
+        self.assertEqual(result.verdict.decision, Decision.TRANSFORM)
         self.assertEqual(
             result.transformed_policy_target,
             {"text": "Please summarize account [REDACTED]."},
@@ -132,7 +131,7 @@ class NativeRuntimeTests(unittest.TestCase):
             )
 
         result = asyncio.run(run())
-        self.assertEqual(result.verdict.decision, Decision.WARN)
+        self.assertEqual(result.verdict.decision, Decision.TRANSFORM)
 
 
 def _opa_available() -> bool:
