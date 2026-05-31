@@ -68,6 +68,7 @@ public enum Decision
     Deny,
     Warn,
     Escalate,
+    Transform,
 }
 
 public enum PerfTelemetry
@@ -85,6 +86,7 @@ public static class DecisionExtensions
         Decision.Deny => "deny",
         Decision.Warn => "warn",
         Decision.Escalate => "escalate",
+        Decision.Transform => "transform",
         _ => throw new ArgumentOutOfRangeException(nameof(decision), decision, "Unknown Agent Control Specification decision."),
     };
 
@@ -94,18 +96,61 @@ public static class DecisionExtensions
         "deny" => Decision.Deny,
         "warn" => Decision.Warn,
         "escalate" => Decision.Escalate,
+        "transform" => Decision.Transform,
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown Agent Control Specification decision."),
     };
 
+    /// <summary>
+    /// True for decisions whose execution side proceeds with the action. Per
+    /// AGT D1 only <c>Transform</c> mutates the policy target;
+    /// <c>Allow</c> and <c>Warn</c> proceed unchanged.
+    /// <c>Escalate</c> is excluded because §13.1 forbids it from carrying any
+    /// rewrite and the host must consult the approval path before continuing.
+    /// </summary>
     public static bool AppliesEffects(this Decision decision) =>
-        decision is Decision.Allow or Decision.Warn or Decision.Escalate;
+        decision is Decision.Allow or Decision.Warn or Decision.Transform;
+
+    /// <summary>
+    /// True only for <c>Transform</c>, the sole mutating decision per AGT D1.
+    /// Use this to decide whether to consume
+    /// <see cref="InterventionPointResult.TransformedPolicyTarget"/>.
+    /// </summary>
+    public static bool AppliesTransform(this Decision decision) =>
+        decision is Decision.Transform;
+
+    /// <summary>
+    /// True for decisions whose execution side proceeds with the action
+    /// (<c>Allow</c>, <c>Warn</c>, <c>Transform</c>). Mirrors
+    /// <c>Decision::permits</c> in the Rust core.
+    /// </summary>
+    public static bool Permits(this Decision decision) =>
+        decision is Decision.Allow or Decision.Warn or Decision.Transform;
 }
+
+/// <summary>
+/// AGT D1.1 single-target replacement payload. Present on a verdict only when
+/// <see cref="Verdict.Decision"/> is <see cref="Decision.Transform"/>. The
+/// runtime applies <see cref="Value"/> at <see cref="Path"/> rooted at
+/// <c>$policy_target</c> before the action proceeds.
+/// </summary>
+public sealed record Transform(string Path, object? Value);
+
+/// <summary>
+/// AGT D2 opaque evidence payload that high-assurance dispatchers MAY attach
+/// to a verdict. The runtime propagates the payload verbatim. The total
+/// serialized size is bounded by AGT-EVIDENCE-1.0 §2 (4 KiB) at the
+/// dispatcher boundary, not at this SDK shape.
+/// </summary>
+public sealed record Evidence(
+    string? Artefact = null,
+    IReadOnlyDictionary<string, string>? VerificationPointers = null);
 
 public sealed record Verdict(
     Decision Decision,
     string? Reason = null,
     string? Message = null,
-    IReadOnlyList<JsonElement>? Effects = null,
+    Transform? Transform = null,
+    Evidence? Evidence = null,
     IReadOnlyList<string>? ResultLabels = null);
 
 public sealed record InterventionPointRequest(
@@ -113,11 +158,21 @@ public sealed record InterventionPointRequest(
     JsonElement Snapshot,
     EnforcementMode Mode = EnforcementMode.Enforce);
 
+/// <summary>
+/// Result of a single intervention-point evaluation. Per AGT D1.4 the action
+/// identity is bisected: <see cref="InputIdentity"/> pins what the policy
+/// actually saw, <see cref="EnforcedIdentity"/> pins what the host will carry
+/// out (equal to <see cref="InputIdentity"/> for non-transform decisions).
+/// <see cref="ActionIdentity"/> is the pre-bisection alias that maps to
+/// <see cref="EnforcedIdentity"/>.
+/// </summary>
 public sealed record InterventionPointResult(
     Verdict Verdict,
     JsonElement? TransformedPolicyTarget = null,
     JsonElement? PolicyInput = null,
-    string? ActionIdentity = null);
+    string? ActionIdentity = null,
+    string? InputIdentity = null,
+    string? EnforcedIdentity = null);
 
 public sealed record RunResult<TValue>(
     TValue Value,

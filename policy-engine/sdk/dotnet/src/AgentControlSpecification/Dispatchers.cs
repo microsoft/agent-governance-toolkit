@@ -346,18 +346,25 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
     private static InterventionPointResult MapResult(JsonElement raw)
     {
         var verdict = MapVerdict(raw.GetProperty("verdict"));
+        // AGT D1.4: the FFI surfaces both `input_identity` and
+        // `enforced_identity` alongside the back-compat `action_identity`
+        // alias (which equals `enforced_identity`). We populate every slot
+        // we can so audit consumers see the bisected pair without losing
+        // the single-identity shape older callers depend on.
+        var enforcedIdentity = OptionalString(raw, "enforced_identity");
+        var inputIdentity = OptionalString(raw, "input_identity");
+        var actionIdentity = OptionalString(raw, "action_identity") ?? enforcedIdentity;
         return new InterventionPointResult(
             verdict,
             OptionalElement(raw, "transformed_policy_target"),
             OptionalElement(raw, "policy_input"),
-            OptionalString(raw, "action_identity"));
+            actionIdentity,
+            inputIdentity ?? actionIdentity,
+            enforcedIdentity ?? actionIdentity);
     }
 
     private static Verdict MapVerdict(JsonElement raw)
     {
-        var effects = raw.TryGetProperty("effects", out var effectsElement) && effectsElement.ValueKind == JsonValueKind.Array
-            ? effectsElement.EnumerateArray().Select(effect => effect.Clone()).ToArray()
-            : Array.Empty<JsonElement>();
         var resultLabels = raw.TryGetProperty("result_labels", out var labelsElement) && labelsElement.ValueKind == JsonValueKind.Array
             ? labelsElement.EnumerateArray().Select(label => label.GetString() ?? string.Empty).ToArray()
             : Array.Empty<string>();
@@ -365,8 +372,56 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
             DecisionExtensions.FromWireName(raw.GetProperty("decision").GetString() ?? string.Empty),
             OptionalString(raw, "reason"),
             OptionalString(raw, "message"),
-            effects,
+            MapTransform(raw),
+            MapEvidence(raw),
             resultLabels);
+    }
+
+    private static Transform? MapTransform(JsonElement raw)
+    {
+        if (!raw.TryGetProperty("transform", out var transformElement) || transformElement.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        var path = transformElement.GetProperty("path").GetString() ?? string.Empty;
+        object? value = null;
+        if (transformElement.TryGetProperty("value", out var valueElement) && valueElement.ValueKind != JsonValueKind.Undefined)
+        {
+            value = valueElement.Clone();
+        }
+
+        return new Transform(path, value);
+    }
+
+    private static Evidence? MapEvidence(JsonElement raw)
+    {
+        if (!raw.TryGetProperty("evidence", out var evidenceElement) || evidenceElement.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        string? artefact = null;
+        if (evidenceElement.TryGetProperty("artefact", out var artefactElement) && artefactElement.ValueKind == JsonValueKind.String)
+        {
+            artefact = artefactElement.GetString();
+        }
+
+        Dictionary<string, string>? pointers = null;
+        if (evidenceElement.TryGetProperty("verification_pointers", out var pointersElement)
+            && pointersElement.ValueKind == JsonValueKind.Object)
+        {
+            pointers = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var property in pointersElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    pointers[property.Name] = property.Value.GetString() ?? string.Empty;
+                }
+            }
+        }
+
+        return new Evidence(artefact, pointers);
     }
 
     private static JsonElement? OptionalElement(JsonElement raw, string propertyName)
