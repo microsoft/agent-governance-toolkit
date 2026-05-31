@@ -73,19 +73,34 @@ test("escalate with no resolver fails closed to a block", async () => {
   );
 });
 
-test("escalate resolved to allow applies escalate effects after approval", async () => {
+test("transform verdict routes through transformedPolicyTarget without an approval resolver", async () => {
+  // AGT D1.1: TRANSFORM is the canonical mutation path; ESCALATE
+  // MUST NOT mutate the policy target. Pre-AGT this case exercised
+  // escalate + transformedPolicyTarget routed through an approval
+  // resolver, but that combination is no longer producible by the
+  // runtime per AGT D1. Migrate to a TRANSFORM verdict and assert the
+  // SDK uses the engine transform without consulting any resolver.
+  let consulted = false;
   const control = controlWith(
     (point) =>
       point === InterventionPoint.Input
         ? {
-            verdict: { decision: Decision.Escalate },
+            verdict: {
+              decision: Decision.Transform,
+              reason: "redact_pii",
+              transform: { path: "$policy_target", value: "REDACTED" },
+            },
             transformedPolicyTarget: "REDACTED",
           }
         : {},
-    allowResolver,
+    (_point, result) => {
+      consulted = true;
+      return ApprovalResolution.allow(result.actionIdentity);
+    },
   );
   const result = await control.run("original", (input) => input);
   assert.equal(result.value, "REDACTED");
+  assert.equal(consulted, false);
 });
 
 

@@ -129,11 +129,19 @@ fn result_to_value(
 ) -> Result<Value> {
     let verdict = serde_json::to_value(result.verdict)
         .map_err(|err| Error::from_reason(format!("serialize verdict: {err}")))?;
+    // AGT D1.4: surface both `input_identity` and `enforced_identity`
+    // alongside the back-compat `action_identity` alias so the Node
+    // SDK can persist what the policy saw and what the host enforced.
+    // AGT D1 + D2: `verdict.transform` and `verdict.evidence` already
+    // serialize via serde on the Verdict struct above and ride through
+    // this response verbatim.
     Ok(json!({
         "verdict": verdict,
         "transformed_policy_target": result.transformed_policy_target,
         "policy_input": result.policy_input,
         "action_identity": result.action_identity,
+        "input_identity": result.input_identity,
+        "enforced_identity": result.enforced_identity,
     }))
 }
 

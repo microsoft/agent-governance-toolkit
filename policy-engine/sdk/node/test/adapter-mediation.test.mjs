@@ -25,8 +25,15 @@ class StubRuntimeClient {
   async evaluateInterventionPoint(request) {
     this.requests.push(request);
     const result = await this.handler(request);
+    // AGT D1: auto-pick Decision.Transform when the handler provided
+    // a transformedPolicyTarget so the canonical mutation gate fires.
+    const verdict =
+      result.verdict ??
+      (result.transformedPolicyTarget !== undefined
+        ? { decision: Decision.Transform }
+        : { decision: Decision.Allow });
     return {
-      verdict: result.verdict ?? { decision: Decision.Allow },
+      verdict,
       ...(result.transformedPolicyTarget === undefined ? {} : { transformedPolicyTarget: result.transformedPolicyTarget }),
     };
   }

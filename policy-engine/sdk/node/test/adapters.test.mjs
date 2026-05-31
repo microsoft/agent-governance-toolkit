@@ -28,7 +28,16 @@ class StubRuntimeClient {
   async evaluateInterventionPoint(request) {
     this.requests.push(request);
     const result = await this.handler(request);
-    const response = { verdict: result.verdict ?? { decision: Decision.Allow } };
+    // AGT D1: TRANSFORM is the only mutating decision. Helper auto-
+    // picks Decision.Transform when the handler supplied a
+    // transformedPolicyTarget so existing call sites exercise the
+    // canonical mutation path under the new gate.
+    const verdict =
+      result.verdict ??
+      (result.transformedPolicyTarget !== undefined
+        ? { decision: Decision.Transform }
+        : { decision: Decision.Allow });
+    const response = { verdict };
     if (result.transformedPolicyTarget !== undefined) response.transformedPolicyTarget = result.transformedPolicyTarget;
     if (result.policyInput !== undefined) response.policyInput = result.policyInput;
     return response;
@@ -56,7 +65,10 @@ test("model middleware evaluates pre/post and blocks enforcement decisions", asy
     return { text: "model" };
   });
   assert.deepEqual(result.value, { text: "checked" });
-  assert.equal(result.preModelCallResult.verdict.decision, Decision.Allow);
+  // AGT D1.1: the runtime auto-marks a result with a
+  // transformedPolicyTarget as Decision.Transform (the only mutating
+  // verdict under AGT). Pre-AGT this defaulted to Decision.Allow.
+  assert.equal(result.preModelCallResult.verdict.decision, Decision.Transform);
 
   const middleware = createModelMiddleware(control);
   assert.deepEqual(
@@ -218,7 +230,9 @@ test("OpenClaw hook plugin exposes explicit model and tool hooks", async () => {
 
   assert.deepEqual(await plugin.beforeModelCall({ prompt: "raw" }), {
     value: { prompt: "safe" },
-    result: { verdict: { decision: Decision.Allow }, transformedPolicyTarget: { prompt: "safe" } },
+    // AGT D1: the stub auto-marks transformed responses as
+    // Decision.Transform so the canonical mutation gate fires.
+    result: { verdict: { decision: Decision.Transform }, transformedPolicyTarget: { prompt: "safe" } },
   });
   const tool = plugin.wrapTool("lookup", (args) => ({ seen: args }));
   assert.deepEqual((await tool({ id: 1 }, { toolCallId: "openclaw-tool-2" })).value, { wrapped: true });

@@ -40,6 +40,7 @@ export const Decision = Object.freeze({
   Deny: "deny",
   Warn: "warn",
   Escalate: "escalate",
+  Transform: "transform",
 } as const);
 export type Decision = (typeof Decision)[keyof typeof Decision];
 
@@ -80,11 +81,41 @@ export type ApprovalResolver = (
   result: InterventionPointResult,
 ) => Promise<ApprovalResolution> | ApprovalResolution;
 
+/**
+ * AGT D1.1 single-target replacement payload that mirrors
+ * `core/src/verdict.rs::Transform`. The runtime applies `value` at
+ * `path` (rooted at `$policy_target`) before propagating the result.
+ */
+export interface Transform {
+  path: string;
+  value: JsonValue;
+}
+
+/**
+ * AGT D2 opaque evidence payload propagated verbatim from the
+ * dispatcher. `artefact` is a content address (typically
+ * `sha256:<hex>`) of an offline-verifiable proof; `verificationPointers`
+ * maps named pointer keys to URLs that an auditor MAY consult to
+ * re-verify the decision. The SDK does not validate or fetch either
+ * field; AGT-EVIDENCE-1.0 §3 restricts telemetry to the artefact and
+ * sorted pointer keys, while §4 keeps the full pointer map in the
+ * audit record.
+ */
+export interface Evidence {
+  artefact?: string;
+  verificationPointers?: Record<string, string>;
+}
+
 export interface Verdict {
   decision: Decision;
   reason?: string | null;
   message?: string | null;
-  effects?: Array<Record<string, JsonValue>>;
+  /** AGT D1.1 single-target replacement payload. Present only when
+   * `decision === 'transform'`; forbidden on every other decision. */
+  transform?: Transform;
+  /** AGT D2 opaque evidence payload. Propagated verbatim by the
+   * runtime; the SDK performs no semantic validation on it. */
+  evidence?: Evidence;
   result_labels?: string[];
 }
 
@@ -98,6 +129,18 @@ export interface InterventionPointResult {
   verdict: Verdict;
   transformedPolicyTarget?: JsonValue;
   policyInput?: JsonValue;
+  /** AGT D1.4 SHA-256 of the canonical policy input that was
+   * evaluated. Pins what the policy actually saw. */
+  inputIdentity?: string;
+  /** AGT D1.4 SHA-256 of the canonical policy input AFTER the
+   * transform path is applied to the policy target. Equal to
+   * `inputIdentity` for every non-transform decision. Pins what the
+   * host actually carried out. */
+  enforcedIdentity?: string;
+  /** Backwards-compatible alias for `enforcedIdentity` per AGT D1.4;
+   * pre-bisection callers MAY default to this single-identity slot.
+   * Mirrors the action_identity field on InterventionPointResult in
+   * core/src/runtime.rs. */
   actionIdentity?: string;
 }
 
@@ -530,11 +573,23 @@ function canonicalJson(value: JsonValue): string {
 }
 
 function mapResult(raw: Record<string, JsonValue>): InterventionPointResult {
+  // AGT D1.4: prefer the new bisected identity fields when the native
+  // core exposes them, falling back to action_identity for older
+  // binaries so a rollout stays tolerant of stale bindings.
+  const legacyIdentity = raw.action_identity === null ? undefined : (raw.action_identity as string | undefined);
+  const rawInputIdentity = raw.input_identity === null ? undefined : (raw.input_identity as string | undefined);
+  const rawEnforcedIdentity = raw.enforced_identity === null ? undefined : (raw.enforced_identity as string | undefined);
+  const inputIdentity = rawInputIdentity ?? legacyIdentity;
+  const enforcedIdentity = rawEnforcedIdentity ?? legacyIdentity;
   return {
     verdict: raw.verdict as unknown as Verdict,
     transformedPolicyTarget: raw.transformed_policy_target === null ? undefined : raw.transformed_policy_target,
     policyInput: raw.policy_input === null ? undefined : raw.policy_input,
-    actionIdentity: raw.action_identity === null ? undefined : raw.action_identity as string | undefined,
+    inputIdentity,
+    enforcedIdentity,
+    // actionIdentity remains a back-compat alias for enforcedIdentity
+    // so older callers reading the single-identity slot keep working.
+    actionIdentity: enforcedIdentity,
   };
 }
 

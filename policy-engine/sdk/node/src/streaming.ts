@@ -9,7 +9,7 @@ import {
   ToolRunResult,
   runModel,
 } from "./index";
-import { AdapterOptions, RunnableControl, appliesEffects } from "./adapter-helpers";
+import { AdapterOptions, RunnableControl, appliesTransform } from "./adapter-helpers";
 
 export const DEFAULT_MAX_STREAM_BYTES = 8 * 1024 * 1024;
 export const DEFAULT_MAX_STREAM_EVENTS = 10_000;
@@ -102,7 +102,7 @@ export async function runModelStream(
       throw new StreamingUnsupportedError("Streaming response contained no data chunks.");
     }
     const transformed = modelRun.postModelCallResult.transformedPolicyTarget !== undefined &&
-      appliesEffects(modelRun.postModelCallResult.verdict.decision);
+      appliesTransform(modelRun.postModelCallResult.verdict.decision);
     const bytes = transformed
       ? synthesizeSseStream(modelRun.value, assembledResponse)
       : originalBytes;

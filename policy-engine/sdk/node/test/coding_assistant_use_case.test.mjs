@@ -93,8 +93,13 @@ function decision(decisionValue, extra = {}) {
   return { decision: decisionValue, ...extra };
 }
 
-function rootReplace(value) {
-  return [{ type: "replace", path: "$policy_target", value }];
+// AGT D1.1: TRANSFORM with a single-target transform payload is the
+// canonical mutation path. The pre-AGT `effects: [{ type: 'replace',
+// path: '$policy_target', value }]` shape is rejected by the strict
+// runtime per 1d8fcb64, so this helper now produces the transform
+// payload directly.
+function rootTransform(value) {
+  return { path: "$policy_target", value };
 }
 
 function makeCodingControl({ approvalResolver, annotatorDelay = async () => {}, policyOverride } = {}) {
@@ -126,9 +131,9 @@ function makeCodingControl({ approvalResolver, annotatorDelay = async () => {}, 
           const normalizedPrompt = invocation.input.annotations.prompt_normalizer.normalized_prompt;
           if (String(target.prompt ?? "").includes("SECRET_PROMPT")) {
             assert.equal(normalizedPrompt.includes("SECRET_PROMPT"), false);
-            return decision(Decision.Warn, {
+            return decision(Decision.Transform, {
               reason: "prompt_redacted",
-              effects: rootReplace({ ...target, prompt: normalizedPrompt }),
+              transform: rootTransform({ ...target, prompt: normalizedPrompt }),
             });
           }
           return decision(Decision.Allow);
@@ -139,9 +144,9 @@ function makeCodingControl({ approvalResolver, annotatorDelay = async () => {}, 
             return decision(Decision.Escalate, { reason: "sensitive_model_action" });
           }
           if (content.includes("ghp_secret123")) {
-            return decision(Decision.Warn, {
+            return decision(Decision.Transform, {
               reason: "secret_redacted",
-              effects: rootReplace(redactedResponse(target, content.replace(/ghp_secret123/g, "[REDACTED]"))),
+              transform: rootTransform(redactedResponse(target, content.replace(/ghp_secret123/g, "[REDACTED]"))),
             });
           }
           return decision(Decision.Allow);
@@ -155,18 +160,18 @@ function makeCodingControl({ approvalResolver, annotatorDelay = async () => {}, 
             return decision(Decision.Escalate, { reason: "sensitive_file_read" });
           }
           if (target.env?.TOKEN === "ghp_secret123") {
-            return decision(Decision.Warn, {
+            return decision(Decision.Transform, {
               reason: "tool_secret_redacted",
-              effects: rootReplace({ ...target, env: { ...target.env, TOKEN: "[REDACTED]" } }),
+              transform: rootTransform({ ...target, env: { ...target.env, TOKEN: "[REDACTED]" } }),
             });
           }
           return decision(Decision.Allow);
         }
         if (point === InterventionPoint.PostToolCall) {
           if (String(target.stdout ?? "").includes("internal")) {
-            return decision(Decision.Warn, {
+            return decision(Decision.Transform, {
               reason: "tool_output_redacted",
-              effects: rootReplace({ ...target, stdout: String(target.stdout).replace(/internal/g, "[redacted]") }),
+              transform: rootTransform({ ...target, stdout: String(target.stdout).replace(/internal/g, "[redacted]") }),
             });
           }
           return decision(Decision.Allow);

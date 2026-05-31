@@ -57,17 +57,17 @@ function policyForAccountNumber(invocation) {
   const containsAccountNumber =
     invocation.input.annotations.prompt_classifier.contains_account_number;
   if (!containsAccountNumber) return { decision: Decision.Allow };
+  // AGT D1: effects[] is rejected by the runtime. The canonical
+  // mutation path is decision: 'transform' with a single-target
+  // transform payload, mirroring core/src/verdict.rs::Transform.
   return {
-    decision: Decision.Warn,
+    decision: Decision.Transform,
     reason: "account_number_redacted",
     message: "Account number was redacted before continuing.",
-    effects: [
-      {
-        type: "replace",
-        path: "$policy_target.text",
-        value: "Please summarize account [REDACTED].",
-      },
-    ],
+    transform: {
+      path: "$policy_target.text",
+      value: "Please summarize account [REDACTED].",
+    },
   };
 }
 
@@ -112,12 +112,24 @@ function assertRuntimeErrorVerdict(result) {
   assert.match(result.verdict.reason, /^runtime_error/);
 }
 
-test("native runtime supports async JS dispatchers and applies warn effects", async () => {
+test("native runtime supports async JS dispatchers and applies transform decision", async () => {
+  // AGT D1.1: TRANSFORM is the canonical mutation path. Previously this
+  // test exercised warn + effects[] which is now rejected as
+  // runtime_error:policy_output_invalid by the strict runtime per
+  // 1d8fcb64. The dispatcher now emits a transform verdict so the
+  // runtime produces transformedPolicyTarget by applying transform.path.
   const agentControl = makeAccountControl();
   const result = await evaluateText(agentControl, "Please summarize account 1234.");
-  assert.equal(result.verdict.decision, Decision.Warn);
+  assert.equal(result.verdict.decision, Decision.Transform);
   assert.equal(result.verdict.reason, "account_number_redacted");
   assert.deepEqual(result.transformedPolicyTarget, { text: "Please summarize account [REDACTED]." });
+  // AGT D1.4: bisected identity. A transform mutates the policy
+  // target so input_identity MUST differ from enforced_identity, and
+  // the legacy actionIdentity slot MUST alias enforced_identity.
+  assert.ok(typeof result.inputIdentity === "string" && result.inputIdentity.startsWith("sha256:"));
+  assert.ok(typeof result.enforcedIdentity === "string" && result.enforcedIdentity.startsWith("sha256:"));
+  assert.notEqual(result.inputIdentity, result.enforcedIdentity);
+  assert.equal(result.actionIdentity, result.enforcedIdentity);
 });
 
 test("native runtime handles concurrent async dispatcher round trips", async () => {
@@ -134,7 +146,7 @@ test("native runtime handles concurrent async dispatcher round trips", async () 
   );
 
   for (const [index, result] of results.entries()) {
-    assert.equal(result.verdict.decision, index % 2 === 0 ? Decision.Warn : Decision.Allow);
+    assert.equal(result.verdict.decision, index % 2 === 0 ? Decision.Transform : Decision.Allow);
   }
 });
 
@@ -143,7 +155,7 @@ test("native runtime supports sequential re-entry after awaited evaluate", async
   const first = await evaluateText(agentControl, "Please summarize account 1234.");
   const second = await evaluateText(agentControl, "No account number here.");
 
-  assert.equal(first.verdict.decision, Decision.Warn);
+  assert.equal(first.verdict.decision, Decision.Transform);
   assert.equal(second.verdict.decision, Decision.Allow);
 });
 

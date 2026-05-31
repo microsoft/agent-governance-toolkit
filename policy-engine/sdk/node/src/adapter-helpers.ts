@@ -9,7 +9,12 @@ import type {
 
 const ENFORCE_MODE = "enforce";
 const EVALUATE_ONLY_MODE = "evaluate_only";
-const EFFECT_APPLYING_DECISIONS = new Set(["allow", "warn", "escalate"]);
+// AGT D1: the transform decision is the only verdict that mutates the
+// policy target. The pre-AGT set (allow|warn|escalate) was wrong because
+// escalate must never mutate, and allow/warn cannot carry a transform
+// either. Replace EFFECT_APPLYING_DECISIONS with a TRANSFORM_DECISIONS
+// set so callers gate strictly on the new mutation path.
+const TRANSFORM_DECISIONS = new Set<string>(["transform"]);
 
 export interface AdapterOptions {
   snapshot?: Record<string, JsonValue>;
@@ -63,8 +68,25 @@ export class AgentControlSuspendedError extends AgentControlInterruptionError {
   }
 }
 
+/**
+ * True only for `Decision.Transform`, the sole mutating verdict per
+ * AGT D1.1. `Decision.appliesEffects` is retained as a deprecated
+ * alias and now delegates to this predicate; consumers SHOULD migrate
+ * to `appliesTransform`.
+ */
+export function appliesTransform(decision: Decision): boolean {
+  return TRANSFORM_DECISIONS.has(decision);
+}
+
+/**
+ * @deprecated Use {@link appliesTransform}. AGT D1 removed effects[],
+ * so only `Decision.Transform` mutates the policy target. The pre-AGT
+ * surface returned true for allow, warn, and escalate; this alias now
+ * returns the same answer as `appliesTransform` so callers that
+ * already relied on it still gate correctly under AGT.
+ */
 export function appliesEffects(decision: Decision): boolean {
-  return EFFECT_APPLYING_DECISIONS.has(decision);
+  return appliesTransform(decision);
 }
 
 export function transformedOr<T extends JsonValue>(
@@ -72,8 +94,11 @@ export function transformedOr<T extends JsonValue>(
   fallback: T,
   mode: EnforcementMode = ENFORCE_MODE as EnforcementMode,
 ): JsonValue {
+  // AGT D1: the SDK MUST return the engine's transformedPolicyTarget
+  // only when the verdict was Decision.Transform in enforce mode. Every
+  // other verdict (allow, warn, deny, escalate) keeps the fallback.
   if (mode !== ENFORCE_MODE) return fallback;
-  if (!appliesEffects(result.verdict.decision)) return fallback;
+  if (!appliesTransform(result.verdict.decision)) return fallback;
   return result.transformedPolicyTarget === undefined ? fallback : result.transformedPolicyTarget;
 }
 

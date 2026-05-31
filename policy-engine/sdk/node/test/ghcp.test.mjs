@@ -19,7 +19,14 @@ class StubRuntimeClient {
       snapshot: request.snapshot,
     };
     this.policyInputs.push(policyInput);
-    const response = { verdict: result.verdict ?? { decision: Decision.Allow }, policyInput };
+    // AGT D1: auto-pick Decision.Transform when a transformedPolicyTarget
+    // is present so the new mutation gate applies it.
+    const verdict =
+      result.verdict ??
+      (result.transformedPolicyTarget !== undefined
+        ? { decision: Decision.Transform }
+        : { decision: Decision.Allow });
+    const response = { verdict, policyInput };
     if (result.transformedPolicyTarget !== undefined) response.transformedPolicyTarget = result.transformedPolicyTarget;
     if (result.actionIdentity !== undefined) response.actionIdentity = result.actionIdentity;
     return response;

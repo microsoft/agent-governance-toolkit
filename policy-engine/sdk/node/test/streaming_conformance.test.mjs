@@ -39,8 +39,10 @@ function allowControl() {
 }
 
 function transformedControl(transformedPolicyTarget) {
+  // AGT D1: TRANSFORM is the only mutating decision; pre-AGT this used
+  // Decision.Warn which is now a non-mutating verdict under AGT.
   return new AgentControl(new StubRuntimeClient(({ interventionPoint }) => ({
-    verdict: { decision: interventionPoint === "post_model_call" ? Decision.Warn : Decision.Allow },
+    verdict: { decision: interventionPoint === "post_model_call" ? Decision.Transform : Decision.Allow },
     ...(interventionPoint === "post_model_call" ? { transformedPolicyTarget } : {}),
   })));
 }
