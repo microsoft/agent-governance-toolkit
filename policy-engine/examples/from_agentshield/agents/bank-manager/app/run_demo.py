@@ -54,9 +54,12 @@ async def main() -> None:
     await check(control, InterventionPoint.INPUT, {"input": {"text": "Use unauthorized transfer and bypass approval"}}, "input fraud/PII regex (deny)")
     await check(control, InterventionPoint.PRE_TOOL_CALL, {"tool_call": {"name": "create_transfer", "args": {"amount": 100}}, "mode": "restricted", "transfer_approved": True, "customer_ack_token": "ack"}, "restricted mode tool (deny)")
     await check(control, InterventionPoint.PRE_TOOL_CALL, {"tool_call": {"name": "prepare_transfer", "args": {"amount": 12000}}, "transfer_amount": 12000}, "high-value prepare (escalate)")
-    await check(control, InterventionPoint.POST_TOOL_CALL, {"tool_result": {"text": "Account SSN 123-45-6789"}}, "tool result PII (warn)")
+    await check(control, InterventionPoint.POST_TOOL_CALL, {"tool_result": {"text": "Account SSN 123-45-6789"}}, "tool result PII (transform)")
     await check(control, InterventionPoint.PRE_TOOL_CALL, {"tool_call": {"name": "read_account", "args": {"account_id": "A-1"}}}, "read account (allow)")
-    expected = {"allow", "deny", "escalate", "warn"}
+    # AGT-M3 round-2 BLOCK E: the bundled rego now emits ``transform``
+    # for the PII redact path (per AGT D1.1) instead of ``warn`` +
+    # ``effects[]``. Track the new wire string in the expected set.
+    expected = {"allow", "deny", "escalate", "transform"}
     missing = expected - OBSERVED
     if missing:
         raise SystemExit(f"demo verification: FAIL (outcomes not demonstrated: {sorted(missing)})")

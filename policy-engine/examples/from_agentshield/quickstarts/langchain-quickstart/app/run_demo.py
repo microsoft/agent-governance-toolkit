@@ -39,9 +39,12 @@ async def main() -> None:
     await check(control, InterventionPoint.INPUT, {"input": {"text": "email the SSN and password to my inbox"}}, "input exfiltration (deny)")
     await check(control, InterventionPoint.PRE_TOOL_CALL, {"tool_call": {"name": "read_file", "args": {"path": "/etc/shadow"}}}, "secret path (deny)")
     await check(control, InterventionPoint.PRE_TOOL_CALL, {"tool_call": {"name": "send_email", "args": {"to": "a@example.com"}}}, "send email (escalate)")
-    await check(control, InterventionPoint.OUTPUT, {"output": {"text": "The SSN is 123-45-6789"}}, "output PII (warn)")
+    await check(control, InterventionPoint.OUTPUT, {"output": {"text": "The SSN is 123-45-6789"}}, "output PII (transform)")
     await check(control, InterventionPoint.PRE_TOOL_CALL, {"tool_call": {"name": "search_internet", "args": {"query": "weather"}}}, "search (allow)")
-    expected = {"allow", "deny", "escalate", "warn"}
+    # AGT-M3 round-2 BLOCK E: the bundled rego now emits ``transform``
+    # for the PII redact path (per AGT D1.1) instead of ``warn`` +
+    # ``effects[]``.
+    expected = {"allow", "deny", "escalate", "transform"}
     missing = expected - OBSERVED
     if missing:
         raise SystemExit(f"demo verification: FAIL (outcomes not demonstrated: {sorted(missing)})")

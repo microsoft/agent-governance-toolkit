@@ -213,7 +213,16 @@ async def main() -> None:
     await run_scenario(agent, "escalated refund flow", "refund high value order")
     await run_scenario(agent, "redaction transform flow", "lookup pii for support note")
 
-    expected = {"allow", "deny", "escalate", "redaction"}
+    # AGT-M3 round-2 BLOCK E: after the AGT D1.1 verdict rework the
+    # bundled rego no longer emits ``warn`` + ``effects[]`` for the
+    # post_tool_call PII path. The post_tool_call now denies on PII
+    # (per the rego comment "multi-pattern redaction is not yet
+    # expressible as a single AGT D1.1 transform"), which short-
+    # circuits the warn emitted by the upstream pre_tool_call for the
+    # external email scenario. The observable outcomes across the
+    # current scenario set are therefore ``allow`` / ``deny`` /
+    # ``escalate`` only.
+    expected = {"allow", "deny", "escalate"}
     missing = expected - OBSERVED
     if missing:
         raise SystemExit(f"demo verification: FAIL (outcomes not demonstrated: {sorted(missing)})")
