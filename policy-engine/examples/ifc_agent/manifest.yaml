@@ -6,7 +6,11 @@ policies:
     type: rego
     bundle: ./policy
     data_paths:
-      - ../../policy/lib
+      # Point at the specific upstream IFC library file rather than
+      # the whole policy/lib/ directory, because the AGT stock library
+      # now ships sibling subdirectories (cedar/) and *_test.rego files
+      # that OPA's data loader cannot reconcile with the Rego bundle.
+      - ../../policy/lib/ifc.rego
     query: data.agent_control_specification.ifc_agent.verdict
 intervention_points:
   pre_tool_call:
