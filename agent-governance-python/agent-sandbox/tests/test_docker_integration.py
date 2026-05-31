@@ -42,8 +42,18 @@ pytestmark = pytest.mark.skipif(
     reason="Docker daemon is not running or docker SDK is not installed",
 )
 
-# Use a slim Python image for fast pulls
-_TEST_IMAGE = "python:3.11-slim"
+# Use the minimal-PATH sandbox image
+_TEST_IMAGE = "agent-sandbox-hardened:test"
+
+@pytest.fixture(scope="session", autouse=True)
+def build_sandbox_image():
+    import os
+    if not _docker_available:
+        return
+    docker_dir = os.path.join(os.path.dirname(__file__), "..", "docker")
+    dockerfile_path = os.path.join(docker_dir, "Dockerfile.sandbox")
+    if os.path.exists(dockerfile_path):
+        _client.images.build(path=docker_dir, dockerfile="Dockerfile.sandbox", tag=_TEST_IMAGE, rm=True)
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +366,24 @@ class TestContainerHardening:
         assert eh.result.success
         # All caps dropped → effective capabilities = 0
         assert "caps 0" in eh.result.stdout
+
+    def test_sandbox_path_is_minimal(self, provider):
+        """Verify the PATH is restricted and dangerous tools are unavailable."""
+        p, _ = provider
+        h = _create(provider)
+        
+        # Verify curl is denied
+        r_curl = p.run(h.agent_id, ["curl", "--version"], session_id=h.session_id)
+        assert not r_curl.success
+        
+        # Verify wget is denied
+        r_wget = p.run(h.agent_id, ["wget", "--version"], session_id=h.session_id)
+        assert not r_wget.success
+
+        # Verify python is available
+        r_py = p.run(h.agent_id, ["python", "-c", "print(1)"], session_id=h.session_id)
+        assert r_py.success
+        assert "1" in r_py.stdout
 
 
 # =========================================================================

@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+# Create a minimal PATH directory
+# Intentionally present binaries:
+# - python / python3: Required for executing python code in the sandbox
+# - bash / sh: Required for underlying execution engine wrappers
+# - env: Required for some python standard library scripts
+RUN mkdir -p /sandbox/bin && \
+    ln -s /usr/local/bin/python3 /sandbox/bin/python && \
+    ln -s /usr/local/bin/python3 /sandbox/bin/python3 && \
+    ln -s /bin/bash /sandbox/bin/bash && \
+    ln -s /bin/sh /sandbox/bin/sh && \
+    ln -s /usr/bin/env /sandbox/bin/env
+
+# Strip unused network tools and builtins to prevent alternate binary execution
+RUN rm -f /usr/bin/curl \
+          /usr/bin/wget \
+          /bin/nc \
+          /usr/bin/nc \
+          /bin/ping \
+          /usr/bin/ncat \
+          /usr/bin/netcat
+
+# Pin PATH to the minimal set
+ENV PATH="/sandbox/bin"
+
+WORKDIR /workspace
