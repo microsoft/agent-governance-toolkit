@@ -1,0 +1,24 @@
+{
+  "id": "allow-overrides-staging-read",
+  "description": "When one rule denies and another allows read access on staging, allow-overrides strategy must select the allow rule.",
+  "input": {
+    "action": "sql_execute",
+    "resource": "staging-db",
+    "agent_id": "agent-analytics-02",
+    "tool_name": "sql_executor",
+    "parameters": {
+      "query": "SELECT version()"
+    }
+  },
+  "expected_verdict": "allow",
+  "expected_rule": "allow-staging-reads",
+  "resolution_metadata": {
+    "rule_id": "allow-staging-reads",
+    "strategy": "allow-overrides"
+  },
+  "tags": [
+    "conflict-resolution",
+    "allow-overrides",
+    "staging"
+  ]
+}
