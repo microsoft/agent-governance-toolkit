@@ -136,14 +136,21 @@ def test_bridge_translates_blocked_patterns_via_patterns_library(tmp_path: Path)
 def test_bridge_translates_require_human_approval_to_escalate(tmp_path: Path) -> None:
     manifest = _bridge(tmp_path, require_human_approval=True)
 
-    assert manifest["approval"] == {
-        "required": True,
-        "approvers": ["human"],
-        "reason": "human_approval_required",
-    }
+    # AGT-M3 bridge gap fix: emit a v5-shaped approval section the
+    # engine actually accepts. The engine's ApprovalSection uses
+    # ``deny_unknown_fields``; emitting v4's ``{required, approvers,
+    # reason}`` shape made every approval manifest fail to load.
+    assert manifest["approval"] == {}
     rego = Path(manifest["policies"]["agt_governance_policy"]["bundle"]) / "agt_governance_policy.rego"
     body = rego.read_text(encoding="utf-8")
     assert "approval.escalate_if_approver_required" in body
+    # AGT-M3 bridge gap fix: require_human_approval MUST bind
+    # pre_tool_call so the escalate rule actually fires somewhere.
+    assert "pre_tool_call" in manifest["intervention_points"]
+    # When there is no explicit allowlist the bridge MUST NOT set
+    # ``tool_name_from`` on the binding; otherwise the engine's
+    # fail-closed tool-known check fires before the approval rule.
+    assert "tool_name_from" not in manifest["intervention_points"]["pre_tool_call"]
 
 
 def test_bridge_translates_confidence_threshold(tmp_path: Path) -> None:
@@ -249,3 +256,100 @@ def test_evaluation_result_to_v4_check_result_warn_uses_audit_action() -> None:
     # that wire string so existing audit pipelines keep bucketing.
     assert v4.action == "audit"
     assert v4.audit_entry["verdict"] == "warn"
+
+
+# ── M3 bridge gap regression tests ───────────────────────────────────
+
+
+def test_bridge_empty_allowed_tools_with_budget_drops_tool_name_from(tmp_path: Path) -> None:
+    """AGT-M3 bridge gap fix: with no allowlist + a budget, the bridge
+    MUST bind pre_tool_call (so the budget rule has a binding) but MUST
+    omit ``tool_name_from`` so the engine does not fail-close on every
+    call with ``runtime_error:tool_unknown`` before the budget rule runs.
+    """
+    manifest = _bridge(tmp_path, allowed_tools=[], max_tool_calls=2)
+
+    assert "tools" not in manifest
+    pre = manifest["intervention_points"]["pre_tool_call"]
+    assert "tool_name_from" not in pre
+    assert pre["policy_target"] == "$.tool_call.args"
+
+
+def test_bridge_allowed_tools_keeps_tool_name_from(tmp_path: Path) -> None:
+    """When the v4 policy DID declare an allowlist the bridge must keep
+    ``tool_name_from`` so the engine's fail-closed check fires for
+    unknown tools (preserving v4 ``NOT_ALLOWED_TOOL`` semantics)."""
+    manifest = _bridge(tmp_path, allowed_tools=["lookup"], max_tool_calls=2)
+
+    assert manifest["tools"] == {"lookup": {"clearance": "public"}}
+    pre = manifest["intervention_points"]["pre_tool_call"]
+    assert pre["tool_name_from"] == "$.tool_call.name"
+
+
+def test_bridge_require_human_approval_alone_binds_pre_tool_call(tmp_path: Path) -> None:
+    """AGT-M3 bridge gap fix: a v4 policy whose only constraint is
+    ``require_human_approval=True`` MUST still bind an intervention
+    point so the approval rule fires. Before the fix ``bind_tools``
+    was false in this case and the fallback binding kept
+    ``tool_name_from`` set, both of which were wrong."""
+    manifest = _bridge(tmp_path, require_human_approval=True)
+
+    assert "pre_tool_call" in manifest["intervention_points"]
+    pre = manifest["intervention_points"]["pre_tool_call"]
+    assert "tool_name_from" not in pre
+
+
+def test_bridge_approval_section_validates_against_engine_schema(tmp_path: Path) -> None:
+    """AGT-M3 bridge gap fix: the engine's ``ApprovalSection`` uses
+    ``deny_unknown_fields`` and accepts ``default_resolver``,
+    ``timeout_seconds``, ``on_timeout``, ``fatigue_threshold``,
+    ``fatigue_window_seconds``, and a ``resolvers`` map only. Emitting
+    v4's ``{required, approvers, reason}`` made every approval manifest
+    fail to load. Verify the bridge emits a v5-valid section.
+    """
+    manifest = _bridge(tmp_path, require_human_approval=True)
+    accepted_keys = {
+        "default_resolver",
+        "timeout_seconds",
+        "on_timeout",
+        "fatigue_threshold",
+        "fatigue_window_seconds",
+        "resolvers",
+    }
+    extra_keys = set(manifest["approval"].keys()) - accepted_keys
+    assert not extra_keys, f"approval section carries unknown fields: {extra_keys}"
+
+
+def test_bridge_end_to_end_approval_path_loads_manifest(tmp_path: Path) -> None:
+    """End-to-end regression for the M3 approval gap: a manifest where
+    the only v4 constraint is ``require_human_approval=True`` must
+    actually LOAD through ``AgtRuntime.from_path`` (not crash on
+    manifest parse with ``deny_unknown_fields``) and must surface an
+    ``escalate`` verdict on pre_tool_call.
+    """
+    import shutil
+
+    if shutil.which("opa") is None:
+        pytest.skip("opa binary required for runtime end-to-end test")
+
+    pytest.importorskip("agent_control_specification")
+
+    from agt.policies.runtime import AgtRuntime
+
+    manifest = _bridge(tmp_path, require_human_approval=True)
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+
+    runtime = AgtRuntime(manifest_path)
+
+    snap = SnapshotBuilder(agent_id="bot").pre_tool_call(
+        tool_name="any_tool", args={"x": 1}
+    )
+    # evaluate_only so we see the raw escalate (enforce would route
+    # through a missing approval resolver and surface as deny).
+    result = runtime.evaluate_intervention_point(
+        "pre_tool_call", snap, mode="evaluate_only"
+    )
+    assert result.verdict == "escalate", (
+        f"expected escalate verdict, got {result.verdict!r} (reason={result.reason!r})"
+    )

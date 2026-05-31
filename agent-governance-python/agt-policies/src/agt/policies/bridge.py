@@ -213,6 +213,7 @@ def _build_intervention_points(
     bind_tools: bool,
     bind_output: bool,
     bind_post_model_call: bool,
+    bind_tools_with_catalog: bool,
 ) -> dict[str, Any]:
     """Bind the bridge policy at the intervention points that match
     the v4 GovernancePolicy fields.
@@ -221,15 +222,25 @@ def _build_intervention_points(
     / budgets / approval. input and output cover blocked_patterns on
     text bodies. post_model_call covers confidence_threshold (the host
     surfaces a confidence score via the snapshot's annotations layer).
+
+    ``bind_tools_with_catalog`` flips ``tool_name_from`` on the
+    pre_tool_call binding so the engine's fail-closed tool-known check
+    fires (AGT-M3 bridge gap fix). When false the bridge omits
+    ``tool_name_from`` entirely so the engine does NOT project the tool
+    name, which means budgets / approval / patterns can run end-to-end
+    without a tool catalog (matching v4's ``allowed_tools=[]`` semantic
+    of "no allowlist enforced; let other rules decide").
     """
     bindings: dict[str, Any] = {}
     if bind_tools:
-        bindings["pre_tool_call"] = {
+        pre_tool_call: dict[str, Any] = {
             "policy_target": "$.tool_call.args",
             "policy_target_kind": "tool_args",
-            "tool_name_from": "$.tool_call.name",
             "policy": {"id": policy_id},
         }
+        if bind_tools_with_catalog:
+            pre_tool_call["tool_name_from"] = "$.tool_call.name"
+        bindings["pre_tool_call"] = pre_tool_call
     if bind_input:
         bindings["input"] = {
             "policy_target": "$.input.body",
@@ -309,7 +320,23 @@ def governance_to_acs_manifest(
     rego_path = bundle_dir / f"{policy_id}.rego"
     rego_path.write_text(rego_source, encoding="utf-8")
 
-    bind_tools = bool(policy.allowed_tools) or policy.max_tool_calls > 0
+    # bind_tools must also cover the case where the policy has a budget
+    # or human-approval requirement but no explicit tool allowlist; without
+    # this the pre_tool_call binding is never created and the host's tool
+    # calls bypass enforcement (AGT-M3 bridge gap fix).
+    bind_tools = (
+        bool(policy.allowed_tools)
+        or policy.max_tool_calls > 0
+        or policy.require_human_approval
+    )
+    # Only enable the engine's fail-closed tool-known check when the v4
+    # policy declared an explicit allowlist. With v4 semantics
+    # ``allowed_tools=[]`` means "no allowlist", so leaving the catalog
+    # off and dropping ``tool_name_from`` from the binding stops the
+    # engine from emitting ``runtime_error:tool_unknown`` for every
+    # call (which would mask the budget / approval / patterns rules)
+    # (AGT-M3 bridge gap fix).
+    bind_tools_with_catalog = bool(policy.allowed_tools)
     bind_input = bool(policy.blocked_patterns)
     bind_output = bool(policy.blocked_patterns)
     bind_post_model_call = (
@@ -322,16 +349,17 @@ def governance_to_acs_manifest(
         bind_tools=bind_tools,
         bind_output=bind_output,
         bind_post_model_call=bind_post_model_call,
+        bind_tools_with_catalog=bind_tools_with_catalog,
     )
 
     # At least one binding is required by AGT-MANIFEST §3; fall back to
-    # binding pre_tool_call so even a no-constraint policy produces a
+    # binding pre_tool_call (without a tool catalog so the no-allowlist
+    # rule path stays open) so even a no-constraint policy produces a
     # valid manifest.
     if not intervention_points:
         intervention_points["pre_tool_call"] = {
             "policy_target": "$.tool_call.args",
             "policy_target_kind": "tool_args",
-            "tool_name_from": "$.tool_call.name",
             "policy": {"id": policy_id},
         }
 
@@ -358,11 +386,15 @@ def governance_to_acs_manifest(
         manifest["tools"] = tools_section
 
     if policy.require_human_approval:
-        manifest["approval"] = {
-            "required": True,
-            "approvers": ["human"],
-            "reason": _REASON_APPROVAL,
-        }
+        # AGT-M3 bridge gap fix: emit a v5-shaped approval section the
+        # engine actually accepts (ApprovalSection uses deny_unknown_fields).
+        # The v4 ``require_human_approval=True`` semantic maps to
+        # "fire escalate on tool calls and route through the host's
+        # approval_resolver". The host wires the resolver on the
+        # AgtRuntime constructor (per AGT-DELTA D5); the manifest just
+        # needs an empty section so the Rego's escalate verdict reaches
+        # the host approval path instead of failing manifest validation.
+        manifest["approval"] = {}
 
     return manifest
 
