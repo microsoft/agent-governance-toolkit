@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-governance-toolkit.dev/schemas/fixture_schema.json",
+  "title": "Policy Replay Fixture",
+  "description": "Schema for AGT policy replay test fixtures.",
+  "type": "object",
+  "required": ["id", "input", "expected_verdict"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the fixture.",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this fixture tests."
+    },
+    "input": {
+      "type": "object",
+      "description": "Execution context passed to the policy evaluator.",
+      "properties": {
+        "action": {"type": "string"},
+        "resource": {"type": "string"},
+        "agent_id": {"type": "string"},
+        "session_id": {"type": "string"},
+        "tool_name": {"type": "string"},
+        "parameters": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "expected_verdict": {
+      "type": "string",
+      "enum": ["allow", "deny", "audit", "block"],
+      "description": "Expected policy decision action."
+    },
+    "expected_rule": {
+      "type": "string",
+      "description": "Optional: expected matched rule ID."
+    },
+    "resolution_metadata": {
+      "type": "object",
+      "description": "Expected resolution metadata when conflict strategies are tested.",
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "description": "The rule ID that the conflict resolution strategy selected."
+        },
+        "strategy": {
+          "type": "string",
+          "enum": ["deny-overrides", "allow-overrides", "first-match", "priority"],
+          "description": "The conflict resolution strategy applied."
+        }
+      },
+      "required": ["rule_id", "strategy"],
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional tags for filtering fixtures."
+    }
+  },
+  "additionalProperties": false
+}
