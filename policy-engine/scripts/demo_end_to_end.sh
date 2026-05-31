@@ -593,13 +593,9 @@ if should_run dotnet-sdk && command -v dotnet >/dev/null 2>&1; then
 XML
     dotnet add package AgentControlSpecification --version 0.1.0 --no-restore 2>&1 | tail -3 || warn ".NET package add failed"
     cat > Program.cs <<'CS'
-// AGT 5.0 .NET end-to-end demo: exercise allow + deny via the packed
-// AgentControlSpecification SDK pulled from the local NuGet feed.
-//
-// NOTE: the .NET SDK currently tracks upstream ACS (no Transform
-// decision, sync FromPath). Migrating it to the full AGT 5.0 surface
-// (transform verdict, evidence, bisected identity) is tracked in
-// DEFERRED.md. This demo proves the SDK installs and runs end-to-end.
+// AGT 5.0 .NET end-to-end demo: exercises allow + deny + transform +
+// escalate via the packed AgentControlSpecification SDK pulled from the
+// local NuGet feed. Mirrors the Python demo's four canonical paths.
 using System;
 using System.IO;
 using System.Text.Json;
@@ -611,10 +607,32 @@ Directory.CreateDirectory(Path.Combine(tmp, "policy"));
 File.WriteAllText(Path.Combine(tmp, "policy", "demo.rego"),
 @"package agt.demo
 import rego.v1
+
+# pre_tool_call: allow under 500, escalate 501..1000, deny above 1000
 default pre_tool_call := {""decision"": ""allow""}
 pre_tool_call := {""decision"": ""deny"", ""reason"": ""amount_exceeds_limit""} if {
   input.intervention_point == ""pre_tool_call""
   input.snapshot.tool_call.args.amount > 1000
+}
+pre_tool_call := {""decision"": ""escalate"", ""reason"": ""needs_approval""} if {
+  input.intervention_point == ""pre_tool_call""
+  input.snapshot.tool_call.args.amount > 500
+  input.snapshot.tool_call.args.amount <= 1000
+}
+
+# post_tool_call: pass-through allow so RunToolAsync can complete after
+# an approved escalate.
+default post_tool_call := {""decision"": ""allow""}
+
+# output: redact SSN-shaped values through a Transform verdict.
+default output := {""decision"": ""allow""}
+output := {
+  ""decision"": ""transform"",
+  ""reason"": ""ssn_redacted"",
+  ""transform"": {""path"": ""$policy_target"", ""value"": ""Customer SSN is [REDACTED]""}
+} if {
+  input.intervention_point == ""output""
+  regex.match(`[0-9]{3}-[0-9]{2}-[0-9]{4}`, input.snapshot.output)
 }");
 File.WriteAllText(Path.Combine(tmp, "manifest.yaml"),
 $@"agent_control_specification_version: ""0.3.0-alpha""
@@ -623,6 +641,14 @@ policies:
     type: rego
     bundle: {Path.Combine(tmp, "policy")}
     query: data.agt.demo.pre_tool_call
+  demo_post:
+    type: rego
+    bundle: {Path.Combine(tmp, "policy")}
+    query: data.agt.demo.post_tool_call
+  demo_output:
+    type: rego
+    bundle: {Path.Combine(tmp, "policy")}
+    query: data.agt.demo.output
 intervention_points:
   pre_tool_call:
     policy_target: ""$.tool_call.args""
@@ -630,29 +656,119 @@ intervention_points:
     tool_name_from: ""$.tool_call.name""
     policy:
       id: demo
+  post_tool_call:
+    policy_target: ""$.tool_result""
+    policy_target_kind: tool_result
+    tool_name_from: ""$.tool_call.name""
+    policy:
+      id: demo_post
+  output:
+    policy_target: ""$.output""
+    policy_target_kind: response_content
+    policy:
+      id: demo_output
 tools:
   wire_transfer:
     clearance: confidential");
 
-var control = AgentControl.FromPath(Path.Combine(tmp, "manifest.yaml"));
 int passed = 0, total = 0;
-foreach (var (amount, expected, label) in new[]{
-    (100L, Decision.Allow, "allow under limit"),
-    (5000L, Decision.Deny, "deny over limit")}) {
+void Check(bool ok, string label, string detail)
+{
     total++;
-    var snapshot = JsonDocument.Parse(
-        $@"{{ ""tool_call"": {{ ""name"": ""wire_transfer"", ""args"": {{ ""amount"": {amount} }} }}, ""envelope"": {{ ""agent"": {{ ""id"": ""demo"" }}, ""intervention_point"": ""pre_tool_call"" }} }}"
-    ).RootElement;
-    var result = await control.EvaluateInterventionPointAsync(
-        InterventionPoint.PreToolCall, snapshot, EnforcementMode.Enforce);
-    var actual = result.Verdict.Decision;
-    var ok = actual == expected;
     if (ok) passed++;
-    Console.WriteLine($"  {(ok ? "✓" : "✗")} {label}: got {actual.ToWireName()} (expected {expected.ToWireName()})");
+    Console.WriteLine($"  {(ok ? "✓" : "✗")} {label}: {detail}");
 }
+
+// FromPathAsync mirrors the async loaders in the other SDKs.
+var control = await AgentControl.FromPathAsync(Path.Combine(tmp, "manifest.yaml"));
+
+// 1. allow under limit
+var allowSnap = JsonDocument.Parse(
+    @"{ ""tool_call"": { ""id"": ""call-allow"", ""name"": ""wire_transfer"", ""args"": { ""amount"": 100 } }, ""envelope"": { ""agent"": { ""id"": ""demo"" } } }").RootElement;
+var allowResult = await control.EvaluateInterventionPointAsync(
+    InterventionPoint.PreToolCall, allowSnap, EnforcementMode.Enforce);
+Check(allowResult.Verdict.Decision == Decision.Allow,
+      "allow under limit",
+      $"got {allowResult.Verdict.Decision.ToWireName()} (expected allow)");
+
+// 2. deny over limit
+var denySnap = JsonDocument.Parse(
+    @"{ ""tool_call"": { ""id"": ""call-deny"", ""name"": ""wire_transfer"", ""args"": { ""amount"": 5000 } }, ""envelope"": { ""agent"": { ""id"": ""demo"" } } }").RootElement;
+var denyResult = await control.EvaluateInterventionPointAsync(
+    InterventionPoint.PreToolCall, denySnap, EnforcementMode.Enforce);
+Check(denyResult.Verdict.Decision == Decision.Deny,
+      "deny over limit",
+      $"got {denyResult.Verdict.Decision.ToWireName()} reason={denyResult.Verdict.Reason}");
+
+// 3. escalate path (evaluate_only surfaces the raw verdict)
+var escalateSnap = JsonDocument.Parse(
+    @"{ ""tool_call"": { ""id"": ""call-escalate"", ""name"": ""wire_transfer"", ""args"": { ""amount"": 750 } }, ""envelope"": { ""agent"": { ""id"": ""demo"" } } }").RootElement;
+var rawEscalate = await control.EvaluateInterventionPointAsync(
+    InterventionPoint.PreToolCall, escalateSnap, EnforcementMode.EvaluateOnly);
+Check(rawEscalate.Verdict.Decision == Decision.Escalate,
+      "escalate raw (evaluate_only)",
+      $"got {rawEscalate.Verdict.Decision.ToWireName()} reason={rawEscalate.Verdict.Reason}");
+Check(rawEscalate.InputIdentity is not null && rawEscalate.EnforcedIdentity is not null
+      && rawEscalate.InputIdentity == rawEscalate.EnforcedIdentity,
+      "escalate bisected identity",
+      $"input_identity == enforced_identity (escalate carries no transform per AGT D1.4)");
+
+// Drive the resolver end-to-end: build a second control whose resolver
+// captures the identities the host receives and approves with the
+// enforced_identity (matching the AGT D1.4 binding contract).
+string? resolverInputIdentity = null;
+string? resolverEnforcedIdentity = null;
+var resolverControl = await AgentControl.FromPathAsync(
+    Path.Combine(tmp, "manifest.yaml"),
+    approvalResolver: (_, result, _) =>
+    {
+        resolverInputIdentity = result.InputIdentity;
+        resolverEnforcedIdentity = result.EnforcedIdentity;
+        return ValueTask.FromResult(ApprovalResolution.Allow(result.EnforcedIdentity!));
+    });
+var approvedRun = await resolverControl.RunToolAsync<object, string>(
+    "wire_transfer",
+    new { amount = 750 },
+    (args, _) => ValueTask.FromResult($"ok:{JsonSerializer.Serialize(args)}"),
+    "call-escalate-approve");
+Check(approvedRun.PreToolCallResult.Verdict.Decision == Decision.Escalate,
+      "escalate routed through resolver",
+      "pre_tool_call surfaced escalate before the approval ran");
+Check(resolverInputIdentity is not null && resolverEnforcedIdentity is not null
+      && resolverInputIdentity == resolverEnforcedIdentity,
+      "approval resolver receives bisected identity",
+      $"input_identity == enforced_identity from the resolver callback");
+
+// 4. transform path: output policy redacts SSN-shaped values
+var ssnSnap = JsonDocument.Parse(
+    @"{ ""output"": ""Customer SSN is 123-45-6789, please update."" }").RootElement;
+var transformResult = await control.EvaluateInterventionPointAsync(
+    InterventionPoint.Output, ssnSnap, EnforcementMode.Enforce);
+Check(transformResult.Verdict.Decision == Decision.Transform,
+      "transform decision",
+      $"got {transformResult.Verdict.Decision.ToWireName()} reason={transformResult.Verdict.Reason}");
+var transformedValue = transformResult.TransformedPolicyTarget?.GetString();
+Check(transformedValue == "Customer SSN is [REDACTED]",
+      "transform value applied",
+      $"transformed_policy_target = {transformedValue ?? "<null>"}");
+Check(transformResult.Verdict.Transform?.Path == "$policy_target",
+      "transform body carries $policy_target path",
+      $"verdict.transform.path = {transformResult.Verdict.Transform?.Path ?? "<null>"}");
+Check(transformResult.InputIdentity != transformResult.EnforcedIdentity,
+      "transform shifts enforced_identity",
+      "input_identity != enforced_identity per AGT D1.4");
+
 Console.WriteLine($"\n  .NET demo: {passed}/{total} paths green");
 Environment.Exit(passed == total ? 0 : 1);
 CS
+    # The packed SDK keeps the 0.1.0 version while the AGT 5.0 surface
+    # rolls forward. NuGet caches by (id, version) so a stale package on
+    # disk would mask our newly-packed AgentControlSpecification.0.1.0
+    # nupkg. Drop the global-cache copies for this package family before
+    # the restore so the local feed wins.
+    for pkg in agentcontrolspecification agentcontrolspecification.ai agentcontrolspecification.agentframework agentcontrolspecification.autogen agentcontrolspecification.semantickernel; do
+      rm -rf "$HOME/.nuget/packages/$pkg/0.1.0" 2>/dev/null || true
+    done
     dotnet restore --configfile NuGet.Config 2>&1 | tail -5 || { warn ".NET restore failed"; exit 1; }
     AGT_DEMO_TMP="$DEMO_TMP/demo-dotnet-data" dotnet run --no-restore 2>&1 | tail -10 || { warn ".NET demo run failed"; exit 1; }
   ) && { ok ".NET demo green"; record "dotnet-demo" "ok"; } || { warn ".NET demo had issues; see above"; record "dotnet-demo" "warn"; }
