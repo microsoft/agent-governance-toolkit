@@ -12,11 +12,10 @@
 //!    compiled, that parses a small JSON pseudo-cedar policy set, builds a
 //!    cedar [`CedarRequest`] from the policy input per D3.2, and emits an
 //!    `allow`, `deny`, or advice-translated verdict per D3.3.
-//! 3. A feature-gated `CedarBuiltinDispatcher` backed by the upstream
-//!    `cedar-policy` crate is deferred to a follow-up milestone per the
-//!    AGT M2.S2 prompt fallback; hosts that need real cedar evaluation
-//!    today implement [`CedarPolicyDispatcher`] themselves and link
-//!    `cedar-policy` at the host crate level.
+//! 3. [`CedarBuiltinDispatcher`] is the AGT M2.S5 D7 feature-gated bundled
+//!    dispatcher backed by the upstream `cedar-policy` crate. It is gated
+//!    behind the `cedar` Cargo feature so callers that do not want the
+//!    heavyweight cedar dep can opt out at build time.
 //!
 //! The dispatcher returns a verdict-shaped `JsonValue` exactly like the OPA
 //! dispatcher does, and the runtime then normalizes the value via
@@ -35,10 +34,8 @@ use serde_json::{json, Map};
 /// to [`crate::normalize_policy_output`]. Errors fail closed with
 /// `runtime_error:policy_invocation_failed` or `runtime_error:policy_output_invalid`.
 pub trait CedarPolicyDispatcher: Send + Sync {
-    fn evaluate_cedar(
-        &self,
-        invocation: &CedarPolicyInvocation,
-    ) -> Result<JsonValue, RuntimeError>;
+    fn evaluate_cedar(&self, invocation: &CedarPolicyInvocation)
+        -> Result<JsonValue, RuntimeError>;
 }
 
 /// Cedar request derived from the policy input per AGT D3.2 default mapping.
@@ -124,7 +121,11 @@ pub fn build_cedar_request(policy_input: &JsonValue) -> Result<CedarRequest, Run
 
     let resource = resource_entity(object);
 
-    let mut context_keys: Vec<String> = snapshot.keys().filter(|key| *key != "envelope").cloned().collect();
+    let mut context_keys: Vec<String> = snapshot
+        .keys()
+        .filter(|key| *key != "envelope")
+        .cloned()
+        .collect();
     if let Some(JsonValue::Object(annotations)) = object.get(pi_key::ANNOTATIONS) {
         for key in annotations.keys() {
             let key = format!("annotations.{key}");
@@ -405,7 +406,10 @@ pub fn translate_advice(advice: JsonValue) -> Result<JsonValue, RuntimeError> {
     }
 
     let mut out = Map::new();
-    out.insert("decision".to_string(), JsonValue::String(verdict.to_string()));
+    out.insert(
+        "decision".to_string(),
+        JsonValue::String(verdict.to_string()),
+    );
 
     if let Some(reason) = object.get("reason") {
         match reason {
@@ -455,18 +459,160 @@ pub fn translate_advice(advice: JsonValue) -> Result<JsonValue, RuntimeError> {
     Ok(JsonValue::Object(out))
 }
 
-/// Feature-gated cedar dispatcher backed by the upstream `cedar-policy`
-/// crate is deferred from M2.S2 per the prompt's fallback. The dispatcher
-/// trait, the [`CedarTestDispatcher`] reference implementation, and the
-/// manifest plumbing ship now; a follow-up milestone will land the builtin
-/// once a build environment with a `cc`-compatible C toolchain is available
-/// (the current toolchain in the AGT dev container is `zig cc`, which
-/// rejects the `--target=x86_64-unknown-linux-gnu` target query the
-/// `cc-rs` crate passes when compiling the `psm` transitive dependency of
-/// `cedar-policy`'s `stacker` dep). Hosts that need real cedar evaluation
-/// today implement [`CedarPolicyDispatcher`] themselves and link the
-/// `cedar-policy` crate at the host crate level.
-const _: () = ();
+/// AGT M2.S5 D7 bundled cedar dispatcher backed by the upstream
+/// `cedar-policy` crate. Gated behind the `cedar` Cargo feature so that
+/// hosts that never need real cedar evaluation do not have to compile the
+/// cedar runtime. The dispatcher parses the inline `policy_set` text (or
+/// the file pointed to by `policy_path`), builds a `cedar_policy::Request`
+/// from the [`CedarRequest`] produced by [`build_cedar_request`], and runs
+/// the upstream authorizer. The result is translated into the verdict
+/// JSON the runtime feeds to [`crate::normalize_policy_output`]: a cedar
+/// `Allow` becomes `{"decision":"allow"}` and a cedar `Deny` becomes
+/// `{"decision":"deny","reason":"no_matching_policy"}` (or
+/// `runtime_error:policy_invocation_failed` when the authorizer surfaces a
+/// hard error).
+///
+/// Cedar policy annotations and richer advice translation remain the job
+/// of the host-facing [`CedarPolicyDispatcher`] implementations; the
+/// builtin restricts itself to the standard allow / deny contract that the
+/// upstream `Authorizer::is_authorized` exposes.
+#[cfg(feature = "cedar")]
+#[derive(Debug, Clone, Default)]
+pub struct CedarBuiltinDispatcher;
+
+#[cfg(feature = "cedar")]
+impl CedarBuiltinDispatcher {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[cfg(feature = "cedar")]
+impl CedarPolicyDispatcher for CedarBuiltinDispatcher {
+    fn evaluate_cedar(
+        &self,
+        invocation: &CedarPolicyInvocation,
+    ) -> Result<JsonValue, RuntimeError> {
+        builtin::evaluate(invocation)
+    }
+}
+
+#[cfg(feature = "cedar")]
+impl PolicyDispatcher for CedarBuiltinDispatcher {
+    fn evaluate(&self, invocation: &PreparedPolicyInvocation) -> Result<JsonValue, RuntimeError> {
+        match invocation {
+            PreparedPolicyInvocation::Cedar(invocation) => self.evaluate_cedar(invocation),
+            other => Err(RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher only supports Cedar invocations; received {} invocation",
+                other.engine_type()
+            ))),
+        }
+    }
+}
+
+#[cfg(feature = "cedar")]
+mod builtin {
+    //! Upstream-cedar evaluation helpers for [`super::CedarBuiltinDispatcher`].
+    //!
+    //! Kept in a private module so the cedar crate imports never leak into
+    //! the public API surface even when the `cedar` feature is enabled.
+
+    use super::{build_cedar_request, CedarEntity, CedarRequest};
+    use crate::{CedarPolicyInvocation, JsonValue, RuntimeError};
+    use cedar_policy::{Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request};
+    use serde_json::json;
+    use std::{fs, str::FromStr};
+
+    pub(super) fn evaluate(invocation: &CedarPolicyInvocation) -> Result<JsonValue, RuntimeError> {
+        let policy_text = load_policy_text(invocation)?;
+        let policy_set = PolicySet::from_str(&policy_text).map_err(|err| {
+            RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher failed to parse policy_set: {err}"
+            ))
+        })?;
+        let entities = load_entities(invocation.entities_path.as_deref())?;
+        let request = build_cedar_request(&invocation.input)?;
+        let cedar_request = build_authorizer_request(&request)?;
+
+        let authorizer = Authorizer::new();
+        let answer = authorizer.is_authorized(&cedar_request, &policy_set, &entities);
+        let hard_errors = answer.diagnostics().errors().cloned().collect::<Vec<_>>();
+        if !hard_errors.is_empty() {
+            let detail = hard_errors
+                .iter()
+                .map(|err| err.to_string())
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher authorizer reported errors: {detail}"
+            )));
+        }
+
+        match answer.decision() {
+            Decision::Allow => Ok(json!({ "decision": "allow" })),
+            Decision::Deny => Ok(json!({
+                "decision": "deny",
+                "reason": "no_matching_policy",
+            })),
+        }
+    }
+
+    fn load_policy_text(invocation: &CedarPolicyInvocation) -> Result<String, RuntimeError> {
+        match (
+            invocation.policy_set.as_deref(),
+            invocation.policy_path.as_deref(),
+        ) {
+            (Some(text), None) => Ok(text.to_string()),
+            (None, Some(path)) => fs::read_to_string(path).map_err(|err| {
+                RuntimeError::PolicyInvocationFailed(format!(
+                    "cedar builtin dispatcher failed to read policy_path '{path}': {err}"
+                ))
+            }),
+            (Some(_), Some(_)) => Err(RuntimeError::PolicyInvocationFailed(
+                "cedar builtin dispatcher received both policy_set and policy_path; manifest validation must reject this earlier".to_string(),
+            )),
+            (None, None) => Err(RuntimeError::PolicyInvocationFailed(
+                "cedar builtin dispatcher requires either policy_set or policy_path".to_string(),
+            )),
+        }
+    }
+
+    fn load_entities(path: Option<&str>) -> Result<Entities, RuntimeError> {
+        let Some(path) = path else {
+            return Ok(Entities::empty());
+        };
+        let json_text = fs::read_to_string(path).map_err(|err| {
+            RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher failed to read entities_path '{path}': {err}"
+            ))
+        })?;
+        Entities::from_json_str(&json_text, None).map_err(|err| {
+            RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher failed to parse entities at '{path}': {err}"
+            ))
+        })
+    }
+
+    fn build_authorizer_request(request: &CedarRequest) -> Result<Request, RuntimeError> {
+        let principal = entity_uid(&request.principal, "principal")?;
+        let action = entity_uid(&request.action, "action")?;
+        let resource = entity_uid(&request.resource, "resource")?;
+        Request::new(principal, action, resource, Context::empty(), None).map_err(|err| {
+            RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher failed to build authorizer request: {err}"
+            ))
+        })
+    }
+
+    fn entity_uid(entity: &CedarEntity, field: &str) -> Result<EntityUid, RuntimeError> {
+        EntityUid::from_str(&entity.as_display()).map_err(|err| {
+            RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher failed to parse {field} entity '{}': {err}",
+                entity.as_display()
+            ))
+        })
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -785,8 +931,7 @@ mod tests {
 
     #[test]
     fn translate_advice_rejects_non_string_reason() {
-        let error =
-            translate_advice(json!({"verdict": "warn", "reason": 7})).unwrap_err();
+        let error = translate_advice(json!({"verdict": "warn", "reason": 7})).unwrap_err();
         assert_eq!(error.reason(), "runtime_error:policy_output_invalid");
     }
 
@@ -794,5 +939,56 @@ mod tests {
     fn translate_advice_round_trips_warn() {
         let value = translate_advice(json!({"verdict": "warn"})).unwrap();
         assert_eq!(value["decision"], json!("warn"));
+    }
+
+    // ── M2.S5 D7 builtin dispatcher (feature `cedar`) ─────────────────
+
+    #[cfg(feature = "cedar")]
+    #[test]
+    fn builtin_dispatcher_allows_trivial_permit_all_policy() {
+        let policy_set = "permit(principal, action, resource);";
+        let inv = invocation(policy_set, tool_input("agent-1", "hello"));
+        let output = CedarBuiltinDispatcher::new()
+            .evaluate_cedar(&inv)
+            .expect("builtin cedar dispatcher returns ok for permit-all");
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Allow);
+    }
+
+    #[cfg(feature = "cedar")]
+    #[test]
+    fn builtin_dispatcher_denies_when_no_policy_matches() {
+        let policy_set = "permit(principal == Agent::\"alice\", action, resource);";
+        let inv = invocation(policy_set, tool_input("bob", "hello"));
+        let output = CedarBuiltinDispatcher::new()
+            .evaluate_cedar(&inv)
+            .expect("builtin cedar dispatcher returns ok for deny");
+        let verdict = normalize_policy_output(output).unwrap();
+        assert_eq!(verdict.decision, Decision::Deny);
+        assert_eq!(verdict.reason.as_deref(), Some("no_matching_policy"));
+    }
+
+    #[cfg(feature = "cedar")]
+    #[test]
+    fn builtin_dispatcher_rejects_non_cedar_invocation_through_policy_dispatcher() {
+        use crate::{PolicyDispatcher, PreparedPolicyInvocation, TestPolicyInvocation};
+
+        let other = PreparedPolicyInvocation::Test(TestPolicyInvocation {
+            adapter_config: Default::default(),
+            input: json!({}),
+            canonical_input: "{}".to_string(),
+        });
+        let error = CedarBuiltinDispatcher::new().evaluate(&other).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    }
+
+    #[cfg(feature = "cedar")]
+    #[test]
+    fn builtin_dispatcher_surfaces_parser_errors_as_policy_invocation_failed() {
+        let inv = invocation("not a valid cedar policy", tool_input("agent-1", "hello"));
+        let error = CedarBuiltinDispatcher::new()
+            .evaluate_cedar(&inv)
+            .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
     }
 }

@@ -26,7 +26,9 @@ pub use default::DefaultAnnotatorDispatcher;
 pub use endpoint::EndpointAnnotator;
 pub use llm::LlmAnnotator;
 
-use crate::{AnnotatorDispatcher, Manifest, OpaPolicyDispatcher, PolicyDispatcher, RuntimeError};
+use crate::AnnotatorDispatcher;
+#[cfg(feature = "opa")]
+use crate::{Manifest, OpaPolicyDispatcher, PolicyDispatcher, RuntimeError};
 use std::sync::Arc;
 
 /// The bundled native annotator dispatcher used as the zero-config default. It
@@ -40,6 +42,11 @@ pub fn default_annotator_dispatcher() -> Arc<dyn AnnotatorDispatcher> {
 ///
 /// Fails closed if the manifest declares a non-Rego policy (the default
 /// dispatcher only evaluates Rego) or if the `opa` binary is unavailable.
+///
+/// AGT M2.S5 D7: gated behind the `opa` feature. Hosts that build the core
+/// without `opa` MUST register their own `PolicyDispatcher` explicitly; the
+/// FFI builder surfaces a clear error in that configuration.
+#[cfg(feature = "opa")]
 pub fn default_policy_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {

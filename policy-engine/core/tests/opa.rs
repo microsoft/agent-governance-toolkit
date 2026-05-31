@@ -1,3 +1,5 @@
+#![cfg(feature = "opa")]
+
 use agent_control_specification_core::{
     canonical_json, AnnotatorDispatcher, AnnotatorInvocation, EnforcementMode, InterventionPoint,
     InterventionPointRequest, JsonValue, Manifest, OpaPolicyDispatcher, OpaRegoRunner,

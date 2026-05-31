@@ -351,15 +351,35 @@ Effects-related reasons (`runtime_error:effect_invalid`,
 
 ## D7. Cargo feature split (build-only delta, no spec impact)
 
-The `core/` crate is split into:
+The `core/` crate exposes two opt-out Cargo features that gate the
+heavyweight bundled dispatcher backends.
 
-- `agt-core` — runtime, manifest, verdict, telemetry, FFI. Always required.
-- `agt-core-opa` — bundled OPA dispatcher. Optional feature `opa`.
-- `agt-core-cedar` — bundled Cedar dispatcher. Optional feature `cedar`.
+- `opa` — bundled OPA Rego dispatcher reached through `crate::opa` and the
+  `Opa*` re-exports. Default-on. Disabling the feature removes the bundled
+  Rego dispatcher and the OPA arm of `crate::dispatchers::default_policy_dispatcher`;
+  the `PolicyConfig::Rego` manifest grammar stays compiled so manifests that
+  declare `type: rego` still validate and hosts may wire their own
+  `PolicyDispatcher` implementation.
+- `cedar` — bundled Cedar dispatcher (`CedarBuiltinDispatcher`) backed by
+  the upstream `cedar-policy` crate. Default-on. Disabling the feature
+  removes the builtin dispatcher and drops the `cedar-policy` build
+  dependency. The manifest grammar (`PolicyConfig::Cedar`,
+  `CedarPolicyConfig`), the `CedarPolicyDispatcher` trait, the request
+  mapping helpers (`build_cedar_request`, `translate_advice`), and the
+  always-compiled `CedarTestDispatcher` reference implementation remain
+  available regardless of the feature so hosts can supply their own cedar
+  backend without the bundled dep.
 
 Default features for the workspace include `opa` and `cedar`. Language SDK
-crates (`sdk/python`, `sdk/node`, `sdk/dotnet`, `sdk/go`) MUST always enable
-both features.
+crates (`sdk/python`, `sdk/node`, `sdk/dotnet`, `sdk/go`, `sdk/rust`) MUST
+always enable both features so existing consumers see the historical
+surface.
+
+A later milestone MAY extract the bundled dispatchers into sibling crates
+(`agent_control_specification_opa`, `agent_control_specification_cedar`);
+the feature split shipped here keeps the same opt-out option for
+downstream Rust callers without the cross-SDK churn that a multi-crate
+refactor would require.
 
 This delta has no impact on the spec; it documents the M2 workspace shape.
 

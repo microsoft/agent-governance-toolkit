@@ -480,16 +480,16 @@ fn resolve_default_policy_dispatcher(
     if !builder.enable_default_policy {
         return Ok(None);
     }
-    #[cfg(feature = "default-dispatchers")]
+    #[cfg(all(feature = "default-dispatchers", feature = "opa"))]
     {
         crate::dispatchers::default_policy_dispatcher(manifest)
             .map(Some)
             .map_err(|error| error.to_string())
     }
-    #[cfg(not(feature = "default-dispatchers"))]
+    #[cfg(not(all(feature = "default-dispatchers", feature = "opa")))]
     {
         let _ = manifest;
-        Err("default policy dispatcher is unavailable; rebuild with the 'default-dispatchers' feature".to_string())
+        Err("default policy dispatcher is unavailable; rebuild with the 'default-dispatchers' and 'opa' features".to_string())
     }
 }
 

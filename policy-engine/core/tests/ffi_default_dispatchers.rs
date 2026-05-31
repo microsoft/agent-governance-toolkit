@@ -11,6 +11,7 @@ use std::{
     ptr,
 };
 
+#[cfg(feature = "opa")]
 const REGO_MANIFEST: &str = r#"agent_control_specification_version: 0.3.0-alpha
 metadata:
   name: defaults-rego
@@ -55,6 +56,7 @@ fn take_err(err: *mut c_char) -> String {
     message
 }
 
+#[cfg(feature = "opa")]
 #[test]
 fn zero_config_defaults_build_a_runtime_for_rego_and_classifier() {
     if !opa_available() {
@@ -84,6 +86,7 @@ fn zero_config_defaults_build_a_runtime_for_rego_and_classifier() {
     unsafe { acs_runtime_free(runtime) };
 }
 
+#[cfg(feature = "opa")]
 #[test]
 fn default_policy_dispatcher_rejects_non_rego_policies() {
     let yaml = CString::new(CUSTOM_POLICY_MANIFEST).unwrap();
@@ -128,6 +131,7 @@ fn build_without_enabling_defaults_still_requires_a_policy_dispatcher() {
     let _ = acs_builder_free;
 }
 
+#[cfg(feature = "opa")]
 fn opa_available() -> bool {
     std::process::Command::new("opa")
         .arg("version")

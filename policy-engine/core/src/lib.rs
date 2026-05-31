@@ -15,6 +15,13 @@ pub mod ffi;
 pub mod intervention_point;
 pub mod limits;
 pub mod manifest;
+// AGT M2.S5 D7: the OPA CLI dispatcher lives behind the `opa` feature so
+// hosts that never use Rego do not see the Rego dispatcher surface. The
+// `PolicyConfig::Rego` manifest grammar stays compiled unconditionally so
+// manifest validation still accepts `type: rego` even when the bundled
+// dispatcher is absent; hosts that need Rego evaluation under those
+// conditions must wire their own `PolicyDispatcher` implementation.
+#[cfg(feature = "opa")]
 pub mod opa;
 pub mod paths;
 pub mod perf_telemetry;
@@ -28,6 +35,8 @@ pub mod verdict;
 pub use annotation::{
     AnnotationConfig, AnnotatorConfig, AnnotatorDispatcher, AnnotatorInvocation, AnnotatorType,
 };
+#[cfg(feature = "cedar")]
+pub use cedar::CedarBuiltinDispatcher;
 pub use cedar::{
     build_cedar_request, translate_advice, CedarEntity, CedarPolicyDispatcher, CedarRequest,
     CedarTestDispatcher,
@@ -43,6 +52,7 @@ pub use manifest::{
     ApprovalOnTimeout, ApprovalResolverConfig, ApprovalSection, InterventionPointConfig, Manifest,
     ToolConfig,
 };
+#[cfg(feature = "opa")]
 pub use opa::{OpaPolicyDispatcher, OpaRegoRunner};
 pub use paths::{JsonPath, PathEnv, PathParseError, PathRoot, PathSegment};
 pub use perf_telemetry::PerfTelemetry;

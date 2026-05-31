@@ -13,6 +13,23 @@ categories = ["config"]
 crate-type = ["lib", "cdylib"]
 
 [features]
+# AGT M2.S5 D7 runtime split. The default surface is the historical core plus
+# the bundled OPA Rego dispatcher and the bundled Cedar dispatcher. Hosts that
+# do not want either heavyweight backend can disable default features and
+# opt back in to whichever engines they need.
+#
+# * `opa` gates `pub mod opa`, the `Opa*` re-exports, and the OPA arm of the
+#   `default_policy_dispatcher`. The OPA dispatcher only shells out to the
+#   `opa` CLI and therefore carries no Rust build deps; the gate exists so
+#   callers that never use Rego do not see the Rego dispatcher surface.
+# * `cedar` gates the new `CedarBuiltinDispatcher` powered by the upstream
+#   `cedar-policy` crate. The manifest grammar, `PolicyConfig::Cedar`, the
+#   `CedarPolicyDispatcher` trait, the request mapping, the advice
+#   translator, and the always-compiled `CedarTestDispatcher` stay available
+#   under no-default-features per AGT D3.
+default = ["opa", "cedar"]
+opa = []
+cedar = ["dep:cedar-policy"]
 # Bundled reference dispatchers (networked OPA classifier annotators) used to
 # provide zero-config defaults through the FFI builder. OFF by default so the
 # pure deterministic core carries no networking dependency unless opted in.
@@ -31,6 +48,7 @@ regex = "1"
 serde_yaml = "0.9"
 sha2 = "0.10"
 ureq = { version = "2", features = ["json"], optional = true }
+cedar-policy = { version = "4", optional = true }
 
 [dev-dependencies]
 jsonschema = { version = "0.17", default-features = false }
