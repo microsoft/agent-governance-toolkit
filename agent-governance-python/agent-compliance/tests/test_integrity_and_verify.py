@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import re
+import warnings
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -669,7 +670,7 @@ rules:
 
         assert payload["schema"] == "governance-attestation/v1"
         assert payload["mode"] == "evidence"
-        assert payload["strict"] is False
+        assert payload["strict"] is True
         assert payload["evidence_source"].endswith("agt-evidence.json")
         assert len(payload["evidence_checks"]) == 6
         assert payload["failures"] == []
@@ -811,4 +812,84 @@ class TestCLI:
         result = cmd_integrity(args)
 
         assert result == 0
-        
+
+
+# ── Security Regression: strict-default attestation (jb/sec-attestation-strict) ─
+
+
+class TestJbSecAttestationStrict:
+    """Regression tests for CVSS 8.1 / GPT F-003.
+
+    verify_evidence must default to strict=True and force passed=False whenever
+    any evidence check fails, unless the caller explicitly opts in to the
+    development-only allow_failures escape hatch.
+    """
+
+    def test_jb_sec_attestation_strict_default_forces_failed_with_evidence_failures(
+        self, tmp_path: Path
+    ):
+        """Default call (no kwargs) with evidence failures → passed=False."""
+        evidence_path = _write_runtime_evidence(tmp_path, identity_enabled=False)
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+
+        attestation = verifier.verify_evidence(evidence_path)
+
+        assert attestation.passed is False
+        assert any(f for f in attestation.failures)
+        payload = json.loads(attestation.to_json())
+        assert payload["allow_failures_used"] is False, (
+            "allow_failures_used must be False on a normal (non-overridden) call"
+        )
+
+    def test_jb_sec_attestation_strict_default_is_true_in_serialized_output(
+        self, tmp_path: Path
+    ):
+        """Default call records strict=True in JSON output."""
+        evidence_path = _write_runtime_evidence(tmp_path)
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+
+        attestation = verifier.verify_evidence(evidence_path)
+        payload = json.loads(attestation.to_json())
+
+        assert payload["strict"] is True
+
+    def test_jb_sec_attestation_strict_allow_failures_preserves_passed_and_warns(
+        self, tmp_path: Path
+    ):
+        """allow_failures=True: passed is NOT forced False and a UserWarning is emitted."""
+        evidence_path = _write_runtime_evidence(tmp_path, identity_enabled=False)
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            attestation = verifier.verify_evidence(evidence_path, allow_failures=True)
+
+        assert any(issubclass(w.category, UserWarning) for w in caught), (
+            "Expected a UserWarning when allow_failures=True"
+        )
+        # Failures are present but passed is NOT forced to False
+        assert attestation.failures, "Expected evidence failures to be present"
+        assert attestation.passed is True, (
+            "With allow_failures=True, evidence failures must NOT force passed=False"
+        )
+        # allow_failures_used must be serialized so downstream systems can detect the override
+        payload = json.loads(attestation.to_json())
+        assert payload["allow_failures_used"] is True, (
+            "allow_failures_used must be True in serialized JSON when override was applied"
+        )
+
+    def test_jb_sec_attestation_strict_false_explicit_still_forces_failed(
+        self, tmp_path: Path
+    ):
+        """strict=False (explicit) with failures still forces passed=False.
+
+        The strict parameter no longer gates failure enforcement.  Only
+        allow_failures=True can suppress the forced-False outcome.
+        """
+        evidence_path = _write_runtime_evidence(tmp_path, identity_enabled=False)
+        verifier = GovernanceVerifier(controls=_CUSTOM_VERIFY_CONTROLS)
+
+        attestation = verifier.verify_evidence(evidence_path, strict=False)
+
+        assert attestation.passed is False
+        assert any(f for f in attestation.failures)
