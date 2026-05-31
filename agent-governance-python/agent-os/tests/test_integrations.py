@@ -2230,3 +2230,152 @@ class TestGeminiBridgeScenarios:
 
         fn_call = response.candidates[0].content.parts[0].function_call
         assert fn_call.args == {"city": "[REDACTED]"}
+
+
+# ── LlamaIndex scenario coverage ─────────────────────────────────────
+
+
+def _make_llama_engine(query_response="answer", chat_response="chat-answer"):
+    """Return a mock LlamaIndex engine (no SDK required)."""
+    from types import SimpleNamespace
+
+    engine = MagicMock()
+    # Drop the auto-generated MagicMock for .name so wrap() falls back to
+    # the synthesised agent_id (LlamaIndexKernel rejects Mock names).
+    del engine.name
+    engine.query.return_value = SimpleNamespace(response=query_response)
+    engine.chat.return_value = SimpleNamespace(response=chat_response)
+    return engine
+
+
+@_V5_BRIDGE_REQUIRED
+class TestLlamaIndexBridgeScenarios:
+    """Verify LlamaIndexKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, approval_resolver=None):
+        from agent_os.integrations.llamaindex_adapter import LlamaIndexKernel
+
+        return LlamaIndexKernel(_runtime=runtime, approval_resolver=approval_resolver)
+
+    def test_query_allow_path_forwards_to_engine(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {"decision": "allow"},  # output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        result = governed.query("what is the meaning of life?")
+
+        assert result.response == "answer"
+        engine.query.assert_called_once()
+        # The engine MUST see the original query
+        assert engine.query.call_args.args[0] == "what is the meaning of life?"
+        assert len(policy.invocations) == 2
+
+    def test_query_deny_path_raises_policy_violation(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "blocked_query"}],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        with pytest.raises(PolicyViolationError) as excinfo:
+            governed.query("blocked content")
+
+        assert excinfo.value.check_result.reason == "blocked_query"
+        engine.query.assert_not_called()
+
+    def test_chat_transform_rewrites_message(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                },
+                {"decision": "allow"},  # output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        governed.chat("Customer SSN is 123-45-6789")
+
+        engine.chat.assert_called_once()
+        # LlamaIndex engine MUST see the redacted message
+        assert engine.chat.call_args.args[0] == "Customer SSN is [REDACTED]"
+
+    def test_query_escalate_with_approving_resolver_forwards(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "escalate", "reason": "human_approval_required"},
+                {"decision": "allow"},  # output
+            ],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        governed.query("needs approval")
+
+        assert captured["ip"] == "input"
+        engine.query.assert_called_once()
+
+    def test_query_escalate_with_no_resolver_denies(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=None,
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        with pytest.raises(PolicyViolationError):
+            governed.query("needs approval")
+
+        engine.query.assert_not_called()
+
+    def test_output_transform_rewrites_response(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "output_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED OUTPUT]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine(query_response="leaked secret content")
+        governed = kernel.wrap(engine)
+
+        result = governed.query("safe question")
+
+        # The result object's response attribute MUST be rewritten
+        assert result.response == "[REDACTED OUTPUT]"
