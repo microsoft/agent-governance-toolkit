@@ -250,18 +250,24 @@ class AdapterRuntimeBridge:
             tool_name=tool_name, args=dict(args), call_id=call_id
         )
         result = self._evaluate("pre_tool_call", snapshot)
-        # The AGT manifest bridge emits no ``pre_tool_call`` binding
-        # when neither ``allowed_tools`` nor ``max_tool_calls`` requires
-        # one (or emits no ``tools`` catalog when allowed_tools is
-        # empty). Both cases short-circuit before the rego runs, so
-        # the bridge cannot enforce ``max_tool_calls`` /
-        # ``max_tokens`` on its own. Apply the budget check at the host
-        # level here so the v4 contract still holds.
+        # The AGT manifest bridge only binds ``pre_tool_call`` when
+        # ``max_tool_calls > 0`` or ``allowed_tools`` is set or
+        # ``require_human_approval`` is true (see
+        # agt.policies.bridge._build_intervention_points). The corner
+        # case that survived the AGT-M3 fix is a policy with
+        # ``max_tool_calls == 0`` (the v4 "deny on every tool call"
+        # contract) and an empty allowlist: the bridge generates no
+        # ``pre_tool_call`` binding, the engine returns
+        # ``runtime_error:intervention_point_unknown``, and the bridge
+        # rewrites that to ``allow`` with
+        # ``v5_fallback=unbound_intervention_point``. ``empty_allowed_tools``
+        # never fires on this intervention point because
+        # ``bind_tools_with_catalog`` is only true when ``allowed_tools``
+        # is non-empty, in which case ``not self._policy.allowed_tools``
+        # is false. Guard the corner case here so the v4 contract still
+        # holds for the ``max_tool_calls == 0`` policy.
         fallback = result.evaluation.audit_entry.get("v5_fallback")
-        if result.verdict == "allow" and fallback in (
-            "empty_allowed_tools",
-            "unbound_intervention_point",
-        ):
+        if result.verdict == "allow" and fallback == "unbound_intervention_point":
             host_check = _host_budget_check(self._policy, ctx)
             if host_check is not None:
                 return host_check
@@ -435,9 +441,21 @@ class AdapterRuntimeBridge:
 def _host_human_approval_deny() -> BridgeResult:
     """Return the host-side deny for ``require_human_approval=True``.
 
+    Reachable only on the ``input`` intervention point when:
+
+    * the policy sets ``require_human_approval=True``;
+    * the policy has no ``blocked_patterns`` (so the bridge does not
+      bind ``input`` in the generated manifest and the engine
+      auto-rewrites the result to ``allow`` via the
+      ``runtime_error:intervention_point_unknown`` rewrite); and
+    * no ``approval_resolver`` is wired on the AgtRuntime.
+
     Mirrors the v4 ``deny_human_approval`` factory so kernels that
     have not configured an approval resolver keep the v4 blocking
-    semantics for ``require_human_approval=True``.
+    semantics for ``require_human_approval=True``. The AGT-M3 bridge
+    gap fix always binds ``pre_tool_call`` for this same policy, so
+    the equivalent fallback on the pre-tool path is unreachable and
+    intentionally absent.
     """
     from agt.policies.result import EvaluationResult
 
@@ -463,12 +481,18 @@ def _host_budget_check(
 ) -> Optional[BridgeResult]:
     """Return a deny :class:`BridgeResult` when the v4 budgets fail.
 
-    Used by the v5 bridge to enforce ``max_tool_calls`` and
-    ``max_tokens`` when the AGT manifest bridge has fallen back to
-    allow because the policy emits no ``tools`` catalog. Mirrors the v4
-    semantics (the v4 base.py compared ``ctx.call_count`` and
-    ``ctx.total_tokens`` directly). Returns ``None`` when the budgets
-    are still within limits.
+    Reachable on the ``pre_tool_call`` intervention point only when
+    ``policy.max_tool_calls == 0`` (the v4 "deny on every tool call"
+    contract). With ``max_tool_calls > 0`` the AGT manifest bridge
+    emits the budget rule inline in the generated Rego and the engine
+    enforces it directly; with ``max_tool_calls == 0`` the bridge
+    binds no ``pre_tool_call`` and the engine returns
+    ``runtime_error:intervention_point_unknown`` which the bridge
+    rewrites to ``allow`` (``v5_fallback=unbound_intervention_point``).
+    The token branch covers the symmetric ``max_tokens`` corner case.
+    Mirrors the v4 semantics (the v4 base.py compared
+    ``ctx.call_count`` and ``ctx.total_tokens`` directly). Returns
+    ``None`` when the budgets are still within limits.
     """
     from agt.policies.result import EvaluationResult
 
