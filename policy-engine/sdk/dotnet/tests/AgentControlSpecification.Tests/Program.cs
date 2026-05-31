@@ -36,13 +36,19 @@ var result = await control.EvaluateInputAsync(
         ["transport"] = new { kind = "api_gateway", route = "/chat" },
     });
 
-AssertEqual(Decision.Warn, result.Verdict.Decision, "input policy should warn.");
-Assert(result.TransformedPolicyTarget.HasValue, "warn verdict should include a transformed policy target.");
+AssertEqual(Decision.Transform, result.Verdict.Decision, "input policy should transform.");
+Assert(result.TransformedPolicyTarget.HasValue, "transform verdict should include a transformed policy target.");
+Assert(result.Verdict.Transform is not null, "transform verdict should carry the transform payload.");
+AssertEqual("$policy_target.text", result.Verdict.Transform!.Path, "transform path should round-trip from the dispatcher.");
 var transformedPolicyTarget = result.TransformedPolicyTarget!.Value;
 AssertEqual(
     "Please summarize account [REDACTED].",
     transformedPolicyTarget.GetProperty("text").GetString(),
     "account number should be redacted.");
+Assert(result.InputIdentity is not null, "transform verdict should surface an input identity.");
+Assert(result.EnforcedIdentity is not null, "transform verdict should surface an enforced identity.");
+Assert(result.InputIdentity != result.EnforcedIdentity, "transform verdict shifts enforced_identity away from input_identity.");
+AssertEqual(result.EnforcedIdentity, result.ActionIdentity, "action_identity is the back-compat alias for enforced_identity.");
 
 var throwingControl = AgentControl.FromNative(BasicHostManifest, new ThrowingAnnotator(), new CustomPolicy());
 var failureResult = await throwingControl.EvaluateInputAsync(new { text = "Please summarize account 1234." });
@@ -71,7 +77,7 @@ McpToolArgs? receivedArgs = null;
 var transformingMcp = new AgentControlMcpToolProvider<McpToolArgs, string>(
     new AgentControl(new DelegateRuntime(request =>
         request.InterventionPoint == InterventionPoint.PreToolCall
-            ? Result(Decision.Allow, new McpToolArgs("redacted"))
+            ? Result(Decision.Transform, new McpToolArgs("redacted"))
             : Result(Decision.Allow))),
     (args, _) =>
     {
@@ -172,14 +178,11 @@ catch (AgentControlBlockedException)
 {
 }
 
-var allowEffectsControl = new AgentControl(
-    new DelegateRuntime(request =>
-        request.InterventionPoint == InterventionPoint.Input
-            ? Result(Decision.Escalate, "REDACTED")
-            : Result(Decision.Allow)),
-    AllowApproval());
-var allowRun = await allowEffectsControl.RunAsync<string, string>("original", (input, _) => ValueTask.FromResult(input));
-AssertEqual("REDACTED", allowRun.Value, "escalate-allow should apply escalate effects after approval.");
+// AGT D1: per §13.1 an escalate carries no transform. After approval the
+// host proceeds with the original policy target, not a substituted one.
+var escalateAllowControl = new AgentControl(escalateInputRuntime, AllowApproval());
+var allowRun = await escalateAllowControl.RunAsync<string, string>("original", (input, _) => ValueTask.FromResult(input));
+AssertEqual("original", allowRun.Value, "an approved escalate should proceed with the original value (escalate carries no transform).");
 
 
 var identitySeen = string.Empty;
@@ -365,8 +368,8 @@ catch (AgentControlBlockedException ex)
 var mediatedChatInner = new RecordingChatClient();
 var mediatedChat = mediatedChatInner.UseAgentControl(new AgentControl(new DelegateRuntime(request =>
     request.InterventionPoint == InterventionPoint.PreModelCall
-        ? Result(Decision.Allow, "safe")
-        : Result(Decision.Allow, "checked"))));
+        ? Result(Decision.Transform, "safe")
+        : Result(Decision.Transform, "checked"))));
 var mediatedChatResult = await mediatedChat.GetResponseAsync("raw");
 AssertEqual("checked", mediatedChatResult, "chat client should return the transformed model response.");
 AssertEqual("safe", mediatedChatInner.Calls.Single(), "chat client should pass transformed request to inner.");
@@ -395,8 +398,8 @@ var allowedSkContext = new FunctionContext<McpToolArgs, string>("lookup", new Mc
 var allowedSkFilter = AgentControlFrameworkAdapters.SemanticKernelFunctionFilter<McpToolArgs, string>(
     new AgentControl(new DelegateRuntime(request =>
         request.InterventionPoint == InterventionPoint.PreToolCall
-            ? Result(Decision.Allow, new McpToolArgs("safe"))
-            : Result(Decision.Allow, "checked"))));
+            ? Result(Decision.Transform, new McpToolArgs("safe"))
+            : Result(Decision.Transform, "checked"))));
 await allowedSkFilter.InvokeAsync(allowedSkContext, (context, _) =>
 {
     context.Result = context.Arguments.Text;
@@ -429,8 +432,8 @@ var allowedAutoGenContext = new AgentInvocationContext<string, string>("raw");
 var allowedAutoGen = AgentControlFrameworkAdapters.AutoGenMiddleware<string, string>(
     new AgentControl(new DelegateRuntime(request =>
         request.InterventionPoint == InterventionPoint.Input
-            ? Result(Decision.Allow, "safe")
-            : Result(Decision.Allow, "checked"))));
+            ? Result(Decision.Transform, "safe")
+            : Result(Decision.Transform, "checked"))));
 await allowedAutoGen.InvokeAsync(allowedAutoGenContext, (context, _) =>
 {
     context.Output = context.Input;
@@ -464,8 +467,8 @@ var allowedAfContext = new FunctionContext<McpToolArgs, string>("lookup", new Mc
 var allowedAfFilter = AgentControlFrameworkAdapters.AgentFrameworkFunctionMiddleware<McpToolArgs, string>(
     new AgentControl(new DelegateRuntime(request =>
         request.InterventionPoint == InterventionPoint.PreToolCall
-            ? Result(Decision.Allow, new McpToolArgs("safe"))
-            : Result(Decision.Allow, "checked"))));
+            ? Result(Decision.Transform, new McpToolArgs("safe"))
+            : Result(Decision.Transform, "checked"))));
 await allowedAfFilter.InvokeAsync(allowedAfContext, (context, _) =>
 {
     context.Result = context.Arguments.Text;
@@ -499,8 +502,8 @@ var allowedAfRunContext = new AgentInvocationContext<string, string>("raw");
 var allowedAfRun = AgentControlFrameworkAdapters.AgentFrameworkRunMiddleware<string, string>(
     new AgentControl(new DelegateRuntime(request =>
         request.InterventionPoint == InterventionPoint.Input
-            ? Result(Decision.Allow, "safe")
-            : Result(Decision.Allow, "checked"))));
+            ? Result(Decision.Transform, "safe")
+            : Result(Decision.Transform, "checked"))));
 await allowedAfRun.InvokeAsync(allowedAfRunContext, (context, _) =>
 {
     context.Output = context.Input;
@@ -622,7 +625,7 @@ var chainControl = AgentControl.FromManifestChain(
     new CustomPolicy(),
     perfTelemetry: PerfTelemetry.Full);
 var chainResult = await chainControl.EvaluateInputAsync(new { text = "Please summarize account 1234." });
-AssertEqual(Decision.Warn, chainResult.Verdict.Decision, "manifest chain with perf telemetry should warn.");
+AssertEqual(Decision.Transform, chainResult.Verdict.Decision, "manifest chain with perf telemetry should transform.");
 
 // Zero-config ergonomics: FromPath with no dispatchers must build by enabling the
 // bundled native defaults (OPA policy dispatcher resolving the manifest-relative
@@ -637,6 +640,7 @@ AssertEqual(Decision.Allow, zeroConfigResult.Verdict.Decision, "zero-config pre_
 
 await PaymentEscalationHarness.RunAsync();
 await StreamingHarness.RunAsync();
+await Agt5SurfaceHarness.RunAsync();
 
 Console.WriteLine("AgentControlSpecification native round-trip test passed.");
 Console.WriteLine("AgentControlSpecification callback exception-safety test passed.");
@@ -707,14 +711,21 @@ static InterventionPointResult MismatchedEscalateResult()
         ["snapshot"] = new Dictionary<string, object?> { ["input"] = "mutated" },
     });
     return new InterventionPointResult(
-        new Verdict(Decision.Escalate, Effects: Array.Empty<JsonElement>()),
+        new Verdict(Decision.Escalate),
         PolicyInput: mutatedPolicyInput,
         ActionIdentity: AgentControl.ActionIdentity(originalPolicyInput));
 }
 
 static InterventionPointResult Result(Decision decision, object? transformedPolicyTarget = null) =>
     new(
-        new Verdict(decision, Effects: Array.Empty<JsonElement>()),
+        new Verdict(
+            decision,
+            // AGT D1.1: Transform decisions MUST carry the `transform` payload.
+            // We synthesize a $policy_target replacement here so simulated
+            // transforms match the wire shape the FFI surfaces.
+            Transform: decision == Decision.Transform && transformedPolicyTarget is not null
+                ? new Transform("$policy_target", transformedPolicyTarget)
+                : null),
         transformedPolicyTarget is null ? null : JsonSerializer.SerializeToElement(transformedPolicyTarget));
 
 file sealed record McpToolArgs(string Text);
@@ -914,19 +925,17 @@ file sealed class CustomPolicy : IPolicyDispatcher
             .GetBoolean();
         if (containsAccountNumber)
         {
+            // AGT D1.1: redaction now flows through a Transform verdict
+            // instead of the removed `warn` + effects[] pattern.
             return ValueTask.FromResult(JsonSerializer.SerializeToElement(new
             {
-                decision = "warn",
+                decision = "transform",
                 reason = "account_number_redacted",
                 message = "Account number was redacted before continuing.",
-                effects = new object[]
+                transform = new
                 {
-                    new
-                    {
-                        type = "replace",
-                        path = "$policy_target.text",
-                        value = "Please summarize account [REDACTED].",
-                    },
+                    path = "$policy_target.text",
+                    value = "Please summarize account [REDACTED].",
                 },
             }));
         }
@@ -934,7 +943,6 @@ file sealed class CustomPolicy : IPolicyDispatcher
         return ValueTask.FromResult(JsonSerializer.SerializeToElement(new
         {
             decision = "allow",
-            effects = Array.Empty<object>(),
         }));
     }
 }

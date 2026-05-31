@@ -6,25 +6,29 @@ internal static class PaymentEscalationHarness
     public static async Task RunAsync()
     {
         var staleApproval = string.Empty;
-        var approvedEffectsSeen = new List<PaymentArgs>();
+        var approvedToolArgs = new List<PaymentArgs>();
         var approveControl = new AgentControl(new PaymentRuntime(), (_, result, _) =>
         {
             staleApproval = result.ActionIdentity ?? string.Empty;
             return ValueTask.FromResult(ApprovalResolution.Allow(result.ActionIdentity!));
         });
+        // AGT D1: an escalate carries no transform per §13.1. After approval
+        // the host proceeds with the original tool args, so the memo flows
+        // through unmodified. A separate Transform-verdict policy would be
+        // needed to scrub the memo before the action executes.
         var approved = await approveControl.RunToolAsync<PaymentArgs, PaymentReceipt>(
             "wire_transfer",
             new PaymentArgs(25_000, "acct-1", "payroll secret"),
             (args, _) =>
             {
-                approvedEffectsSeen.Add(args);
+                approvedToolArgs.Add(args);
                 return ValueTask.FromResult(new PaymentReceipt(args.Amount, args.Beneficiary, args.Memo));
             },
             "wire-approve");
         Equal(25_000, approved.Value.Amount, "approved payment should execute.");
-        Equal("[redacted]", approved.Value.Memo, "approved payment should receive the approved transform.");
-        Equal(1, approvedEffectsSeen.Count, "approved payment should execute once.");
-        Equal("[redacted]", approvedEffectsSeen.Single().Memo, "approved payment should apply transform once.");
+        Equal("payroll secret", approved.Value.Memo, "approved escalate proceeds with the original args (escalate carries no transform).");
+        Equal(1, approvedToolArgs.Count, "approved payment should execute once.");
+        Equal("payroll secret", approvedToolArgs.Single().Memo, "approved escalate proceeds with the original args.");
 
         var rejectExecuted = false;
         var rejectControl = new AgentControl(new PaymentRuntime(), (_, _, _) => ValueTask.FromResult(ApprovalResolution.Deny()));
@@ -156,11 +160,12 @@ internal sealed class PaymentRuntime : IAgentControlRuntime
             return ValueTask.FromResult(WithIdentity(request, new Verdict(Decision.Allow)));
         }
 
-        var transformed = args with { Memo = "[redacted]" };
+        // AGT D1: escalate carries no transform per §13.1. The host's approval
+        // path consents to the action as-submitted; any redaction would need
+        // to come from a separate Transform verdict.
         return ValueTask.FromResult(WithIdentity(
             request,
-            new Verdict(Decision.Escalate, Reason: "large_transfer"),
-            transformed));
+            new Verdict(Decision.Escalate, Reason: "large_transfer")));
     }
 
     public static string IdentityFor(PaymentArgs args, string callId, PropertyOrder order)

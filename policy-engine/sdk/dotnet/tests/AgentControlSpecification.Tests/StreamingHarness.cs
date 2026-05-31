@@ -58,9 +58,9 @@ annotators:
             new ModelRequest("write code"),
             (_, _) => ValueTask.FromResult(inputBytes));
         AssertEqual(Decision.Allow, streamResult.PreModelCallResult.Verdict.Decision, "streaming pre_model_call should allow safe requests.");
-        AssertEqual(Decision.Warn, streamResult.PostModelCallResult.Verdict.Decision, "streaming post_model_call should warn on redaction.");
+        AssertEqual(Decision.Transform, streamResult.PostModelCallResult.Verdict.Decision, "streaming post_model_call should transform on redaction.");
         AssertEqual("safe [REDACTED]", ExtractContent(streamResult.Value), "streaming transform should redact model output.");
-        Assert(!inputBytes.SequenceEqual(streamResult.Bytes), "warn transform should synthesize replacement bytes.");
+        Assert(!inputBytes.SequenceEqual(streamResult.Bytes), "transform should synthesize replacement bytes.");
         AssertEqual("first,second", string.Join(',', annotator.Calls), "annotators should dispatch in manifest order.");
 
         ToolArgs? toolSaw = null;
@@ -116,7 +116,7 @@ annotators:
             new AgentControl(new ThrowingRuntime()),
             "policy invocation failure should fail closed for streaming.");
         await AssertStreamingBlockedAsync(
-            new AgentControl(new DelegateRuntime(_ => new InterventionPointResult(new Verdict(Decision.Allow, Effects: []), JsonSerializer.SerializeToElement(new { choices = "bad" })))),
+            new AgentControl(new DelegateRuntime(_ => new InterventionPointResult(new Verdict(Decision.Allow), JsonSerializer.SerializeToElement(new { choices = "bad" })))),
             "invalid transformed policy output should fail closed for streaming.");
         try
         {
@@ -265,7 +265,7 @@ annotators:
     private static string ExtractContent(JsonElement completion) =>
         completion.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
 
-    private static InterventionPointResult AllowResult() => new(new Verdict(Decision.Allow, Effects: []));
+    private static InterventionPointResult AllowResult() => new(new Verdict(Decision.Allow));
 
     private static InterventionPointResult WarnRedactedCompletion()
     {
@@ -285,7 +285,11 @@ annotators:
                 },
             },
         });
-        return new InterventionPointResult(new Verdict(Decision.Warn, Effects: []), transformed);
+        // AGT D1: only Transform may rewrite the policy target; `warn`+effects
+        // was the upstream-ACS pattern and is no longer valid.
+        return new InterventionPointResult(
+            new Verdict(Decision.Transform, Transform: new Transform("$policy_target", transformed)),
+            transformed);
     }
 
     private static InterventionPointResult EscalateResult(InterventionPointRequest request)
@@ -295,7 +299,7 @@ annotators:
             ["intervention_point"] = request.InterventionPoint.ToWireName(),
             ["snapshot"] = request.Snapshot,
         });
-        return new InterventionPointResult(new Verdict(Decision.Escalate, Effects: []), PolicyInput: policyInput, ActionIdentity: AgentControl.ActionIdentity(policyInput));
+        return new InterventionPointResult(new Verdict(Decision.Escalate), PolicyInput: policyInput, ActionIdentity: AgentControl.ActionIdentity(policyInput));
     }
 
     private static ApprovalResolver AllowApproval() => (_, result, _) => ValueTask.FromResult(ApprovalResolution.Allow(result.ActionIdentity!));
@@ -372,7 +376,7 @@ annotators:
             {
                 "post_model_call" => PostModel(input),
                 "pre_tool_call" => PreTool(input),
-                _ => JsonSerializer.SerializeToElement(new { decision = "allow", effects = Array.Empty<object>() }),
+                _ => JsonSerializer.SerializeToElement(new { decision = "allow" }),
             });
         }
 
@@ -381,21 +385,18 @@ annotators:
             var content = input.GetProperty("policy_target").GetProperty("value").GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
             if (!content.Contains("SECRET", StringComparison.Ordinal))
             {
-                return JsonSerializer.SerializeToElement(new { decision = "allow", effects = Array.Empty<object>() });
+                return JsonSerializer.SerializeToElement(new { decision = "allow" });
             }
 
+            // AGT D1.1: rewrite via a Transform verdict; effects[] was removed.
             return JsonSerializer.SerializeToElement(new
             {
-                decision = "warn",
+                decision = "transform",
                 reason = "secret_redacted",
-                effects = new object[]
+                transform = new
                 {
-                    new
-                    {
-                        type = "replace",
-                        path = "$policy_target.choices[0].message.content",
-                        value = content.Replace("SECRET", "[REDACTED]", StringComparison.Ordinal),
-                    },
+                    path = "$policy_target.choices[0].message.content",
+                    value = content.Replace("SECRET", "[REDACTED]", StringComparison.Ordinal),
                 },
             });
         }
@@ -413,7 +414,7 @@ annotators:
                 return JsonSerializer.SerializeToElement(new { decision = "escalate", reason = "sensitive_action" });
             }
 
-            return JsonSerializer.SerializeToElement(new { decision = "allow", effects = Array.Empty<object>() });
+            return JsonSerializer.SerializeToElement(new { decision = "allow" });
         }
     }
 
