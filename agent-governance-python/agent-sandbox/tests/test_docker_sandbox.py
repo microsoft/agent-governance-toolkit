@@ -13,6 +13,7 @@ All Docker interactions are mocked so tests run without a Docker daemon.
 from __future__ import annotations
 
 import asyncio
+import ntpath
 import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -1583,17 +1584,41 @@ class TestSessionLifecyclePattern:
 
 class TestWindowsPathProtection:
     @patch("agent_sandbox.docker_provider.provider.platform")
-    def test_drive_root_blocked(self, mock_platform):
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.realpath",
+        side_effect=ntpath.realpath if hasattr(ntpath, "realpath") else lambda p: p,
+    )
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.normpath",
+        side_effect=ntpath.normpath,
+    )
+    def test_drive_root_blocked(self, mock_normpath, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\") is True
 
     @patch("agent_sandbox.docker_provider.provider.platform")
-    def test_drive_letter_only_blocked(self, mock_platform):
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.realpath",
+        side_effect=ntpath.realpath if hasattr(ntpath, "realpath") else lambda p: p,
+    )
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.normpath",
+        side_effect=ntpath.normpath,
+    )
+    def test_drive_letter_only_blocked(self, mock_normpath, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("D:") is True
 
     @patch("agent_sandbox.docker_provider.provider.platform")
-    def test_windows_safe_path(self, mock_platform):
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.realpath",
+        side_effect=ntpath.realpath if hasattr(ntpath, "realpath") else lambda p: p,
+    )
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.normpath",
+        side_effect=ntpath.normpath,
+    )
+    def test_windows_safe_path(self, mock_normpath, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\Users\\agent\\data") is False
 
