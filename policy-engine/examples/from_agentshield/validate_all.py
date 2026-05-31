@@ -26,7 +26,7 @@ import jsonschema
 import yaml
 
 from agent_control_specification import AgentControl
-from acs_generator.vocabulary import DECISIONS, EFFECT_TYPES
+from acs_generator.vocabulary import DECISIONS
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
@@ -74,12 +74,44 @@ def opa_eval(bundle: Path, point: str, cfg: dict) -> dict:
 def validate_verdict(point: str, verdict: dict) -> None:
     if verdict.get("decision") not in DECISIONS:
         raise RuntimeError(f"{point}: unsupported decision {verdict.get('decision')!r}")
-    for effect in verdict.get("effects", []):
-        if not isinstance(effect, dict) or effect.get("type") not in EFFECT_TYPES:
-            raise RuntimeError(f"{point}: unsupported effect {effect!r}")
-        path = str(effect.get("path", ""))
+    # AGT-M3 round-2 CONCERN F: AGT D1.1 removed the verdict ``effects``
+    # array and replaced it with a single ``transform`` object whose
+    # ``path`` must be rooted at ``$policy_target``. The legacy
+    # ``effects[]`` validator walked an array that the Rust core now
+    # rejects with ``runtime_error:policy_output_invalid``, so it can
+    # never see a valid value. Validate the new transform shape
+    # instead: required when ``decision == "transform"``, forbidden
+    # otherwise, with the same ``$policy_target``-rooted path
+    # restriction the old per-effect check enforced.
+    if "effects" in verdict:
+        raise RuntimeError(
+            f"{point}: verdict carries removed 'effects' member; "
+            "use a 'transform' verdict per AGT D1.1"
+        )
+    if verdict["decision"] == "transform":
+        transform = verdict.get("transform")
+        if not isinstance(transform, dict):
+            raise RuntimeError(
+                f"{point}: transform verdict missing 'transform' object"
+            )
+        path = transform.get("path")
+        if not isinstance(path, str):
+            raise RuntimeError(
+                f"{point}: transform.path must be a string, got {path!r}"
+            )
         if path != "$policy_target" and not path.startswith("$policy_target."):
-            raise RuntimeError(f"{point}: effect path outside $policy_target: {effect.get('path')!r}")
+            raise RuntimeError(
+                f"{point}: transform.path outside $policy_target: {path!r}"
+            )
+        if "value" not in transform:
+            raise RuntimeError(
+                f"{point}: transform verdict missing 'transform.value'"
+            )
+    elif verdict.get("transform") is not None:
+        raise RuntimeError(
+            f"{point}: 'transform' member is only allowed on transform "
+            f"verdicts, got decision={verdict['decision']!r}"
+        )
 
 
 class _NoopAnnotator:
