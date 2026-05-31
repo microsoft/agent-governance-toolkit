@@ -21,6 +21,7 @@ The module is structured as a thin re-export layer so external callers
 only need ``from agt.policies import ...``.
 """
 
+from .result import EvaluationResult
 from .snapshot import (
     SnapshotBuilder,
     agent_shutdown_snapshot,
@@ -34,6 +35,7 @@ from .snapshot import (
 )
 
 __all__ = [
+    "EvaluationResult",
     "SnapshotBuilder",
     "agent_shutdown_snapshot",
     "agent_startup_snapshot",
