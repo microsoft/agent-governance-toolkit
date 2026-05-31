@@ -55,6 +55,22 @@ Application semantics:
 - In `evaluate_only` mode the transformation is validated but not applied
   (matches today's `effects` behaviour in §5).
 
+Host-side ordering: hosts MUST consult the AGT runtime before applying any
+host-side input transformation that would mask or alter the value the
+runtime sees. AGT-side runs first so a `transform` verdict that redacts a
+sensitive value, or a `deny` / `escalate` verdict on it, takes precedence
+over a host-side scan.
+
+Back-compat exception. The
+`agent_os.integrations.bedrock_adapter.BedrockKernel` flag
+`enable_agt_pii_routing` defaults to `False` for v4 back-compatibility so
+host-side `_check_input` still fires first. This is the only documented
+adapter that retains the v4 host-first ordering and the only field that
+intentionally diverges from this section. v6 will flip the default to
+`True`; hosts SHOULD set the flag to `True` ahead of the v6 cut and move
+PII patterns into the AGT manifest. No other adapter MAY introduce a
+similar back-compat opt-out without an explicit spec amendment.
+
 ### D1.2 Decision semantics (replacing §13.1)
 
 `allow` permits the action with no change to the policy target.

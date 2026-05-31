@@ -199,6 +199,19 @@ class BedrockKernel(BaseIntegration):
                 a :class:`PolicyViolationError` before the bridge
                 runs. Hosts opt in to the AGT routing once they have
                 migrated their PII handling into the manifest.
+
+                .. deprecated::
+                    The ``False`` default is preserved for v4
+                    back-compatibility and is the documented exception
+                    to the AGT D1.1 "AGT runs first" ordering called
+                    out in ``policy-engine/spec/SPECIFICATION-AGT-DELTA.md``
+                    §D1.1. v6 will flip the default to ``True`` so
+                    every adapter routes through the bridge first.
+                    Existing hosts SHOULD set this to ``True`` ahead
+                    of v6 and migrate their PII patterns into the AGT
+                    manifest (typically via the stock
+                    ``data.agt.patterns`` library plus a
+                    ``transform`` verdict).
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
