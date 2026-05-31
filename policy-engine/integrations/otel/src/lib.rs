@@ -6,7 +6,11 @@ use std::collections::HashMap;
 
 pub const DEFAULT_OTEL_METER_NAME: &str = "agent_control_specification";
 
-const DECISION_WIRE_STRINGS: &[&str] = &["allow", "deny", "warn", "escalate"];
+// AGT D1.1: `transform` is the fifth wire decision per
+// SPECIFICATION-AGT-DELTA.md §D1. OtelTelemetrySink builds one
+// counter per decision so the transform path is observable alongside
+// allow / deny / warn / escalate.
+const DECISION_WIRE_STRINGS: &[&str] = &["allow", "deny", "warn", "escalate", "transform"];
 
 pub struct OtelTelemetrySink {
     meter_name: String,
@@ -109,6 +113,22 @@ pub fn metric_attributes(event: &TelemetryEvent) -> Vec<AttributePair> {
             value: event.annotators.join(","),
         });
     }
+    // AGT D2 / AGT-EVIDENCE-1.0 §3: forward the verbatim `artefact`
+    // string and the sorted pointer keys (not the URL values) so
+    // telemetry cardinality stays bounded. Auditors recover the full
+    // URL map from the audit record per §4.
+    if let Some(artefact) = &event.evidence_artefact {
+        attributes.push(AttributePair {
+            key: "evidence_artefact",
+            value: artefact.clone(),
+        });
+    }
+    if !event.evidence_verification_pointer_keys.is_empty() {
+        attributes.push(AttributePair {
+            key: "evidence_verification_pointer_keys",
+            value: event.evidence_verification_pointer_keys.join(","),
+        });
+    }
     attributes
 }
 
@@ -130,7 +150,8 @@ mod tests {
     fn default_uses_canonical_meter_name() {
         let sink = OtelTelemetrySink::default();
         assert_eq!(sink.meter_name(), DEFAULT_OTEL_METER_NAME);
-        assert_eq!(sink.decision_counter_count(), 4);
+        // AGT D1: five decisions (allow, deny, warn, escalate, transform).
+        assert_eq!(sink.decision_counter_count(), 5);
     }
 
     #[test]
@@ -171,6 +192,91 @@ mod tests {
         let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Output)
             .with_decision(Decision::Allow)
             .with_duration_ms(1.0);
+        sink.emit(event);
+    }
+
+    #[test]
+    fn mapping_omits_evidence_attributes_when_verdict_has_none() {
+        // AGT D2 / AGT-EVIDENCE-1.0 §3: events without evidence MUST NOT
+        // emit the evidence_artefact or evidence_verification_pointer_keys
+        // attributes; their absence keeps the telemetry shape clean for
+        // the common no-evidence path.
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+            .with_decision(Decision::Allow);
+        let attributes = metric_attributes(&event);
+        assert!(!attributes
+            .iter()
+            .any(|attr| attr.key == "evidence_artefact"
+                || attr.key == "evidence_verification_pointer_keys"));
+    }
+
+    #[test]
+    fn mapping_includes_evidence_attributes_when_verdict_has_them() {
+        // AGT D2 / AGT-EVIDENCE-1.0 §3: the runtime forwards the verbatim
+        // artefact and the sorted pointer keys. The URL values MUST NOT
+        // appear in telemetry; auditors recover them from the audit
+        // record per §4.
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+            .with_decision(Decision::Allow)
+            .with_evidence(
+                Some("sha256:proofblob"),
+                vec!["issuer_pubkey".to_string(), "policy_registry".to_string()],
+            );
+        let attributes = metric_attributes(&event);
+        assert!(attributes.contains(&AttributePair {
+            key: "evidence_artefact",
+            value: "sha256:proofblob".to_string(),
+        }));
+        assert!(attributes.contains(&AttributePair {
+            key: "evidence_verification_pointer_keys",
+            value: "issuer_pubkey,policy_registry".to_string(),
+        }));
+        // Defense in depth: the URL strings MUST NOT be on any attribute
+        // value, per AGT-EVIDENCE-1.0 §3.
+        for attr in &attributes {
+            assert!(!attr.value.contains("https://"));
+        }
+    }
+
+    #[test]
+    fn intervention_point_transformed_event_increments_transform_counter() {
+        // AGT D1 + D2: the runtime emits a dedicated
+        // `intervention_point.transformed` event in addition to the base
+        // Decision event when the verdict is Transform. The OTel sink
+        // routes both through the per-decision counter scheme using the
+        // event's `decision` field.
+        let sink = OtelTelemetrySink::new("acs_transform_test");
+        let event = TelemetryEvent::new(
+            TelemetryEventType::InterventionPointTransformed,
+            InterventionPoint::Output,
+        )
+        .with_decision(Decision::Transform)
+        .with_enforcement_mode(EnforcementMode::Enforce)
+        .with_reason_code("redacted")
+        .with_evidence(
+            Some("sha256:proofblob"),
+            vec!["issuer_pubkey".to_string()],
+        );
+        let attributes = metric_attributes(&event);
+        assert!(attributes.contains(&AttributePair {
+            key: "event_type",
+            value: "intervention_point.transformed".to_string(),
+        }));
+        assert!(attributes.contains(&AttributePair {
+            key: "decision",
+            value: "transform".to_string(),
+        }));
+        assert!(attributes.contains(&AttributePair {
+            key: "evidence_artefact",
+            value: "sha256:proofblob".to_string(),
+        }));
+        assert!(attributes.contains(&AttributePair {
+            key: "evidence_verification_pointer_keys",
+            value: "issuer_pubkey".to_string(),
+        }));
+        // The transform decision MUST have a counter in the per-decision
+        // map so emit() can record on it.
+        assert!(sink.decision_counters.contains_key("transform"));
         sink.emit(event);
     }
 }
