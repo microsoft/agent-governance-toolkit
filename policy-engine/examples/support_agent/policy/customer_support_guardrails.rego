@@ -12,26 +12,13 @@ default post_tool_call_verdict := {"decision": "allow"}
 default output_verdict := {"decision": "allow"}
 default agent_shutdown_verdict := {"decision": "allow"}
 
-pii_redact_effects := [
-    {
-        "type": "redact",
-        "path": "$policy_target.value",
-        "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
-        "replacement": "[REDACTED]"
-    },
-    {
-        "type": "redact",
-        "path": "$policy_target.value",
-        "pattern": "\\b\\d{3}[-.]\\d{3}[-.]\\d{4}\\b",
-        "replacement": "[REDACTED]"
-    },
-    {
-        "type": "redact",
-        "path": "$policy_target.value",
-        "pattern": "\\b(?:\\d[ -]*?){13,16}\\b",
-        "replacement": "[REDACTED]"
-    }
-]
+# AGT-DELTA D1.3: multi-pattern redaction (email + phone + card) is a
+# stateful operation that does not fit a single Transform verdict's
+# {path, value} body. Until the AGT D1.3 follow-up moves multi-pattern
+# redaction into an annotator that pre-processes the policy target, the
+# policy MUST deny when PII is detected at post_tool_call / output.
+# TODO(AGT-DELTA D1.3): replace with an annotator-driven redact step
+# (or a chain of Transform verdicts) once the host pipeline supports it.
 
 verdict := agent_startup_verdict if { input.intervention_point == "agent_startup" }
 verdict := input_verdict if { input.intervention_point == "input" }
@@ -84,10 +71,9 @@ else := {
 }
 
 post_tool_call_verdict := {
-    "decision": "allow",
-    "reason": "allow",
-    "message": "",
-    "effects": pii_redact_effects
+    "decision": "deny",
+    "reason": "pii_detected",
+    "message": "Tool result contains PII (email/phone/card) and multi-pattern redaction is not yet expressible as a single AGT D1.1 transform."
 } if {
     input.intervention_point == "post_tool_call"
     input.intervention_point == "post_tool_call"
@@ -95,10 +81,9 @@ post_tool_call_verdict := {
 }
 
 output_verdict := {
-    "decision": "allow",
-    "reason": "allow",
-    "message": "",
-    "effects": pii_redact_effects
+    "decision": "deny",
+    "reason": "pii_detected",
+    "message": "Output contains PII (email/phone/card) and multi-pattern redaction is not yet expressible as a single AGT D1.1 transform."
 } if {
     input.intervention_point == "output"
     input.intervention_point == "output"

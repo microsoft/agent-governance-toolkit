@@ -117,21 +117,22 @@ post_value := object.get(input.policy_target, "value", {})
 post_text := object.get(post_value, "text", sprintf("%v", [post_value]))
 output_text := object.get(object.get(input.policy_target, "value", {}), "text", "")
 
-redact_secret := redact_from(post_text, "redact_secret_in_tool_result", "Tool result contains a secret-like value.", "[SECRET-REDACTED]", `(?i)\b(api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+`)
-redact_ssn_post := redact_from(post_text, "redact_ssn_in_tool_result", "Tool result contains an SSN-shaped value.", "[SSN-REDACTED]", `\b\d{3}-\d{2}-\d{4}\b`)
-redact_secret_out := redact_from(output_text, "redact_secret_in_output", "Output contains a secret-like value.", "[SECRET-REDACTED]", `(?i)\b(api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+`)
-redact_ssn_out := redact_from(output_text, "redact_ssn_in_output", "Output contains an SSN-shaped value.", "[SSN-REDACTED]", `\b\d{3}-\d{2}-\d{4}\b`)
+redact_secret := transform_redact_from(post_text, "redact_secret_in_tool_result", "Tool result contains a secret-like value.", "[SECRET-REDACTED]", `(?i)\b(api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+`)
+redact_ssn_post := transform_redact_from(post_text, "redact_ssn_in_tool_result", "Tool result contains an SSN-shaped value.", "[SSN-REDACTED]", `\b\d{3}-\d{2}-\d{4}\b`)
+redact_secret_out := transform_redact_from(output_text, "redact_secret_in_output", "Output contains a secret-like value.", "[SECRET-REDACTED]", `(?i)\b(api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+`)
+redact_ssn_out := transform_redact_from(output_text, "redact_ssn_in_output", "Output contains an SSN-shaped value.", "[SSN-REDACTED]", `\b\d{3}-\d{2}-\d{4}\b`)
 
-redact_from(text, reason, message, replacement, pattern) := {
-	"decision": "warn",
+# AGT-DELTA D1.1: rewrite the single regex match through a Transform
+# verdict scoped to ``$policy_target.text``. The Rust core rejects any
+# verdict carrying ``effects`` with ``runtime_error:policy_output_invalid``.
+transform_redact_from(text, reason, message, replacement, pattern) := {
+	"decision": "transform",
 	"reason": reason,
 	"message": message,
-	"effects": [{"type": "redact", "path": "$policy_target.text", "spans": [{"start": start, "end": end, "replacement": replacement}]}],
+	"transform": {"path": "$policy_target.text", "value": replace(text, m[0], replacement)},
 } if {
 	m := regex.find_n(pattern, text, 1)
 	count(m) > 0
-	start := indexof(text, m[0])
-	end := start + count(m[0])
 }
 
 deny(reason, message) := {"decision": "deny", "reason": reason, "message": message}

@@ -32,16 +32,13 @@ input_verdict := {
 }
 
 post_model_call_verdict := {
-    "decision": "allow",
-    "reason": "allow",
+    "decision": "transform",
+    "reason": "phi_redacted",
     "message": "",
-    "effects": [
-        {
-            "type": "redact",
-            "path": "$policy_target.value",
-            "spans": [{"start": 0, "end": count(input.policy_target.value.value), "replacement": "[REDACTED PHI]"}]
-        }
-    ]
+    "transform": {
+        "path": "$policy_target.value",
+        "value": "[REDACTED PHI]"
+    }
 } if {
     input.intervention_point == "post_model_call"
     input.intervention_point == "post_model_call"
@@ -79,16 +76,13 @@ else := {
 }
 
 post_tool_call_verdict := {
-    "decision": "allow",
-    "reason": "allow",
+    "decision": "transform",
+    "reason": "phi_redacted",
     "message": "",
-    "effects": [
-        {
-            "type": "redact",
-            "path": "$policy_target.value",
-            "spans": [{"start": 0, "end": count(input.policy_target.value.value), "replacement": "[REDACTED PHI]"}]
-        }
-    ]
+    "transform": {
+        "path": "$policy_target.value",
+        "value": "[REDACTED PHI]"
+    }
 } if {
     input.intervention_point == "post_tool_call"
     input.intervention_point == "post_tool_call"
@@ -96,16 +90,13 @@ post_tool_call_verdict := {
 }
 
 output_verdict := {
-    "decision": "allow",
-    "reason": "allow",
+    "decision": "transform",
+    "reason": "phi_redacted",
     "message": "",
-    "effects": [
-        {
-            "type": "redact",
-            "path": "$policy_target.value",
-            "spans": [{"start": 0, "end": count(input.policy_target.value.value), "replacement": "[REDACTED PHI]"}]
-        }
-    ]
+    "transform": {
+        "path": "$policy_target.value",
+        "value": "[REDACTED PHI]"
+    }
 } if {
     input.intervention_point == "output"
     input.intervention_point == "output"

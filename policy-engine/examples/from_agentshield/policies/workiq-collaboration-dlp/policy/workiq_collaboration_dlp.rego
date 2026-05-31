@@ -148,31 +148,27 @@ pre_tool_call_verdict := {
 }
 
 post_tool_call_verdict := {
-	"decision": "warn",
+	"decision": "transform",
 	"reason": "pii_redact_tool_output",
 	"message": "PII detected in tool result.",
-	"effects": [{"type": "redact", "path": "$policy_target.value", "spans": [{"start": start, "end": end, "replacement": "[PII REDACTED]"}]}],
+	"transform": {"path": "$policy_target.value", "value": replace(text, pii, "[PII REDACTED]")},
 } if {
 	text := object.get(object.get(input.policy_target, "value", {}), "value", "")
 	matches := regex.find_n(`\b(\d{3}-\d{2}-\d{4}|\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4})\b`, text, 1)
 	count(matches) > 0
 	pii := matches[0]
-	start := indexof(text, pii)
-	end := start + count(pii)
 }
 
 output_verdict := {
-	"decision": "warn",
+	"decision": "transform",
 	"reason": "pii_redaction",
 	"message": "PII detected in agent output.",
-	"effects": [{"type": "redact", "path": "$policy_target.text", "spans": [{"start": start, "end": end, "replacement": "[REDACTED]"}]}],
+	"transform": {"path": "$policy_target.text", "value": replace(text, pii, "[REDACTED]")},
 } if {
 	text := object.get(object.get(input.policy_target, "value", {}), "text", "")
 	matches := regex.find_n(`\b(\d{3}-\d{2}-\d{4}|\d{16}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b`, text, 1)
 	count(matches) > 0
 	pii := matches[0]
-	start := indexof(text, pii)
-	end := start + count(pii)
 }
 
 sensitivity_rank(label) := rank if {

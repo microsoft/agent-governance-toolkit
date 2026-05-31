@@ -71,16 +71,13 @@ post_tool_call_verdict := {
     input.annotations.content_size == "very_large"
 }
 else := {
-    "decision": "allow",
-    "reason": "allow",
+    "decision": "transform",
+    "reason": "secret_redacted",
     "message": "",
-    "effects": [
-        {
-            "type": "redact",
-            "path": "$policy_target",
-            "spans": [{"start": start, "end": end, "replacement": "[REDACTED_SECRET]"}]
-        }
-    ]
+    "transform": {
+        "path": "$policy_target",
+        "value": redacted
+    }
 } if {
     input.intervention_point == "post_tool_call"
     input.intervention_point == "post_tool_call"
@@ -88,9 +85,7 @@ else := {
     is_string(input.policy_target.value)
     matches := regex.find_n("(API_KEY|TOKEN|SECRET)=[A-Za-z0-9_-]+", input.policy_target.value, 1)
     count(matches) > 0
-    secret := matches[0]
-    start := indexof(input.policy_target.value, secret)
-    end := start + count(secret)
+    redacted := replace(input.policy_target.value, matches[0], "[REDACTED_SECRET]")
 }
 
 output_verdict := {
@@ -103,16 +98,13 @@ output_verdict := {
     input.annotations.content_size == "very_large"
 }
 else := {
-    "decision": "allow",
-    "reason": "allow",
+    "decision": "transform",
+    "reason": "secret_redacted",
     "message": "",
-    "effects": [
-        {
-            "type": "redact",
-            "path": "$policy_target",
-            "spans": [{"start": start, "end": end, "replacement": "[REDACTED_SECRET]"}]
-        }
-    ]
+    "transform": {
+        "path": "$policy_target",
+        "value": redacted
+    }
 } if {
     input.intervention_point == "output"
     input.intervention_point == "output"
@@ -120,7 +112,5 @@ else := {
     is_string(input.policy_target.value)
     matches := regex.find_n("(API_KEY|TOKEN|SECRET)=[A-Za-z0-9_-]+", input.policy_target.value, 1)
     count(matches) > 0
-    secret := matches[0]
-    start := indexof(input.policy_target.value, secret)
-    end := start + count(secret)
+    redacted := replace(input.policy_target.value, matches[0], "[REDACTED_SECRET]")
 }

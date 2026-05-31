@@ -133,22 +133,22 @@ fraud_agent_high_risk if object.get(snapshot, "fraud_risk_score", 0) >= 70
 
 result_value := object.get(input.policy_target, "value", {})
 result_text := object.get(result_value, "text", sprintf("%v", [result_value]))
-redact_ssn := warn_effect("redact_ssn_in_tool_result", "Tool result contains an SSN-shaped value.", "[SSN-REDACTED]", m[0]) if {
+redact_ssn := transform_redact("redact_ssn_in_tool_result", "Tool result contains an SSN-shaped value.", "[SSN-REDACTED]", m[0]) if {
 	m := regex.find_n(`\b\d{3}-\d{2}-\d{4}\b`, result_text, 1)
 	count(m) > 0
 }
-redact_card := warn_effect("redact_card_in_tool_result", "Tool result contains a card-shaped value.", "[CARD-REDACTED]", m[0]) if {
+redact_card := transform_redact("redact_card_in_tool_result", "Tool result contains a card-shaped value.", "[CARD-REDACTED]", m[0]) if {
 	m := regex.find_n(`\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b`, result_text, 1)
 	count(m) > 0
 }
-warn_effect(reason, message, replacement, match) := {
-	"decision": "warn",
+# AGT-DELTA D1.1: rewrite the single regex match through a Transform
+# verdict scoped to ``$policy_target.text``. The Rust core rejects any
+# verdict carrying ``effects`` with ``runtime_error:policy_output_invalid``.
+transform_redact(reason, message, replacement, match) := {
+	"decision": "transform",
 	"reason": reason,
 	"message": message,
-	"effects": [{"type": "redact", "path": "$policy_target.text", "spans": [{"start": start, "end": end, "replacement": replacement}]}],
-} if {
-	start := indexof(result_text, match)
-	end := start + count(match)
+	"transform": {"path": "$policy_target.text", "value": replace(result_text, match, replacement)},
 }
 
 deny(reason, message) := {"decision": "deny", "reason": reason, "message": message}
