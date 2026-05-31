@@ -641,6 +641,7 @@ AssertEqual(Decision.Allow, zeroConfigResult.Verdict.Decision, "zero-config pre_
 await PaymentEscalationHarness.RunAsync();
 await StreamingHarness.RunAsync();
 await Agt5SurfaceHarness.RunAsync();
+await Agt1TransformGateHarness.RunAsync();
 
 Console.WriteLine("AgentControlSpecification native round-trip test passed.");
 Console.WriteLine("AgentControlSpecification callback exception-safety test passed.");
@@ -654,6 +655,7 @@ Console.WriteLine("AgentControlSpecification payment escalation use-case tests p
 Console.WriteLine("AgentControlSpecification adapter approval-resolver parity tests passed.");
 Console.WriteLine("AgentControlSpecification fail-closed error parity tests passed.");
 Console.WriteLine("AgentControlSpecification zero-config FromPath test passed.");
+Console.WriteLine("AgentControlSpecification AGT D1 transform-gate parity tests passed.");
 Console.WriteLine($"Native library: {nativeLibraryPath}");
 
 static void Assert(bool condition, string message)
@@ -716,8 +718,20 @@ static InterventionPointResult MismatchedEscalateResult()
         ActionIdentity: AgentControl.ActionIdentity(originalPolicyInput));
 }
 
-static InterventionPointResult Result(Decision decision, object? transformedPolicyTarget = null) =>
-    new(
+static InterventionPointResult Result(Decision decision, object? transformedPolicyTarget = null)
+{
+    // AGT D1 fixes the only decision that may rewrite the policy target to
+    // Transform. Producing a (Allow|Warn|Deny|Escalate, transformedPolicyTarget!=null)
+    // result is a test-authoring mistake that would mask regressions in the
+    // host gating helper, so refuse the combination here.
+    if (transformedPolicyTarget is not null && decision != Decision.Transform)
+    {
+        throw new ArgumentException(
+            $"Result(decision={decision}, transformedPolicyTarget!=null) violates AGT D1; only Transform may carry a policy-target rewrite.",
+            nameof(transformedPolicyTarget));
+    }
+
+    return new(
         new Verdict(
             decision,
             // AGT D1.1: Transform decisions MUST carry the `transform` payload.
@@ -727,6 +741,7 @@ static InterventionPointResult Result(Decision decision, object? transformedPoli
                 ? new Transform("$policy_target", transformedPolicyTarget)
                 : null),
         transformedPolicyTarget is null ? null : JsonSerializer.SerializeToElement(transformedPolicyTarget));
+}
 
 file sealed record McpToolArgs(string Text);
 

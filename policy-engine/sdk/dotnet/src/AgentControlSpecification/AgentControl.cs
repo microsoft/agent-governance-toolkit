@@ -558,7 +558,7 @@ public sealed class AgentControl
 
     private static T TransformedOr<T>(InterventionPointResult result, T fallback, EnforcementMode mode)
     {
-        if (mode != EnforcementMode.Enforce || !result.Verdict.Decision.AppliesEffects())
+        if (mode != EnforcementMode.Enforce || !result.Verdict.Decision.AppliesTransform())
         {
             return fallback;
         }

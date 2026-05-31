@@ -55,7 +55,7 @@ public static class AgentControlStreamingExtensions
             }
 
             var transformed = modelRun.PostModelCallResult.TransformedPolicyTarget.HasValue
-                && modelRun.PostModelCallResult.Verdict.Decision.AppliesEffects();
+                && modelRun.PostModelCallResult.Verdict.Decision.AppliesTransform();
             var bytes = transformed
                 ? AgentControlStreaming.SynthesizeSseStream(modelRun.Value, assembledResponse.Value)
                 : CopyBytes(originalBytes);

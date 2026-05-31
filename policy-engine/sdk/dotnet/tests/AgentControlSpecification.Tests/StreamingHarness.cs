@@ -115,8 +115,13 @@ annotators:
         await AssertStreamingBlockedAsync(
             new AgentControl(new ThrowingRuntime()),
             "policy invocation failure should fail closed for streaming.");
+        // AGT D1: invalid transform payloads must fail closed; a Transform
+        // verdict with `choices` shaped as a string cannot be re-synthesized
+        // as an SSE response.
         await AssertStreamingBlockedAsync(
-            new AgentControl(new DelegateRuntime(_ => new InterventionPointResult(new Verdict(Decision.Allow), JsonSerializer.SerializeToElement(new { choices = "bad" })))),
+            new AgentControl(new DelegateRuntime(_ => new InterventionPointResult(
+                new Verdict(Decision.Transform, Transform: new Transform("$policy_target", JsonSerializer.SerializeToElement(new { choices = "bad" }))),
+                JsonSerializer.SerializeToElement(new { choices = "bad" })))),
             "invalid transformed policy output should fail closed for streaming.");
         try
         {

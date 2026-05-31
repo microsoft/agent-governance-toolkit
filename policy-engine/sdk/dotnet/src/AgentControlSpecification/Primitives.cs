@@ -101,14 +101,17 @@ public static class DecisionExtensions
     };
 
     /// <summary>
-    /// True for decisions whose execution side proceeds with the action. Per
-    /// AGT D1 only <c>Transform</c> mutates the policy target;
-    /// <c>Allow</c> and <c>Warn</c> proceed unchanged.
-    /// <c>Escalate</c> is excluded because §13.1 forbids it from carrying any
-    /// rewrite and the host must consult the approval path before continuing.
+    /// Deprecated. Use <see cref="AppliesTransform(Decision)"/> when deciding
+    /// whether to consume
+    /// <see cref="InterventionPointResult.TransformedPolicyTarget"/>, or
+    /// <see cref="Permits(Decision)"/> when checking whether the action
+    /// proceeds. AGT D1 removed the effects[] surface and only the
+    /// <c>Transform</c> decision mutates the policy target, so this helper now
+    /// returns the same value as <see cref="AppliesTransform(Decision)"/>.
     /// </summary>
+    [Obsolete("AGT D1 removed effects[]; use AppliesTransform (only Transform mutates) or Permits (action proceeds).")]
     public static bool AppliesEffects(this Decision decision) =>
-        decision is Decision.Allow or Decision.Warn or Decision.Transform;
+        decision.AppliesTransform();
 
     /// <summary>
     /// True only for <c>Transform</c>, the sole mutating decision per AGT D1.
