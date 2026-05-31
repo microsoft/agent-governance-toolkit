@@ -336,3 +336,96 @@ def test_event_stream_transform_rewrites_action_group_parameters(
     assert invocation_input["actionGroupInvocationInput"]["parameters"] == {
         "q": "[SANITIZED]"
     }
+
+
+def test_enable_agt_pii_routing_lets_transform_run_before_host_pii_check(
+    tmp_path: Path,
+) -> None:
+    """AGT-DELTA D1.1 Concern 2 regression. With
+    ``enable_agt_pii_routing=True`` the Bedrock kernel MUST run the
+    AGT input intervention point BEFORE the host-side ``_check_input``
+    PII scan, so an AGT manifest can redact PII before the legacy
+    pattern scan rejects it.
+    """
+    from agent_os.integrations.base import GovernancePolicy
+    from agent_os.integrations.bedrock_adapter import BedrockKernel
+
+    runtime, _policy = _build_runtime(
+        tmp_path,
+        [
+            {
+                "decision": "transform",
+                "reason": "pii_redaction",
+                "transform": {
+                    "path": "$policy_target",
+                    "value": "Customer record [REDACTED]",
+                },
+            }
+        ],
+    )
+    kernel = BedrockKernel(
+        policy=GovernancePolicy(),
+        _runtime=runtime,
+        enable_agt_pii_routing=True,
+    )
+    client = _mock_client()
+    governed = kernel.wrap(client)
+
+    # The raw inputText contains a SSN-shaped pattern the host
+    # ``_check_input`` would refuse if it ran first.
+    governed.invoke_agent(
+        agentId="A",
+        agentAliasId="L",
+        sessionId="s",
+        inputText="Customer SSN 123-45-6789 trailing",
+    )
+
+    client.invoke_agent.assert_called_once()
+    sent = client.invoke_agent.call_args.kwargs
+    assert sent["inputText"] == "Customer record [REDACTED]"
+
+
+def test_enable_agt_pii_routing_off_preserves_v4_short_circuit(
+    tmp_path: Path,
+) -> None:
+    """When the flag is off the host PII scan still fires first and
+    raises before the AGT bridge runs.
+    """
+    from agent_os.integrations.base import (
+        GovernancePolicy,
+        PolicyViolationError,
+    )
+    from agent_os.integrations.bedrock_adapter import BedrockKernel
+
+    runtime, policy = _build_runtime(
+        tmp_path,
+        [
+            {
+                "decision": "transform",
+                "reason": "pii_redaction",
+                "transform": {
+                    "path": "$policy_target",
+                    "value": "Customer record [REDACTED]",
+                },
+            }
+        ],
+    )
+    kernel = BedrockKernel(
+        policy=GovernancePolicy(),
+        _runtime=runtime,
+    )
+    client = _mock_client()
+    governed = kernel.wrap(client)
+
+    with pytest.raises(PolicyViolationError):
+        governed.invoke_agent(
+            agentId="A",
+            agentAliasId="L",
+            sessionId="s",
+            inputText="Customer SSN 123-45-6789 trailing",
+        )
+
+    # The AGT bridge MUST NOT have been consulted in the v4 default
+    # path so the scripted dispatcher's transform remains queued.
+    assert policy.invocations == []
+    client.invoke_agent.assert_not_called()

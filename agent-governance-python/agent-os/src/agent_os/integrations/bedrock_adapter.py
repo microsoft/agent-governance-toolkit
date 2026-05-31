@@ -165,6 +165,7 @@ class BedrockKernel(BaseIntegration):
         evaluator: Any = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        enable_agt_pii_routing: bool = False,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ) -> None:
@@ -188,6 +189,16 @@ class BedrockKernel(BaseIntegration):
                 matches :data:`agt.policies.runtime.ApprovalCallback`.
                 When ``None`` an escalate verdict fails closed to
                 ``deny``.
+            enable_agt_pii_routing: When ``True`` the AGT input
+                intervention point runs BEFORE the host-side
+                ``_check_input`` PII / blocked-pattern scan, so an
+                AGT D1.1 transform on PII (or an AGT deny / escalate)
+                takes precedence and is given a chance to redact the
+                outbound text. When ``False`` (the v4 default) the
+                host scan still fires first and any PII match raises
+                a :class:`PolicyViolationError` before the bridge
+                runs. Hosts opt in to the AGT routing once they have
+                migrated their PII handling into the manifest.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -204,12 +215,18 @@ class BedrockKernel(BaseIntegration):
         self._start_time = time.monotonic()
         self._last_error: str | None = None
         self._approval_resolver = approval_resolver
+        self._enable_agt_pii_routing = bool(enable_agt_pii_routing)
         self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
             self.policy,
             approval_resolver=approval_resolver,
             runtime=_runtime,
             runtime_factory=_runtime_factory,
         )
+
+    @property
+    def enable_agt_pii_routing(self) -> bool:
+        """Whether AGT runs first on the input intervention point."""
+        return self._enable_agt_pii_routing
 
     @property
     def bridge(self) -> AdapterRuntimeBridge:
@@ -485,18 +502,22 @@ class GovernedBedrockClient:
         # 1. Rate limit
         self._kernel._check_rate_limit(agent_arn)
 
-        # 2. Input scan (host-side defensive PII / blocked-pattern check)
+        # 2. Input governance. Per AGT-DELTA D1.1 a transform verdict
+        # on the input intervention point rewrites the outbound text
+        # before it reaches Bedrock. When ``enable_agt_pii_routing`` is
+        # set on the kernel the AGT bridge runs FIRST so a manifest-
+        # defined PII transform can redact the text; the host-side
+        # ``_check_input`` PII scan then runs against the (possibly
+        # redacted) text and only raises when the AGT path allowed
+        # without rewriting. When the flag is off (the v4 default) the
+        # host scan still fires first to preserve the historical
+        # PolicyViolationError shape.
         input_text = kwargs.get("inputText", "")
-        self._kernel._check_input(self._ctx, input_text)
-
-        # 3. AGT input intervention point
-        if input_text:
+        if self._kernel.enable_agt_pii_routing and input_text:
             bridge_result = self._kernel.evaluate_input(self._ctx, input_text)
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, str
             ):
-                # Rewrite the outbound inputText per AGT-DELTA D1.1 so
-                # the Bedrock client sees the AGT-redacted payload.
                 input_text = bridge_result.transform.value
                 kwargs["inputText"] = input_text
             if not bridge_result.allowed:
@@ -509,6 +530,32 @@ class GovernedBedrockClient:
                 raise PolicyViolationError.from_check_result(
                     bridge_result.check_result
                 )
+            # The bridge approved or transformed; fall through to the
+            # host-side PII scan against the effective text.
+            self._kernel._check_input(self._ctx, input_text)
+        else:
+            self._kernel._check_input(self._ctx, input_text)
+
+            # 3. AGT input intervention point (legacy ordering)
+            if input_text:
+                bridge_result = self._kernel.evaluate_input(self._ctx, input_text)
+                if bridge_result.transform is not None and isinstance(
+                    bridge_result.transform.value, str
+                ):
+                    # Rewrite the outbound inputText per AGT-DELTA D1.1 so
+                    # the Bedrock client sees the AGT-redacted payload.
+                    input_text = bridge_result.transform.value
+                    kwargs["inputText"] = input_text
+                if not bridge_result.allowed:
+                    self._kernel.emit(GovernanceEventType.POLICY_VIOLATION, {
+                        "agent_id": self._ctx.agent_id,
+                        "agent_arn": agent_arn,
+                        "reason": bridge_result.reason,
+                        "timestamp": datetime.now().isoformat(),
+                    })
+                    raise PolicyViolationError.from_check_result(
+                        bridge_result.check_result
+                    )
 
         # 4. Cedar/OPA gate (legacy)
         cedar_ctx = self._kernel._build_cedar_context(
