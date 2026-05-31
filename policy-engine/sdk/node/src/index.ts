@@ -582,7 +582,7 @@ function mapResult(raw: Record<string, JsonValue>): InterventionPointResult {
   const inputIdentity = rawInputIdentity ?? legacyIdentity;
   const enforcedIdentity = rawEnforcedIdentity ?? legacyIdentity;
   return {
-    verdict: raw.verdict as unknown as Verdict,
+    verdict: mapVerdict(raw.verdict),
     transformedPolicyTarget: raw.transformed_policy_target === null ? undefined : raw.transformed_policy_target,
     policyInput: raw.policy_input === null ? undefined : raw.policy_input,
     inputIdentity,
@@ -590,6 +590,58 @@ function mapResult(raw: Record<string, JsonValue>): InterventionPointResult {
     // actionIdentity remains a back-compat alias for enforcedIdentity
     // so older callers reading the single-identity slot keep working.
     actionIdentity: enforcedIdentity,
+  };
+}
+
+function mapVerdict(raw: JsonValue): Verdict {
+  // The native binding emits snake_case keys from the Rust serde
+  // derives; the public TS surface uses camelCase. We translate the
+  // two known wire fields where the casing differs (result_labels and
+  // evidence.verification_pointers) and pass the rest through. AGT D1
+  // already forbids the legacy `effects` key, so this is the entire
+  // translation surface.
+  const wire = raw as Record<string, JsonValue> | null | undefined;
+  if (wire === null || wire === undefined) {
+    throw new Error("native runtime returned a missing verdict");
+  }
+  const decision = wire.decision as Decision;
+  const reason = wire.reason === null ? undefined : (wire.reason as string | undefined);
+  const message = wire.message === null ? undefined : (wire.message as string | undefined);
+  const rawTransform = wire.transform as Record<string, JsonValue> | null | undefined;
+  const transform: Transform | undefined = rawTransform
+    ? { path: rawTransform.path as string, value: rawTransform.value }
+    : undefined;
+  const rawEvidence = wire.evidence as Record<string, JsonValue> | null | undefined;
+  const evidence: Evidence | undefined = rawEvidence
+    ? {
+        artefact:
+          rawEvidence.artefact === null || rawEvidence.artefact === undefined
+            ? undefined
+            : (rawEvidence.artefact as string),
+        // AGT D2: snake_case verification_pointers on the wire → camelCase
+        // verificationPointers in the public TS type. Preserving the
+        // original key losses the documented surface and breaks every
+        // consumer that follows the Evidence interface.
+        verificationPointers:
+          rawEvidence.verification_pointers === null ||
+          rawEvidence.verification_pointers === undefined
+            ? undefined
+            : (rawEvidence.verification_pointers as Record<string, string>),
+      }
+    : undefined;
+  const rawResultLabels = wire.result_labels;
+  const resultLabels: string[] | undefined = Array.isArray(rawResultLabels)
+    ? (rawResultLabels as string[])
+    : undefined;
+  return {
+    decision,
+    reason,
+    message,
+    transform,
+    evidence,
+    // Preserve the documented snake_case key on the Verdict surface;
+    // it matches the wire and existing TS callers.
+    result_labels: resultLabels,
   };
 }
 

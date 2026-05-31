@@ -57,50 +57,95 @@ fn policy_input_fixtures_validate_against_wire_schemas() {
 fn verdict_and_effect_samples_validate_against_wire_schemas() {
     let verdict_schema = compile_schema("verdict.schema.json");
     let effect_schema = compile_schema("effect.schema.json");
+
+    // AGT D1 + D2 verdict samples. The old upstream samples that used
+    // the effects[] array are no longer valid against the AGT wire
+    // schema; the migration replaces them with transform decisions and
+    // an evidence-bearing allow.
     let verdicts = [
         json!({"decision": "allow"}),
-        json!({
-            "decision": "warn",
-            "reason": "policy:content_warning",
-            "message": "Content was transformed.",
-            "effects": [
-                {"type": "replace", "path": "$policy_target.flag", "value": true},
-                {"type": "append", "path": "$policy_target.items", "value": "tail"},
-                {"type": "prepend", "path": "$policy_target.items", "value": "head"},
-                {
-                    "type": "redact",
-                    "path": "$policy_target.content",
-                    "spans": [{"start": 0, "end": 6, "replacement": "[REDACTED]"}]
-                },
-                {
-                    "type": "redact",
-                    "path": "$policy_target.content",
-                    "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
-                    "replacement": "[REDACTED]"
-                },
-                {
-                    "type": "redact",
-                    "path": "$policy_target.content",
-                    "values": ["secret"],
-                    "replacement": "[REDACTED]"
-                }
-            ]
-        }),
-        json!({"decision": "deny", "reason": "policy:blocked", "effects": null}),
+        json!({"decision": "deny", "reason": "policy:blocked"}),
         json!({"decision": "escalate", "reason": "policy:approval_required"}),
+        json!({"decision": "warn", "reason": "policy:content_warning", "message": "Heads up."}),
         json!({"decision": "allow", "result_labels": ["confidential"]}),
+        json!({
+            "decision": "transform",
+            "reason": "policy:redacted",
+            "transform": {
+                "path": "$policy_target.content",
+                "value": "[REDACTED]"
+            }
+        }),
+        json!({
+            "decision": "allow",
+            "evidence": {
+                "artefact": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                "verification_pointers": {
+                    "issuer_pubkey": "https://example.com/keys/2026.pem",
+                    "policy_registry": "https://example.com/policies/v1/"
+                }
+            }
+        }),
     ];
 
     for (index, verdict) in verdicts.iter().enumerate() {
         assert_valid(&verdict_schema, verdict, &format!("verdict sample {index}"));
-        if let Some(effects) = verdict.get("effects").and_then(Value::as_array) {
-            for (effect_index, effect) in effects.iter().enumerate() {
-                assert_valid(
-                    &effect_schema,
-                    effect,
-                    &format!("verdict sample {index} effect {effect_index}"),
-                );
-            }
-        }
+    }
+
+    // The legacy effect-shape samples still validate against the standalone
+    // effect.schema.json (the schema for the upstream effects[] entries),
+    // but the verdict schema no longer permits the effects key.
+    let legacy_effects = [
+        json!({"type": "replace", "path": "$policy_target.flag", "value": true}),
+        json!({"type": "append", "path": "$policy_target.items", "value": "tail"}),
+        json!({"type": "prepend", "path": "$policy_target.items", "value": "head"}),
+        json!({
+            "type": "redact",
+            "path": "$policy_target.content",
+            "spans": [{"start": 0, "end": 6, "replacement": "[REDACTED]"}]
+        }),
+        json!({
+            "type": "redact",
+            "path": "$policy_target.content",
+            "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}",
+            "replacement": "[REDACTED]"
+        }),
+        json!({
+            "type": "redact",
+            "path": "$policy_target.content",
+            "values": ["secret"],
+            "replacement": "[REDACTED]"
+        }),
+    ];
+    for (index, effect) in legacy_effects.iter().enumerate() {
+        assert_valid(&effect_schema, effect, &format!("legacy effect {index}"));
+    }
+
+    // Negative: a verdict carrying the effects key (even when null or
+    // empty) MUST fail validation per AGT D1.
+    let rejected = [
+        json!({"decision": "allow", "effects": null}),
+        json!({"decision": "allow", "effects": []}),
+        json!({
+            "decision": "allow",
+            "effects": [{"type": "replace", "path": "$policy_target.x", "value": 1}]
+        }),
+        json!({
+            "decision": "transform"
+        }),
+        json!({
+            "decision": "allow",
+            "transform": {"path": "$policy_target.x", "value": 1}
+        }),
+        json!({
+            "decision": "transform",
+            "transform": {"path": "$snap.x", "value": 1}
+        }),
+    ];
+    for (index, instance) in rejected.iter().enumerate() {
+        assert!(
+            !verdict_schema.is_valid(instance),
+            "expected wire schema to REJECT verdict {index}: {instance}",
+        );
     }
 }

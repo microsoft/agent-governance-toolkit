@@ -202,7 +202,8 @@ test("native runtime composes manifest chains", async () => {
   );
 
   const result = await evaluateText(agentControl, "Please summarize account 1234.");
-  assert.equal(result.verdict.decision, Decision.Warn);
+  assert.equal(result.verdict.decision, Decision.Transform);
+  assert.equal(result.verdict.transform.path, "$policy_target.text");
   assert.deepEqual(result.transformedPolicyTarget, { text: "Please summarize account [REDACTED]." });
 });
 
