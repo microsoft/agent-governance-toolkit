@@ -1,0 +1,92 @@
+[
+  {
+    "name": "matching_hashes_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "tool_call": {"name": "search", "args": {}, "content_hash": "sha256:abc"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"content_hash": "sha256:abc"}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "mismatched_hashes_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "tool_call": {"name": "search", "args": {}, "content_hash": "sha256:def"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"content_hash": "sha256:abc"}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["tool_content_hash_mismatch"],
+    "num_errors": 0
+  },
+  {
+    "name": "observed_hash_missing_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "tool_call": {"name": "search", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"content_hash": "sha256:abc"}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["tool_content_hash_mismatch_observed_missing"],
+    "num_errors": 0
+  },
+  {
+    "name": "manifest_did_not_declare_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "tool_call": {"name": "search", "args": {}, "content_hash": "sha256:abc"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "neither_present_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "tool_call": {"name": "search", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]
