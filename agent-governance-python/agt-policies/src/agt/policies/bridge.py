@@ -55,13 +55,20 @@ logger = logging.getLogger(__name__)
 
 ACS_VERSION = "0.3.0-alpha-agt"
 
-# Reason strings keep the v4 ViolationCategory wire values so audit
-# consumers that bucket on ``reason`` keep working after migration.
-_REASON_TOOL_CALL_BUDGET = "max_tool_calls"
-_REASON_TOKEN_BUDGET = "max_tokens"
-_REASON_CONFIDENCE = "confidence_threshold"
+# Reason string used by the v4 ``blocked_patterns`` rule. The other v4
+# wire strings (``max_tool_calls``, ``max_tokens``,
+# ``confidence_threshold``, ``human_approval_required``) cannot be
+# threaded through the stock Rego helpers because
+# ``agt.budgets.deny_if_budget_exceeded``,
+# ``agt.confidence.deny_if_low_confidence``, and
+# ``agt.approval.escalate_if_approver_required`` hardcode their own
+# v5 reason strings (``budget_tool_calls_exceeded``,
+# ``budget_tokens_exceeded``, ``confidence_below_threshold``,
+# ``approval_required``). v5 reasons therefore differ from the v4
+# ``ViolationCategory`` wire values for those rules; audit consumers
+# that bucket on ``reason`` MUST update to the v5 strings or run a
+# host-side translation layer.
 _REASON_PATTERN = "blocked_pattern_input"
-_REASON_APPROVAL = "human_approval_required"
 
 
 @runtime_checkable
