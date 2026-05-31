@@ -2734,6 +2734,113 @@ class TestGoogleADKBridgeScenarios:
             "enforced_identity"
         )
 
+    def test_non_sensitive_tool_does_not_invoke_resolver_when_filter_set(
+        self, tmp_path
+    ):
+        """AGT-M3 round-2 BLOCK B regression: with a non-empty
+        ``sensitive_tools`` list, a non-sensitive tool MUST NOT route
+        through the AGT escalate path. The previous wiring set
+        ``bridge_require_approval=True`` whenever ``approval_resolver``
+        was present, which bypassed the local ``_needs_approval``
+        filter and called the resolver for EVERY tool. The fixed
+        kernel keeps two bridges (sensitive escalates, non-sensitive
+        does not) and selects per call.
+        """
+        invocations: list[str] = []
+
+        def _counting_resolver(ip, result):
+            from agt.policies.runtime import ApprovalDecision
+
+            invocations.append(ip)
+            return ApprovalDecision.allow(result.enforced_identity)
+
+        # Scripted dispatcher returns allow for the non-sensitive tool;
+        # the resolver should never be touched because the default
+        # bridge has ``require_human_approval=False`` and therefore
+        # never emits escalate for this call. ``get_weather`` is in the
+        # scenario manifest catalog (so the engine does not fail
+        # closed with ``runtime_error:tool_unknown``) but is NOT in
+        # ``sensitive_tools``, so it must dispatch through the default
+        # bridge that never escalates.
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "allow"}],
+            approval_resolver=_counting_resolver,
+        )
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=_counting_resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+        ctx = _ADKFakeToolContext(
+            tool_name="get_weather", tool_args={"q": "AI"}
+        )
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is None, (
+            f"non-sensitive tool must pass through bridge allow, got {result!r}"
+        )
+        assert invocations == [], (
+            "approval_resolver MUST NOT be invoked for non-sensitive tools; "
+            f"resolver was called at: {invocations!r}"
+        )
+
+    def test_sensitive_filter_routes_only_sensitive_through_resolver(
+        self, tmp_path
+    ):
+        """AGT-M3 round-2 BLOCK B end-to-end: a single kernel calling
+        one non-sensitive tool and one sensitive tool MUST invoke the
+        resolver exactly once (for the sensitive call) and zero times
+        for the non-sensitive call.
+        """
+        invocations: list[str] = []
+
+        def _counting_resolver(ip, result):
+            from agt.policies.runtime import ApprovalDecision
+
+            invocations.append(ip)
+            return ApprovalDecision.allow(result.enforced_identity)
+
+        # The scripted dispatcher is consulted on every pre_tool_call.
+        # First call (non-sensitive, ``get_weather``): default bridge
+        # asks the dispatcher and gets ``allow``. Second call
+        # (sensitive, ``scenario_tool``): sibling bridge asks the
+        # dispatcher and gets ``escalate``; the runtime routes it
+        # through the resolver.
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},
+                {"decision": "escalate", "reason": "human_approval_required"},
+            ],
+            approval_resolver=_counting_resolver,
+        )
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=_counting_resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+
+        non_sensitive_ctx = _ADKFakeToolContext(
+            tool_name="get_weather", tool_args={"q": "AI"}
+        )
+        sensitive_ctx = _ADKFakeToolContext(
+            tool_name="scenario_tool", tool_args={"q": "AI"}
+        )
+
+        first = kernel.before_tool_callback(non_sensitive_ctx)
+        second = kernel.before_tool_callback(sensitive_ctx)
+
+        assert first is None
+        assert second is None
+        assert invocations == ["pre_tool_call"], (
+            f"resolver MUST be invoked exactly once (for the sensitive "
+            f"tool), got: {invocations!r}"
+        )
+
 
 # =============================================================================
 # Bridge-scenario coverage for the remaining adapters (CONCERN 5 from the
