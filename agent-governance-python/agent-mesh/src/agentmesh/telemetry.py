@@ -19,11 +19,27 @@ from __future__ import annotations
 
 import logging
 import os
+import urllib.parse
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 _bootstrapped = False
+
+_LOCAL_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def _is_local_endpoint(endpoint: str) -> bool:
+    """Return True if *endpoint* resolves to a loopback address."""
+    if not endpoint:
+        return False
+    if "://" not in endpoint:
+        endpoint = "grpc://" + endpoint
+    try:
+        hostname = urllib.parse.urlparse(endpoint).hostname or ""
+    except Exception:
+        return False
+    return hostname in _LOCAL_HOSTS
 
 
 def bootstrap_otel(
@@ -132,7 +148,33 @@ def bootstrap_otel(
 def _attach_trace_exporter(
     provider: object, endpoint: str, protocol: str
 ) -> None:
-    """Attach OTLP span exporter to the tracer provider (best-effort)."""
+    """Attach OTLP span exporter to the tracer provider (best-effort).
+
+    Raises:
+        ValueError: If the endpoint uses ``http://`` with a non-local host,
+            preventing accidental plaintext telemetry export to remote collectors.
+    """
+    parsed_scheme = (
+        urllib.parse.urlparse(endpoint).scheme.lower()
+        if "://" in endpoint
+        else ""
+    )
+    is_plaintext = parsed_scheme == "http"
+    is_local = _is_local_endpoint(endpoint)
+
+    if is_plaintext and not is_local:
+        raise ValueError(
+            f"Plaintext (http://) OTLP transport is not permitted for "
+            f"non-local endpoint '{endpoint}'. Use https:// or point to a "
+            f"TLS-enabled collector."
+        )
+    if is_plaintext and is_local:
+        logger.warning(
+            "OTLP exporter is using an insecure (plaintext) channel to %s. "
+            "This is only acceptable for local development.",
+            endpoint,
+        )
+
     try:
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
@@ -140,12 +182,16 @@ def _attach_trace_exporter(
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                 OTLPSpanExporter,
             )
+            exporter = OTLPSpanExporter(endpoint=endpoint)
         else:
             from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
                 OTLPSpanExporter,
             )
+            # For gRPC, insecure=True only when caller explicitly opted in via
+            # a loopback http:// URL.
+            insecure = is_plaintext and is_local
+            exporter = OTLPSpanExporter(endpoint=endpoint, insecure=insecure)
 
-        exporter = OTLPSpanExporter(endpoint=endpoint)
         provider.add_span_processor(BatchSpanProcessor(exporter))  # type: ignore[attr-defined]
     except ImportError:
         logger.debug("OTLP exporter not available, traces will use in-memory provider only")

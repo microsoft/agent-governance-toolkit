@@ -8,6 +8,9 @@ instances with BatchSpanProcessor for gRPC, HTTP, and console export.
 
 from __future__ import annotations
 
+import logging
+import urllib.parse
+
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
@@ -15,6 +18,23 @@ from opentelemetry.sdk.trace.export import (
     ConsoleSpanExporter,
     SimpleSpanProcessor,
 )
+
+_logger = logging.getLogger(__name__)
+
+_LOCAL_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def _is_local_endpoint(endpoint: str) -> bool:
+    """Return True if *endpoint* resolves to a loopback address."""
+    if not endpoint:
+        return False
+    if "://" not in endpoint:
+        endpoint = "grpc://" + endpoint
+    try:
+        hostname = urllib.parse.urlparse(endpoint).hostname or ""
+    except Exception:
+        return False
+    return hostname in _LOCAL_HOSTS
 
 
 def _build_resource(service_name: str = "agent-sre") -> Resource:
@@ -25,7 +45,7 @@ def _build_resource(service_name: str = "agent-sre") -> Resource:
 def configure_otlp_grpc(
     endpoint: str = "localhost:4317",
     headers: dict[str, str] | None = None,
-    insecure: bool = True,
+    insecure: bool = False,
     service_name: str = "agent-sre",
 ) -> TracerProvider:
     """Configure a TracerProvider exporting via OTLP/gRPC.
@@ -33,7 +53,10 @@ def configure_otlp_grpc(
     Args:
         endpoint: Collector gRPC endpoint (e.g. ``localhost:4317``).
         headers: Optional metadata headers for authentication.
-        insecure: Whether to use an insecure channel.
+        insecure: Whether to use an insecure (plaintext) channel.  Only
+            permitted for loopback endpoints; raises :exc:`ValueError` for
+            non-local endpoints to prevent accidental plaintext export.
+            Defaults to ``False`` (TLS required).
         service_name: Service name for the OTel resource.
 
     Returns:
@@ -42,7 +65,21 @@ def configure_otlp_grpc(
     Raises:
         ImportError: If ``opentelemetry-exporter-otlp-proto-grpc`` is
             not installed.
+        ValueError: If ``insecure=True`` is requested for a non-local endpoint.
     """
+    if insecure and not _is_local_endpoint(endpoint):
+        raise ValueError(
+            f"Insecure (plaintext) OTLP/gRPC transport is not permitted for "
+            f"non-local endpoint '{endpoint}'. Set insecure=False or use a "
+            f"TLS-enabled collector."
+        )
+    if insecure:
+        _logger.warning(
+            "OTLP/gRPC exporter is using an insecure (plaintext) channel to %s. "
+            "This is only acceptable for local development.",
+            endpoint,
+        )
+
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
         OTLPSpanExporter,
     )
