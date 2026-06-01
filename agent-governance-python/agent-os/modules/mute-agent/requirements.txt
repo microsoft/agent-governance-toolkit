@@ -1,9 +1,0 @@
-# Mute Agent has minimal runtime dependencies
-# Python 3.8+ standard library is sufficient for core functionality
-
-# Optional: For visualization and benchmarking
-matplotlib>=3.5.0
-
-# For graph visualization (Phase 3: Evidence Layer)
-networkx>=2.6.0
-pyvis>=0.3.0

@@ -276,7 +276,6 @@ DockerHub directly. Follow onboarding at [aka.ms/mcr/onboarding](https://aka.ms/
 | IATP | `agent-governance-python/agent-os/modules/iatp/Dockerfile` | Inter-Agent Trust Protocol |
 | IATP Sidecar (Go) | `agent-governance-python/agent-os/modules/iatp/sidecar/go/Dockerfile` | Go trust sidecar |
 | Control Plane | `agent-governance-python/agent-os/modules/control-plane/Dockerfile` | Agent control plane |
-| SCAK | `agent-governance-python/agent-os/modules/scak/Dockerfile` | Safety-Critical Agent Kernel |
 | CaaS | `agent-governance-python/agent-os/modules/caas/Dockerfile` | Compliance as a Service |
 
 ### Image Requirements

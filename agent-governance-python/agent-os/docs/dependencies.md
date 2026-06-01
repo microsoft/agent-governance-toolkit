@@ -51,11 +51,6 @@ Agent OS follows "Scale by Subtraction" - minimal dependencies for a lean kernel
 - **Zero external dependencies** (by design)
 - All kernel-space code uses only stdlib
 
-### Layer 8: SCAK (Self-Correcting Agent Kernel)
-| Package | Why Needed |
-|---------|------------|
-| pyyaml | Configuration parsing |
-
 ## Development Dependencies
 
 | Package | Why Needed |

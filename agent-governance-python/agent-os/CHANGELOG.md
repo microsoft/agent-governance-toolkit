@@ -167,10 +167,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Layer 3: Framework
 - **control-plane** (v0.3.0) - Agent Control Plane with kernel architecture
 
-#### Layer 4: Intelligence
-- **scak** (v2.0.0) - Self-Correcting Agent Kernel
-- **mute-agent** (v0.2.0) - Reasoning/Execution decoupling
-
 ### New Features (v0.3.0 Control Plane)
 - **Signal Handling**: POSIX-style signals (SIGSTOP, SIGKILL, SIGPOLICY, SIGTRUST)
 - **Agent VFS**: Virtual File System with mount points (/mem/working, /mem/episodic, /state)
@@ -199,10 +195,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - v0.3.1 - agent-primitives integration
 - v0.3.0 - Policy engine, recovery
 
-### scak
-- v2.0.0 - Layer 4 architecture, agent-primitives integration
-- v1.0.0 - Initial release
-
 ### primitives
 - v0.1.0 - Initial release (FailureType, FailureSeverity, AgentFailure)
 
@@ -219,8 +211,6 @@ The following repositories have been archived (renamed with `-archived` suffix):
 - amb-archived
 - atr-archived
 - agent-control-plane-archived
-- scak-archived
-- mute-agent-archived
 - carbon-auditor-swarm-archived
 - sdlc-agents-archived
 - self-evaluating-agent-archived
