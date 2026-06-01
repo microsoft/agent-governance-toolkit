@@ -94,6 +94,7 @@ cref
 CrewAI
 crun
 CuriousHet
+custodied
 dalek
 dataclass
 dataclasses
@@ -182,6 +183,7 @@ GOPROXY
 governancepolicy
 gvisor
 h├⌐llo
+hardlinks
 hasattr
 hashlib
 hdrs
@@ -206,6 +208,7 @@ imran
 inheritdoc
 inspectable
 IPFS
+iproof
 isfinite
 isinstance
 isoformat
@@ -275,6 +278,7 @@ mypod
 mypy
 nacl
 nameof
+namespacing
 Nanvix
 nargs
 NemoClaw
@@ -300,12 +304,14 @@ OpenAI
 OpenClaw
 opencode
 openshell
+ORAS
 ospo
 oxycodone
 paramref
 parseability
 parseable
 pasteable
+Pastebin
 pathed
 pathext
 pathexts
@@ -349,12 +355,14 @@ pyyaml
 quickstarts
 Ravande
 readouterr
+reco
 recognised
 recognising
 redteam
 refetch
 refetches
 Rego
+Rekor
 relativedelta
 removeprefix
 removesuffix
@@ -400,8 +408,11 @@ setuptools
 shortone
 shutil
 siddique
+sideloaded
+Sideloading
 SIEM
 signcertname
+Sigstore
 sitecustomize
 skipif
 Slidev
@@ -446,12 +457,15 @@ toolkits
 traceparent
 typeerror
 typer
+typosquat
 ufeff
 uncallable
+keystore
 unconfigured
 Ungated
 unicodedata
 uninspectable
+unioned
 Unmarshal
 unmigrated
 unreachability
@@ -459,6 +473,7 @@ unredacted
 Unregisters
 unrevocation
 unrevoke
+Unrevoking
 unsets
 uppercased
 urandom

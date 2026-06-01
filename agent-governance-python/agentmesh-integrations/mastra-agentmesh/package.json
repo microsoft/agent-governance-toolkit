@@ -39,9 +39,10 @@
   },
   "devDependencies": {
     "@mastra/core": "1.37.1",
+    "@types/node": "^22.19.19",
     "tsup": "8.5.1",
     "typescript": "5.7.3",
-    "vitest": "3.0.5",
+    "vitest": "4.1.0",
     "zod": "3.22.0"
   }
 }

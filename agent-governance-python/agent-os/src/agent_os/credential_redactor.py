@@ -48,7 +48,9 @@ class CredentialRedactor:
         ),
         CredentialPattern(
             name="GitHub token",
-            pattern=re.compile(r"\b(?:ghp|ghs)_[A-Za-z0-9]{20,}\b"),
+            pattern=re.compile(
+                r"(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])"
+            ),
         ),
         CredentialPattern(
             name="AWS access key",
@@ -67,10 +69,9 @@ class CredentialRedactor:
         CredentialPattern(
             name="PEM private key",
             pattern=re.compile(
-                r"-----BEGIN\s+(?P<label>(?:RSA\s+|EC\s+|OPENSSH\s+)?PRIVATE\s+KEY)-----"
-                r"[\s\S]*?"
-                r"-----END\s+(?P=label)-----",
-                re.DOTALL,
+                r"-----BEGIN (?P<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
+                r"(?:\r?\n[!-~ \t]*)*?"
+                r"\r?\n-----END (?P=label)-----"
             ),
         ),
         CredentialPattern(

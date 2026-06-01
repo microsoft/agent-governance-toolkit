@@ -464,7 +464,7 @@ class TestRegistryAPI:
         assert result["successful_sessions"] == 0
         assert result["failed_sessions"] == 0
         assert result["timeout_sessions"] == 0
-        assert result["completion_rate"] == -1.0
+        assert result["completion_rate"] is None
         assert result["last_session_at"] is None
 
     def test_session_counters_bump_on_success(self, client):
@@ -523,7 +523,7 @@ class TestRegistryAPI:
         # initiator counters MUST stay at zero — failure is the
         # receiver's fault, not the initiator's
         assert init["total_sessions"] == 0
-        assert init["completion_rate"] == -1.0
+        assert init["completion_rate"] is None
 
     def test_session_counters_bump_only_receiver_on_timeout(self, client):
         """Timeout is partial blame on the receiver only."""
@@ -761,3 +761,76 @@ class TestRegistryStoreRateLimiting:
 
     def test_try_update_last_seen_missing_agent(self, store):
         assert store.try_update_last_seen("did:agentmesh:missing") is False
+
+
+class TestApplyReputationUpdateAtomic:
+    """RED-first regression for I1 (reputation counter race).
+
+    The legacy endpoint pattern was
+        agent = store.get_agent(did)   # lock A
+        agent.total_sessions += 1      # NO lock
+        store.put_agent(agent)         # lock B
+    Concurrent submissions against the same DID lose updates because
+    both readers see the same baseline. Fix introduces an atomic
+    apply_reputation_update on the store and rewires the endpoint to
+    use it. This test fails on main with AttributeError because the
+    method does not exist; once the method exists, the 16x50 worker
+    race must produce exactly 800 total_sessions.
+    """
+
+    def test_concurrent_updates_do_not_lose_increments(self, store):
+        import threading
+
+        record = AgentRecord(did="did:agt:race", public_key=b"\x00" * 32)
+        store.put_agent(record)
+
+        N_THREADS = 16
+        UPDATES_PER_THREAD = 50
+        start = threading.Event()
+
+        def worker():
+            start.wait()
+            for _ in range(UPDATES_PER_THREAD):
+                store.apply_reputation_update(
+                    did="did:agt:race",
+                    target_score=1.0,
+                    alpha=0.3,
+                    outcome_bucket="success",
+                )
+
+        threads = [threading.Thread(target=worker) for _ in range(N_THREADS)]
+        for t in threads:
+            t.start()
+        start.set()
+        for t in threads:
+            t.join()
+
+        agent = store.get_agent("did:agt:race")
+        expected = N_THREADS * UPDATES_PER_THREAD
+        assert agent.total_sessions == expected, (
+            f"lost-update race: expected {expected} total_sessions, "
+            f"got {agent.total_sessions}"
+        )
+        assert agent.successful_sessions == expected
+        assert agent.failed_sessions == 0
+        assert agent.timeout_sessions == 0
+
+    def test_returns_none_for_unknown_did(self, store):
+        result = store.apply_reputation_update(
+            did="did:agt:missing",
+            target_score=0.5,
+            alpha=0.3,
+            outcome_bucket=None,
+        )
+        assert result is None
+
+    def test_rejects_invalid_outcome_bucket(self, store):
+        record = AgentRecord(did="did:agt:bad", public_key=b"\x00" * 32)
+        store.put_agent(record)
+        with pytest.raises(ValueError):
+            store.apply_reputation_update(
+                did="did:agt:bad",
+                target_score=0.5,
+                alpha=0.3,
+                outcome_bucket="bogus",
+            )
