@@ -41,6 +41,7 @@ Env vars
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -193,7 +194,13 @@ class EntraTokenVerifier:
                     self._cfg.jwks_ttl_secs,
                 )
                 return client
-            except (httpx.HTTPError, jwt.PyJWKClientError, OSError) as exc:
+            except (
+                httpx.HTTPError,
+                jwt.PyJWKClientError,
+                OSError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
                 stale_age = int(time.monotonic() - self._jwk_cached_at)
                 if (
                     self._jwk_client is not None

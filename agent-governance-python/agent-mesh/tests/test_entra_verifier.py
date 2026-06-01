@@ -354,3 +354,55 @@ class TestJwksStaleCeiling:
                 await v._ensure_jwk_client()
         # Stale client must be dropped so future calls don't reuse it.
         assert v._jwk_client is None
+
+
+class TestJwksFetchExceptionBreadth:
+    """RED-first regression for C2 (JWKS fetch except too narrow).
+
+    Pre-fix, _ensure_jwk_client only caught (httpx.HTTPError,
+    jwt.PyJWKClientError, OSError). A malformed JWKS body that the
+    underlying JSON parser rejects raises ValueError / JSONDecodeError,
+    which bubbled raw out of _ensure_jwk_client instead of triggering
+    the stale-cache fallback / fail-closed path. The fix widens the
+    except tuple.
+    """
+
+    @pytest.mark.asyncio
+    async def test_value_error_from_jwk_client_constructor_wrapped(self, monkeypatch):
+        cfg = EntraVerifierConfig(
+            audience="api://test",
+            tenant_id="tid-xyz",
+            authority="https://login.microsoftonline.com",
+            jwks_ttl_secs=3600,
+            jwks_max_stale_secs=86400,
+        )
+        verifier = EntraTokenVerifier(cfg)
+
+        def boom(*_a, **_kw):
+            raise ValueError("malformed JWKS payload: not a JSON object")
+
+        monkeypatch.setattr(entra_verifier, "PyJWKClient", boom)
+
+        with pytest.raises(EntraTokenError):
+            await verifier._ensure_jwk_client()
+
+    @pytest.mark.asyncio
+    async def test_json_decode_error_from_jwk_client_constructor_wrapped(self, monkeypatch):
+        import json
+
+        cfg = EntraVerifierConfig(
+            audience="api://test",
+            tenant_id="tid-xyz",
+            authority="https://login.microsoftonline.com",
+            jwks_ttl_secs=3600,
+            jwks_max_stale_secs=86400,
+        )
+        verifier = EntraTokenVerifier(cfg)
+
+        def boom(*_a, **_kw):
+            raise json.JSONDecodeError("expecting value", "<jwks>", 0)
+
+        monkeypatch.setattr(entra_verifier, "PyJWKClient", boom)
+
+        with pytest.raises(EntraTokenError):
+            await verifier._ensure_jwk_client()

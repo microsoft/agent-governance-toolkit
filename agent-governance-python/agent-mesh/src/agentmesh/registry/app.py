@@ -252,14 +252,14 @@ class RegistryServer:
                     if agent.last_session_at is not None
                     else None
                 ),
-                # Derived field: success / total. -1.0 sentinel means
-                # "no sessions yet" so consumers can distinguish from
-                # "0 of N succeeded". Computing it server-side keeps
+                # Derived field: success / total. ``None`` (JSON ``null``)
+                # signals "no sessions yet" so consumers can distinguish
+                # from "0 of N succeeded". Computing it server-side keeps
                 # clients honest (no risk of a stale client computing
                 # 0.0 because it doesn't know about the new fields).
                 "completion_rate": (
                     agent.successful_sessions / agent.total_sessions
-                    if agent.total_sessions > 0 else -1.0
+                    if agent.total_sessions > 0 else None
                 ),
                 # Phase 6.c identity verification — populated when the
                 # agent has POSTed a valid Entra-signed JWT to
@@ -451,26 +451,27 @@ class RegistryServer:
                     status_code=403,
                     detail="Agents may not submit reputation about themselves",
                 )
-            agent = store.get_agent(did)
-            if not agent:
-                raise HTTPException(status_code=404, detail="Agent not found")
-
-            # Simple exponential moving average
-            alpha = 0.3
-            agent.reputation_score = alpha * req.score + (1 - alpha) * agent.reputation_score
-            # Bump counters in lockstep with the EMA so total_sessions
-            # always reflects the number of EMA updates and consumers
-            # can compute a confidence interval.
-            agent.total_sessions += 1
+            # Map the score band to a per-outcome counter bucket. This
+            # keeps the legacy endpoint's bucket semantics intact while
+            # delegating the actual EMA + counter update to a single
+            # locked store call (was: get_agent → mutate → put_agent,
+            # which lost increments under concurrent submissions for
+            # the same DID).
             if req.score >= 0.7:
-                agent.successful_sessions += 1
+                bucket: str | None = "success"
             elif req.score < 0.3:
-                agent.failed_sessions += 1
+                bucket = "failed"
             else:
-                agent.timeout_sessions += 1
-            agent.last_session_at = _utcnow()
-            store.put_agent(agent)
-            return {"did": did, "reputation_score": round(agent.reputation_score, 4)}
+                bucket = "timeout"
+            new_score = store.apply_reputation_update(
+                did=did,
+                target_score=req.score,
+                alpha=0.3,
+                outcome_bucket=bucket,
+            )
+            if new_score is None:
+                raise HTTPException(status_code=404, detail="Agent not found")
+            return {"did": did, "reputation_score": new_score}
 
         @app.post("/v1/registry/reputation/session")
         async def submit_session_reputation(
@@ -522,27 +523,30 @@ class RegistryServer:
             outcome = (req.outcome or "").lower()
             alpha = 0.2
             updated: dict[str, float] = {}
-            now = _utcnow()
+            # Map the per-request outcome to a counter bucket. The
+            # legacy code applied this branch inside _apply for each
+            # participant; the bucket is identical for both because
+            # outcome is request-scoped. We hoist it here so each
+            # _apply call is a single atomic store mutation rather
+            # than a get/mutate/put race window.
+            if outcome == "success":
+                bucket: str | None = "success"
+            elif outcome == "failed":
+                bucket = "failed"
+            elif outcome == "timeout":
+                bucket = "timeout"
+            else:
+                bucket = None  # validated below; never reaches _apply
 
             def _apply(did: str, target_score: float) -> None:
-                agent = store.get_agent(did)
-                if not agent:
-                    return
-                agent.reputation_score = alpha * target_score + (1 - alpha) * agent.reputation_score
-                # Always bump the totals — every reputation update is a
-                # session, regardless of which side initiated. Per-outcome
-                # buckets are stored only for the SAME outcome the EMA
-                # was nudged with, so success/fail/timeout sum to total.
-                agent.total_sessions += 1
-                if outcome == "success":
-                    agent.successful_sessions += 1
-                elif outcome == "failed":
-                    agent.failed_sessions += 1
-                elif outcome == "timeout":
-                    agent.timeout_sessions += 1
-                agent.last_session_at = now
-                store.put_agent(agent)
-                updated[did] = round(agent.reputation_score, 4)
+                new_score = store.apply_reputation_update(
+                    did=did,
+                    target_score=target_score,
+                    alpha=alpha,
+                    outcome_bucket=bucket,
+                )
+                if new_score is not None:
+                    updated[did] = new_score
 
             if outcome == "success":
                 _apply(req.receiver_amid, 1.0)
