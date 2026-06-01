@@ -43,3 +43,10 @@ f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src
 f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:103
 f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:117
 f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:131
+
+# redactor.rs detection patterns re-fingerprinted after commit c88f4556 touched the file
+# (these are BEGIN/END PRIVATE KEY and API-key regex patterns used to scrub secrets, not real secrets)
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:generic-api-key:257
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:103
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:117
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:131
