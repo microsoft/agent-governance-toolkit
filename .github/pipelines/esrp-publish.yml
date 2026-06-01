@@ -90,6 +90,8 @@ parameters:
         path: agent-governance-python/agent-marketplace
       - name: agent-rag-governance
         path: agent-governance-python/agent-rag-governance
+      - name: agt-sandbox
+        path: agent-governance-python/agent-sandbox
 
   - name: npmPackages
     type: object
