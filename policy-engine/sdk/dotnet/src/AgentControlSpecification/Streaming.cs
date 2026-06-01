@@ -36,7 +36,7 @@ public static class AgentControlStreamingExtensions
         JsonElement? assembledResponse = null;
         try
         {
-            var modelRun = await control.RunModelAsync<TRequest, JsonElement>(
+            var modelRun = await control.RunModelCoreAsync<TRequest, JsonElement>(
                 modelRequest,
                 async (effectiveRequest, ct) =>
                 {
@@ -47,7 +47,8 @@ public static class AgentControlStreamingExtensions
                 snapshot,
                 mode,
                 approvalResolver,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                rejectStreamingRequests: false).ConfigureAwait(false);
 
             if (originalBytes is null || !assembledResponse.HasValue)
             {
@@ -68,7 +69,7 @@ public static class AgentControlStreamingExtensions
                 assembledResponse.Value.Clone(),
                 CopyBytes(originalBytes));
         }
-        catch (AgentControlBlockedException)
+        catch (AgentControlInterruptionException)
         {
             throw;
         }

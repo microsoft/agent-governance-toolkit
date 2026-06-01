@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::hint::black_box;
 
 const BASE_MANIFEST: &str = r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.3.1-beta"
 metadata:
   name: perf-harness
 policies:
@@ -34,7 +34,7 @@ tools:
 "#;
 
 const MID_MANIFEST: &str = r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.3.1-beta"
 metadata:
   name: perf-harness
 policies:
@@ -54,7 +54,7 @@ tools:
 "#;
 
 const CHILD_MANIFEST: &str = r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.3.1-beta"
 metadata:
   name: perf-harness
 policies:

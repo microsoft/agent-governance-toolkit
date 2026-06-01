@@ -1,7 +1,7 @@
 use agent_control_specification_core::{
-    AnnotatorDispatcher, AnnotatorInvocation, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, JsonValue, Manifest, PerfTelemetry, PolicyDispatcher,
-    PreparedPolicyInvocation, Runtime, RuntimeError,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
+    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, PerfTelemetry,
+    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -79,10 +79,65 @@ fn runtime_error(error: RuntimeError) -> PyErr {
 
 fn annotation_error(error: PyErr) -> RuntimeError {
     let detail = error.to_string();
-    if detail.contains("runtime_error:annotation_timeout") {
-        RuntimeError::AnnotationTimeout(detail)
+    if detail.contains(agent_control_specification_core::reserved_reason::ANNOTATION_TIMEOUT) {
+        RuntimeError::AnnotationTimeout("annotation dispatcher timed out".to_string())
     } else {
-        RuntimeError::AnnotationFailed(detail)
+        RuntimeError::AnnotationFailed("annotation dispatcher failed".to_string())
+    }
+}
+
+fn result_to_py(py: Python<'_>, result: InterventionPointResult) -> PyResult<Py<PyAny>> {
+    let output = PyDict::new(py);
+    let verdict = serde_json::to_value(&result.verdict)
+        .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
+    output.set_item("verdict", json_value_to_py(py, &verdict)?)?;
+    output.set_item(
+        "transformed_policy_target_applied",
+        result.transformed_policy_target.is_some(),
+    )?;
+    match &result.transformed_policy_target {
+        Some(value) => {
+            output.set_item("transformed_policy_target", json_value_to_py(py, value)?)?
+        }
+        None => output.set_item("transformed_policy_target", py.None())?,
+    }
+    match &result.policy_input {
+        Some(value) => output.set_item("policy_input", json_value_to_py(py, value)?)?,
+        None => output.set_item("policy_input", py.None())?,
+    }
+    match &result.action_identity {
+        Some(value) => output.set_item("action_identity", value)?,
+        None => output.set_item("action_identity", py.None())?,
+    }
+    Ok(output.into_any().unbind())
+}
+
+fn runtime_error_result(error: RuntimeError) -> InterventionPointResult {
+    InterventionPointResult {
+        verdict: Verdict::runtime_error(&error),
+        transformed_policy_target: None,
+        policy_input: None,
+        action_identity: None,
+        input_identity: None,
+        enforced_identity: None,
+    }
+}
+
+fn request_invalid_result() -> InterventionPointResult {
+    InterventionPointResult {
+        verdict: Verdict {
+            decision: Decision::Deny,
+            reason: Some("runtime_error:request_invalid".to_string()),
+            message: Some("Request blocked by Agent Control Specification.".to_string()),
+            transform: None,
+            evidence: None,
+            result_labels: Vec::new(),
+        },
+        transformed_policy_target: None,
+        policy_input: None,
+        action_identity: None,
+        input_identity: None,
+        enforced_identity: None,
     }
 }
 
@@ -180,25 +235,42 @@ impl NativeRuntime {
     }
 
     fn evaluate(&self, py: Python<'_>, request: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let request = py_to_json_value(request)?;
-        let object = request
-            .as_object()
-            .ok_or_else(|| PyValueError::new_err("request must be a mapping"))?;
-        let intervention_point = object
-            .get("intervention_point")
-            .and_then(JsonValue::as_str)
-            .ok_or_else(|| PyValueError::new_err("request.intervention_point is required"))?;
-        let intervention_point =
-            InterventionPoint::from_str(intervention_point).map_err(PyValueError::new_err)?;
-        let snapshot = object
-            .get("snapshot")
-            .cloned()
-            .ok_or_else(|| PyValueError::new_err("request.snapshot is required"))?;
-        let mode = object
-            .get("mode")
-            .and_then(JsonValue::as_str)
-            .unwrap_or("enforce");
-        let mode = EnforcementMode::from_str(mode).map_err(PyValueError::new_err)?;
+        let request = match py_to_json_value(request) {
+            Ok(value) => value,
+            Err(_) => return result_to_py(py, request_invalid_result()),
+        };
+        let Some(object) = request.as_object() else {
+            return result_to_py(py, request_invalid_result());
+        };
+        let Some(intervention_point) = object.get("intervention_point").and_then(JsonValue::as_str)
+        else {
+            return result_to_py(py, request_invalid_result());
+        };
+        let intervention_point = match InterventionPoint::from_str(intervention_point) {
+            Ok(value) => value,
+            Err(_) => {
+                return result_to_py(
+                    py,
+                    runtime_error_result(RuntimeError::InterventionPointUnknown(
+                        intervention_point.to_string(),
+                    )),
+                );
+            }
+        };
+        let Some(snapshot) = object.get("snapshot").cloned() else {
+            return result_to_py(py, request_invalid_result());
+        };
+        if !snapshot.is_object() {
+            return result_to_py(py, request_invalid_result());
+        }
+        let mode = match object.get("mode") {
+            None => EnforcementMode::Enforce,
+            Some(JsonValue::String(value)) => match EnforcementMode::from_str(value) {
+                Ok(mode) => mode,
+                Err(_) => return result_to_py(py, request_invalid_result()),
+            },
+            Some(_) => return result_to_py(py, request_invalid_result()),
+        };
         let request = InterventionPointRequest {
             intervention_point,
             snapshot,
@@ -210,25 +282,7 @@ impl NativeRuntime {
         // `Python::attach` on the calling thread.
         let result = py.detach(|| self.runtime.evaluate_intervention_point(request));
 
-        let output = PyDict::new(py);
-        let verdict = serde_json::to_value(&result.verdict)
-            .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-        output.set_item("verdict", json_value_to_py(py, &verdict)?)?;
-        match &result.transformed_policy_target {
-            Some(value) => {
-                output.set_item("transformed_policy_target", json_value_to_py(py, value)?)?
-            }
-            None => output.set_item("transformed_policy_target", py.None())?,
-        }
-        match &result.policy_input {
-            Some(value) => output.set_item("policy_input", json_value_to_py(py, value)?)?,
-            None => output.set_item("policy_input", py.None())?,
-        }
-        match &result.action_identity {
-            Some(value) => output.set_item("action_identity", value)?,
-            None => output.set_item("action_identity", py.None())?,
-        }
-        Ok(output.into_any().unbind())
+        result_to_py(py, result)
     }
 }
 

@@ -19,13 +19,7 @@
   },
   "include": [
     "index.ts",
-    "src/index.ts",
-    "src/adapters.ts",
-    "src/adapter-helpers.ts",
-    "src/streaming.ts",
-    "src/integrations/ghcp.ts",
-    "src/integrations/opa-binary.ts",
-    "src/integrations/bootstrap.ts",
+    "src/**/*.ts",
     "native.d.ts"
   ],
   "exclude": [

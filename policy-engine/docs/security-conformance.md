@@ -12,7 +12,7 @@ Fail closed reserved reasons. Every reserved `runtime_error:` value reachable th
 
 Error paths do not apply effects. Runtime errors return deny verdicts with empty effect lists and no transformed policy target. Invalid or forbidden policy effects fail closed before a transform is exposed.
 
-Extends root confinement. File based manifest extends are confined to the top level manifest directory. Escaping paths and URL shaped entries fail closed during manifest loading.
+Extends confinement and URL loading. File based manifest path extends are confined to the top level manifest directory. Escaping paths fail closed during manifest loading. HTTPS URL extends use bounded fetches with optional SHA-256 pins. Plain `http`, unsupported schemes, hash mismatches, cycles, and URL body limit breaches fail closed.
 
 Annotator isolation. Annotator output is stored only under `annotations.<name>`. Attempts to shadow `snapshot`, `policy_target`, `tool`, or `intervention_point` stay confined under the annotation key. Oversized annotator output and reserved `runtime_error:` reasons fail closed with `runtime_error:annotation_failed`.
 

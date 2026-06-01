@@ -1,4 +1,6 @@
 import {
+  AgentControlBlockedError,
+  Decision,
   EnforcementMode,
   InterventionPoint,
   InterventionPointResult,
@@ -14,6 +16,7 @@ import {
   assertObject,
   ensureHasMethod,
   extractAdapterOptions,
+  hasAgentControlSurface,
   isObject,
   mergeOptions,
   normalizeMode,
@@ -25,6 +28,29 @@ export type { AdapterOptions } from "./adapter-helpers";
 
 const MODEL_METHOD_NAMES = ["invoke", "call", "complete", "generate", "create"];
 const TOOL_METHOD_NAMES = ["execute", "call", "invoke", "handler"];
+const UNSUPPORTED_BATCH_STREAM_METHODS = new Set<PropertyKey>(["batch", "stream"]);
+const UNSUPPORTED_MCP_METHODS = new Set<PropertyKey>([
+  "readResource",
+  "read_resource",
+  "getPrompt",
+  "get_prompt",
+  "stream",
+  "initialize",
+]);
+
+function unsupportedAdapterMethod(
+  label: string,
+  method: string,
+  interventionPoint: InterventionPoint = InterventionPoint.Output,
+): AgentControlBlockedError {
+  return new AgentControlBlockedError(interventionPoint, {
+    verdict: {
+      decision: Decision.Deny,
+      reason: "runtime_error:adapter_unsupported",
+      message: `${label} method ${method} is not guarded by this adapter.`,
+    },
+  });
+}
 
 export interface ModelRunResult<TOutput = JsonValue> {
   value: TOutput;
@@ -59,6 +85,7 @@ export async function runModel<TOutput extends JsonValue = JsonValue>(
   options: AdapterOptions = {},
 ): Promise<ModelRunResult<TOutput | JsonValue>> {
   assertAgentControl(control);
+  rejectStreamingModelRequest(request);
   const mode = normalizeMode(options.mode ?? EnforcementMode.Enforce);
   const ambient = { ...(options.snapshot ?? {}) };
   const preModelCallResult = await control.evaluateInterventionPoint(
@@ -80,6 +107,17 @@ export async function runModel<TOutput extends JsonValue = JsonValue>(
     preModelCallResult,
     postModelCallResult,
   };
+}
+
+function rejectStreamingModelRequest(request: JsonValue): void {
+  if (!isObject(request) || request.stream !== true) return;
+  throw new AgentControlBlockedError(InterventionPoint.PreModelCall, {
+    verdict: {
+      decision: Decision.Deny,
+      reason: "runtime_error:streaming_unsupported",
+      message: "Streaming model requests are not guarded by this adapter; use runModelStream for SSE buffering.",
+    },
+  });
 }
 
 export function protectModel(
@@ -181,9 +219,11 @@ export async function runLangChainRunnable(
   config?: unknown,
   options: AdapterOptions = {},
 ): Promise<JsonValue> {
-  assertAgentControl(control);
+  if (!hasAgentControlSurface(control)) {
+    throw unsupportedAdapterMethod("LangChain runnable", "invoke", InterventionPoint.PreModelCall);
+  }
   if (!isObject(runnable) || typeof runnable.invoke !== "function") {
-    throw new TypeError("LangChain runnable must expose invoke(input, config?)");
+    throw unsupportedAdapterMethod("LangChain runnable", "invoke", InterventionPoint.PreModelCall);
   }
   const mergedOptions = mergeOptions(options, extractAdapterOptions(config));
   const result = await runWithInputModelOutput(
@@ -200,9 +240,11 @@ export function guardLangChainRunnable<TAgent>(
   runnable: TAgent,
   defaultOptions: AdapterOptions = {},
 ): TAgent {
-  assertAgentControl(control);
+  if (!hasAgentControlSurface(control)) {
+    throw unsupportedAdapterMethod("LangChain runnable", "guardLangChainRunnable", InterventionPoint.PreModelCall);
+  }
   if (!isObject(runnable) || (typeof runnable.invoke !== "function" && typeof runnable.ainvoke !== "function")) {
-    throw new TypeError("LangChain runnable must expose invoke(input, config?) or ainvoke(input, config?)");
+    throw unsupportedAdapterMethod("LangChain runnable", "invoke/ainvoke", InterventionPoint.PreModelCall);
   }
   return new Proxy(runnable, {
     get(target, property, receiver) {
@@ -217,6 +259,11 @@ export function guardLangChainRunnable<TAgent>(
             options,
           );
           return result.value;
+        };
+      }
+      if (UNSUPPORTED_BATCH_STREAM_METHODS.has(property) && typeof value === "function") {
+        return async () => {
+          throw unsupportedAdapterMethod("LangChain runnable", String(property), InterventionPoint.PreModelCall);
         };
       }
       return value;
@@ -295,6 +342,11 @@ export function wrapOpenAIRunner<TRunner>(
       if (property === "run" && typeof value === "function") {
         return async (agent: unknown, input: JsonValue, runOptions: unknown = {}) =>
           await runOpenAIAgent(control, target, agent, input, runOptions, defaultOptions);
+      }
+      if (typeof value === "function") {
+        return async () => {
+          throw unsupportedAdapterMethod("OpenAI Agents runner", String(property), InterventionPoint.Input);
+        };
       }
       return value;
     },
@@ -385,6 +437,7 @@ export async function runAnthropicMessage(
   options: AdapterOptions = {},
 ): Promise<JsonValue> {
   assertAgentControl(control);
+  failClosedIfAnthropicStreaming(request);
   const { create, target } = getAnthropicCreate(client);
   const mergedOptions = mergeOptions(options, extractAdapterOptions(requestOptions));
   const result = await runWithInputModelOutput(
@@ -394,6 +447,17 @@ export async function runAnthropicMessage(
     mergedOptions,
   );
   return result.value;
+}
+
+function failClosedIfAnthropicStreaming(request: JsonValue): void {
+  if (!isObject(request) || request.stream !== true) return;
+  throw new AgentControlBlockedError(InterventionPoint.PostModelCall, {
+    verdict: {
+      decision: Decision.Deny,
+      reason: "runtime_error:streaming_unsupported",
+      message: "Anthropic streaming responses are not guarded by this adapter.",
+    },
+  });
 }
 
 export function wrapAnthropicClient<TClient>(
@@ -454,10 +518,14 @@ export function wrapMcpToolProvider<TProvider>(
   provider: TProvider,
   defaultOptions: AdapterOptions = {},
 ): TProvider {
-  assertAgentControl(control);
-  assertObject(provider, "MCP tool provider");
+  if (!hasAgentControlSurface(control)) {
+    throw unsupportedAdapterMethod("MCP tool provider", "wrapMcpToolProvider", InterventionPoint.PreToolCall);
+  }
+  if (!isObject(provider)) {
+    throw unsupportedAdapterMethod("MCP tool provider", "callTool/call_tool", InterventionPoint.PreToolCall);
+  }
   if (typeof provider.callTool !== "function" && typeof provider.call_tool !== "function") {
-    throw new TypeError("MCP tool provider must expose callTool(...) or call_tool(...)");
+    throw unsupportedAdapterMethod("MCP tool provider", "callTool/call_tool", InterventionPoint.PreToolCall);
   }
   return new Proxy(provider, {
     get(target, property, receiver) {
@@ -473,6 +541,11 @@ export function wrapMcpToolProvider<TProvider>(
             withSyntheticToolCallId(options, parsed.toolName),
           );
           return result.value;
+        };
+      }
+      if (UNSUPPORTED_MCP_METHODS.has(property) && typeof value === "function") {
+        return async () => {
+          throw unsupportedAdapterMethod("MCP tool provider", String(property), InterventionPoint.PreToolCall);
         };
       }
       return value;
@@ -517,13 +590,23 @@ export function createOpenClawAdapter(control: RunnableControl, defaultOptions: 
 export function createUnsupportedFrameworkAdapter(frameworkName: string) {
   return {
     guardAgent() {
-      throw new Error(
-        `Full-coverage ${frameworkName} adapter is not implemented yet; ` +
-          "use AgentControl.run() or AgentControl.protectTool() with explicit hooks.",
-      );
+      throw new AgentControlBlockedError(InterventionPoint.Input, {
+        verdict: {
+          decision: Decision.Deny,
+          reason: "runtime_error:adapter_unsupported",
+          message: `Full-coverage ${frameworkName} adapter is not implemented yet; ` +
+            "use AgentControl.run() or AgentControl.protectTool() with explicit hooks.",
+        },
+      });
     },
     wrapModel() {
-      throw new Error(`Model middleware for ${frameworkName} is not implemented yet.`);
+      throw new AgentControlBlockedError(InterventionPoint.Input, {
+        verdict: {
+          decision: Decision.Deny,
+          reason: "runtime_error:adapter_unsupported",
+          message: `Model middleware for ${frameworkName} is not implemented yet.`,
+        },
+      });
     },
     wrapTool(toolName: string, execute: (args: JsonValue) => Promise<JsonValue> | JsonValue, control: RunnableControl) {
       if (!control || typeof control.protectTool !== "function") {
@@ -660,7 +743,7 @@ function createOpenClawHookHandlers(control: RunnableControl, defaultOptions: Ad
       const result = await enforceOpenClawHookPoint(
         control,
         InterventionPoint.PreToolCall,
-        { tool_call: { id: openClawToolCallId(event, context), name: toolName, args: params } },
+        { tool_call: openClawToolCall(event, context, toolName, params) },
         defaultOptions,
         context,
       );
@@ -674,11 +757,7 @@ function createOpenClawHookHandlers(control: RunnableControl, defaultOptions: Ad
         control,
         InterventionPoint.PostToolCall,
         {
-          tool_call: {
-            id: openClawToolCallId(event, context),
-            name: toolName,
-            args: propertyJson(event, "params") ?? {},
-          },
+          tool_call: openClawToolCall(event, context, toolName, propertyJson(event, "params") ?? {}),
           tool_result: propertyJson(event, "result") ?? {},
         },
         defaultOptions,
@@ -736,8 +815,16 @@ function openClawAgentMetadata(agent: Record<PropertyKey, unknown>): JsonValue {
   };
 }
 
-function openClawToolCallId(event: unknown, context: unknown): string {
-  return propertyString(event, "toolCallId") ?? propertyString(context, "toolCallId") ?? "openclaw-hook";
+function openClawToolCall(event: unknown, context: unknown, name: string, args: JsonValue): Record<string, JsonValue> {
+  const id = openClawToolCallId(event, context);
+  const toolCall: Record<string, JsonValue> = { name, args };
+  if (id !== undefined) toolCall.id = id;
+  return toolCall;
+}
+
+function openClawToolCallId(event: unknown, context: unknown): string | undefined {
+  const id = propertyString(event, "toolCallId") ?? propertyString(context, "toolCallId");
+  return id !== undefined && id.trim().length > 0 ? id : undefined;
 }
 
 function wrapToolLike<TTool>(
@@ -784,6 +871,11 @@ function wrapToolLike<TTool>(
             withSyntheticToolCallId(options, toolName),
           );
           return result.value;
+        };
+      }
+      if (UNSUPPORTED_BATCH_STREAM_METHODS.has(property) && typeof value === "function") {
+        return async () => {
+          throw unsupportedAdapterMethod(label, String(property), InterventionPoint.PreToolCall);
         };
       }
       return value;

@@ -2,6 +2,7 @@
 
 from ._adapters import (
     AdapterUnsupportedError,
+    AgentControlLiteLLMGuardrail,
     FullCoverageAgentAdapter,
     LiteLLMProxyMiddleware,
     ModelCallResult,
@@ -53,6 +54,7 @@ from ._types import (
 
 __all__ = [
     "AdapterUnsupportedError",
+    "AgentControlLiteLLMGuardrail",
     "AgentControl",
     "AgentControlBlocked",
     "AgentControlInterruption",

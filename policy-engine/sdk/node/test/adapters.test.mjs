@@ -14,7 +14,11 @@ const {
   createOpenAIAgentsAdapter,
   createOpenClawAdapter,
   createUnsupportedFrameworkAdapter,
+  guardLangChainRunnable,
+  guardLangChainTool,
   runModel,
+  wrapMcpToolProvider,
+  wrapModel,
   wrapAnthropicClient,
   wrapAnthropicTool,
 } = require("../dist/index.js");
@@ -92,6 +96,28 @@ test("model middleware evaluates pre/post and blocks enforcement decisions", asy
   );
 });
 
+test("model wrappers fail closed for stream requests before upstream execution", async () => {
+  const { control } = makeControl();
+  let calls = 0;
+  const wrapped = wrapModel(control, {
+    async create(request) {
+      calls += 1;
+      return request;
+    },
+  }, { methods: ["create"] });
+
+  await assert.rejects(
+    () => wrapped.create({ stream: true, messages: [{ content: "hi" }] }),
+    (error) => {
+      assert.ok(error instanceof AgentControlBlockedError);
+      assert.equal(error.interventionPoint, InterventionPoint.PreModelCall);
+      assert.equal(error.result.verdict.reason, "runtime_error:streaming_unsupported");
+      return true;
+    },
+  );
+  assert.equal(calls, 0);
+});
+
 test("LangChain runnable adapter guards invoke with input, model, and output checks", async () => {
   const { control, client } = makeControl(({ interventionPoint, snapshot }) => {
     if (interventionPoint === InterventionPoint.Input) {
@@ -132,6 +158,88 @@ test("LangChain runnable adapter guards invoke with input, model, and output che
   assert.deepEqual(client.requests[1].snapshot.input, { q: "raw-input" });
 });
 
+test("LangChain runnable adapter blocks unsupported batch and stream methods", async () => {
+  const { control } = makeControl();
+  let batchCalls = 0;
+  let streamCalls = 0;
+  const runnable = {
+    async invoke(input) {
+      return input;
+    },
+    async batch(inputs) {
+      batchCalls += 1;
+      return inputs;
+    },
+    async stream(input) {
+      streamCalls += 1;
+      return [input];
+    },
+  };
+  const guarded = guardLangChainRunnable(control, runnable);
+
+  for (const method of ["batch", "stream"]) {
+    await assert.rejects(
+      () => guarded[method]([{ q: "secret" }]),
+      (error) => {
+        assert.ok(error instanceof AgentControlBlockedError);
+        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        return true;
+      },
+    );
+  }
+  assert.equal(batchCalls, 0);
+  assert.equal(streamCalls, 0);
+});
+
+test("LangChain runnable adapter fails closed for unsupported shapes", () => {
+  const { control } = makeControl();
+
+  assert.throws(
+    () => guardLangChainRunnable(control, {}),
+    (error) => {
+      assert.ok(error instanceof AgentControlBlockedError);
+      assert.equal(error.interventionPoint, InterventionPoint.PreModelCall);
+      assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+      return true;
+    },
+  );
+});
+
+test("LangChain tool adapter blocks unsupported batch and stream methods", async () => {
+  const { control } = makeControl();
+  let batchCalls = 0;
+  let streamCalls = 0;
+  const tool = {
+    name: "retriever",
+    async invoke(args) {
+      return args;
+    },
+    async batch(argsList) {
+      batchCalls += 1;
+      return argsList;
+    },
+    async stream(args) {
+      streamCalls += 1;
+      return [args];
+    },
+  };
+  const guarded = guardLangChainTool(control, tool);
+
+  for (const method of ["batch", "stream"]) {
+    await assert.rejects(
+      () => guarded[method]([{ q: "secret" }]),
+      (error) => {
+        assert.ok(error instanceof AgentControlBlockedError);
+        assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
+        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        return true;
+      },
+    );
+  }
+  assert.equal(batchCalls, 0);
+  assert.equal(streamCalls, 0);
+});
+
 test("OpenAI Agents runner adapter wraps runner.run", async () => {
   const { control } = makeControl(({ interventionPoint, snapshot }) => {
     if (interventionPoint === InterventionPoint.Input) {
@@ -153,6 +261,43 @@ test("OpenAI Agents runner adapter wraps runner.run", async () => {
     await wrapped.run({ name: "assistant" }, "hello", { metadata: { id: "run-1" } }),
     { final: "hello-checked" },
   );
+});
+
+test("OpenAI Agents runner adapter blocks unsupported runner methods", async () => {
+  const { control } = makeControl();
+  const calls = [];
+  const runner = {
+    async run() {
+      calls.push("run");
+      return { final: "ok" };
+    },
+    runSync() {
+      calls.push("runSync");
+      return { final: "sync leak" };
+    },
+    stream() {
+      calls.push("stream");
+      return [{ final: "stream leak" }];
+    },
+    bypass() {
+      calls.push("bypass");
+      return { final: "bypass leak" };
+    },
+  };
+  const wrapped = createOpenAIAgentsAdapter(control).wrapRunner(runner);
+
+  for (const method of ["runSync", "stream", "bypass"]) {
+    await assert.rejects(
+      () => wrapped[method]({ name: "assistant" }, "secret"),
+      (error) => {
+        assert.ok(error instanceof AgentControlBlockedError);
+        assert.equal(error.interventionPoint, InterventionPoint.Input);
+        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        return true;
+      },
+    );
+  }
+  assert.deepEqual(calls, []);
 });
 
 test("Anthropic adapter wraps client messages and tool calls", async () => {
@@ -190,6 +335,31 @@ test("Anthropic adapter wraps client messages and tool calls", async () => {
   assert.deepEqual(await adapter.run(anthropic, { messages: ["bye"] }), { content: ["bye"] });
 });
 
+test("Anthropic adapter fails closed for streaming requests before upstream execution", async () => {
+  const { control } = makeControl();
+  let calls = 0;
+  const anthropic = {
+    messages: {
+      async create() {
+        calls += 1;
+        return {};
+      },
+    },
+  };
+  const wrappedClient = wrapAnthropicClient(control, anthropic);
+
+  await assert.rejects(
+    () => wrappedClient.messages.create({ stream: true, messages: ["hi"] }),
+    (error) => {
+      assert.ok(error instanceof AgentControlBlockedError);
+      assert.equal(error.interventionPoint, InterventionPoint.PostModelCall);
+      assert.equal(error.result.verdict.reason, "runtime_error:streaming_unsupported");
+      return true;
+    },
+  );
+  assert.equal(calls, 0);
+});
+
 test("MCP tool-provider adapter wraps object and positional calls", async () => {
   const { control, client } = makeControl(({ interventionPoint, snapshot }) => {
     if (interventionPoint === InterventionPoint.PreToolCall) {
@@ -216,6 +386,72 @@ test("MCP tool-provider adapter wraps object and positional calls", async () => 
   assert.equal(client.requests[2].snapshot.tool_call.name, "lookup");
 });
 
+test("MCP tool-provider adapter blocks unsupported provider methods", async () => {
+  const { control, client } = makeControl();
+  const calls = [];
+  const provider = {
+    async callTool(request) {
+      calls.push(["callTool", request]);
+      return { result: request.name };
+    },
+    async readResource(request) {
+      calls.push(["readResource", request]);
+      return { content: "raw" };
+    },
+    async getPrompt(request) {
+      calls.push(["getPrompt", request]);
+      return { prompt: "raw" };
+    },
+    async stream(request) {
+      calls.push(["stream", request]);
+      return { chunk: "raw" };
+    },
+    async initialize() {
+      calls.push(["initialize"]);
+      return { ok: true };
+    },
+  };
+
+  const wrapped = createMcpToolProviderAdapter(control).wrapProvider(provider);
+  for (const method of ["readResource", "getPrompt", "stream", "initialize"]) {
+    await assert.rejects(
+      () => wrapped[method]({}),
+      (error) => {
+        assert.ok(error instanceof AgentControlBlockedError);
+        assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
+        assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+        return true;
+      },
+    );
+  }
+  assert.deepEqual(calls, []);
+  assert.deepEqual(client.requests, []);
+});
+
+test("MCP tool-provider adapter fails closed for unsupported shapes", () => {
+  const { control } = makeControl();
+  const provider = { async callTool() {} };
+
+  assert.throws(
+    () => wrapMcpToolProvider(control, {}),
+    (error) => {
+      assert.ok(error instanceof AgentControlBlockedError);
+      assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
+      assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+      return true;
+    },
+  );
+  assert.throws(
+    () => wrapMcpToolProvider({}, provider),
+    (error) => {
+      assert.ok(error instanceof AgentControlBlockedError);
+      assert.equal(error.interventionPoint, InterventionPoint.PreToolCall);
+      assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+      return true;
+    },
+  );
+});
+
 test("OpenClaw hook plugin exposes explicit model and tool hooks", async () => {
   const { control } = makeControl(({ interventionPoint }) => {
     if (interventionPoint === InterventionPoint.PreModelCall) {
@@ -238,9 +474,45 @@ test("OpenClaw hook plugin exposes explicit model and tool hooks", async () => {
   assert.deepEqual((await tool({ id: 1 }, { toolCallId: "openclaw-tool-2" })).value, { wrapped: true });
 });
 
+test("OpenClaw hooks omit tool_call.id when no host id is supplied", async () => {
+  const { control, client } = makeControl(() => ({}));
+  const plugin = createOpenClawAdapter(control).plugin();
+
+  await plugin.hooks.before_tool_call({ toolName: "lookup", params: { q: "hi" } }, {});
+  await plugin.hooks.after_tool_call({ toolName: "lookup", params: { q: "hi" }, result: "ok" }, {});
+
+  assert.equal("id" in client.requests[0].snapshot.tool_call, false);
+  assert.equal("id" in client.requests[1].snapshot.tool_call, false);
+});
+
+test("OpenClaw hooks carry a supplied host tool_call.id", async () => {
+  const { control, client } = makeControl(() => ({}));
+  const plugin = createOpenClawAdapter(control).plugin();
+
+  await plugin.hooks.before_tool_call({ toolName: "lookup", params: { q: "hi" }, toolCallId: "oc-1" }, {});
+
+  assert.equal(client.requests[0].snapshot.tool_call.id, "oc-1");
+});
+
+test("adapter helper subpath is exported", () => {
+  const adapters = require("agent-control-specification/adapters");
+
+  assert.equal(adapters.wrapModel, wrapModel);
+  assert.equal(adapters.createAnthropicAdapter, createAnthropicAdapter);
+  assert.equal(adapters.createMcpToolProviderAdapter, createMcpToolProviderAdapter);
+});
+
 test("unsupported framework adapter fails loudly", () => {
   const unsupported = createUnsupportedFrameworkAdapter("ExampleAI");
-  assert.throws(() => unsupported.guardAgent({}), /Full-coverage ExampleAI adapter is not implemented/);
-  assert.throws(() => unsupported.wrapModel({}), /Model middleware for ExampleAI is not implemented/);
+  assert.throws(() => unsupported.guardAgent({}), (error) => {
+    assert.ok(error instanceof AgentControlBlockedError);
+    assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+    return true;
+  });
+  assert.throws(() => unsupported.wrapModel({}), (error) => {
+    assert.ok(error instanceof AgentControlBlockedError);
+    assert.equal(error.result.verdict.reason, "runtime_error:adapter_unsupported");
+    return true;
+  });
   assert.throws(() => createLangChainAdapter({}).guard({}), /control must expose/);
 });

@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Callable, Mapping, Protocol, runtime_checkable
 
-from ._types import JsonValue, InterventionPointRequest, InterventionPointResult, Verdict
+from ._types import JsonValue, InterventionPoint, InterventionPointRequest, InterventionPointResult, Verdict
 
 
 @runtime_checkable
@@ -127,7 +127,11 @@ class NativeRuntimeClient:
                 "provide a RuntimeClient implementation or wire the Rust core FFI."
             )
         request_dict = {
-            "intervention_point": request.intervention_point.value,
+            "intervention_point": (
+                request.intervention_point.value
+                if isinstance(request.intervention_point, InterventionPoint)
+                else request.intervention_point
+            ),
             "snapshot": dict(request.snapshot),
             "mode": request.mode.value,
         }
@@ -143,6 +147,9 @@ class NativeRuntimeClient:
         return InterventionPointResult(
             verdict=Verdict.from_mapping(raw["verdict"]),
             transformed_policy_target=raw.get("transformed_policy_target"),
+            transformed_policy_target_applied=bool(
+                raw.get("transformed_policy_target_applied", raw.get("transformed_policy_target") is not None)
+            ),
             policy_input=raw.get("policy_input"),
             input_identity=input_identity,
             enforced_identity=enforced_identity,

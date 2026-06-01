@@ -11,7 +11,7 @@ use std::{
     ptr,
 };
 
-const MANIFEST_YAML: &str = r#"agent_control_specification_version: 0.3.0-alpha
+const MANIFEST_YAML: &str = r#"agent_control_specification_version: 0.3.1-beta
 metadata:
   name: basic-host-example
 policies:
@@ -31,7 +31,7 @@ annotators:
   prompt_classifier:
     type: classifier"#;
 
-const BASE_CHAIN_YAML: &str = r#"agent_control_specification_version: 0.3.0-alpha
+const BASE_CHAIN_YAML: &str = r#"agent_control_specification_version: 0.3.1-beta
 policies:
   input_custom_policy:
     type: custom
@@ -43,7 +43,7 @@ intervention_points:
       id: input_custom_policy
     policy_target: $.input"#;
 
-const OVERLAY_CHAIN_YAML: &str = r#"agent_control_specification_version: 0.3.0-alpha
+const OVERLAY_CHAIN_YAML: &str = r#"agent_control_specification_version: 0.3.1-beta
 metadata:
   name: ffi-chain-test
 intervention_points:
@@ -59,7 +59,7 @@ annotators:
   prompt_classifier:
     type: classifier"#;
 
-const UNRESOLVED_EXTENDS_YAML: &str = r#"agent_control_specification_version: 0.3.0-alpha
+const UNRESOLVED_EXTENDS_YAML: &str = r#"agent_control_specification_version: 0.3.1-beta
 extends:
   - ./base.yaml
 policies:
@@ -157,6 +157,21 @@ unsafe extern "C" fn policy_callback(
         .into_raw()
 }
 
+unsafe extern "C" fn null_transform_policy_callback(
+    _prepared_invocation_json: *const c_char,
+    _user_data: *mut c_void,
+) -> *mut c_char {
+    CString::new(
+        json!({
+            "decision": "transform",
+            "transform": {"path": "$policy_target", "value": null}
+        })
+        .to_string(),
+    )
+    .expect("JSON contains no NUL")
+    .into_raw()
+}
+
 unsafe fn build_runtime() -> *mut agent_control_specification_core::ffi::AcsRuntime {
     let manifest = CString::new(MANIFEST_YAML).expect("manifest contains no NUL");
     let mut err = ptr::null_mut();
@@ -167,6 +182,13 @@ unsafe fn build_runtime() -> *mut agent_control_specification_core::ffi::AcsRunt
 
 unsafe fn build_runtime_from_builder(
     builder: *mut agent_control_specification_core::ffi::AcsBuilder,
+) -> *mut agent_control_specification_core::ffi::AcsRuntime {
+    unsafe { build_runtime_from_builder_with_policy(builder, policy_callback) }
+}
+
+unsafe fn build_runtime_from_builder_with_policy(
+    builder: *mut agent_control_specification_core::ffi::AcsBuilder,
+    policy: agent_control_specification_core::ffi::AcsPolicyCallback,
 ) -> *mut agent_control_specification_core::ffi::AcsRuntime {
     let mut err = ptr::null_mut();
 
@@ -184,7 +206,7 @@ unsafe fn build_runtime_from_builder(
     let registered = unsafe {
         acs_builder_register_policy_dispatcher(
             builder,
-            Some(policy_callback),
+            Some(policy),
             Some(free_result),
             ptr::null_mut(),
             &mut err,
@@ -225,13 +247,17 @@ fn ffi_roundtrip_transforms_policy_target() {
         )
         .expect("runtime output is JSON");
         assert_eq!(result["verdict"]["decision"], "transform");
+        assert_eq!(result["transformed_policy_target_applied"], true);
         assert_eq!(
             result["transformed_policy_target"]["text"],
             "Please summarize account [REDACTED]."
         );
         // AGT D1: the verdict carries the canonical transform payload so
         // bindings can persist what the policy actually asked for.
-        assert_eq!(result["verdict"]["transform"]["path"], "$policy_target.text");
+        assert_eq!(
+            result["verdict"]["transform"]["path"],
+            "$policy_target.text"
+        );
         assert_eq!(
             result["verdict"]["transform"]["value"],
             "Please summarize account [REDACTED]."
@@ -339,9 +365,88 @@ fn ffi_evaluate_rejects_unknown_intervention_point() {
         .expect("request contains no NUL");
         let mut err = ptr::null_mut();
         let out = acs_runtime_evaluate(runtime, request.as_ptr(), &mut err);
-        assert!(out.is_null());
-        assert!(!err.is_null());
-        acs_free_string(err);
+        assert!(!out.is_null(), "evaluate error: {}", take_err(err));
+        let result: Value = serde_json::from_str(
+            CStr::from_ptr(out)
+                .to_str()
+                .expect("runtime output is UTF-8"),
+        )
+        .expect("runtime output is JSON");
+        assert_eq!(result["verdict"]["decision"], "deny");
+        assert_eq!(
+            result["verdict"]["reason"],
+            "runtime_error:intervention_point_unknown"
+        );
+        assert_eq!(result["transformed_policy_target_applied"], false);
+        acs_free_string(out);
+        acs_runtime_free(runtime);
+    }
+}
+
+#[test]
+fn ffi_malformed_request_envelopes_fail_closed() {
+    unsafe {
+        let runtime = build_runtime();
+        let cases = [
+            "{".to_string(),
+            "[]".to_string(),
+            json!({"snapshot": {"input": {"text": "hello"}}, "mode": "enforce"}).to_string(),
+            json!({"intervention_point": "input", "mode": "enforce"}).to_string(),
+            json!({"intervention_point": "input", "snapshot": [], "mode": "enforce"}).to_string(),
+            json!({"intervention_point": "input", "snapshot": {"input": {"text": "hello"}}, "mode": "bogus"}).to_string(),
+            json!({"intervention_point": "input", "snapshot": {"input": {"text": "hello"}}, "mode": 1}).to_string(),
+        ];
+
+        for request in cases {
+            let result = evaluate_raw_request(runtime, &request);
+            assert_eq!(result["verdict"]["decision"], "deny");
+            assert_eq!(result["verdict"]["reason"], "runtime_error:request_invalid");
+            assert_eq!(result["policy_input"], Value::Null);
+        }
+
+        let default_mode = evaluate_raw_request(
+            runtime,
+            &json!({
+                "intervention_point": "input",
+                "snapshot": {"input": {"text": "hello"}}
+            })
+            .to_string(),
+        );
+        assert_eq!(default_mode["verdict"]["decision"], "allow");
+        acs_runtime_free(runtime);
+    }
+}
+
+#[test]
+fn ffi_marks_explicit_null_policy_target_transform() {
+    unsafe {
+        let manifest = CString::new(BASE_CHAIN_YAML).expect("manifest contains no NUL");
+        let mut err = ptr::null_mut();
+        let builder = acs_builder_from_yaml(manifest.as_ptr(), &mut err);
+        assert!(!builder.is_null(), "builder error: {}", take_err(err));
+        let runtime =
+            build_runtime_from_builder_with_policy(builder, null_transform_policy_callback);
+        let request = CString::new(
+            json!({
+                "intervention_point": "input",
+                "snapshot": {"input": {"text": "clear me"}},
+                "mode": "enforce"
+            })
+            .to_string(),
+        )
+        .expect("request contains no NUL");
+        let out = acs_runtime_evaluate(runtime, request.as_ptr(), &mut err);
+        assert!(!out.is_null(), "evaluate error: {}", take_err(err));
+        let result: Value = serde_json::from_str(
+            CStr::from_ptr(out)
+                .to_str()
+                .expect("runtime output is UTF-8"),
+        )
+        .expect("runtime output is JSON");
+        assert_eq!(result["verdict"]["decision"], "transform");
+        assert_eq!(result["transformed_policy_target"], Value::Null);
+        assert_eq!(result["transformed_policy_target_applied"], true);
+        acs_free_string(out);
         acs_runtime_free(runtime);
     }
 }
@@ -452,4 +557,20 @@ unsafe fn take_err(err: *mut c_char) -> String {
         .into_owned();
     unsafe { acs_free_string(err) };
     message
+}
+
+unsafe fn evaluate_raw_request(
+    runtime: *mut agent_control_specification_core::ffi::AcsRuntime,
+    request_json: &str,
+) -> Value {
+    let request = CString::new(request_json).expect("request contains no NUL");
+    let mut err = ptr::null_mut();
+    let out = unsafe { acs_runtime_evaluate(runtime, request.as_ptr(), &mut err) };
+    assert!(!out.is_null(), "evaluate error: {}", take_err(err));
+    assert!(err.is_null(), "unexpected error: {}", take_err(err));
+    let result: Value =
+        serde_json::from_str(unsafe { CStr::from_ptr(out).to_str().expect("UTF-8") })
+            .expect("runtime output is JSON");
+    unsafe { acs_free_string(out) };
+    result
 }

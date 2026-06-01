@@ -5,11 +5,14 @@ use crate::{
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
+    env,
+    ffi::OsString,
     io::{self, Write},
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
 };
 
+pub const OPA_PATH_ENV: &str = "ACS_OPA_PATH";
 const OPA_DATA_KEYS: [&str; 2] = ["data", "data_paths"];
 const ERROR_OUTPUT_LIMIT: usize = 4096;
 
@@ -27,9 +30,36 @@ impl OpaRegoRunner {
         }
     }
 
+    pub fn from_environment() -> Self {
+        match env::var_os(OPA_PATH_ENV) {
+            Some(value) if !value.is_empty() => {
+                Self::new().with_executable(Self::resolve_opa_executable_hint(PathBuf::from(value)))
+            }
+            _ => Self::new(),
+        }
+    }
+
     pub fn with_executable(mut self, executable: impl Into<PathBuf>) -> Self {
         self.executable = executable.into();
         self
+    }
+
+    fn resolve_opa_executable_hint(hint: PathBuf) -> PathBuf {
+        if hint.is_dir() {
+            hint.join(Self::opa_binary_name())
+        } else {
+            hint
+        }
+    }
+
+    #[cfg(windows)]
+    fn opa_binary_name() -> &'static str {
+        "opa.exe"
+    }
+
+    #[cfg(not(windows))]
+    fn opa_binary_name() -> &'static str {
+        "opa"
     }
 
     pub fn with_data_path(mut self, data_path: impl Into<PathBuf>) -> Self {
@@ -88,13 +118,13 @@ impl OpaRegoRunner {
             .arg("--stdin-input");
 
         if let Some(bundle) = &invocation.bundle {
-            command.arg("--bundle").arg(bundle);
+            command.arg("--bundle").arg(opa_command_path_arg(bundle));
         }
         for data_path in &self.data_paths {
-            command.arg("--data").arg(data_path);
+            command.arg("--data").arg(opa_command_path_arg(data_path));
         }
         for data_path in adapter_data_paths {
-            command.arg("--data").arg(data_path);
+            command.arg("--data").arg(opa_command_path_arg(&data_path));
         }
         command
             .arg(&invocation.query)
@@ -126,6 +156,21 @@ impl OpaRegoRunner {
         child.wait_with_output().map_err(|err| {
             RuntimeError::PolicyInvocationFailed(format!("failed to read OPA output: {err}"))
         })
+    }
+}
+
+fn opa_command_path_arg(path: impl AsRef<Path>) -> OsString {
+    strip_windows_verbatim_prefix(path.as_ref())
+}
+
+fn strip_windows_verbatim_prefix(path: &Path) -> OsString {
+    let value = path.to_string_lossy();
+    if let Some(stripped) = value.strip_prefix(r"\\?\UNC\") {
+        OsString::from(format!(r"\\{stripped}"))
+    } else if let Some(stripped) = value.strip_prefix(r"\\?\") {
+        OsString::from(stripped)
+    } else {
+        path.as_os_str().to_os_string()
     }
 }
 
@@ -242,10 +287,17 @@ fn push_data_path(key: &str, path: &str, paths: &mut Vec<PathBuf>) -> Result<(),
 
 fn opa_spawn_error(executable: &Path, err: io::Error) -> RuntimeError {
     if err.kind() == io::ErrorKind::NotFound || err.raw_os_error() == Some(2) {
-        RuntimeError::PolicyInvocationFailed(format!(
-            "OPA executable '{}' was not found; install OPA or configure OpaRegoRunner::with_executable(...)",
-            executable.display()
-        ))
+        let message = match env::var_os(OPA_PATH_ENV) {
+            Some(value) if !value.is_empty() => format!(
+                "default policy dispatcher could not execute OPA from ${OPA_PATH_ENV}: '{}'; explicit OPA paths do not fall back to PATH",
+                executable.display()
+            ),
+            _ => format!(
+                "OPA executable '{}' was not found; install OPA or configure OpaRegoRunner::with_executable(...)",
+                executable.display()
+            ),
+        };
+        RuntimeError::PolicyInvocationFailed(message)
     } else {
         RuntimeError::PolicyInvocationFailed(format!(
             "failed to start OPA executable '{}': {err}",
@@ -325,5 +377,27 @@ fn truncate(value: &str) -> String {
         format!("{truncated}…")
     } else {
         truncated
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::opa_command_path_arg;
+    use std::path::Path;
+
+    #[test]
+    fn opa_command_path_arg_strips_windows_verbatim_disk_prefix() {
+        assert_eq!(
+            opa_command_path_arg(Path::new(r"\\?\C:\Temp\acs\policy")).to_string_lossy(),
+            r"C:\Temp\acs\policy"
+        );
+    }
+
+    #[test]
+    fn opa_command_path_arg_strips_windows_verbatim_unc_prefix() {
+        assert_eq!(
+            opa_command_path_arg(Path::new(r"\\?\UNC\server\share\policy")).to_string_lossy(),
+            r"\\server\share\policy"
+        );
     }
 }

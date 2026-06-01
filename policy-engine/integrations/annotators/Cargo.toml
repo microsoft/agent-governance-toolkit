@@ -1,6 +1,6 @@
 [package]
 name = "agent_control_specification_annotators"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 edition = "2021"
 rust-version = "1.85"
 publish = false
@@ -16,8 +16,8 @@ lakera_guard = ["agent_control_specification_core/lakera_guard"]
 auto = ["agent_control_specification_core/auto"]
 
 [dependencies]
-agent_control_specification = { path = "../../sdk/rust" }
-agent_control_specification_core = { path = "../../core", features = ["default-dispatchers"] }
+agent_control_specification = { version = "0.3.1-beta.0", path = "../../sdk/rust" }
+agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core", features = ["default-dispatchers"] }
 serde_json = "1"
 ureq = { version = "2", features = ["json"] }
 

@@ -1,14 +1,23 @@
-# Information-flow-control agent ACS Rust demo
+# Information flow control example
 
-This is the canonical zero-config example. The manifest declares a Rego policy bundle and no annotators, so `AgentControl::from_path` wires the bundled OPA policy dispatcher against the manifest-relative Rego bundle with no host dispatcher code. The demo in `demo.rs` constructs the runtime in one line and evaluates a `pre_tool_call` information-flow check that allows a public egress of public-labeled data and denies egress of confidential-labeled data. It also shows stateless label propagation: the policy returns the produced data's label in `verdict.result_labels`, and the demo threads that label back in as a source label on a follow-up turn into a confidential-cleared sink.
+This Rust example uses `AgentControl::from_path` with a Rego policy bundle and no annotators. It enforces a no write down label policy at `pre_tool_call` by comparing `snapshot.ifc.source_labels` with the projected tool clearance.
 
-Run it from the repository root:
+## Threat or governance need
+
+A host that tracks data provenance needs a deterministic sink check before data leaves the agent through a tool. ACS stays stateless. The host supplies source labels on each call, and the policy returns `result_labels` for the host to persist with produced data.
+
+## Run
 
 ```sh
-export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
-cargo run -p agent_control_specification --example ifc_agent
+cargo run -p agent_control_specification --example ifc_agent --quiet
 ```
 
-`opa` is expected at `~/.local/bin/opa` (or on `PATH`). The demo prints `demo verification: PASS` when the allowed and denied flows match the policy.
+`opa` must be available on `PATH`.
 
-For demos that supply custom dispatchers because their annotations come from local deterministic host heuristics, see [`records_agent`](../records_agent), [`research_agent`](../research_agent), and [`coding_agent`](../coding_agent). See [Zero-config construction](../../README.md#zero-config-construction) for when each constructor applies.
+## Expected verdicts
+
+Public data sent to `public_egress` allows. The propagated public label then allows into `trusted_archive`. Confidential data sent to `public_egress` denies with `ifc_clearance_violation`.
+
+## Where to look
+
+`manifest.yaml` declares tool clearances and the `pre_tool_call` target. `policy/ifc_agent.rego` imports `policy/lib/ifc.rego`. `demo.rs` shows host label propagation and zero configuration construction.

@@ -103,6 +103,50 @@ test("transform verdict routes through transformedPolicyTarget without an approv
   assert.equal(consulted, false);
 });
 
+test("escalate resolved to allow does not apply transforms after approval", async () => {
+  const control = controlWith(
+    (point) =>
+      point === InterventionPoint.Input
+        ? {
+            verdict: { decision: Decision.Escalate },
+            transformedPolicyTarget: "REDACTED",
+          }
+        : {},
+    allowResolver,
+  );
+  const result = await control.run("original", (input) => input);
+  assert.equal(result.value, "original");
+});
+
+test("run splices nested output transforms into the original output shape", async () => {
+  const control = controlWith((point) =>
+    point === InterventionPoint.Output
+      ? {
+          verdict: {
+            decision: Decision.Transform,
+            reason: "redact_pii",
+            transform: { path: "$policy_target", value: "deployment complete [REDACTED]" },
+          },
+          transformedPolicyTarget: "deployment complete [REDACTED]",
+          policyInput: {
+            policy_target: { path: "$.output.message" },
+            snapshot: {},
+          },
+        }
+      : {},
+  );
+
+  const result = await control.run("deploy", () => ({
+    message: "deployment complete DEPLOY-ABCDEFGH",
+    meta: { env: "prod", preserved: true },
+  }));
+
+  assert.deepEqual(result.value, {
+    message: "deployment complete [REDACTED]",
+    meta: { env: "prod", preserved: true },
+  });
+});
+
 
 test("approval receives a stable action identity", async () => {
   let seenIdentity;
@@ -207,6 +251,7 @@ test("a throwing resolver fails closed and preserves the cause", async () => {
       assert.ok(error instanceof AgentControlBlockedError);
       assert.equal(error.result.verdict.reason, "runtime_error:approval_resolver_failed");
       assert.equal(error.result.verdict.message, "Approval resolver failed closed.");
+      assert.equal(error.result.actionIdentity, actionIdentity(error.result.policyInput));
       assert.ok(error.cause instanceof Error);
       assert.equal(error.cause.message, "resolver boom");
       return true;
@@ -223,6 +268,7 @@ test("a resolver returning null or malformed fails closed with resolver-failed r
         assert.ok(error instanceof AgentControlBlockedError);
         assert.equal(error.result.verdict.reason, "runtime_error:approval_resolver_failed");
         assert.equal(error.result.verdict.message, "Approval resolver failed closed.");
+        assert.equal(error.result.actionIdentity, actionIdentity(error.result.policyInput));
         return true;
       },
     );

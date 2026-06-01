@@ -28,15 +28,18 @@ const TARGETS = {
   "linux-x64": { asset: "opa_linux_amd64_static", pkg: "agent-control-specification-opa-linux-x64", bin: "opa" },
   "linux-arm64": { asset: "opa_linux_arm64_static", pkg: "agent-control-specification-opa-linux-arm64", bin: "opa" },
   "darwin-x64": { asset: "opa_darwin_amd64", pkg: "agent-control-specification-opa-darwin-x64", bin: "opa" },
-  "darwin-arm64": { asset: "opa_darwin_arm64", pkg: "agent-control-specification-opa-darwin-arm64", bin: "opa" },
+  "darwin-arm64": { asset: "opa_darwin_arm64_static", pkg: "agent-control-specification-opa-darwin-arm64", bin: "opa" },
   "win32-x64": { asset: "opa_windows_amd64.exe", pkg: "agent-control-specification-opa-win32-x64", bin: "opa.exe" },
 };
 
-// Pin known-good sha256 digests per version+target here to enforce integrity.
-// Leave a target unset to skip verification (the script prints the digest it
-// downloaded so you can record it).
 const CHECKSUMS = {
-  // "0.70.0": { "linux-x64": "<sha256>", ... },
+  "0.70.0": {
+    "linux-x64": "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084",
+    "linux-arm64": "48061407a2d7b0b59440fc3a257e7bb251e9ec62f6ce7b1e45c142263ae24413",
+    "darwin-x64": "7827172827c6c7763fd36dd72052c318a6beb18f7b907c5e67d847bb557af1a1",
+    "darwin-arm64": "267608fe41dba91fb23e2a69a439cb2a39710b3a069a828c744bd99bb3f94508",
+    "win32-x64": "19d00eea60477a8f983c20af690fedcc8da52aef81922e570b27538ca88305a4",
+  },
 };
 
 function fetch(url, redirectsLeft = 5) {
@@ -75,7 +78,10 @@ async function vendorOne(key) {
   const digest = createHash("sha256").update(buf).digest("hex");
 
   const expected = CHECKSUMS[VERSION]?.[key];
-  if (expected !== undefined && expected !== digest) {
+  if (expected === undefined) {
+    throw new Error(`missing pinned checksum for OPA ${VERSION} ${key}`);
+  }
+  if (expected !== digest) {
     throw new Error(`checksum mismatch for ${key}: expected ${expected}, got ${digest}`);
   }
 

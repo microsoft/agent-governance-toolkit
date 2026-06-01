@@ -75,11 +75,13 @@ fn dispatch_generic(
     let input_field = http::optional_string_field(&annotator.fields, FIELD_INPUT_FIELD)
         .unwrap_or(DEFAULT_INPUT_FIELD);
     let api_key = http::env_api_key(annotator_name, &annotator.fields)?;
+    let timeout_ms = http::timeout_ms(annotator_name, &annotator.fields)?;
     let response = http::post_json(
         annotator_name,
         url,
         json!({ input_field: policy_target }),
         api_key,
+        timeout_ms,
     )?;
     match http::optional_string_field(&annotator.fields, FIELD_RESPONSE_FIELD) {
         Some(field) => response.get(field).cloned().ok_or_else(|| {

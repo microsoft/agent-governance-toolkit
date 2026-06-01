@@ -3,6 +3,7 @@ pub type JsonValue = serde_json::Value;
 pub mod annotation;
 pub mod cedar;
 mod constants;
+pub use constants::reserved_reason;
 #[cfg(feature = "default-dispatchers")]
 pub mod dispatchers;
 // AGT D1: effects are no longer part of the public verdict surface. The
@@ -70,7 +71,10 @@ pub use verdict::{normalize_policy_output, Decision, Evidence, Transform, Verdic
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    };
 
     #[derive(Default)]
     struct StaticAnnotator {
@@ -137,6 +141,56 @@ mod tests {
         }
     }
 
+    struct OncePanicAnnotator {
+        panicked: AtomicBool,
+    }
+
+    impl OncePanicAnnotator {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                panicked: AtomicBool::new(false),
+            })
+        }
+    }
+
+    impl AnnotatorDispatcher for OncePanicAnnotator {
+        fn dispatch(
+            &self,
+            _annotator_name: &str,
+            _annotator: &AnnotatorInvocation,
+            _preliminary_policy_input: &JsonValue,
+        ) -> Result<JsonValue, RuntimeError> {
+            if !self.panicked.swap(true, Ordering::SeqCst) {
+                panic!("annotator boom");
+            }
+            Ok(json!({"label": "safe"}))
+        }
+    }
+
+    struct OncePanicPolicy {
+        panicked: AtomicBool,
+    }
+
+    impl OncePanicPolicy {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                panicked: AtomicBool::new(false),
+            })
+        }
+    }
+
+    impl PolicyDispatcher for OncePanicPolicy {
+        fn evaluate(
+            &self,
+            _invocation: &PreparedPolicyInvocation,
+        ) -> Result<JsonValue, RuntimeError> {
+            if !self.panicked.swap(true, Ordering::SeqCst) {
+                panic!("policy boom");
+            }
+            Ok(json!({"decision": "allow"}))
+        }
+    }
+
     fn no_annotations() -> Arc<StaticAnnotator> {
         Arc::new(StaticAnnotator {
             output: JsonValue::Null,
@@ -193,7 +247,7 @@ mod tests {
 
     #[test]
     fn validates_closed_intervention_point_names_and_tool_intervention_point_constraints() {
-        let unknown_intervention_point = r#"agent_control_specification_version: 0.3.0-alpha
+        let unknown_intervention_point = r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -210,7 +264,7 @@ intervention_points:
             "runtime_error:manifest_invalid"
         );
 
-        let invalid_tool_name_from = r#"agent_control_specification_version: 0.3.0-alpha
+        let invalid_tool_name_from = r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -232,7 +286,7 @@ intervention_points:
     #[test]
     fn unknown_tool_fails_closed() {
         let manifest = manifest(
-            r#"agent_control_specification_version: 0.3.0-alpha
+            r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -286,7 +340,7 @@ intervention_points:
         // exercises the transform decision per `SPECIFICATION-AGT-DELTA.md`
         // D1.1 §5. Effects are removed from the verdict surface.
         let manifest = manifest(
-            r#"agent_control_specification_version: 0.3.0-alpha
+            r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -324,7 +378,7 @@ intervention_points:
         // rewrites the entire policy target object. Multi-step rewriting is
         // moving to annotators per D1.3.
         let manifest = manifest(
-            r#"agent_control_specification_version: 0.3.0-alpha
+            r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -374,7 +428,7 @@ intervention_points:
     #[test]
     fn annotation_dispatch_runs_before_policy_and_finalizes_policy_input() {
         let manifest = manifest(
-            r#"agent_control_specification_version: 0.3.0-alpha
+            r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -419,6 +473,85 @@ annotators:
             json!({"risk": "low"})
         );
         assert_eq!(result.policy_input.unwrap(), final_input);
+    }
+
+    #[test]
+    fn dispatcher_panics_fail_closed_without_poisoning_runtime_reuse() {
+        let annotated_manifest = manifest(
+            r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  input:
+    policy:
+      id: test_policy
+    policy_target: $snap.input
+    annotations:
+      prompt_classifier:
+        from: $policy_target.text
+annotators:
+  prompt_classifier:
+    type: classifier"#,
+        );
+        let annotation_runtime = Runtime::new(
+            annotated_manifest,
+            OncePanicAnnotator::new(),
+            Arc::new(StaticPolicy::allow()),
+        )
+        .unwrap();
+
+        let first_annotation =
+            annotation_runtime.evaluate_intervention_point(InterventionPointRequest {
+                intervention_point: InterventionPoint::Input,
+                snapshot: json!({"input": {"text": "hello"}}),
+                mode: EnforcementMode::Enforce,
+            });
+        assert_eq!(first_annotation.verdict.decision, Decision::Deny);
+        assert_eq!(
+            first_annotation.verdict.reason.as_deref(),
+            Some("runtime_error:annotation_failed")
+        );
+
+        let second_annotation =
+            annotation_runtime.evaluate_intervention_point(InterventionPointRequest {
+                intervention_point: InterventionPoint::Input,
+                snapshot: json!({"input": {"text": "hello"}}),
+                mode: EnforcementMode::Enforce,
+            });
+        assert_eq!(second_annotation.verdict.decision, Decision::Allow);
+
+        let policy_manifest = manifest(
+            r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  input:
+    policy:
+      id: test_policy
+    policy_target: $snap.input"#,
+        );
+        let policy_runtime =
+            Runtime::new(policy_manifest, no_annotations(), OncePanicPolicy::new()).unwrap();
+
+        let first_policy = policy_runtime.evaluate_intervention_point(InterventionPointRequest {
+            intervention_point: InterventionPoint::Input,
+            snapshot: json!({"input": "hello"}),
+            mode: EnforcementMode::Enforce,
+        });
+        assert_eq!(first_policy.verdict.decision, Decision::Deny);
+        assert_eq!(
+            first_policy.verdict.reason.as_deref(),
+            Some("runtime_error:policy_invocation_failed")
+        );
+
+        let second_policy = policy_runtime.evaluate_intervention_point(InterventionPointRequest {
+            intervention_point: InterventionPoint::Input,
+            snapshot: json!({"input": "hello"}),
+            mode: EnforcementMode::Enforce,
+        });
+        assert_eq!(second_policy.verdict.decision, Decision::Allow);
     }
 
     #[test]

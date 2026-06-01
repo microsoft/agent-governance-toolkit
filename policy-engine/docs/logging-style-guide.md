@@ -24,18 +24,22 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
       ],
       "optional_fields": [
         "reason_code",
+        "error_class",
         "policy_id",
-        "annotators"
+        "annotators",
+        "action_identity"
       ],
       "documented_attribute_keys": [
         "event_type",
         "intervention_point",
         "decision",
         "reason_code",
+        "error_class",
         "policy_id",
         "annotators",
         "enforcement_mode",
-        "duration_ms"
+        "duration_ms",
+        "action_identity"
       ]
     },
     {
@@ -47,13 +51,15 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
         "duration_ms"
       ],
       "optional_fields": [
-        "reason_code"
+        "reason_code",
+        "error_class"
       ],
       "documented_attribute_keys": [
         "event_type",
         "intervention_point",
         "annotators",
         "reason_code",
+        "error_class",
         "duration_ms"
       ]
     },
@@ -67,13 +73,15 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
         "metadata.policy_type"
       ],
       "optional_fields": [
-        "reason_code"
+        "reason_code",
+        "error_class"
       ],
       "documented_attribute_keys": [
         "event_type",
         "intervention_point",
         "policy_id",
         "reason_code",
+        "error_class",
         "duration_ms",
         "metadata.policy_type"
       ]
@@ -89,16 +97,20 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
       ],
       "optional_fields": [
         "reason_code",
-        "policy_id"
+        "error_class",
+        "policy_id",
+        "action_identity"
       ],
       "documented_attribute_keys": [
         "event_type",
         "intervention_point",
         "decision",
         "reason_code",
+        "error_class",
         "policy_id",
         "enforcement_mode",
-        "duration_ms"
+        "duration_ms",
+        "action_identity"
       ]
     },
     {
@@ -136,14 +148,16 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
         "event_type",
         "intervention_point",
         "annotators",
-        "reason_code"
+        "reason_code",
+        "error_class"
       ],
       "optional_fields": [],
       "documented_attribute_keys": [
         "event_type",
         "intervention_point",
         "annotators",
-        "reason_code"
+        "reason_code",
+        "error_class"
       ]
     },
     {
@@ -153,6 +167,7 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
         "intervention_point",
         "policy_id",
         "reason_code",
+        "error_class",
         "metadata.policy_type"
       ],
       "optional_fields": [],
@@ -161,6 +176,7 @@ Contributors must treat `docs/observability.md` as the first source for telemetr
         "intervention_point",
         "policy_id",
         "reason_code",
+        "error_class",
         "metadata.policy_type"
       ]
     }
@@ -175,7 +191,7 @@ Event type wire values use lowercase snake case and must remain stable. Field na
 
 ## Redaction rules
 
-Telemetry must never include raw policy target values, snapshot input, snapshot output, model requests, model responses, messages, tool arguments, tool results, annotation payload values, redaction replacement text, secrets, or PII. Use stable identifiers, names, modes, decisions, reason codes, durations, counts, lengths, and span counts. Free text policy reasons must be reported as `policy_reason` unless they are already shaped as low cardinality identifiers.
+Telemetry must never include raw policy target values, snapshot input, snapshot output, model requests, model responses, messages, tool arguments, tool results, annotation payload values, redaction replacement text, secrets, or PII. Use stable identifiers, action identity hashes, names, modes, decisions, reason codes, error classes, durations, counts, lengths, and span counts. Free text policy reasons must be reported as `policy_reason` unless they are already shaped as low cardinality identifiers.
 
 ## Severity and level rules
 

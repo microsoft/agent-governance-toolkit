@@ -58,7 +58,7 @@ impl PolicyDispatcher for MockPolicy {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 metadata:
   name: basic-host-example
 policies:

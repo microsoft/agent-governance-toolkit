@@ -1,14 +1,23 @@
-# Medical records assistant ACS .NET demo
+# .NET records agent example
 
-This folder contains a runnable C# console app in `app/` that loads `manifest.yaml`, evaluates `policy/medical_records_assistant_guardrails.rego` through OPA, supplies host-side classifier annotations, and enforces input/model/tool/output decisions with the ACS .NET SDK.
+This .NET SDK example wraps a medical records loop with `RunAsync`, `RunModelAsync`, and `RunToolAsync`. It uses deterministic annotators, an OPA policy dispatcher, and an approval resolver.
 
-Run from the repository root:
+## Threat or governance need
 
-```bash
-export PATH="$HOME/.dotnet:$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+Medical records workflows need input screening, record access checks, PHI redaction, and approval for sensitive records or export actions. The example keeps those controls in ACS policy while the host owns model and tool execution.
+
+## Run
+
+```sh
 dotnet run --project examples/records_agent/app/RecordsAgentDemo.csproj
 ```
 
-The demo prints allowed, denied, escalated-with-approval, and redacted flows for the simulated `fetch_record` and `export_data` tools.
+`opa` must be available on `PATH`.
 
-This is an advanced custom-dispatcher example. It supplies its own annotator dispatcher because the classifier annotations are produced by local deterministic host heuristics rather than a reachable endpoint, so it does not use the bundled zero-config annotator default. A host whose manifest uses Rego policies and either declares no annotators or points them at configured endpoints integrates in roughly three lines with `FromPath`. See [Zero-config construction](../../README.md#zero-config-construction).
+## Expected verdicts
+
+The runner prints allowed record fetch, denied prompt injection, denied unauthorized record, escalated sensitive record, escalated export, and post-model PHI redaction.
+
+## Where to look
+
+`manifest.yaml` binds all guarded points. `policy/medical_records_assistant_guardrails.rego` contains the rules. `app/Program.cs` shows .NET typed orchestration, redaction handling, and approval resolution.

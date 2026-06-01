@@ -30,6 +30,11 @@ public interface IAgentControlRuntime
 public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    // Single source of truth for the annotator timeout sentinel that the host
+    // dispatcher signals back to the native runtime. It must match the core
+    // reserved reason `runtime_error:annotation_timeout`.
+    private const string AnnotationTimeoutReason = "runtime_error:annotation_timeout";
     private readonly IAnnotatorDispatcher? annotatorDispatcher;
     private readonly IPolicyDispatcher? policyDispatcher;
     private readonly AcsRuntimeHandle handle;
@@ -179,6 +184,11 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
         var buildConsumesBuilder = false;
         try
         {
+            if (policyCallback is null)
+            {
+                NativeEnvironment.SyncOpaEnvironment();
+            }
+
             var created = createBuilder();
             builder = created.Builder;
             ThrowIfNativeFailed(builder, created.Error, "create ACS builder");
@@ -274,8 +284,8 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
     {
         var requestJson = JsonSerializer.Serialize(new Dictionary<string, object?>
         {
-            ["intervention_point"] = request.InterventionPoint.ToWireName(),
-            ["mode"] = request.Mode.ToWireName(),
+            ["intervention_point"] = InterventionPointWireValue(request.InterventionPoint),
+            ["mode"] = EnforcementModeWireValue(request.Mode),
             ["snapshot"] = request.Snapshot,
         }, JsonOptions);
 
@@ -293,6 +303,26 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
             NativeMethods.AcsFreeString(result);
         }
     }
+
+    private static object InterventionPointWireValue(InterventionPoint interventionPoint) => interventionPoint switch
+    {
+        InterventionPoint.AgentStartup => "agent_startup",
+        InterventionPoint.Input => "input",
+        InterventionPoint.PreModelCall => "pre_model_call",
+        InterventionPoint.PostModelCall => "post_model_call",
+        InterventionPoint.PreToolCall => "pre_tool_call",
+        InterventionPoint.PostToolCall => "post_tool_call",
+        InterventionPoint.Output => "output",
+        InterventionPoint.AgentShutdown => "agent_shutdown",
+        _ => (int)interventionPoint,
+    };
+
+    private static object EnforcementModeWireValue(EnforcementMode mode) => mode switch
+    {
+        EnforcementMode.Enforce => "enforce",
+        EnforcementMode.EvaluateOnly => "evaluate_only",
+        _ => (int)mode,
+    };
 
     private IntPtr DispatchAnnotator(
         IntPtr annotatorNamePtr,
@@ -314,9 +344,9 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
                 .GetResult();
             return Marshal.StringToCoTaskMemUTF8(result.GetRawText());
         }
-        catch (Exception exception) when (exception.Message.Contains("runtime_error:annotation_timeout", StringComparison.Ordinal))
+        catch (Exception exception) when (exception.Message.Contains(AnnotationTimeoutReason, StringComparison.Ordinal))
         {
-            return Marshal.StringToCoTaskMemUTF8("runtime_error:annotation_timeout");
+            return Marshal.StringToCoTaskMemUTF8(AnnotationTimeoutReason);
         }
         catch
         {
@@ -346,6 +376,17 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
     private static InterventionPointResult MapResult(JsonElement raw)
     {
         var verdict = MapVerdict(raw.GetProperty("verdict"));
+        var transformedPolicyTargetApplied =
+            raw.TryGetProperty("transformed_policy_target_applied", out var appliedElement)
+                && appliedElement.ValueKind == JsonValueKind.True;
+        if (!transformedPolicyTargetApplied
+            && raw.TryGetProperty("transformed_policy_target", out var legacyTransformed)
+            && legacyTransformed.ValueKind != JsonValueKind.Null
+            && legacyTransformed.ValueKind != JsonValueKind.Undefined)
+        {
+            transformedPolicyTargetApplied = true;
+        }
+
         // AGT D1.4: the FFI surfaces both `input_identity` and
         // `enforced_identity` alongside the back-compat `action_identity`
         // alias (which equals `enforced_identity`). We populate every slot
@@ -356,9 +397,10 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
         var actionIdentity = OptionalString(raw, "action_identity") ?? enforcedIdentity;
         return new InterventionPointResult(
             verdict,
-            OptionalElement(raw, "transformed_policy_target"),
+            OptionalTransformedPolicyTarget(raw, transformedPolicyTargetApplied),
             OptionalElement(raw, "policy_input"),
             actionIdentity,
+            transformedPolicyTargetApplied,
             inputIdentity ?? actionIdentity,
             enforcedIdentity ?? actionIdentity);
     }
@@ -427,6 +469,16 @@ public sealed class NativeAgentControlRuntime : IAgentControlRuntime, IDisposabl
     private static JsonElement? OptionalElement(JsonElement raw, string propertyName)
     {
         if (!raw.TryGetProperty(propertyName, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return value.Clone();
+    }
+
+    private static JsonElement? OptionalTransformedPolicyTarget(JsonElement raw, bool applied)
+    {
+        if (!applied || !raw.TryGetProperty("transformed_policy_target", out var value) || value.ValueKind == JsonValueKind.Undefined)
         {
             return null;
         }

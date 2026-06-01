@@ -1,17 +1,27 @@
-# Web research agent ACS Node demo
+# Node research agent example
 
-This runnable demo uses the generated manifest and Rego policy with the ACS Node SDK. It simulates a web research agent with `http_fetch` and `post_webhook`, supplies host-side classifier annotations, evaluates OPA at `input`, `pre_tool_call`, `post_tool_call`, and `output`, and shows allow, deny, escalate/approval, warn, and redaction effects.
+This Node SDK example drives ACS manually with `evaluateInterventionPoint` and `enforce`. It guards input, output, `pre_tool_call`, and `post_tool_call` around deterministic research tools.
 
-This is an advanced custom-dispatcher example. It supplies its own annotator dispatcher because the classifier annotations are produced by local deterministic host heuristics rather than a reachable endpoint, so it does not use the bundled zero-config annotator default. A host whose manifest uses Rego policies and either declares no annotators or points them at configured endpoints integrates in roughly three lines with `fromPath`. See [Zero-config construction](../../README.md#zero-config-construction).
+## Threat or governance need
+
+Research agents retrieve untrusted content and may post summaries to external systems. The example blocks prompt injection and disallowed domains, escalates internal domains and webhook posts, warns on large content, and redacts secrets in retrieved pages and final output.
 
 ## Run
 
-From the repository root:
-
 ```sh
-export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
-cd sdk/node && npm install && npm run build
-cd ../../examples/research_agent/app && npm start
+cd sdk/node
+npm ci
+npm run build
+cd ../..
+node examples/research_agent/app/index.js
 ```
 
-`opa` is expected at `~/.local/bin/opa` (or set `OPA=/path/to/opa`).
+`opa` must be available through `$OPA`, `$OPA_PATH`, `PATH`, or `$HOME/.local/bin/opa`.
+
+## Expected verdicts
+
+The runner demonstrates allow, deny, escalate with approval, warn, and redaction outcomes. It exits with `demo verification: PASS` after all assertions pass.
+
+## Where to look
+
+`manifest.yaml` declares tool metadata and annotations. `policy/web_research_agent_guardrails.rego` contains the Rego rules. `app/index.js` shows manual Node enforcement and transformed policy target use.

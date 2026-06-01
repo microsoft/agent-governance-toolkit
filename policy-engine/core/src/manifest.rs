@@ -9,7 +9,9 @@ use serde_json::Map;
 use std::{
     collections::BTreeMap,
     fs,
+    io::Read,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -19,7 +21,7 @@ pub struct Manifest {
     #[serde(default = "empty_object")]
     pub metadata: JsonValue,
     #[serde(default)]
-    pub extends: Vec<String>,
+    pub extends: Vec<ManifestExtends>,
     #[serde(default)]
     pub policies: BTreeMap<String, PolicyConfig>,
     #[serde(default)]
@@ -91,16 +93,56 @@ pub struct ApprovalResolverConfig {
     pub additional_properties: BTreeMap<String, JsonValue>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ManifestExtends {
+    Reference(String),
+    Url(ManifestUrlExtends),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifestUrlExtends {
+    pub url: String,
+    #[serde(default)]
+    pub integrity: Option<String>,
+    #[serde(default)]
+    pub sha256: Option<String>,
+}
+
+impl ManifestExtends {
+    fn reference(&self) -> &str {
+        match self {
+            Self::Reference(reference) => reference,
+            Self::Url(url) => &url.url,
+        }
+    }
+}
+
+impl PartialEq<&str> for ManifestExtends {
+    fn eq(&self, other: &&str) -> bool {
+        self.reference() == *other
+    }
+}
+
+impl PartialEq<String> for ManifestExtends {
+    fn eq(&self, other: &String) -> bool {
+        self.reference() == other
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InterventionPointConfig {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub policy_target: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy_target_kind: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_name_from: Option<String>,
     #[serde(default)]
     pub annotations: BTreeMap<String, AnnotationConfig>,
+    #[serde(default, skip_serializing_if = "is_empty_policy_binding")]
     pub policy: PolicyBinding,
 }
 
@@ -215,11 +257,12 @@ impl Manifest {
         }
 
         for extends in &self.extends {
-            if extends.trim().is_empty() {
+            if extends.reference().trim().is_empty() {
                 return Err(RuntimeError::ManifestInvalid(
                     "extends entries must not be empty".to_string(),
                 ));
             }
+            validate_extends_trust(extends)?;
         }
 
         if self.intervention_points.is_empty() {
@@ -262,12 +305,17 @@ fn validate_point_config(
     config: &InterventionPointConfig,
     manifest: &Manifest,
 ) -> Result<(), RuntimeError> {
-    let policy_target_path =
-        JsonPath::parse_with_snapshot_alias(&config.policy_target).map_err(|err| {
-            RuntimeError::ManifestInvalid(format!(
-                "invalid policy_target for intervention point {intervention_point}: {err}"
-            ))
-        })?;
+    let policy_target = &config.policy_target;
+    if policy_target.trim().is_empty() {
+        return Err(RuntimeError::ManifestInvalid(format!(
+            "intervention point {intervention_point} must define policy_target after extends resolution"
+        )));
+    }
+    let policy_target_path = JsonPath::parse_with_snapshot_alias(policy_target).map_err(|err| {
+        RuntimeError::ManifestInvalid(format!(
+            "invalid policy_target for intervention point {intervention_point}: {err}"
+        ))
+    })?;
     if policy_target_path.root() != PathRoot::Snap {
         return Err(RuntimeError::ManifestInvalid(format!(
             "policy_target for intervention point {intervention_point} must use $, $snap, or a snapshot alias"
@@ -306,6 +354,11 @@ fn validate_point_config(
                 "intervention point {intervention_point} references unknown annotator '{annotation_name}'"
             )));
         }
+        if annotation_config.fields.contains_key("annotator") {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "annotation '{annotation_name}' for intervention point {intervention_point} must use the annotations map key as the annotator name"
+            )));
+        }
         if annotation_config.from.trim().is_empty() {
             return Err(RuntimeError::ManifestInvalid(format!(
                 "annotation '{annotation_name}' for intervention point {intervention_point} must define from"
@@ -324,13 +377,19 @@ fn validate_point_config(
         }
     }
 
-    let policy_config = manifest.policies.get(&config.policy.id).ok_or_else(|| {
+    let policy = &config.policy;
+    if policy.id.trim().is_empty() {
+        return Err(RuntimeError::ManifestInvalid(format!(
+            "intervention point {intervention_point} must define policy after extends resolution"
+        )));
+    }
+    let policy_config = manifest.policies.get(&policy.id).ok_or_else(|| {
         RuntimeError::ManifestInvalid(format!(
             "intervention point {intervention_point} references unknown policy '{}'",
-            config.policy.id
+            policy.id
         ))
     })?;
-    validate_policy_binding(intervention_point, &config.policy, policy_config)?;
+    validate_policy_binding(intervention_point, policy, policy_config)?;
 
     Ok(())
 }
@@ -395,11 +454,22 @@ fn empty_object() -> JsonValue {
     JsonValue::Object(Map::new())
 }
 
-#[derive(Default)]
+fn is_empty_policy_binding(policy: &PolicyBinding) -> bool {
+    policy.id.is_empty() && policy.query.is_none() && policy.adapter_config.is_empty()
+}
+
 struct ManifestLoader {
-    stack: Vec<PathBuf>,
+    stack: Vec<ManifestLocation>,
     trust_root: Option<PathBuf>,
     limits: Limits,
+    url_bodies: BTreeMap<String, Vec<u8>>,
+    fetcher: Box<dyn ExtendsFetcher>,
+}
+
+impl Default for ManifestLoader {
+    fn default() -> Self {
+        Self::with_limits(Limits::default())
+    }
 }
 
 impl ManifestLoader {
@@ -408,6 +478,19 @@ impl ManifestLoader {
             stack: Vec::new(),
             trust_root: None,
             limits,
+            url_bodies: BTreeMap::new(),
+            fetcher: Box::new(HttpExtendsFetcher),
+        }
+    }
+
+    #[cfg(test)]
+    fn with_limits_and_fetcher(limits: Limits, fetcher: Box<dyn ExtendsFetcher>) -> Self {
+        Self {
+            stack: Vec::new(),
+            trust_root: None,
+            limits,
+            url_bodies: BTreeMap::new(),
+            fetcher,
         }
     }
 
@@ -418,7 +501,7 @@ impl ManifestLoader {
             .unwrap_or_else(|| Path::new("."))
             .to_path_buf();
         let previous_root = self.trust_root.replace(trust_root);
-        let result = self.load_canonical(canonical_path);
+        let result = self.load_location(ManifestLocation::Path(canonical_path));
         self.trust_root = previous_root;
         let manifest = result?;
         manifest.validate()?;
@@ -445,56 +528,108 @@ impl ManifestLoader {
                 canonical_path.display()
             )));
         }
-        self.load_canonical(canonical_path)
+        self.load_location(ManifestLocation::Path(canonical_path))
     }
 
-    fn load_canonical(&mut self, canonical_path: PathBuf) -> Result<Manifest, RuntimeError> {
+    fn load_extends_url(
+        &mut self,
+        url: String,
+        including: &ManifestLocation,
+        extends: &ManifestExtends,
+    ) -> Result<Manifest, RuntimeError> {
+        let normalized = validate_https_url(&url)?;
+        let body = self.fetch_url_body(&normalized)?;
+        verify_extends_hash(extends, &normalized, &body)?;
+        self.load_location_with_body(ManifestLocation::Url(normalized), Some(body), including)
+    }
+
+    fn load_location(&mut self, location: ManifestLocation) -> Result<Manifest, RuntimeError> {
+        self.load_location_with_body(location.clone(), None, &location)
+    }
+
+    fn load_location_with_body(
+        &mut self,
+        location: ManifestLocation,
+        body: Option<Vec<u8>>,
+        including: &ManifestLocation,
+    ) -> Result<Manifest, RuntimeError> {
         if self.stack.len() + 1 > self.limits.max_extends_depth {
             return Err(RuntimeError::ResourceLimitExceeded(format!(
                 "manifest extends depth exceeds limit {} at '{}'",
                 self.limits.max_extends_depth,
-                canonical_path.display()
+                location.label()
             )));
         }
 
-        if let Some(start) = self.stack.iter().position(|path| path == &canonical_path) {
+        if let Some(start) = self.stack.iter().position(|path| path == &location) {
             let mut cycle: Vec<String> = self.stack[start..]
                 .iter()
-                .map(|path| path.display().to_string())
+                .map(ManifestLocation::label)
                 .collect();
-            cycle.push(canonical_path.display().to_string());
+            cycle.push(location.label());
             return Err(RuntimeError::ManifestInvalid(format!(
                 "manifest extends cycle detected: {}",
                 cycle.join(" -> ")
             )));
         }
 
-        let source = fs::read_to_string(&canonical_path).map_err(|err| {
+        let source_bytes = match body {
+            Some(body) => body,
+            None => self.read_location_body(&location, including)?,
+        };
+        let source = String::from_utf8(source_bytes).map_err(|err| {
             RuntimeError::ManifestInvalid(format!(
-                "failed to read manifest file '{}': {err}",
-                canonical_path.display()
+                "manifest '{}' is not valid UTF-8: {err}",
+                location.label()
             ))
         })?;
-        let mut manifest = parse_manifest_file(&source, &canonical_path)?;
-        validate_extends_entries(&manifest, &canonical_path)?;
-        let parent_dir_buf = canonical_path
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .to_path_buf();
-        manifest.resolve_relative_paths(&parent_dir_buf);
+        let mut manifest = parse_manifest_source(&source, &location)?;
+        validate_extends_entries(&manifest, &location)?;
+        if let ManifestLocation::Path(canonical_path) = &location {
+            let parent_dir_buf = canonical_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf();
+            manifest.resolve_relative_paths(&parent_dir_buf);
+        }
 
-        self.stack.push(canonical_path.clone());
+        self.stack.push(location.clone());
         let mut resolved: Option<Manifest> = None;
-        let parent_dir = parent_dir_buf.as_path();
         let extends = manifest.extends.clone();
         for extends_entry in extends {
-            let include_path = resolve_extends_path(parent_dir, &extends_entry, &canonical_path)?;
-            let included_manifest =
-                self.load_extends_path(&include_path, &canonical_path, &extends_entry)?;
+            let (included_manifest, included_source) =
+                match resolve_extends_entry(&location, &extends_entry)? {
+                    ResolvedExtends::Path(include_path) => {
+                        let including_path = match &location {
+                            ManifestLocation::Path(path) => path,
+                            ManifestLocation::Url(_) => {
+                                return Err(RuntimeError::ManifestInvalid(format!(
+                                    "remote manifest '{}' cannot extend local path '{}'",
+                                    location.label(),
+                                    extends_entry.reference()
+                                )))
+                            }
+                        };
+                        let canonical_path =
+                            canonicalize_manifest_path(&include_path, Some(including_path))?;
+                        let manifest = self.load_extends_path(
+                            &include_path,
+                            including_path,
+                            extends_entry.reference(),
+                        )?;
+                        (manifest, ManifestLocation::Path(canonical_path))
+                    }
+                    ResolvedExtends::Url(url) => {
+                        let normalized = validate_https_url(&url)?;
+                        let manifest =
+                            self.load_extends_url(normalized.clone(), &location, &extends_entry)?;
+                        (manifest, ManifestLocation::Url(normalized))
+                    }
+                };
             merge_resolved_manifest(
                 &mut resolved,
                 included_manifest,
-                &ManifestSource::Path(include_path.clone()),
+                &ManifestSource::Location(included_source),
             )?;
             self.validate_merged_manifest_size(&resolved)?;
         }
@@ -504,10 +639,42 @@ impl ManifestLoader {
         merge_resolved_manifest(
             &mut resolved,
             manifest,
-            &ManifestSource::Path(canonical_path.clone()),
+            &ManifestSource::Location(location.clone()),
         )?;
         self.validate_merged_manifest_size(&resolved)?;
         Ok(resolved.expect("current manifest should always be merged"))
+    }
+
+    fn read_location_body(
+        &mut self,
+        location: &ManifestLocation,
+        _including: &ManifestLocation,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        match location {
+            ManifestLocation::Path(path) => fs::read(path).map_err(|err| {
+                RuntimeError::ManifestInvalid(format!(
+                    "failed to read manifest file '{}': {err}",
+                    path.display()
+                ))
+            }),
+            ManifestLocation::Url(url) => self.fetch_url_body(url),
+        }
+    }
+
+    fn fetch_url_body(&mut self, url: &str) -> Result<Vec<u8>, RuntimeError> {
+        if let Some(body) = self.url_bodies.get(url) {
+            return Ok(body.clone());
+        }
+        let body = self.fetcher.fetch(url, self.limits)?;
+        if body.len() > self.limits.max_manifest_url_bytes {
+            return Err(RuntimeError::ResourceLimitExceeded(format!(
+                "manifest URL extends body from '{url}' is {} bytes, exceeding limit {}",
+                body.len(),
+                self.limits.max_manifest_url_bytes
+            )));
+        }
+        self.url_bodies.insert(url.to_string(), body.clone());
+        Ok(body)
     }
 
     fn validate_merged_manifest_size(
@@ -553,37 +720,40 @@ fn canonicalize_manifest_path(
     })
 }
 
-fn parse_manifest_file(source: &str, path: &Path) -> Result<Manifest, RuntimeError> {
-    let parse_as_json = path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"));
+fn parse_manifest_source(
+    source: &str,
+    location: &ManifestLocation,
+) -> Result<Manifest, RuntimeError> {
+    let parse_as_json = location.is_json();
     if parse_as_json {
         serde_json::from_str(source).map_err(|err| {
             RuntimeError::ManifestInvalid(format!(
-                "failed to parse manifest file '{}' as JSON: {err}",
-                path.display()
+                "failed to parse manifest '{}' as JSON: {err}",
+                location.label()
             ))
         })
     } else {
         serde_yaml::from_str(source).map_err(|err| {
             RuntimeError::ManifestInvalid(format!(
-                "failed to parse manifest file '{}' as YAML: {err}",
-                path.display()
+                "failed to parse manifest '{}' as YAML: {err}",
+                location.label()
             ))
         })
     }
 }
 
-fn validate_extends_entries(manifest: &Manifest, path: &Path) -> Result<(), RuntimeError> {
+fn validate_extends_entries(
+    manifest: &Manifest,
+    location: &ManifestLocation,
+) -> Result<(), RuntimeError> {
     for extends in &manifest.extends {
-        if extends.trim().is_empty() {
+        if extends.reference().trim().is_empty() {
             return Err(RuntimeError::ManifestInvalid(format!(
                 "extends entries in '{}' must not be empty",
-                path.display()
+                location.label()
             )));
         }
-        reject_url_shaped_extends(extends, &path.display().to_string())?;
+        validate_extends_trust(extends)?;
     }
     Ok(())
 }
@@ -591,50 +761,329 @@ fn validate_extends_entries(manifest: &Manifest, path: &Path) -> Result<(), Runt
 fn validate_chain_extends(manifest: &Manifest, index: usize) -> Result<(), RuntimeError> {
     let source = format!("manifest chain entry {index}");
     for extends in &manifest.extends {
-        if extends.trim().is_empty() {
+        if extends.reference().trim().is_empty() {
             return Err(RuntimeError::ManifestInvalid(format!(
                 "extends entries in {source} must not be empty"
             )));
         }
-        reject_url_shaped_extends(extends, &source)?;
+        validate_extends_trust(extends)?;
     }
     Ok(())
 }
 
-fn reject_url_shaped_extends(extends_entry: &str, source: &str) -> Result<(), RuntimeError> {
-    let trimmed = extends_entry.trim_start();
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+fn validate_extends_trust(extends: &ManifestExtends) -> Result<(), RuntimeError> {
+    if let ManifestExtends::Url(url) = extends {
+        if url.integrity.is_some() && url.sha256.is_some() {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "extends URL '{}' must not define both integrity and sha256",
+                url.url
+            )));
+        }
+        if let Some(integrity) = &url.integrity {
+            parse_integrity(integrity)?;
+        }
+        if let Some(sha256) = &url.sha256 {
+            parse_sha256_hex(sha256)?;
+        }
+    }
+    Ok(())
+}
+
+fn resolve_extends_entry(
+    parent: &ManifestLocation,
+    extends: &ManifestExtends,
+) -> Result<ResolvedExtends, RuntimeError> {
+    match extends {
+        ManifestExtends::Reference(reference) => resolve_reference(parent, reference),
+        ManifestExtends::Url(url) => {
+            resolve_url_reference(parent, &url.url).map(ResolvedExtends::Url)
+        }
+    }
+}
+
+fn resolve_reference(
+    parent: &ManifestLocation,
+    reference: &str,
+) -> Result<ResolvedExtends, RuntimeError> {
+    if has_url_scheme(reference) {
+        let url = validate_https_url(reference)?;
+        return Ok(ResolvedExtends::Url(url));
+    }
+    match parent {
+        ManifestLocation::Path(path) => {
+            let parent_dir = path.parent().unwrap_or_else(|| Path::new("."));
+            let extends_path = Path::new(reference);
+            if extends_path.is_absolute() {
+                Ok(ResolvedExtends::Path(extends_path.to_path_buf()))
+            } else {
+                Ok(ResolvedExtends::Path(parent_dir.join(extends_path)))
+            }
+        }
+        ManifestLocation::Url(_) => {
+            resolve_url_reference(parent, reference).map(ResolvedExtends::Url)
+        }
+    }
+}
+
+fn resolve_url_reference(parent: &ManifestLocation, raw: &str) -> Result<String, RuntimeError> {
+    let parsed = match url::Url::parse(raw) {
+        Ok(url) => url,
+        Err(url::ParseError::RelativeUrlWithoutBase) => match parent {
+            ManifestLocation::Url(base) => {
+                let base_url = url::Url::parse(base).map_err(|err| {
+                    RuntimeError::ManifestInvalid(format!(
+                        "internal manifest URL '{base}' is invalid: {err}"
+                    ))
+                })?;
+                base_url.join(raw).map_err(|err| {
+                    RuntimeError::ManifestInvalid(format!(
+                        "failed to resolve URL extends entry '{raw}' from '{base}': {err}"
+                    ))
+                })?
+            }
+            ManifestLocation::Path(path) => {
+                return Err(RuntimeError::ManifestInvalid(format!(
+                    "extends URL '{raw}' in '{}' must be absolute HTTPS",
+                    path.display()
+                )))
+            }
+        },
+        Err(err) => {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "extends URL '{raw}' is invalid: {err}"
+            )))
+        }
+    };
+    validate_url_components(parsed)
+}
+
+fn validate_https_url(raw: &str) -> Result<String, RuntimeError> {
+    let parsed = url::Url::parse(raw).map_err(|err| {
+        RuntimeError::ManifestInvalid(format!("extends URL '{raw}' is invalid: {err}"))
+    })?;
+    validate_url_components(parsed)
+}
+
+fn validate_url_components(mut parsed: url::Url) -> Result<String, RuntimeError> {
+    if parsed.scheme() != "https" {
         return Err(RuntimeError::ManifestInvalid(format!(
-            "extends entry '{extends_entry}' in {source} uses an unsupported URL scheme"
+            "extends URL '{}' uses unsupported URL scheme '{}'; only https is allowed",
+            parsed,
+            parsed.scheme()
         )));
     }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(RuntimeError::ManifestInvalid(format!(
+            "extends URL '{}' must not include credentials",
+            parsed
+        )));
+    }
+    if parsed.fragment().is_some() {
+        return Err(RuntimeError::ManifestInvalid(format!(
+            "extends URL '{}' must not include a fragment",
+            parsed
+        )));
+    }
+    parsed.set_fragment(None);
+    Ok(parsed.to_string())
+}
+
+fn has_url_scheme(reference: &str) -> bool {
+    let trimmed = reference.trim_start();
+    if !trimmed.contains("://") {
+        return false;
+    }
+    let Some(colon_index) = trimmed.find(':') else {
+        return false;
+    };
+    trimmed[..colon_index]
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_alphabetic())
+        && trimmed[..colon_index]
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '-' | '.'))
+}
+
+fn verify_extends_hash(
+    extends: &ManifestExtends,
+    url: &str,
+    body: &[u8],
+) -> Result<(), RuntimeError> {
+    let ManifestExtends::Url(url_extends) = extends else {
+        return Ok(());
+    };
+    let actual = sha256_digest(body);
+    if let Some(expected) = &url_extends.sha256 {
+        let expected = parse_sha256_hex(expected)?;
+        if actual.as_slice() != expected.as_slice() {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "sha256 mismatch for extends URL '{url}'"
+            )));
+        }
+    }
+    if let Some(expected) = &url_extends.integrity {
+        let expected = parse_integrity(expected)?;
+        if actual.as_slice() != expected.as_slice() {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "integrity mismatch for extends URL '{url}'"
+            )));
+        }
+    }
     Ok(())
 }
 
-fn resolve_extends_path(
-    parent_dir: &Path,
-    extends_entry: &str,
-    including_manifest: &Path,
-) -> Result<PathBuf, RuntimeError> {
-    reject_url_shaped_extends(extends_entry, &including_manifest.display().to_string())?;
-    let extends_path = Path::new(extends_entry);
-    if extends_path.is_absolute() {
-        Ok(extends_path.to_path_buf())
-    } else {
-        Ok(parent_dir.join(extends_path))
+fn sha256_digest(body: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(body);
+    hasher.finalize().into()
+}
+
+fn parse_integrity(raw: &str) -> Result<Vec<u8>, RuntimeError> {
+    use base64::Engine;
+    let digest = raw.trim().strip_prefix("sha256-").ok_or_else(|| {
+        RuntimeError::ManifestInvalid(format!(
+            "extends integrity '{raw}' must use sha256-<base64>"
+        ))
+    })?;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(digest)
+        .or_else(|_| base64::engine::general_purpose::STANDARD_NO_PAD.decode(digest))
+        .or_else(|_| base64::engine::general_purpose::URL_SAFE.decode(digest))
+        .or_else(|_| base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(digest))
+        .map_err(|_| {
+            RuntimeError::ManifestInvalid(format!(
+                "extends integrity '{raw}' must use sha256-<base64>"
+            ))
+        })?;
+    if decoded.len() != 32 {
+        return Err(RuntimeError::ManifestInvalid(format!(
+            "extends integrity '{raw}' must contain a 32 byte sha256 digest"
+        )));
     }
+    Ok(decoded)
+}
+
+fn parse_sha256_hex(raw: &str) -> Result<Vec<u8>, RuntimeError> {
+    let trimmed = raw.trim();
+    if trimmed.len() != 64 || !trimmed.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err(RuntimeError::ManifestInvalid(format!(
+            "extends sha256 '{raw}' must be 64 lowercase or uppercase hex characters"
+        )));
+    }
+    (0..trimmed.len())
+        .step_by(2)
+        .map(|index| {
+            u8::from_str_radix(&trimmed[index..index + 2], 16).map_err(|err| {
+                RuntimeError::ManifestInvalid(format!("extends sha256 '{raw}' is invalid: {err}"))
+            })
+        })
+        .collect()
+}
+
+trait ExtendsFetcher {
+    fn fetch(&self, url: &str, limits: Limits) -> Result<Vec<u8>, RuntimeError>;
+}
+
+struct HttpExtendsFetcher;
+
+impl ExtendsFetcher for HttpExtendsFetcher {
+    fn fetch(&self, url: &str, limits: Limits) -> Result<Vec<u8>, RuntimeError> {
+        let agent = ureq::AgentBuilder::new()
+            .https_only(true)
+            .try_proxy_from_env(false)
+            .redirects(limits.max_manifest_url_redirects as u32)
+            .timeout(Duration::from_millis(limits.manifest_url_timeout_ms))
+            .build();
+        self.fetch_with_agent(url, limits, agent)
+    }
+}
+
+impl HttpExtendsFetcher {
+    fn fetch_with_agent(
+        &self,
+        url: &str,
+        limits: Limits,
+        agent: ureq::Agent,
+    ) -> Result<Vec<u8>, RuntimeError> {
+        use ureq::OrAnyStatus as _;
+
+        let response = agent.get(url).call().or_any_status().map_err(|err| {
+            RuntimeError::ManifestInvalid(format!("failed to fetch extends URL '{url}': {err}"))
+        })?;
+        if response.status() >= 400 {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "failed to fetch extends URL '{url}': HTTP {}",
+                response.status()
+            )));
+        }
+        let mut body = Vec::new();
+        let mut reader = response
+            .into_reader()
+            .take(limits.max_manifest_url_bytes as u64 + 1);
+        reader.read_to_end(&mut body).map_err(|err| {
+            RuntimeError::ManifestInvalid(format!(
+                "failed to read extends URL '{url}' response body: {err}"
+            ))
+        })?;
+        if body.len() > limits.max_manifest_url_bytes {
+            return Err(RuntimeError::ResourceLimitExceeded(format!(
+                "manifest URL extends body from '{url}' exceeds limit {}",
+                limits.max_manifest_url_bytes
+            )));
+        }
+        Ok(body)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+enum ManifestLocation {
+    Path(PathBuf),
+    Url(String),
+}
+
+impl ManifestLocation {
+    fn label(&self) -> String {
+        match self {
+            Self::Path(path) => path.display().to_string(),
+            Self::Url(url) => url.clone(),
+        }
+    }
+
+    fn is_json(&self) -> bool {
+        match self {
+            Self::Path(path) => path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json")),
+            Self::Url(raw) => url::Url::parse(raw)
+                .ok()
+                .and_then(|url| {
+                    Path::new(url.path())
+                        .extension()
+                        .and_then(|extension| extension.to_str().map(str::to_string))
+                })
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json")),
+        }
+    }
+}
+
+enum ResolvedExtends {
+    Path(PathBuf),
+    Url(String),
 }
 
 #[derive(Debug)]
 enum ManifestSource {
-    Path(PathBuf),
+    Location(ManifestLocation),
     ChainEntry(usize),
 }
 
 impl ManifestSource {
     fn label(&self) -> String {
         match self {
-            Self::Path(path) => path.display().to_string(),
+            Self::Location(location) => location.label(),
             Self::ChainEntry(index) => format!("manifest chain entry {index}"),
         }
     }
@@ -709,10 +1158,45 @@ fn merge_metadata(
     source: &ManifestSource,
 ) -> Result<(), RuntimeError> {
     let empty = empty_object();
+    if incoming_metadata == empty {
+        return Ok(());
+    }
     if existing.metadata == empty {
         existing.metadata = incoming_metadata;
-    } else if incoming_metadata != empty && existing.metadata != incoming_metadata {
-        return manifest_merge_conflict("metadata", source);
+        return Ok(());
+    }
+    if existing.metadata == incoming_metadata {
+        return Ok(());
+    }
+    match (&mut existing.metadata, incoming_metadata) {
+        (JsonValue::Object(existing), JsonValue::Object(incoming)) => {
+            merge_metadata_object(existing, incoming, "metadata", source)
+        }
+        _ => manifest_merge_conflict("metadata", source),
+    }
+}
+
+fn merge_metadata_object(
+    existing: &mut Map<String, JsonValue>,
+    incoming: Map<String, JsonValue>,
+    path: &str,
+    source: &ManifestSource,
+) -> Result<(), RuntimeError> {
+    for (key, value) in incoming {
+        let field = format!("{path}.{key}");
+        match existing.get_mut(&key) {
+            Some(existing_value) if existing_value == &value => {}
+            Some(JsonValue::Object(existing_object)) => match value {
+                JsonValue::Object(incoming_object) => {
+                    merge_metadata_object(existing_object, incoming_object, &field, source)?
+                }
+                _ => return manifest_merge_conflict(&field, source),
+            },
+            Some(_) => return manifest_merge_conflict(&field, source),
+            None => {
+                existing.insert(key, value);
+            }
+        }
     }
     Ok(())
 }
@@ -768,17 +1252,42 @@ fn merge_point_config(
         return Ok(());
     }
     let point_path = format!("intervention_points.{intervention_point}");
-    if existing.policy_target != incoming.policy_target {
-        return manifest_merge_conflict(&format!("{point_path}.policy_target"), source);
+    if !incoming.policy_target.is_empty() {
+        if existing.policy_target.is_empty() {
+            existing.policy_target = incoming.policy_target;
+        } else if existing.policy_target != incoming.policy_target {
+            return manifest_merge_conflict(&format!("{point_path}.policy_target"), source);
+        }
     }
-    if existing.policy_target_kind != incoming.policy_target_kind {
-        return manifest_merge_conflict(&format!("{point_path}.policy_target_kind"), source);
+    if let Some(policy_target_kind) = incoming.policy_target_kind {
+        match &existing.policy_target_kind {
+            Some(existing_policy_target_kind)
+                if existing_policy_target_kind != &policy_target_kind =>
+            {
+                return manifest_merge_conflict(
+                    &format!("{point_path}.policy_target_kind"),
+                    source,
+                );
+            }
+            None => existing.policy_target_kind = Some(policy_target_kind),
+            _ => {}
+        }
     }
-    if existing.tool_name_from != incoming.tool_name_from {
-        return manifest_merge_conflict(&format!("{point_path}.tool_name_from"), source);
+    if let Some(tool_name_from) = incoming.tool_name_from {
+        match &existing.tool_name_from {
+            Some(existing_tool_name_from) if existing_tool_name_from != &tool_name_from => {
+                return manifest_merge_conflict(&format!("{point_path}.tool_name_from"), source);
+            }
+            None => existing.tool_name_from = Some(tool_name_from),
+            _ => {}
+        }
     }
-    if existing.policy != incoming.policy {
-        return manifest_merge_conflict(&format!("{point_path}.policy"), source);
+    if !is_empty_policy_binding(&incoming.policy) {
+        if is_empty_policy_binding(&existing.policy) {
+            existing.policy = incoming.policy;
+        } else if existing.policy != incoming.policy {
+            return manifest_merge_conflict(&format!("{point_path}.policy"), source);
+        }
     }
     merge_string_keyed_map(
         &mut existing.annotations,
@@ -796,6 +1305,7 @@ fn manifest_merge_conflict<T>(field: &str, source: &ManifestSource) -> Result<T,
 }
 
 #[cfg(test)]
+
 mod approval_section_tests {
     use super::*;
     use serde_json::json;
@@ -1017,5 +1527,435 @@ intervention_points:
         assert_eq!(resolver_json["type"], json!("custom"));
         assert_eq!(resolver_json["backend"]["kind"], json!("queue"));
         assert_eq!(resolver_json["labels"], json!(["high-trust", "secure"]));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+    use std::{
+        cell::RefCell,
+        collections::BTreeMap,
+        fs,
+        io::{Read, Write},
+        net::TcpListener,
+        path::Path,
+        rc::Rc,
+        thread::{self, JoinHandle},
+    };
+
+    #[derive(Clone)]
+    struct MockFetcher {
+        bodies: Rc<BTreeMap<String, Vec<u8>>>,
+        calls: Rc<RefCell<BTreeMap<String, usize>>>,
+    }
+
+    impl MockFetcher {
+        fn new(bodies: BTreeMap<String, Vec<u8>>) -> Self {
+            Self {
+                bodies: Rc::new(bodies),
+                calls: Rc::new(RefCell::new(BTreeMap::new())),
+            }
+        }
+
+        fn calls(&self, url: &str) -> usize {
+            self.calls.borrow().get(url).copied().unwrap_or(0)
+        }
+    }
+
+    impl ExtendsFetcher for MockFetcher {
+        fn fetch(&self, url: &str, _limits: Limits) -> Result<Vec<u8>, RuntimeError> {
+            *self.calls.borrow_mut().entry(url.to_string()).or_insert(0) += 1;
+            self.bodies.get(url).cloned().ok_or_else(|| {
+                RuntimeError::ManifestInvalid(format!("mock fetch missing body for {url}"))
+            })
+        }
+    }
+
+    fn base_manifest() -> &'static str {
+        r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  p:
+    type: test
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+"#
+    }
+
+    fn root_path(name: &str, yaml: &str) -> PathBuf {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("https-extends-unit");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        fs::write(&path, yaml).unwrap();
+        path
+    }
+
+    fn load_with_fetcher(
+        path: &Path,
+        fetcher: MockFetcher,
+        limits: Limits,
+    ) -> Result<Manifest, RuntimeError> {
+        ManifestLoader::with_limits_and_fetcher(limits, Box::new(fetcher)).load(path)
+    }
+
+    fn sri(body: &[u8]) -> String {
+        let digest = sha256_digest(body);
+        format!(
+            "sha256-{}",
+            base64::engine::general_purpose::STANDARD.encode(digest)
+        )
+    }
+
+    fn hex_sha256(body: &[u8]) -> String {
+        sha256_digest(body)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    #[test]
+    fn extends_allows_annotation_only_point_overlay() {
+        let base = root_path(
+            "annotation-only-base.yaml",
+            r#"agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: base
+policies:
+  p:
+    type: test
+annotators:
+  base_classifier:
+    type: classifier
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+    annotations:
+      base_classifier:
+        from: $policy_target.text
+"#,
+        );
+        let overlay = root_path(
+            "annotation-only-overlay.yaml",
+            &format!(
+                r#"agent_control_specification_version: 0.3.1-beta
+extends:
+  - {}
+annotators:
+  overlay_classifier:
+    type: classifier
+intervention_points:
+  input:
+    annotations:
+      overlay_classifier:
+        from: $policy_target.text
+"#,
+                base.file_name().unwrap().to_string_lossy()
+            ),
+        );
+
+        let manifest = Manifest::from_path(&overlay).unwrap();
+        let input = manifest
+            .intervention_points
+            .get(&InterventionPoint::Input)
+            .unwrap();
+        assert_eq!(input.policy_target, "$snap.input");
+        assert_eq!(input.policy.id, "p");
+        assert!(input.annotations.contains_key("base_classifier"));
+        assert!(input.annotations.contains_key("overlay_classifier"));
+        assert!(manifest.annotators.contains_key("base_classifier"));
+        assert!(manifest.annotators.contains_key("overlay_classifier"));
+    }
+
+    fn http_response(status: &str, headers: &[(&str, String)], body: &[u8]) -> Vec<u8> {
+        let mut response = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n",
+            body.len()
+        );
+        for (name, value) in headers {
+            response.push_str(name);
+            response.push_str(": ");
+            response.push_str(value);
+            response.push_str("\r\n");
+        }
+        response.push_str("\r\n");
+        let mut bytes = response.into_bytes();
+        bytes.extend_from_slice(body);
+        bytes
+    }
+
+    fn request_path(request: &[u8]) -> String {
+        String::from_utf8_lossy(request)
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .unwrap_or("/")
+            .to_string()
+    }
+
+    fn spawn_http_server<F>(requests: usize, mut respond: F) -> (String, JoinHandle<()>)
+    where
+        F: FnMut(String, String) -> Vec<u8> + Send + 'static,
+    {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let thread_base_url = base_url.clone();
+        let handle = thread::spawn(move || {
+            for _ in 0..requests {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = [0_u8; 2048];
+                let read = stream.read(&mut request).unwrap();
+                let path = request_path(&request[..read]);
+                let response = respond(thread_base_url.clone(), path);
+                stream.write_all(&response).unwrap();
+            }
+        });
+        (base_url, handle)
+    }
+
+    fn local_http_agent(redirects: usize) -> ureq::Agent {
+        ureq::AgentBuilder::new()
+            .try_proxy_from_env(false)
+            .redirects(redirects as u32)
+            .build()
+    }
+
+    #[test]
+    fn real_http_fetcher_rejects_http_before_network_fetch() {
+        let error = HttpExtendsFetcher
+            .fetch("http://127.0.0.1/manifest.yaml", Limits::default())
+            .unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("https")
+                || error.detail().contains("HTTP is forbidden")
+                || error.detail().contains("unsupported")
+        );
+    }
+
+    #[test]
+    fn real_http_fetcher_streaming_body_cap_fails_closed() {
+        let (base_url, handle) = spawn_http_server(1, |_base_url, _path| {
+            http_response("200 OK", &[], b"abcdef")
+        });
+        let limits = Limits {
+            max_manifest_url_bytes: 4,
+            ..Limits::default()
+        };
+
+        let error = HttpExtendsFetcher
+            .fetch_with_agent(
+                &format!("{base_url}/large.yaml"),
+                limits,
+                local_http_agent(0),
+            )
+            .unwrap_err();
+        handle.join().unwrap();
+
+        assert_eq!(error.reason(), "runtime_error:resource_limit_exceeded");
+        assert!(error.detail().contains("exceeds limit 4"));
+    }
+
+    #[test]
+    fn real_http_fetcher_rejects_http_error_status() {
+        let (base_url, handle) = spawn_http_server(1, |_base_url, _path| {
+            http_response("404 Not Found", &[], b"missing")
+        });
+
+        let error = HttpExtendsFetcher
+            .fetch_with_agent(
+                &format!("{base_url}/missing.yaml"),
+                Limits::default(),
+                local_http_agent(0),
+            )
+            .unwrap_err();
+        handle.join().unwrap();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("HTTP 404"));
+    }
+
+    #[test]
+    fn real_http_fetcher_enforces_redirect_cap() {
+        let (base_url, handle) = spawn_http_server(1, |base_url, path| {
+            let next = if path == "/start.yaml" {
+                "/middle.yaml"
+            } else {
+                "/end.yaml"
+            };
+            http_response(
+                "302 Found",
+                &[("Location", format!("{base_url}{next}"))],
+                b"",
+            )
+        });
+
+        let error = HttpExtendsFetcher
+            .fetch_with_agent(
+                &format!("{base_url}/start.yaml"),
+                Limits {
+                    max_manifest_url_redirects: 1,
+                    ..Limits::default()
+                },
+                local_http_agent(1),
+            )
+            .unwrap_err();
+        handle.join().unwrap();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("redirect")
+                || error.detail().contains("TooManyRedirects")
+                || error.detail().contains("too many")
+        );
+    }
+
+    #[test]
+    fn https_string_extends_fetches_and_merges() {
+        let url = "https://policy.example/base.yaml";
+        let fetcher = MockFetcher::new(BTreeMap::from([(
+            url.to_string(),
+            base_manifest().as_bytes().to_vec(),
+        )]));
+        let path = root_path(
+            "https-string.yaml",
+            &format!(
+                "agent_control_specification_version: 0.3.1-beta\nextends:\n  - {url}\nmetadata:\n  name: child\n"
+            ),
+        );
+
+        let manifest = load_with_fetcher(&path, fetcher.clone(), Limits::default()).unwrap();
+
+        assert!(manifest.extends.is_empty());
+        assert!(manifest.policies.contains_key("p"));
+        assert_eq!(fetcher.calls(url), 1);
+    }
+
+    #[test]
+    fn https_object_extends_accepts_matching_integrity() {
+        let url = "https://policy.example/pinned.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.clone())]));
+        let path = root_path(
+            "https-integrity.yaml",
+            &format!(
+                "agent_control_specification_version: 0.3.1-beta\nextends:\n  - url: {url}\n    integrity: {}\n",
+                sri(&body)
+            ),
+        );
+
+        let manifest = load_with_fetcher(&path, fetcher, Limits::default()).unwrap();
+
+        assert!(manifest.policies.contains_key("p"));
+    }
+
+    #[test]
+    fn https_object_extends_rejects_mismatched_sha256() {
+        let url = "https://policy.example/bad-pin.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body)]));
+        let path = root_path(
+            "https-bad-sha.yaml",
+            &format!(
+                "agent_control_specification_version: 0.3.1-beta\nextends:\n  - url: {url}\n    sha256: {}\n",
+                "00".repeat(32)
+            ),
+        );
+
+        let error = load_with_fetcher(&path, fetcher, Limits::default()).unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("sha256 mismatch"));
+    }
+
+    #[test]
+    fn url_extends_rejects_http_and_unsupported_schemes() {
+        for (name, url) in [
+            ("http-reject.yaml", "http://policy.example/base.yaml"),
+            ("ftp-reject.yaml", "ftp://policy.example/base.yaml"),
+        ] {
+            let path = root_path(
+                name,
+                &format!("agent_control_specification_version: 0.3.1-beta\nextends:\n  - {url}\n"),
+            );
+            let error =
+                load_with_fetcher(&path, MockFetcher::new(BTreeMap::new()), Limits::default())
+                    .unwrap_err();
+            assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+            assert!(error.detail().contains("unsupported URL scheme"));
+        }
+    }
+
+    #[test]
+    fn url_extends_detects_url_cycles() {
+        let url = "https://policy.example/cycle.yaml";
+        let body =
+            format!("agent_control_specification_version: 0.3.1-beta\nextends:\n  - {url}\n");
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.into_bytes())]));
+        let path = root_path(
+            "https-cycle.yaml",
+            &format!("agent_control_specification_version: 0.3.1-beta\nextends:\n  - {url}\n"),
+        );
+
+        let error = load_with_fetcher(&path, fetcher, Limits::default()).unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("manifest extends cycle detected"));
+    }
+
+    #[test]
+    fn url_extends_body_size_limit_fails_closed() {
+        let url = "https://policy.example/large.yaml";
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), b"abcdef".to_vec())]));
+        let path = root_path(
+            "https-large.yaml",
+            &format!("agent_control_specification_version: 0.3.1-beta\nextends:\n  - {url}\n"),
+        );
+
+        let error = load_with_fetcher(
+            &path,
+            fetcher,
+            Limits {
+                max_manifest_url_bytes: 4,
+                ..Limits::default()
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:resource_limit_exceeded");
+    }
+
+    #[test]
+    fn duplicate_url_extends_fetches_once_and_merges_identical() {
+        let url = "https://policy.example/duplicate.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body)]));
+        let path = root_path(
+            "https-duplicate.yaml",
+            &format!(
+                "agent_control_specification_version: 0.3.1-beta\nextends:\n  - {url}\n  - {url}\n"
+            ),
+        );
+
+        let manifest = load_with_fetcher(&path, fetcher.clone(), Limits::default()).unwrap();
+
+        assert!(manifest.policies.contains_key("p"));
+        assert_eq!(fetcher.calls(url), 1);
+    }
+
+    #[test]
+    fn sha256_helper_matches_known_digest() {
+        assert_eq!(
+            hex_sha256(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
     }
 }

@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agent-control-specification-node"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification_core",
  "napi",
@@ -22,7 +22,7 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification_core",
  "serde",
@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification_annotators"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification",
  "agent_control_specification_core",
@@ -41,8 +41,9 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification_core"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
+ "base64 0.22.1",
  "cedar-policy",
  "criterion",
  "jsonschema",
@@ -52,11 +53,12 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "ureq",
+ "url",
 ]
 
 [[package]]
 name = "agent_control_specification_mcp"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification",
  "rmcp",
@@ -67,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification_openai"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification",
  "async-openai",
@@ -77,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification_otel"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification_core",
  "opentelemetry",
@@ -86,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification_py"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification_core",
  "pyo3",
@@ -96,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "agent_control_specification_rig"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 dependencies = [
  "agent_control_specification",
  "rig-core",

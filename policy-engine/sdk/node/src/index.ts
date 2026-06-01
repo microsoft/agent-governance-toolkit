@@ -6,6 +6,7 @@ import {
   AgentControlSuspendedError,
   transformedOr,
 } from "./adapter-helpers";
+import { configureOpaPath } from "./integrations/opa-binary";
 
 export { AgentControlBlockedError, AgentControlInterruptionError, AgentControlSuspendedError };
 
@@ -128,6 +129,7 @@ export interface InterventionPointRequest {
 export interface InterventionPointResult {
   verdict: Verdict;
   transformedPolicyTarget?: JsonValue;
+  transformedPolicyTargetApplied?: boolean;
   policyInput?: JsonValue;
   /** AGT D1.4 SHA-256 of the canonical policy input that was
    * evaluated. Pins what the policy actually saw. */
@@ -219,6 +221,7 @@ export class NativeRuntimeClient implements RuntimeClient {
   ) {
     this.annotatorDispatcher = annotatorDispatcher;
     this.policyDispatcher = policyDispatcher;
+    if (policyDispatcher === undefined) configureOpaPath();
     const manifestString = typeof manifest === "string" ? manifest : JSON.stringify(manifest);
     const NativeRuntimeClass = (native as { NativeRuntime: NativeRuntimeConstructor }).NativeRuntime;
     // An undefined dispatcher opts into the bundled native default (OPA policy /
@@ -345,13 +348,13 @@ export class AgentControl {
     try {
       resolution = await resolver(interventionPoint, result);
     } catch (error) {
-      const blocked = new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult());
+      const blocked = new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult(result));
       (blocked as { cause?: unknown }).cause = error;
       throw blocked;
     }
 
     if (resolution === undefined || resolution === null) {
-      throw new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult());
+      throw new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult(result));
     }
 
     switch (resolution.outcome) {
@@ -364,7 +367,7 @@ export class AgentControl {
       case ApprovalOutcome.Deny:
         throw new AgentControlBlockedError(interventionPoint, result);
       default:
-        throw new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult());
+        throw new AgentControlBlockedError(interventionPoint, approvalResolverFailedResult(result));
     }
   }
 
@@ -414,7 +417,7 @@ export class AgentControl {
     return async (args, callOptions = {}) => {
       const snapshot = { ...defaultSnapshot, ...(callOptions.snapshot ?? {}) };
       return this.runTool(toolName, args, execute, {
-        toolCallId: callOptions.toolCallId ?? options.toolCallId ?? syntheticToolCallId(toolName),
+        toolCallId: callOptions.toolCallId ?? options.toolCallId,
         snapshot,
         mode: options.mode,
         approvalResolver: callOptions.approvalResolver ?? options.approvalResolver,
@@ -436,7 +439,7 @@ export class AgentControl {
     const mode = options.mode ?? EnforcementMode.Enforce;
     const resolver = options.approvalResolver;
     const ambient = { ...(options.snapshot ?? {}) };
-    const toolCallId = requireToolCallId(options.toolCallId);
+    const toolCallId = normalizeToolCallId(options.toolCallId);
     const toolCall = makeToolCall(toolName, args, toolCallId);
     const preToolCallResult = await this.evaluateInterventionPoint(
       InterventionPoint.PreToolCall,
@@ -528,13 +531,15 @@ export class AgentControl {
 }
 
 
-function approvalResolverFailedResult(): InterventionPointResult {
+function approvalResolverFailedResult(result: InterventionPointResult): InterventionPointResult {
   return {
     verdict: {
       decision: Decision.Deny,
       reason: "runtime_error:approval_resolver_failed",
       message: "Approval resolver failed closed.",
     },
+    policyInput: result.policyInput,
+    actionIdentity: result.actionIdentity,
   };
 }
 
@@ -567,9 +572,21 @@ function canonicalJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
   return `{${Object.keys(value)
-    .sort()
+    .sort(compareUnicodeScalarKeys)
     .map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, JsonValue>)[key])}`)
     .join(",")}}`;
+}
+
+function compareUnicodeScalarKeys(left: string, right: string): number {
+  const leftScalars = Array.from(left);
+  const rightScalars = Array.from(right);
+  const length = Math.min(leftScalars.length, rightScalars.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftCodePoint = leftScalars[index].codePointAt(0) ?? 0;
+    const rightCodePoint = rightScalars[index].codePointAt(0) ?? 0;
+    if (leftCodePoint !== rightCodePoint) return leftCodePoint - rightCodePoint;
+  }
+  return leftScalars.length - rightScalars.length;
 }
 
 function mapResult(raw: Record<string, JsonValue>): InterventionPointResult {
@@ -581,9 +598,12 @@ function mapResult(raw: Record<string, JsonValue>): InterventionPointResult {
   const rawEnforcedIdentity = raw.enforced_identity === null ? undefined : (raw.enforced_identity as string | undefined);
   const inputIdentity = rawInputIdentity ?? legacyIdentity;
   const enforcedIdentity = rawEnforcedIdentity ?? legacyIdentity;
+  const transformedPolicyTargetApplied = raw.transformed_policy_target_applied === true ||
+    (raw.transformed_policy_target !== null && raw.transformed_policy_target !== undefined);
   return {
     verdict: mapVerdict(raw.verdict),
-    transformedPolicyTarget: raw.transformed_policy_target === null ? undefined : raw.transformed_policy_target,
+    transformedPolicyTarget: transformedPolicyTargetApplied ? raw.transformed_policy_target : undefined,
+    transformedPolicyTargetApplied,
     policyInput: raw.policy_input === null ? undefined : raw.policy_input,
     inputIdentity,
     enforcedIdentity,
@@ -645,28 +665,25 @@ function mapVerdict(raw: JsonValue): Verdict {
   };
 }
 
-function requireToolCallId(toolCallId: string | undefined): string {
+function normalizeToolCallId(toolCallId: string | undefined): string | undefined {
   if (toolCallId === undefined) {
-    throw new Error("toolCallId is required for preToolCall/postToolCall snapshots.");
+    return undefined;
   }
   if (typeof toolCallId !== "string") {
     throw new TypeError("toolCallId must be a string.");
   }
   if (toolCallId.length === 0) {
-    throw new Error("toolCallId must be a non-empty string.");
+    throw new Error("toolCallId must be a non-empty string when provided.");
   }
   return toolCallId;
 }
 
-function makeToolCall(toolName: string, args: JsonValue, toolCallId: string): Record<string, JsonValue> {
-  return { id: toolCallId, name: toolName, args };
-}
-
-let syntheticToolCallCounter = 0;
-
-function syntheticToolCallId(toolName: string): string {
-  syntheticToolCallCounter += 1;
-  return `acs-${toolName.replace(/[^A-Za-z0-9_.:-]/g, "_")}-${syntheticToolCallCounter}`;
+function makeToolCall(toolName: string, args: JsonValue, toolCallId: string | undefined): Record<string, JsonValue> {
+  const toolCall: Record<string, JsonValue> = { name: toolName, args };
+  if (toolCallId !== undefined) {
+    toolCall.id = toolCallId;
+  }
+  return toolCall;
 }
 
 export * from "./adapters";

@@ -1,15 +1,20 @@
 import {
   AgentControlBlockedError,
+  AgentControlInterruptionError,
   Decision,
   EnforcementMode,
   InterventionPoint,
   JsonValue,
   ModelRunResult,
-  RunResult,
-  ToolRunResult,
-  runModel,
 } from "./index";
-import { AdapterOptions, RunnableControl, appliesTransform } from "./adapter-helpers";
+import {
+  AdapterOptions,
+  RunnableControl,
+  appliesTransform,
+  normalizeMode,
+  policyJsonValue,
+  transformedOr,
+} from "./adapter-helpers";
 
 export const DEFAULT_MAX_STREAM_BYTES = 8 * 1024 * 1024;
 export const DEFAULT_MAX_STREAM_EVENTS = 10_000;
@@ -93,22 +98,37 @@ export async function runModelStream(
   let originalBytes: Uint8Array | undefined;
   let assembledResponse: JsonValue | undefined;
   try {
-    const modelRun = await runModel(control, request, async (effectiveRequest) => {
-      originalBytes = await collectStreamBytes(await execute(effectiveRequest), options);
-      assembledResponse = assembleSseStream(originalBytes, options);
-      return assembledResponse;
-    }, options);
+    const mode = normalizeMode(options.mode ?? EnforcementMode.Enforce);
+    const ambient = { ...(options.snapshot ?? {}) };
+    const preModelCallResult = await control.evaluateInterventionPoint(
+      InterventionPoint.PreModelCall,
+      { ...ambient, model_request: policyJsonValue(request) },
+      mode,
+    );
+    await control.enforce(InterventionPoint.PreModelCall, preModelCallResult, mode, options.approvalResolver);
+    const effectiveRequest = transformedOr(preModelCallResult, request, mode);
+    originalBytes = await collectStreamBytes(await execute(effectiveRequest), options);
+    assembledResponse = assembleSseStream(originalBytes, options);
+    const postModelCallResult = await control.evaluateInterventionPoint(
+      InterventionPoint.PostModelCall,
+      { ...ambient, model_request: policyJsonValue(effectiveRequest), model_response: policyJsonValue(assembledResponse) },
+      mode,
+    );
+    await control.enforce(InterventionPoint.PostModelCall, postModelCallResult, mode, options.approvalResolver);
+    const value = transformedOr(postModelCallResult, assembledResponse, mode);
     if (originalBytes === undefined || assembledResponse === undefined) {
       throw new StreamingUnsupportedError("Streaming response contained no data chunks.");
     }
-    const transformed = modelRun.postModelCallResult.transformedPolicyTarget !== undefined &&
-      appliesTransform(modelRun.postModelCallResult.verdict.decision);
+    const transformed = mode === EnforcementMode.Enforce &&
+      (postModelCallResult.transformedPolicyTargetApplied === true ||
+        postModelCallResult.transformedPolicyTarget !== undefined) &&
+      appliesTransform(postModelCallResult.verdict.decision);
     const bytes = transformed
-      ? synthesizeSseStream(modelRun.value, assembledResponse)
+      ? synthesizeSseStream(value, assembledResponse)
       : originalBytes;
-    return { ...modelRun, bytes, assembledResponse, originalBytes };
+    return { value, preModelCallResult, postModelCallResult, bytes, assembledResponse, originalBytes };
   } catch (error) {
-    if (error instanceof AgentControlBlockedError) throw error;
+    if (error instanceof AgentControlInterruptionError) throw error;
     throw failClosed(error instanceof StreamingUnsupportedError ? error.message : "Streaming response failed closed.", error);
   }
 }

@@ -25,7 +25,14 @@ public sealed class AgentControlChatClient : DelegatingChatClient
         var result = await control.RunModelTurnAsync(
             LastUserText(messageList),
             request,
-            async (_, ct) => ChatResponseSnapshot.From(await base.GetResponseAsync(messageList, options, ct).ConfigureAwait(false)),
+            async (effectiveRequest, ct) =>
+            {
+                var innerResponse = await base.GetResponseAsync(
+                    effectiveRequest.ApplyMessages(messageList),
+                    effectiveRequest.ApplyOptions(options),
+                    ct).ConfigureAwait(false);
+                return ChatResponseSnapshot.From(innerResponse);
+            },
             response => response.Text,
             mode: mode,
             approvalResolver: approvalResolver,
@@ -72,40 +79,203 @@ public sealed record ChatRequestSnapshot(IReadOnlyList<ChatMessageSnapshot> Mess
 {
     public static ChatRequestSnapshot From(IReadOnlyList<ChatMessage> messages, ChatOptions? options) =>
         new(messages.Select(ChatMessageSnapshot.From).ToList(), ChatOptionsSnapshot.From(options));
+
+    public IReadOnlyList<ChatMessage> ApplyMessages(IReadOnlyList<ChatMessage> original)
+    {
+        if (Messages.Count == original.Count && Messages.Select((message, index) => message.Matches(original[index])).All(match => match))
+        {
+            return original;
+        }
+
+        var applied = new List<ChatMessage>(Messages.Count);
+        var originalIndex = 0;
+        for (var messageIndex = 0; messageIndex < Messages.Count; messageIndex++)
+        {
+            var snapshot = Messages[messageIndex];
+            var exactMatch = FindExactMatch(original, snapshot, originalIndex);
+            if (exactMatch >= 0)
+            {
+                applied.Add(original[exactMatch]);
+                originalIndex = exactMatch + 1;
+                continue;
+            }
+
+            if (originalIndex < original.Count
+                && snapshot.HasSameEnvelope(original[originalIndex])
+                && !HasFutureExactMatch(original[originalIndex], messageIndex + 1))
+            {
+                applied.Add(snapshot.ApplyTo(original[originalIndex]));
+                originalIndex++;
+                continue;
+            }
+
+            applied.Add(snapshot.ToChatMessage());
+        }
+
+        return applied;
+    }
+
+    public ChatOptions? ApplyOptions(ChatOptions? original) => Options.ApplyTo(original);
+
+    private int FindExactMatch(IReadOnlyList<ChatMessage> original, ChatMessageSnapshot snapshot, int startIndex)
+    {
+        for (var index = startIndex; index < original.Count; index++)
+        {
+            if (snapshot.Matches(original[index]))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private bool HasFutureExactMatch(ChatMessage original, int startIndex)
+    {
+        for (var index = startIndex; index < Messages.Count; index++)
+        {
+            if (Messages[index].Matches(original))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 public sealed record ChatMessageSnapshot(string Role, string Text, string? AuthorName)
 {
     public static ChatMessageSnapshot From(ChatMessage message) =>
         new(message.Role.ToString(), message.Text ?? string.Empty, message.AuthorName);
+
+    public bool Matches(ChatMessage message) =>
+        string.Equals(message.Role.ToString(), Role, StringComparison.Ordinal) &&
+        string.Equals(message.Text ?? string.Empty, Text, StringComparison.Ordinal) &&
+        string.Equals(message.AuthorName, AuthorName, StringComparison.Ordinal);
+
+    public bool HasSameEnvelope(ChatMessage message) =>
+        string.Equals(message.Role.ToString(), Role, StringComparison.Ordinal) &&
+        string.Equals(message.AuthorName, AuthorName, StringComparison.Ordinal);
+
+    public ChatMessage ToChatMessage()
+    {
+        var message = new ChatMessage(new ChatRole(Role), Text)
+        {
+            AuthorName = AuthorName,
+        };
+        return message;
+    }
+
+    public ChatMessage ApplyTo(ChatMessage original)
+    {
+        var message = original.Clone();
+        message.Role = new ChatRole(Role);
+        message.AuthorName = AuthorName;
+        if (!string.Equals(message.Text ?? string.Empty, Text, StringComparison.Ordinal))
+        {
+            message.Contents = ReplaceTextContent(message.Contents, Text);
+        }
+
+        return message;
+    }
+
+    private static IList<AIContent> ReplaceTextContent(IList<AIContent> originalContents, string text)
+    {
+        var contents = new List<AIContent>(originalContents.Count + 1);
+        var replaced = false;
+        foreach (var content in originalContents)
+        {
+            if (content is TextContent)
+            {
+                if (!replaced)
+                {
+                    contents.Add(new TextContent(text));
+                    replaced = true;
+                }
+
+                continue;
+            }
+
+            contents.Add(content);
+        }
+
+        if (!replaced)
+        {
+            contents.Insert(0, new TextContent(text));
+        }
+
+        return contents;
+    }
 }
 
 public sealed record ChatOptionsSnapshot(string? Instructions, string? ModelId, IReadOnlyList<string> Tools)
 {
     public static ChatOptionsSnapshot From(ChatOptions? options) =>
         new(options?.Instructions, options?.ModelId, options?.Tools?.Select(tool => tool.Name).ToList() ?? []);
+
+    public ChatOptions? ApplyTo(ChatOptions? original)
+    {
+        if (original is null && Instructions is null && ModelId is null && Tools.Count == 0)
+        {
+            return null;
+        }
+
+        var options = original?.Clone() ?? new ChatOptions();
+        options.Instructions = Instructions;
+        options.ModelId = ModelId;
+        var toolNames = Tools.ToHashSet(StringComparer.Ordinal);
+        options.Tools = original?.Tools is null
+            ? []
+            : original.Tools.Where(tool => toolNames.Contains(tool.Name)).ToList();
+        return options;
+    }
 }
 
 public sealed class ChatResponseSnapshot
 {
+    private readonly ChatResponse? originalResponse;
+
     public ChatResponseSnapshot(string text, string? responseId, IReadOnlyList<ChatMessageSnapshot> messages)
+        : this(text, responseId, messages, null)
+    {
+    }
+
+    private ChatResponseSnapshot(string text, string? responseId, IReadOnlyList<ChatMessageSnapshot> messages, ChatResponse? originalResponse)
     {
         Text = text;
         ResponseId = responseId;
         Messages = messages;
+        this.originalResponse = originalResponse;
     }
 
-    [JsonIgnore]
     public string Text { get; }
 
     public string? ResponseId { get; }
 
-    [JsonIgnore]
     public IReadOnlyList<ChatMessageSnapshot> Messages { get; }
 
     [JsonIgnore]
-    public ChatResponse Response => new(Messages.Select(message => new ChatMessage(new ChatRole(message.Role), message.Text)).ToList());
+    public ChatResponse Response
+    {
+        get
+        {
+            if (originalResponse is not null && MessagesMatch(originalResponse.Messages))
+            {
+                return originalResponse;
+            }
+
+            return new(Messages.Select(message => message.ToChatMessage()).ToList())
+            {
+                ResponseId = ResponseId,
+            };
+        }
+    }
 
     public static ChatResponseSnapshot From(ChatResponse response) =>
-        new(response.Text ?? string.Empty, response.ResponseId, response.Messages.Select(ChatMessageSnapshot.From).ToList());
+        new(response.Text ?? string.Empty, response.ResponseId, response.Messages.Select(ChatMessageSnapshot.From).ToList(), response);
+
+    private bool MessagesMatch(IList<ChatMessage> messages) =>
+        Messages.Count == messages.Count &&
+        Messages.Select((message, index) => message.Matches(messages[index])).All(match => match);
 }

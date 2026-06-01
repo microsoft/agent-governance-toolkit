@@ -165,7 +165,7 @@ fn no_events() -> Arc<Mutex<Vec<String>>> {
 
 #[test]
 fn action_identity_is_stable_for_repeated_escalations() {
-    let manifest_yaml = r#"agent_control_specification_version: 0.3.0-alpha
+    let manifest_yaml = r#"agent_control_specification_version: 0.3.1-beta
 policies:
   p:
     type: test
@@ -214,7 +214,7 @@ fn runtime_is_send_sync_for_reentrant_intervention_point_evaluation() {
 #[test]
 fn manifest_accepts_only_the_design_intervention_point_enum() {
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -293,7 +293,7 @@ intervention_points:
         assert!(InterventionPoint::from_str(removed_or_unknown).is_err());
         let manifest_yaml = format!(
             r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.3.1-beta"
 policies:
   test_policy:
     type: test
@@ -311,7 +311,7 @@ intervention_points:
 #[test]
 fn manifest_enforces_explicit_roots_for_each_field_context() {
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -328,7 +328,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -345,7 +345,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -363,7 +363,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -376,7 +376,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -394,7 +394,7 @@ annotators:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -409,7 +409,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -427,7 +427,26 @@ annotators:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  input:
+    policy:
+      id: test_policy
+    policy_target: $snap.input
+    annotations:
+      classifier:
+        from: $policy_target.text
+        annotator: classifier
+annotators:
+  classifier:
+    type: classifier"#,
+    );
+
+    assert_manifest_invalid(
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -439,7 +458,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -536,7 +555,7 @@ fn explicit_path_roots_resolve_against_their_intended_envelopes() {
 #[test]
 fn manifest_validates_typed_policy_configs_and_supported_engines() {
     let valid = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   input_rego_policy:
     type: rego
@@ -576,7 +595,7 @@ intervention_points:
     for invalid_policy in [r#"type: mock"#, r#"type: rego"#, r#"type: custom"#] {
         let manifest_yaml = format!(
             r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.3.1-beta"
 policies:
   bad_policy:
     {invalid_policy}
@@ -591,7 +610,7 @@ intervention_points:
     }
 
     let empty_rego_binding_query = r#"
-agent_control_specification_version: "0.3.0-alpha"
+agent_control_specification_version: "0.3.1-beta"
 policies:
   bad_policy:
     type: rego
@@ -611,7 +630,7 @@ fn policy_target_extraction_and_policy_input_shape_cover_all_runtime_interventio
     let annotations = RecordingAnnotator::new(events.clone());
     let policy = RecordingPolicy::allow(events);
     let tool_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -744,7 +763,7 @@ fn policy_dispatcher_receives_prepared_rego_and_test_invocations() {
     let events = no_events();
     let policy = RecordingPolicy::allow(events.clone());
     let runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   input_rego_policy:
     type: rego
@@ -811,7 +830,7 @@ intervention_points:
 }
 
 #[test]
-fn runtime_flow_uses_preliminary_annotations_final_policy_input_and_effects_in_order() {
+fn runtime_flow_uses_preliminary_annotations_final_policy_input_and_transform_in_order() {
     let events = no_events();
     let annotations = RecordingAnnotator::new(events.clone());
     annotations.set_output("tool_context", json!({"saw_tool": true}));
@@ -832,7 +851,7 @@ fn runtime_flow_uses_preliminary_annotations_final_policy_input_and_effects_in_o
         events.clone(),
     );
     let tool_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   pre_tool_call_policy:
     type: test
@@ -951,7 +970,7 @@ annotators:
 #[test]
 fn runtime_failures_normalize_to_deny_with_reserved_reasons() {
     let missing_path_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -987,7 +1006,7 @@ intervention_points:
     );
     let policy = RecordingPolicy::allow(events.clone());
     let annotation_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1019,7 +1038,7 @@ annotators:
     assert_eq!(timeout.policy_input.unwrap()["annotations"], json!({}));
 
     let policy_error_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1050,7 +1069,7 @@ intervention_points:
         json!({"decision": "allow", "reason": "runtime_error:path_missing"}),
     ] {
         let invalid_runtime = runtime(
-            r#"agent_control_specification_version: 0.3.0-alpha
+            r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1094,7 +1113,7 @@ fn telemetry_sink_receives_structured_low_cardinality_events() {
         callback_events,
     );
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1158,6 +1177,9 @@ annotators:
         transformed_event.enforcement_mode,
         Some(EnforcementMode::Enforce)
     );
+    assert!(transformed_event.duration_ms.unwrap() >= 0.0);
+    assert_eq!(transformed_event.action_identity, result.action_identity);
+    assert!(transformed_event.error_class.is_none());
 
     for event in events {
         assert!(!event.metadata.contains_key("policy_target"));
@@ -1185,7 +1207,7 @@ fn telemetry_decision_event_omits_raw_subject_data_by_default() {
         callback_events,
     );
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1219,6 +1241,7 @@ annotators:
         .find(|event| event.event_type == TelemetryEventType::Decision)
         .expect("decision event should be emitted");
     assert_eq!(decision_event.reason_code.as_deref(), Some("policy_reason"));
+    assert!(decision_event.error_class.is_none());
     let debug = format!("{decision_event:?}");
     assert!(!debug.contains(raw_subject));
     assert!(!debug.contains(raw_annotation));
@@ -1233,7 +1256,7 @@ annotators:
 #[test]
 fn perf_telemetry_gates_external_and_timing_events() {
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1313,7 +1336,7 @@ annotators:
 #[test]
 fn telemetry_records_policy_failure_events() {
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1366,6 +1389,13 @@ intervention_points:
         failed.reason_code.as_deref(),
         Some("runtime_error:policy_invocation_failed")
     );
+    assert_eq!(failed.error_class.as_deref(), Some("runtime_error"));
+    let decision = events
+        .iter()
+        .find(|event| event.event_type == TelemetryEventType::Decision)
+        .expect("decision event");
+    assert_eq!(decision.error_class.as_deref(), Some("runtime_error"));
+    assert!(decision.action_identity.is_none());
 }
 
 #[test]
@@ -1377,7 +1407,7 @@ fn telemetry_records_annotation_failure_events() {
     );
     let policy = RecordingPolicy::allow(no_events());
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1426,6 +1456,7 @@ annotators:
         failed.reason_code.as_deref(),
         Some("runtime_error:annotation_failed")
     );
+    assert_eq!(failed.error_class.as_deref(), Some("runtime_error"));
 }
 
 #[test]
@@ -1438,7 +1469,7 @@ fn transform_applies_for_enforce_and_validates_in_evaluate_only() {
     // transform decision honors enforce vs evaluate_only and that the
     // transform-invalid and transform-target-forbidden reasons surface on
     // the runtime path.
-    let manifest_yaml = r#"agent_control_specification_version: 0.3.0-alpha
+    let manifest_yaml = r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1521,6 +1552,19 @@ intervention_points:
     assert_eq!(deny.verdict.decision, Decision::Deny);
     assert!(deny.transformed_policy_target.is_none());
 
+    let escalate_runtime = runtime(
+        manifest_yaml,
+        RecordingAnnotator::new(no_events()),
+        RecordingPolicy::with_output(json!({"decision": "escalate"}), no_events()),
+    );
+    let escalate = escalate_runtime.evaluate_intervention_point(InterventionPointRequest {
+        intervention_point: InterventionPoint::Output,
+        snapshot: snapshot.clone(),
+        mode: EnforcementMode::Enforce,
+    });
+    assert_eq!(escalate.verdict.decision, Decision::Escalate);
+    assert!(escalate.transformed_policy_target.is_none());
+
     let invalid_transform_runtime = runtime(
         manifest_yaml,
         RecordingAnnotator::new(no_events()),
@@ -1574,7 +1618,7 @@ fn tool_metadata_projection_and_independent_tool_invocation_inputs_are_per_reque
     let annotations = RecordingAnnotator::new(events.clone());
     let policy = RecordingPolicy::allow(events);
     let tool_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1645,7 +1689,7 @@ tools:
 
     let no_projection_policy = RecordingPolicy::allow(no_events());
     let no_projection_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -1668,7 +1712,7 @@ intervention_points:
     assert!(no_projection.policy_input.unwrap()["tool"].is_null());
 
     let unknown_tool_runtime = runtime(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test

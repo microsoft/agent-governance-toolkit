@@ -123,7 +123,7 @@ fn manifest_invariants_are_frozen() {
     }
 
     let valid = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 extends:
   - ./base.yaml
 policies:
@@ -155,7 +155,7 @@ annotators:
         .contains_key("classifier"));
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 extends: ./base.yaml
 policies:
   test_policy:
@@ -169,7 +169,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 policies:
   test_policy:
     type: test
@@ -182,7 +182,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 policies:
   test_policy:
     type: test
@@ -195,7 +195,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 policies:
   test_policy:
     type: test
@@ -207,7 +207,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 intervention_points:
   input:
     policy_target: "$snap.input"
@@ -217,7 +217,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 policies:
   test_policy:
     type: test
@@ -230,7 +230,7 @@ intervention_points:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 policies:
   test_policy:
     type: test
@@ -246,7 +246,7 @@ annotators:
     );
 
     assert_manifest_invalid(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 policies:
   test_policy:
     type: test

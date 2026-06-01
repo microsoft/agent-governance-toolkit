@@ -1,6 +1,6 @@
 [package]
 name = "agent_control_specification_core"
-version = "0.1.0"
+version = "0.3.1-beta.0"
 edition = "2021"
 rust-version = "1.85"
 description = "Stateless Rust core for Agent Control Specification"
@@ -30,10 +30,10 @@ crate-type = ["lib", "cdylib"]
 default = ["opa", "cedar"]
 opa = []
 cedar = ["dep:cedar-policy"]
-# Bundled reference dispatchers (networked OPA classifier annotators) used to
-# provide zero-config defaults through the FFI builder. OFF by default so the
-# pure deterministic core carries no networking dependency unless opted in.
-default-dispatchers = ["dep:ureq"]
+# Bundled reference dispatchers used to provide zero-config defaults through
+# the FFI builder. OFF by default. Manifest HTTPS extends support is part of
+# file based construction and is independent of this feature.
+default-dispatchers = []
 aacs = ["default-dispatchers"]
 openai_moderation = ["default-dispatchers"]
 perspective = ["default-dispatchers"]
@@ -47,7 +47,9 @@ serde_json = "1"
 regex = "1"
 serde_yaml = "0.9"
 sha2 = "0.10"
-ureq = { version = "2", features = ["json"], optional = true }
+base64 = "0.22"
+url = "2"
+ureq = { version = "2", features = ["json"] }
 cedar-policy = { version = "4", optional = true }
 
 [dev-dependencies]

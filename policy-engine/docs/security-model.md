@@ -32,7 +32,7 @@ ACS protects assets only on mediated paths. A path is mediated when the host sup
 - Policy intent is protected by manifest validation, policy binding validation, reserved runtime error reasons, effect validation, and fail closed construction rules for unresolved `extends`.
 - Policy portability is protected by the canonical policy input shape, canonical serialization, and shared Rust core behavior surfaced through SDK and FFI bindings.
 - Sensitive data is protected to the extent policy denies, escalates, warns, or transforms the policy target before the host performs disclosure or action.
-- Telemetry minimization is protected by runtime events that carry low cardinality metadata and do not include policy target values, tool arguments, tool results, annotation values, model messages, secrets, or personal data.
+- Telemetry minimization is protected by runtime events that carry content safe metadata and do not include policy target values, tool arguments, tool results, annotation values, model messages, secrets, or personal data.
 
 ## Principals And Components
 
@@ -126,7 +126,7 @@ An application can accidentally or deliberately call a model, execute a tool, pr
 
 ### Fail Open On Malformed Policy Or Runtime Error
 
-Malformed manifests, unresolved manifest inheritance, invalid paths, unknown intervention points, unknown tools, annotation failures, policy dispatcher failures, invalid policy outputs, and invalid effects could otherwise lead to unintended allow decisions. ACS treats runtime failures as `deny` verdicts with reserved `runtime_error:*` reasons. The core validates manifests before use. `Runtime::with_telemetry` rejects a manifest whose `extends` list remains unresolved, which means string and FFI loaders must receive an already composed manifest before an enforcing runtime can be constructed.
+Malformed manifests, unresolved manifest inheritance, failed HTTPS manifest fetches, invalid paths, unknown intervention points, unknown tools, annotation failures, policy dispatcher failures, invalid policy outputs, and invalid effects could otherwise lead to unintended allow decisions. ACS treats runtime failures as `deny` verdicts with reserved `runtime_error:*` reasons. The core validates manifests before use. File based loaders compose file and HTTPS `extends` before runtime construction. `Runtime::with_telemetry` rejects a manifest whose `extends` list remains unresolved, which means string and FFI loaders must receive an already composed manifest before an enforcing runtime can be constructed.
 
 ### Supply Chain Of Policy Bundles And Runtime Artifacts
 
@@ -134,7 +134,7 @@ An attacker can attempt to alter the manifest, Rego bundle, OPA executable, SDK 
 
 ### Classifier Or Annotator Failure
 
-A classifier, LLM judge, or endpoint annotator can time out, return malformed data, become unavailable, or be adversarially influenced. ACS declares annotators in the manifest, resolves their input paths before policy execution, and calls the host annotator dispatcher in deterministic name order. Annotator errors and dispatcher timeouts fail closed as runtime errors. The reference HTTP annotators fold transport failures, non 2xx responses, and malformed response content into dispatcher errors. The host owns service authentication, timeouts, retries, caching, privacy controls, and response validation beyond JSON shape.
+A classifier, LLM judge, or endpoint annotator can time out, return malformed data, become unavailable, or be adversarially influenced. ACS declares annotators in the manifest, resolves their input paths before policy execution, and calls the host annotator dispatcher in deterministic name order. Annotator errors and dispatcher timeouts fail closed as runtime errors. The reference HTTP annotators fold transport failures, non 2xx responses, and malformed response content into dispatcher errors. The bundled LLM provider presets keep credentials in explicit fields or named environment variables and normalize provider text to one annotation shape. The host owns service authentication, timeouts, retries, caching, privacy controls, and response validation beyond JSON shape.
 
 ### Parameter Tampering After Evaluation
 
@@ -177,12 +177,11 @@ When the host correctly integrates ACS at the declared intervention points and e
 - The runtime prepares typed policy invocations and fails closed when policy preparation or dispatch fails.
 - The runtime fails closed when policy output is not a valid verdict object or when policy uses the reserved `runtime_error:*` reason prefix.
 - The runtime validates all effects before returning success.
-- The runtime applies effects only in enforce mode and only for `allow`, `warn`, and `escalate` verdicts.
-- Hosts expose transformed targets from `escalate` verdicts only after approval succeeds.
-- The runtime never applies effects for `deny` or runtime error outcomes.
+- The runtime applies effects only in enforce mode and only for `allow` and `warn` verdicts.
+- The runtime never applies effects for `deny`, `escalate`, or runtime error outcomes.
 - The runtime rejects effects that target anything outside `$policy_target`.
 - The runtime returns no transformed policy target in evaluate only mode.
-- The runtime rejects unresolved `extends` during enforcing runtime construction, so file based loaders must compose inherited manifests before use and string or FFI loaders must receive an already merged manifest.
+- The runtime rejects unresolved `extends` during enforcing runtime construction, so file based loaders must compose inherited file and HTTPS manifests before use and string or FFI loaders must receive an already merged manifest.
 - The runtime emits only low cardinality telemetry metadata and not policy target values, tool arguments, tool results, annotation values, model messages, secrets, or personal data.
 
 These guarantees do not make ACS a sandbox. They are mediation guarantees over supported runtime paths.
@@ -195,10 +194,10 @@ Integrations must preserve these invariants for the security model to hold.
 - The host must not expose parallel unguarded model, tool, tool result, or output paths for governed workflows.
 - The snapshot must contain the complete facts the policy relies on, including actor, tenant, conversation, approvals, prior decisions, transport, model request, tool call, tool result, and output facts as applicable.
 - The policy target selected by the manifest must be the value the host will actually send, execute, store, or disclose after enforcement.
-- The host must apply the transformed policy target returned by ACS in enforce mode before continuing.
+- The host must apply the transformed policy target returned by ACS in enforce mode before continuing. Only `allow` and `warn` verdicts return transformed targets.
 - The host must block a `deny` verdict in enforce mode.
 - The host must route an `escalate` verdict to a host approval path and must fail closed if no path is configured, the path fails, or the path returns an unrecognized outcome.
-- The host must not apply effects from an `escalate` verdict because ACS applies effects only for `allow` and `warn`.
+- The host must not execute an escalated action until approval succeeds. `escalate` verdicts validate effects but do not return or apply transformed targets.
 - The host must bind approval to the reviewed actor, tenant, policy version, intervention point, tool name, arguments, and relevant snapshot facts.
 - The host must aggregate streams before calling `post_model_call` or `output` because ACS evaluates complete snapshots.
 - The host must call `pre_tool_call` and `post_tool_call` separately for each concrete tool invocation, including parallel invocations.
@@ -265,7 +264,7 @@ A deployment should satisfy these checks before relying on ACS for security enfo
 - The deployment inventory lists every model call, tool call, tool result path, final output path, startup path, and shutdown path that is governed.
 - Tests prove each governed path invokes the expected ACS intervention point before execution or disclosure.
 - Tests prove no parallel unguarded path exists for governed tools and outputs.
-- The manifest is loaded through a path based loader when using `extends`, or string and FFI loaders receive an already merged manifest.
+- The manifest is loaded through a path based loader when using file or HTTPS `extends`, or string and FFI loaders receive an already merged manifest.
 - The manifest and Rego bundle are reviewed by security owners and protected by branch controls.
 - The Rego bundle, OPA executable, SDK package, native library, and host adapter are pinned to reviewed versions.
 - The host records the manifest version, bundle version, policy query, and runtime version with security decisions when audit requirements need that evidence.

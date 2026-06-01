@@ -26,9 +26,9 @@ internal static class PaymentEscalationHarness
             },
             "wire-approve");
         Equal(25_000, approved.Value.Amount, "approved payment should execute.");
-        Equal("payroll secret", approved.Value.Memo, "approved escalate proceeds with the original args (escalate carries no transform).");
+        Equal("payroll secret", approved.Value.Memo, "approved payment should keep the original target after escalation approval.");
         Equal(1, approvedToolArgs.Count, "approved payment should execute once.");
-        Equal("payroll secret", approvedToolArgs.Single().Memo, "approved escalate proceeds with the original args.");
+        Equal("payroll secret", approvedToolArgs.Single().Memo, "approved escalate should not apply a transform.");
 
         var rejectExecuted = false;
         var rejectControl = new AgentControl(new PaymentRuntime(), (_, _, _) => ValueTask.FromResult(ApprovalResolution.Deny()));

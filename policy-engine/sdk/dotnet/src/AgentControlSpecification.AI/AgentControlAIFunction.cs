@@ -43,7 +43,7 @@ public sealed class AgentControlAIFunction : AIFunction
             Name,
             args,
             async (effectiveArgs, ct) => await inner.InvokeAsync(BuildArgs(effectiveArgs, arguments), ct).ConfigureAwait(false),
-            toolCallId: $"aifunc_{Guid.NewGuid():N}",
+            toolCallId: null,
             snapshot: null,
             mode: mode,
             approvalResolver: approvalResolver,

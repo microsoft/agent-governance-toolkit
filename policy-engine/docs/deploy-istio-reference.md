@@ -1,6 +1,6 @@
 # ACS Kubernetes and Istio reference architecture
 
-This document describes a reference deployment for ACS mediated workloads in Kubernetes with Istio. It is a design reference, not a tested or CI verified cluster artifact.
+This document describes a reference deployment for ACS mediated workloads in Kubernetes with Istio and an OPA sidecar. ACS itself is embedded in the application process through an SDK. It is a design reference, not a tested or CI verified cluster artifact.
 
 The workload embeds an ACS SDK in the application process. The host invokes ACS at `input`, `pre_model_call`, `post_model_call`, `pre_tool_call`, `post_tool_call`, and `output` with complete snapshots. The runtime builds canonical policy input, resolves the configured policy target, projects tool metadata for tool intervention points, invokes the host policy dispatcher, normalizes the verdict, validates effects, and returns a decision. A deny verdict stops the operation on the guarded path. Runtime errors and dispatcher failures should fail closed.
 
@@ -12,4 +12,4 @@ The manifest binds every primary ACS intervention point to a Rego query. Input p
 
 The trusted computing base includes the app integration code, selected ACS SDK, Rust core, manifest, Rego bundle, dispatcher, OPA binary, app image, Kubernetes control plane, and mesh configuration that protects workload identity and mounted artifacts. Untrusted principals include users, retrieved content authors, model outputs, tool results, and downstream text until ACS allows the relevant transition. Backend services remain responsible for their own authorization, idempotency, audit, and transaction controls.
 
-Use the manifests in `deploy/kubernetes/acs-sidecar-reference` as a starting point for platform review. Pin images, add resource limits, protect ConfigMap updates, select a production OPA version, add health and readiness semantics that match the app, and run real cluster tests before depending on the architecture.
+Use the manifests in `deploy/kubernetes/acs-sidecar-reference` as a starting point for platform review. The path is retained for compatibility, but the topology is an embedded ACS SDK with OPA and Envoy sidecars. Pin images, add resource limits, protect ConfigMap updates, select a production OPA version, add health and readiness semantics that match the app, and run real cluster tests before depending on the architecture.

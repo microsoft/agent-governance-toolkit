@@ -66,7 +66,7 @@ test("bootstrap discovers a manifest by conventional name walking upward", () =>
   const root = mkdtempSync(join(tmpdir(), "acs-disc-"));
   const nested = join(root, "a", "b");
   require("node:fs").mkdirSync(nested, { recursive: true });
-  writeFileSync(join(root, "acs.yaml"), "agent_control_specification_version: 0.3.0-alpha\n");
+  writeFileSync(join(root, "acs.yaml"), "agent_control_specification_version: 0.3.1-beta\n");
   try {
     // PATH cleared and bundled opa disabled so opa is unresolvable: reaching
     // the opa error proves the manifest was discovered (manifest resolution

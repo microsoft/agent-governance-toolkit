@@ -60,6 +60,14 @@ impl PolicyDispatcher for StaticPolicy {
     }
 }
 
+struct OutputPolicy(JsonValue);
+
+impl PolicyDispatcher for OutputPolicy {
+    fn evaluate(&self, _invocation: &PreparedPolicyInvocation) -> Result<JsonValue, RuntimeError> {
+        Ok(self.0.clone())
+    }
+}
+
 struct EchoAnnotationReasonPolicy;
 
 impl PolicyDispatcher for EchoAnnotationReasonPolicy {
@@ -75,7 +83,7 @@ impl PolicyDispatcher for EchoAnnotationReasonPolicy {
 fn base_manifest(extra: &str) -> Manifest {
     let yaml = format!(
         "{}{}",
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   p:
     type: test
@@ -227,6 +235,57 @@ fn annotator_output_is_size_limited_as_annotation_failed() {
 }
 
 #[test]
+fn oversized_policy_output_fails_with_resource_limit_reason() {
+    let limits = Limits {
+        max_policy_output_bytes: 64,
+        ..Limits::default()
+    };
+    let runtime = runtime(
+        base_manifest(""),
+        StaticAnnotator::new(BTreeMap::new()),
+        Arc::new(OutputPolicy(json!({
+            "decision": "allow",
+            "message": "x".repeat(128),
+        }))),
+        limits,
+    );
+
+    let result = evaluate(&runtime, json!({"input": "hello"}));
+
+    assert_eq!(result.verdict.decision, Decision::Deny);
+    assert_eq!(
+        result.verdict.reason.as_deref(),
+        Some("runtime_error:resource_limit_exceeded")
+    );
+}
+
+#[test]
+fn transformed_snapshot_size_is_limited_after_transform() {
+    let limits = Limits {
+        max_snapshot_bytes: 64,
+        ..Limits::default()
+    };
+    let runtime = runtime(
+        base_manifest(""),
+        StaticAnnotator::new(BTreeMap::new()),
+        Arc::new(OutputPolicy(json!({
+            "decision": "transform",
+            "transform": {"path": "$policy_target.payload", "value": "x".repeat(128)},
+        }))),
+        limits,
+    );
+
+    let result = evaluate(&runtime, json!({"input": {"payload": "ok"}}));
+
+    assert_eq!(result.verdict.decision, Decision::Deny);
+    assert_eq!(
+        result.verdict.reason.as_deref(),
+        Some("runtime_error:resource_limit_exceeded")
+    );
+    assert!(result.transformed_policy_target.is_none());
+}
+
+#[test]
 fn annotator_output_policy_target_stays_under_annotations() {
     let mut outputs = BTreeMap::new();
     outputs.insert(
@@ -323,7 +382,7 @@ fn manifest_extends_depth_limit_fails_closed() {
         };
         let body = if index == 3 {
             concat!(
-                "agent_control_specification_version: 0.3.0-alpha\n",
+                "agent_control_specification_version: 0.3.1-beta\n",
                 "policies:\n",
                 "  p:\n",
                 "    type: test\n",
@@ -335,7 +394,7 @@ fn manifest_extends_depth_limit_fails_closed() {
             )
             .to_string()
         } else {
-            format!("agent_control_specification_version: 0.3.0-alpha\n{next}")
+            format!("agent_control_specification_version: 0.3.1-beta\n{next}")
         };
         fs::write(root.join(format!("m{index}.yaml")), body).unwrap();
     }
@@ -362,7 +421,7 @@ fn merged_manifest_size_limit_fails_closed() {
     fs::write(
         root.join("manifest.yaml"),
         concat!(
-            "agent_control_specification_version: 0.3.0-alpha\n",
+            "agent_control_specification_version: 0.3.1-beta\n",
             "metadata:\n",
             "  large: abcdefghijklmnopqrstuvwxyz\n",
             "policies:\n",

@@ -12,8 +12,8 @@ Every `Runtime::evaluate_intervention_point` call passes one complete JSON snaps
 | `input` | `input` |
 | `pre_model_call` | `model_request` |
 | `post_model_call` | `model_response` |
-| `pre_tool_call` | `tool_call.id`, `tool_call.name`, `tool_call.args` |
-| `post_tool_call` | `tool_call.id`, `tool_call.name`, `tool_result` |
+| `pre_tool_call` | `tool_call.name`, `tool_call.args`, optional `tool_call.id` |
+| `post_tool_call` | `tool_call.name`, `tool_result`, optional `tool_call.id` |
 | `output` | `output` |
 | `agent_shutdown` | `agent` or full shutdown snapshot plus optional `reason` |
 
@@ -21,11 +21,11 @@ Common ambient fields such as `actor`, `tenant`, `conversation`, `messages`, `ap
 
 ## Tool call identity
 
-The `tool_call.id` field carries the caller-supplied invocation identity on the `pre_tool_call` and `post_tool_call` snapshots, and the underlying snapshot model treats it as optional. When a value is present every SDK includes the identical value on both the pre and post snapshots so a policy that keys escalation, audit, deduplication, or transforms on it observes one stable id across the surrounding mediation. No SDK ever synthesizes a value, which means no SDK invents a random id, a deterministic hash id, a placeholder, or an empty string.
+The `tool_call.id` field carries the caller-supplied invocation identity on the `pre_tool_call` and `post_tool_call` snapshots, and the snapshot model treats it as optional. When a value is present every SDK includes the identical value on both the pre and post snapshots so a policy that keys escalation, audit, deduplication, or transforms on it observes one stable id across the surrounding mediation.
 
-SDK host APIs differ deliberately in whether they demand the id. The Python, Node, and .NET host APIs require the caller to supply a non-empty `tool_call_id` and fail before policy evaluation when it is missing, reflecting a host-correlation contract where model and MCP style invocation ids are operationally important for tying tool calls to responses and audit events. The Rust host API models the id as optional through `ToolRunOptions { tool_call_id }` and omits the `tool_call.id` field from the snapshot when no value is supplied. That omission is deterministic and load-bearing for first-party integrations such as the rig adapter, which wraps arbitrary tools invoked outside any model or MCP context that would carry a JSON-RPC call id.
+Every SDK host API treats `tool_call.id` uniformly. The Rust, Python, Node, and .NET host APIs all model the id as optional, validate it as a string whose length is greater than zero when one is supplied, preserve the supplied bytes including whitespace, and omit the `tool_call.id` field from the snapshot entirely when no value is supplied. No SDK layer fabricates a synthetic id into the snapshot, because the id participates in the canonical policy input and therefore in the sha256 action identity, so a fabricated value would corrupt action identity and break determinism across pre and post evaluation. A host-correlation id that an integration mints for its own bookkeeping stays outside the snapshot. The GHCP integration follows this rule by minting an internal admission-correlation id while still omitting `tool_call.id` from the snapshot whenever no host id exists.
 
-Policy authors must therefore treat `tool_call.id` as optional in the data model. A policy that requires an id should deny explicitly when the field is absent rather than assume it always exists.
+Policy authors must therefore treat `tool_call.id` as optional in the data model. A policy that requires an id should deny explicitly when the field is absent rather than assume it always exists. The reusable `agent_control_specification.lib.tool_call` Rego helpers in `policy/lib/tool_call.rego` provide `valid_tool_call_id` and `require` for this deny-on-absence pattern.
 
 ## Policy input
 
@@ -45,7 +45,7 @@ The core builds this exact policy-input shape for policy dispatchers:
 }
 ```
 
-`annotations` is retained as the internal field for annotation outputs: each per-point `annotations.<name>` entry is dispatched through the host and inserted at `policy_input.annotations.<name>`. There is no public top-level `annotations`, `request`, `resource`, or `tools` root in policy input. Current tool metadata is projected as `tool` only at the `pre_tool_call` and `post_tool_call` intervention points, where the runtime derives the invoked tool name from `$snap.tool_call.name` and projects the matching `tools` catalog entry; at all other points it is `null`.
+`annotations` is retained as the internal field for annotation outputs: each per-point `annotations.<name>` entry is dispatched through the host and inserted at `policy_input.annotations.<name>`. There is no public top-level `annotations`, `request`, `resource`, or `tools` root in policy input. Current tool metadata is projected as `tool` only at the `pre_tool_call` and `post_tool_call` intervention points, where the runtime resolves the configured `tool_name_from` path and projects the matching `tools` catalog entry; at all other points it is `null`.
 
 Golden examples are frozen under `tests/fixtures/policy-inputs/` and are checked by Rust integration tests.
 
@@ -57,7 +57,7 @@ Canonical manifests live under `tests/fixtures/manifests/`. They use:
 - top-level `policies`, referenced per point by `policy.id`
 - top-level `annotators` with `type: classifier | llm | endpoint`
 - per-point `annotations`
-- array-only `extends`, resolved by file-based path loaders relative to the including manifest; string and FFI loaders retain `extends` as data but cannot build an enforcing runtime while it is non-empty
+- array-only `extends`, resolved by file-based loaders relative to the including manifest for paths and over HTTPS for URL entries; string and FFI loaders retain `extends` as data but cannot build an enforcing runtime while it is non-empty
 - `policy_target` paths rooted in `$snap`, `$`, or `$.field`
 
 ## Operational statelessness

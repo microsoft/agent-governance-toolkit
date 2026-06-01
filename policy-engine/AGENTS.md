@@ -73,11 +73,3 @@ OPA backed tests and examples need `opa` on `PATH`. Use `AGENT_CONTROL_REQUIRE_O
 ## Prose style
 
 Documentation prose must be dense and technical. Do not use em dashes. Do not use colons inside prose sentences. Colons are acceptable in headings, tables, code blocks, YAML, and JSON.
-
-## Commit trailer
-
-Every commit must end with this trailer.
-
-```text
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
-```

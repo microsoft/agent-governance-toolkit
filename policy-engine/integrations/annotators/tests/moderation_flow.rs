@@ -118,7 +118,7 @@ impl PolicyDispatcher for ModerationPolicy {
 
 fn manifest() -> Manifest {
     Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   moderation:
     type: test

@@ -93,18 +93,18 @@
         },
         "pattern": {
           "type": "string",
-          "description": "Rust regex crate pattern. The core derives character spans from non empty matches."
+          "description": "Rust regex crate pattern. The core derives Unicode scalar value spans from non empty matches."
         },
         "values": {
           "type": "array",
-          "description": "Literal strings. The core derives character spans from non empty occurrences.",
+          "description": "Literal strings. The core derives Unicode scalar value spans from non empty occurrences.",
           "items": {
             "type": "string"
           }
         },
         "spans": {
           "type": "array",
-          "description": "Ordered non overlapping character offsets into the selected string. The core enforces ordering and bounds.",
+          "description": "Ordered non overlapping Unicode scalar value offsets into the selected string. These offsets are not UTF-8 bytes, UTF-16 code units, or grapheme clusters. The core enforces ordering and bounds.",
           "items": {
             "$ref": "#/$defs/redaction_span"
           }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import inspect
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
@@ -95,10 +96,19 @@ class AgentControl:
         snapshot: Mapping[str, JsonValue],
         mode: EnforcementMode | str = EnforcementMode.ENFORCE,
     ) -> InterventionPointResult:
+        try:
+            normalized_intervention_point: InterventionPoint | str = InterventionPoint(intervention_point)
+        except ValueError:
+            normalized_intervention_point = str(intervention_point)
+        try:
+            normalized_mode = EnforcementMode(mode)
+            normalized_snapshot = dict(snapshot)
+        except (TypeError, ValueError):
+            return _request_invalid_result()
         request = InterventionPointRequest(
-            intervention_point=InterventionPoint(intervention_point),
-            snapshot=dict(snapshot),
-            mode=EnforcementMode(mode),
+            intervention_point=normalized_intervention_point,
+            snapshot=normalized_snapshot,
+            mode=normalized_mode,
         )
         return await self._runtime_client.evaluate_intervention_point(request)
 
@@ -183,8 +193,8 @@ class AgentControl:
     ) -> ToolRunResult:
         enforcement_mode = EnforcementMode(mode)
         ambient = dict(snapshot or {})
-        required_tool_call_id = _require_tool_call_id(tool_call_id)
-        tool_call = _tool_call(tool_name, args, required_tool_call_id)
+        normalized_tool_call_id = _normalize_tool_call_id(tool_call_id)
+        tool_call = _tool_call(tool_name, args, normalized_tool_call_id)
 
         pre_result = await self.evaluate_intervention_point(
             InterventionPoint.PRE_TOOL_CALL,
@@ -201,7 +211,7 @@ class AgentControl:
             InterventionPoint.POST_TOOL_CALL,
             {
                 **ambient,
-                "tool_call": _tool_call(tool_name, effective_args, required_tool_call_id),
+                "tool_call": _tool_call(tool_name, effective_args, normalized_tool_call_id),
                 "tool_result": tool_result,
             },
             enforcement_mode,
@@ -250,11 +260,11 @@ class AgentControl:
         except AgentControlInterruption:
             raise
         except Exception as exc:  # noqa: BLE001 - a failing resolver must fail closed
-            raise AgentControlBlocked(intervention_point, _approval_resolver_failed_result()) from exc
+            raise AgentControlBlocked(intervention_point, _approval_resolver_failed_result(result)) from exc
         if isinstance(resolution, ApprovalOutcome):
             resolution = ApprovalResolution(resolution, action_identity=original_identity)
         if not isinstance(resolution, ApprovalResolution):
-            raise AgentControlBlocked(intervention_point, _approval_resolver_failed_result())
+            raise AgentControlBlocked(intervention_point, _approval_resolver_failed_result(result))
         if resolution.outcome == ApprovalOutcome.ALLOW:
             _require_approved_identity(intervention_point, result, original_identity, resolution.action_identity)
             return
@@ -394,12 +404,25 @@ def _approval_action_mismatch_result() -> InterventionPointResult:
     )
 
 
-def _approval_resolver_failed_result() -> InterventionPointResult:
+def _approval_resolver_failed_result(result: InterventionPointResult) -> InterventionPointResult:
     return InterventionPointResult(
         Verdict(
             Decision.DENY,
             reason="runtime_error:approval_resolver_failed",
             message="Approval resolver failed closed.",
+        ),
+        policy_input=result.policy_input,
+        input_identity=result.input_identity,
+        enforced_identity=result.enforced_identity,
+    )
+
+
+def _request_invalid_result() -> InterventionPointResult:
+    return InterventionPointResult(
+        Verdict(
+            Decision.DENY,
+            reason="runtime_error:request_invalid",
+            message="Request blocked by Agent Control Specification.",
         ),
     )
 
@@ -420,29 +443,132 @@ def _transformed_or(
     target. The previous implementation gated on ``applies_effects`` which
     also returned True for ``allow``, ``warn``, and ``escalate``; under AGT
     those decisions never produce a transformed_policy_target, so the gate
-    is moved to the canonical ``applies_transform`` predicate. The behaviour
-    for non-transform verdicts is unchanged because the runtime guarantees
-    ``transformed_policy_target`` is ``None`` outside of TRANSFORM.
+    is moved to the canonical ``applies_transform`` predicate. An explicit
+    ``transformed_policy_target_applied`` flag preserves upstream support for
+    a transform whose replacement value is JSON null.
     """
 
     if mode != EnforcementMode.ENFORCE:
         return fallback
     if not result.verdict.decision.applies_transform:
         return fallback
-    if result.transformed_policy_target is None:
-        return fallback
-    return result.transformed_policy_target
+    if result.transformed_policy_target_applied or result.transformed_policy_target is not None:
+        transformed = result.transformed_policy_target
+        return _splice_nested_policy_target(result, fallback, transformed)
+    return fallback
 
 
-def _require_tool_call_id(tool_call_id: str | None) -> str:
+def _splice_nested_policy_target(
+    result: InterventionPointResult,
+    fallback: JsonValue,
+    transformed: JsonValue,
+) -> JsonValue:
+    path = _policy_target_path(result)
+    relative = _relative_snapshot_path(path)
+    if relative is None:
+        return transformed
+    if not relative:
+        return transformed
+    cloned = copy.deepcopy(fallback)
+    return cloned if _set_relative_json_path(cloned, relative, transformed) else transformed
+
+
+def _policy_target_path(result: InterventionPointResult) -> str | None:
+    policy_input = result.policy_input
+    if not isinstance(policy_input, Mapping):
+        return None
+    policy_target = policy_input.get("policy_target")
+    if not isinstance(policy_target, Mapping):
+        return None
+    path = policy_target.get("path")
+    return path if isinstance(path, str) else None
+
+
+def _relative_snapshot_path(path: str | None) -> str | None:
+    if path is None:
+        return None
+    if path.startswith("$."):
+        rest = path[2:]
+    elif path.startswith("$snap."):
+        rest = path[6:]
+    else:
+        return None
+    first_segment_end = len(rest)
+    for delimiter in (".", "["):
+        index = rest.find(delimiter)
+        if index != -1:
+            first_segment_end = min(first_segment_end, index)
+    if first_segment_end == len(rest):
+        return ""
+    return rest[first_segment_end:]
+
+
+def _set_relative_json_path(root: JsonValue, path: str, value: JsonValue) -> bool:
+    segments = _relative_path_segments(path)
+    if not segments:
+        return False
+    current = root
+    for segment in segments[:-1]:
+        match segment:
+            case str():
+                if not isinstance(current, Mapping) or segment not in current:
+                    return False
+                current = current[segment]
+            case int():
+                if not isinstance(current, list) or segment < 0 or segment >= len(current):
+                    return False
+                current = current[segment]
+            case _:
+                return False
+
+    last = segments[-1]
+    if isinstance(last, str) and isinstance(current, dict) and last in current:
+        current[last] = value
+        return True
+    if isinstance(last, int) and isinstance(current, list) and 0 <= last < len(current):
+        current[last] = value
+        return True
+    return False
+
+
+def _relative_path_segments(path: str) -> list[str | int]:
+    segments: list[str | int] = []
+    index = 0
+    while index < len(path):
+        if path[index] == ".":
+            index += 1
+            start = index
+            while index < len(path) and path[index] not in ".[":
+                index += 1
+            if start == index:
+                return []
+            segments.append(path[start:index])
+        elif path[index] == "[":
+            end = path.find("]", index)
+            if end == -1:
+                return []
+            try:
+                segments.append(int(path[index + 1:end]))
+            except ValueError:
+                return []
+            index = end + 1
+        else:
+            return []
+    return segments
+
+
+def _normalize_tool_call_id(tool_call_id: str | None) -> str | None:
     if tool_call_id is None:
-        raise ValueError("tool_call_id is required for pre_tool_call/post_tool_call snapshots.")
+        return None
     if not isinstance(tool_call_id, str):
         raise TypeError("tool_call_id must be a string.")
     if tool_call_id == "":
-        raise ValueError("tool_call_id must be a non-empty string.")
+        raise ValueError("tool_call_id must be a non-empty string when provided.")
     return tool_call_id
 
 
-def _tool_call(tool_name: str, args: JsonValue, tool_call_id: str) -> dict[str, JsonValue]:
-    return {"id": tool_call_id, "name": tool_name, "args": args}
+def _tool_call(tool_name: str, args: JsonValue, tool_call_id: str | None) -> dict[str, JsonValue]:
+    tool_call: dict[str, JsonValue] = {"name": tool_name, "args": args}
+    if tool_call_id is not None:
+        tool_call["id"] = tool_call_id
+    return tool_call

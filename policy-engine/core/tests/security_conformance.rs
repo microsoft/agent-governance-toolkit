@@ -89,7 +89,7 @@ impl TelemetrySink for RecordingTelemetry {
 fn manifest_yaml(extra: &str) -> String {
     format!(
         "{}{}",
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   p:
     type: test
@@ -191,6 +191,84 @@ fn runtime_error_reason_table_matches_spec_section_15() {
     ]);
 
     assert_eq!(produced, expected);
+}
+
+#[test]
+fn reserved_reason_inventory_matches_producers() {
+    let inventory: Value =
+        serde_json::from_str(include_str!("../../spec/reserved-reasons.json")).unwrap();
+    let reasons = inventory["reasons"].as_array().unwrap();
+
+    let core_runtime_inventory: BTreeSet<_> = reasons
+        .iter()
+        .filter(|entry| entry["producer"] == "core-runtime")
+        .map(|entry| entry["reason"].as_str().unwrap())
+        .collect();
+
+    let core_runtime_produced: BTreeSet<_> = [
+        RuntimeError::ManifestInvalid(String::new()),
+        RuntimeError::InterventionPointUnknown(String::new()),
+        RuntimeError::PathMissing(String::new()),
+        RuntimeError::PathTypeMismatch(String::new()),
+        RuntimeError::ToolUnknown(String::new()),
+        RuntimeError::AnnotationFailed(String::new()),
+        RuntimeError::AnnotationTimeout(String::new()),
+        RuntimeError::PolicyInvocationFailed(String::new()),
+        RuntimeError::PolicyOutputInvalid(String::new()),
+        RuntimeError::EffectInvalid(String::new()),
+        RuntimeError::EffectTargetForbidden(String::new()),
+        RuntimeError::ResourceLimitExceeded(String::new()),
+        RuntimeError::ApprovalActionMismatch(String::new()),
+    ]
+    .into_iter()
+    .map(|error| error.reason())
+    .collect();
+
+    // The core-runtime subset of the inventory must equal exactly the reasons the
+    // core runtime can produce. This prevents drift between the enum and the spec.
+    assert_eq!(core_runtime_inventory, core_runtime_produced);
+
+    // Every reason carries the reserved prefix and a known producer.
+    for entry in reasons {
+        let reason = entry["reason"].as_str().unwrap();
+        let producer = entry["producer"].as_str().unwrap();
+        assert!(reason.starts_with("runtime_error:"), "{reason}");
+        assert!(
+            producer == "core-runtime"
+                || producer == "sdk-approval"
+                || producer == "sdk-streaming"
+                || producer == "sdk-adapter"
+                || producer == "sdk-wire",
+            "unknown producer {producer} for {reason}"
+        );
+    }
+
+    for (reason, producer) in [
+        ("runtime_error:streaming_unsupported", "sdk-streaming"),
+        ("runtime_error:adapter_unsupported", "sdk-adapter"),
+        ("runtime_error:request_invalid", "sdk-wire"),
+    ] {
+        let entry = reasons
+            .iter()
+            .find(|entry| entry["reason"] == reason)
+            .unwrap_or_else(|| panic!("{reason} reason present"));
+        assert_eq!(entry["producer"], producer);
+        assert!(!core_runtime_produced.contains(reason));
+    }
+}
+
+#[test]
+fn dispatcher_boundary_reason_constants_match_enum() {
+    use agent_control_specification_core::reserved_reason;
+
+    assert_eq!(
+        reserved_reason::ANNOTATION_TIMEOUT,
+        RuntimeError::AnnotationTimeout(String::new()).reason()
+    );
+    assert_eq!(
+        reserved_reason::ANNOTATION_FAILED,
+        RuntimeError::AnnotationFailed(String::new()).reason()
+    );
 }
 
 #[test]
@@ -316,19 +394,19 @@ fn error_paths_never_apply_policy_effects() {
 }
 
 #[test]
-fn extends_root_confinement_rejects_escape_and_url_extends() {
+fn extends_root_confinement_rejects_escape_and_unsupported_url_extends() {
     let root = target_dir("security-conformance-extends");
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("trusted")).unwrap();
     fs::write(root.join("outside.yaml"), manifest_yaml("")).unwrap();
     fs::write(
         root.join("trusted").join("escape.yaml"),
-        "agent_control_specification_version: 0.3.0-alpha\nextends:\n  - ../outside.yaml\n",
+        "agent_control_specification_version: 0.3.1-beta\nextends:\n  - ../outside.yaml\n",
     )
     .unwrap();
     fs::write(
         root.join("trusted").join("url.yaml"),
-        "agent_control_specification_version: 0.3.0-alpha\nextends:\n  - https://example.invalid/base.yaml\n",
+        "agent_control_specification_version: 0.3.1-beta\nextends:\n  - http://example.invalid/base.yaml\n",
     )
     .unwrap();
 
@@ -466,7 +544,7 @@ fn configured_resource_limits_fail_closed_with_expected_reasons() {
         };
         fs::write(
             root.join(format!("m{index}.yaml")),
-            format!("agent_control_specification_version: 0.3.0-alpha\n{extends}"),
+            format!("agent_control_specification_version: 0.3.1-beta\n{extends}"),
         )
         .unwrap();
     }

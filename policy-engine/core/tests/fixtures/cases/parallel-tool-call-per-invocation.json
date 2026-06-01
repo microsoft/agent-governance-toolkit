@@ -119,6 +119,6 @@
     }
   ],
   "id": "parallel-tool-call-per-invocation",
-  "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  pre_tool_call:\n    policy_target_kind: tool_args\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_call.args\ntools:\n  search:\n    type: Tool\n    id: search\n    clearance:\n    - public\n  customer_lookup:\n    type: Tool\n    id: customer_lookup\n    clearance:\n    - banking\n",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  pre_tool_call:\n    policy_target_kind: tool_args\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_call.args\ntools:\n  search:\n    type: Tool\n    id: search\n    clearance:\n    - public\n  customer_lookup:\n    type: Tool\n    id: customer_lookup\n    clearance:\n    - banking\n",
   "schema_version": 1
 }

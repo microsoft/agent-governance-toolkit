@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import json
-import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
@@ -83,9 +82,9 @@ def _transformed_or(
         return fallback
     if not result.verdict.decision.applies_transform:
         return fallback
-    if result.transformed_policy_target is None:
-        return fallback
-    return result.transformed_policy_target
+    if result.transformed_policy_target_applied or result.transformed_policy_target is not None:
+        return result.transformed_policy_target
+    return fallback
 
 
 def _require_callable(target: Any, method_name: str, target_name: str) -> Execute:
@@ -114,11 +113,8 @@ def _has_path(target: Any, path: tuple[str, ...]) -> bool:
 
 
 def _string_or_none(value: Any) -> str | None:
-    return value if isinstance(value, str) and value else None
+    return value if isinstance(value, str) else None
 
-
-def _new_tool_call_id() -> str:
-    return uuid.uuid4().hex
 
 
 def _resolve_control_and_target(
@@ -172,6 +168,24 @@ def _decode_json_body(body: bytes, label: str) -> JsonValue:
 
 def _encode_json_body(value: JsonValue) -> bytes:
     return json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def _jsonable(value: Any) -> JsonValue:
+    if isinstance(value, Mapping):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, str | int | float | bool) or value is None:
+        return value
+    method = getattr(value, "model_dump", None) or getattr(value, "dict", None)
+    if callable(method):
+        try:
+            return _jsonable(method())
+        except Exception:  # noqa: BLE001
+            pass
+    if hasattr(value, "__dict__"):
+        return _jsonable({k: v for k, v in vars(value).items() if not k.startswith("_")})
+    return repr(value)
 
 
 def _single_body_receive(body: bytes) -> Callable[[], Awaitable[dict[str, Any]]]:

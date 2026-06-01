@@ -107,6 +107,15 @@ test("tool adapters block before inner execution and pass transformed values", a
   assert.deepEqual(client.requests.map((request) => request.interventionPoint), [InterventionPoint.PreToolCall, InterventionPoint.PostToolCall]);
 });
 
+test("tool helpers preserve non-empty whitespace tool call ids", async () => {
+  const { control, client } = makeControl(() => ({}));
+
+  await control.runTool("lookup", { q: "raw" }, (args) => args, { toolCallId: " " });
+
+  assert.equal(client.requests[0].snapshot.tool_call.id, " ");
+  assert.equal(client.requests[1].snapshot.tool_call.id, " ");
+});
+
 test("OpenClaw hooks expose explicit mediation and no hidden callable", async () => {
   const denied = makeControl(({ interventionPoint }) => ({
     verdict: { decision: interventionPoint === InterventionPoint.PreToolCall ? Decision.Deny : Decision.Allow },

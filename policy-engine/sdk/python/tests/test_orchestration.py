@@ -52,6 +52,34 @@ class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([request.intervention_point for request in runtime.requests], [InterventionPoint.INPUT, InterventionPoint.OUTPUT])
         self.assertEqual(runtime.requests[1].snapshot["output"], {"answer": "raw"})
 
+    async def test_run_splices_nested_output_transform_into_original_shape(self):
+        runtime = QueueRuntime(
+            [
+                InterventionPointResult(Verdict(Decision.ALLOW)),
+                InterventionPointResult(
+                    Verdict(Decision.TRANSFORM),
+                    transformed_policy_target="token [REDACTED]",
+                    transformed_policy_target_applied=True,
+                    policy_input={
+                        "policy_target": {
+                            "path": "$.output.raw",
+                        }
+                    },
+                ),
+            ]
+        )
+        control = AgentControl(runtime)
+
+        async def execute(_value):
+            return {"raw": "token CAMP-ABCDEFGH", "metadata": {"shape": "campaign"}}
+
+        result = await control.run({"topic": "launch"}, execute)
+
+        self.assertEqual(
+            result.value,
+            {"raw": "token [REDACTED]", "metadata": {"shape": "campaign"}},
+        )
+
     async def test_protect_tool_enforces_pre_and_post_tool_call(self):
         # AGT D1: TRANSFORM is the only mutating decision.
         runtime = QueueRuntime(
@@ -76,8 +104,8 @@ class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runtime.requests[0].snapshot["tool_call"], {"id": "call-1", "name": "adder", "args": {"x": 1}})
         self.assertEqual(runtime.requests[1].snapshot["tool_call"]["id"], "call-1")
 
-    async def test_run_tool_requires_tool_call_id_before_intervention_point_evaluation(self):
-        runtime = QueueRuntime([])
+    async def test_run_tool_omits_tool_call_id_when_absent(self):
+        runtime = QueueRuntime([InterventionPointResult(Verdict(Decision.ALLOW)), InterventionPointResult(Verdict(Decision.ALLOW))])
         control = AgentControl(runtime)
         executed = False
 
@@ -86,14 +114,31 @@ class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
             executed = True
             return args
 
-        with self.assertRaisesRegex(ValueError, "tool_call_id is required"):
-            await control.run_tool("adder", {"x": 1}, tool)
+        await control.run_tool("adder", {"x": 1}, tool)
 
-        self.assertFalse(executed)
+        self.assertTrue(executed)
+        self.assertNotIn("id", runtime.requests[0].snapshot["tool_call"])
+        self.assertNotIn("id", runtime.requests[1].snapshot["tool_call"])
+
+    async def test_run_tool_rejects_blank_tool_call_id(self):
+        runtime = QueueRuntime([])
+        control = AgentControl(runtime)
+
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            await control.run_tool("adder", {"x": 1}, lambda args: args, tool_call_id="")
         self.assertEqual(runtime.requests, [])
 
-    async def test_protect_tool_requires_tool_call_id_before_intervention_point_evaluation(self):
-        runtime = QueueRuntime([])
+    async def test_run_tool_preserves_non_empty_whitespace_tool_call_id(self):
+        runtime = QueueRuntime([InterventionPointResult(Verdict(Decision.ALLOW)), InterventionPointResult(Verdict(Decision.ALLOW))])
+        control = AgentControl(runtime)
+
+        await control.run_tool("adder", {"x": 1}, lambda args: args, tool_call_id=" ")
+
+        self.assertEqual(runtime.requests[0].snapshot["tool_call"]["id"], " ")
+        self.assertEqual(runtime.requests[1].snapshot["tool_call"]["id"], " ")
+
+    async def test_protect_tool_omits_tool_call_id_when_absent(self):
+        runtime = QueueRuntime([InterventionPointResult(Verdict(Decision.ALLOW)), InterventionPointResult(Verdict(Decision.ALLOW))])
         control = AgentControl(runtime)
         executed = False
 
@@ -103,12 +148,10 @@ class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
             return args
 
         protected = control.protect_tool("adder", tool)
+        await protected({"x": 1})
 
-        with self.assertRaisesRegex(ValueError, "tool_call_id is required"):
-            await protected({"x": 1})
-
-        self.assertFalse(executed)
-        self.assertEqual(runtime.requests, [])
+        self.assertTrue(executed)
+        self.assertNotIn("id", runtime.requests[0].snapshot["tool_call"])
 
     async def test_deny_blocks_before_execute(self):
         runtime = QueueRuntime([InterventionPointResult(Verdict(Decision.DENY, reason="blocked"))])
@@ -153,6 +196,15 @@ class OrchestrationTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(NotImplementedError, "Native Agent Control Specification Python bindings are not implemented yet"):
             await control.evaluate_intervention_point(InterventionPoint.INPUT, {"input": "raw"})
+
+    async def test_unknown_intervention_point_reaches_runtime_client(self):
+        runtime = QueueRuntime([InterventionPointResult(Verdict(Decision.DENY, reason="runtime_error:intervention_point_unknown"))])
+        control = AgentControl(runtime)
+
+        result = await control.evaluate_intervention_point("not_a_real_point", {"input": "raw"})
+
+        self.assertEqual(result.verdict.reason, "runtime_error:intervention_point_unknown")
+        self.assertEqual(runtime.requests[0].intervention_point, "not_a_real_point")
 
 
 if __name__ == "__main__":

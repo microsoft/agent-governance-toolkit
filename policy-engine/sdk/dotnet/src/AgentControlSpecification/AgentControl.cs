@@ -1,17 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace AgentControlSpecification;
 
 public sealed class AgentControl
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-    private static readonly JsonSerializerOptions CanonicalJsonOptions = new()
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
     private readonly IAgentControlRuntime runtime;
     private readonly ApprovalResolver? approvalResolver;
 
@@ -144,10 +140,10 @@ public sealed class AgentControl
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
-        var requiredToolCallId = RequireToolCallId(toolCallId);
+        var normalizedToolCallId = NormalizeToolCallId(toolCallId);
         return EvaluateInterventionPointAsync(
             InterventionPoint.PreToolCall,
-            BuildSnapshot(snapshot, ("tool_call", ToolCall(toolName, args, requiredToolCallId))),
+            BuildSnapshot(snapshot, ("tool_call", ToolCall(toolName, args, normalizedToolCallId))),
             mode,
             cancellationToken);
     }
@@ -162,12 +158,12 @@ public sealed class AgentControl
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
-        var requiredToolCallId = RequireToolCallId(toolCallId);
+        var normalizedToolCallId = NormalizeToolCallId(toolCallId);
         return EvaluateInterventionPointAsync(
             InterventionPoint.PostToolCall,
             BuildSnapshot(
                 snapshot,
-                ("tool_call", ToolCall(toolName, args, requiredToolCallId)),
+                ("tool_call", ToolCall(toolName, args, normalizedToolCallId)),
                 ("tool_result", toolResult)),
             mode,
             cancellationToken);
@@ -182,12 +178,12 @@ public sealed class AgentControl
         string.IsNullOrWhiteSpace(reason)
             ? EvaluateInterventionPointAsync(
                 InterventionPoint.AgentShutdown,
-                BuildSnapshot(snapshot, ("agent", agent)),
+                BuildSnapshot(snapshot, ("summary", agent)),
                 mode,
                 cancellationToken)
             : EvaluateInterventionPointAsync(
                 InterventionPoint.AgentShutdown,
-                BuildSnapshot(snapshot, ("agent", agent), ("reason", reason)),
+                BuildSnapshot(snapshot, ("summary", agent), ("reason", reason)),
                 mode,
                 cancellationToken);
 
@@ -246,7 +242,31 @@ public sealed class AgentControl
         ApprovalResolver? approvalResolver = null,
         CancellationToken cancellationToken = default)
     {
+        return await RunModelCoreAsync(
+            modelRequest,
+            execute,
+            snapshot,
+            mode,
+            approvalResolver,
+            cancellationToken,
+            rejectStreamingRequests: true).ConfigureAwait(false);
+    }
+
+    internal async ValueTask<ModelRunResult<TResponse>> RunModelCoreAsync<TRequest, TResponse>(
+        TRequest modelRequest,
+        Func<TRequest, CancellationToken, ValueTask<TResponse>> execute,
+        IReadOnlyDictionary<string, object?>? snapshot,
+        EnforcementMode mode,
+        ApprovalResolver? approvalResolver,
+        CancellationToken cancellationToken,
+        bool rejectStreamingRequests)
+    {
         ArgumentNullException.ThrowIfNull(execute);
+        if (rejectStreamingRequests)
+        {
+            RejectStreamingModelRequest(modelRequest);
+        }
+
         var preModelCallResult = await EvaluateInterventionPointAsync(
             InterventionPoint.PreModelCall,
             BuildSnapshot(snapshot, ("model_request", modelRequest)),
@@ -283,6 +303,8 @@ public sealed class AgentControl
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(execute);
+        RejectStreamingModelRequest(modelRequest);
+
         var inputResult = await EvaluateInterventionPointAsync(
             InterventionPoint.Input,
             BuildSnapshot(snapshot, ("input", input)),
@@ -344,10 +366,10 @@ public sealed class AgentControl
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
         ArgumentNullException.ThrowIfNull(execute);
-        var requiredToolCallId = RequireToolCallId(toolCallId);
+        var normalizedToolCallId = NormalizeToolCallId(toolCallId);
         var preToolCallResult = await EvaluateInterventionPointAsync(
             InterventionPoint.PreToolCall,
-            BuildSnapshot(snapshot, ("tool_call", ToolCall(toolName, args, requiredToolCallId))),
+            BuildSnapshot(snapshot, ("tool_call", ToolCall(toolName, args, normalizedToolCallId))),
             mode,
             cancellationToken).ConfigureAwait(false);
         await EnforceAsync(InterventionPoint.PreToolCall, preToolCallResult, mode, approvalResolver, cancellationToken).ConfigureAwait(false);
@@ -358,7 +380,7 @@ public sealed class AgentControl
             InterventionPoint.PostToolCall,
             BuildSnapshot(
                 snapshot,
-                ("tool_call", ToolCall(toolName, effectiveArgs, requiredToolCallId)),
+                ("tool_call", ToolCall(toolName, effectiveArgs, normalizedToolCallId)),
                 ("tool_result", toolResult)),
             mode,
             cancellationToken).ConfigureAwait(false);
@@ -481,12 +503,12 @@ public sealed class AgentControl
         }
         catch (Exception exception)
         {
-            throw new AgentControlBlockedException(interventionPoint, ApprovalResolverFailedResult(), exception);
+            throw new AgentControlBlockedException(interventionPoint, ApprovalResolverFailedResult(result), exception);
         }
 
         if (resolution is null)
         {
-            throw new AgentControlBlockedException(interventionPoint, ApprovalResolverFailedResult());
+            throw new AgentControlBlockedException(interventionPoint, ApprovalResolverFailedResult(result));
         }
 
         switch (resolution.Outcome)
@@ -500,15 +522,47 @@ public sealed class AgentControl
             case ApprovalOutcome.Deny:
                 throw new AgentControlBlockedException(interventionPoint, result);
             default:
-                throw new AgentControlBlockedException(interventionPoint, ApprovalResolverFailedResult());
+                throw new AgentControlBlockedException(interventionPoint, ApprovalResolverFailedResult(result));
         }
     }
 
-    private static InterventionPointResult ApprovalResolverFailedResult() =>
-        new(new Verdict(
-            Decision.Deny,
-            Reason: "runtime_error:approval_resolver_failed",
-            Message: "Approval resolver failed closed."));
+    private static void RejectStreamingModelRequest<TRequest>(TRequest modelRequest)
+    {
+        if (!IsExplicitStreamingRequest(modelRequest))
+        {
+            return;
+        }
+
+        throw new AgentControlBlockedException(
+            InterventionPoint.PreModelCall,
+            new InterventionPointResult(
+                new Verdict(
+                    Decision.Deny,
+                    Reason: "runtime_error:streaming_unsupported",
+                    Message: "Streaming model requests are not guarded by RunModelAsync; use RunModelStreamAsync for SSE buffering.")));
+    }
+
+    private static bool IsExplicitStreamingRequest<TRequest>(TRequest modelRequest)
+    {
+        if (modelRequest is null)
+        {
+            return false;
+        }
+
+        var request = JsonSerializer.SerializeToElement(modelRequest, JsonOptions);
+        return request.ValueKind == JsonValueKind.Object
+            && request.TryGetProperty("stream", out var stream)
+            && stream.ValueKind == JsonValueKind.True;
+    }
+
+    private static InterventionPointResult ApprovalResolverFailedResult(InterventionPointResult result) =>
+        new(
+            new Verdict(
+                Decision.Deny,
+                Reason: "runtime_error:approval_resolver_failed",
+                Message: "Approval resolver failed closed."),
+            PolicyInput: result.PolicyInput,
+            ActionIdentity: result.ActionIdentity);
 
     private static void RequireApprovedIdentity(
         InterventionPoint interventionPoint,
@@ -544,16 +598,80 @@ public sealed class AgentControl
         return value.ValueKind switch
         {
             JsonValueKind.Object => "{" + string.Join(",", value.EnumerateObject()
-                .OrderBy(property => property.Name, StringComparer.Ordinal)
-                .Select(property => JsonSerializer.Serialize(property.Name, CanonicalJsonOptions) + ":" + CanonicalJson(property.Value))) + "}",
+                .OrderBy(property => property.Name, UnicodeScalarStringComparer.Instance)
+                .Select(property => QuoteJsonString(property.Name) + ":" + CanonicalJson(property.Value))) + "}",
             JsonValueKind.Array => "[" + string.Join(",", value.EnumerateArray().Select(CanonicalJson)) + "]",
-            JsonValueKind.String => JsonSerializer.Serialize(value.GetString(), CanonicalJsonOptions),
+            JsonValueKind.String => QuoteJsonString(value.GetString() ?? string.Empty),
             JsonValueKind.Number => value.GetRawText(),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
             JsonValueKind.Null => "null",
             _ => "null",
         };
+    }
+
+    private static string QuoteJsonString(string value)
+    {
+        var builder = new StringBuilder(value.Length + 2);
+        builder.Append('"');
+        foreach (var ch in value)
+        {
+            builder.Append(ch switch
+            {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\b' => "\\b",
+                '\f' => "\\f",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ when ch < 0x20 => $"\\u{(int)ch:x4}",
+                _ => ch,
+            });
+        }
+        builder.Append('"');
+        return builder.ToString();
+    }
+
+    private sealed class UnicodeScalarStringComparer : IComparer<string>
+    {
+        public static readonly UnicodeScalarStringComparer Instance = new();
+
+        public int Compare(string? x, string? y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return 0;
+            }
+
+            if (x is null)
+            {
+                return -1;
+            }
+
+            if (y is null)
+            {
+                return 1;
+            }
+
+            var left = x.EnumerateRunes().GetEnumerator();
+            var right = y.EnumerateRunes().GetEnumerator();
+            while (true)
+            {
+                var hasLeft = left.MoveNext();
+                var hasRight = right.MoveNext();
+                if (!hasLeft || !hasRight)
+                {
+                    return hasLeft == hasRight ? 0 : hasLeft ? 1 : -1;
+                }
+
+                var comparison = left.Current.Value.CompareTo(right.Current.Value);
+                if (comparison != 0)
+                {
+                    return comparison;
+                }
+            }
+        }
     }
 
     private static T TransformedOr<T>(InterventionPointResult result, T fallback, EnforcementMode mode)
@@ -563,12 +681,178 @@ public sealed class AgentControl
             return fallback;
         }
 
-        if (!result.TransformedPolicyTarget.HasValue || result.TransformedPolicyTarget.Value.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+        var hasTransformedPolicyTarget =
+            result.TransformedPolicyTargetApplied ||
+            (result.TransformedPolicyTarget.HasValue
+                && result.TransformedPolicyTarget.Value.ValueKind != JsonValueKind.Undefined);
+        if (!hasTransformedPolicyTarget)
         {
             return fallback;
         }
 
-        return JsonSerializer.Deserialize<T>(result.TransformedPolicyTarget.Value.GetRawText(), JsonOptions)!;
+        var transformedJson = result.TransformedPolicyTarget?.GetRawText() ?? "null";
+        if (TrySpliceNestedPolicyTarget(result, fallback, transformedJson, out var spliced))
+        {
+            return spliced;
+        }
+
+        return JsonSerializer.Deserialize<T>(transformedJson, JsonOptions)!;
+    }
+
+    private static bool TrySpliceNestedPolicyTarget<T>(
+        InterventionPointResult result,
+        T fallback,
+        string transformedJson,
+        out T spliced)
+    {
+        spliced = fallback;
+        var relativePath = RelativeSnapshotPath(PolicyTargetPath(result));
+        if (relativePath is null || relativePath.Length == 0)
+        {
+            return false;
+        }
+
+        var root = JsonSerializer.SerializeToNode(fallback, JsonOptions);
+        var transformed = JsonNode.Parse(transformedJson);
+        if (root is null || !SetRelativeJsonPath(root, relativePath, transformed))
+        {
+            return false;
+        }
+
+        spliced = root.Deserialize<T>(JsonOptions)!;
+        return true;
+    }
+
+    private static string? PolicyTargetPath(InterventionPointResult result)
+    {
+        if (!result.PolicyInput.HasValue ||
+            result.PolicyInput.Value.ValueKind != JsonValueKind.Object ||
+            !result.PolicyInput.Value.TryGetProperty("policy_target", out var policyTarget) ||
+            policyTarget.ValueKind != JsonValueKind.Object ||
+            !policyTarget.TryGetProperty("path", out var path) ||
+            path.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return path.GetString();
+    }
+
+    private static string? RelativeSnapshotPath(string? path)
+    {
+        string rest;
+        if (path is null)
+        {
+            return null;
+        }
+        else if (path.StartsWith("$.", StringComparison.Ordinal))
+        {
+            rest = path[2..];
+        }
+        else if (path.StartsWith("$snap.", StringComparison.Ordinal))
+        {
+            rest = path[6..];
+        }
+        else
+        {
+            return null;
+        }
+
+        var firstSegmentEnd = rest.Length;
+        var dot = rest.IndexOf('.', StringComparison.Ordinal);
+        var bracket = rest.IndexOf('[', StringComparison.Ordinal);
+        if (dot >= 0)
+        {
+            firstSegmentEnd = Math.Min(firstSegmentEnd, dot);
+        }
+        if (bracket >= 0)
+        {
+            firstSegmentEnd = Math.Min(firstSegmentEnd, bracket);
+        }
+
+        return firstSegmentEnd == rest.Length ? string.Empty : rest[firstSegmentEnd..];
+    }
+
+    private static bool SetRelativeJsonPath(JsonNode root, string path, JsonNode? value)
+    {
+        var segments = RelativePathSegments(path);
+        if (segments.Count == 0)
+        {
+            return false;
+        }
+
+        var current = root;
+        foreach (var segment in segments.Take(segments.Count - 1))
+        {
+            current = segment switch
+            {
+                string field when current is JsonObject obj && obj[field] is not null => obj[field]!,
+                int index when current is JsonArray array && index >= 0 && index < array.Count && array[index] is not null => array[index]!,
+                _ => null,
+            };
+            if (current is null)
+            {
+                return false;
+            }
+        }
+
+        return segments[^1] switch
+        {
+            string field when current is JsonObject obj && obj.ContainsKey(field) => SetObjectValue(obj, field, value),
+            int index when current is JsonArray array && index >= 0 && index < array.Count => SetArrayValue(array, index, value),
+            _ => false,
+        };
+    }
+
+    private static List<object> RelativePathSegments(string path)
+    {
+        var segments = new List<object>();
+        var index = 0;
+        while (index < path.Length)
+        {
+            if (path[index] == '.')
+            {
+                index++;
+                var start = index;
+                while (index < path.Length && path[index] != '.' && path[index] != '[')
+                {
+                    index++;
+                }
+                if (start == index)
+                {
+                    return [];
+                }
+                segments.Add(path[start..index]);
+            }
+            else if (path[index] == '[')
+            {
+                var end = path.IndexOf(']', index);
+                if (end < 0 || !int.TryParse(path[(index + 1)..end], out var arrayIndex))
+                {
+                    return [];
+                }
+                segments.Add(arrayIndex);
+                index = end + 1;
+            }
+            else
+            {
+                return [];
+            }
+        }
+
+        return segments;
+    }
+
+    private static bool SetObjectValue(JsonObject obj, string field, JsonNode? value)
+    {
+        obj[field] = value;
+        return true;
+    }
+
+    private static bool SetArrayValue(JsonArray array, int index, JsonNode? value)
+    {
+        array[index] = value;
+        return true;
     }
 
     private static JsonElement BuildSnapshot(
@@ -586,19 +870,31 @@ public sealed class AgentControl
         return JsonSerializer.SerializeToElement(envelope, JsonOptions);
     }
 
-    private static Dictionary<string, object?> ToolCall<TArgs>(string name, TArgs args, string id) =>
-        new()
+    private static Dictionary<string, object?> ToolCall<TArgs>(string name, TArgs args, string? id)
+    {
+        var toolCall = new Dictionary<string, object?>
         {
-            ["id"] = id,
             ["name"] = name,
             ["args"] = args,
         };
-
-    private static string RequireToolCallId(string? id)
-    {
-        if (string.IsNullOrWhiteSpace(id))
+        if (id is not null)
         {
-            throw new ArgumentException("toolCallId is required for tool intervention point snapshots.", nameof(id));
+            toolCall["id"] = id;
+        }
+
+        return toolCall;
+    }
+
+    private static string? NormalizeToolCallId(string? id)
+    {
+        if (id is null)
+        {
+            return null;
+        }
+
+        if (id.Length == 0)
+        {
+            throw new ArgumentException("toolCallId must be a non-empty string when provided.", nameof(id));
         }
 
         return id;

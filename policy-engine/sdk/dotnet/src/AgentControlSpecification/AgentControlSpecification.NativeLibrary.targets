@@ -57,12 +57,12 @@
           BeforeTargets="AssignTargetPaths"
           Condition="'$(_AcsHostRid)' != ''">
     <ItemGroup Condition="Exists('$(_AcsStagedPath)')">
-      <Content Include="$(_AcsStagedPath)"
-               Link="$(_AcsNativeLibName)"
-               CopyToOutputDirectory="PreserveNewest"
-               CopyToPublishDirectory="PreserveNewest"
-               Pack="false"
-               Visible="false" />
+      <None Include="$(_AcsStagedPath)"
+            Link="$(_AcsNativeLibName)"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="PreserveNewest"
+            Pack="false"
+            Visible="false" />
     </ItemGroup>
   </Target>
 
@@ -72,7 +72,7 @@
   </PropertyGroup>
 
   <Target Name="_AcsAddNativeLibraryToPackage"
-          DependsOnTargets="_AcsBuildNativeLibrary"
+          DependsOnTargets="_AcsBuildNativeLibrary;_AcsVerifyPackageNativeAssets"
           Condition="'$(_AcsHostRid)' != ''">
     <Error Condition="!Exists('$(_AcsStagedPath)')"
            Text="Cannot pack AgentControlSpecification because the native library was not staged at $(_AcsStagedPath). Build the native library first or set AgentControlSpecificationSkipNativeBuild=true with a prestaged library." />
@@ -80,9 +80,24 @@
           DestinationFiles="$(_AcsPackStagePath)"
           SkipUnchangedFiles="true" />
     <ItemGroup>
-      <TfmSpecificPackageFile Include="$(_AcsPackStagePath)">
-        <PackagePath>runtimes/$(_AcsHostRid)/native/$(_AcsNativeLibName)</PackagePath>
+      <_AcsPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/**/*" />
+      <TfmSpecificPackageFile Include="@(_AcsPackageNativeAsset)">
+        <PackagePath>runtimes/%(_AcsPackageNativeAsset.RecursiveDir)%(_AcsPackageNativeAsset.Filename)%(_AcsPackageNativeAsset.Extension)</PackagePath>
       </TfmSpecificPackageFile>
     </ItemGroup>
+  </Target>
+
+  <Target Name="_AcsVerifyPackageNativeAssets"
+          Condition="'$(AgentControlSpecificationAllowIncompleteNativePack)' != 'true'">
+    <ItemGroup>
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-x64/native/libagent_control_specification_core.so" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-arm64/native/libagent_control_specification_core.so" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-x64/native/libagent_control_specification_core.dylib" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-arm64/native/libagent_control_specification_core.dylib" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/win-x64/native/agent_control_specification_core.dll" />
+      <_AcsMissingPackageNativeAsset Include="@(_AcsRequiredPackageNativeAsset)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <Error Condition="'@(_AcsMissingPackageNativeAsset)' != ''"
+           Text="Cannot pack AgentControlSpecification because required native runtime assets are missing: @(_AcsMissingPackageNativeAsset, ', '). Run the release native asset jobs first, or set AgentControlSpecificationAllowIncompleteNativePack=true for a host-only development package." />
   </Target>
 </Project>

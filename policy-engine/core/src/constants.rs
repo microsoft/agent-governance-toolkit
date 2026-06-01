@@ -4,6 +4,16 @@ pub(crate) mod annotation {
     pub(crate) const TYPE: &str = "type";
 }
 
+/// Reserved deny reasons that cross the dispatcher boundary, where a host
+/// supplied annotator dispatcher signals the outcome back to the runtime. These
+/// are the single source of truth for the sentinel strings, so the FFI boundary
+/// and the language bridges compare and emit the same values without duplicating
+/// string literals that could drift apart.
+pub mod reserved_reason {
+    pub const ANNOTATION_TIMEOUT: &str = "runtime_error:annotation_timeout";
+    pub const ANNOTATION_FAILED: &str = "runtime_error:annotation_failed";
+}
+
 pub(crate) mod engine {
     pub(crate) const CEDAR: &str = "cedar";
     pub(crate) const CUSTOM: &str = "custom";

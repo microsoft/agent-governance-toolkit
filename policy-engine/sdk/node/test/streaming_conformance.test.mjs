@@ -8,7 +8,10 @@ const test = require("node:test");
 const {
   AgentControl,
   AgentControlBlockedError,
+  AgentControlSuspendedError,
+  ApprovalResolution,
   Decision,
+  actionIdentity,
   assembleSseStream,
   runModelStream,
   synthesizeSseStream,
@@ -116,6 +119,30 @@ test("streaming conformance limits are enforced", async () => {
     (error) => {
       assert.ok(error instanceof AgentControlBlockedError);
       assert.equal(errorMessage(error), "Streaming response exceeded the buffering byte limit.");
+      return true;
+    },
+  );
+});
+
+test("streaming preserves suspended escalation handles", async () => {
+  const policyInput = { intervention_point: "post_model_call", snapshot: { model_response: "pending" } };
+  const identity = actionIdentity(policyInput);
+  const control = new AgentControl(
+    new StubRuntimeClient(({ interventionPoint }) => interventionPoint === "post_model_call"
+      ? {
+        verdict: { decision: Decision.Escalate, reason: "human_review" },
+        policyInput,
+        actionIdentity: identity,
+      }
+      : { verdict: { decision: Decision.Allow } }),
+    () => ApprovalResolution.suspend({ ticket: "T-1" }, identity),
+  );
+
+  await assert.rejects(
+    () => runModelStream(control, { messages: [] }, () => readFixture("inputs/allow_text_only.sse"), limits),
+    (error) => {
+      assert.ok(error instanceof AgentControlSuspendedError);
+      assert.deepEqual(error.handle, { ticket: "T-1" });
       return true;
     },
   );

@@ -6,7 +6,7 @@ These fixtures are the shared cross SDK contract for canonical ACS behavior.
 
 | Fixture | Purpose | Source |
 | --- | --- | --- |
-| `telemetry_redaction_canonical.json` | Enumerates core telemetry event kinds, documented exported event names, safe emitted attributes, and fields that must stay withheld. | `docs/observability.md`, `docs/stateless-runtime.md`, `spec/SPECIFICATION.md`, `core/src/telemetry.rs`, `core/src/runtime.rs` |
+| `telemetry_redaction_canonical.json` | Enumerates core telemetry event kinds, SDK enforcement boundary events, safe emitted attributes, and fields that must stay withheld. | `docs/observability.md`, `docs/stateless-runtime.md`, `spec/SPECIFICATION.md`, `core/src/telemetry.rs`, `core/src/runtime.rs` |
 | `verdict_dispatch_canonical.json` | Defines policy verdict normalization and whether effects apply in enforce mode. | `core/src/verdict.rs` and the stateless runtime evaluation flow |
 | `resource_limits_canonical.json` | Captures default runtime resource budgets. | `core/src/limits.rs` |
 | `error_mapping_canonical.json` | Maps every `RuntimeError` variant to its reserved reason. | `core/src/error.rs` and specification section 15 |

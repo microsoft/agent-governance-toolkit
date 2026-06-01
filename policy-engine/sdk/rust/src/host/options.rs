@@ -92,7 +92,12 @@ impl ToolRunOptions {
     }
 
     pub fn with_tool_call_id(mut self, tool_call_id: impl Into<String>) -> Self {
-        self.tool_call_id = Some(tool_call_id.into());
+        let tool_call_id = tool_call_id.into();
+        assert!(
+            !tool_call_id.is_empty(),
+            "tool_call_id must be a non-empty string when provided"
+        );
+        self.tool_call_id = Some(tool_call_id);
         self
     }
 

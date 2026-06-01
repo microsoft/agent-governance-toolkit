@@ -46,3 +46,16 @@ def test_assemble_cases(case: dict) -> None:
 def test_synthesize_cases(case: dict) -> None:
     out = _sse.synthesize_sse_stream(case["response"], case["template"])
     assert out == _read(case["expected_output"])
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"choices": [{"index": 0, "message": {"content": "a"}}, {"index": 1, "message": {"content": "b"}}]},
+        {"choices": [{"index": 1, "message": {"content": "wrong"}}]},
+        {"choices": [{"index": 0, "message": {"content": {"not": "string"}}}]},
+    ],
+)
+def test_synthesize_rejects_malformed_transformed_responses(response: dict) -> None:
+    with pytest.raises(AdapterUnsupportedError):
+        _sse.synthesize_sse_stream(response, {})

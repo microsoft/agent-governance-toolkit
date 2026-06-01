@@ -94,7 +94,7 @@ impl PolicyDispatcher for ScenarioPolicy {
 
 fn manifest() -> Manifest {
     Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   scenario:
     type: test
@@ -447,7 +447,7 @@ impl PolicyDispatcher for PaymentPolicy {
 
 fn payment_manifest() -> Manifest {
     Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   payments:
     type: test
@@ -625,10 +625,7 @@ fn concurrent_payment_escalations_do_not_cross_authorize() {
             assert_eq!(result.value["charged"]["amount"], json!(amount));
             // AGT D1 + §13.1: escalate carries no effects; the action
             // proceeds with the original memo after approval.
-            assert_eq!(
-                result.value["charged"]["memo"],
-                json!(format!("concurrent"))
-            );
+            assert_eq!(result.value["charged"]["memo"], json!("concurrent"));
         }));
     }
     for handle in handles {

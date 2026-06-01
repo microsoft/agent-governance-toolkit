@@ -33,14 +33,22 @@ from agent_control_specification import (
 )
 
 
-def result(decision=None, transformed_policy_target=None):
+def result(decision=None, transformed_policy_target=None, transformed_policy_target_applied=False):
     # AGT D1: only Decision.TRANSFORM applies the engine's
     # transformed_policy_target. Helper defaults to TRANSFORM when the
     # caller supplied a transformed_policy_target so existing call sites
     # exercise the canonical mutation path without spelling it out.
     if decision is None:
-        decision = Decision.TRANSFORM if transformed_policy_target is not None else Decision.ALLOW
-    return InterventionPointResult(Verdict(decision), transformed_policy_target=transformed_policy_target)
+        decision = (
+            Decision.TRANSFORM
+            if transformed_policy_target is not None or transformed_policy_target_applied
+            else Decision.ALLOW
+        )
+    return InterventionPointResult(
+        Verdict(decision),
+        transformed_policy_target=transformed_policy_target,
+        transformed_policy_target_applied=transformed_policy_target_applied,
+    )
 
 
 def _sse(*chunks):
@@ -144,6 +152,21 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runtime.requests[0].snapshot["model_request"]["messages"][0]["content"], "raw")
         self.assertEqual(runtime.requests[1].snapshot["model_response"], {"content": "raw response"})
 
+    async def test_run_model_call_applies_explicit_null_transform(self):
+        runtime = QueueRuntime([
+            result(transformed_policy_target=None, transformed_policy_target_applied=True),
+            result(),
+        ])
+        seen = []
+
+        async def call_model(request):
+            seen.append(request)
+            return {"content": "raw response"}
+
+        await run_model_call(AgentControl(runtime), {"messages": [{"content": "raw"}]}, call_model)
+
+        self.assertEqual(seen, [None])
+
     async def test_guard_model_call_blocks_before_execute(self):
         runtime = QueueRuntime([result(Decision.DENY)])
         executed = False
@@ -158,7 +181,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(executed)
         self.assertEqual([r.intervention_point for r in runtime.requests], [InterventionPoint.PRE_MODEL_CALL])
 
-    async def test_guard_tool_transforms_args_result_and_requires_call_id(self):
+    async def test_guard_tool_transforms_args_result_and_allows_absent_call_id(self):
         runtime = QueueRuntime([result(transformed_policy_target={"x": 2}), result(transformed_policy_target={"sum": 4})])
         seen = []
 
@@ -175,8 +198,8 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runtime.requests[1].snapshot["tool_result"], {"sum": 3})
         self.assertEqual(runtime.requests[1].snapshot["turn"], "t1")
 
-        with self.assertRaisesRegex(ValueError, "tool_call_id is required"):
-            await guard_tool(AgentControl(QueueRuntime([])), "adder", add)({"x": 1})
+        guarded_no_id = guard_tool(AgentControl(QueueRuntime([result(), result()])), "adder", add)
+        await guarded_no_id({"x": 1}, 1)
 
     async def test_mcp_tool_alias_uses_tool_intervention_points(self):
         runtime = QueueRuntime([result(transformed_policy_target={"query": "safe"}), result(transformed_policy_target={"value": "redacted"})])
@@ -238,6 +261,89 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.chat.completions.calls, [{"model": "gpt", "messages": [{"content": "safe"}]}])
         self.assertEqual(runtime.requests[1].snapshot["provider"], "openai")
         self.assertEqual(runtime.requests[1].snapshot["request_id"], "r2")
+
+    async def test_openai_adapter_jsonifies_and_restores_sdk_response_shape(self):
+        class FakeCompletion:
+            def __init__(self, data):
+                self.data = data
+                self.choices = data["choices"]
+
+            def model_dump(self):
+                return self.data
+
+            @classmethod
+            def model_validate(cls, data):
+                return cls({**data, "validated": True})
+
+        class FakeCompletions:
+            async def create(self, **kwargs):
+                return FakeCompletion(
+                    {
+                        "id": "chatcmpl-test",
+                        "object": "chat.completion",
+                        "choices": [
+                            {"message": {"role": "assistant", "content": kwargs["messages"][0]["content"]}}
+                        ],
+                    }
+                )
+
+        client = type("Client", (), {})()
+        client.chat = type("Chat", (), {"completions": FakeCompletions()})()
+        runtime = QueueRuntime([
+            result(),
+            InterventionPointResult(
+                Verdict(Decision.TRANSFORM),
+                transformed_policy_target="redacted",
+                transformed_policy_target_applied=True,
+                policy_input={
+                    "policy_target": {
+                        "path": "$.model_response.choices[0].message.content"
+                    }
+                },
+            ),
+        ])
+
+        value = await guard_openai_client(AgentControl(runtime), client).chat.completions.create(
+            model="gpt",
+            messages=[{"content": "secret"}],
+        )
+
+        self.assertIsInstance(value, FakeCompletion)
+        self.assertEqual(value.choices[0]["message"]["content"], "redacted")
+        self.assertTrue(value.data["validated"])
+        self.assertEqual(
+            runtime.requests[1].snapshot["model_response"]["choices"][0]["message"]["content"],
+            "secret",
+        )
+
+    async def test_openai_agents_adapter_preserves_final_output_shape_when_redacting(self):
+        class FakeRunResult:
+            def __init__(self, final_output, trace):
+                self.final_output = final_output
+                self.trace = trace
+
+        class Runner:
+            def __init__(self):
+                self.calls = []
+
+            async def run(self, agent, value, **kwargs):
+                self.calls.append((agent, value, kwargs))
+                return FakeRunResult("token SRC-ABCDEFGH", trace=["kept"])
+
+        runtime = QueueRuntime([
+            result(),
+            result(transformed_policy_target="token [REDACTED]", transformed_policy_target_applied=True),
+        ])
+        runner = Runner()
+        guarded = guard_openai_agents_runner(AgentControl(runtime), runner)
+
+        value = await guarded.run("agent", "research", max_turns=1)
+
+        self.assertIsInstance(value, FakeRunResult)
+        self.assertEqual(value.final_output, "token [REDACTED]")
+        self.assertEqual(value.trace, ["kept"])
+        self.assertEqual(runner.calls, [("agent", "research", {"max_turns": 1})])
+        self.assertEqual(runtime.requests[1].snapshot["output"], "token SRC-ABCDEFGH")
 
     async def test_openai_agents_runner_handles_positional_keyword_inputs_and_blocks_bypasses(self):
         class FakeRunner:
@@ -346,6 +452,55 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runtime.requests[0].snapshot["tool_call"]["args"], {"query": "raw"})
         self.assertEqual(runtime.requests[1].snapshot["server"], "mcp")
 
+    async def test_mcp_server_rejects_explicit_empty_tool_call_id(self):
+        class FakeMcpServer:
+            async def call_tool(self, request):
+                return {"value": request["arguments"]["query"]}
+
+        runtime = QueueRuntime([result(), result()])
+        server = guard_mcp_server(AgentControl(runtime), FakeMcpServer())
+
+        with self.assertRaisesRegex(ValueError, "non-empty"):
+            await server.call_tool({"id": "", "name": "search", "arguments": {"query": "raw"}})
+        self.assertEqual(runtime.requests, [])
+
+    async def test_mcp_server_blocks_unsupported_provider_methods(self):
+        class FakeMcpServer:
+            def __init__(self):
+                self.calls = []
+
+            async def call_tool(self, request):
+                self.calls.append(("call_tool", request))
+                return {"value": request["arguments"]["query"]}
+
+            async def read_resource(self, request):
+                self.calls.append(("read_resource", request))
+                return {"content": "raw"}
+
+            async def get_prompt(self, request):
+                self.calls.append(("get_prompt", request))
+                return {"prompt": "raw"}
+
+            async def stream(self, request):
+                self.calls.append(("stream", request))
+                return {"chunk": "raw"}
+
+            async def initialize(self):
+                self.calls.append(("initialize", None))
+                return {"ok": True}
+
+        runtime = QueueRuntime([result(), result()])
+        raw_server = FakeMcpServer()
+        server = guard_mcp_server(AgentControl(runtime), raw_server)
+
+        for method_name in ("read_resource", "get_prompt", "stream", "initialize"):
+            with self.subTest(method_name=method_name):
+                with self.assertRaises(AdapterUnsupportedError):
+                    await getattr(server, method_name)({})
+
+        self.assertEqual(raw_server.calls, [])
+        self.assertEqual(runtime.requests, [])
+
     async def test_semantic_kernel_function_allow_path_returns_result(self):
         class FakeFunction:
             name = "search"
@@ -417,7 +572,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             ).invoke("kernel", ImmutableArguments())
         self.assertFalse(function.called)
 
-    async def test_semantic_kernel_filter_generates_call_id_and_sets_result(self):
+    async def test_semantic_kernel_filter_omits_call_id_when_absent_and_sets_result(self):
         class FakeFunction:
             name = "lookup"
 
@@ -434,10 +589,8 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         runtime = QueueRuntime([result(transformed_policy_target={"query": "safe"}), result(transformed_policy_target={"value": "redacted"})])
         await guard_semantic_kernel_filter(AgentControl(runtime))(context, next_filter)
 
-        call_id = runtime.requests[0].snapshot["tool_call"]["id"]
-        self.assertIsInstance(call_id, str)
-        self.assertTrue(call_id)
-        self.assertEqual(runtime.requests[1].snapshot["tool_call"]["id"], call_id)
+        self.assertNotIn("id", runtime.requests[0].snapshot["tool_call"])
+        self.assertNotIn("id", runtime.requests[1].snapshot["tool_call"])
         self.assertEqual(context.arguments, {"query": "safe"})
         self.assertEqual(context.result, {"value": "redacted"})
 

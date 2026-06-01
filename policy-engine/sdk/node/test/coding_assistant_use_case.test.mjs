@@ -15,7 +15,7 @@ const {
   wrapMcpToolProvider,
 } = require("../dist/index.js");
 
-const manifest = `agent_control_specification_version: 0.3.0-alpha
+const manifest = `agent_control_specification_version: 0.3.1-beta
 metadata:
   name: coding-assistant-node-use-case
 policies:
@@ -390,13 +390,23 @@ test("tool callback exceptions propagate to the caller without post tool mediati
   assert.deepEqual(invocations.map(pointOf), [InterventionPoint.PreToolCall]);
 });
 
-test("omitting the tool_call_id fails before any mediation runs", async () => {
+test("omitting the tool_call_id evaluates with tool_call.id omitted from the snapshot", async () => {
+  const { control, invocations } = makeCodingControl();
+  const result = await control.runTool("shell", { command: "echo safe" }, () => ({ stdout: "ok" }));
+
+  assert.equal(result.value.stdout, "ok");
+  assert.deepEqual(invocations.map(pointOf), [InterventionPoint.PreToolCall, InterventionPoint.PostToolCall]);
+  assert.equal("id" in invocations[0].input.snapshot.tool_call, false);
+  assert.equal("id" in invocations[1].input.snapshot.tool_call, false);
+});
+
+test("a blank tool_call_id is rejected before any mediation runs", async () => {
   const { control, invocations } = makeCodingControl();
   await assert.rejects(
-    () => control.runTool("shell", { command: "echo safe" }, () => ({ stdout: "never" })),
+    () => control.runTool("shell", { command: "echo safe" }, () => ({ stdout: "never" }), { toolCallId: "" }),
     (error) => {
       assert.equal(error instanceof AgentControlBlockedError, false);
-      assert.match(String(error.message), /toolCallId/i);
+      assert.match(String(error.message), /non-empty/i);
       return true;
     },
   );

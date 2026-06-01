@@ -14,7 +14,23 @@ const {
 
 const ROOT = path.resolve(__dirname, "..");
 const manifest = fs.readFileSync(path.join(ROOT, "manifest.yaml"), "utf8");
-const opaPath = process.env.OPA || path.join(os.homedir(), ".local/bin/opa");
+function executableFromPath(name) {
+  const pathValue = process.env.PATH || "";
+  for (const dir of pathValue.split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+function resolveOpaPath() {
+  if (process.env.OPA) return process.env.OPA;
+  if (process.env.OPA_PATH) return process.env.OPA_PATH;
+  return executableFromPath("opa") || path.join(os.homedir(), ".local/bin/opa");
+}
+
+const opaPath = resolveOpaPath();
 
 function evaluateRegoWithOpa(invocation) {
   assert.equal(invocation.type, "rego", "research demo expects Rego invocations");

@@ -32,8 +32,13 @@ else:
 
 
 class FixtureAnnotator:
+    def __init__(self, case):
+        self.case = case
+        self.seen: list[str] = []
+
     def dispatch(self, annotator_name, annotator_config, preliminary_policy_input):
-        return {"ok": True}
+        self.seen.append(annotator_name)
+        return self.case.get("annotator_outputs", {}).get(annotator_name, {"ok": True})
 
 
 class FixturePolicy:
@@ -41,6 +46,8 @@ class FixturePolicy:
         self.case = case
 
     def evaluate(self, invocation):
+        if self.case.get("policy_behavior") == "error":
+            raise RuntimeError("policy failed")
         return self.case["policy_response"]
 
 
@@ -71,8 +78,13 @@ def result_item(case: dict, status: str, detail: str | None = None) -> dict:
 
 
 async def run_evaluate(case: dict) -> dict:
-    control = AgentControl.from_native(case["manifest_yaml"], FixtureAnnotator(), FixturePolicy(case))
-    result = await control.evaluate_intervention_point(case["intervention_point"], case["snapshot"])
+    annotator = FixtureAnnotator(case)
+    control = AgentControl.from_native(case["manifest_yaml"], annotator, FixturePolicy(case))
+    result = await control.evaluate_intervention_point(
+        case["intervention_point"],
+        case["snapshot"],
+        case.get("mode", "enforce"),
+    )
     expected = case["expected"]
     if decision_value(result.verdict.decision) != expected["decision"]:
         return result_item(case, "fail", f"decision {result.verdict.decision!r}")
@@ -80,6 +92,12 @@ async def run_evaluate(case: dict) -> dict:
         return result_item(case, "fail", f"reason {result.verdict.reason!r}")
     if "transformed_policy_target" in expected and result.transformed_policy_target != expected["transformed_policy_target"]:
         return result_item(case, "fail", "transformed target mismatch")
+    if "policy_target" in expected and result.policy_input["policy_target"]["value"] != expected["policy_target"]:
+        return result_item(case, "fail", "policy target mismatch")
+    if "annotations" in expected and result.policy_input["annotations"] != expected["annotations"]:
+        return result_item(case, "fail", "annotations mismatch")
+    if "annotator_order" in expected and annotator.seen != expected["annotator_order"]:
+        return result_item(case, "fail", f"annotator order {annotator.seen!r}")
     return result_item(case, "pass")
 
 

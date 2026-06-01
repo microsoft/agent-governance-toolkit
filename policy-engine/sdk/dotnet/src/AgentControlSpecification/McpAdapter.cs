@@ -38,8 +38,7 @@ public sealed class AgentControlMcpToolProvider<TArgs, TResult> :
             toolName,
             arguments,
             execute,
-            string.IsNullOrWhiteSpace(toolCallId) ? throw new ArgumentException(
-                "toolCallId is required for MCP tool calls.", nameof(toolCallId)) : toolCallId,
+            toolCallId,
             snapshot,
             mode,
             approvalResolver,

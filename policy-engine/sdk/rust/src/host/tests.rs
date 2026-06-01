@@ -69,7 +69,7 @@ fn runtime(manifest_yaml: &str, policy: Arc<QueuePolicy>) -> Runtime {
 }
 
 fn run_manifest() -> &'static str {
-    r#"agent_control_specification_version: 0.3.0-alpha
+    r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -131,7 +131,7 @@ fn from_manifest_with_dispatchers_prefers_host_policy() {
 
 fn tool_manifest(policy_target: &str) -> String {
     format!(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -154,9 +154,15 @@ tools:
     )
 }
 
+#[test]
+#[should_panic(expected = "tool_call_id must be a non-empty string when provided")]
+fn tool_run_options_reject_empty_tool_call_id() {
+    let _ = ToolRunOptions::new().with_tool_call_id("");
+}
+
 fn model_manifest(pre_target: &str, post_target: &str) -> String {
     format!(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test

@@ -80,7 +80,7 @@ input_verdict := {
     )?;
 
     let manifest_yaml = format!(
-        r#"agent_control_specification_version: "0.3.0-alpha"
+        r#"agent_control_specification_version: "0.3.1-beta"
 metadata:
   name: "live-content-safety-loop"
 policies:

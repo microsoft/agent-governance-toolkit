@@ -28,7 +28,7 @@ pub use llm::LlmAnnotator;
 
 use crate::AnnotatorDispatcher;
 #[cfg(feature = "opa")]
-use crate::{Manifest, OpaPolicyDispatcher, PolicyDispatcher, RuntimeError};
+use crate::{Manifest, OpaPolicyDispatcher, OpaRegoRunner, PolicyDispatcher, RuntimeError};
 use std::sync::Arc;
 
 /// The bundled native annotator dispatcher used as the zero-config default. It
@@ -40,8 +40,9 @@ pub fn default_annotator_dispatcher() -> Arc<dyn AnnotatorDispatcher> {
 
 /// The bundled native OPA policy dispatcher used as the zero-config default.
 ///
-/// Fails closed if the manifest declares a non-Rego policy (the default
-/// dispatcher only evaluates Rego) or if the `opa` binary is unavailable.
+/// Fails closed if the manifest declares a non-Rego policy because the default
+/// dispatcher only evaluates Rego. OPA process failures happen during
+/// evaluation and are normalized by the runtime to fail-closed verdicts.
 ///
 /// AGT M2.S5 D7: gated behind the `opa` feature. Hosts that build the core
 /// without `opa` MUST register their own `PolicyDispatcher` explicitly; the
@@ -58,12 +59,7 @@ pub fn default_policy_dispatcher(
             )));
         }
     }
-    let dispatcher = OpaPolicyDispatcher::new();
-    if !dispatcher.runner().is_available() {
-        return Err(RuntimeError::PolicyInvocationFailed(
-            "default policy dispatcher requires the 'opa' binary to be available on PATH"
-                .to_string(),
-        ));
-    }
-    Ok(Arc::new(dispatcher))
+    Ok(Arc::new(OpaPolicyDispatcher::with_runner(
+        OpaRegoRunner::from_environment(),
+    )))
 }

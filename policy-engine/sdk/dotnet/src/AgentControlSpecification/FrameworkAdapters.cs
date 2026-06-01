@@ -387,8 +387,13 @@ public sealed class UnsupportedFrameworkAdapter<TAgent> : IFullCoverageAgentAdap
     public string FrameworkName { get; }
 
     public TAgent Guard(TAgent agent, AgentControl control) =>
-        throw new NotSupportedException(
-            $"Package-specific full-coverage {FrameworkName} adapter is not wired in this no-dependency SDK surface; " +
-            "use AgentControl.RunAsync(), AgentControl.RunModelAsync(), AgentControl.ProtectToolAsync(), " +
-            "or the no-dependency duck-typed adapter shapes.");
+        throw new AgentControlBlockedException(
+            InterventionPoint.Input,
+            new InterventionPointResult(new Verdict(
+                Decision.Deny,
+                Reason: "runtime_error:adapter_unsupported",
+                Message:
+                    $"Package-specific full-coverage {FrameworkName} adapter is not wired in this no-dependency SDK surface; " +
+                    "use AgentControl.RunAsync(), AgentControl.RunModelAsync(), AgentControl.ProtectToolAsync(), " +
+                    "or the no-dependency duck-typed adapter shapes.")));
 }

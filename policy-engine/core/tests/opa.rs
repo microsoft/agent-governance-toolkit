@@ -115,7 +115,7 @@ fn runtime_can_use_opa_policy_dispatcher_for_rego_policy() {
         return;
     };
     let manifest = Manifest::from_yaml_str(&format!(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   input_rego_policy:
     type: rego

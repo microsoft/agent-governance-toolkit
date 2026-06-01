@@ -11,7 +11,6 @@ from ._shared import (
     TOOL_CALL_ID_KWARG,
     _maybe_await,
     _merge_snapshot,
-    _new_tool_call_id,
     _ObjectProxy,
     _pop_common_adapter_kwargs,
     _resolve_control_and_target,
@@ -118,7 +117,7 @@ def _guard_langchain_tool_ainvoke(
             tool_name,
             args_value,
             execute_effective,
-            tool_call_id=explicit_call_id or tool_call_id or _new_tool_call_id(),
+            tool_call_id=explicit_call_id or tool_call_id,
             snapshot=merged_snapshot,
             mode=mode,
         )

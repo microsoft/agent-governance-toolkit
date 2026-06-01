@@ -51,7 +51,7 @@ fn manifest_json() -> JsonValue {
 
 fn model_control() -> AgentControl {
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -195,7 +195,7 @@ fn streaming_guard_transforms_to_single_synthesized_chunk() {
     }
 
     let manifest = Manifest::from_yaml_str(
-        r#"agent_control_specification_version: 0.3.0-alpha
+        r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test

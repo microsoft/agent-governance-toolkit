@@ -101,6 +101,12 @@ pub fn metric_attributes(event: &TelemetryEvent) -> Vec<AttributePair> {
             value: reason_code.clone(),
         });
     }
+    if let Some(error_class) = &event.error_class {
+        attributes.push(AttributePair {
+            key: "error_class",
+            value: error_class.clone(),
+        });
+    }
     if let Some(policy_id) = &event.policy_id {
         attributes.push(AttributePair {
             key: "policy_id",
@@ -159,7 +165,8 @@ mod tests {
         let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
             .with_enforcement_mode(EnforcementMode::Enforce)
             .with_decision(Decision::Deny)
-            .with_reason_code("policy_denied")
+            .with_reason_code("runtime_error:policy_invocation_failed")
+            .with_error_class("runtime_error")
             .with_policy_id("content_policy")
             .with_annotator("prompt_classifier")
             .with_duration_ms(4.2);
@@ -174,7 +181,11 @@ mod tests {
         }));
         assert!(attributes.contains(&AttributePair {
             key: "reason_code",
-            value: "policy_denied".to_string(),
+            value: "runtime_error:policy_invocation_failed".to_string(),
+        }));
+        assert!(attributes.contains(&AttributePair {
+            key: "error_class",
+            value: "runtime_error".to_string(),
         }));
         assert!(attributes.contains(&AttributePair {
             key: "policy_id",
@@ -184,6 +195,17 @@ mod tests {
             key: "annotators",
             value: "prompt_classifier".to_string(),
         }));
+    }
+
+    #[test]
+    fn mapping_omits_action_identity() {
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+            .with_decision(Decision::Allow)
+            .with_action_identity("sha256:0123456789abcdef");
+        let attributes = metric_attributes(&event);
+        assert!(!attributes
+            .iter()
+            .any(|attribute| attribute.key == "action_identity"));
     }
 
     #[test]

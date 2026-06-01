@@ -49,3 +49,7 @@ sdk/dotnet/**/runtimes/
 generator/build/
 .env
 .env.*
+
+# Copilot CLI project-state scratch file and temp dirs
+.copilot
+.copilot-tmp/

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ACS_VERSION = "0.3.0-alpha"
+ACS_VERSION = "0.3.1-beta"
 ANNOTATOR_TYPES = frozenset({"classifier", "llm", "endpoint"})
 DECISIONS = frozenset({"allow", "warn", "deny", "escalate", "transform"})
 EFFECT_TYPES = frozenset({"append", "replace", "redact"})

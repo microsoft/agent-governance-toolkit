@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from importlib import resources
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -20,7 +21,8 @@ from .vocabulary import (
 )
 
 OPA_TIMEOUT_SECONDS = 10
-SCHEMA_PATH = Path(__file__).resolve().parents[2] / "spec" / "schema" / "manifest.schema.json"
+SCHEMA_PACKAGE = "acs_generator.schema"
+SCHEMA_NAME = "manifest.schema.json"
 VALIDATION_DIR_NAME = ".acs_generator_validation"
 
 
@@ -68,7 +70,7 @@ def validate_artifacts(
 
 
 def _validate_schema(manifest: dict[str, Any]) -> None:
-    with SCHEMA_PATH.open("r", encoding="utf-8") as handle:
+    with resources.files(SCHEMA_PACKAGE).joinpath(SCHEMA_NAME).open("r", encoding="utf-8") as handle:
         schema = json.load(handle)
     try:
         jsonschema.validate(manifest, schema)
@@ -131,7 +133,7 @@ def _reject_deprecated_refs(rego: str) -> None:
 
 
 def _synthetic_input(point_name: str, config: dict[str, Any]) -> dict[str, Any]:
-    tool = {"name": ""} if point_name in {"pre_tool_call", "post_tool_call"} else None
+    tool = {"id": "", "name": ""} if point_name in {"pre_tool_call", "post_tool_call"} else None
     return {
         POLICY_INPUT_POINT_KEY: point_name,
         "snapshot": {},

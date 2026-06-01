@@ -52,6 +52,9 @@ ACS does not own network I/O or async cancellation for dispatchers. The host mus
 | Annotator output serialized size | `262_144` bytes |
 | Manifest extends depth | `16` |
 | Merged manifest serialized size | `1_048_576` bytes |
+| Manifest HTTPS extends body size | `1_048_576` bytes |
+| Manifest HTTPS extends timeout | `30_000` ms |
+| Manifest HTTPS extends redirects | `5` |
 
 Set policy dispatcher timeouts shorter than customer facing request deadlines. Set annotator timeouts per annotator class and fail closed when the dispatcher reports an error or timeout. Keep gateway payload caps aligned with snapshot and manifest limits so oversized requests fail before expensive policy work begins.
 
@@ -63,7 +66,7 @@ Use the no-op sink for local tests and a host supplied sink for production expor
 
 ## Manifest and bundle integrity
 
-Treat manifests, Rego bundles, OPA binaries, SDK packages, native libraries, and adapter code as security critical release artifacts. Protect them with review, provenance, pinning, vulnerability scanning, and deploy promotion controls. File based manifest loading may compose `extends`; string and FFI loaders must receive an already merged manifest.
+Treat manifests, Rego bundles, OPA binaries, SDK packages, native libraries, and adapter code as security critical release artifacts. Protect them with review, provenance, pinning, vulnerability scanning, and deploy promotion controls. File based manifest loading may compose file and HTTPS `extends`; string and FFI loaders must receive an already merged manifest. Pin HTTPS `extends` with `integrity` or `sha256` when transport trust and repository controls are not sufficient for the deployment.
 
 Record the manifest version, bundle version, policy query, runtime version, SDK version, and host adapter version alongside production decisions when those fields are needed for audit or rollback.
 

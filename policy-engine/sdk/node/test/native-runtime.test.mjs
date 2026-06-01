@@ -2,9 +2,9 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { AgentControl, Decision, InterventionPoint } = require("../dist/index.js");
+const { AgentControl, Decision, EnforcementMode, InterventionPoint, actionIdentity, resolveBundledOpa } = require("../dist/index.js");
 
-const manifest = `agent_control_specification_version: 0.3.0-alpha
+const manifest = `agent_control_specification_version: 0.3.1-beta
 metadata:
   name: basic-host-node-test
 policies:
@@ -24,7 +24,7 @@ annotators:
   prompt_classifier:
     type: classifier`;
 
-const baseManifest = `agent_control_specification_version: 0.3.0-alpha
+const baseManifest = `agent_control_specification_version: 0.3.1-beta
 policies:
   input_custom_policy:
     type: custom
@@ -36,7 +36,7 @@ intervention_points:
       id: input_custom_policy
     policy_target: $.input`;
 
-const overlayManifest = `agent_control_specification_version: 0.3.0-alpha
+const overlayManifest = `agent_control_specification_version: 0.3.1-beta
 metadata:
   name: node-chain-test
 intervention_points:
@@ -171,7 +171,9 @@ test("dispatcher sync throw and async rejection resolve to runtime-error verdict
     },
     policyDispatcher,
   );
-  assertRuntimeErrorVerdict(await evaluateText(throwingControl, "Please summarize account 1234."));
+  const throwingResult = await evaluateText(throwingControl, "Please summarize account 1234.");
+  assertRuntimeErrorVerdict(throwingResult);
+  assert.doesNotMatch(JSON.stringify(throwingResult), /sync boom/);
 
   const rejectingControl = AgentControl.fromNative(
     manifest,
@@ -182,7 +184,9 @@ test("dispatcher sync throw and async rejection resolve to runtime-error verdict
     },
     policyDispatcher,
   );
-  assertRuntimeErrorVerdict(await evaluateText(rejectingControl, "Please summarize account 1234."));
+  const rejectingResult = await evaluateText(rejectingControl, "Please summarize account 1234.");
+  assertRuntimeErrorVerdict(rejectingResult);
+  assert.doesNotMatch(JSON.stringify(rejectingResult), /async boom/);
 });
 
 test("native runtime composes manifest chains", async () => {
@@ -225,7 +229,22 @@ function opaAvailable() {
   }
 }
 
-const nonRegoManifest = `agent_control_specification_version: 0.3.0-alpha
+function withCleanEnv(overrides, body) {
+  const keys = ["PATH", "ACS_OPA_PATH", "ACS_OPA_NO_BUNDLE"];
+  const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of keys) delete process.env[key];
+    Object.assign(process.env, overrides);
+    return body();
+  } finally {
+    for (const key of keys) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  }
+}
+
+const nonRegoManifest = `agent_control_specification_version: 0.3.1-beta
 metadata:
   name: zero-config-non-rego
 policies:
@@ -239,11 +258,54 @@ intervention_points:
       id: p
     policy_target: $.input`;
 
-test("zero-config fromPath builds with bundled defaults", { skip: !opaAvailable() }, async () => {
+const regoManifest = `agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: zero-config-rego
+policies:
+  p:
+    type: rego
+    bundle: ./policy
+    query: data.acs.verdict
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: p
+    policy_target: $.input`;
+
+test("zero-config fromPath builds with bundled defaults", { skip: !(opaAvailable() || resolveBundledOpa()) }, async () => {
   assert.ok(existsSync(supportManifest));
   // No host dispatchers: the bundled OPA policy and annotator defaults are used.
   const agentControl = AgentControl.fromPath(supportManifest);
   assert.ok(agentControl);
+});
+
+test("zero-config fromPath uses bundled opa with an empty PATH", { skip: !resolveBundledOpa() }, async () => {
+  assert.ok(existsSync(supportManifest));
+  withCleanEnv({ PATH: "" }, () => {
+    const agentControl = AgentControl.fromPath(supportManifest);
+    assert.ok(agentControl);
+    assert.equal(process.env.PATH, dirname(resolveBundledOpa()));
+  });
+});
+
+test("zero-config fromPath bad explicit OPA path fails closed on evaluation", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "acs-zc-"));
+  const path = join(dir, "manifest.yaml");
+  writeFileSync(path, regoManifest);
+  try {
+    await withCleanEnv({ ACS_OPA_PATH: join(tmpdir(), "definitely-no-opa-here") }, async () => {
+      const control = AgentControl.fromPath(path);
+      const result = await control.evaluateInterventionPoint(
+        InterventionPoint.Input,
+        { input: { text: "hello" } },
+      );
+      assert.equal(result.verdict.decision, Decision.Deny);
+      assert.equal(result.verdict.reason, "runtime_error:policy_invocation_failed");
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("zero-config default policy dispatcher rejects non-rego", async () => {
@@ -274,4 +336,104 @@ test("native runtime returns policy result_labels for IFC propagation", async ()
   const result = await evaluateText(agentControl, "hello");
   assert.equal(result.verdict.decision, Decision.Allow);
   assert.deepEqual(result.verdict.result_labels, ["confidential"]);
+});
+
+test("native runtime preserves explicit null transforms", async () => {
+  const nullTransformManifest = `agent_control_specification_version: 0.3.1-beta
+policies:
+  p:
+    type: custom
+    adapter: test
+intervention_points:
+  input:
+    policy:
+      id: p
+    policy_target: $.input
+  output:
+    policy:
+      id: p
+    policy_target: $.output`;
+  const agentControl = AgentControl.fromNative(
+    nullTransformManifest,
+    { dispatch() { return {}; } },
+    {
+      evaluate(invocation) {
+        if (invocation.input.intervention_point !== InterventionPoint.Input) return { decision: Decision.Allow };
+        return {
+          decision: Decision.Transform,
+          transform: { path: "$policy_target", value: null },
+        };
+      },
+    },
+  );
+
+  const result = await agentControl.run({ text: "clear me" }, (value) => ({ received: value }));
+  assert.equal(result.inputResult.transformedPolicyTarget, null);
+  assert.equal(result.inputResult.transformedPolicyTargetApplied, true);
+  assert.deepEqual(result.value, { received: null });
+});
+
+test("native runtime unknown intervention points fail closed", async () => {
+  const agentControl = AgentControl.fromNative(
+    manifest,
+    { dispatch() { return {}; } },
+    { evaluate() { return { decision: Decision.Allow }; } },
+  );
+
+  const result = await agentControl.evaluateInterventionPoint("not_a_real_intervention_point", {
+    input: { text: "hello" },
+  });
+
+  assert.equal(result.verdict.decision, Decision.Deny);
+  assert.equal(result.verdict.reason, "runtime_error:intervention_point_unknown");
+});
+
+test("native runtime malformed request envelopes fail closed", async () => {
+  const agentControl = AgentControl.fromNative(
+    baseManifest,
+    { dispatch() { return {}; } },
+    { evaluate() { return { decision: Decision.Allow }; } },
+  );
+  const cases = [
+    { snapshot: { input: { text: "hello" } }, mode: EnforcementMode.Enforce },
+    { interventionPoint: InterventionPoint.Input, mode: EnforcementMode.Enforce },
+    { interventionPoint: InterventionPoint.Input, snapshot: [], mode: EnforcementMode.Enforce },
+    { interventionPoint: InterventionPoint.Input, snapshot: { input: { text: "hello" } }, mode: "bogus" },
+    { interventionPoint: InterventionPoint.Input, snapshot: { input: { text: "hello" } }, mode: 1 },
+  ];
+
+  for (const request of cases) {
+    const result = await agentControl.runtimeClient.evaluateInterventionPoint(request);
+    assert.equal(result.verdict.decision, Decision.Deny);
+    assert.equal(result.verdict.reason, "runtime_error:request_invalid");
+    assert.equal(result.policyInput, undefined);
+  }
+
+  const defaultMode = await agentControl.runtimeClient.evaluateInterventionPoint({
+    interventionPoint: InterventionPoint.Input,
+    snapshot: { input: { text: "hello" } },
+  });
+  assert.equal(defaultMode.verdict.decision, Decision.Allow);
+});
+
+test("SDK action identity matches native core for non-BMP object keys", async () => {
+  const agentControl = AgentControl.fromNative(
+    `agent_control_specification_version: 0.3.1-beta
+policies:
+  p:
+    type: custom
+    adapter: test
+intervention_points:
+  input:
+    policy:
+      id: p
+    policy_target: $.input`,
+    { dispatch() { return {}; } },
+    { evaluate() { return { decision: Decision.Escalate }; } },
+  );
+  const result = await agentControl.evaluateInterventionPoint(InterventionPoint.Input, {
+    input: { "𐀀": 1, "\uE000": 2 },
+  });
+
+  assert.equal(actionIdentity(result.policyInput), result.actionIdentity);
 });

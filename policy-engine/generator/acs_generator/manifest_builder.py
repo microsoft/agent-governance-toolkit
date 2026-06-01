@@ -7,7 +7,7 @@ from .plan import PolicyPlan
 from .util import slugify
 from .vocabulary import ACS_VERSION, INTERVENTION_POINT_BY_NAME, POLICY_BUNDLE, POLICY_TYPE
 
-_TOOL_NAME_CONDITION = re.compile(r'input\.tool\.name\s*==\s*"([^"]+)"')
+_TOOL_NAME_CONDITION = re.compile(r'input\.tool\.(?:name|id)\s*==\s*"([^"]+)"')
 
 
 def referenced_tool_names(plan: PolicyPlan) -> list[str]:

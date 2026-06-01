@@ -1,6 +1,6 @@
-# ACS Kubernetes and Istio sidecar reference
+# ACS embedded SDK with OPA and Istio sidecars
 
-This is a reference architecture for an application that embeds an ACS SDK and runs inside an Istio service mesh. It is not a tested cluster recipe and it is not CI verified. Adapt image names, host adapter code, OPA wiring, probes, resource limits, and policy content before production use.
+This is a reference architecture for an application that embeds an ACS SDK and runs inside an Istio service mesh with OPA and Envoy sidecars. ACS is not a sidecar in this topology. It is not a tested cluster recipe and it is not CI verified. Adapt image names, host adapter code, OPA wiring, probes, resource limits, and policy content before production use.
 
 ## Architecture
 

@@ -370,10 +370,32 @@ class StreamingAdapterHardeningTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(AdapterUnsupportedError):
             await guard_openai_client(AgentControl(QueueRuntime([])), client).responses.create(model="gpt", input="x", stream=True)
 
-    async def test_openai_sdk_object_stream_and_anthropic_stream_fail_closed_as_unsupported(self):
+    async def test_openai_sdk_object_stream_is_guarded_and_anthropic_stream_fails_closed(self):
+        class Chunk:
+            def __init__(self, content=None, role=None, finish_reason=None):
+                self.content = content
+                self.role = role
+                self.finish_reason = finish_reason
+
+            def model_dump(self):
+                delta = {}
+                if self.role is not None:
+                    delta["role"] = self.role
+                if self.content is not None:
+                    delta["content"] = self.content
+                return {
+                    "id": "chatcmpl-stream",
+                    "object": "chat.completion.chunk",
+                    "model": "gpt",
+                    "choices": [
+                        {"index": 0, "delta": delta, "finish_reason": self.finish_reason}
+                    ],
+                }
+
         class ObjectStream:
             def __iter__(self):
-                yield {"choices": []}
+                yield Chunk("hello", role="assistant")
+                yield Chunk(finish_reason="stop")
 
         class ChatCompletions:
             async def create(self, **kwargs):
@@ -381,10 +403,28 @@ class StreamingAdapterHardeningTests(unittest.IsolatedAsyncioTestCase):
 
         client = type("Client", (), {})()
         client.chat = type("Chat", (), {"completions": ChatCompletions()})()
-        with self.assertRaises(AdapterUnsupportedError):
-            await guard_openai_client(AgentControl(QueueRuntime([verdict()])), client).chat.completions.create(
-                model="gpt", messages=[], stream=True
-            )
+        body = await guard_openai_client(
+            AgentControl(
+                QueueRuntime([
+                    verdict(),
+                    InterventionPointResult(
+                        Verdict(Decision.TRANSFORM),
+                        transformed_policy_target="redacted",
+                        transformed_policy_target_applied=True,
+                        policy_input={
+                            "policy_target": {
+                                "path": "$.model_response.choices[0].message.content"
+                            }
+                        },
+                        enforced_identity="sha256:test",
+                    ),
+                ])
+            ),
+            client,
+        ).chat.completions.create(
+            model="gpt", messages=[], stream=True
+        )
+        self.assertEqual(_sse.assemble_sse_stream(body)["choices"][0]["message"]["content"], "redacted")
 
         class Messages:
             async def create(self, **kwargs):
@@ -400,7 +440,7 @@ class StreamingAdapterHardeningTests(unittest.IsolatedAsyncioTestCase):
 @unittest.skipUnless(_NATIVE_AVAILABLE, "agent_control_specification._native extension is not built")
 class AnnotatorOrderingStreamingTests(unittest.TestCase):
     def test_annotator_dispatch_precedes_policy_evaluation(self):
-        manifest = """agent_control_specification_version: 0.3.0-alpha
+        manifest = """agent_control_specification_version: 0.3.1-beta
 policies:
   p:
     type: custom

@@ -12,7 +12,6 @@ from ._shared import (
     _maybe_await,
     _merge_snapshot,
     _ObjectProxy,
-    _new_tool_call_id,
     _pop_common_adapter_kwargs,
     _resolve_control_and_target,
     _string_or_none,
@@ -84,7 +83,7 @@ def guard_semantic_kernel_filter(
         tool_name = _semantic_kernel_function_name(getattr(context, "function", None))
         arguments = getattr(context, "arguments", None)
         tool_args = _arguments_snapshot(arguments)
-        call_id = _semantic_kernel_tool_call_id(context) or _new_tool_call_id()
+        call_id = _semantic_kernel_tool_call_id(context)
         merged_snapshot = _merge_snapshot(default_snapshot, _context_snapshot(context))
 
         async def execute_effective(effective_args: JsonValue) -> JsonValue:
@@ -234,6 +233,4 @@ def _context_snapshot(context: Any) -> Mapping[str, JsonValue] | None:
 def _effective_tool_call_id(explicit_call_id: Any, default_call_id: str | None) -> Any:
     if explicit_call_id is not None:
         return explicit_call_id
-    if default_call_id is not None:
-        return default_call_id
-    return _new_tool_call_id()
+    return default_call_id

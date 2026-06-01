@@ -181,7 +181,7 @@ class Verdict:
 
 @dataclass(frozen=True)
 class InterventionPointRequest:
-    intervention_point: InterventionPoint
+    intervention_point: InterventionPoint | str
     snapshot: Mapping[str, JsonValue]
     mode: EnforcementMode = EnforcementMode.ENFORCE
 
@@ -190,6 +190,7 @@ class InterventionPointRequest:
 class InterventionPointResult:
     verdict: Verdict
     transformed_policy_target: JsonValue | None = None
+    transformed_policy_target_applied: bool = False
     policy_input: JsonValue | None = None
     # AGT D1.4: bisected identity. ``input_identity`` pins the policy input
     # that was evaluated; ``enforced_identity`` pins the policy input AFTER

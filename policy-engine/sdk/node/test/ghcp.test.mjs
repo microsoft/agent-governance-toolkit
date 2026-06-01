@@ -100,14 +100,14 @@ test("GHCP pre-tool deny returns a Copilot deny decision with captured messages"
   assert.deepEqual(client.policyInputs[0].snapshot.messages, messages);
 });
 
-test("GHCP pre-tool hook synthesizes an admission id and still evaluates without a prior assistant event", async () => {
+test("GHCP pre-tool hook evaluates without a prior assistant event and omits tool_call.id", async () => {
   const { extension, client } = makeExtension(() => ({}));
   const result = await extension.hooks.onPreToolUse({ toolName: "lookup", toolArgs: { q: "hi" } }, { sessionId: "s1" });
 
   assert.equal(result, undefined);
   assert.equal(client.requests.length, 1);
   assert.equal(client.requests[0].interventionPoint, InterventionPoint.PreToolCall);
-  assert.match(String(client.requests[0].snapshot.tool_call.id), /__acs_ghcp_synthetic__/);
+  assert.equal("id" in client.requests[0].snapshot.tool_call, false);
 });
 
 test("GHCP parses JSON-string tool args into an object for the policy target", async () => {

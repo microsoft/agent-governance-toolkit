@@ -20,7 +20,6 @@ from ._shared import (
     TOOL_CALL_ID_KWARG,
     _merge_snapshot,
     _maybe_await,
-    _new_tool_call_id,
     _ObjectProxy,
     _pop_common_adapter_kwargs,
     _resolve_control_and_target,
@@ -28,6 +27,15 @@ from ._shared import (
 )
 
 AgentT = TypeVar("AgentT")
+
+_UNSUPPORTED_MCP_METHODS = {
+    "read_resource",
+    "readResource",
+    "get_prompt",
+    "getPrompt",
+    "stream",
+    "initialize",
+}
 
 
 def guard_mcp_tool(
@@ -113,7 +121,13 @@ def guard_mcp_server(
             "full MCP resource/prompt/server interception is still unsupported."
         )
 
-    return _ObjectProxy(resolved_server, overrides=overrides)  # type: ignore[return-value]
+    blocked = {
+        name: f"MCP method {name} is not guarded by this adapter."
+        for name in _UNSUPPORTED_MCP_METHODS
+        if name not in overrides and callable(getattr(resolved_server, name, None))
+    }
+
+    return _ObjectProxy(resolved_server, overrides=overrides, blocked=blocked)  # type: ignore[return-value]
 
 
 def mcp_approval_resolver(
@@ -176,7 +190,7 @@ def _guard_mcp_tool_provider_method(
             tool_name,
             tool_args,
             execute_effective,
-            tool_call_id=tool_call_id or _new_tool_call_id(),
+            tool_call_id=tool_call_id,
             snapshot=merged_snapshot,
             mode=mode,
             approval_resolver=approval_resolver,
@@ -200,9 +214,9 @@ def _mcp_tool_policy_target_and_executor(
         if not isinstance(tool_name, str) or not tool_name:
             raise AdapterUnsupportedError("MCP tool request must include string name/tool/toolName.")
         tool_args = request.get("arguments", request.get("args", request.get("input", {})))
-        tool_call_id = explicit_call_id or _string_or_none(
-            request.get("id") or request.get("call_id") or request.get("tool_call_id")
-        )
+        tool_call_id = explicit_call_id
+        if tool_call_id is None:
+            tool_call_id = _mcp_request_call_id(request)
 
         async def execute_effective(effective_args: JsonValue) -> JsonValue:
             effective_request = dict(request)
@@ -231,3 +245,10 @@ def _mcp_tool_policy_target_and_executor(
     raise AdapterUnsupportedError(
         "MCP tool calls must be object-shaped with name/arguments or positional name, args."
     )
+
+
+def _mcp_request_call_id(request: Mapping[str, Any]) -> str | None:
+    for key in ("id", "call_id", "tool_call_id"):
+        if key in request:
+            return _string_or_none(request[key])
+    return None

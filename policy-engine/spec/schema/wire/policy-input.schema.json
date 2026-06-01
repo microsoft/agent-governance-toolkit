@@ -163,7 +163,6 @@
       "type": "object",
       "additionalProperties": true,
       "required": [
-        "id",
         "name",
         "args"
       ],
@@ -177,7 +176,6 @@
       "type": "object",
       "additionalProperties": true,
       "required": [
-        "id",
         "name"
       ],
       "properties": {

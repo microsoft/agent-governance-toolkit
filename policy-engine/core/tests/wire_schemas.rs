@@ -149,3 +149,51 @@ fn verdict_and_effect_samples_validate_against_wire_schemas() {
         );
     }
 }
+
+#[test]
+fn tool_call_id_is_optional_in_snapshot_wire_schemas() {
+    let policy_input_schema = compile_schema("policy-input.schema.json");
+    let snapshot_schema = compile_schema("snapshot.schema.json");
+
+    let pre_tool_snapshot_without_id = json!({
+        "tool_call": {
+            "name": "search",
+            "args": {"query": "policy"}
+        }
+    });
+    let post_tool_snapshot_without_id = json!({
+        "tool_call": {
+            "name": "search"
+        },
+        "tool_result": {"items": []}
+    });
+    let pre_tool_policy_input_without_id = json!({
+        "intervention_point": "pre_tool_call",
+        "policy_target": {
+            "kind": "tool_args",
+            "path": "$snap.tool_call.args",
+            "value": {"query": "policy"}
+        },
+        "snapshot": pre_tool_snapshot_without_id,
+        "annotations": {},
+        "tool": {
+            "name": "search"
+        }
+    });
+
+    assert_valid(
+        &snapshot_schema,
+        &pre_tool_snapshot_without_id,
+        "pre tool snapshot without id",
+    );
+    assert_valid(
+        &snapshot_schema,
+        &post_tool_snapshot_without_id,
+        "post tool snapshot without id",
+    );
+    assert_valid(
+        &policy_input_schema,
+        &pre_tool_policy_input_without_id,
+        "policy input with pre tool snapshot without id",
+    );
+}

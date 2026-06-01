@@ -8,7 +8,7 @@ For each intervention-point evaluation, the host calls `Runtime::evaluate_interv
 
 1. Finds the intervention point config in the manifest.
 2. Resolves `policy_target` against `$snap` (or the `$`/`$.field` snapshot aliases).
-3. Projects current tool metadata at `pre_tool_call` and `post_tool_call` by deriving the invoked tool name from `$snap.tool_call.name`.
+3. Projects current tool metadata at `pre_tool_call` and `post_tool_call` by resolving the configured `tool_name_from` snapshot path.
 4. Builds preliminary policy input with empty `annotations`.
 5. Calls each configured annotator through the host-supplied `AnnotatorDispatcher`.
 6. Builds final policy input with annotation results inserted under the compatibility `annotations` field.
@@ -44,6 +44,7 @@ Every manifest path has an explicit root and a small deterministic grammar: fiel
 | Manifest field | Allowed root |
 |---|---|
 | `policy_target` | `$snap`, `$`, `$.field` |
+| `tool_name_from` | `$snap`, `$`, `$.field` |
 | annotation `from` | preliminary `$pi`, `$policy_target`, `$tool`, `$snap`, `$`, `$.field` |
 | effect `path` | `$policy_target` only |
 
@@ -65,7 +66,7 @@ Policies should return reasons from their own namespace. `runtime_error:*` is re
 
 ## Telemetry
 
-`Runtime::with_telemetry` accepts an optional `TelemetrySink`. The default constructor uses a no-op sink. Events are low-cardinality (`intervention_point.evaluated`, `intervention_point.allowed`, `intervention_point.denied`, `intervention_point.warned`, `intervention_point.escalated`, `intervention_point.effect_applied`, `annotator.started`, `annotator.failed`, `policy.invoked`, `policy.failed`) and carry stable metadata such as intervention point, policy type, provider, decision, and reason. Policy target values, tool args/results, annotation values, model messages, secrets, and PII are not emitted.
+`Runtime::with_telemetry` accepts an optional `TelemetrySink`. The default constructor uses a no-op sink. Events use the stable kinds `decision`, `annotator_dispatch`, `policy_evaluation`, `evaluation_timing`, `effect_applied`, `annotator_failed`, and `policy_failed`. Events carry stable metadata such as intervention point, enforcement mode, policy id, annotator names, decision, reason code, error class, duration, effect count, and action identity when available. Policy target values, tool args/results, annotation values, model messages, secrets, and PII are not emitted.
 
 ## Effects and transformed policy targets
 
@@ -89,8 +90,8 @@ Reasoning or thinking tokens are governed under the same rule. A host that strea
 
 Adapters that wrap streaming providers must document whether they buffer output before yielding it or emit it only after validation, so an integrator can tell from the adapter contract whether a given stream can leak content before the governing verdict. An adapter that yields tokens to the principal as they arrive and validates only afterward provides observability rather than enforcement for that path, and its documentation must say so.
 
-`Runtime` is immutable after construction and `evaluate_intervention_point` is reentrant. For parallel tool calls, invoke `pre_tool_call` and `post_tool_call` separately for each tool invocation, including an invocation ID in `$snap.tool_call.id` when correlation is useful.
+`Runtime` is immutable after construction and `evaluate_intervention_point` is reentrant. For parallel tool calls, invoke `pre_tool_call` and `post_tool_call` separately for each tool invocation, including an invocation ID in `$snap.tool_call.id` when correlation is useful. The invocation ID is host supplied and optional in the snapshot model.
 
 ## Removed concepts
 
-The stateless runtime intentionally excludes the old stateful-control concepts: state and endpoint intervention points, a separate hooks block, the `tool_name_from` and `policy_target_kind` manifest fields, the per-point `ifc:` block, non-Rego in-manifest policy engines, variables, lifetimes, event bus, resolvers, expression language, guard-policy merging, auto-resolution, durable runtime state, and manifest-level fail-open behavior.
+The stateless runtime intentionally excludes the old stateful-control concepts: state and endpoint intervention points, a separate hooks block, the per-point `ifc:` block, non-Rego in-manifest policy engines, variables, lifetimes, event bus, resolvers, expression language, guard-policy merging, auto-resolution, durable runtime state, and manifest-level fail-open behavior. `tool_name_from` and `policy_target_kind` are current ACS manifest fields.

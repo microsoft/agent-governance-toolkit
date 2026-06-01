@@ -56,7 +56,7 @@ impl Effect {
             .get("path")
             .and_then(JsonValue::as_str)
             .ok_or_else(|| RuntimeError::EffectInvalid("effect.path is required".to_string()))?;
-        let parsed = JsonPath::parse(path)
+        let parsed = JsonPath::parse_with_snapshot_alias(path)
             .map_err(|err| RuntimeError::EffectInvalid(format!("invalid effect path: {err}")))?;
         if parsed.root() != PathRoot::PolicyTarget {
             return Err(RuntimeError::EffectTargetForbidden(path.to_string()));
@@ -131,7 +131,7 @@ pub fn validate_and_maybe_apply_effects(
 }
 
 fn apply_effect(policy_target: &mut JsonValue, effect: &Effect) -> Result<(), RuntimeError> {
-    let path = JsonPath::parse(&effect.path)
+    let path = JsonPath::parse_with_snapshot_alias(&effect.path)
         .map_err(|err| RuntimeError::EffectInvalid(format!("invalid effect path: {err}")))?;
     if path.root() != PathRoot::PolicyTarget {
         return Err(RuntimeError::EffectTargetForbidden(effect.path.clone()));

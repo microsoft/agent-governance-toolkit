@@ -97,10 +97,20 @@
     },
     "snapshot": {},
     "policy_response": {},
+    "mode": {
+      "enum": [
+        "enforce",
+        "evaluate_only"
+      ]
+    },
     "policy_behavior": {
       "enum": [
         "error"
       ]
+    },
+    "annotator_outputs": {
+      "type": "object",
+      "additionalProperties": true
     },
     "annotator_behavior": {
       "enum": [
@@ -125,6 +135,10 @@
           "minimum": 0
         },
         "max_annotator_output_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_policy_output_bytes": {
           "type": "integer",
           "minimum": 1
         },
@@ -169,6 +183,16 @@
         "policy_target": {},
         "tool_name": {
           "type": "string"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "annotator_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "action_identity": {
           "enum": [

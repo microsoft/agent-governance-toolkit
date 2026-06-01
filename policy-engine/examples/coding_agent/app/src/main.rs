@@ -488,8 +488,25 @@ fn byte_to_char(text: &str, byte_index: usize) -> usize {
 }
 
 fn opa_path() -> PathBuf {
+    for key in ["OPA", "OPA_PATH"] {
+        if let Some(value) = std::env::var_os(key) {
+            return PathBuf::from(value);
+        }
+    }
+
+    if let Some(path) = find_on_path("opa") {
+        return path;
+    }
+
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".local/bin/opa")
+}
+
+fn find_on_path(name: &str) -> Option<PathBuf> {
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths)
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
 }

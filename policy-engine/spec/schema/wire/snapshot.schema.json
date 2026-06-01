@@ -63,7 +63,7 @@
     "pre_tool_call": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["id", "name", "args"],
+      "required": ["name", "args"],
       "properties": {
         "id": true,
         "name": true,
@@ -73,7 +73,7 @@
     "post_tool_call": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["id", "name"],
+      "required": ["name"],
       "properties": {
         "id": true,
         "name": true,

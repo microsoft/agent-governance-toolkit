@@ -35,6 +35,7 @@ pub struct TelemetryEvent {
     pub intervention_point: InterventionPoint,
     pub decision: Option<Decision>,
     pub reason_code: Option<String>,
+    pub error_class: Option<String>,
     pub policy_id: Option<String>,
     pub annotators: Vec<String>,
     pub enforcement_mode: Option<EnforcementMode>,
@@ -49,6 +50,7 @@ pub struct TelemetryEvent {
     /// omitted to keep telemetry cardinality bounded; auditors recover
     /// them from the audit record.
     pub evidence_verification_pointer_keys: Vec<String>,
+    pub action_identity: Option<String>,
     pub metadata: BTreeMap<String, String>,
 }
 
@@ -59,12 +61,14 @@ impl TelemetryEvent {
             intervention_point,
             decision: None,
             reason_code: None,
+            error_class: None,
             policy_id: None,
             annotators: Vec::new(),
             enforcement_mode: None,
             duration_ms: None,
             evidence_artefact: None,
             evidence_verification_pointer_keys: Vec::new(),
+            action_identity: None,
             metadata: BTreeMap::new(),
         }
     }
@@ -81,6 +85,16 @@ impl TelemetryEvent {
 
     pub fn with_optional_reason_code(mut self, reason_code: Option<&str>) -> Self {
         self.reason_code = reason_code.map(str::to_string);
+        self
+    }
+
+    pub fn with_error_class(mut self, error_class: impl Into<String>) -> Self {
+        self.error_class = Some(error_class.into());
+        self
+    }
+
+    pub fn with_optional_error_class(mut self, error_class: Option<&str>) -> Self {
+        self.error_class = error_class.map(str::to_string);
         self
     }
 
@@ -111,6 +125,16 @@ impl TelemetryEvent {
 
     pub fn with_duration_ms(mut self, duration_ms: f64) -> Self {
         self.duration_ms = Some(duration_ms);
+        self
+    }
+
+    pub fn with_action_identity(mut self, action_identity: impl Into<String>) -> Self {
+        self.action_identity = Some(action_identity.into());
+        self
+    }
+
+    pub fn with_optional_action_identity(mut self, action_identity: Option<&str>) -> Self {
+        self.action_identity = action_identity.map(str::to_string);
         self
     }
 

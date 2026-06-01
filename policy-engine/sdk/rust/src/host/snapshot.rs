@@ -210,6 +210,10 @@ pub(super) fn tool_call_snapshot(
     tool_call.insert("name".to_string(), JsonValue::String(tool_name.to_string()));
     tool_call.insert("args".to_string(), args);
     if let Some(id) = tool_call_id {
+        assert!(
+            !id.is_empty(),
+            "tool_call_id must be a non-empty string when provided"
+        );
         tool_call.insert("id".to_string(), JsonValue::String(id.to_string()));
     }
     JsonValue::Object(tool_call)

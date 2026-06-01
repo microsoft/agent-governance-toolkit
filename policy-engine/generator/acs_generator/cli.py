@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import json
 import os
 from pathlib import Path
@@ -9,10 +10,14 @@ from typing import Any
 import yaml
 
 from .engine import GenerationEngine, GenerationError
+from .init_flow import main as init_main
 from .llm import OpenAICompatibleLanguageModel
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "init":
+        return init_main(argv[1:])
     parser = _parser()
     args = parser.parse_args(argv)
     try:
@@ -37,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate ACS manifest and Rego policy artifacts from guardrail prose.")
+    parser = argparse.ArgumentParser(description="Generate ACS manifest and Rego policy artifacts from guardrail prose. Use `acs-generate init` for guided setup.")
     prompt = parser.add_mutually_exclusive_group(required=True)
     prompt.add_argument("--prompt", help="Natural-language guardrail prompt")
     prompt.add_argument("--prompt-file", help="File containing the natural-language guardrail prompt")

@@ -132,10 +132,26 @@ fn canonical_resource_limits_match_core_defaults() {
         defaults["max_annotator_output_bytes"],
         limits.max_annotator_output_bytes
     );
+    assert_eq!(
+        defaults["max_policy_output_bytes"],
+        limits.max_policy_output_bytes
+    );
     assert_eq!(defaults["max_extends_depth"], limits.max_extends_depth);
     assert_eq!(
         defaults["max_merged_manifest_bytes"],
         limits.max_merged_manifest_bytes
+    );
+    assert_eq!(
+        defaults["max_manifest_url_bytes"],
+        limits.max_manifest_url_bytes
+    );
+    assert_eq!(
+        defaults["manifest_url_timeout_ms"],
+        limits.manifest_url_timeout_ms
+    );
+    assert_eq!(
+        defaults["max_manifest_url_redirects"],
+        limits.max_manifest_url_redirects
     );
 }
 
@@ -234,13 +250,21 @@ fn canonical_telemetry_redaction_matches_core_event_types() {
             );
         }
     }
-    assert_eq!(
-        fixture["documented_low_cardinality_events"]
+    let sdk_boundaries = fixture["sdk_enforcement_boundary_events"]
+        .as_array()
+        .unwrap();
+    assert_eq!(sdk_boundaries.len(), 4);
+    for event in sdk_boundaries {
+        assert_eq!(event["name"], "decision");
+        assert!(event["reserved_reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("runtime_error:"));
+        assert!(event["safe_attribute_keys"]
             .as_array()
             .unwrap()
-            .len(),
-        10
-    );
+            .contains(&json!("action_identity")));
+    }
 }
 
 #[test]

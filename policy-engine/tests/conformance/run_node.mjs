@@ -34,19 +34,45 @@ function reasonFromError(error) {
   return String(error?.message ?? error).match(/runtime_error:[a-z_]+/)?.[0];
 }
 
+function stableJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+}
+
 async function runEvaluate(sdk, caseDef) {
+  const annotatorOrder = [];
   const control = sdk.AgentControl.fromNative(
     caseDef.manifest_yaml,
-    { dispatch() { return { ok: true }; } },
-    { evaluate() { return caseDef.policy_response; } },
+    {
+      dispatch(annotatorName) {
+        annotatorOrder.push(annotatorName);
+        return caseDef.annotator_outputs?.[annotatorName] ?? { ok: true };
+      },
+    },
+    {
+      evaluate() {
+        if (caseDef.policy_behavior === "error") throw new Error("policy failed");
+        return caseDef.policy_response;
+      },
+    },
   );
-  const result = await control.evaluateInterventionPoint(caseDef.intervention_point, caseDef.snapshot);
+  const result = await control.evaluateInterventionPoint(caseDef.intervention_point, caseDef.snapshot, caseDef.mode ?? "enforce");
   const expected = caseDef.expected;
   if (result.verdict.decision !== expected.decision) return item(caseDef, "fail", `decision ${result.verdict.decision}`);
   if (Object.hasOwn(expected, "reason") && result.verdict.reason !== expected.reason) return item(caseDef, "fail", `reason ${result.verdict.reason}`);
   if (Object.hasOwn(expected, "transformed_policy_target")) {
     const actual = result.transformedPolicyTarget === undefined ? null : result.transformedPolicyTarget;
-    if (JSON.stringify(actual) !== JSON.stringify(expected.transformed_policy_target)) return item(caseDef, "fail", "transformed target mismatch");
+    if (stableJson(actual) !== stableJson(expected.transformed_policy_target)) return item(caseDef, "fail", "transformed target mismatch");
+  }
+  if (Object.hasOwn(expected, "policy_target") && stableJson(result.policyInput?.policy_target?.value) !== stableJson(expected.policy_target)) {
+    return item(caseDef, "fail", "policy target mismatch");
+  }
+  if (Object.hasOwn(expected, "annotations") && stableJson(result.policyInput?.annotations) !== stableJson(expected.annotations)) {
+    return item(caseDef, "fail", "annotations mismatch");
+  }
+  if (Object.hasOwn(expected, "annotator_order") && JSON.stringify(annotatorOrder) !== JSON.stringify(expected.annotator_order)) {
+    return item(caseDef, "fail", `annotator order ${JSON.stringify(annotatorOrder)}`);
   }
   return item(caseDef, "pass");
 }

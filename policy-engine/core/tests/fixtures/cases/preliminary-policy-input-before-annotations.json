@@ -122,6 +122,6 @@
     }
   },
   "id": "preliminary-policy-input-before-annotations",
-  "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n    annotations:\n      classifier:\n        from: $policy_target.text\n      actor_context:\n        from: $pi.snapshot.actor.id\nannotators:\n  classifier:\n    type: classifier\n  actor_context:\n    type: classifier\n",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n    annotations:\n      classifier:\n        from: $policy_target.text\n      actor_context:\n        from: $pi.snapshot.actor.id\nannotators:\n  classifier:\n    type: classifier\n  actor_context:\n    type: classifier\n",
   "schema_version": 1
 }

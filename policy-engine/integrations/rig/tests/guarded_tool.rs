@@ -54,6 +54,29 @@ impl PolicyDispatcher for QueuePolicy {
     }
 }
 
+struct AmbientSnapshotPolicy;
+
+impl PolicyDispatcher for AmbientSnapshotPolicy {
+    fn evaluate(&self, invocation: &PreparedPolicyInvocation) -> Result<JsonValue, RuntimeError> {
+        let input = invocation.policy_input().expect("policy input");
+        if input["intervention_point"] == "pre_tool_call" {
+            let labels = input
+                .pointer("/snapshot/ifc/source_labels")
+                .and_then(JsonValue::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if labels == vec![json!("confidential")] {
+                return Ok(json!({ "decision": "allow" }));
+            }
+            return Ok(json!({
+                "decision": "deny",
+                "reason": "ifc_missing_or_invalid_source_labels"
+            }));
+        }
+        Ok(json!({ "decision": "allow" }))
+    }
+}
+
 /// Inner Rig tool that records the args it received and echoes them back.
 struct EchoTool {
     seen: Arc<Mutex<Vec<JsonValue>>>,
@@ -173,7 +196,7 @@ impl Tool for SmokeRigTool {
 }
 
 fn manifest() -> Manifest {
-    let yaml = r#"agent_control_specification_version: 0.3.0-alpha
+    let yaml = r#"agent_control_specification_version: 0.3.1-beta
 policies:
   test_policy:
     type: test
@@ -201,6 +224,36 @@ fn control<I: IntoIterator<Item = JsonValue>>(verdicts: I) -> AgentControl {
         manifest(),
         Arc::new(NoopAnnotator),
         QueuePolicy::new(verdicts),
+    )
+    .expect("runtime");
+    AgentControl::new(runtime)
+}
+
+fn ifc_ambient_control() -> AgentControl {
+    let yaml = r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  pre_tool_call:
+    policy_target_kind: tool_args
+    tool_name_from: $snap.tool_call.name
+    policy:
+      id: test_policy
+    policy_target: $snap.tool_call.args
+  post_tool_call:
+    policy_target_kind: tool_result
+    tool_name_from: $snap.tool_call.name
+    policy:
+      id: test_policy
+    policy_target: $snap.tool_result
+tools:
+  trusted_archive:
+    clearance: confidential"#;
+    let runtime = Runtime::new(
+        Manifest::from_yaml_str(yaml).unwrap(),
+        Arc::new(NoopAnnotator),
+        Arc::new(AmbientSnapshotPolicy),
     )
     .expect("runtime");
     AgentControl::new(runtime)
@@ -257,6 +310,60 @@ async fn zero_config_from_path_guards_rig_tool() {
 
     assert!(error.to_string().contains("IFC clearance violation"));
     assert!(seen.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn ambient_snapshot_reaches_rig_tool_policy_input() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let ambient_snapshot = json!({
+        "ifc": {
+            "source_labels": ["confidential"]
+        }
+    })
+    .as_object()
+    .unwrap()
+    .clone();
+    let guarded = ifc_ambient_control()
+        .guard_rig_tool(Arc::new(NamedEchoTool {
+            name: "trusted_archive",
+            seen: seen.clone(),
+        }))
+        .with_ambient_snapshot(ambient_snapshot);
+
+    let output = guarded
+        .call(json!({ "query": "confidential record" }).to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(output, "result for confidential record");
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![json!({ "query": "confidential record" })]
+    );
+}
+
+#[tokio::test]
+async fn call_with_result_exposes_post_tool_result_labels() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let guarded = control([
+        json!({ "decision": "allow" }),
+        json!({ "decision": "allow", "result_labels": ["internal"] }),
+    ])
+    .guard_rig_tool(Arc::new(EchoTool { seen }));
+
+    let result = guarded
+        .call_with_result(json!({ "query": "labeled result" }).to_string())
+        .await
+        .unwrap();
+
+    assert_eq!(result.value, "result for labeled result");
+    assert_eq!(
+        result
+            .post_tool_call_intervention_point_result
+            .verdict
+            .result_labels,
+        vec!["internal".to_string()]
+    );
 }
 
 #[tokio::test]
@@ -401,8 +508,8 @@ async fn escalate_after_resolver_proceeds_with_original_args() {
     // deferred transform with the escalate decision.
     let seen = Arc::new(Mutex::new(Vec::new()));
     let guarded = control([json!({"decision": "escalate", "reason": "needs review"})])
-    .with_approval_resolver(allow_resolver())
-    .guard_rig_tool(Arc::new(EchoTool { seen: seen.clone() }));
+        .with_approval_resolver(allow_resolver())
+        .guard_rig_tool(Arc::new(EchoTool { seen: seen.clone() }));
 
     let output = guarded
         .call(json!({ "query": "raw" }).to_string())

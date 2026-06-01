@@ -43,7 +43,7 @@ from ._shared import (
 )
 from .agents import guard_autogen_agent, guard_crewai_crew
 from .langchain import guard_langchain_runnable, guard_langchain_tool
-from .litellm import LiteLLMProxyMiddleware, guard_litellm_proxy, _is_guarded_litellm_scope
+from .litellm import AgentControlLiteLLMGuardrail, LiteLLMProxyMiddleware, guard_litellm_proxy, _is_guarded_litellm_scope
 from .mcp import (
     guard_mcp_server,
     guard_mcp_tool,
@@ -65,6 +65,7 @@ from .anthropic import guard_anthropic_client
 
 __all__ = [
     "AdapterUnsupportedError",
+    "AgentControlLiteLLMGuardrail",
     "AgentT",
     "Execute",
     "FullCoverageAgentAdapter",

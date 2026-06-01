@@ -14,7 +14,7 @@ else:
     _NATIVE_AVAILABLE = True
 
 
-MANIFEST_YAML = """agent_control_specification_version: 0.3.0-alpha
+MANIFEST_YAML = """agent_control_specification_version: 0.3.1-beta
 metadata:
   name: basic-host-example
 policies:
@@ -87,6 +87,23 @@ class NativeRuntimeTests(unittest.TestCase):
             {"text": "Please summarize account [REDACTED]."},
         )
 
+    def test_annotator_exception_details_are_sanitized(self):
+        class ThrowingAnnotator:
+            def dispatch(self, annotator_name, annotator_config, preliminary_policy_input):
+                raise RuntimeError("secret sentinel should not leak")
+
+        async def run():
+            control = AgentControl.from_native(MANIFEST_YAML, ThrowingAnnotator(), MockPolicy())
+            return await control.evaluate_intervention_point(
+                InterventionPoint.INPUT,
+                {"input": {"text": "Please summarize account 1234."}},
+            )
+
+        result = asyncio.run(run())
+        self.assertEqual(result.verdict.decision, Decision.DENY)
+        self.assertEqual(result.verdict.reason, "runtime_error:annotation_failed")
+        self.assertNotIn("secret sentinel", repr(result.verdict))
+
     def test_native_runtime_returns_result_labels(self):
         # IFC propagation: a policy that emits result_labels must have them
         # surfaced verbatim on the verdict so the host can re-supply them as
@@ -106,13 +123,98 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(result.verdict.decision, Decision.ALLOW)
         self.assertEqual(list(result.verdict.result_labels), ["confidential"])
 
+    def test_native_runtime_preserves_explicit_null_transform(self):
+        manifest = """agent_control_specification_version: 0.3.1-beta
+policies:
+  p:
+    type: custom
+    adapter: test
+intervention_points:
+  input:
+    policy:
+      id: p
+    policy_target: $.input
+  output:
+    policy:
+      id: p
+    policy_target: $.output
+"""
+
+        class NullingPolicy:
+            def evaluate(self, invocation):
+                if invocation["input"]["intervention_point"] != "input":
+                    return {"decision": "allow"}
+                return {
+                    "decision": "transform",
+                    "transform": {"path": "$policy_target", "value": None},
+                }
+
+        async def run():
+            control = AgentControl.from_native(manifest, MockAnnotator(), NullingPolicy())
+            return await control.run(
+                {"text": "clear me"},
+                lambda value: {"received": value},
+            )
+
+        result = asyncio.run(run())
+        self.assertIsNone(result.input_result.transformed_policy_target)
+        self.assertTrue(result.input_result.transformed_policy_target_applied)
+        self.assertEqual(result.value, {"received": None})
+
+    def test_native_runtime_unknown_intervention_point_fails_closed(self):
+        async def run():
+            control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), MockPolicy())
+            return await control.evaluate_intervention_point(
+                "not_a_real_intervention_point",
+                {"input": {"text": "hello"}},
+            )
+
+        result = asyncio.run(run())
+        self.assertEqual(result.verdict.decision, Decision.DENY)
+        self.assertEqual(result.verdict.reason, "runtime_error:intervention_point_unknown")
+
+    def test_native_runtime_malformed_request_envelope_fails_closed(self):
+        runtime = _native.NativeRuntime(
+            MANIFEST_YAML,
+            MockAnnotator().dispatch,
+            MockPolicy().evaluate,
+        )
+        cases = [
+            {"snapshot": {"input": {"text": "hello"}}, "mode": "enforce"},
+            {"intervention_point": "input", "mode": "enforce"},
+            {"intervention_point": "input", "snapshot": [], "mode": "enforce"},
+            {"intervention_point": "input", "snapshot": {"input": {"text": "hello"}}, "mode": "bogus"},
+            {"intervention_point": "input", "snapshot": {"input": {"text": "hello"}}, "mode": 1},
+            [],
+        ]
+
+        for request in cases:
+            with self.subTest(request=request):
+                result = runtime.evaluate(request)
+                self.assertEqual(result["verdict"]["decision"], "deny")
+                self.assertEqual(result["verdict"]["reason"], "runtime_error:request_invalid")
+                self.assertIsNone(result["policy_input"])
+
+    def test_high_level_unknown_mode_fails_closed(self):
+        async def run():
+            control = AgentControl.from_native(MANIFEST_YAML, MockAnnotator(), MockPolicy())
+            return await control.evaluate_intervention_point(
+                InterventionPoint.INPUT,
+                {"input": {"text": "hello"}},
+                "bogus",
+            )
+
+        result = asyncio.run(run())
+        self.assertEqual(result.verdict.decision, Decision.DENY)
+        self.assertEqual(result.verdict.reason, "runtime_error:request_invalid")
+
     def test_from_manifest_chain_threads_perf_telemetry(self):
         # Regression guard: the high level facade must accept and thread
         # perf_telemetry through from_manifest_chain (and from_path), matching
         # from_native and the other SDKs. A live audit found these loaders had
         # dropped the perf_telemetry argument.
         chain_child = (
-            "agent_control_specification_version: 0.3.0-alpha\n"
+            "agent_control_specification_version: 0.3.1-beta\n"
             "tools:\n"
             "  noop_tool:\n"
             "    clearance: public\n"
@@ -147,13 +249,29 @@ _SUPPORT_MANIFEST = (
     Path(__file__).resolve().parents[3] / "examples/support_agent/manifest.yaml"
 )
 
-NON_REGO_MANIFEST = """agent_control_specification_version: 0.3.0-alpha
+NON_REGO_MANIFEST = """agent_control_specification_version: 0.3.1-beta
 metadata:
   name: zero-config-non-rego
 policies:
   p:
     type: custom
     adapter: host_mock
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: p
+    policy_target: $.input
+"""
+
+REGO_MANIFEST = """agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: zero-config-rego
+policies:
+  p:
+    type: rego
+    bundle: ./policy
+    query: data.acs.verdict
 intervention_points:
   input:
     policy_target_kind: user_input
@@ -173,6 +291,32 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
         self.assertTrue(_SUPPORT_MANIFEST.exists())
         control = AgentControl.from_path(str(_SUPPORT_MANIFEST))
         self.assertIsNotNone(control._runtime_client._native)
+
+    def test_from_path_bad_explicit_opa_path_fails_closed_on_evaluation(self):
+        import os
+        import tempfile
+
+        previous = os.environ.get("ACS_OPA_PATH")
+        os.environ["ACS_OPA_PATH"] = "/definitely/not/a/real/opa"
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as handle:
+            handle.write(REGO_MANIFEST)
+            path = handle.name
+        try:
+            control = AgentControl.from_path(path)
+            result = asyncio.run(
+                control.evaluate_intervention_point(
+                    InterventionPoint.INPUT,
+                    {"input": {"text": "hello"}},
+                )
+            )
+            self.assertEqual(result.verdict.decision, Decision.DENY)
+            self.assertEqual(result.verdict.reason, "runtime_error:policy_invocation_failed")
+        finally:
+            os.unlink(path)
+            if previous is None:
+                os.environ.pop("ACS_OPA_PATH", None)
+            else:
+                os.environ["ACS_OPA_PATH"] = previous
 
     def test_default_policy_dispatcher_rejects_non_rego(self):
         import tempfile

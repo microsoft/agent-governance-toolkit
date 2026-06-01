@@ -26,7 +26,11 @@ public static class AgentControlAgentBuilderExtensions
             var result = await control.RunModelTurnAsync(
                 messageList.LastOrDefault(message => message.Role == ChatRole.User)?.Text ?? string.Empty,
                 request,
-                async (_, token) => await agent.RunAsync(messageList, session, options, token).ConfigureAwait(false),
+                async (effectiveRequest, token) => await agent.RunAsync(
+                    effectiveRequest.ApplyMessages(messageList),
+                    session,
+                    options,
+                    token).ConfigureAwait(false),
                 mode: mode,
                 approvalResolver: approvalResolver,
                 cancellationToken: ct).ConfigureAwait(false);
@@ -46,7 +50,7 @@ public static class AgentControlAgentBuilderExtensions
                 context.Function.Name,
                 context.Arguments.ToDictionary(pair => pair.Key, pair => pair.Value),
                 async (_, token) => await next(context, token).ConfigureAwait(false),
-                context.CallContent?.CallId ?? Guid.NewGuid().ToString("N"),
+                string.IsNullOrEmpty(context.CallContent?.CallId) ? null : context.CallContent!.CallId,
                 mode: mode,
                 approvalResolver: approvalResolver,
                 cancellationToken: ct).ConfigureAwait(false);

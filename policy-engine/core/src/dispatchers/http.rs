@@ -5,7 +5,13 @@ use crate::dispatchers::{
 };
 use crate::{JsonValue, RuntimeError};
 use serde_json::json;
-use std::{collections::BTreeMap, env, io::Read, time::Duration};
+use std::{
+    collections::BTreeMap,
+    env,
+    error::Error,
+    io::{self, Read},
+    time::Duration,
+};
 
 /// An authorization header to attach to an annotator HTTP request.
 ///
@@ -18,13 +24,18 @@ pub struct Authorization {
     pub value: String,
 }
 
+pub const DEFAULT_TIMEOUT_MS: u64 = 10_000;
+
 pub fn post_json(
     annotator_name: &str,
     url: &str,
     payload: JsonValue,
     authorization: Option<Authorization>,
+    timeout_ms: u64,
 ) -> Result<JsonValue, RuntimeError> {
-    let agent = ureq::AgentBuilder::new().build();
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_millis(timeout_ms))
+        .build();
     let mut request = agent
         .post(url)
         .set(HEADER_CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -48,11 +59,28 @@ pub fn post_json(
                 )
             }
         }
-        ureq::Error::Transport(error) => {
-            failed(annotator_name, format!("HTTP request failed: {error}"))
-        }
+        ureq::Error::Transport(error) => transport_error(annotator_name, error),
     })?;
     parse_response(annotator_name, response)
+}
+
+fn transport_error(annotator_name: &str, error: ureq::Transport) -> RuntimeError {
+    if is_timeout_transport(&error) {
+        RuntimeError::AnnotationTimeout(format!("HTTP request timed out: {error}"))
+    } else {
+        failed(annotator_name, format!("HTTP request failed: {error}"))
+    }
+}
+
+fn is_timeout_transport(error: &ureq::Transport) -> bool {
+    let mut source = error.source();
+    while let Some(error) = source {
+        if let Some(io_error) = error.downcast_ref::<io::Error>() {
+            return io_error.kind() == io::ErrorKind::TimedOut;
+        }
+        source = error.source();
+    }
+    false
 }
 
 /// Reads a bounded slice of an error response body so failures stay diagnosable
@@ -138,6 +166,19 @@ pub fn optional_string_field<'a>(
         .filter(|value| !value.is_empty())
 }
 
+pub fn timeout_ms(
+    annotator_name: &str,
+    fields: &BTreeMap<String, JsonValue>,
+) -> Result<u64, RuntimeError> {
+    match fields.get(FIELD_TIMEOUT_MS) {
+        None | Some(JsonValue::Null) => Ok(DEFAULT_TIMEOUT_MS),
+        Some(value) => value
+            .as_u64()
+            .filter(|timeout| *timeout > 0)
+            .ok_or_else(|| failed(annotator_name, "timeout_ms must be a positive integer")),
+    }
+}
+
 pub fn env_api_key(
     annotator_name: &str,
     fields: &BTreeMap<String, JsonValue>,
@@ -152,21 +193,6 @@ pub fn env_api_key(
         )
     })?;
     Ok(Some(authorization(fields, key)))
-}
-
-pub fn required_env_api_key(
-    annotator_name: &str,
-    fields: &BTreeMap<String, JsonValue>,
-) -> Result<Authorization, RuntimeError> {
-    let env_name =
-        optional_string_field(fields, FIELD_API_KEY_ENV).unwrap_or(DEFAULT_OPENAI_API_KEY_ENV);
-    let key = env::var(env_name).map_err(|_| {
-        failed(
-            annotator_name,
-            format!("API key environment variable '{env_name}' is not set"),
-        )
-    })?;
-    Ok(authorization(fields, key))
 }
 
 /// Builds the authorization header for a request. Uses `api_key_header` when
@@ -200,6 +226,42 @@ pub fn configured_fields(
 pub fn endpoint_payload(input: String, fields: &BTreeMap<String, JsonValue>) -> JsonValue {
     json!({
         REQUEST_INPUT: input,
-        REQUEST_FIELDS: configured_fields(fields, &[ANNOTATOR_TYPE, FIELD_FROM, FIELD_INPUT_FROM, FIELD_URL]),
+        REQUEST_FIELDS: configured_fields(fields, &[
+            ANNOTATOR_TYPE,
+            FIELD_FROM,
+            FIELD_INPUT_FROM,
+            FIELD_ENDPOINT,
+            FIELD_URL,
+            FIELD_TIMEOUT_MS,
+            FIELD_API_KEY_ENV,
+            FIELD_API_KEY,
+            FIELD_API_KEY_HEADER,
+            FIELD_HEADERS,
+            FIELD_PROVIDER_CONFIG,
+            FIELD_AWS_ACCESS_KEY_ID,
+            FIELD_AWS_SECRET_ACCESS_KEY,
+            FIELD_AWS_SESSION_TOKEN,
+            FIELD_AWS_ACCESS_KEY_ID_ENV,
+            FIELD_AWS_SECRET_ACCESS_KEY_ENV,
+            FIELD_AWS_SESSION_TOKEN_ENV,
+        ]),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeout_transport_maps_to_annotation_timeout() {
+        let io_error = io::Error::new(io::ErrorKind::TimedOut, "too slow");
+        let ureq_error: ureq::Error = io_error.into();
+        let ureq::Error::Transport(transport) = ureq_error else {
+            panic!("expected transport error");
+        };
+
+        let error = transport_error("endpoint", transport);
+
+        assert!(matches!(error, RuntimeError::AnnotationTimeout(_)));
+    }
 }

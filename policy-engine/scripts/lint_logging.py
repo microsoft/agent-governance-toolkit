@@ -43,10 +43,16 @@ BASE_FIELDS = {
     "intervention_point",
     "decision",
     "reason_code",
+    "error_class",
     "policy_id",
     "annotators",
     "enforcement_mode",
     "duration_ms",
+    "action_identity",
+}
+
+OTEL_DISALLOWED_FIELDS = {
+    "action_identity",
 }
 
 START_MARKER = "<!-- acs telemetry vocabulary start -->"
@@ -199,11 +205,20 @@ def scan_otel_attributes(allowed_fields: set[str], violations: list[str]) -> Non
     if not OTEL_RS.exists():
         return
     text = OTEL_RS.read_text(encoding="utf-8")
-    otel_allowed = {field for field in allowed_fields if not field.startswith("metadata.")}
+    otel_allowed = {
+        field
+        for field in allowed_fields
+        if not field.startswith("metadata.") and field not in OTEL_DISALLOWED_FIELDS
+    }
     for line_number, line in enumerate(text.splitlines(), start=1):
         match = re.search(r"key:\s*\"([^\"]+)\"", line)
         if match:
             key = match.group(1)
+            check(
+                key not in OTEL_DISALLOWED_FIELDS,
+                f"{rel(OTEL_RS)}:{line_number} emits high-cardinality OTel attribute {key}",
+                violations,
+            )
             check(key in otel_allowed, f"{rel(OTEL_RS)}:{line_number} emits undocumented OTel attribute {key}", violations)
 
 

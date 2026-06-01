@@ -111,6 +111,11 @@ class EscalationConformanceTests(unittest.IsolatedAsyncioTestCase):
                 caught.exception.result.verdict.message,
                 "Approval resolver failed closed.",
             )
+            self.assertIsNotNone(caught.exception.result.policy_input)
+            self.assertEqual(
+                caught.exception.result.action_identity,
+                action_identity(caught.exception.result.policy_input),
+            )
 
     async def test_transform_verdict_routes_through_transformed_policy_target(self):
         """AGT D1: Decision.TRANSFORM is the canonical mutation path.

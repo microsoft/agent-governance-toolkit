@@ -139,22 +139,27 @@ def synthesize_sse_stream(response: JsonValue, template: Mapping[str, Any]) -> b
     if not isinstance(response, Mapping):
         raise AdapterUnsupportedError("Transformed streaming response must be an object.")
     choices = response.get("choices")
-    if not isinstance(choices, list) or not choices or not isinstance(choices[0], Mapping):
+    if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], Mapping):
         raise AdapterUnsupportedError("Transformed streaming response must carry a choice.")
 
     choice = choices[0]
+    if choice.get("index", 0) != 0:
+        raise AdapterUnsupportedError("Transformed streaming response must carry one zero-index choice.")
     message = choice.get("message") or {}
     if not isinstance(message, Mapping):
         raise AdapterUnsupportedError("Transformed streaming choice must carry a message.")
 
     delta: dict[str, Any] = {"role": _ASSISTANT_ROLE}
     if message.get("content") is not None:
+        if not isinstance(message["content"], str):
+            raise AdapterUnsupportedError("Transformed streaming content must be a string.")
         delta["content"] = message["content"]
     tool_calls = message.get("tool_calls")
-    if tool_calls:
+    if tool_calls is not None:
         if not isinstance(tool_calls, list):
             raise AdapterUnsupportedError("Transformed streaming tool_calls must be a list.")
-        delta["tool_calls"] = [_streaming_tool_call(index, call) for index, call in enumerate(tool_calls)]
+        if tool_calls:
+            delta["tool_calls"] = [_streaming_tool_call(index, call) for index, call in enumerate(tool_calls)]
 
     finish_reason = choice.get("finish_reason")
     if finish_reason is None:

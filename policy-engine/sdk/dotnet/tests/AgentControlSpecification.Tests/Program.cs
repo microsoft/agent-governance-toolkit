@@ -1,9 +1,13 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AgentControlSpecification;
+using AgentControlSpecification.AI;
+using AgentControlSpecification.AutoGen;
+using AutoGen.Core;
+using Microsoft.Extensions.AI;
 
 const string BasicHostManifest = """
-agent_control_specification_version: 0.3.0-alpha
+agent_control_specification_version: 0.3.1-beta
 metadata:
   name: basic-host-example
 policies:
@@ -67,6 +71,57 @@ Assert(labelingResult.Verdict.ResultLabels is not null, "verdict should carry re
 AssertEqual(1, labelingResult.Verdict.ResultLabels!.Count, "result_labels should contain one label.");
 AssertEqual("confidential", labelingResult.Verdict.ResultLabels![0], "result_labels should round-trip verbatim.");
 
+const string InputOutputManifest = """
+agent_control_specification_version: 0.3.1-beta
+policies:
+  p:
+    type: custom
+    adapter: test
+intervention_points:
+  input:
+    policy:
+      id: p
+    policy_target: $.input
+  output:
+    policy:
+      id: p
+    policy_target: $.output
+""";
+var nullingControl = AgentControl.FromNative(InputOutputManifest, new ClassifierAnnotator(), new NullTransformPolicy());
+var nullingRun = await nullingControl.RunAsync<object?, object?>(
+    new { text = "clear me" },
+    (value, _) => ValueTask.FromResult<object?>(new Dictionary<string, object?> { ["received"] = value }));
+Assert(nullingRun.InputResult.TransformedPolicyTargetApplied, "explicit null transform should be marked as applied.");
+Assert(
+    nullingRun.InputResult.TransformedPolicyTarget.HasValue &&
+    nullingRun.InputResult.TransformedPolicyTarget.Value.ValueKind == JsonValueKind.Null,
+    "explicit null transform should preserve a JSON null target.");
+AssertEqual(
+    null,
+    ((Dictionary<string, object?>)nullingRun.Value!)["received"],
+    "run helper should pass explicit null transform to the guarded action.");
+
+var nestedOutputControl = new AgentControl(new DelegateRuntime(request =>
+    request.InterventionPoint == InterventionPoint.Output
+        ? NestedOutputTransformResult()
+        : Result(Decision.Allow)));
+var nestedOutputRun = await nestedOutputControl.RunAsync<string, ShapeOutput>(
+    "shape",
+    (_, _) => ValueTask.FromResult(new ShapeOutput(
+        "token OPS-ShapeSafe_12345",
+        new Dictionary<string, string> { ["kind"] = "operation", ["status"] = "kept" })));
+AssertEqual("token [REDACTED]", nestedOutputRun.Value.Raw, "nested output transform should splice into original shape.");
+AssertEqual("operation", nestedOutputRun.Value.Metadata["kind"], "nested output transform should preserve metadata.");
+
+var nonBmpIdentityControl = AgentControl.FromNative(InputOutputManifest, new ClassifierAnnotator(), new EscalatingPolicy());
+var nonBmpIdentityResult = await nonBmpIdentityControl.EvaluateInputAsync(
+    new Dictionary<string, object?> { ["𐀀"] = 1, ["\uE000"] = 2 });
+Assert(nonBmpIdentityResult.PolicyInput.HasValue, "native identity result should carry policy input.");
+AssertEqual(
+    nonBmpIdentityResult.ActionIdentity,
+    AgentControl.ActionIdentity(nonBmpIdentityResult.PolicyInput!.Value),
+    "SDK action identity should match native core for non-BMP object keys.");
+
 var allowMcp = new AgentControlMcpToolProvider<McpToolArgs, string>(
     AllowingToolControl(),
     (args, _) => ValueTask.FromResult($"echo:{args.Text}"));
@@ -107,13 +162,22 @@ catch (AgentControlBlockedException ex)
     Assert(!denyMcpRan, "MCP adapter should not run the inner tool after a pre_tool_call deny.");
 }
 
-var requiredIdMcp = new AgentControlMcpToolProvider<McpToolArgs, string>(
-    new AgentControl(new DelegateRuntime(_ => Result(Decision.Allow))),
+var omittedIdMcp = new AgentControlMcpToolProvider<McpToolArgs, string>(
+    new AgentControl(new DelegateRuntime(request =>
+    {
+        Assert(
+            !request.Snapshot.GetProperty("tool_call").TryGetProperty("id", out _),
+            "MCP adapter should omit tool_call.id when no caller id is supplied.");
+        return Result(Decision.Allow);
+    })),
     (_, _) => ValueTask.FromResult("ok"));
+var omittedIdResult = await omittedIdMcp.CallToolAsync("echo", new McpToolArgs("no-id"));
+AssertEqual("ok", omittedIdResult.Value, "MCP adapter should evaluate when no tool_call_id is supplied.");
+
 try
 {
-    await requiredIdMcp.CallToolAsync("echo", new McpToolArgs("no-id"));
-    throw new InvalidOperationException("MCP adapter should require a caller-supplied tool_call_id.");
+    await omittedIdMcp.CallToolAsync("echo", new McpToolArgs("empty-id"), toolCallId: "");
+    throw new InvalidOperationException("MCP adapter should reject explicit empty tool_call_id.");
 }
 catch (ArgumentException)
 {
@@ -131,6 +195,18 @@ await suppliedIdMcp.CallToolAsync("echo", new McpToolArgs("with-id"), toolCallId
 AssertEqual(2, suppliedIds.Count, "MCP adapter should evaluate pre and post tool calls.");
 AssertEqual("call-7", suppliedIds[0], "MCP adapter should use the supplied tool_call_id.");
 AssertEqual(suppliedIds[0], suppliedIds[1], "MCP adapter should reuse the supplied tool_call_id.");
+
+var whitespaceIdSeen = false;
+var whitespaceIdMcp = new AgentControlMcpToolProvider<McpToolArgs, string>(
+    new AgentControl(new DelegateRuntime(request =>
+    {
+        whitespaceIdSeen = true;
+        AssertEqual(" ", request.Snapshot.GetProperty("tool_call").GetProperty("id").GetString(), "non-empty whitespace tool_call_id should remain caller-supplied.");
+        return Result(Decision.Allow);
+    })),
+    (_, _) => ValueTask.FromResult("ok"));
+await whitespaceIdMcp.CallToolAsync("echo", new McpToolArgs("with-whitespace-id"), toolCallId: " ");
+Assert(whitespaceIdSeen, "MCP adapter should evaluate when whitespace tool_call_id is supplied.");
 
 var exceptionMcp = new AgentControlMcpToolProvider<McpToolArgs, string>(
     AllowingToolControl(),
@@ -182,7 +258,7 @@ catch (AgentControlBlockedException)
 // host proceeds with the original policy target, not a substituted one.
 var escalateAllowControl = new AgentControl(escalateInputRuntime, AllowApproval());
 var allowRun = await escalateAllowControl.RunAsync<string, string>("original", (input, _) => ValueTask.FromResult(input));
-AssertEqual("original", allowRun.Value, "an approved escalate should proceed with the original value (escalate carries no transform).");
+AssertEqual("original", allowRun.Value, "an approved escalate should proceed with the original value.");
 
 
 var identitySeen = string.Empty;
@@ -206,6 +282,24 @@ var stableSecond = await stableRuntime.EvaluateInterventionPointAsync(new Interv
     InterventionPoint.Input,
     JsonSerializer.SerializeToElement(new Dictionary<string, object?> { ["input"] = "hi" })));
 AssertEqual(stableFirst.ActionIdentity, stableSecond.ActionIdentity, "action identity should be stable for repeated evaluation.");
+
+JsonElement? shutdownSnapshot = null;
+var shutdownControl = new AgentControl(new DelegateRuntime(request =>
+{
+    if (request.InterventionPoint == InterventionPoint.AgentShutdown)
+    {
+        shutdownSnapshot = request.Snapshot.Clone();
+    }
+
+    return Result(Decision.Allow);
+}));
+await shutdownControl.EvaluateAgentShutdownAsync(new { status = "done" });
+Assert(
+    shutdownSnapshot.HasValue && shutdownSnapshot.Value.TryGetProperty("summary", out _),
+    "EvaluateAgentShutdownAsync should build a summary snapshot field.");
+Assert(
+    shutdownSnapshot.HasValue && !shutdownSnapshot.Value.TryGetProperty("agent", out _),
+    "EvaluateAgentShutdownAsync should not build the obsolete agent snapshot field.");
 
 var mismatchControl = new AgentControl(new DelegateRuntime(_ => MismatchedEscalateResult()), AllowApproval());
 try
@@ -298,10 +392,21 @@ try
 catch (AgentControlBlockedException ex)
 {
     AssertEqual("runtime_error:approval_resolver_failed", ex.Result.Verdict.Reason, "a resolver failure should use the reserved reason.");
+    Assert(ex.Result.PolicyInput.HasValue, "a resolver failure should retain the original policy input.");
+    AssertEqual(
+        AgentControl.ActionIdentity(ex.Result.PolicyInput!.Value),
+        ex.Result.ActionIdentity,
+        "a resolver failure should retain the original action identity.");
     Assert(
         ex.InnerException is InvalidOperationException { Message: "resolver boom" },
         "a resolver failure should preserve the cause.");
 }
+
+var invalidModeResult = await control.EvaluateInputAsync(
+    new { text = "invalid mode" },
+    mode: (EnforcementMode)999);
+AssertEqual(Decision.Deny, invalidModeResult.Verdict.Decision, "an invalid enforcement mode should fail closed.");
+AssertEqual("runtime_error:request_invalid", invalidModeResult.Verdict.Reason, "an invalid enforcement mode should map to request_invalid.");
 
 // Adapter-level approval-resolver parity.
 var escalateModelRuntime = new DelegateRuntime(request =>
@@ -323,6 +428,17 @@ var filterResult = await toolFilter.InvokeAsync(
     "call-filter",
     approvalResolver: AllowApproval());
 AssertEqual("q", filterResult.Value, "tool filter per-call resolver should override the instance resolver.");
+
+var unsupportedAdapter = new UnsupportedFrameworkAdapter<object>("ExampleAI");
+try
+{
+    unsupportedAdapter.Guard(new object(), new AgentControl(new DelegateRuntime(_ => Result(Decision.Allow))));
+    throw new InvalidOperationException("unsupported framework adapter should fail closed.");
+}
+catch (AgentControlBlockedException ex)
+{
+    AssertEqual("runtime_error:adapter_unsupported", ex.Result.Verdict.Reason, "unsupported framework adapter should use the reserved reason.");
+}
 
 var agentMiddleware = new AgentControlAgentMiddleware<string, string>(new AgentControl(escalateInputRuntime));
 try
@@ -373,6 +489,50 @@ var mediatedChat = mediatedChatInner.UseAgentControl(new AgentControl(new Delega
 var mediatedChatResult = await mediatedChat.GetResponseAsync("raw");
 AssertEqual("checked", mediatedChatResult, "chat client should return the transformed model response.");
 AssertEqual("safe", mediatedChatInner.Calls.Single(), "chat client should pass transformed request to inner.");
+
+var lookupTool = AIFunctionFactory.Create((Func<string, string>)(value => value), "lookup", "Lookup test tool", serializerOptions: null);
+var deleteTool = AIFunctionFactory.Create((Func<string, string>)(value => value), "delete_customer", "Delete test tool", serializerOptions: null);
+var filteredOptions = new ChatOptionsSnapshot(null, null, ["lookup"]).ApplyTo(new ChatOptions
+{
+    Tools = [lookupTool, deleteTool],
+});
+Assert(filteredOptions is not null, "filtered chat options should be present.");
+AssertEqual(1, filteredOptions!.Tools!.Count, "chat options transform should remove omitted tools.");
+AssertEqual("lookup", filteredOptions.Tools[0].Name, "chat options transform should preserve the named tool.");
+var clearedOptions = new ChatOptionsSnapshot(null, null, []).ApplyTo(new ChatOptions
+{
+    Tools = [lookupTool, deleteTool],
+});
+Assert(clearedOptions is not null, "cleared chat options should be present.");
+AssertEqual(0, clearedOptions!.Tools!.Count, "chat options transform should clear tools.");
+
+var imageContent = new DataContent(new byte[] { 1, 2, 3 }, "image/png");
+var originalMultiPart = new ChatMessage(ChatRole.User, [new TextContent("raw"), imageContent]);
+var appendedMessages = new ChatRequestSnapshot(
+    [
+        new ChatMessageSnapshot(ChatRole.System.ToString(), "safety preface", null),
+        ChatMessageSnapshot.From(originalMultiPart),
+    ],
+    new ChatOptionsSnapshot(null, null, [])).ApplyMessages([originalMultiPart]);
+AssertEqual(2, appendedMessages.Count, "chat message transform should include inserted messages.");
+Assert(ReferenceEquals(originalMultiPart, appendedMessages[1]), "unchanged multipart messages should be preserved after insertion.");
+var redactedMessages = new ChatRequestSnapshot(
+    [new ChatMessageSnapshot(ChatRole.User.ToString(), "safe", null)],
+    new ChatOptionsSnapshot(null, null, [])).ApplyMessages([originalMultiPart]);
+AssertEqual("safe", redactedMessages[0].Text, "chat message transform should apply text redaction.");
+Assert(
+    redactedMessages[0].Contents.OfType<DataContent>().Single().MediaType == "image/png",
+    "chat message text transform should preserve non-text content.");
+var responseWithData = new ChatResponse(new ChatMessage(ChatRole.Assistant, [new TextContent("ok"), imageContent]))
+{
+    ResponseId = "resp-1",
+};
+var preservedResponse = ChatResponseSnapshot.From(responseWithData).Response;
+Assert(ReferenceEquals(responseWithData, preservedResponse), "allow-path chat response snapshots should preserve the original response object.");
+Assert(
+    preservedResponse.Messages.Single().Contents.OfType<DataContent>().Single().MediaType == "image/png",
+    "allow-path chat response snapshots should preserve non-text response content.");
+AssertEqual("resp-1", preservedResponse.ResponseId, "allow-path chat response snapshots should preserve response metadata.");
 
 var filterNextCalled = false;
 var deniedSkContext = new FunctionContext<McpToolArgs, string>("lookup", new McpToolArgs("raw"), "sk-deny");
@@ -441,6 +601,25 @@ await allowedAutoGen.InvokeAsync(allowedAutoGenContext, (context, _) =>
 });
 AssertEqual("safe", allowedAutoGenContext.Input, "AutoGen middleware should pass transformed input to next.");
 AssertEqual("checked", allowedAutoGenContext.Output, "AutoGen middleware should apply output transform.");
+
+var autoGenCompanionReply = await new FakeAutoGenAgent(new TextMessage(Role.Assistant, "reply SUPPORT-TOKEN-1", "assistant"))
+    .UseAgentControl(new AgentControl(new DelegateRuntime(request =>
+    {
+        if (request.InterventionPoint == InterventionPoint.PostModelCall &&
+            (!request.Snapshot.TryGetProperty("model_response", out var modelResponse) ||
+             !modelResponse.TryGetProperty("content", out var content) ||
+             content.GetString() != "reply SUPPORT-TOKEN-1"))
+        {
+            throw new InvalidOperationException("AutoGen middleware must serialize the concrete reply content.");
+        }
+
+        return
+        request.InterventionPoint == InterventionPoint.PostModelCall
+            ? Result(Decision.Transform, new { role = "assistant", content = "reply [REDACTED]", from = "assistant" })
+            : Result(Decision.Allow);
+    })))
+    .GenerateReplyAsync([new TextMessage(Role.User, "hello", "user")]);
+AssertEqual("reply [REDACTED]", autoGenCompanionReply.GetContent(), "AutoGen companion should apply post_model_call transforms to replies.");
 
 // Microsoft Agent Framework function-calling middleware maps to pre/post_tool_call.
 var afFilterNextCalled = false;
@@ -610,7 +789,7 @@ foreach (var caseElement in parityFixture.RootElement.GetProperty("cases").Enume
 }
 
 const string ChainChildManifest = """
-agent_control_specification_version: 0.3.0-alpha
+agent_control_specification_version: 0.3.1-beta
 tools:
   noop_tool:
     clearance: public
@@ -638,6 +817,29 @@ var zeroConfigResult = await zeroConfigControl.EvaluatePreModelCallAsync(
     new { messages = new[] { new { role = "user", content = "List my upcoming appointments." } } });
 AssertEqual(Decision.Allow, zeroConfigResult.Verdict.Decision, "zero-config pre_model_call should allow.");
 
+var originalOpaPath = Environment.GetEnvironmentVariable("ACS_OPA_PATH");
+try
+{
+    Environment.SetEnvironmentVariable(
+        "ACS_OPA_PATH",
+        Path.Combine(Path.GetTempPath(), "acs-missing-opa-for-dotnet-test"));
+    var badOpaPathControl = AgentControl.FromPath(zeroConfigManifest);
+    var badOpaPathResult = await badOpaPathControl.EvaluatePreModelCallAsync(
+        new { messages = new[] { new { role = "user", content = "hello" } } });
+    AssertEqual(
+        Decision.Deny,
+        badOpaPathResult.Verdict.Decision,
+        "bad explicit ACS_OPA_PATH should fail closed during evaluation.");
+    AssertEqual(
+        "runtime_error:policy_invocation_failed",
+        badOpaPathResult.Verdict.Reason,
+        "bad explicit ACS_OPA_PATH should use policy invocation failed reason.");
+}
+finally
+{
+    Environment.SetEnvironmentVariable("ACS_OPA_PATH", originalOpaPath);
+}
+
 await PaymentEscalationHarness.RunAsync();
 await StreamingHarness.RunAsync();
 await Agt5SurfaceHarness.RunAsync();
@@ -648,7 +850,7 @@ Console.WriteLine("AgentControlSpecification callback exception-safety test pass
 Console.WriteLine("AgentControlSpecification MCP allow path test passed.");
 Console.WriteLine("AgentControlSpecification MCP pre-tool transform test passed.");
 Console.WriteLine("AgentControlSpecification MCP pre-tool deny test passed.");
-Console.WriteLine("AgentControlSpecification MCP required tool_call_id test passed.");
+Console.WriteLine("AgentControlSpecification MCP optional tool_call_id test passed.");
 Console.WriteLine("AgentControlSpecification MCP inner exception propagation test passed.");
 Console.WriteLine("AgentControlSpecification escalation seam conformance tests passed.");
 Console.WriteLine("AgentControlSpecification payment escalation use-case tests passed.");
@@ -718,6 +920,20 @@ static InterventionPointResult MismatchedEscalateResult()
         ActionIdentity: AgentControl.ActionIdentity(originalPolicyInput));
 }
 
+static InterventionPointResult NestedOutputTransformResult()
+{
+    var policyInput = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+    {
+        ["policy_target"] = new Dictionary<string, object?> { ["path"] = "$.output.raw" },
+    });
+    return new InterventionPointResult(
+        new Verdict(Decision.Transform, Transform: new Transform("$policy_target", "token [REDACTED]")),
+        JsonSerializer.SerializeToElement("token [REDACTED]"),
+        policyInput,
+        AgentControl.ActionIdentity(policyInput),
+        true);
+}
+
 static InterventionPointResult Result(Decision decision, object? transformedPolicyTarget = null)
 {
     // AGT D1 fixes the only decision that may rewrite the policy target to
@@ -740,10 +956,13 @@ static InterventionPointResult Result(Decision decision, object? transformedPoli
             Transform: decision == Decision.Transform && transformedPolicyTarget is not null
                 ? new Transform("$policy_target", transformedPolicyTarget)
                 : null),
-        transformedPolicyTarget is null ? null : JsonSerializer.SerializeToElement(transformedPolicyTarget));
+        transformedPolicyTarget is null ? null : JsonSerializer.SerializeToElement(transformedPolicyTarget),
+        TransformedPolicyTargetApplied: transformedPolicyTarget is not null);
 }
 
 file sealed record McpToolArgs(string Text);
+
+file sealed record ShapeOutput(string Raw, Dictionary<string, string> Metadata);
 
 file sealed class EchoChatClient : IAgentControlChatClient<string, string>
 {
@@ -766,6 +985,24 @@ file sealed class RecordingChatClient : IAgentControlChatClient<string, string>
         Calls.Add(request);
         return ValueTask.FromResult($"echo:{request}");
     }
+}
+
+file sealed class FakeAutoGenAgent : IAgent
+{
+    private readonly IMessage reply;
+
+    public FakeAutoGenAgent(IMessage reply)
+    {
+        this.reply = reply;
+    }
+
+    public string Name => "fake-autogen";
+
+    public Task<IMessage> GenerateReplyAsync(
+        IEnumerable<IMessage> messages,
+        GenerateReplyOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(reply);
 }
 
 file sealed class FunctionContext<TArgs, TOutput> : IAgentControlFunctionInvocationContext<TArgs, TOutput>
@@ -972,6 +1209,49 @@ file sealed class LabelingPolicy : IPolicyDispatcher
         {
             decision = "allow",
             result_labels = new[] { "confidential" },
+        }));
+    }
+}
+
+file sealed class NullTransformPolicy : IPolicyDispatcher
+{
+    public ValueTask<JsonElement> EvaluateAsync(
+        JsonElement preparedInvocation,
+        CancellationToken cancellationToken = default)
+    {
+        var interventionPoint = preparedInvocation
+            .GetProperty("input")
+            .GetProperty("intervention_point")
+            .GetString();
+        if (interventionPoint != "input")
+        {
+            return ValueTask.FromResult(JsonSerializer.SerializeToElement(new
+            {
+                decision = "allow",
+            }));
+        }
+
+        return ValueTask.FromResult(JsonSerializer.SerializeToElement(new
+        {
+            decision = "transform",
+            transform = new
+            {
+                path = "$policy_target",
+                value = (object?)null,
+            },
+        }));
+    }
+}
+
+file sealed class EscalatingPolicy : IPolicyDispatcher
+{
+    public ValueTask<JsonElement> EvaluateAsync(
+        JsonElement preparedInvocation,
+        CancellationToken cancellationToken = default)
+    {
+        return ValueTask.FromResult(JsonSerializer.SerializeToElement(new
+        {
+            decision = "escalate",
         }));
     }
 }

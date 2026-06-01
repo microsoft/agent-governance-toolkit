@@ -126,7 +126,7 @@ class PythonCanonicalParityTests(unittest.TestCase):
         annotator_count = fixture["defaults"]["max_annotators_per_point"] + 1
         annotations = "\n".join(f"      a{i}:\n        from: $policy_target" for i in range(annotator_count))
         annotators = "\n".join(f"  a{i}:\n    type: classifier" for i in range(annotator_count))
-        manifest = f"""agent_control_specification_version: 0.3.0-alpha
+        manifest = f"""agent_control_specification_version: 0.3.1-beta
 policies:
   p:
     type: test

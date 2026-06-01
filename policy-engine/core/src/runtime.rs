@@ -8,8 +8,8 @@ use crate::{
     telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetryEventType, TelemetrySink},
     tool_projection::project_tool,
     verdict::{normalize_policy_output, Decision, Transform},
-    EnforcementMode, InterventionPoint, JsonPath, JsonValue, Limits, PathEnv, PerfTelemetry,
-    RuntimeError, Verdict,
+    EnforcementMode, InterventionPoint, JsonPath, JsonValue, Limits, PathEnv,
+    PathSegment, PerfTelemetry, RuntimeError, Verdict,
 };
 use serde_json::Map;
 use std::{
@@ -172,6 +172,7 @@ impl Runtime {
             policy_id.as_deref(),
             annotators,
             duration_ms,
+            result.action_identity.as_deref(),
         );
         if self.perf_telemetry.emit_stage_events() {
             self.emit_event(
@@ -181,8 +182,12 @@ impl Runtime {
                         safe_telemetry_reason_code(result.verdict.reason.as_deref()).as_deref(),
                     )
                     .with_optional_policy_id(policy_id.as_deref())
+                    .with_optional_error_class(
+                        telemetry_error_class(result.verdict.reason.as_deref()).as_deref(),
+                    )
                     .with_enforcement_mode(mode)
-                    .with_duration_ms(duration_ms),
+                    .with_duration_ms(duration_ms)
+                    .with_optional_action_identity(result.action_identity.as_deref()),
             );
         }
         result
@@ -204,13 +209,16 @@ impl Runtime {
 
         self.limits.validate_snapshot(&request.snapshot)?;
 
-        let policy_target_path = JsonPath::parse_with_snapshot_alias(&point_config.policy_target)
-            .map_err(|err| {
-            RuntimeError::ManifestInvalid(format!(
-                "invalid policy_target for intervention point {}: {err}",
-                request.intervention_point
-            ))
-        })?;
+        let policy_target_field = point_config.policy_target.as_str();
+        let policy = &point_config.policy;
+
+        let policy_target_path =
+            JsonPath::parse_with_snapshot_alias(policy_target_field).map_err(|err| {
+                RuntimeError::ManifestInvalid(format!(
+                    "invalid policy_target for intervention point {}: {err}",
+                    request.intervention_point
+                ))
+            })?;
         let policy_target = policy_target_path.resolve(&PathEnv::with_snap(&request.snapshot))?;
         let tool = project_tool(
             &self.manifest,
@@ -221,7 +229,7 @@ impl Runtime {
 
         let preliminary_policy_input = build_policy_input(
             request.intervention_point,
-            &point_config.policy_target,
+            policy_target_field,
             point_config.policy_target_kind.as_deref(),
             policy_target.clone(),
             request.snapshot.clone(),
@@ -244,74 +252,93 @@ impl Runtime {
 
         let final_policy_input = build_policy_input(
             request.intervention_point,
-            &point_config.policy_target,
+            policy_target_field,
             point_config.policy_target_kind.as_deref(),
             policy_target.clone(),
-            request.snapshot,
+            request.snapshot.clone(),
             annotations,
             tool,
         );
         self.limits.validate_policy_input(&final_policy_input)?;
 
-        let policy_config = self
-            .manifest
-            .policies
-            .get(&point_config.policy.id)
-            .ok_or_else(|| {
-                RuntimeError::ManifestInvalid(format!(
-                    "intervention point {} references unknown policy '{}'",
-                    request.intervention_point, point_config.policy.id
-                ))
+        let policy_config = self.manifest.policies.get(&policy.id).ok_or_else(|| {
+            RuntimeError::ManifestInvalid(format!(
+                "intervention point {} references unknown policy '{}'",
+                request.intervention_point, policy.id
+            ))
+        })?;
+
+        let invocation = prepare_policy_invocation(policy_config, policy, &final_policy_input)
+            .map_err(|error| {
+                self.emit_policy_failed(
+                    request.intervention_point,
+                    &policy.id,
+                    policy_config,
+                    &error,
+                );
+                EvaluationFailure {
+                    error,
+                    policy_input: Some(final_policy_input.clone()),
+                }
             })?;
 
-        let invocation =
-            prepare_policy_invocation(policy_config, &point_config.policy, &final_policy_input)
-                .map_err(|error| {
-                    self.emit_policy_failed(
-                        request.intervention_point,
-                        &point_config.policy.id,
-                        policy_config,
-                        &error,
-                    );
-                    EvaluationFailure {
-                        error,
-                        policy_input: Some(final_policy_input.clone()),
-                    }
-                })?;
-
         let policy_start = Instant::now();
-        let policy_output = self.policy.evaluate(&invocation).map_err(|err| {
-            let error = RuntimeError::PolicyInvocationFailed(err.to_string());
-            self.emit_policy_external_event(
-                request.intervention_point,
-                &point_config.policy.id,
-                policy_config,
-                Some(error.reason()),
-                policy_start.elapsed().as_secs_f64() * 1000.0,
-            );
-            self.emit_policy_failed(
-                request.intervention_point,
-                &point_config.policy.id,
-                policy_config,
-                &error,
-            );
-            EvaluationFailure {
-                error,
-                policy_input: Some(final_policy_input.clone()),
-            }
-        })?;
+        let policy_output = catch_unwind(AssertUnwindSafe(|| self.policy.evaluate(&invocation)))
+            .map_err(|payload| {
+                RuntimeError::PolicyInvocationFailed(format!(
+                    "policy dispatcher panicked: {}",
+                    panic_detail(payload.as_ref())
+                ))
+            })
+            .and_then(|result| {
+                result.map_err(|err| RuntimeError::PolicyInvocationFailed(err.to_string()))
+            })
+            .map_err(|error| {
+                self.emit_policy_external_event(
+                    request.intervention_point,
+                    &policy.id,
+                    policy_config,
+                    Some(error.reason()),
+                    policy_start.elapsed().as_secs_f64() * 1000.0,
+                );
+                self.emit_policy_failed(
+                    request.intervention_point,
+                    &policy.id,
+                    policy_config,
+                    &error,
+                );
+                EvaluationFailure {
+                    error,
+                    policy_input: Some(final_policy_input.clone()),
+                }
+            })?;
         self.emit_policy_external_event(
             request.intervention_point,
-            &point_config.policy.id,
+            &policy.id,
             policy_config,
             None,
             policy_start.elapsed().as_secs_f64() * 1000.0,
         );
 
+        self.limits
+            .validate_policy_output(&policy_output)
+            .map_err(|error| {
+                self.emit_policy_failed(
+                    request.intervention_point,
+                    &policy.id,
+                    policy_config,
+                    &error,
+                );
+                EvaluationFailure {
+                    error,
+                    policy_input: Some(final_policy_input.clone()),
+                }
+            })?;
+
         let verdict = normalize_policy_output(policy_output).map_err(|error| {
             self.emit_policy_failed(
                 request.intervention_point,
-                &point_config.policy.id,
+                &policy.id,
                 policy_config,
                 &error,
             );
@@ -347,6 +374,28 @@ impl Runtime {
             }
             _ => None,
         };
+
+        // AGT D1.1 hardening ported from upstream ACS. When a transform
+        // rewrites the policy target, rebuild the snapshot with the rewritten
+        // value and re-validate it against resource limits before the rewrite
+        // is surfaced to the host.
+        if let Some(transformed) = &transformed_policy_target {
+            let transformed_snapshot = snapshot_with_transformed_policy_target(
+                &request.snapshot,
+                &policy_target_path,
+                transformed.clone(),
+            )
+            .map_err(|error| EvaluationFailure {
+                error,
+                policy_input: Some(final_policy_input.clone()),
+            })?;
+            self.limits
+                .validate_snapshot(&transformed_snapshot)
+                .map_err(|error| EvaluationFailure {
+                    error,
+                    policy_input: Some(final_policy_input.clone()),
+                })?;
+        }
 
         let input_identity =
             action_identity(&final_policy_input).map_err(|error| EvaluationFailure {
@@ -453,19 +502,27 @@ impl Runtime {
             }
 
             let dispatch_start = Instant::now();
-            let output = self
-                .annotations
-                .dispatch(annotator_name, &annotator, preliminary_policy_input)
-                .map_err(|err| normalize_annotator_error(annotator_name, err))
-                .inspect_err(|error| {
-                    self.emit_annotator_external_event(
-                        intervention_point,
-                        annotator_name,
-                        Some(error.reason()),
-                        dispatch_start.elapsed().as_secs_f64() * 1000.0,
-                    );
-                    self.emit_annotator_failed(intervention_point, annotator_name, error);
-                })?;
+            let output = catch_unwind(AssertUnwindSafe(|| {
+                self.annotations
+                    .dispatch(annotator_name, &annotator, preliminary_policy_input)
+            }))
+            .map_err(|payload| {
+                RuntimeError::AnnotationFailed(format!(
+                    "annotator dispatcher panicked: {}",
+                    panic_detail(payload.as_ref())
+                ))
+            })
+            .and_then(|result| result)
+            .map_err(|err| normalize_annotator_error(annotator_name, err))
+            .inspect_err(|error| {
+                self.emit_annotator_external_event(
+                    intervention_point,
+                    annotator_name,
+                    Some(error.reason()),
+                    dispatch_start.elapsed().as_secs_f64() * 1000.0,
+                );
+                self.emit_annotator_failed(intervention_point, annotator_name, error);
+            })?;
             self.limits
                 .validate_annotator_output(annotator_name, &output)
                 .inspect_err(|error| {
@@ -490,6 +547,7 @@ impl Runtime {
         policy_id: Option<&str>,
         annotators: Vec<String>,
         duration_ms: f64,
+        action_identity: Option<&str>,
     ) {
         // AGT D2 / AGT-EVIDENCE-1.0 §3: propagate the verbatim artefact
         // string and the sorted pointer keys (not URL values) when the
@@ -506,10 +564,14 @@ impl Runtime {
                 .with_optional_reason_code(
                     safe_telemetry_reason_code(verdict.reason.as_deref()).as_deref(),
                 )
+                .with_optional_error_class(
+                    telemetry_error_class(verdict.reason.as_deref()).as_deref(),
+                )
                 .with_optional_policy_id(policy_id)
                 .with_annotators(annotators.clone())
                 .with_enforcement_mode(mode)
                 .with_duration_ms(duration_ms)
+                .with_optional_action_identity(action_identity)
                 .with_evidence(evidence_artefact.as_deref(), evidence_keys.clone()),
         );
 
@@ -527,10 +589,14 @@ impl Runtime {
                 .with_optional_reason_code(
                     safe_telemetry_reason_code(verdict.reason.as_deref()).as_deref(),
                 )
+                .with_optional_error_class(
+                    telemetry_error_class(verdict.reason.as_deref()).as_deref(),
+                )
                 .with_optional_policy_id(policy_id)
                 .with_annotators(annotators)
                 .with_enforcement_mode(mode)
                 .with_duration_ms(duration_ms)
+                .with_optional_action_identity(action_identity)
                 .with_evidence(evidence_artefact.as_deref(), evidence_keys),
             );
         }
@@ -545,7 +611,8 @@ impl Runtime {
         self.emit_event(
             TelemetryEvent::new(TelemetryEventType::AnnotatorFailed, intervention_point)
                 .with_annotator(annotator_name)
-                .with_reason_code(error.reason()),
+                .with_reason_code(error.reason())
+                .with_optional_error_class(telemetry_error_class(Some(error.reason())).as_deref()),
         );
     }
 
@@ -560,6 +627,7 @@ impl Runtime {
             TelemetryEvent::new(TelemetryEventType::PolicyFailed, intervention_point)
                 .with_policy_id(policy_id)
                 .with_reason_code(error.reason())
+                .with_optional_error_class(telemetry_error_class(Some(error.reason())).as_deref())
                 .with_metadata("policy_type", policy_config.engine_type()),
         );
     }
@@ -578,6 +646,7 @@ impl Runtime {
             TelemetryEvent::new(TelemetryEventType::AnnotatorDispatch, intervention_point)
                 .with_annotator(annotator_name)
                 .with_optional_reason_code(safe_telemetry_reason_code(reason).as_deref())
+                .with_optional_error_class(telemetry_error_class(reason).as_deref())
                 .with_duration_ms(duration_ms),
         );
     }
@@ -597,6 +666,7 @@ impl Runtime {
             TelemetryEvent::new(TelemetryEventType::PolicyEvaluation, intervention_point)
                 .with_policy_id(policy_id)
                 .with_optional_reason_code(safe_telemetry_reason_code(reason).as_deref())
+                .with_optional_error_class(telemetry_error_class(reason).as_deref())
                 .with_duration_ms(duration_ms)
                 .with_metadata("policy_type", policy_config.engine_type()),
         );
@@ -629,6 +699,12 @@ fn safe_telemetry_reason_code(reason: Option<&str>) -> Option<String> {
     } else {
         Some("policy_reason".to_string())
     }
+}
+
+fn telemetry_error_class(reason: Option<&str>) -> Option<String> {
+    reason
+        .filter(|reason| reason.starts_with("runtime_error:"))
+        .map(|_| "runtime_error".to_string())
 }
 
 fn is_identifier_reason_code(reason: &str) -> bool {
@@ -671,6 +747,16 @@ fn apply_transform(
         Err(error) => Err(RuntimeError::TransformInvalid(format!(
             "transform could not be applied: {error}"
         ))),
+    }
+}
+
+fn panic_detail(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "unknown panic".to_string()
     }
 }
 
@@ -731,6 +817,51 @@ fn annotator_error_detail(annotator_name: &str, detail: String) -> String {
     } else {
         format!("{annotator_name}: {detail}")
     }
+}
+
+fn snapshot_with_transformed_policy_target(
+    snapshot: &JsonValue,
+    policy_target_path: &JsonPath,
+    transformed: JsonValue,
+) -> Result<JsonValue, RuntimeError> {
+    if policy_target_path.root() != PathRoot::Snap {
+        return Err(RuntimeError::ManifestInvalid(
+            "policy_target must resolve from snapshot".to_string(),
+        ));
+    }
+
+    let mut snapshot = snapshot.clone();
+    let mut current = &mut snapshot;
+    for segment in policy_target_path.segments() {
+        match segment {
+            PathSegment::Field(field) => match current {
+                JsonValue::Object(map) => {
+                    current = map.get_mut(field).ok_or_else(|| {
+                        RuntimeError::PathMissing(policy_target_path.original().to_string())
+                    })?;
+                }
+                _ => {
+                    return Err(RuntimeError::PathTypeMismatch(
+                        policy_target_path.original().to_string(),
+                    ))
+                }
+            },
+            PathSegment::Index(index) => match current {
+                JsonValue::Array(values) => {
+                    current = values.get_mut(*index).ok_or_else(|| {
+                        RuntimeError::PathMissing(policy_target_path.original().to_string())
+                    })?;
+                }
+                _ => {
+                    return Err(RuntimeError::PathTypeMismatch(
+                        policy_target_path.original().to_string(),
+                    ))
+                }
+            },
+        }
+    }
+    *current = transformed;
+    Ok(snapshot)
 }
 
 #[derive(Debug)]

@@ -1,8 +1,8 @@
 # Agent Control Specification
 
-This document specifies version `0.3.0-alpha` of the Agent Control Specification (ACS). Its status is Draft.
+This document specifies version `0.3.1-beta` of the Agent Control Specification (ACS). Its status is Draft.
 
-The machine readable contract is [`spec/schema/manifest.schema.json`](schema/manifest.schema.json). That schema governs manifest syntax. This document governs runtime semantics, which are the evaluation order, the policy input shape, verdict handling, effect application, and fail closed behavior.
+The machine readable manifest contract is `schema/manifest.schema.json` in artifact kits and `spec/schema/manifest.schema.json` in this repository. That schema governs manifest syntax. This document governs runtime semantics, which are the evaluation order, the policy input shape, verdict handling, effect application, and fail closed behavior.
 
 The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL in this document are to be interpreted as described in BCP 14 [RFC 2119] [RFC 8174] when, and only when, they appear in all capitals, as shown here. The references are listed in section 23.
 
@@ -20,7 +20,7 @@ The runtime is deterministic. Two evaluations with the same manifest, snapshot, 
 
 The runtime fails closed. Any error during evaluation MUST yield a `deny` verdict whose reason is one of the reserved identifiers in section 16. The runtime MUST NOT apply an effect on any path that ends in a runtime error.
 
-The runtime performs no input or output of its own. Network requests, classifier and judge execution, policy engine execution, model calls, tool calls, stream assembly, and parallel dispatch belong to the host. The runtime and host exchange typed values through synchronous dispatcher interfaces.
+Intervention point evaluation performs no input or output of its own. Network requests during evaluation, classifier and judge execution, policy engine execution, model calls, tool calls, stream assembly, and parallel dispatch belong to the host. File based manifest loading may perform bounded HTTPS fetches for URL `extends` during construction. The runtime and host exchange typed values through synchronous dispatcher interfaces.
 
 ### 1.2 Terminology
 
@@ -56,7 +56,7 @@ A manifest is a single YAML or JSON document. The schema rejects unknown top lev
 | --- | --- | --- |
 | `agent_control_specification_version` | yes | Non empty version string. |
 | `metadata` | no | Free form value the runtime does not interpret. |
-| `extends` | no | Ordered array of parent manifest paths, defined in section 2.2. |
+| `extends` | no | Ordered array of parent manifest paths or HTTPS URLs, defined in section 2.2. |
 | `policies` | yes | Map of named policy definitions, defined in section 12. |
 | `intervention_points` | yes | Map of intervention point configurations, defined in section 4. |
 | `tools` | no | Catalog of tools used for projection, defined in section 9. |
@@ -68,11 +68,13 @@ A manifest MUST be validated before any evaluation uses it. A manifest that fail
 
 ### 2.1 Version
 
-`agent_control_specification_version` MUST be a non empty string. This document describes the value `0.3.0-alpha`.
+`agent_control_specification_version` MUST be a non empty string. This document describes the value `0.3.1-beta`.
 
 ### 2.2 extends
 
-`extends` is an ordered array of non empty path strings. A file based loader resolves each entry relative to the including manifest, merges parents before children, and validates the merged manifest as a whole. Merging is additive: a name defined in more than one manifest MUST be either identical in every manifest or non conflicting (for an intervention point, only its `annotations` may differ and are unioned). A conflicting duplicate definition MUST fail closed. Loading MUST also fail closed on a reference cycle, a missing file, or a version that differs between a parent and a child. A loader that parses an in memory string (including every FFI loader) cannot resolve `extends` against the file system; it may retain `extends` as data, but constructing an enforcing runtime from a manifest whose `extends` is non empty MUST fail closed, so such loaders MUST be given an already merged manifest.
+`extends` is an ordered array of non empty parent references. A reference MAY be a string path, a string HTTPS URL, or an object with `url` and optional `integrity` or `sha256`. Existing string path entries remain valid. A file based loader resolves path entries relative to the including manifest and confines them to the directory tree rooted at the top level manifest. A file based loader resolves URL entries as HTTPS only, fetches them without ambient credentials, applies finite timeout, body size, and redirect limits, merges parents before children, and validates the merged manifest as a whole. Plain `http` and all non HTTPS URL schemes MUST fail closed. URL entries without a hash pin are trusted because the host chose that URL. URL entries with `integrity` MUST use `sha256-<base64>` over the fetched bytes. URL entries with `sha256` MUST use a 64 character hexadecimal SHA-256 digest over the fetched bytes. A mismatch MUST fail closed. `integrity` and `sha256` MUST NOT appear together.
+
+Merging is additive. A name defined in more than one manifest MUST be either identical in every manifest or non conflicting. Metadata object keys are merged additively, with nested object keys merged recursively when duplicate object values are non conflicting. For an intervention point, only its `annotations` may differ and are unioned. A conflicting duplicate definition MUST fail closed. Loading MUST also fail closed on a reference cycle, a missing file, a failed URL fetch, a URL body limit breach, or a version that differs between a parent and a child. A construction time load failure MAY surface by refusing to construct the runtime because no runtime exists yet to return an intervention verdict. A loader that parses an in memory string, including every FFI loader, cannot resolve `extends` against the file system or network. It may retain `extends` as data, but constructing an enforcing runtime from a manifest whose `extends` is non empty MUST fail closed, so such loaders MUST be given an already merged manifest.
 
 ## 3. Paths
 
@@ -176,6 +178,8 @@ When a stable string form of the policy input is required, the runtime sorts obj
 
 At a tool intervention point the runtime resolves `tool_name_from` to a string and projects the matching catalog entry into `tool`. A `tool_name_from` value that does not resolve to a string MUST fail closed. A tool name absent from the catalog MUST fail closed with `runtime_error:tool_unknown`. `tool_name_from` MUST NOT appear on a non tool intervention point, and a manifest that places it elsewhere MUST fail closed with `runtime_error:manifest_invalid`.
 
+Tool call snapshots MAY carry `tool_call.id` as a caller supplied invocation identity. When present, hosts SHOULD preserve the same value across the surrounding `pre_tool_call` and `post_tool_call` evaluations. The field is not required by the runtime snapshot model.
+
 ## 10. Annotators
 
 A top level `annotators` entry is a declaration whose `type` is `classifier`, `llm`, or `endpoint` and which MAY carry other host defined fields. A declaration does no work on its own.
@@ -185,6 +189,8 @@ An intervention point opts into an annotator by adding a member to `annotations`
 The runtime invokes the opted in annotators in ascending lexicographic order of annotator name. It places each output only under `annotations.<name>`. Annotator output MUST NOT overwrite or shadow `snapshot`, `policy_target`, `tool`, `intervention_point`, or any other root policy input member. An annotator output that is oversized, malformed, or contains a `reason` value with the reserved `runtime_error:` prefix MUST fail closed with `runtime_error:annotation_failed`. An annotator error MUST fail closed with `runtime_error:annotation_failed`. An annotator timeout MUST fail closed with `runtime_error:annotation_timeout`.
 
 ACS defines no built in classifier or judge engine. Annotator execution is always host provided.
+
+An implementation MAY ship host side default annotator dispatchers. A default `llm` dispatcher MAY provide provider presets for OpenAI compatible chat completions, Azure OpenAI chat completions, Amazon Bedrock Converse, Gemini `generateContent`, and Ollama chat. These presets MUST preserve runtime determinism by keeping network input and output outside pure decision logic. Provider credentials MUST come from explicit manifest fields or named environment variables. Provider responses MUST be normalized to a JSON annotation before policy execution. A malformed provider response, provider error, missing credential, missing label field, or invalid model JSON MUST fail closed as an annotator error. The normalized shape SHOULD include `label` and `raw` members, and a host MAY preserve a configurable `label_field` for model JSON.
 
 ## 11. Information flow control
 
@@ -252,7 +258,7 @@ The host owns propagation. A host that practices information-flow control persis
 
 ## 14. Effects
 
-An effect changes the policy target and nothing else. Every effect `path` MUST be rooted at `$policy_target`. A path with any other root MUST fail closed with `runtime_error:effect_target_forbidden`. An effect MUST NOT change the snapshot, the annotations, the projected tool, or any host state.
+An effect changes the policy target and nothing else. Every effect `path` MUST be rooted at `$policy_target`. A path with any other root MUST fail closed with `runtime_error:effect_target_forbidden`. A path that cannot be parsed as an ACS effect path MUST fail closed with `runtime_error:effect_invalid` before the root check. An effect MUST NOT change the snapshot, the annotations, the projected tool, or any host state.
 
 | Type | Required field | Action |
 | --- | --- | --- |
@@ -267,13 +273,13 @@ A `redact` effect MUST provide exactly one of `pattern`, `values`, or `spans`. T
 
 The `values` form provides an array of literal strings and an optional string `replacement`. The runtime finds every non empty literal occurrence, including overlapping occurrences, converts byte offsets to character offsets, sorts the spans, merges overlapping or adjacent spans, and replaces each merged span with `replacement` or `[REDACTED]` when `replacement` is absent. Empty values produce no span.
 
-The `spans` form is the low level form. A redaction span has a non negative integer `start`, a non negative integer `end`, and a string `replacement`. Spans MUST be ordered, non overlapping, and within the bounds of the target string counted in characters. A span set that breaks these rules MUST fail closed with `runtime_error:effect_invalid`. A `redact` target that is not a string MUST fail closed with the same reason.
+The `spans` form is the low level form. A redaction span has a non negative integer `start`, a non negative integer `end`, and a string `replacement`. Span offsets count Unicode scalar values in the target string. They do not count UTF-8 bytes, UTF-16 code units, or grapheme clusters. Spans MUST be ordered, non overlapping, and within the bounds of the target string counted in Unicode scalar values. A span set that breaks these rules MUST fail closed with `runtime_error:effect_invalid`. A `redact` target that is not a string MUST fail closed with the same reason.
 
 The runtime applies effects in array order. The result of applying effects to the policy target is the transformed policy target. In `evaluate_only` mode the runtime validates effects but applies none and returns no transformed policy target.
 
 ## 15. Resource limits
 
-A runtime MUST enforce finite limits while loading file based manifest extends, building policy input, serializing policy input, and invoking annotators. A host MAY configure those limits. A limit breach MUST fail closed with `runtime_error:resource_limit_exceeded`, except an individual annotator output limit breach MUST fail closed with `runtime_error:annotation_failed`.
+A runtime MUST enforce finite limits while loading file based manifest extends, fetching HTTPS manifest extends, building policy input, serializing policy input, invoking annotators, normalizing policy output, and validating or applying effects. A host MAY configure those limits. Policy output is measured as canonical JSON before verdict normalization. A transformed policy target produced by applied effects MUST be reinserted into the request snapshot for snapshot limit validation before the runtime returns it to the host. A limit breach MUST fail closed with `runtime_error:resource_limit_exceeded`, except an individual annotator output limit breach MUST fail closed with `runtime_error:annotation_failed`.
 
 ## 16. Reserved reasons
 
@@ -295,15 +301,26 @@ A runtime failure yields a `deny` verdict whose `reason` is one of the identifie
 | `runtime_error:resource_limit_exceeded` | Evaluation or manifest loading exceeded a configured resource limit. |
 | `runtime_error:approval_action_mismatch` | An approved action identity did not match the current action identity. |
 
+An SDK enforcement layer MAY also fail closed with a reserved `runtime_error:` reason that the core runtime never produces. Such a reason is SDK produced and is attributed to its producing layer. The reasons below are reserved for SDK enforcement helpers.
+
+| Reason | Producer | Cause |
+| --- | --- | --- |
+| `runtime_error:approval_resolver_failed` | `sdk-approval` | An SDK approval resolver raised, returned an unrecognized result, or otherwise failed closed. |
+| `runtime_error:streaming_unsupported` | `sdk-streaming` | An SDK streaming helper could not assemble a complete response snapshot for evaluation and failed closed. |
+| `runtime_error:adapter_unsupported` | `sdk-adapter` | An SDK adapter detected an unmediated framework method or unsupported call shape and failed closed instead of invoking upstream code. |
+| `runtime_error:request_invalid` | `sdk-wire` | A JSON wire binding received a malformed intervention request envelope and failed closed before policy input construction. |
+
+A machine readable inventory of every reserved reason with producer attribution lives in [`spec/reserved-reasons.json`](reserved-reasons.json). A policy MUST NOT emit any reason that starts with `runtime_error:`, including the SDK layer reasons.
+
 ## 17. Host obligations
 
-The runtime returns a verdict and an optional transformed policy target. The host enforces them. In `enforce` mode the host MUST NOT carry out the action of a `deny` verdict, MUST route an `escalate` verdict to an approval path and MUST NOT carry out the action until that path resolves, and MUST use the transformed policy target in place of the original policy target when one is present. In `evaluate_only` mode the host MAY carry out the original action and SHOULD record the verdict. A host that ignores a `deny` or an unresolved `escalate` is not conformant.
+The runtime returns a verdict and, for effect-applying verdicts, an optional transformed policy target. The host enforces them. In `enforce` mode the host MUST NOT carry out the action of a `deny` verdict, MUST route an `escalate` verdict to an approval path and MUST NOT carry out the action until that path resolves, and MUST use the transformed policy target in place of the original policy target when one is present. In `evaluate_only` mode the host MAY carry out the original action and SHOULD record the verdict. A host that ignores a `deny` or an unresolved `escalate` is not conformant.
 
 ### 17.1 Approval path
 
 The approval path is a host concern and is not part of the policy input contract. An SDK MAY expose it as an approval resolver. The resolver is a host supplied callback that the SDK consults only for an `escalate` verdict in `enforce` mode. The resolver payload MUST include the action identity returned by evaluation. The approval outcome MUST carry the approved action identity for an allow or suspend result. The SDK MUST rederive the identity from the current policy input before proceeding and MUST fail closed with `runtime_error:approval_action_mismatch` when it differs from the approved identity. The path resolves to one of three outcomes.
 
-1. Allow. The host carries out the action. An `escalate` verdict applies no effects, so the host MUST use the original policy target and MUST NOT apply any transformed policy target carried by the verdict.
+1. Allow. The host carries out the action. `escalate` verdicts validate effects but do not return or apply transformed targets.
 2. Deny. The host MUST NOT carry out the action.
 3. Suspend. The host stops the current run and hands the decision to an out of band process. Suspension is terminal for the run. Resumption is the host's responsibility and is not a runtime operation.
 
@@ -319,11 +336,11 @@ A tool intervention point runs once for each concrete tool invocation. For paral
 
 ## 19. Telemetry and audit
 
-A host MAY supply a telemetry sink. Events are low cardinality. They include `intervention_point.evaluated`, the decision events `intervention_point.allowed`, `intervention_point.denied`, `intervention_point.warned`, and `intervention_point.escalated`, the event `intervention_point.effect_applied`, the annotator events `annotator.started` and `annotator.failed`, and the policy events `policy.invoked` and `policy.failed`. An event carries stable, low cardinality metadata such as the intervention point, the policy type, the decision, and the reason. The runtime MUST NOT emit policy target values, tool arguments or results, annotation values, model messages, secrets, or personal data.
+A host MAY supply a telemetry sink. Events are content safe and stable. Known event kinds are `decision`, `annotator_dispatch`, `policy_evaluation`, `evaluation_timing`, `effect_applied`, `annotator_failed`, and `policy_failed`. An event carries stable metadata such as the intervention point, enforcement mode, decision, reason code, error class, policy id, annotator names, duration, and effect count. A runtime MAY include the action identity from section 13 as a correlation identifier. The runtime MUST NOT emit policy target values, tool arguments or results, annotation values, model messages, secrets, or personal data.
 
-A host MAY derive an audit record from each evaluation. The action identity defined in section 13, which is the `sha256:` digest of the canonical policy input, is the stable key that ties an audit record to the exact intervention point, policy target, snapshot, annotations, and projected tool data the policy evaluated. An audit record SHOULD record the intervention point, the mode, the verdict, the reason, and the action identity, and it MUST follow the same redaction rule as telemetry so that it carries no sensitive value.
+A host MAY derive an audit record from each evaluation. The action identity defined in section 13, which is the `sha256:` digest of the canonical policy input, is the stable key that ties an audit record to the exact intervention point, policy target, snapshot, annotations, and projected tool data the policy evaluated. An audit record SHOULD record the intervention point, the mode, the verdict, the reason, the error class for runtime errors, and the action identity when available. It MUST follow the same redaction rule as telemetry so that it carries no sensitive value.
 
-The telemetry and audit contract is transport neutral. ACS ships an OpenTelemetry binding in the `integrations/otel` component that maps these events to OpenTelemetry counters and histograms, described in [`docs/observability.md`](../docs/observability.md). That binding is one supported integration and is not required for conformance. A host MAY route the same events to any sink it chooses.
+The telemetry and audit contract is transport neutral. ACS ships an OpenTelemetry binding in the `agent_control_specification_otel` integration crate that maps these events to OpenTelemetry counters and histograms, described in [`docs/observability.md`](../docs/observability.md). That binding is one supported integration and is not required for conformance. A host MAY route the same events to any sink it chooses.
 
 ## 20. Conformance
 
@@ -369,7 +386,7 @@ The current version carries the `-alpha` pre release tag and the status Draft. W
 
 **[RFC 8259]** Bray, T., Ed., "The JavaScript Object Notation (JSON) Data Interchange Format", RFC 8259, December 2017.
 
-**[SCHEMA]** Agent Control Specification manifest schema, [`spec/schema/manifest.schema.json`](schema/manifest.schema.json).
+**[SCHEMA]** Agent Control Specification manifest schema, `schema/manifest.schema.json` in artifact kits and `spec/schema/manifest.schema.json` in this repository.
 
 **[OPA]** Open Policy Agent and the Rego policy language, `https://www.openpolicyagent.org/`.
 
@@ -377,7 +394,7 @@ The current version carries the `-alpha` pre release tag and the status Draft. W
 
 **[THREAT-MODEL]** Agent Control Specification threat and security model, [`docs/security-model.md`](../docs/security-model.md).
 
-**[IMPL-DESIGN]** Agent Control Specification stateless implementation design, [`docs/design/stateless-implementation-design.md`](../docs/design/stateless-implementation-design.md).
+**[IMPL-DESIGN]** Agent Control Specification stateless implementation design, [`docs/stateless-runtime.md`](../docs/stateless-runtime.md).
 
 ## Appendix A. Worked example
 
@@ -386,7 +403,7 @@ This appendix is informative. It walks one evaluation from end to end.
 A host governs the `input` intervention point with a custom policy. The manifest binds the policy and selects the user text as the policy target.
 
 ```yaml
-agent_control_specification_version: 0.3.0-alpha
+agent_control_specification_version: 0.3.1-beta
 metadata:
   name: worked-example
 policies:

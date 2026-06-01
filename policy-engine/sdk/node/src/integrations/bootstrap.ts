@@ -1,13 +1,13 @@
 import { statSync } from "node:fs";
-import { delimiter, dirname, isAbsolute, join, parse, resolve } from "node:path";
+import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 
 import { AgentControl, PerfTelemetry } from "../index";
 import type { ApprovalResolver } from "../index";
 import { createGhcpExtension, GhcpExtension, GhcpHooksOptions } from "./ghcp";
-import { resolveBundledOpa } from "./opa-binary";
+import { ensureOpaResolvable, OPA_PATH_ENV } from "./opa-binary";
 
 const DEFAULT_MANIFEST_ENV = "ACS_MANIFEST";
-const DEFAULT_OPA_ENV = "ACS_OPA_PATH";
+const DEFAULT_OPA_ENV = OPA_PATH_ENV;
 // Deliberately ACS-specific: a guardrail extension must never silently pick up
 // an unrelated `manifest.yaml` from an ancestor directory. Adopters who want a
 // generic name can pass `options.manifestNames` or `options.manifestPath`.
@@ -130,60 +130,6 @@ function searchUpward(startDir: string, names: string[]): string | undefined {
     if (parent === dir) return undefined;
     dir = parent;
   }
-}
-
-/**
- * Ensure `opa` is resolvable for the runtime's child processes and return the
- * resolved path. Throws a clear, actionable error rather than letting the
- * runtime fail opaquely at construction.
- */
-function ensureOpaResolvable(opaHint: string | undefined): string {
-  if (opaHint !== undefined && opaHint !== "") {
-    // An explicit path always wins over the bundled binary or system PATH.
-    const st = statSafe(opaHint);
-    if (st === undefined) {
-      throw new Error(`ACS: opa not found at the path provided (options.opaPath / $${DEFAULT_OPA_ENV}): ${opaHint}`);
-    }
-    const dir = st.isDirectory() ? opaHint : dirname(opaHint);
-    prependToPath(dir);
-  } else {
-    // Prefer the vendored per-platform binary over whatever happens to be on
-    // PATH, so adopters get a pinned, reproducible opa with zero setup.
-    const bundled = resolveBundledOpa();
-    if (bundled !== undefined) prependToPath(dirname(bundled));
-  }
-
-  const resolved = findOnPath("opa");
-  if (resolved === undefined) {
-    throw new Error(
-      "ACS: the bundled policy dispatcher requires the 'opa' binary, which could not be located. " +
-        "Normally a vendored copy ships via the agent-control-specification-opa-* optional dependency; " +
-        "if that is unavailable for your platform, install Open Policy Agent " +
-        "(https://www.openpolicyagent.org/docs/latest/#running-opa) and add it to PATH, " +
-        `or set $${DEFAULT_OPA_ENV} to the binary or its directory.`,
-    );
-  }
-  return resolved;
-}
-
-function prependToPath(dir: string): void {
-  const current = process.env.PATH ?? "";
-  const entries = current.split(delimiter);
-  if (entries.includes(dir)) return;
-  process.env.PATH = current === "" ? dir : `${dir}${delimiter}${current}`;
-}
-
-function findOnPath(binary: string): string | undefined {
-  const pathValue = process.env.PATH ?? "";
-  const candidates = process.platform === "win32" ? [binary, `${binary}.exe`, `${binary}.cmd`] : [binary];
-  for (const dir of pathValue.split(delimiter)) {
-    if (dir === "") continue;
-    for (const name of candidates) {
-      const candidate = join(dir, name);
-      if (isFile(candidate)) return candidate;
-    }
-  }
-  return undefined;
 }
 
 function maybeLoadEnv(loadEnv: boolean | string | string[], manifestPath: string): void {

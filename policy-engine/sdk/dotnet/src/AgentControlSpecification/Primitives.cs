@@ -174,6 +174,7 @@ public sealed record InterventionPointResult(
     JsonElement? TransformedPolicyTarget = null,
     JsonElement? PolicyInput = null,
     string? ActionIdentity = null,
+    bool TransformedPolicyTargetApplied = false,
     string? InputIdentity = null,
     string? EnforcedIdentity = null);
 

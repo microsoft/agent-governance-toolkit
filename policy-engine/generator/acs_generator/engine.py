@@ -18,7 +18,7 @@ Schema: {name, guarded_points, annotators, annotations, tools, rules, warnings}.
 Valid intervention points: %s.
 Annotator types: classifier, llm, endpoint. Decisions: allow, warn, deny, escalate.
 Effects must use append, replace, or redact and paths beginning with $policy_target.
-Rule conditions are Rego body lines that may read only input.intervention_point, input.annotations.<annotator>, input.policy_target.value, input.tool.name, and constants.
+Rule conditions are Rego body lines that may read only input.intervention_point, input.annotations.<annotator>, input.policy_target.value, input.tool.name, input.tool.id, and constants.
 Every rule must set "point" to one of the valid intervention points and include at least one condition that selects when it fires, unless its decision is "allow" with no effects. Never emit a rule with an empty point or empty conditions.
 """ % ", ".join(INTERVENTION_POINT_NAMES)
 

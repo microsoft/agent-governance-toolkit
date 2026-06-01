@@ -99,7 +99,98 @@ export function transformedOr<T extends JsonValue>(
   // other verdict (allow, warn, deny, escalate) keeps the fallback.
   if (mode !== ENFORCE_MODE) return fallback;
   if (!appliesTransform(result.verdict.decision)) return fallback;
-  return result.transformedPolicyTarget === undefined ? fallback : result.transformedPolicyTarget;
+  if (result.transformedPolicyTargetApplied) {
+    return spliceNestedPolicyTarget(result, fallback, result.transformedPolicyTarget ?? null);
+  }
+  return result.transformedPolicyTarget === undefined
+    ? fallback
+    : spliceNestedPolicyTarget(result, fallback, result.transformedPolicyTarget);
+}
+
+function spliceNestedPolicyTarget<T extends JsonValue>(
+  result: InterventionPointResult,
+  fallback: T,
+  transformed: JsonValue,
+): JsonValue {
+  const relativePath = relativeSnapshotPath(policyTargetPath(result));
+  if (relativePath === undefined || relativePath.length === 0) return transformed;
+  const cloned = cloneJsonValue(fallback);
+  return setRelativeJsonPath(cloned, relativePath, transformed) ? cloned : transformed;
+}
+
+function policyTargetPath(result: InterventionPointResult): string | undefined {
+  if (!isObject(result.policyInput)) return undefined;
+  const policyTarget = result.policyInput.policy_target ?? result.policyInput.policyTarget;
+  if (!isObject(policyTarget)) return undefined;
+  return typeof policyTarget.path === "string" ? policyTarget.path : undefined;
+}
+
+function relativeSnapshotPath(path: string | undefined): string | undefined {
+  if (path === undefined) return undefined;
+  const rest = path.startsWith("$.")
+    ? path.slice(2)
+    : path.startsWith("$snap.")
+      ? path.slice(6)
+      : undefined;
+  if (rest === undefined) return undefined;
+  let firstSegmentEnd = rest.length;
+  for (const delimiter of [".", "["]) {
+    const index = rest.indexOf(delimiter);
+    if (index >= 0) firstSegmentEnd = Math.min(firstSegmentEnd, index);
+  }
+  return firstSegmentEnd === rest.length ? "" : rest.slice(firstSegmentEnd);
+}
+
+function cloneJsonValue<T extends JsonValue>(value: T): T {
+  return value === undefined ? value : JSON.parse(JSON.stringify(value)) as T;
+}
+
+function setRelativeJsonPath(root: JsonValue, path: string, value: JsonValue): boolean {
+  const segments = relativePathSegments(path);
+  if (segments.length === 0) return false;
+  let current: JsonValue = root;
+  for (const segment of segments.slice(0, -1)) {
+    if (typeof segment === "string") {
+      if (!isObject(current) || !(segment in current)) return false;
+      current = current[segment];
+    } else {
+      if (!Array.isArray(current) || segment < 0 || segment >= current.length) return false;
+      current = current[segment];
+    }
+  }
+  const last = segments[segments.length - 1];
+  if (typeof last === "string") {
+    if (!isObject(current) || !(last in current)) return false;
+    current[last] = value;
+    return true;
+  }
+  if (!Array.isArray(current) || last < 0 || last >= current.length) return false;
+  current[last] = value;
+  return true;
+}
+
+function relativePathSegments(path: string): Array<string | number> {
+  const segments: Array<string | number> = [];
+  let index = 0;
+  while (index < path.length) {
+    if (path[index] === ".") {
+      index += 1;
+      const start = index;
+      while (index < path.length && path[index] !== "." && path[index] !== "[") index += 1;
+      if (start === index) return [];
+      segments.push(path.slice(start, index));
+    } else if (path[index] === "[") {
+      const end = path.indexOf("]", index);
+      if (end < 0) return [];
+      const parsed = Number.parseInt(path.slice(index + 1, end), 10);
+      if (!Number.isInteger(parsed)) return [];
+      segments.push(parsed);
+      index = end + 1;
+    } else {
+      return [];
+    }
+  }
+  return segments;
 }
 
 export function normalizeMode(mode: EnforcementMode = ENFORCE_MODE as EnforcementMode): EnforcementMode {
@@ -133,16 +224,20 @@ export function extractAdapterOptions(value: unknown): AdapterOptions {
 }
 
 export function assertAgentControl(control: unknown): asserts control is RunnableControl {
-  if (
+  if (!hasAgentControlSurface(control)) {
+    throw new TypeError("control must expose evaluateInterventionPoint(), run(), runTool(), protectTool(), and withSession()");
+  }
+}
+
+export function hasAgentControlSurface(control: unknown): control is RunnableControl {
+  return (
     !isObject(control) ||
     typeof control.evaluateInterventionPoint !== "function" ||
     typeof control.run !== "function" ||
     typeof control.runTool !== "function" ||
     typeof control.protectTool !== "function" ||
     typeof control.withSession !== "function"
-  ) {
-    throw new TypeError("control must expose evaluateInterventionPoint(), run(), runTool(), protectTool(), and withSession()");
-  }
+  ) ? false : true;
 }
 
 export function assertObject(value: unknown, label: string): asserts value is Record<PropertyKey, unknown> {

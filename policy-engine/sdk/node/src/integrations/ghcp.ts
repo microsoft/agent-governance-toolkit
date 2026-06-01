@@ -14,11 +14,16 @@ const SYNTHETIC_ID_PREFIX = "__acs_ghcp_synthetic__";
 /**
  * How a tool call's id was determined for the snapshot. Surfaced to the logger
  * so live differences between the real CLI and the event stream are debuggable.
- * - `real-id`        the host supplied `toolCallId` directly (preferred).
- * - `event-bound`    matched a prior `assistant.message` tool request via onEvent.
- * - `synthetic`      no id available; a per-session monotonic id was minted.
+ * - `real-id`        the host supplied `toolCallId` directly (preferred); it is
+ *                    carried into the snapshot.
+ * - `event-bound`    matched a prior `assistant.message` tool request via onEvent;
+ *                    that host id is carried into the snapshot.
+ * - `synthetic`      no host id available; the snapshot omits `tool_call.id` and a
+ *                    per-session monotonic id is minted for internal pre/post
+ *                    correlation only (it never enters the snapshot).
  * - `post-fallback`  post-tool could not bind to a prior pre-tool admission and
- *                    evaluated from its own hook input instead.
+ *                    evaluated from its own hook input instead; the snapshot
+ *                    carries the host id when present and omits it otherwise.
  */
 export type GhcpBindingMode = "real-id" | "event-bound" | "synthetic" | "post-fallback";
 
@@ -140,6 +145,7 @@ interface PendingEventToolCall {
 
 interface AdmittedToolCall {
   id: string;
+  snapshotId: string | undefined;
   name: string;
   args: JsonValue;
   mode: GhcpBindingMode;
@@ -175,6 +181,12 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
     const next = (syntheticCounterBySession.get(sessionId) ?? 0) + 1;
     syntheticCounterBySession.set(sessionId, next);
     return `${SYNTHETIC_ID_PREFIX}:${sessionId}:${next}`;
+  }
+
+  function ghcpToolCall(id: string | undefined, name: string, args: JsonValue): Record<string, JsonValue> {
+    const toolCall: Record<string, JsonValue> = { name, args };
+    if (id !== undefined) toolCall.id = id;
+    return toolCall;
   }
 
   /**
@@ -312,19 +324,19 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
           return undefined;
         }
         const args = asObject(input.toolArgs ?? {});
-        const bound = bindPre(sessionId, toolName, args, input.toolCallId);
+        const bound = bindPre(sessionId, toolName, args, stringFromUnknown(input.toolCallId));
         const result = await evaluate(
           InterventionPoint.PreToolCall,
           sessionId,
           "onPreToolUse",
           invocation,
           input,
-          { tool_call: { id: bound.id, name: toolName, args } },
+          { tool_call: ghcpToolCall(bound.snapshotId, toolName, args) },
         );
         const g = await gate(InterventionPoint.PreToolCall, sessionId, "onPreToolUse", result, toolName, bound.mode);
         if (g !== undefined) return toPermission(g)!;
         const effectiveArgs = transformedOr(result, args, mode);
-        rememberAdmitted(sessionId, { id: bound.id, name: toolName, args: effectiveArgs, mode: bound.mode });
+        rememberAdmitted(sessionId, { id: bound.correlationId, snapshotId: bound.snapshotId, name: toolName, args: effectiveArgs, mode: bound.mode });
         if (effectiveArgs !== args) return { modifiedArgs: effectiveArgs };
         return undefined;
       },
@@ -336,7 +348,7 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
           log({ hook: "onPostToolUse", sessionId, interventionPoint: InterventionPoint.PostToolCall, decision: Decision.Allow, reason: "tool not governed; passed through", toolName });
           return undefined;
         }
-        const bound = bindPost(sessionId, toolName, input.toolCallId);
+        const bound = bindPost(sessionId, toolName, stringFromUnknown(input.toolCallId));
         // Prefer the admitted (possibly transformed) args; fall back to the hook's own.
         const args = bound.args ?? asObject(input.toolArgs ?? {});
         const toolResult = asObject(input.toolResult ?? null);
@@ -347,7 +359,7 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
           invocation,
           input,
           {
-            tool_call: { id: bound.id, name: bound.name, args },
+            tool_call: ghcpToolCall(bound.snapshotId, bound.name, args),
             tool_result: toolResult,
           },
         );
@@ -431,34 +443,37 @@ export function createGhcpExtension(control: AgentControl, options: GhcpHooksOpt
   }
 
   // Best-effort pre-tool binding: real host id > event-bound id > synthesized.
-  // Never fails — an unbindable call still gets evaluated under a fresh id.
+  // Never fails. `snapshotId` is the host id when one exists and undefined when
+  // it does not (the snapshot then omits tool_call.id). `correlationId` is always
+  // present and is used only for internal pre/post admission matching.
   function bindPre(
     sessionId: string,
     toolName: string,
     args: JsonValue,
     toolCallId: string | undefined,
-  ): { id: string; mode: GhcpBindingMode } {
-    if (toolCallId !== undefined) return { id: toolCallId, mode: "real-id" };
+  ): { correlationId: string; snapshotId: string | undefined; mode: GhcpBindingMode } {
+    if (toolCallId !== undefined) return { correlationId: toolCallId, snapshotId: toolCallId, mode: "real-id" };
     const match = popPending(sessionId, toolName, args);
-    if (match !== null && match.ambiguous === false) return { id: match.id, mode: "event-bound" };
-    return { id: syntheticId(sessionId), mode: "synthetic" };
+    if (match !== null && match.ambiguous === false) return { correlationId: match.id, snapshotId: match.id, mode: "event-bound" };
+    return { correlationId: syntheticId(sessionId), snapshotId: undefined, mode: "synthetic" };
   }
 
   // Best-effort post-tool binding: real id > FIFO same-name admission > fallback
   // to the hook's own input. Never rejects purely because binding failed.
+  // `snapshotId` carries the host id when one exists and is undefined otherwise.
   function bindPost(
     sessionId: string,
     toolName: string,
     toolCallId: string | undefined,
-  ): { id: string; name: string; args?: JsonValue; mode: GhcpBindingMode } {
+  ): { snapshotId: string | undefined; name: string; args?: JsonValue; mode: GhcpBindingMode } {
     if (toolCallId !== undefined) {
       const byId = popAdmittedById(sessionId, toolCallId);
-      if (byId !== undefined) return { id: byId.id, name: byId.name, args: byId.args, mode: byId.mode };
+      if (byId !== undefined) return { snapshotId: byId.snapshotId, name: byId.name, args: byId.args, mode: byId.mode };
     }
     const byName = popAdmitted(sessionId, toolName);
-    if (byName !== undefined) return { id: byName.id, name: byName.name, args: byName.args, mode: byName.mode };
+    if (byName !== undefined) return { snapshotId: byName.snapshotId, name: byName.name, args: byName.args, mode: byName.mode };
     log({ hook: "onPostToolUse", sessionId, interventionPoint: InterventionPoint.PostToolCall, decision: Decision.Allow, reason: "no prior admission; evaluated from post-tool input", toolName, binding: "post-fallback" });
-    return { id: toolCallId ?? syntheticId(sessionId), name: toolName, mode: "post-fallback" };
+    return { snapshotId: toolCallId, name: toolName, mode: "post-fallback" };
   }
 
   // FIFO first match by tool name; the queue preserves admission order.
@@ -609,7 +624,7 @@ function asJsonValue(value: unknown): JsonValue | undefined {
 }
 
 function stringFromUnknown(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {

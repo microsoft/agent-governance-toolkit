@@ -6,7 +6,7 @@ using AgentControlSpecification;
 internal static class StreamingHarness
 {
     private const string CodingAssistantManifest = """
-agent_control_specification_version: 0.3.0-alpha
+agent_control_specification_version: 0.3.1-beta
 policies:
   coding_policy:
     type: custom
@@ -77,6 +77,31 @@ annotators:
         AssertEqual(Decision.Allow, toolResult.PreToolCallResult.Verdict.Decision, "redacted shell command should be allowed.");
         AssertEqual(Decision.Allow, toolResult.PostToolCallResult.Verdict.Decision, "post_tool_call should allow benign results.");
 
+        var explicitStreamingUpstreamCalls = 0;
+        try
+        {
+            await new AgentControl(new ThrowingRuntime()).RunModelAsync(
+                new Dictionary<string, object?> { ["stream"] = true, ["messages"] = Array.Empty<object>() },
+                (_, _) =>
+                {
+                    explicitStreamingUpstreamCalls++;
+                    return ValueTask.FromResult(new Dictionary<string, object?> { ["ok"] = true });
+                });
+            throw new InvalidOperationException("explicit streaming RunModelAsync request should fail closed.");
+        }
+        catch (AgentControlBlockedException ex)
+        {
+            AssertEqual(InterventionPoint.PreModelCall, ex.InterventionPoint, "explicit streaming RunModelAsync request should block at pre_model_call.");
+            AssertEqual("runtime_error:streaming_unsupported", ex.Result.Verdict.Reason, "explicit streaming RunModelAsync request should use streaming unsupported.");
+            AssertEqual(0, explicitStreamingUpstreamCalls, "explicit streaming RunModelAsync request should not invoke upstream.");
+        }
+
+        var explicitStreamingRequest = new Dictionary<string, object?> { ["stream"] = true, ["messages"] = Array.Empty<object>() };
+        var bufferedStream = await new AgentControl(new DelegateRuntime(_ => AllowResult())).RunModelStreamAsync(
+            explicitStreamingRequest,
+            (_, _) => ValueTask.FromResult(SseText("buffered", "stop")));
+        AssertEqual("buffered", ExtractContent(bufferedStream.Value), "RunModelStreamAsync should support explicit streaming requests.");
+
         var mcp = new AgentControlMcpToolProvider<ToolArgs, string>(control, (args, _) => ValueTask.FromResult(args.Command));
         try
         {
@@ -133,6 +158,20 @@ annotators:
         {
             AssertEqual(InterventionPoint.PostModelCall, ex.InterventionPoint, "approval callback failure should block at post_model_call.");
             Assert(ex.InnerException is InvalidOperationException { Message: "approval failed" }, "approval callback failure should preserve the cause.");
+        }
+
+        try
+        {
+            await new AgentControl(
+                    new DelegateRuntime(request => request.InterventionPoint == InterventionPoint.PostModelCall ? EscalateResult(request) : AllowResult()),
+                    (_, result, _) => ValueTask.FromResult(ApprovalResolution.Suspend(JsonSerializer.SerializeToElement(new { ticket = "T-stream" }), result.ActionIdentity!)))
+                .RunModelStreamAsync(new ModelRequest("write code"), (_, _) => ValueTask.FromResult(SseText("ok", "stop")));
+            throw new InvalidOperationException("suspended streaming escalation should surface suspension.");
+        }
+        catch (AgentControlSuspendedException ex)
+        {
+            AssertEqual(InterventionPoint.PostModelCall, ex.InterventionPoint, "streaming suspension should report post_model_call.");
+            AssertEqual("T-stream", ex.Handle!.Value.GetProperty("ticket").GetString(), "streaming suspension handle should round-trip.");
         }
 
         var cycle = new Dictionary<string, object?>();

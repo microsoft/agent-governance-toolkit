@@ -1,7 +1,7 @@
 use agent_control_specification_core::{
-    AnnotatorDispatcher, AnnotatorInvocation, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, JsonValue, Manifest, PerfTelemetry, PolicyDispatcher,
-    PreparedPolicyInvocation, Runtime, RuntimeError,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
+    InterventionPointRequest, InterventionPointResult, JsonValue, Manifest, PerfTelemetry,
+    PolicyDispatcher, PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use napi::bindgen_prelude::{Env, Error, JsFunction, Promise, Result};
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
@@ -54,10 +54,10 @@ fn make_string_tsfn(
 struct JsAnnotatorDispatcher(ThreadsafeFunction<String, ErrorStrategy::CalleeHandled>);
 
 fn js_annotation_error(detail: String) -> RuntimeError {
-    if detail.contains("runtime_error:annotation_timeout") {
-        RuntimeError::AnnotationTimeout(detail)
+    if detail.contains(agent_control_specification_core::reserved_reason::ANNOTATION_TIMEOUT) {
+        RuntimeError::AnnotationTimeout("annotation dispatcher timed out".to_string())
     } else {
-        RuntimeError::AnnotationFailed(detail)
+        RuntimeError::AnnotationFailed("annotation dispatcher failed".to_string())
     }
 }
 
@@ -98,26 +98,42 @@ impl PolicyDispatcher for JsPolicyDispatcher {
     }
 }
 
-fn parse_request(request: Value) -> Result<InterventionPointRequest> {
-    let object = request
-        .as_object()
-        .ok_or_else(|| Error::from_reason("request must be an object"))?;
-    let intervention_point = object
-        .get("intervention_point")
-        .and_then(Value::as_str)
-        .ok_or_else(|| Error::from_reason("request.intervention_point is required"))?;
-    let intervention_point =
-        InterventionPoint::from_str(intervention_point).map_err(Error::from_reason)?;
-    let snapshot = object
-        .get("snapshot")
-        .cloned()
-        .ok_or_else(|| Error::from_reason("request.snapshot is required"))?;
-    let mode = object
-        .get("mode")
-        .and_then(Value::as_str)
-        .unwrap_or("enforce");
-    let mode = EnforcementMode::from_str(mode).map_err(Error::from_reason)?;
-    Ok(InterventionPointRequest {
+enum ParsedRequest {
+    Request(InterventionPointRequest),
+    RuntimeError(RuntimeError),
+    RequestInvalid,
+}
+
+fn parse_request(request: Value) -> ParsedRequest {
+    let Some(object) = request.as_object() else {
+        return ParsedRequest::RequestInvalid;
+    };
+    let Some(intervention_point) = object.get("intervention_point").and_then(Value::as_str) else {
+        return ParsedRequest::RequestInvalid;
+    };
+    let intervention_point = match InterventionPoint::from_str(intervention_point) {
+        Ok(value) => value,
+        Err(_) => {
+            return ParsedRequest::RuntimeError(RuntimeError::InterventionPointUnknown(
+                intervention_point.to_string(),
+            ));
+        }
+    };
+    let Some(snapshot) = object.get("snapshot").cloned() else {
+        return ParsedRequest::RequestInvalid;
+    };
+    if !snapshot.is_object() {
+        return ParsedRequest::RequestInvalid;
+    }
+    let mode = match object.get("mode") {
+        None => EnforcementMode::Enforce,
+        Some(Value::String(value)) => match EnforcementMode::from_str(value) {
+            Ok(mode) => mode,
+            Err(_) => return ParsedRequest::RequestInvalid,
+        },
+        Some(_) => return ParsedRequest::RequestInvalid,
+    };
+    ParsedRequest::Request(InterventionPointRequest {
         intervention_point,
         snapshot,
         mode,
@@ -138,11 +154,41 @@ fn result_to_value(
     Ok(json!({
         "verdict": verdict,
         "transformed_policy_target": result.transformed_policy_target,
+        "transformed_policy_target_applied": result.transformed_policy_target.is_some(),
         "policy_input": result.policy_input,
         "action_identity": result.action_identity,
         "input_identity": result.input_identity,
         "enforced_identity": result.enforced_identity,
     }))
+}
+
+fn runtime_error_value(error: RuntimeError) -> Result<Value> {
+    result_to_value(InterventionPointResult {
+        verdict: Verdict::runtime_error(&error),
+        transformed_policy_target: None,
+        policy_input: None,
+        action_identity: None,
+        input_identity: None,
+        enforced_identity: None,
+    })
+}
+
+fn request_invalid_value() -> Result<Value> {
+    result_to_value(InterventionPointResult {
+        verdict: Verdict {
+            decision: Decision::Deny,
+            reason: Some("runtime_error:request_invalid".to_string()),
+            message: Some("Request blocked by Agent Control Specification.".to_string()),
+            transform: None,
+            evidence: None,
+            result_labels: Vec::new(),
+        },
+        transformed_policy_target: None,
+        policy_input: None,
+        action_identity: None,
+        input_identity: None,
+        enforced_identity: None,
+    })
 }
 
 #[napi]
@@ -237,7 +283,11 @@ impl NativeRuntime {
 
     #[napi]
     pub async fn evaluate(&self, request: Value) -> Result<Value> {
-        let request = parse_request(request)?;
+        let request = match parse_request(request) {
+            ParsedRequest::Request(request) => request,
+            ParsedRequest::RuntimeError(error) => return runtime_error_value(error),
+            ParsedRequest::RequestInvalid => return request_invalid_value(),
+        };
         let runtime = self.runtime.clone();
         let result =
             tokio::task::spawn_blocking(move || runtime.evaluate_intervention_point(request))

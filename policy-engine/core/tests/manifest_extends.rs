@@ -59,6 +59,93 @@ fn path_loader_merges_ordered_extends_and_relative_paths() {
 }
 
 #[test]
+fn metadata_merges_additive_keys() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("manifest-extends-metadata-additive");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("base.yaml"),
+        r#"agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: metadata-additive
+  owner:
+    team: policy
+policies:
+  p:
+    type: test
+intervention_points:
+  input:
+    policy_target: "$snap.input"
+    policy:
+      id: p
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("child.yaml"),
+        r#"agent_control_specification_version: "0.3.1-beta"
+extends:
+  - base.yaml
+metadata:
+  name: metadata-additive
+  use_case: healthcare-intake
+  owner:
+    contact: security
+"#,
+    )
+    .unwrap();
+
+    let manifest = Manifest::from_path(root.join("child.yaml")).unwrap();
+
+    assert_eq!(manifest.metadata["name"], "metadata-additive");
+    assert_eq!(manifest.metadata["use_case"], "healthcare-intake");
+    assert_eq!(manifest.metadata["owner"]["team"], "policy");
+    assert_eq!(manifest.metadata["owner"]["contact"], "security");
+}
+
+#[test]
+fn metadata_conflicting_duplicate_keys_fail_closed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("manifest-extends-metadata-conflict");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("base.yaml"),
+        r#"agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: parent-name
+policies:
+  p:
+    type: test
+intervention_points:
+  input:
+    policy_target: "$snap.input"
+    policy:
+      id: p
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("child.yaml"),
+        r#"agent_control_specification_version: "0.3.1-beta"
+extends:
+  - base.yaml
+metadata:
+  name: child-name
+"#,
+    )
+    .unwrap();
+
+    assert_manifest_invalid(
+        root.join("child.yaml"),
+        "manifest extends conflict for metadata.name",
+    );
+}
+
+#[test]
 fn duplicate_identical_definitions_are_allowed() {
     let manifest = Manifest::from_path(fixture_root().join("ordered/child.yaml")).unwrap();
 
@@ -131,15 +218,15 @@ fn path_loader_rejects_url_shaped_extends_entries() {
 #[test]
 fn yaml_chain_rejects_url_shaped_extends_entries() {
     let yaml = "\
-agent_control_specification_version: 0.3.0-alpha
+agent_control_specification_version: 0.3.1-beta
 extends:
   - https://example.invalid/base.yaml
 ";
     let error = Manifest::from_yaml_chain(&[yaml]).unwrap_err();
     assert_eq!(error.reason(), "runtime_error:manifest_invalid");
     assert!(
-        error.detail().contains("unsupported URL scheme"),
-        "error should explain unsupported URL extends, got {:?}",
+        error.detail().contains("unresolved extends"),
+        "error should explain unresolved extends, got {:?}",
         error.detail()
     );
 }
@@ -148,7 +235,7 @@ extends:
 fn committed_example_manifest_loads_through_path_loader() {
     let manifest = Manifest::from_path(repo_root().join("examples/bank_agent/manifest.yaml"))
         .expect("committed example manifest should load through Manifest::from_path");
-    assert_eq!(manifest.agent_control_specification_version, "0.3.0-alpha");
+    assert_eq!(manifest.agent_control_specification_version, "0.3.1-beta");
     assert_eq!(manifest.metadata["name"], "bank-agent");
     assert_eq!(manifest.intervention_points.len(), 8);
 }
@@ -187,7 +274,7 @@ fn building_a_runtime_from_unresolved_extends_fails_closed() {
     // unresolved `extends` must never reach an enforcing runtime: dropping the
     // bases would silently discard their intervention points and policies.
     let yaml = "\
-agent_control_specification_version: 0.3.0-alpha
+agent_control_specification_version: 0.3.1-beta
 extends:
   - ./base.yaml
 intervention_points:

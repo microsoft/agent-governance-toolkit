@@ -1,14 +1,24 @@
-# Customer support ACS Python demo
+# Python support agent example
 
-This runnable demo wires the generated `manifest.yaml` and `policy/customer_support_guardrails.rego` into the ACS Python SDK. It uses host-side toy classifiers for `input_risk`, `refund_risk`, `recipient_scope`, and `pii_scan`, uses the bundled zero configuration OPA policy dispatcher, and enforces input, tool, and output intervention points. Redaction is declared as Rego `pattern` effects and the Rust core resolves those patterns into deterministic spans. The demo does not hand roll a policy dispatcher or compute redaction spans in Python.
+This Python SDK example uses `AgentControl.from_path`, host annotators, `run`, and `run_tool` to guard a customer support loop. Rego policies return allow, warn, deny, escalate, and redaction effects.
 
-Run from the repository root.
+## Threat or governance need
+
+Support agents handle refunds, customer records, and outbound messages. The example blocks prompt injection, denies fraudulent refunds, escalates high value refunds, warns on external email, and redacts PII in tool results and final output.
+
+## Run
 
 ```sh
-cd /home/liamcrumm/rb/AgentControlSpecification
-source .venv-int/bin/activate
-export PATH="$HOME/.local/bin:$PATH"
+python -m pip install ./sdk/python
 python examples/support_agent/app/run_demo.py
 ```
 
-The demo prints allowed, warn, deny/block, escalate-with-approval, and redaction/transform outcomes.
+`opa` must be available on `PATH`.
+
+## Expected verdicts
+
+The runner prints an allowed lookup, a warn for external email, denied input, denied refund, escalated refund approval, and redaction of customer PII.
+
+## Where to look
+
+`manifest.yaml` binds input, tool, and output points. `policy/customer_support_guardrails.rego` contains the governance rules. `app/run_demo.py` shows Python host orchestration and approval handling.

@@ -6,9 +6,9 @@
 //! released with the paired host-provided `AcsFreeResultCallback`.
 
 use crate::{
-    AnnotatorDispatcher, AnnotatorInvocation, EnforcementMode, InterventionPoint,
+    AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
     InterventionPointRequest, JsonValue, Manifest, PerfTelemetry, PolicyDispatcher,
-    PreparedPolicyInvocation, Runtime, RuntimeError,
+    PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use serde_json::json;
 use std::{
@@ -132,10 +132,10 @@ impl AnnotatorDispatcher for CAnnotatorDispatcher {
         };
         let returned = unsafe { self.holder.read_and_free(raw) }
             .map_err(|err| RuntimeError::AnnotationFailed(err.to_string()))?;
-        if returned == "runtime_error:annotation_timeout" {
+        if returned == crate::reserved_reason::ANNOTATION_TIMEOUT {
             return Err(RuntimeError::AnnotationTimeout(returned));
         }
-        if returned == "runtime_error:annotation_failed" {
+        if returned == crate::reserved_reason::ANNOTATION_FAILED {
             return Err(RuntimeError::AnnotationFailed(returned));
         }
         serde_json::from_str(&returned)
@@ -408,7 +408,8 @@ pub unsafe extern "C" fn acs_builder_enable_default_annotator_dispatcher(
 /// When enabled and no explicit policy dispatcher is registered, the runtime
 /// evaluates Rego policies through the bundled OPA dispatcher. An explicitly
 /// registered host dispatcher always overrides this default. `build` fails fast
-/// if the manifest declares a non-Rego policy or the `opa` binary is unavailable.
+/// if the manifest declares a non-Rego policy. OPA process failures happen
+/// during evaluation and are normalized to fail-closed verdicts.
 ///
 /// # Safety
 /// `b` must be a live builder returned by ACS and not concurrently mutated. If
@@ -574,9 +575,11 @@ pub unsafe extern "C" fn acs_builder_free(b: *mut AcsBuilder) {
 ///
 /// # Safety
 /// `r` must be a live runtime returned by ACS. `request_json` must be a valid
-/// pointer to a NUL-terminated UTF-8 JSON string. If `err` is non-null it must
-/// be writable; populated errors and the returned string must be freed with
-/// `acs_free_string`.
+/// pointer to a NUL-terminated UTF-8 string. If the string is not a valid
+/// request JSON object, ACS returns a deny verdict with
+/// `runtime_error:request_invalid`. A missing `mode` defaults to `enforce`. If
+/// `err` is non-null it must be writable; populated errors and the returned
+/// string must be freed with `acs_free_string`.
 #[no_mangle]
 pub unsafe extern "C" fn acs_runtime_evaluate(
     r: *const AcsRuntime,
@@ -597,43 +600,44 @@ pub unsafe extern "C" fn acs_runtime_evaluate(
         };
         let request_value: JsonValue = match serde_json::from_str(request_str) {
             Ok(value) => value,
-            Err(error) => {
-                unsafe { write_err(err, &format!("invalid request_json: {error}")) };
-                return std::ptr::null_mut();
-            }
+            Err(_) => return request_invalid_response(),
         };
         let Some(object) = request_value.as_object() else {
-            unsafe { write_err(err, "request_json must be an object") };
-            return std::ptr::null_mut();
+            return request_invalid_response();
         };
         let Some(intervention_point_str) =
             object.get("intervention_point").and_then(JsonValue::as_str)
         else {
-            unsafe { write_err(err, "request_json.intervention_point must be a string") };
-            return std::ptr::null_mut();
+            return request_invalid_response();
         };
         let intervention_point = match InterventionPoint::from_str(intervention_point_str) {
             Ok(value) => value,
-            Err(error) => {
-                unsafe { write_err(err, &error) };
-                return std::ptr::null_mut();
+            Err(_) => {
+                let error =
+                    RuntimeError::InterventionPointUnknown(intervention_point_str.to_string());
+                return json_to_c(&json!({
+                    "verdict": Verdict::runtime_error(&error),
+                    "transformed_policy_target": null,
+                    "transformed_policy_target_applied": false,
+                    "policy_input": null,
+                    "action_identity": null,
+                }));
             }
         };
-        let Some(mode_str) = object.get("mode").and_then(JsonValue::as_str) else {
-            unsafe { write_err(err, "request_json.mode must be a string") };
-            return std::ptr::null_mut();
-        };
-        let mode = match EnforcementMode::from_str(mode_str) {
-            Ok(value) => value,
-            Err(error) => {
-                unsafe { write_err(err, &error) };
-                return std::ptr::null_mut();
-            }
+        let mode = match object.get("mode") {
+            None => EnforcementMode::Enforce,
+            Some(JsonValue::String(mode_str)) => match EnforcementMode::from_str(mode_str) {
+                Ok(value) => value,
+                Err(_) => return request_invalid_response(),
+            },
+            Some(_) => return request_invalid_response(),
         };
         let Some(snapshot) = object.get("snapshot").cloned() else {
-            unsafe { write_err(err, "request_json.snapshot is required") };
-            return std::ptr::null_mut();
+            return request_invalid_response();
         };
+        if !snapshot.is_object() {
+            return request_invalid_response();
+        }
 
         let result = runtime
             .runtime
@@ -652,6 +656,7 @@ pub unsafe extern "C" fn acs_runtime_evaluate(
         let response = json!({
             "verdict": result.verdict,
             "transformed_policy_target": result.transformed_policy_target,
+            "transformed_policy_target_applied": result.transformed_policy_target.is_some(),
             "policy_input": result.policy_input,
             "action_identity": result.action_identity,
             "input_identity": result.input_identity,
@@ -708,6 +713,20 @@ fn json_to_c(value: &JsonValue) -> *mut c_char {
         Ok(serialized) => string_to_c(&serialized),
         Err(_) => string_to_c(r#"{"error":"serialization failed"}"#),
     }
+}
+
+fn request_invalid_response() -> *mut c_char {
+    json_to_c(&json!({
+        "verdict": {
+            "decision": Decision::Deny,
+            "reason": "runtime_error:request_invalid",
+            "message": "Request blocked by Agent Control Specification."
+        },
+        "transformed_policy_target": null,
+        "transformed_policy_target_applied": false,
+        "policy_input": null,
+        "action_identity": null,
+    }))
 }
 
 unsafe fn write_err(err: *mut *mut c_char, msg: &str) {
