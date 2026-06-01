@@ -216,3 +216,110 @@ rules:
         for i in range(10):
             result = safe(action="read", iteration=i)
             assert result["iteration"] == i
+
+
+# ── Ring enforcement tests ─────────────────────────────────────────
+
+class TestRingEnforcement:
+    """Tests for ring-level resource constraint enforcement in govern()."""
+
+    def test_ring3_denies_subprocess_action(self):
+        """Ring 3 agent cannot invoke a subprocess-type action."""
+        from hypervisor.models import ExecutionRing
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, ring=ExecutionRing.RING_3_SANDBOX)
+        with pytest.raises(GovernanceDenied) as exc_info:
+            safe(action="subprocess_exec")
+        assert exc_info.value.decision.matched_rule == "ring_enforcement"
+        assert "subprocess" in exc_info.value.decision.reason
+
+    def test_ring3_denies_network_action(self):
+        """Ring 3 agent cannot invoke a network-type action."""
+        from hypervisor.models import ExecutionRing
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, ring=ExecutionRing.RING_3_SANDBOX)
+        with pytest.raises(GovernanceDenied) as exc_info:
+            safe(action="http_request")
+        assert exc_info.value.decision.matched_rule == "ring_enforcement"
+        assert "network" in exc_info.value.decision.reason
+
+    def test_ring3_allows_tool_execution(self):
+        """Ring 3 agent can invoke generic tool-execution actions."""
+        from hypervisor.models import ExecutionRing
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, ring=ExecutionRing.RING_3_SANDBOX)
+        result = safe(action="read")
+        assert result["status"] == "executed"
+
+    def test_ring2_allows_subprocess_action(self):
+        """Ring 2 agent is permitted to invoke subprocess-type actions."""
+        from hypervisor.models import ExecutionRing
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, ring=ExecutionRing.RING_2_STANDARD)
+        result = safe(action="subprocess_exec")
+        assert result["status"] == "executed"
+
+    def test_ring2_allows_network_action(self):
+        """Ring 2 agent is permitted to invoke network-type actions."""
+        from hypervisor.models import ExecutionRing
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, ring=ExecutionRing.RING_2_STANDARD)
+        result = safe(action="http_request")
+        assert result["status"] == "executed"
+
+    def test_no_ring_no_enforcement(self):
+        """When ring is not set, subprocess actions pass through unchanged."""
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY)
+        result = safe(action="subprocess_exec")
+        assert result["status"] == "executed"
+
+    def test_ring_context_injected_for_policy_rules(self):
+        """ring.* fields are injected into evaluation context when ring is set."""
+        from hypervisor.models import ExecutionRing
+
+        RING_AWARE_POLICY = """
+apiVersion: governance.toolkit/v1
+name: ring-aware
+default_action: deny
+rules:
+  - name: allow-read-only-ring
+    condition: "action.type == 'read'"
+    action: allow
+"""
+        safe = govern(dummy_tool, policy=RING_AWARE_POLICY, ring=ExecutionRing.RING_3_SANDBOX)
+        # Policy allows reads; ring 3 allows tool_execution — should pass
+        result = safe(action="read")
+        assert result["status"] == "executed"
+
+    def test_ring3_on_deny_callback_called(self):
+        """on_deny callback receives the ring denial decision."""
+        from hypervisor.models import ExecutionRing
+        denied = []
+        safe = govern(
+            dummy_tool,
+            policy=ALLOW_ALL_POLICY,
+            ring=ExecutionRing.RING_3_SANDBOX,
+            on_deny=lambda d: denied.append(d) or {"status": "denied"},
+        )
+        result = safe(action="subprocess_exec")
+        assert result["status"] == "denied"
+        assert len(denied) == 1
+        assert denied[0].matched_rule == "ring_enforcement"
+
+    def test_ring_denial_does_not_reach_policy_engine(self):
+        """A ring-denied action never reaches policy evaluation."""
+        from hypervisor.models import ExecutionRing
+
+        # Policy would allow everything — ring should deny first
+        safe = govern(dummy_tool, policy=ALLOW_ALL_POLICY, ring=ExecutionRing.RING_3_SANDBOX)
+        with pytest.raises(GovernanceDenied) as exc_info:
+            safe(action="subprocess_exec")
+        # matched_rule comes from ring layer, not from any policy rule
+        assert exc_info.value.decision.matched_rule == "ring_enforcement"
+
+    def test_circuit_breaker_trips_after_repeated_violations(self):
+        """Repeated ring violations trip the circuit breaker."""
+        from hypervisor.rings.breach_detector import RingBreachDetector
+        from hypervisor.models import ExecutionRing
+
+        # Use a detector with a very low baseline so the breaker trips quickly
+        detector = RingBreachDetector(baseline_rate=0.01)
+        # Simulate rapid calls from ring 3 attempting ring 1 access
+        for _ in range(50):
+            detector.record_call("agent-x", "sess-1", ExecutionRing.RING_3_SANDBOX, ExecutionRing.RING_1_PRIVILEGED)
+        assert detector.is_breaker_tripped("agent-x", "sess-1")

@@ -21,12 +21,15 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
+
+if TYPE_CHECKING:
+    from hypervisor.models import ExecutionRing
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,11 @@ class GovernanceConfig:
         audit_file: Path for file-based audit log. None = in-memory only.
         on_deny: Callback when a policy denies an action. Default: raise.
         conflict_strategy: Policy conflict resolution strategy.
+        ring: Optional execution ring for the agent. When set, ring-level
+            resource constraints are enforced before policy evaluation and
+            injected into the evaluation context as ``ring.*`` fields.
+        session_id: Agent session identifier used by RingBreachDetector
+            to track per-session violation rates. Defaults to "".
     """
 
     policy: Union[str, Policy]
@@ -52,6 +60,8 @@ class GovernanceConfig:
     approval_handler: Optional[ApprovalHandler] = None
     advisory: Optional[AdvisoryCheck] = None
     conflict_strategy: str = "deny_overrides"
+    ring: Optional["ExecutionRing"] = None
+    session_id: str = ""
 
 
 class GovernanceDenied(Exception):
@@ -98,12 +108,30 @@ class GovernedCallable:
         if not loaded.agent and not loaded.agents:
             loaded.agents = ["*"]
 
+        # Ring enforcement — only active when a ring is explicitly configured.
+        self._ring_enforcer: Any = None
+        self._breach_detector: Any = None
+        if config.ring is not None:
+            from hypervisor.rings.enforcer import RingEnforcer
+            from hypervisor.rings.breach_detector import RingBreachDetector
+            self._ring_enforcer = RingEnforcer()
+            self._breach_detector = RingBreachDetector()
+
         functools.update_wrapper(self, fn)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the wrapped function with governance enforcement."""
         # Build evaluation context from kwargs
         context = self._build_context(args, kwargs)
+
+        # Ring enforcement — runs before policy evaluation so a denied ring
+        # never reaches the policy engine.
+        if self._ring_enforcer is not None and self._config.ring is not None:
+            ring_denial = self._check_ring(context)
+            if ring_denial is not None:
+                if self._config.on_deny:
+                    return self._config.on_deny(ring_denial)
+                raise GovernanceDenied(ring_denial)
 
         # Evaluate policy
         start = time.monotonic()
@@ -151,6 +179,86 @@ class GovernedCallable:
 
         # Allowed — execute the wrapped function
         return self._fn(*args, **kwargs)
+
+    def _check_ring(self, context: dict) -> Optional[PolicyDecision]:
+        """Enforce ring-level resource constraints and inject ring context.
+
+        Returns a denial PolicyDecision when the agent's ring forbids the
+        requested resource, or None when access is permitted. Also injects
+        ``ring`` and ``ring_constraints`` into *context* so downstream policy
+        rules can reference them (e.g. ``ring.subprocess_allowed == false``).
+        """
+        from hypervisor.rings.enforcer import RING_CONSTRAINTS, ResourceType
+
+        ring = self._config.ring
+
+        # Circuit-breaker: if this agent/session has tripped the breaker from
+        # prior violations, deny immediately without consulting the ring enforcer.
+        session_id = self._config.session_id or "default"
+        if self._breach_detector.is_breaker_tripped(self._config.agent_id, session_id):
+            return PolicyDecision(
+                allowed=False,
+                action="deny",
+                matched_rule="ring_breaker",
+                reason=(
+                    f"Circuit breaker tripped for agent '{self._config.agent_id}' "
+                    f"— too many ring violations in session '{session_id}'"
+                ),
+            )
+
+        # Infer the resource type from the action in context.
+        action_type = context.get("action", {}).get("type", "").lower()
+        if any(k in action_type for k in ("subprocess", "exec", "shell", "process")):
+            resource_type = ResourceType.SUBPROCESS
+        elif any(k in action_type for k in ("network", "http", "https", "request", "fetch", "url", "web", "api")):
+            resource_type = ResourceType.NETWORK
+        elif any(k in action_type for k in ("file", "write", "filesystem", "path", "disk")):
+            resource_type = ResourceType.FILESYSTEM
+        else:
+            resource_type = ResourceType.TOOL_EXECUTION
+
+        ring_result = self._ring_enforcer.check_resource(ring, resource_type)
+
+        # Always inject ring context so policy rules can reference it.
+        constraints = self._ring_enforcer.get_constraints(ring)
+        context["ring"] = {
+            "level": ring.value,
+            "subprocess_allowed": constraints.subprocess_allowed,
+            "network_allowed": constraints.network_allowed,
+            "filesystem_scope": constraints.filesystem_scope,
+            "filesystem_writable": constraints.filesystem_writable,
+        }
+
+        if ring_result.allowed:
+            return None
+
+        # Find the minimum ring that allows this resource type so the breach
+        # detector receives an accurate ring distance.
+        from hypervisor.models import ExecutionRing
+        called_ring = next(
+            (
+                r for r in (
+                    ExecutionRing.RING_2_STANDARD,
+                    ExecutionRing.RING_1_PRIVILEGED,
+                    ExecutionRing.RING_0_ROOT,
+                )
+                if RING_CONSTRAINTS[r].allows_resource(resource_type)
+            ),
+            ExecutionRing.RING_1_PRIVILEGED,
+        )
+        self._breach_detector.record_call(
+            self._config.agent_id, session_id, ring, called_ring
+        )
+
+        return PolicyDecision(
+            allowed=False,
+            action="deny",
+            matched_rule="ring_enforcement",
+            reason=(
+                f"Ring {ring.value} agent cannot perform "
+                f"{resource_type.value}: {ring_result.reason}"
+            ),
+        )
 
     def _handle_approval(self, decision: PolicyDecision, context: dict) -> PolicyDecision:
         """Route require_approval decisions through the approval handler."""
@@ -272,6 +380,8 @@ def govern(
     approval_handler: Optional[ApprovalHandler] = None,
     advisory: Optional[AdvisoryCheck] = None,
     conflict_strategy: str = "deny_overrides",
+    ring: Optional["ExecutionRing"] = None,
+    session_id: str = "",
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
 
@@ -307,5 +417,7 @@ def govern(
         approval_handler=approval_handler,
         advisory=advisory,
         conflict_strategy=conflict_strategy,
+        ring=ring,
+        session_id=session_id,
     )
     return GovernedCallable(fn, config)
