@@ -35,6 +35,24 @@ const OSC8 = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
 // C1 control codes (U+0080..U+009F) — never useful in a comment body.
 const ANSI_C1 = /[\u0080-\u009F]/g;
 
+// HTML comments. A single non-global pass is incomplete because nested or
+// overlapping comment markers (e.g. ``<!-- <!-- x --> -->``) reduce to
+// ``<!-- ... -->`` again after one substitution. We loop until the regex no
+// longer matches so no comment markers survive into the escaping step below.
+// (The final ``<``/``>`` escape would defang any survivors, but iterative
+// stripping also removes the comment-injection vector noted by CodeQL
+// js/incomplete-multi-character-sanitization.)
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+function stripHtmlComments(text) {
+  let prev;
+  let current = text;
+  do {
+    prev = current;
+    current = current.replace(HTML_COMMENT, "");
+  } while (current !== prev);
+  return current;
+}
+
 export function truncateUtf8(value, maxBytes) {
   const text = String(value || "");
   if (Buffer.byteLength(text, "utf8") <= maxBytes) return text;
@@ -69,12 +87,14 @@ export function sanitizeForComment(text, maxBytes = MAX_COMMENT_BYTES) {
   // ligatures) cannot bypass the character-class filters below by encoding
   // workflow-command markers like ``::`` in fullwidth form.
   const normalized = String(text || "").normalize("NFKC");
-  const cleaned = normalized
-    .replace(OSC8, "")
-    .replace(ANSI_CSI, "")
-    .replace(ANSI_C1, "")
-    .replace(INVISIBLE_CONTROLS, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
+  const stripped = stripHtmlComments(
+    normalized
+      .replace(OSC8, "")
+      .replace(ANSI_CSI, "")
+      .replace(ANSI_C1, "")
+      .replace(INVISIBLE_CONTROLS, ""),
+  );
+  const cleaned = stripped
     .split(/\r?\n/)
     .filter((line) => !/^::[A-Za-z0-9_-]+(?:\s|::)/.test(line))
     .filter((line) => !/^##\[[A-Za-z][^\]]*\]/.test(line))
