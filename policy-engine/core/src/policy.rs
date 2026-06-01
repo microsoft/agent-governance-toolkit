@@ -346,17 +346,15 @@ pub fn prepare_policy_invocation(
             input: final_policy_input.clone(),
             canonical_input: canonical_policy_input(final_policy_input)?,
         })),
-        PolicyConfig::Cedar(config) => {
-            Ok(PreparedPolicyInvocation::Cedar(CedarPolicyInvocation {
-                policy_set: config.policy_set.clone(),
-                policy_path: config.policy_path.clone(),
-                entities_path: config.entities_path.clone(),
-                schema_path: config.schema_path.clone(),
-                query: config.query.clone(),
-                input: final_policy_input.clone(),
-                canonical_input: canonical_policy_input(final_policy_input)?,
-            }))
-        }
+        PolicyConfig::Cedar(config) => Ok(PreparedPolicyInvocation::Cedar(CedarPolicyInvocation {
+            policy_set: config.policy_set.clone(),
+            policy_path: config.policy_path.clone(),
+            entities_path: config.entities_path.clone(),
+            schema_path: config.schema_path.clone(),
+            query: config.query.clone(),
+            input: final_policy_input.clone(),
+            canonical_input: canonical_policy_input(final_policy_input)?,
+        })),
         PolicyConfig::Test(config) => Ok(PreparedPolicyInvocation::Test(TestPolicyInvocation {
             adapter_config: merge_adapter_config(&config.adapter_config, &binding.adapter_config),
             input: final_policy_input.clone(),

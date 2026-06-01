@@ -1309,7 +1309,6 @@ fn manifest_merge_conflict<T>(field: &str, source: &ManifestSource) -> Result<T,
 }
 
 #[cfg(test)]
-
 mod approval_section_tests {
     use super::*;
     use serde_json::json;

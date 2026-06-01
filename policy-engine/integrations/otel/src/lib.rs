@@ -226,10 +226,10 @@ mod tests {
         let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
             .with_decision(Decision::Allow);
         let attributes = metric_attributes(&event);
-        assert!(!attributes
-            .iter()
-            .any(|attr| attr.key == "evidence_artefact"
-                || attr.key == "evidence_verification_pointer_keys"));
+        assert!(
+            !attributes.iter().any(|attr| attr.key == "evidence_artefact"
+                || attr.key == "evidence_verification_pointer_keys")
+        );
     }
 
     #[test]
@@ -275,10 +275,7 @@ mod tests {
         .with_decision(Decision::Transform)
         .with_enforcement_mode(EnforcementMode::Enforce)
         .with_reason_code("redacted")
-        .with_evidence(
-            Some("sha256:proofblob"),
-            vec!["issuer_pubkey".to_string()],
-        );
+        .with_evidence(Some("sha256:proofblob"), vec!["issuer_pubkey".to_string()]);
         let attributes = metric_attributes(&event);
         assert!(attributes.contains(&AttributePair {
             key: "event_type",

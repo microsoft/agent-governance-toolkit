@@ -8,8 +8,8 @@ use crate::{
     telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetryEventType, TelemetrySink},
     tool_projection::project_tool,
     verdict::{normalize_policy_output, Decision, Transform},
-    EnforcementMode, InterventionPoint, JsonPath, JsonValue, Limits, PathEnv,
-    PathSegment, PerfTelemetry, RuntimeError, Verdict,
+    EnforcementMode, InterventionPoint, JsonPath, JsonValue, Limits, PathEnv, PathSegment,
+    PerfTelemetry, RuntimeError, Verdict,
 };
 use serde_json::Map;
 use std::{
@@ -539,6 +539,10 @@ impl Runtime {
         Ok(JsonValue::Object(annotations_map))
     }
 
+    // AGT integration passes decision evidence/identity fields explicitly; keep
+    // the signature stable to minimize divergence and risk in the vendored
+    // runtime hot path rather than refactoring to a params struct.
+    #[allow(clippy::too_many_arguments)]
     fn emit_decision_event(
         &self,
         intervention_point: InterventionPoint,
