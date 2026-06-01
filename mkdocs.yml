@@ -226,3 +226,5 @@ nav:
     - 日本語 クイックスタート: i18n/quickstart.ja.md
     - 简体中文 README: i18n/README.zh-CN.md
     - 简体中文 快速入门: i18n/quickstart.zh-CN.md
+    - 繁體中文 README: i18n/README.zh-TW.md
+    - 繁體中文 快速入門: i18n/quickstart.zh-TW.md
