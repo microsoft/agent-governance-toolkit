@@ -11,8 +11,6 @@ block-beta
   columns 1
 
   block:L4["Layer 4 — Intelligence"]
-    scak["modules/scak\nSelf-Correcting Agent Kernel"]
-    mute["modules/mute-agent\nFace/Hands Architecture"]
     mcp["modules/mcp-kernel-server\nMCP Kernel Server"]
   end
 
@@ -46,8 +44,6 @@ Dependencies derived from each module's `pyproject.toml` and import analysis:
 ```mermaid
 graph TD
     subgraph "Layer 4 — Intelligence"
-        scak[scak]
-        mute[mute-agent]
         mcp[mcp-kernel-server]
     end
 
@@ -72,9 +68,6 @@ graph TD
     end
 
     %% Declared dependencies
-    scak --> prim
-    scak -.->|optional| cp
-    scak -.->|optional| cmvk
     iatp --> prim
     nexus --> iatp
     runtime --> nexus

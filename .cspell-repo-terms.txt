@@ -389,7 +389,6 @@ sandboxing
 sandboxprovider
 sanitised
 sarif
-SCAK
 scikit
 scipy
 sdist

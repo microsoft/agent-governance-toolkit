@@ -8,7 +8,7 @@
 AGT currently ships seven separate UI surfaces that each cover a slice of the
 product:
 
-- Six Streamlit dashboards (governance, trust, SRE, hypervisor, SCAK,
+- Six Streamlit dashboards (governance, trust, SRE, hypervisor,
   observability) that mostly use simulated data and are rarely consumed in
   production.
 - IDE extensions (Cursor, Copilot, JetBrains) whose UI panels duplicate parts
@@ -111,8 +111,7 @@ degrading.
 | 2 | `agent-mesh/examples/06-trust-score-dashboard` | Trust graph, scores, credentials, protocol traffic, compliance | Mostly port to Studio: trust graph, credentials, compliance. Protocol traffic moves to a Grafana template. |
 | 3 | `agent-sre/examples/dashboard` | SLOs, cost, chaos, incidents, progressive delivery | Replace with Grafana templates. |
 | 4 | `agent-hypervisor/examples/dashboard` | Sessions, rings, sagas, liability, events | Archive. Niche runtime supervision. |
-| 5 | `agent-os/modules/scak/dashboard.py` | SCAK memory and telemetry | Archive with module. |
-| 6 | `agent-os/modules/observability/dashboards.py` | Pre-built Grafana JSON templates | Keep and expand. This is the embed-first integration story. |
+| 5 | `agent-os/modules/observability/dashboards.py` | Pre-built Grafana JSON templates | Keep and expand. This is the embed-first integration story. |
 
 Net effect: six dashboards collapse to one UI plus one Grafana template pack.
 `console.html` is deleted.

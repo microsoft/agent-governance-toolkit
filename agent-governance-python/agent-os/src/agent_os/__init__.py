@@ -37,8 +37,6 @@ Optional ecosystem packages (import directly):
     - emk: Episodic memory kernel
     - amb_core: Agent message bus
     - atr: Agent tool registry
-    - agent_kernel: Self-correcting kernel
-    - mute_agent: Reasoning/execution split
 
 Installation:
     pip install agent-os-kernel[full]  # Everything
@@ -83,8 +81,6 @@ AVAILABLE_PACKAGES: dict[str, bool] = {
     "emk": _check_optional("emk"),
     "amb": _check_optional("amb_core"),
     "atr": _check_optional("atr"),
-    "scak": _check_optional("agent_kernel"),
-    "mute_agent": _check_optional("mute_agent"),
 }
 
 

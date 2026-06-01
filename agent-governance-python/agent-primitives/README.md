@@ -11,8 +11,7 @@ This package provides foundational data models used across multiple Agent OS com
 ```
 Layer 1 (Primitives): cmvk, emk, caas, agent-primitives
 Layer 2 (Infrastructure): iatp, amb, atr
-Layer 3 (Kernel): agent-control-plane  
-Layer 4/5 (Intelligence): scak, mute-agent
+Layer 3 (Kernel): agent-control-plane
 ```
 
 ## Installation
@@ -25,7 +24,7 @@ pip install agentmesh-primitives
 
 ### Failure Models
 
-Core failure tracking primitives used by iatp, scak, and other components:
+Core failure tracking primitives used by iatp and other components:
 
 ```python
 from agent_primitives import (
