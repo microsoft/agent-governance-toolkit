@@ -47,6 +47,7 @@ requires-python = ">=3.11"
 dependencies = [
     # Core dependency redirect
     "agent-governance-toolkit-core>=4.0.0,<5.0",
+    "agent_hypervisor>=4.0.0,<5.0",
     # Original deps kept for backward compat
     "pydantic[email]>=2.5.0,<3.0",
     "cryptography>=46.0.7,<49.0",
