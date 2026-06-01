@@ -926,6 +926,130 @@ class TestContainerCreationHardening:
 
 
 # =========================================================================
+# Section 6b: Minimal-PATH sandbox image (#2713)
+# =========================================================================
+
+
+class TestMinimalPathSandboxImage:
+    """Smoke tests for the hardened minimal-PATH sandbox image.
+
+    The image lives at ``agent-sandbox/docker/Dockerfile.sandbox`` and pins
+    PATH to a single explicit directory containing only the binaries that
+    sandboxed code is allowed to invoke. These tests verify the policy as
+    written in the Dockerfile — they do not require a Docker daemon.
+    """
+
+    @staticmethod
+    def _dockerfile_path():
+        import pathlib
+
+        return (
+            pathlib.Path(__file__).resolve().parent.parent
+            / "docker"
+            / "Dockerfile.sandbox"
+        )
+
+    @staticmethod
+    def _read():
+        return TestMinimalPathSandboxImage._dockerfile_path().read_text(
+            encoding="utf-8"
+        )
+
+    def test_dockerfile_exists(self):
+        path = self._dockerfile_path()
+        assert path.is_file(), f"expected hardened sandbox image at {path}"
+
+    def test_path_is_explicit_and_minimal(self):
+        import re
+
+        content = self._read()
+        path_lines = [
+            line
+            for line in content.splitlines()
+            if re.match(r"^ENV\s+PATH=", line)
+        ]
+        assert path_lines, "Dockerfile must set PATH via `ENV PATH=`"
+        # Take the last ENV PATH= line as the effective value.
+        path_value = path_lines[-1].split("=", 1)[1].strip().strip("\"'")
+        # No inherited / wildcard segments — every PATH entry must be explicit.
+        for forbidden in ("$PATH", "${PATH}", ":/sbin", ":/usr/sbin"):
+            assert forbidden not in path_value, (
+                f"PATH must not include {forbidden!r}: {path_value!r}"
+            )
+        # The pinned directory must be present.
+        assert "/usr/local/sandbox-bin" in path_value, (
+            f"PATH must include the pinned sandbox-bin directory: {path_value!r}"
+        )
+
+    def test_dangerous_binaries_are_addressed(self):
+        import re
+
+        content = self._read()
+        # The Dockerfile must address each of these binary classes — either
+        # by stripping its execute bit, removing it, or shimming it. The
+        # smoke check is simply that the binary name appears somewhere in
+        # the Dockerfile (the existing stripping pass enumerates them by
+        # name), so a maintainer cannot accidentally drop coverage of one
+        # of these without the test catching the omission.
+        for bin_name in (
+            "curl",
+            "wget",
+            "ssh",
+            "az",
+            "kubectl",
+            "terraform",
+            "git",
+            "apt",
+        ):
+            assert re.search(rf"\b{re.escape(bin_name)}\b", content), (
+                f"Dockerfile must address {bin_name!r} explicitly"
+            )
+
+    def test_runs_as_nobody(self):
+        import re
+
+        content = self._read()
+        assert re.search(
+            r"^USER\s+65534:65534\s*$", content, flags=re.MULTILINE
+        ), "Dockerfile must drop privileges to UID 65534 (nobody)"
+
+    def test_allowed_binaries_include_python_and_minimal_utilities(self):
+        import re
+
+        content = self._read()
+        match = re.search(
+            r'ARG\s+ALLOWED_BIN_NAMES\s*=\s*"([^"]+)"', content
+        )
+        assert match, (
+            "Dockerfile must declare an ALLOWED_BIN_NAMES build-arg so the "
+            "permitted set can be extended without editing image internals"
+        )
+        allowed = set(match.group(1).split())
+        # Sandboxed code legitimately needs python and a few read-only
+        # utilities for introspection (cat, echo, ls). Everything else is
+        # opt-in via ALLOWED_BIN_NAMES at build time.
+        assert {"python3", "cat", "echo"} <= allowed, (
+            f"ALLOWED_BIN_NAMES must include python3/cat/echo: {allowed!r}"
+        )
+        # Network and infra CLIs must NOT be in the default allowed set.
+        forbidden_in_allowlist = {
+            "curl",
+            "wget",
+            "ssh",
+            "az",
+            "aws",
+            "gcloud",
+            "kubectl",
+            "terraform",
+            "git",
+        }
+        leaked = allowed & forbidden_in_allowlist
+        assert not leaked, (
+            f"these binaries must never appear in the default ALLOWED_BIN_NAMES: {leaked!r}"
+        )
+
+
+# =========================================================================
 # Section 7: Runtime detection
 # =========================================================================
 

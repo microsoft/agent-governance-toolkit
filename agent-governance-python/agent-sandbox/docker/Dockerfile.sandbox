@@ -1,0 +1,79 @@
+# Hardened sandbox image: minimal-PATH variant of the default agent-sandbox
+# base. Used by `DockerSandboxProvider` when policy requires command-denylist
+# enforcement via PATH-based exclusion (see issue #2713 / parent #2662).
+#
+# The defense in this image is layered:
+#   1. PATH is pinned to a single explicit directory containing only the
+#      binaries sandboxed code is allowed to invoke. Everything else fails
+#      with "command not found" even if the binary is still resident in the
+#      image — there is no fallback search path.
+#   2. A second pass strips the execute bit off well-known network and infra
+#      CLIs (curl, wget, ssh, az, kubectl, terraform, …). Belt-and-braces:
+#      these are unreachable via PATH already, but a sandboxed caller that
+#      goes through an absolute path also gets EACCES rather than silently
+#      executing.
+#   3. The provider's existing hardening (capability drop, no-new-privileges,
+#      read-only root, nobody UID, seccomp, AppArmor) is preserved by mirroring
+#      `USER 65534:65534` here so the image still drops privileges on its own
+#      when started outside the provider.
+#
+# To extend the allowed-binary list, add an entry to ALLOWED_BIN_NAMES below
+# and rebuild. See the agent-sandbox README ("Hardened sandbox image
+# (minimal-PATH)") for the documented extension procedure.
+
+FROM python:3.11-slim AS sandbox-base
+
+# Explicit PATH. No inherited `:$PATH` segment — anything not under
+# /usr/local/sandbox-bin is unreachable.
+ENV PATH=/usr/local/sandbox-bin
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Build-time list of permitted binaries. Maintainers extending this image
+# should add entries here rather than relying on host-side PATH inheritance.
+ARG ALLOWED_BIN_NAMES="python3 cat echo ls"
+
+# Stage 1: collect the allowed binaries into the pinned PATH directory.
+# Symlinks (not copies) preserve setuid behaviour from the base image where
+# present, and keep the diff against the upstream `python:3.11-slim` minimal.
+RUN set -eux; \
+    mkdir -p /usr/local/sandbox-bin; \
+    for bin in $ALLOWED_BIN_NAMES; do \
+        src=$(command -v "$bin" 2>/dev/null || true); \
+        if [ -n "$src" ]; then \
+            ln -sf "$src" "/usr/local/sandbox-bin/$bin"; \
+        else \
+            echo "warning: $bin not found in base image PATH"; \
+        fi; \
+    done; \
+    # python -> python3 alias is commonly expected by sandboxed code.
+    if [ -e /usr/local/sandbox-bin/python3 ] && [ ! -e /usr/local/sandbox-bin/python ]; then \
+        ln -sf /usr/local/sandbox-bin/python3 /usr/local/sandbox-bin/python; \
+    fi
+
+# Stage 2: strip the execute bit off the network and infra CLIs that this
+# image must never silently expose, even via an absolute path. The pinned
+# PATH already makes them unreachable; this is a second-layer guarantee.
+RUN set -eux; \
+    for bin in curl wget nc netcat ssh scp rsync git \
+               apt apt-get dpkg dnf yum apk \
+               aws az gcloud kubectl terraform helm ansible \
+               ssh-keygen ssh-agent telnet ftp tftp \
+               base64 xxd hexdump; do \
+        target=$(command -v "$bin" 2>/dev/null || true); \
+        if [ -n "$target" ] && [ -f "$target" ]; then \
+            chmod a-x "$target" 2>/dev/null || true; \
+        fi; \
+    done
+
+# Drop to nobody. The provider already sets `user="65534:65534"` on the
+# container, but pinning it in the image too means a sandboxed image started
+# outside the provider (e.g. ad-hoc `docker run` for inspection) also drops
+# privileges by default rather than falling through to root.
+USER 65534:65534
+WORKDIR /workspace
+
+# Default entrypoint is plain python — the provider replaces this with
+# `["sleep", "infinity"]` for long-lived sessions; this CMD is what runs
+# when the image is invoked directly.
+CMD ["python3"]
