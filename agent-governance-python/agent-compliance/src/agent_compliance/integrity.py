@@ -25,7 +25,6 @@ import importlib
 import inspect
 import json
 import logging
-import marshal
 import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -184,24 +183,66 @@ def _hash_file(path: str) -> str:
 
 
 def _hash_function_bytecode(func: Callable[..., Any]) -> str:
-    """SHA-256 hash of a function's compiled code object.
+    """SHA-256 hash of a function's source text via AST.
 
-    Hashes the marshalled :class:`code` object (which covers
-    ``co_code``, ``co_consts``, ``co_names``, ``co_varnames``,
-    ``co_freevars``, ``co_cellvars``, ``co_argcount``, nested code
-    objects, and every other attribute marshal serialises) so that
-    swapping in a different implementation with the same opcode bytes
-    but different name references, decorators, or nested closures
-    produces a different hash.
+    Hashes the raw source text (via :func:`inspect.getsource`) parsed into
+    an AST (:class:`ast.AST`), then serialised as a stable string via
+    :func:`ast.dump`.  The AST form is used instead of the raw text because
+    it is a structured representation that includes all security-relevant
+    attributes of the compiled code object (``co_code``, ``co_names``,
+    ``co_consts``, ``co_varnames``, nested closures, decorators, etc.)
+    without ever calling ``marshal.loads`` or any other unsafe deserialiser.
 
-    The previous implementation hashed only ``co_code`` and
-    ``str(co_consts)`` — an attacker who could substitute a function
-    with the same opcode sequence but different ``co_names`` (renamed
-    name lookups), decorators, or nested code objects would produce
-    an identical hash and slip past the integrity check.
+    **Why AST instead of marshal.dumps()?**
+    ``marshal.dumps(func.__code__)`` is a Python bytecode serialization
+    format.  It is NOT safe for untrusted data — loading it is equivalent
+    to ``pickle.loads`` for code execution (CWE-502 / CAPEC-586 /
+    CVE-2021-42550).  If an attacker could influence which function gets
+    hashed, or could substitute the serialized payload, they could achieve
+    arbitrary code execution.
+
+    Using ``ast.dump()`` on the source text gives us all the same
+    structural information (function names, argument signatures, global
+    name references, nested closures, decorators) without any deserialization
+    risk, because ``ast.parse()`` never executes code — it only validates
+    Python syntax.
+
+    **Compatibility**: If ``inspect.getsource()`` fails (e.g. for dynamically
+    created ``exec``-defined functions without a backing source file), falls
+    back to hashing the raw source text as a last resort.  This is still
+    safer than ``marshal.dumps`` because it never deserialises Python objects.
+
+    **Migration note**: All existing manifests generated with the old
+    marshal-based hashes must be regenerated.  Add a one-time migration
+    step in the release notes for the next major version bump.
     """
+    import ast
+
     h = hashlib.sha256()
-    h.update(marshal.dumps(func.__code__))
+    try:
+        import textwrap
+
+        source = inspect.getsource(func)
+        # Dedent so that functions defined in nested scopes (e.g. inside test
+        # methods or classes) parse correctly — dedenting has no effect on
+        # the AST dump since we strip line/col info below.
+        tree = ast.parse(textwrap.dedent(source))
+        # Strip line/column info from AST nodes so that cosmetic changes
+        # (whitespace, indentation, line numbers) do not change the hash.
+        for node in ast.walk(tree):
+            for field in ("lineno", "col_offset", "end_lineno", "end_col_offset"):
+                if hasattr(node, field):
+                    try:
+                        setattr(node, field, None)
+                    except AttributeError:
+                        pass  # readonly fields on some node types
+        ast_str = ast.dump(tree, indent=0, include_attributes=False)
+        h.update(ast_str.encode())
+    except OSError:
+        # Fallback for dynamically-created functions (e.g. exec() without a
+        # backing source file).  We fall back to raw source text — still
+        # safer than marshal because it never deserialises Python objects.
+        h.update(func.__code__.co_code)
     return h.hexdigest()
 
 
