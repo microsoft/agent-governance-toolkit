@@ -323,3 +323,72 @@ rules:
         for _ in range(50):
             detector.record_call("agent-x", "sess-1", ExecutionRing.RING_3_SANDBOX, ExecutionRing.RING_1_PRIVILEGED)
         assert detector.is_breaker_tripped("agent-x", "sess-1")
+
+    # ── Hardening: shared breach detector across an agent's callables ──
+
+    def test_breach_detector_shared_across_callables_same_agent_session(self):
+        """Two GovernedCallable instances for the same (agent_id, session_id)
+        MUST share one RingBreachDetector. Otherwise a rogue agent with N
+        tools can spend the full per-detector violation budget N times."""
+        from hypervisor.models import ExecutionRing
+        from agentmesh.governance.govern import (
+            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+        )
+
+        _reset_shared_breach_detectors()
+        cfg_a = GovernanceConfig(
+            policy=ALLOW_ALL_POLICY, agent_id="agent-1", audit=False,
+            ring=ExecutionRing.RING_3_SANDBOX, session_id="sess-A",
+        )
+        cfg_b = GovernanceConfig(
+            policy=ALLOW_ALL_POLICY, agent_id="agent-1", audit=False,
+            ring=ExecutionRing.RING_3_SANDBOX, session_id="sess-A",
+        )
+        gc_a = GovernedCallable(dummy_tool, cfg_a)
+        gc_b = GovernedCallable(dummy_tool, cfg_b)
+        assert gc_a._breach_detector is gc_b._breach_detector
+
+    def test_breach_detector_isolated_across_sessions(self):
+        """Different session_ids on the same agent get distinct detectors."""
+        from hypervisor.models import ExecutionRing
+        from agentmesh.governance.govern import (
+            GovernanceConfig, GovernedCallable, _reset_shared_breach_detectors,
+        )
+
+        _reset_shared_breach_detectors()
+        cfg_a = GovernanceConfig(
+            policy=ALLOW_ALL_POLICY, agent_id="agent-1", audit=False,
+            ring=ExecutionRing.RING_3_SANDBOX, session_id="sess-A",
+        )
+        cfg_b = GovernanceConfig(
+            policy=ALLOW_ALL_POLICY, agent_id="agent-1", audit=False,
+            ring=ExecutionRing.RING_3_SANDBOX, session_id="sess-B",
+        )
+        gc_a = GovernedCallable(dummy_tool, cfg_a)
+        gc_b = GovernedCallable(dummy_tool, cfg_b)
+        assert gc_a._breach_detector is not gc_b._breach_detector
+
+    # ── Hardening: exact-token resource inference (no substring matches) ──
+
+    def test_resource_inference_no_false_positive_httponly(self):
+        """'set_httponly_flag' must NOT be inferred as a network action."""
+        from agentmesh.governance.govern import _infer_resource_type
+        from agentmesh.governance import ResourceType
+        assert _infer_resource_type("set_httponly_flag") == ResourceType.TOOL_EXECUTION
+
+    def test_resource_inference_no_false_positive_overwrite(self):
+        """'overwrite_protection_check' must NOT be inferred as filesystem."""
+        from agentmesh.governance.govern import _infer_resource_type
+        from agentmesh.governance import ResourceType
+        assert _infer_resource_type("overwrite_protection_check") == ResourceType.TOOL_EXECUTION
+
+    def test_resource_inference_true_positives(self):
+        """Real subprocess/network/filesystem actions still classify correctly."""
+        from agentmesh.governance.govern import _infer_resource_type
+        from agentmesh.governance import ResourceType
+        assert _infer_resource_type("http_get") == ResourceType.NETWORK
+        assert _infer_resource_type("exec.command") == ResourceType.SUBPROCESS
+        assert _infer_resource_type("shell-run") == ResourceType.SUBPROCESS
+        assert _infer_resource_type("write_file") == ResourceType.FILESYSTEM
+        assert _infer_resource_type("read_only_query") == ResourceType.TOOL_EXECUTION
+

@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
@@ -32,6 +33,60 @@ if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
 
 logger = logging.getLogger(__name__)
+
+# Module-level shared ring breach detector, keyed by (agent_id, session_id).
+# A single agent's violation budget MUST be tracked across every governed
+# callable it owns. Without sharing, a rogue agent with N tools could spend
+# the full per-detector violation budget N times before the breaker trips.
+_SHARED_BREACH_DETECTORS: "dict[tuple[str, str], Any]" = {}
+
+
+def _get_shared_breach_detector(agent_id: str, session_id: str) -> Any:
+    """Return the singleton RingBreachDetector for (agent_id, session_id)."""
+    key = (agent_id, session_id)
+    detector = _SHARED_BREACH_DETECTORS.get(key)
+    if detector is None:
+        from hypervisor.rings.breach_detector import RingBreachDetector
+        detector = RingBreachDetector()
+        _SHARED_BREACH_DETECTORS[key] = detector
+    return detector
+
+
+def _reset_shared_breach_detectors() -> None:
+    """Test-only helper to clear the shared detector registry."""
+    _SHARED_BREACH_DETECTORS.clear()
+
+
+# Resource-type inference uses exact-token match on action strings split by
+# non-alphanumeric chars. Substring matching was unsafe: e.g.
+# "set_httponly_flag" must not infer NETWORK from "http", and
+# "overwrite_protection_check" must not infer FILESYSTEM from "write".
+_SUBPROCESS_TOKENS = frozenset({
+    "subprocess", "exec", "shell", "spawn", "fork", "execve", "popen", "system",
+})
+_NETWORK_TOKENS = frozenset({
+    "network", "http", "https", "request", "fetch", "url", "web",
+    "socket", "tcp", "udp", "dns",
+})
+_FILESYSTEM_TOKENS = frozenset({
+    "write", "filesystem", "mkdir", "rmdir", "rm", "chmod",
+    "unlink", "rename", "truncate",
+})
+
+_TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _infer_resource_type(action_type: str) -> Any:
+    """Infer the ring ResourceType from an action string using exact token match."""
+    from agentmesh.governance import ResourceType
+    tokens = {t for t in _TOKEN_SPLIT_RE.split(action_type.lower()) if t}
+    if tokens & _SUBPROCESS_TOKENS:
+        return ResourceType.SUBPROCESS
+    if tokens & _NETWORK_TOKENS:
+        return ResourceType.NETWORK
+    if tokens & _FILESYSTEM_TOKENS:
+        return ResourceType.FILESYSTEM
+    return ResourceType.TOOL_EXECUTION
 
 
 @dataclass
@@ -113,9 +168,13 @@ class GovernedCallable:
         self._breach_detector: Any = None
         if config.ring is not None:
             from hypervisor.rings.enforcer import RingEnforcer
-            from hypervisor.rings.breach_detector import RingBreachDetector
             self._ring_enforcer = RingEnforcer()
-            self._breach_detector = RingBreachDetector()
+            # Shared, (agent_id, session_id)-scoped detector so the circuit
+            # breaker counts violations across ALL of an agent's governed
+            # callables, not per-callable in isolation.
+            self._breach_detector = _get_shared_breach_detector(
+                config.agent_id, config.session_id or "default",
+            )
 
         functools.update_wrapper(self, fn)
 
@@ -206,16 +265,12 @@ class GovernedCallable:
                 ),
             )
 
-        # Infer the resource type from the action in context.
-        action_type = context.get("action", {}).get("type", "").lower()
-        if any(k in action_type for k in ("subprocess", "exec", "shell", "process")):
-            resource_type = ResourceType.SUBPROCESS
-        elif any(k in action_type for k in ("network", "http", "https", "request", "fetch", "url", "web", "api")):
-            resource_type = ResourceType.NETWORK
-        elif any(k in action_type for k in ("file", "write", "filesystem", "path", "disk")):
-            resource_type = ResourceType.FILESYSTEM
-        else:
-            resource_type = ResourceType.TOOL_EXECUTION
+        # Infer the resource type from the action in context. Uses exact
+        # token match (split on non-alphanumerics) to avoid false positives
+        # like "set_httponly_flag" being classified as NETWORK or
+        # "overwrite_protection_check" as FILESYSTEM.
+        action_type = context.get("action", {}).get("type", "")
+        resource_type = _infer_resource_type(action_type)
 
         ring_result = self._ring_enforcer.check_resource(ring, resource_type)
 
