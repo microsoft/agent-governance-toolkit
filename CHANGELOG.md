@@ -11,52 +11,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
-- **Broadened SSN PII regex across integration adapters** ([#2635](https://github.com/microsoft/agent-governance-toolkit/issues/2635), [#2636](https://github.com/microsoft/agent-governance-toolkit/pull/2636)) — the dashed-only `\b\d{3}-\d{2}-\d{4}\b` regex used by the LangChain, AutoGen, CrewAI, and Bedrock adapters to detect SSNs in memory writes and outbound messages was trivially bypassed by space-, dot-, or no-separator variants such as `123 45 6789`, `123.45.6789`, and `123456789`. The pattern is now `\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b`, matching the YAML policy pack fix from [#2594](https://github.com/microsoft/agent-governance-toolkit/pull/2594) / [#2469](https://github.com/microsoft/agent-governance-toolkit/issues/2469).
-- **mesh-relay**: when Entra verification is enabled
-  (`AGENTMESH_ENTRA_AUDIENCE` set), the `connect` frame MUST carry a
-  valid Entra JWT. Empty/missing `token` is rejected immediately —
-  there is no silent fallback to the legacy shared-secret path. Closes
-  an auth-bypass surfaced in PR #2659 review where a peer could skip
-  JWT verification by omitting the `token` field.
-- **mesh-identity (entra_verifier)**: hard upper bound on stale JWKS
-  cache via `AGENTMESH_ENTRA_JWKS_MAX_STALE_SECS` (default 24h).
-  Beyond the budget, refetch failures fail closed rather than serving
-  from an indefinitely-stale cache. Bounds the window in which a key
-  rotated OUT of the live JWKS remains usable.
-- **mesh-identity (entra_verifier)**: pre-validate the JWT header
-  `alg` against `ALLOWED_SIGNING_ALGORITHMS` BEFORE the JWKS lookup.
-  Defense-in-depth against algorithm-confusion attacks (e.g. attacker
-  presents `alg: HS256` hoping the JWK public-key bytes get reused as
-  an HMAC secret); also avoids a wasted network round-trip on
-  obviously-bad tokens.
+## [4.0.0] - 2026-06-01
 
 ### Changed
+- **BREAKING: Python package consolidation** — consolidated 45 Python packages into 5 distributions: `agent-governance-toolkit-core`, `agent-governance-toolkit-runtime`, `agent-governance-toolkit-sre`, `agent-governance-toolkit-cli`, and `agent-governance-toolkit[full]`; legacy package names remain as stub redirects for migration continuity (#2668, #2671)
+- **BREAKING: Monorepo-wide v4 alignment** — bumped Python, TypeScript, .NET, Rust, and Go packages to `4.0.0` and updated release/publishing flows for the new package layout (#2669, #2671)
 - **Consolidated PII detection patterns into a single shared constant** in `agent_os.integrations.base` ([#2635](https://github.com/microsoft/agent-governance-toolkit/issues/2635)). The four per-adapter copies (`langchain_adapter`, `autogen_adapter`, `crewai_adapter`, `bedrock_adapter`) now import the shared `PII_PATTERNS` tuple so future adapters cannot silently drift out of sync. The shared constant is the union of patterns previously used across all four adapters, which means LangChain, AutoGen, and CrewAI now also block credit-card PII (previously a Bedrock-only check). `bedrock_adapter._PII_RE` remains as a back-compat alias to the shared constant.
-- **mesh-registry**: `POST /reputation` now also increments session
-  counters via the same dispatch path, so a simple reputation update
-  is equivalent to a session start + complete pair.
-  ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
+- **mesh-registry**: `POST /reputation` now also increments session counters via the same dispatch path, so a simple reputation update is equivalent to a session start + complete pair. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
 
 ### Added
-- **OpenCode CLI governance package** — new `@microsoft/agent-governance-opencode` package: in-process OpenCode plugin enforcing AGT prompt, tool, and tool-output policy with secret redaction, plus bundled stdio MCP server, default policy, docs, tutorial, runnable example, CI, and ESRP release wiring.
-- **Antigravity CLI governance package** — new `@microsoft/agent-governance-antigravity-cli` package with Antigravity-native hooks, MCP helpers, custom commands, docs, CI, and release wiring.
-- **mesh-relay**: opt-in Entra-signed JWT verification on the WebSocket
-  `connect` frame, with claim allow-list enforcement (`aud`, `tid`,
-  `exp`, `iat`) and JWKS caching. Opt in via `AGENTMESH_ENTRA_AUDIENCE`
-  + `AGENTMESH_ENTRA_TENANT_ID`. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
-- **mesh-registry**: `POST /v1/registry/verify` endpoint for upgrading
-  agents from anonymous to verified tier via Entra-signed JWTs.
-  Stamps `verified_app_id`, `verified_tenant_id`, `verified_at`, and
-  `tier='verified'` on the agent record. Opt-in via the same env vars
-  as the relay. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
-- **mesh-registry**: per-agent session counters (`sessions_started`,
-  `sessions_completed`, `sessions_aborted`) plus derived
-  `completion_rate`. Surfaces commitment-quality as a signal distinct
-  from the reputation scalar. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
-- **mesh-registry**: `/v1/registry/verify` pubkey-fallback for clients
-  sending bare AMID (the unprefixed base64 public-key blob) instead of
-  the DID-prefixed form. ([#2659](https://github.com/microsoft/agent-governance-toolkit/pull/2659))
+- **TEE keystore abstraction** — async key-store primitives with `TEEKeyHandle`, `SoftwareKeyHandle`, `LocalTEEKeyStore`, and `MockSKRKeyStore` for attested and software-backed key management (ADR 0010 PR 3) (#2735)
+- **New governed CLI packages** — added first-party governance packages for OpenCode (`@microsoft/agent-governance-opencode`), Antigravity CLI (`@microsoft/agent-governance-antigravity-cli`), and Claude Code (`@microsoft/agent-governance-claude-code`) with package wiring, docs, examples, and release automation (#2658, #2554, #2457)
+- **Entra-signed JWT verification for AgentMesh** — mesh-relay now validates Entra JWTs on the WebSocket `connect` frame, and mesh-registry adds `/v1/registry/verify` for upgrading agents to verified tier with verified app/tenant metadata, pubkey fallback, and per-agent session counters (`sessions_started`, `sessions_completed`, `sessions_aborted`, `completion_rate`) (#2659, #2719)
+- **Wire-protocol-aware policy evaluation across all SDKs** — added SQL- and Kubernetes-aware policy facets to TypeScript, Rust, Go, and .NET so decisions can key off protocol metadata instead of raw text alone (#2553, #2534, #2535, #2537)
+- **Credential injection and offload across all SDKs** — added governed credential materialization/offload flows for agent tool calls in TypeScript, Rust, Go, and .NET (#2481, #2535)
+- **Credential redaction expansion** — broadened secret/credential redaction coverage across C#, Python, TypeScript, and Rust surfaces (#2737)
+- **Sandbox and shell governance** — added a sandbox subprocess code scanner and OpenShell shell interception to inspect code execution paths before launch (#2705, #2704)
+- **LangGraph v1.0 governance adapter** — added LangGraph 1.0 support plus stale-auth fingerprinting to catch reused or expired auth context (#2694)
+- **AGT test replay engine** — added policy regression replay tooling for replaying captured decision traces against current evaluators (#2619)
+- **Cedarling-AgentMesh integration** — added Cedarling community integration plus injected Cedarling-instance support and runnable examples (#2399, #2460)
+- **Agent sandbox ACA provider refresh** — updated the Azure Container Apps provider and quickstart for the `0.1.0b1` SDK line (#2675)
+- **New runtime and telemetry features** — added a governed-agent-in-10-min demo, Rust feature-gated OTel policy telemetry, a feature-gated Rust `agt` operator CLI, stronger Rust prompt-guard corpora/thresholds, MCP-scan primitive metadata inspection, expanded audit fields (`arguments_hash`, `approver_did`, `policy_version`, `issued_at`, `completed_at`), and registry atomic reputation updates with broader JWKS error handling (#2614, #2539, #2513, #2440, #2438, #2473, #2532, #2733)
+
+### Security
+- **Broadened SSN PII regex across integration adapters** ([#2635](https://github.com/microsoft/agent-governance-toolkit/issues/2635), [#2636](https://github.com/microsoft/agent-governance-toolkit/pull/2636)) — the dashed-only `\b\d{3}-\d{2}-\d{4}\b` regex used by the LangChain, AutoGen, CrewAI, and Bedrock adapters to detect SSNs in memory writes and outbound messages was trivially bypassed by space-, dot-, or no-separator variants such as `123 45 6789`, `123.45.6789`, and `123456789`. The pattern is now `\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b`, matching the YAML policy pack fix from [#2594](https://github.com/microsoft/agent-governance-toolkit/pull/2594) / [#2469](https://github.com/microsoft/agent-governance-toolkit/issues/2469).
+- **mesh-relay**: when Entra verification is enabled (`AGENTMESH_ENTRA_AUDIENCE` set), the `connect` frame MUST carry a valid Entra JWT. Empty/missing `token` is rejected immediately — there is no silent fallback to the legacy shared-secret path. Closes an auth-bypass surfaced in PR #2659 review where a peer could skip JWT verification by omitting the `token` field.
+- **mesh-identity (entra_verifier)**: hard upper bound on stale JWKS cache via `AGENTMESH_ENTRA_JWKS_MAX_STALE_SECS` (default 24h). Beyond the budget, refetch failures fail closed rather than serving from an indefinitely-stale cache. Bounds the window in which a key rotated OUT of the live JWKS remains usable.
+- **mesh-identity (entra_verifier)**: pre-validate the JWT header `alg` against `ALLOWED_SIGNING_ALGORITHMS` BEFORE the JWKS lookup. Defense-in-depth against algorithm-confusion attacks (e.g. attacker presents `alg: HS256` hoping the JWK public-key bytes get reused as an HMAC secret); also avoids a wasted network round-trip on obviously-bad tokens.
+- **Closed authorization bypasses** in the stateless kernel and execute API; resolved a direct-URL policy bypass in resource validation; and added proof-of-possession enforcement on registry registration and registry endpoints (#2644, #2541, #2542, #2533)
+- **Hardened trust boundaries** — tightened POP and capability-grant auth, blocked signing-oracle and unknown-DID auto-trust paths, hardened JWKS/revocation trust fetch and URL allowlist matching, and added registration auth guardrails (#2632, #2633, #2546)
+- **Sandbox and service hardening** — hardened the in-process sandbox against stdlib escape paths, added bearer auth and route/credit protections to cloud-board, and expanded mute-agent with 11 red-team regression tests (#2631, #2645, #2690)
+- **Additional hardening** — strengthened release automation against unsafe inputs, hardened `AsyncTrustPolicyEvaluator` locking, bound mTLS certificates to Ed25519 identity keys, made workflow designer exports fail closed, hardened trust dashboard HTML rendering, and prevented silent fallback to the mock policy evaluator (#2654, #2448, #2476, #2471, #2472, #2484)
+- **Dependency security** — raised the minimum `setuptools` version to `78.1.1` for the published CVE fix (#2752)
+
+### Fixed
+- **CI stabilization** — fixed PyJWT/click/rich dependency issues, OPA/Cedar and LangGraph skip markers, conftest imports, flaky package-matrix behavior, and related test-matrix breakage across the consolidated Python package layout (#2720, #2721, #2722, #2723)
+- **Build and release fixes** — fixed the Mastra DTS build, updated CI workflow paths after the `packages/` layout migration, and stabilized ESRP/PyPI publishing for the consolidated distributions (#2751, #2712)
+- **Various dependency bumps** — refreshed 50+ dependencies across Python, TypeScript, .NET, Rust, docs, and tooling during the v4 line (#2395-#2750)
+
+### Documentation
+- **Documentation overhaul** — rewrote the README for clarity, refreshed the homepage and docs site narrative, updated architecture diagrams, and tightened package/install guidance for the consolidated v4 experience (#2407, #2561, #2486, #2524, #2526, #2579)
+- **Security and governance documentation** — expanded `SECURITY.md` and the threat model, added CHARTER and succession-planning material, updated Code of Conduct to Contributor Covenant v2.1, and added supply-chain impersonation guidance plus an error-handling guide (#2514, #2510, #2511, #2512, #2613, #2550)
+- **Standards, tutorials, and localization** — added ADR-0026 (Foundry AI Gateway PDP), ADR-0028 (AGT Studio), ADR-0029 (policy distribution), the NSA MCP compliance mapping, 60+ tutorial improvements, and Traditional Chinese (`zh-TW`) translations (#2536, #2639, #2691, #2562, #2725)
 
 ## [3.2.1] - 2026-04-22
 
