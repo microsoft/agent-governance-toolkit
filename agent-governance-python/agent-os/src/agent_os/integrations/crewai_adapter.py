@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 from .base import (
     PII_PATTERNS,
     BaseIntegration,
+    GovernanceEventType,
     GovernancePolicy,
     PolicyInterceptor,
     PolicyViolationError,
@@ -200,6 +201,18 @@ class GovernanceHooks:
                 name, tool_name, agent_name,
             )
 
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
+
+            kernel.emit_skill_audit_event(
+                GovernanceEventType.POLICY_CHECK,
+                agent_id=agent_name,
+                action="crewai.before_tool_call",
+                trusted_sources=trusted_skill_sources,
+                default_origin="crewai",
+                context_before=tool_input,
+                tool_name=tool_name,
+            )
+
             # ─── 1. Tool allowlist check ───────────────────────
             if kernel.policy.allowed_tools:
                 if tool_name not in kernel.policy.allowed_tools:
@@ -293,7 +306,19 @@ class GovernanceHooks:
             tool_name = getattr(context, "tool_name", "unknown")
             tool_result = getattr(context, "tool_result", None)
 
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
+
             if tool_result and isinstance(tool_result, str):
+                kernel.emit_skill_audit_event(
+                    GovernanceEventType.POLICY_CHECK,
+                    agent_id=ctx.agent_id,
+                    action="crewai.after_tool_call",
+                    trusted_sources=trusted_skill_sources,
+                    default_origin="crewai",
+                    context_after=tool_result,
+                    tool_name=tool_name,
+                )
+
                 # Blocked-pattern check on output
                 matched = kernel.policy.matches_pattern(tool_result)
                 if matched:
@@ -376,7 +401,18 @@ class GovernanceHooks:
                 for m in messages
             ) if messages else ""
 
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
+
             if combined_input.strip():
+                kernel.emit_skill_audit_event(
+                    GovernanceEventType.POLICY_CHECK,
+                    agent_id=ctx.agent_id,
+                    action="crewai.before_llm_call",
+                    trusted_sources=trusted_skill_sources,
+                    default_origin="crewai",
+                    context_before=combined_input,
+                )
+
                 allowed, reason = kernel.pre_execute(ctx, combined_input)
                 if not allowed:
                     logger.info(
@@ -425,7 +461,18 @@ class GovernanceHooks:
             """
             response = getattr(context, "response", None)
 
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(context)
+
             if response and isinstance(response, str) and response.strip():
+                kernel.emit_skill_audit_event(
+                    GovernanceEventType.POLICY_CHECK,
+                    agent_id=ctx.agent_id,
+                    action="crewai.after_llm_call",
+                    trusted_sources=trusted_skill_sources,
+                    default_origin="crewai",
+                    context_after=response.strip(),
+                )
+
                 # Blocked-pattern check on LLM output
                 matched = kernel.policy.matches_pattern(response)
                 if matched:

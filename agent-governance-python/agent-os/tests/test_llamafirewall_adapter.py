@@ -25,11 +25,7 @@ from agent_os.prompt_injection import DetectionConfig, DetectionResult, ThreatLe
 
 def _run_async(coro):
     """Run an async coroutine synchronously."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    return asyncio.run(coro)
 
 
 def _mock_llama_module(verdict="safe", score=0.0):

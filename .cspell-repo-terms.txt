@@ -53,6 +53,7 @@ bytecodes
 caas
 caplog
 capsys
+coro
 carloshvp
 carryforward
 carveout
@@ -275,6 +276,7 @@ multitenant
 myapp
 mynamespace
 mypod
+objs
 mypy
 nacl
 nameof

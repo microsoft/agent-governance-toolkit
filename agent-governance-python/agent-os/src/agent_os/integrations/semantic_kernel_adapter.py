@@ -27,10 +27,10 @@ Features:
 import asyncio
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
+from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
 
 
 @dataclass
@@ -899,11 +899,33 @@ class GovernanceFunctionFilter:
         func_name = getattr(func, "name", None) or "unknown"
         plugin_name = getattr(func, "plugin_name", None) or ""
         full_name = f"{plugin_name}.{func_name}" if plugin_name else func_name
+        trusted_skill_sources = self._wrapper.trusted_sources(
+            self._wrapper.trusted_skill_metadata_source(
+                skill_name=plugin_name or getattr(func, "skill_name", None),
+                skill_origin=getattr(func, "skill_origin", None),
+            )
+        )
+        skill_fields = self._wrapper.build_skill_audit_fields(
+            trusted_sources=trusted_skill_sources,
+            default_origin="semantic_kernel_plugin",
+            context_before=getattr(context, "arguments", None),
+        )
+
+        self._wrapper.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=self._ctx.agent_id,
+            action="semantic_kernel.function_invocation",
+            trusted_sources=trusted_skill_sources,
+            default_origin="semantic_kernel_plugin",
+            context_before=getattr(context, "arguments", None),
+            function_name=full_name,
+        )
 
         # Record invocation
         self._ctx.functions_invoked.append({
             "function": full_name,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **skill_fields,
         })
 
         # Check allowed_tools
