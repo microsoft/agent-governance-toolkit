@@ -136,6 +136,7 @@ ENOENT
 ensurepip
 Entra
 eprintln
+esac
 Errno
 Errorf
 esrp
@@ -247,6 +248,7 @@ lstrip
 madmin
 mainpublisher
 manylinux
+mapfile
 markdown
 Marp
 masquerade
