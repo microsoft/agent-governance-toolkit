@@ -261,6 +261,51 @@ policy = PolicyDocument.from_yaml("policies/aca_research_agent.yaml")
 handle = await provider.create_session_async("agent-1", policy=policy)
 ```
 
+## Hardened sandbox image (minimal-PATH)
+
+`docker/Dockerfile.sandbox` is an opt-in hardened variant of the default
+`python:3.11-slim` base. It pins `PATH` to a single explicit directory
+(`/usr/local/sandbox-bin`) containing only the binaries sandboxed code is
+allowed to invoke, and strips the execute bit off well-known network and
+infra CLIs (`curl`, `wget`, `ssh`, `git`, `az`, `aws`, `gcloud`, `kubectl`,
+`terraform`, `helm`, `ansible`, `apt`, `dpkg`, …) as a second-layer guarantee
+in case a caller goes through an absolute path.
+
+This closes the gap that issue [#2662](https://github.com/microsoft/agent-governance-toolkit/issues/2662)
+identifies: without a pinned PATH, a tool can invoke `os.system('az account list')`
+inside the sandbox and the attempt is not blocked or logged by AGT even though
+the network-egress policy would later refuse the call. The hardened image makes
+the attempt itself fail with "command not found".
+
+```bash
+# Build with the default allow-list (python3, cat, echo, ls).
+docker build \
+  -f agent-sandbox/docker/Dockerfile.sandbox \
+  -t agt-sandbox/python-minimal-path:3.11 \
+  agent-sandbox/docker
+
+# Build with a custom allow-list — add only what the sandboxed workload
+# actually needs. The full allow-list IS the new PATH; any binary not listed
+# here is unreachable.
+docker build \
+  --build-arg ALLOWED_BIN_NAMES="python3 cat echo ls grep sort uniq" \
+  -f agent-sandbox/docker/Dockerfile.sandbox \
+  -t agt-sandbox/python-minimal-path:3.11 \
+  agent-sandbox/docker
+```
+
+Wire the image into `DockerSandboxProvider` via the existing `image` argument:
+
+```python
+provider = DockerSandboxProvider(image="agt-sandbox/python-minimal-path:3.11")
+```
+
+To extend the allow-list permanently (rather than at `docker build` time),
+edit the `ARG ALLOWED_BIN_NAMES=` line in `Dockerfile.sandbox` and rebuild.
+The `tests/test_docker_sandbox.py::TestMinimalPathSandboxImage` smoke tests
+assert that the default allow-list cannot accidentally regress to include
+network or infra CLIs.
+
 ## License
 
 MIT
