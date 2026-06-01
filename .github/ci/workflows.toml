@@ -16,7 +16,7 @@
 #       id          string      job key
 #       name        string      job display name
 #       toolchains  [str]       subset of {rust, python, node, dotnet}
-#       opa         bool        install OPA and export ACS_OPA_PATH
+#       opa         bool        install OPA, export ACS_OPA_PATH and add it to PATH
 #       working_directory string defaults.run.working-directory for the job
 #       [[workflow.job.step]]   one block per run step
 #         name      string

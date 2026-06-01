@@ -142,6 +142,7 @@ def _opa_step() -> list[str]:
         f'"https://openpolicyagent.org/downloads/v{OPA_VERSION}/opa_linux_amd64_static"\n'
         'chmod +x "$RUNNER_TEMP/opa"\n'
         'echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"\n'
+        'echo "$RUNNER_TEMP" >> "$GITHUB_PATH"\n'
         '"$RUNNER_TEMP/opa" version'
     )
     return _render_run_step("Install OPA", body)
