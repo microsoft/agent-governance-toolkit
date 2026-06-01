@@ -13,12 +13,14 @@ All Docker interactions are mocked so tests run without a Docker daemon.
 from __future__ import annotations
 
 import asyncio
+import ntpath
 import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.sandbox_provider import (
     ExecutionHandle,
     ExecutionStatus,
@@ -520,6 +522,19 @@ class TestDockerExecuteCode:
             "a1", h.session_id, "pass", context={"task": "test"},
         )
         assert eh.status == ExecutionStatus.COMPLETED
+
+    def test_static_scan_blocks_subprocess_before_container_exec(self, docker_provider):
+        h = docker_provider.create_session("a1")
+        container = docker_provider._containers[(h.agent_id, h.session_id)]
+
+        with pytest.raises(SandboxCodeViolation, match="subprocess.run"):
+            docker_provider.execute_code(
+                "a1",
+                h.session_id,
+                "import subprocess\nsubprocess.run(['az', 'account', 'list'])",
+            )
+
+        container.exec_run.assert_not_called()
 
     def test_policy_deny(self, docker_provider):
         try:
@@ -1569,17 +1584,41 @@ class TestSessionLifecyclePattern:
 
 class TestWindowsPathProtection:
     @patch("agent_sandbox.docker_provider.provider.platform")
-    def test_drive_root_blocked(self, mock_platform):
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.realpath",
+        side_effect=ntpath.realpath if hasattr(ntpath, "realpath") else lambda p: p,
+    )
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.normpath",
+        side_effect=ntpath.normpath,
+    )
+    def test_drive_root_blocked(self, mock_normpath, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\") is True
 
     @patch("agent_sandbox.docker_provider.provider.platform")
-    def test_drive_letter_only_blocked(self, mock_platform):
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.realpath",
+        side_effect=ntpath.realpath if hasattr(ntpath, "realpath") else lambda p: p,
+    )
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.normpath",
+        side_effect=ntpath.normpath,
+    )
+    def test_drive_letter_only_blocked(self, mock_normpath, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("D:") is True
 
     @patch("agent_sandbox.docker_provider.provider.platform")
-    def test_windows_safe_path(self, mock_platform):
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.realpath",
+        side_effect=ntpath.realpath if hasattr(ntpath, "realpath") else lambda p: p,
+    )
+    @patch(
+        "agent_sandbox.docker_provider.provider.os.path.normpath",
+        side_effect=ntpath.normpath,
+    )
+    def test_windows_safe_path(self, mock_normpath, mock_realpath, mock_platform):
         mock_platform.system.return_value = "Windows"
         assert _is_protected_path("C:\\Users\\agent\\data") is False
 

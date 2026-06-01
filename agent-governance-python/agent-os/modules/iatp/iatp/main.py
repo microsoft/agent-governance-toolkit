@@ -53,6 +53,76 @@ RETENTION = os.getenv("IATP_RETENTION", "ephemeral")
 HUMAN_IN_LOOP = os.getenv("IATP_HUMAN_IN_LOOP", "false").lower() == "true"
 TRAINING_CONSENT = os.getenv("IATP_TRAINING_CONSENT", "false").lower() == "true"
 
+
+_WEAK_TOKEN_BLACKLIST = frozenset({
+    "true", "yes", "1", "on", "enabled", "ok", "approve", "approved",
+    "x-user-override", "iatp", "override", "admin", "password",
+    "secret", "token", "default", "changeme", "test",
+})
+_MIN_OVERRIDE_TOKEN_LENGTH = 16
+
+
+def _load_trusted_override_token() -> str:
+    """Read and validate the trusted override token from the environment.
+
+    Rejects empty, short, or blacklisted (well-known/weak) values so a
+    misconfigured operator cannot accidentally enable the override gate
+    with a guessable token like ``true`` or ``yes``. Returns the empty
+    string when no usable token is configured — callers MUST treat an
+    empty return as "override disabled, fail closed"."""
+    raw = os.getenv("IATP_TRUSTED_USER_OVERRIDE_TOKEN", "").strip()
+    if not raw:
+        return ""
+    if len(raw) < _MIN_OVERRIDE_TOKEN_LENGTH:
+        logger.warning(
+            "IATP_TRUSTED_USER_OVERRIDE_TOKEN is too short (%d < %d). "
+            "Override gate disabled.",
+            len(raw),
+            _MIN_OVERRIDE_TOKEN_LENGTH,
+        )
+        return ""
+    if raw.lower() in _WEAK_TOKEN_BLACKLIST:
+        logger.warning(
+            "IATP_TRUSTED_USER_OVERRIDE_TOKEN matches a well-known/weak "
+            "value; override gate disabled."
+        )
+        return ""
+    return raw
+
+
+def _trusted_user_override(header_value: Optional[str]) -> bool:
+    """Return True only when the caller-supplied ``X-User-Override`` header
+    can be trusted to satisfy a "requires user confirmation" warning.
+
+    Historical behavior: any truthy value of the header bypassed the
+    policy/security warning gate, so any caller could self-authorize by
+    sending ``X-User-Override: true``. That is the same caller-controlled
+    bypass shape as the kernel ``approved`` parameter we hardened in the
+    Agent OS authz sweep.
+
+    Hardened behavior (defense in depth + double-gate):
+
+    1. The server operator must set ``IATP_TRUSTED_USER_OVERRIDE_TOKEN`` to
+       a non-empty secret value out of band — at least 16 chars and not
+       one of the well-known weak values (``true``, ``yes``, ``admin``,
+       ...). Weak tokens disable the gate entirely.
+    2. The caller must echo that exact token in ``X-User-Override``.
+    3. If the env var is unset/empty/weak, the header is ignored entirely
+       and all warnings fail closed regardless of what the caller sends.
+
+    This is a stop-gap; the real fix is a trusted out-of-band approval
+    provider analogous to ``KernelExecuteTool.approval_provider``. See
+    the design-follow-up note in ``proxy_task``.
+    """
+    if not header_value:
+        return False
+    expected = _load_trusted_override_token()
+    if not expected:
+        return False
+    # Constant-time compare to avoid timing oracles on the token.
+    import secrets
+    return secrets.compare_digest(header_value.strip(), expected)
+
 # Initialize engines and validators
 policy_engine = IATPPolicyEngine()
 recovery_engine = IATPRecoveryEngine()
@@ -167,9 +237,23 @@ async def proxy_task(
     7. Log everything to Flight Recorder
 
     Headers:
-    - X-User-Override: Set to "true" to bypass security warnings
+    - X-User-Override: Must equal the secret server-side
+      ``IATP_TRUSTED_USER_OVERRIDE_TOKEN`` value to bypass security
+      warnings. If the env var is unset, the header is ignored entirely
+      and warnings always block. A bare ``true`` no longer authorizes.
     - X-Agent-Trace-ID: Optional trace ID for distributed tracing
+
+    Future hardening (security): replace the env-token gate with a trusted out-of-band
+    approval provider injection (same shape as
+    ``KernelExecuteTool.approval_provider``). The current gate is a
+    defense-in-depth stop-gap; a host-driven elicitation flow is the
+    proper long-term design.
     """
+    # Normalize the caller-supplied bypass to a trusted boolean before
+    # any policy decision sees it. ``_trusted_user_override`` returns
+    # False when either the env-side token is unset or the caller did
+    # not supply the matching value.
+    user_override_trusted = _trusted_user_override(x_user_override)
     # 1. GENERATE TRACE ID
     trace_id = x_agent_trace_id or TraceIDGenerator.generate()
 
@@ -235,7 +319,7 @@ async def proxy_task(
     if policy_warning:
         warning = f"{warning}\n{policy_warning}" if warning else policy_warning
 
-    if warning and not x_user_override:
+    if warning and not user_override_trusted:
         trust_score = manifest.calculate_trust_score()
         logger.info(f"[{trace_id}] Requires user override. Trust score: {trust_score}")
         return JSONResponse(

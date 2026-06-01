@@ -94,6 +94,20 @@ class BackendDecision:
     verification_pointers: dict[str, str] = field(default_factory=dict)
 
 
+def _is_strict_true(value: Any) -> bool:
+    """Return True only when ``value`` is the literal boolean ``True``.
+
+    Fail-closed helper for external policy backends. Treats any other
+    value (``False``, ``None``, truthy strings like ``"true"``, integers,
+    dicts, lists, etc.) as denied. The OPA / Cedar wire contract is that
+    a positive authorization decision is the JSON literal ``true`` —
+    anything else means the response was malformed or denied, and a
+    permissive ``bool(value)`` cast would silently authorize strings
+    like ``"denied"`` or non-empty dicts like ``{"reason": "..."}``.
+    """
+    return value is True
+
+
 # ── OPA/Rego Backend ─────────────────────────────────────────
 
 
@@ -179,6 +193,40 @@ class OPABackend:
 
     def _evaluate_remote(self, context: dict[str, Any]) -> BackendDecision:
         import urllib.request
+        from urllib.parse import urlparse
+
+        # Plaintext HTTP to a remote OPA server is a man-in-the-middle
+        # vector: an on-path attacker can rewrite the response body and
+        # flip allow=true. Require HTTPS unless the operator has
+        # explicitly opted into plaintext for a local/dev environment.
+        parsed = urlparse(self._opa_url)
+        if parsed.scheme.lower() != "https":
+            allow_plaintext = os.environ.get(
+                "AGENT_OS_OPA_ALLOW_PLAINTEXT", ""
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            env_name = os.environ.get("AGENT_OS_ENV", "").strip().lower()
+            host = (parsed.hostname or "").lower()
+            is_loopback_host = host in {"localhost", "127.0.0.1", "::1"} or host.startswith("127.")
+            local_env = env_name in {"local", "dev", "development"}
+            if not (allow_plaintext and local_env) and not is_loopback_host:
+                return BackendDecision(
+                    allowed=False,
+                    action="deny",
+                    reason=(
+                        f"OPA remote URL uses non-HTTPS scheme ({parsed.scheme!r}). "
+                        "Set AGENT_OS_OPA_ALLOW_PLAINTEXT=1 with AGENT_OS_ENV=local/dev "
+                        "to permit plaintext, or use an https:// URL."
+                    ),
+                    backend="opa",
+                    error="plaintext_opa_blocked",
+                )
+            if not is_loopback_host:
+                logger.warning(
+                    "OPA remote URL is plaintext (%s); permitted by "
+                    "AGENT_OS_OPA_ALLOW_PLAINTEXT in local/dev environment. "
+                    "DO NOT use this in production.",
+                    self._opa_url,
+                )
 
         # Validate query to prevent path injection
         if not re.fullmatch(r'[a-zA-Z0-9._\-]+', self._query):
@@ -205,9 +253,36 @@ class OPABackend:
         )
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — OPA server URL from configuration
-                body = json.loads(resp.read().decode())
-                result_value = body.get("result", False)
-                allowed = bool(result_value)
+                raw = resp.read().decode()
+                body = json.loads(raw)
+                if not isinstance(body, dict):
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            f"OPA remote returned non-object body "
+                            f"({type(body).__name__}); failing closed."
+                        ),
+                        backend="opa",
+                        error="malformed_response",
+                    )
+                if "result" not in body:
+                    # No ``result`` field — OPA convention for "rule did
+                    # not match / undefined"; fail closed explicitly
+                    # instead of defaulting to a permissive truthy cast.
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            "OPA remote response missing 'result' field; "
+                            "failing closed."
+                        ),
+                        backend="opa",
+                        error="missing_result",
+                        raw_result=body,
+                    )
+                result_value = body["result"]
+                allowed = _is_strict_true(result_value)
                 return BackendDecision(
                     allowed=allowed,
                     action="allow" if allowed else "deny",
@@ -290,9 +365,45 @@ class OPABackend:
                         error=proc.stderr.strip(),
                     )
                 result = json.loads(proc.stdout)
-                expressions = result.get("result", [{}])[0].get("expressions", [{}])
-                value = expressions[0].get("value", False) if expressions else False
-                allowed = bool(value)
+                if not isinstance(result, dict):
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            f"opa eval returned non-object payload "
+                            f"({type(result).__name__}); failing closed."
+                        ),
+                        backend="opa",
+                        error="malformed_response",
+                    )
+                top_results = result.get("result")
+                if not isinstance(top_results, list) or not top_results:
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            "opa eval response missing or empty 'result' "
+                            "array; failing closed."
+                        ),
+                        backend="opa",
+                        error="missing_result",
+                        raw_result=result,
+                    )
+                expressions = top_results[0].get("expressions")
+                if not isinstance(expressions, list) or not expressions:
+                    return BackendDecision(
+                        allowed=False,
+                        action="deny",
+                        reason=(
+                            "opa eval response missing 'expressions' "
+                            "array; failing closed."
+                        ),
+                        backend="opa",
+                        error="missing_expressions",
+                        raw_result=result,
+                    )
+                value = expressions[0].get("value")
+                allowed = _is_strict_true(value)
                 return BackendDecision(
                     allowed=allowed,
                     action="allow" if allowed else "deny",

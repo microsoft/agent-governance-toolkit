@@ -84,6 +84,10 @@ mcp = [
     "mcp>=1.0.0,<2.0",
 ]
 
+langgraph = [
+    "langgraph>=1.0.0,<2.0",
+]
+
 nexus = [
     "agent-os-kernel[iatp]",
     "pyyaml>=6.0.0,<7.0",

@@ -10,6 +10,7 @@ This directory contains translated entry points for the Agent Governance Toolkit
 | Japanese | [`README.ja.md`](./README.ja.md) | [`quickstart.ja.md`](./quickstart.ja.md) | Available |
 | Chinese (Simplified) | [`README.zh-CN.md`](./README.zh-CN.md) | [`quickstart.zh-CN.md`](./quickstart.zh-CN.md) | Available |
 | Korean | [`README.ko.md`](./README.ko.md) | [`quickstart.ko.md`](./quickstart.ko.md) | Available |
+| Chinese (Traditional) | [`README.zh-TW.md`](./README.zh-TW.md) | [`quickstart.zh-TW.md`](./quickstart.zh-TW.md) | Available |
 
 Wanted languages include Spanish, French, German, Portuguese, and Hindi.
 

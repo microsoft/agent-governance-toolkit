@@ -62,6 +62,7 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from agent_sandbox.code_scanner import enforce_no_subprocess_execution
 from agent_sandbox.sandbox_provider import (
     ExecutionHandle,
     ExecutionStatus,
@@ -670,6 +671,8 @@ class ACASandboxProvider(SandboxProvider):
             decision = evaluator.evaluate(eval_ctx)
             if not decision.allowed:
                 raise PermissionError(f"Policy denied: {decision.reason}")
+
+        enforce_no_subprocess_execution(code)
 
         # Run the code over the per-sandbox `exec` endpoint. We
         # base64-encode the source so the body is opaque to the host

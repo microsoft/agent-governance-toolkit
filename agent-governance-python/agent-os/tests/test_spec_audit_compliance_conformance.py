@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # sys.path setup -- import sibling packages from the monorepo
 # ---------------------------------------------------------------------------
@@ -93,26 +95,35 @@ from agentmesh.governance.decision_bom import (
 )
 
 # ---------------------------------------------------------------------------
-# agent-hypervisor imports
+# agent-hypervisor imports (optional — not in agent-os[dev])
 # ---------------------------------------------------------------------------
-from hypervisor.audit.delta import DeltaEngine, SemanticDelta, VFSChange
-from hypervisor.audit.commitment import CommitmentEngine, CommitmentRecord
-from hypervisor.observability.event_bus import (
-    EventType,
-    HypervisorEvent,
-    HypervisorEventBus,
-)
+try:
+    from hypervisor.audit.delta import DeltaEngine, SemanticDelta, VFSChange
+    from hypervisor.audit.commitment import CommitmentEngine, CommitmentRecord
+    from hypervisor.observability.event_bus import (
+        EventType,
+        HypervisorEvent,
+        HypervisorEventBus,
+    )
+except ImportError:
+    pytest.skip("agent-hypervisor not installed", allow_module_level=True)
 
 # ---------------------------------------------------------------------------
-# agent-sre imports
+# agent-sre imports (optional — not a declared dependency of agent-os)
 # ---------------------------------------------------------------------------
-from agent_sre.integrations.otel.events import EventLogger as SREEventLogger
-from agent_sre.integrations.otel import conventions as sre_conventions
+try:
+    from agent_sre.integrations.otel.events import EventLogger as SREEventLogger
+    from agent_sre.integrations.otel import conventions as sre_conventions
+except ImportError:
+    pytest.skip("agent-sre with opentelemetry not installed", allow_module_level=True)
 
 # ---------------------------------------------------------------------------
-# agent-lightning imports
+# agent-lightning imports (optional — not a declared dependency of agent-os)
 # ---------------------------------------------------------------------------
-from agent_lightning_gov.emitter import FlightRecorderEmitter, LightningSpan
+try:
+    from agent_lightning_gov.emitter import FlightRecorderEmitter, LightningSpan
+except ImportError:
+    pytest.skip("agent-lightning not installed", allow_module_level=True)
 
 
 # ===================================================================

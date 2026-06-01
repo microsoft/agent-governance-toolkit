@@ -31,12 +31,29 @@ if not _RELAY_TOKEN:
         "unauthenticated connections.  Set this env var in production."
     )
 
+# Phase 6.c — optional Entra-signed JWT verification for the connect
+# frame's ``token`` field. Opt-in via AGENTMESH_ENTRA_AUDIENCE +
+# AGENTMESH_ENTRA_TENANT_ID. When disabled the legacy shared-secret /
+# open-connect behavior is preserved exactly.
+_ENTRA_VERIFY_ENABLED = bool(
+    os.environ.get("AGENTMESH_ENTRA_AUDIENCE", "").strip()
+    and os.environ.get("AGENTMESH_ENTRA_TENANT_ID", "").strip()
+)
+if _ENTRA_VERIFY_ENABLED:
+    logger.info(
+        "Entra-signed JWT verification enabled (audience=%s tenant=%s) — "
+        "shared-secret AGENTMESH_RELAY_TOKEN path is BYPASSED when an "
+        "Entra token is supplied",
+        os.environ.get("AGENTMESH_ENTRA_AUDIENCE"),
+        os.environ.get("AGENTMESH_ENTRA_TENANT_ID"),
+    )
+
 # Proof-of-possession enforcement for connect frames. When True (default),
 # every ``connect`` frame must include ``public_key``, ``timestamp``, and
 # ``signature`` and the relay verifies that the supplied DID is derived
 # from the public key and that the signature over the timestamp is valid.
 # Setting ``AGENTMESH_RELAY_ALLOW_UNAUTHED_DID=1`` re-enables the legacy
-# behaviour for local/dev usage only — never in production.
+# behavior for local/dev usage only — never in production.
 _REQUIRE_DID_POP: bool = (
     os.environ.get("AGENTMESH_RELAY_ALLOW_UNAUTHED_DID", "").lower()
     not in ("1", "true", "yes")
@@ -125,11 +142,20 @@ def _verify_connect_pop(frame: dict) -> tuple[bool, str]:
 class ConnectedAgent:
     """Tracks a connected agent's WebSocket and heartbeat."""
 
-    def __init__(self, did: str, ws: WebSocket) -> None:
+    def __init__(
+        self,
+        did: str,
+        ws: WebSocket,
+        verified_app_id: str | None = None,
+    ) -> None:
         self.did = did
         self.ws = ws
         self.connected_at = _utcnow()
         self.last_heartbeat = _utcnow()
+        # Phase 6.c — populated when the connect frame's ``token`` was
+        # an Entra-signed JWT and verification succeeded. Operators
+        # can correlate did→appid via this field on /health.
+        self.verified_app_id = verified_app_id
 
     @property
     def is_stale(self) -> bool:
@@ -171,10 +197,15 @@ class RelayServer:
 
         @app.get("/health")
         async def health() -> dict:
+            verified_count = sum(
+                1 for c in self._connections.values() if c.verified_app_id
+            )
             return {
                 "status": "healthy",
                 "service": "agentmesh-relay",
                 "connected_agents": len(self._connections),
+                "verified_agents": verified_count,
+                "entra_verify_enabled": _ENTRA_VERIFY_ENABLED,
                 "stats": self._stats,
             }
 
@@ -199,9 +230,12 @@ class RelayServer:
                     await ws.close(code=4002)
                     return
 
-                # Verify DID proof-of-possession (binds the WebSocket to the
-                # holder of the private key, preventing any client from
-                # connecting as an arbitrary DID and intercepting its mail).
+                # DID proof-of-possession check (upstream main). Binds the
+                # WebSocket to the holder of the private key, preventing
+                # any client from connecting as an arbitrary DID and
+                # intercepting its mail. Applies in both Entra and
+                # shared-secret auth modes — it's an independent layer
+                # over identity, not over tokens.
                 if _REQUIRE_DID_POP:
                     ok, reason = _verify_connect_pop(frame)
                     if not ok:
@@ -214,9 +248,111 @@ class RelayServer:
                         await ws.close(code=4005)
                         return
 
-                # Authenticate: require token when AGENTMESH_RELAY_TOKEN is set
-                if _RELAY_TOKEN is not None:
-                    client_token = frame.get("token")
+                # Authenticate. Three modes, in priority order:
+                #
+                # 1. Entra-signed JWT verification (Phase 6.c). When the
+                #    operator has set both AGENTMESH_ENTRA_AUDIENCE and
+                #    AGENTMESH_ENTRA_TENANT_ID, the connect frame MUST
+                #    carry a valid Entra-issued JWT in ``token``. We
+                #    extract ``appid`` and stamp it on the
+                #    ConnectedAgent so /health and trust-scoring can
+                #    correlate did→appid. There is NO fallback to the
+                #    legacy shared-secret path when Entra is enabled —
+                #    that would let an attacker bypass JWT verification
+                #    by simply omitting the ``token`` field.
+                # 2. Legacy shared-secret. When AGENTMESH_RELAY_TOKEN is
+                #    set AND Entra verification is disabled, accept the
+                #    shared secret. Preserves backward compat for
+                #    clusters that haven't migrated to Entra.
+                # 3. Open. When neither is configured, accept anything.
+                #    The boot-time WARNING tells the operator about it.
+                verified_app_id: str | None = None
+                client_token = frame.get("token")
+                if _ENTRA_VERIFY_ENABLED:
+                    # Lazy import keeps PyJWT off the cold path when
+                    # verification is disabled. Verifier lives under
+                    # `agentmesh.identity` so the registry (which also
+                    # validates inbound Entra tokens via /v1/registry/verify)
+                    # can reuse it without a cross-module dependency.
+                    from agentmesh.identity.entra_verifier import (
+                        EntraTokenError,
+                        get_verifier,
+                    )
+
+                    if not client_token or (
+                        isinstance(client_token, str) and len(client_token) > 16384
+                    ):
+                        # Reject empty/missing/oversized tokens IMMEDIATELY when
+                        # Entra is enabled. Falling through to the
+                        # shared-secret branch (or open-acceptance)
+                        # would let a peer skip the JWT presentation
+                        # entirely — exactly the bypass we're meant
+                        # to prevent.
+                        logger.warning(
+                            "Entra enabled but no token presented by %s",
+                            agent_did,
+                        )
+                        await ws.send_json(
+                            {
+                                "type": "error",
+                                "detail": "Authentication required (Entra)",
+                            }
+                        )
+                        await ws.close(code=4003)
+                        return
+
+                    verifier = await get_verifier()
+                    if verifier is None:
+                        # Should not happen if _ENTRA_VERIFY_ENABLED — but
+                        # if the verifier failed to initialize post-boot
+                        # (e.g. JWKS reachability issue), fail closed
+                        # rather than silently downgrading to shared-secret.
+                        logger.error(
+                            "Entra verification enabled but get_verifier() "
+                            "returned None — refusing connect for %s",
+                            agent_did,
+                        )
+                        await ws.send_json(
+                            {
+                                "type": "error",
+                                "detail": "Authentication unavailable (Entra)",
+                            }
+                        )
+                        await ws.close(code=4003)
+                        return
+
+                    try:
+                        claims = await verifier.verify(client_token)
+                        verified_app_id = str(
+                            claims.get("appid") or claims.get("azp") or ""
+                        ) or None
+                        logger.info(
+                            "Entra token verified for %s (appid=%s)",
+                            agent_did,
+                            verified_app_id,
+                        )
+                    except EntraTokenError as exc:
+                        # Differentiated path: only the Entra branch
+                        # was tried, so we MUST NOT fall back to the
+                        # shared-secret compare — an attacker could
+                        # otherwise present a malformed JWT to skip
+                        # straight to the shared-secret check.
+                        logger.warning(
+                            "Entra token rejected for %s: %s",
+                            agent_did,
+                            exc,
+                        )
+                        await ws.send_json(
+                            {
+                                "type": "error",
+                                "detail": "Authentication failed (Entra)",
+                            }
+                        )
+                        await ws.close(code=4003)
+                        return
+                elif _RELAY_TOKEN is not None:
+                    # Legacy shared-secret path. Reached only when Entra
+                    # verification is disabled (operator hasn't opted in).
                     if not client_token or not secrets.compare_digest(
                         client_token, _RELAY_TOKEN
                     ):
@@ -250,8 +386,17 @@ class RelayServer:
                     except Exception:  # noqa: BLE001 - best-effort cleanup
                         pass
 
-                self._connections[agent_did] = ConnectedAgent(agent_did, ws)
-                logger.info("Agent connected: %s", agent_did)
+                self._connections[agent_did] = ConnectedAgent(
+                    agent_did, ws, verified_app_id=verified_app_id
+                )
+                if verified_app_id:
+                    logger.info(
+                        "Agent connected: %s (verified appid=%s)",
+                        agent_did,
+                        verified_app_id,
+                    )
+                else:
+                    logger.info("Agent connected: %s", agent_did)
 
                 # Deliver pending messages
                 await self._deliver_pending(agent_did, ws)
@@ -364,7 +509,7 @@ class RelayServer:
         Messages stay in the inbox until the recipient explicitly sends
         an ``ack`` frame for them — see the ``ack`` branch in
         :meth:`_handle_frame`. Acknowledging on send (the previous
-        behaviour) silently dropped messages whenever the recipient
+        behavior) silently dropped messages whenever the recipient
         disconnected after ``send_json`` returned but before the frame
         actually reached them.
         """

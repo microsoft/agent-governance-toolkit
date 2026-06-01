@@ -568,6 +568,29 @@ class TestErrorHandling:
         with pytest.raises(IntentNotFoundError):
             _run(manager.check_action("intent:nope", "x", {}, "a1", "r1"))
 
+    def test_check_action_rejects_cross_agent_intent_reuse(self, manager):
+        """Another agent must not be able to ride a foreign agent's
+        approved intent (caller agent_id != intent.agent_id → deny)."""
+        intent = _run(manager.declare_intent(
+            agent_id="agent-owner",
+            planned_actions=[IntentAction(action="file_write")],
+        ))
+        _run(manager.approve_intent(intent.intent_id))
+
+        # Owner can execute.
+        ok = _run(manager.check_action(
+            intent.intent_id, "file_write", {}, "agent-owner", "req-1"
+        ))
+        assert ok.allowed is True
+
+        # Foreign agent attempting to reuse the intent_id is denied.
+        denied = _run(manager.check_action(
+            intent.intent_id, "file_write", {}, "agent-attacker", "req-2"
+        ))
+        assert denied.allowed is False
+        assert denied.was_planned is False
+        assert "different agent" in denied.reason.lower()
+
 
 # ---------------------------------------------------------------------------
 # Persistence / Round-trip Tests

@@ -4,11 +4,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import logging
 import os
 from dataclasses import dataclass
+from hashlib import sha256 as _sha256
+from hmac import compare_digest as _constant_time_eq
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -245,9 +245,9 @@ def _matches_any_token(token: str, expected_tokens: list[str]) -> bool:
 
 
 def _token_matches(token: str, expected_token: str) -> bool:
-    token_digest = hashlib.sha256(token.encode("utf-8")).digest()
-    expected_digest = hashlib.sha256(expected_token.encode("utf-8")).digest()
-    return hmac.compare_digest(token_digest, expected_digest)
+    token_digest = _sha256(token.encode("utf-8")).digest()
+    expected_digest = _sha256(expected_token.encode("utf-8")).digest()
+    return _constant_time_eq(token_digest, expected_digest)
 
 
 def _split_env_tokens(value: str) -> list[str]:

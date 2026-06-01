@@ -58,7 +58,7 @@ parameters:
   - name: rustVersion
     type: string
     displayName: 'Rust toolchain version'
-    default: '1.70.0'
+    default: '1.89.0'
 
   - name: goVersion
     type: string
@@ -90,6 +90,8 @@ parameters:
         path: agent-governance-python/agent-marketplace
       - name: agent-rag-governance
         path: agent-governance-python/agent-rag-governance
+      - name: agt-sandbox
+        path: agent-governance-python/agent-sandbox
 
   - name: npmPackages
     type: object
@@ -215,8 +217,9 @@ stages:
                 publishLocation: 'pipeline'
               displayName: 'Publish ${{ pkg.name }} artifacts'
 
+  # All PyPI packages publish in parallel after build completes.
   - stage: Publish_PyPI
-    displayName: 'Publish to PyPI'
+    displayName: 'Publish All Packages to PyPI'
     dependsOn: Build_PyPI
     condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'pypi'), eq('${{ parameters.target }}', 'all')))
     jobs:
