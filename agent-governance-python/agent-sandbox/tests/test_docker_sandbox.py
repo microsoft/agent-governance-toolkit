@@ -2339,3 +2339,42 @@ class TestHardeningAdditions:
         # Digest-pinned images must NOT have a tag passed; Docker SDK requires
         # the digest reference to be the full repo argument with no tag.
         client.images.pull.assert_called_once_with("python@sha256:abc123")
+
+
+# =========================================================================
+# Section 23: Default image selection (hardened vs legacy)
+# =========================================================================
+
+
+class TestDefaultImageSelection:
+    """The DockerSandboxProvider prefers the hardened minimal-PATH image
+    when it is locally available, and falls back to python:3.11-slim
+    otherwise so existing deployments keep working."""
+
+    def test_prefers_hardened_image_when_available(self, monkeypatch):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        def fake_select() -> str:
+            return DockerSandboxProvider.HARDENED_IMAGE_TAG
+
+        monkeypatch.setattr(DockerSandboxProvider, "_select_default_image",
+                            classmethod(lambda cls: fake_select()))
+        p = DockerSandboxProvider()
+        assert p._image == DockerSandboxProvider.HARDENED_IMAGE_TAG
+
+    def test_falls_back_to_legacy_when_hardened_not_built(self, monkeypatch):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        monkeypatch.setattr(DockerSandboxProvider, "_select_default_image",
+                            classmethod(lambda cls: DockerSandboxProvider._LEGACY_DEFAULT_IMAGE))
+        p = DockerSandboxProvider()
+        assert p._image == "python:3.11-slim"
+
+    def test_explicit_image_overrides_default(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+        p = DockerSandboxProvider(image="my-custom:tag")
+        assert p._image == "my-custom:tag"
+
+    def test_hardened_image_tag_documented(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+        assert DockerSandboxProvider.HARDENED_IMAGE_TAG == "agt-sandbox/python-minimal-path:3.11"

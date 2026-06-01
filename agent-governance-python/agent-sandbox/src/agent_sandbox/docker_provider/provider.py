@@ -379,6 +379,24 @@ class DockerSandboxProvider(SandboxProvider):
     # Runtime detection
     # ------------------------------------------------------------------
 
+    @classmethod
+    def _select_default_image(cls) -> str:
+        """Pick the hardened image if it's available locally, else legacy.
+
+        Tries to query the local Docker daemon for ``HARDENED_IMAGE_TAG``.
+        Any failure (no Docker, image not built, permission denied) falls
+        back silently to ``python:3.11-slim`` so existing setups keep
+        working. Callers who want to force one or the other should pass
+        ``image=...`` explicitly.
+        """
+        try:
+            import docker  # type: ignore[import-untyped]
+            client = docker.from_env()
+            client.images.get(cls.HARDENED_IMAGE_TAG)
+            return cls.HARDENED_IMAGE_TAG
+        except Exception:
+            return cls._LEGACY_DEFAULT_IMAGE
+
     def _detect_runtime(self) -> IsolationRuntime:
         """Auto-detect the strongest available OCI runtime."""
         if self._client is None:

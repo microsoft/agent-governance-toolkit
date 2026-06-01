@@ -55,10 +55,13 @@ RUN set -eux; \
 # image must never silently expose, even via an absolute path. The pinned
 # PATH already makes them unreachable; this is a second-layer guarantee.
 RUN set -eux; \
-    for bin in curl wget nc netcat ssh scp rsync git \
+    for bin in curl wget nc netcat ncat socat \
+               ssh scp rsync git \
                apt apt-get dpkg dnf yum apk \
                aws az gcloud kubectl terraform helm ansible \
                ssh-keygen ssh-agent telnet ftp tftp \
+               perl ruby \
+               dash bash busybox sh ksh zsh \
                base64 xxd hexdump; do \
         target=$(command -v "$bin" 2>/dev/null || true); \
         if [ -n "$target" ] && [ -f "$target" ]; then \
