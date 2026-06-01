@@ -460,6 +460,7 @@ typer
 typosquat
 ufeff
 uncallable
+keystore
 unconfigured
 Ungated
 unicodedata
