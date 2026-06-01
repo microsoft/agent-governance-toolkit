@@ -118,6 +118,7 @@ def aca_config_from_policy(
         input_dir=base.input_dir,
         output_dir=base.output_dir,
         runtime=base.runtime,
+        ring=base.ring,
     )
 
     defaults = getattr(policy, "defaults", None)
