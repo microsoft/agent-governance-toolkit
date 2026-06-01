@@ -505,3 +505,6 @@ XACML
 xfail
 xunit
 ZDOTDIR
+
+ACMR
+scak
