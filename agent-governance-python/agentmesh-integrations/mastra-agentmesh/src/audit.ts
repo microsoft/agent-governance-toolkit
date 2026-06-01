@@ -139,18 +139,11 @@ export function auditMiddleware(config: AuditConfig = {}) {
 
 export type { AuditEntry };
 
-/** Compute SHA-256 hash of a string. Works in Node.js and Edge. */
+/** Compute SHA-256 hash of a string. Uses the Web Crypto API (available in Node.js 18+ and all edge runtimes). */
 async function computeHash(data: string): Promise<string> {
-  // Node.js crypto
-  try {
-    const { createHash } = await import("crypto");
-    return createHash("sha256").update(data).digest("hex");
-  } catch {
-    // Fallback for edge runtimes
-    const encoder = new TextEncoder();
-    const buf = await crypto.subtle.digest("SHA-256", encoder.encode(data));
-    return Array.from(new Uint8Array(buf))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
+  const encoder = new TextEncoder();
+  const buf = await crypto.subtle.digest("SHA-256", encoder.encode(data));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
