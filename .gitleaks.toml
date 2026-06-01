@@ -1,0 +1,24 @@
+# Gitleaks configuration for the AGT monorepo.
+#
+# Extends the upstream gitleaks default ruleset and adds a narrowly scoped
+# allowlist for the vendored Agent Control Specification (ACS) subtree under
+# policy-engine/, whose example apps and SDK test fixtures intentionally embed
+# deterministic, non-functional placeholder credentials (e.g. "ghp_secret123",
+# "finalSecret42") to exercise secret-redaction and tool-gating behavior. These
+# are not real secrets and never authenticate against any service.
+title = "AGT gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Vendored ACS example/test fixtures use deliberately fake placeholder tokens"
+paths = [
+  '''policy-engine/examples/.*''',
+  '''policy-engine/sdk/node/test/.*''',
+  '''policy-engine/.*/(test|tests|fixtures)/.*''',
+]
+regexes = [
+  '''ghp_secret123''',
+  '''finalSecret42''',
+]
