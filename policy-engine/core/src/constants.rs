@@ -4,6 +4,14 @@ pub(crate) mod annotation {
     pub(crate) const TYPE: &str = "type";
 }
 
+/// SHA-256 digest sizes shared by the `extends` integrity validators so the
+/// raw-byte and hex-encoded length checks stay in lockstep with their error
+/// messages.
+pub(crate) mod sha256 {
+    pub(crate) const DIGEST_BYTES: usize = 32;
+    pub(crate) const HEX_LEN: usize = 64;
+}
+
 /// Reserved deny reasons that cross the dispatcher boundary, where a host
 /// supplied annotator dispatcher signals the outcome back to the runtime. These
 /// are the single source of truth for the sentinel strings, so the FFI boundary

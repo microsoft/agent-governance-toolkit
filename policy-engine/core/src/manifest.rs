@@ -957,9 +957,10 @@ fn parse_integrity(raw: &str) -> Result<Vec<u8>, RuntimeError> {
                 "extends integrity '{raw}' must use sha256-<base64>"
             ))
         })?;
-    if decoded.len() != 32 {
+    if decoded.len() != crate::constants::sha256::DIGEST_BYTES {
         return Err(RuntimeError::ManifestInvalid(format!(
-            "extends integrity '{raw}' must contain a 32 byte sha256 digest"
+            "extends integrity '{raw}' must contain a {} byte sha256 digest",
+            crate::constants::sha256::DIGEST_BYTES
         )));
     }
     Ok(decoded)
@@ -967,9 +968,12 @@ fn parse_integrity(raw: &str) -> Result<Vec<u8>, RuntimeError> {
 
 fn parse_sha256_hex(raw: &str) -> Result<Vec<u8>, RuntimeError> {
     let trimmed = raw.trim();
-    if trimmed.len() != 64 || !trimmed.chars().all(|ch| ch.is_ascii_hexdigit()) {
+    if trimmed.len() != crate::constants::sha256::HEX_LEN
+        || !trimmed.chars().all(|ch| ch.is_ascii_hexdigit())
+    {
         return Err(RuntimeError::ManifestInvalid(format!(
-            "extends sha256 '{raw}' must be 64 lowercase or uppercase hex characters"
+            "extends sha256 '{raw}' must be {} lowercase or uppercase hex characters",
+            crate::constants::sha256::HEX_LEN
         )));
     }
     (0..trimmed.len())
