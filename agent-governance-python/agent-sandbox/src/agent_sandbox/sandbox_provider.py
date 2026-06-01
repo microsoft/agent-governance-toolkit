@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from hypervisor.models import ExecutionRing
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +68,11 @@ class SandboxConfig:
 
     Extends the minimal config with fields needed by session-based
     providers (``input_dir``, ``output_dir``, ``runtime``).
+
+    The ``ring`` field maps the agent's execution ring to resource
+    constraints enforced at session-creation time.  Defaults to
+    ``RING_3_SANDBOX`` (most restrictive) so sandboxes are fail-closed
+    unless the caller explicitly grants a higher ring.
     """
 
     timeout_seconds: float = 60.0
@@ -78,6 +85,7 @@ class SandboxConfig:
     output_dir: str | None = None
     runtime: str | None = None
     output_max_bytes: int = 1_048_576  # 1 MiB per stream
+    ring: ExecutionRing = field(default_factory=lambda: ExecutionRing.RING_3_SANDBOX)
 
 
 @dataclass
