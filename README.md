@@ -229,7 +229,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | Package | Description |
 |---------|-------------|
 | [**Agent OS**](agent-governance-python/agent-os/) | Policy engine, agent lifecycle, governance gate |
-| [**Agent Control Specification**](policy-engine/) | Stateless, deterministic, fail-closed policy decision runtime (Rust core) backing the AGT policy layer |
+| [**Agent Control Specification**](policy-engine/) ([README](policy-engine/README.md)) | Stateless, deterministic, fail-closed policy decision runtime (Rust core) backing the AGT policy layer |
 | [**Agent Mesh**](agent-governance-python/agent-mesh/) | Agent discovery, routing, and trust mesh |
 | [**Agent Runtime**](agent-governance-python/agent-runtime/) | Execution sandboxing with four privilege rings |
 | [**Agent SRE**](agent-governance-python/agent-sre/) | Kill switch, SLO monitoring, chaos testing |

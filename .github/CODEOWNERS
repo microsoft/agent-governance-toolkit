@@ -6,19 +6,19 @@
 # See: docs/CONTRIBUTING.md and .github/workflows/require-maintainer-approval.yml
 
 # Default owners for everything in the repo
-* @microsoft/agent-governance-toolkit
+* @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar
 
 # Security-sensitive paths — require maintainer review, no exceptions
-/.github/                    @imran-siddique,MohammadHaroonAbuomar
+/.github/                    @imran-siddique @MohammadHaroonAbuomar
 
 # Infrastructure & container security — require maintainer review
-/scripts/                    @imran-siddique,MohammadHaroonAbuomar
-**/Dockerfile                @imran-siddique,MohammadHaroonAbuomar
-**/docker-compose*           @imran-siddique,MohammadHaroonAbuomar
-/.dockerignore               @imran-siddique,MohammadHaroonAbuomar
-/.clusterfuzzlite/           @imran-siddique,MohammadHaroonAbuomar
+/scripts/                    @imran-siddique @MohammadHaroonAbuomar
+**/Dockerfile                @imran-siddique @MohammadHaroonAbuomar
+**/docker-compose*           @imran-siddique @MohammadHaroonAbuomar
+/.dockerignore               @imran-siddique @MohammadHaroonAbuomar
+/.clusterfuzzlite/           @imran-siddique @MohammadHaroonAbuomar
 
 # Documentation
-/docs/                       @imran-siddique,MohammadHaroonAbuomar
-/site/                       @imran-siddique,MohammadHaroonAbuomar
-*.md                         @microsoft/agent-governance-toolkit
+/docs/                       @imran-siddique @MohammadHaroonAbuomar
+/site/                       @imran-siddique @MohammadHaroonAbuomar
+*.md                         @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar
