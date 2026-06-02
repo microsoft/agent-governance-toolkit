@@ -591,12 +591,19 @@ body,
  * - Level-1 / Level-2 are the section captions Material renders above
  *   nested groups; they duplicate the row that owns the group.
  *
- * Result: the rail starts directly with the first nav row, on every page.
+ * Result: the rail starts directly with the first nav row.
+ *
+ * IMPORTANT: desktop-only. In the mobile/tablet drawer (< 76.25em) these
+ * titles double as the drawer header and the per-section BACK buttons, so
+ * hiding them there strands the user inside a section with no way back to
+ * the top-level list. Keep them visible in drawer mode.
  */
-.md-nav--primary > .md-nav__title,
-.md-nav--primary .md-nav[data-md-level="1"] > .md-nav__title,
-.md-nav--primary .md-nav[data-md-level="2"] > .md-nav__title {
-  display: none !important;
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary > .md-nav__title,
+  .md-nav--primary .md-nav[data-md-level="1"] > .md-nav__title,
+  .md-nav--primary .md-nav[data-md-level="2"] > .md-nav__title {
+    display: none !important;
+  }
 }
 
 /*
@@ -604,21 +611,28 @@ body,
  * Material "lifts" the active section so its children become the visible
  * sidebar list. The active section's own row (e.g. "Packages") still
  * renders at the top of the lifted nav, where it duplicates the active
- * top-tab AND the page H1. Hide it on every page so the sidebar starts
- * straight at the first child row ("Overview", "Agent OS", ...).
+ * top-tab AND the page H1. Hide it so the sidebar starts straight at the
+ * first child row ("Overview", "Agent OS", ...).
+ *
+ * IMPORTANT: only do this at desktop widths where the tab row actually
+ * renders the section name. In drawer/hamburger mode (< 76.25em) there is
+ * no tab row, so hiding the active section would make it unreachable —
+ * keep it visible there.
  *
  * Targets the `<label class="md-nav__link">` that toggles a nested group
  * for the active top-level section in the lifted primary nav.
  */
-.md-nav--primary.md-nav--lifted
-  > .md-nav__list
-  > .md-nav__item--active
-  > .md-nav__link,
-.md-nav--primary
-  > .md-nav__list
-  > .md-nav__item--section.md-nav__item--active
-  > .md-nav__link {
-  display: none !important;
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary.md-nav--lifted
+    > .md-nav__list
+    > .md-nav__item--active
+    > .md-nav__link,
+  .md-nav--primary
+    > .md-nav__list
+    > .md-nav__item--section.md-nav__item--active
+    > .md-nav__link {
+    display: none !important;
+  }
 }
 
 /* Nav rows — Primer NavList.Item */
