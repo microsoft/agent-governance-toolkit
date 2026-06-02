@@ -109,6 +109,12 @@ def resolve_manifest(
     bundle_path = bundle_dir or Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
     rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
 
+    intervention_points = _collect_intervention_points(docs_only)
+    if merged_rules and not _binds_legacy_rules(intervention_points):
+        raise ResolutionError.invalid_governance(
+            "governance rules must bind policy id 'agt_legacy_rules' at one or more intervention points"
+        )
+
     manifest: dict[str, Any] = {
         "agent_control_specification_version": ACS_VERSION,
         "metadata": {
@@ -127,7 +133,7 @@ def resolve_manifest(
                 "query": "data.agt.legacy.verdict",
             },
         },
-        "intervention_points": _collect_intervention_points(docs_only),
+        "intervention_points": intervention_points,
     }
 
     for section in ("tools", "annotators", "limits", "approval"):
@@ -136,6 +142,16 @@ def resolve_manifest(
             manifest[section] = value
 
     return manifest
+
+
+def _binds_legacy_rules(intervention_points: dict[str, Any]) -> bool:
+    for config in intervention_points.values():
+        if not isinstance(config, dict):
+            continue
+        policy = config.get("policy")
+        if isinstance(policy, dict) and policy.get("id") == "agt_legacy_rules":
+            return True
+    return False
 
 
 def _collect_intervention_points(documents: list[dict[str, Any]]) -> dict[str, Any]:

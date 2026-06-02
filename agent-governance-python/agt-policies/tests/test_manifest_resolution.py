@@ -707,6 +707,17 @@ def _write(path: Path, doc: dict) -> None:
     path.write_text(yaml.safe_dump(doc), encoding="utf-8")
 
 
+def _legacy_binding() -> dict:
+    return {
+        "pre_tool_call": {
+            "policy_target": "$.tool_call.args",
+            "policy_target_kind": "tool_args",
+            "tool_name_from": "$.tool_call.name",
+            "policy": {"id": "agt_legacy_rules"},
+        }
+    }
+
+
 def test_resolve_emits_flat_acs_manifest(tmp_path: Path) -> None:
     root = tmp_path
     _write(
@@ -714,14 +725,7 @@ def test_resolve_emits_flat_acs_manifest(tmp_path: Path) -> None:
         {
             "rules": [_rule("r1", "deny", 10)],
             "tools": {"t": {"clearance": "public"}},
-            "intervention_points": {
-                "pre_tool_call": {
-                    "policy_target": "$.tool_call.args",
-                    "policy_target_kind": "tool_args",
-                    "tool_name_from": "$.tool_call.name",
-                    "policy": {"id": "agt_legacy_rules"},
-                }
-            },
+            "intervention_points": _legacy_binding(),
         },
     )
 
@@ -764,12 +768,16 @@ def test_resolve_inherit_false_truncates_chain(tmp_path: Path) -> None:
     root = tmp_path
     sub = root / "a"
     sub.mkdir()
-    _write(root / "governance.yaml", {"rules": [_rule("p", "deny", 5)]})
+    _write(
+        root / "governance.yaml",
+        {"rules": [_rule("p", "deny", 5)], "intervention_points": _legacy_binding()},
+    )
     _write(
         sub / "governance.yaml",
         {
             "inherit": False,
             "rules": [_rule("c", "allow", 1)],
+            "intervention_points": _legacy_binding(),
         },
     )
 
@@ -796,9 +804,13 @@ def test_resolve_scope_filter_drops_non_matching(tmp_path: Path) -> None:
         {
             "scope": "src/payments/*",
             "rules": [_rule("p", "deny", 5)],
+            "intervention_points": _legacy_binding(),
         },
     )
-    _write(sub / "governance.yaml", {"rules": [_rule("c", "allow", 1)]})
+    _write(
+        sub / "governance.yaml",
+        {"rules": [_rule("c", "allow", 1)], "intervention_points": _legacy_binding()},
+    )
 
     action = sub / "login.py"
     action.touch()
@@ -878,14 +890,7 @@ def test_resolve_invalid_field_syntax_fails_closed(tmp_path: Path) -> None:
                     {"field": "tool_call.args.amount-usd", "operator": "eq", "value": 1},
                 )
             ],
-            "intervention_points": {
-                "pre_tool_call": {
-                    "policy_target": "$.tool_call.args",
-                    "policy_target_kind": "tool_args",
-                    "tool_name_from": "$.tool_call.name",
-                    "policy": {"id": "agt_legacy_rules"},
-                }
-            },
+            "intervention_points": _legacy_binding(),
         },
     )
 
@@ -895,6 +900,29 @@ def test_resolve_invalid_field_syntax_fails_closed(tmp_path: Path) -> None:
 
     assert "runtime_error:manifest_invalid" in rego
     assert "invalid field" in rego
+
+
+def test_resolve_fails_closed_when_legacy_rules_unbound(tmp_path: Path) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [_rule("must-bind", "deny", 10)],
+            "intervention_points": {
+                "pre_tool_call": {
+                    "policy_target": "$.tool_call.args",
+                    "policy_target_kind": "tool_args",
+                    "tool_name_from": "$.tool_call.name",
+                    "policy": {"id": "other_policy"},
+                }
+            },
+        },
+    )
+
+    with pytest.raises(ResolutionError) as exc:
+        resolve_manifest(root, root)
+
+    assert exc.value.reason == ResolutionReason.INVALID_GOVERNANCE
 
 
 @pytest.mark.parametrize(
@@ -921,14 +949,7 @@ def test_resolve_renders_operator_vocabulary(
                     {"field": "tool_call.args.q", "operator": operator, "value": value},
                 )
             ],
-            "intervention_points": {
-                "pre_tool_call": {
-                    "policy_target": "$.tool_call.args",
-                    "policy_target_kind": "tool_args",
-                    "tool_name_from": "$.tool_call.name",
-                    "policy": {"id": "agt_legacy_rules"},
-                }
-            },
+            "intervention_points": _legacy_binding(),
         },
     )
 
