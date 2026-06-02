@@ -4,21 +4,20 @@ last_reviewed: 2026-06-02
 owner: docs-team
 ---
 
-<div align="center">
+# Agent Control Specification
 
-# Agent Control Specification - Public Preview
+<div align="center" markdown>
 
 **Stateless, deterministic, fail-closed policy decisions for agent security**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
 [![Rust](https://img.shields.io/badge/core-Rust-orange.svg)](https://www.rust-lang.org/)
 
-> [!IMPORTANT]
-> **Public Preview** - Agent Control Specification is vendored into AGT under
-> `policy-engine/` as the AGT 5.0 policy layer. APIs and manifest details may
-> change before GA.
-
 </div>
+
+!!! important "Public Preview"
+    Agent Control Specification is vendored into AGT under `policy-engine/` as the
+    AGT 5.0 policy layer. APIs and manifest details may change before GA.
 
 ## What ACS is
 

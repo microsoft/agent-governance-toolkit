@@ -4,7 +4,7 @@ Agent Control Specification, ACS, is the policy layer of the Agent Governance To
 
 Define once. Enforce everywhere.
 
-ACS lives in this `policy-engine/` directory as AGT owned source. It started as a vendored copy of `responsibleai/AgentControlSpecification` at commit `318dbca` and has since been synced to upstream commit `eeaa83b`. It is folded into AGT as the AGT 5.0 policy layer, the directory is named for that role inside AGT rather than for the original project, and there is no upstream tracking branch. The upstream ACS repository will be archived once AGT 5.0 ships.
+ACS lives in this `policy-engine/` directory as AGT owned source. It is folded into AGT as the AGT 5.0 policy layer, and the directory is named for that role inside AGT.
 
 ## Why a unified policy layer
 
@@ -236,7 +236,6 @@ Policies must not emit reasons with that prefix. See specification section 15 fo
 
 | Item | Value |
 | --- | --- |
-| Original ACS source | MIT licensed by Microsoft contributors at `responsibleai/AgentControlSpecification`. |
 | Original ACS license | Preserved at `policy-engine/LICENSE.acs`. |
 
 ## License
