@@ -163,6 +163,17 @@ REGISTERED_NPM_PACKAGES = {
     "@microsoft/agent-governance-antigravity-cli",
     "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
     "@microsoft/agent-os-vscode",
+    "agent-control-specification",
+    "agent-control-specification-linux-x64-gnu",
+    "agent-control-specification-linux-arm64-gnu",
+    "agent-control-specification-darwin-x64",
+    "agent-control-specification-darwin-arm64",
+    "agent-control-specification-win32-x64-msvc",
+    "agent-control-specification-opa-linux-x64",
+    "agent-control-specification-opa-linux-arm64",
+    "agent-control-specification-opa-darwin-x64",
+    "agent-control-specification-opa-darwin-arm64",
+    "agent-control-specification-opa-win32-x64",
     # Common deps
     "typescript", "tsup", "vitest", "express", "zod", "@mastra/core",
     "@modelcontextprotocol/sdk", "ws", "commander", "chalk",
@@ -510,7 +521,7 @@ def check_package_json(filepath: str) -> list[str]:
         return findings
 
     registered_lower = {p.lower() for p in REGISTERED_NPM_PACKAGES}
-    for section in ("dependencies", "devDependencies", "peerDependencies"):
+    for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
         for pkg in data.get(section, {}):
             if pkg.lower() not in registered_lower:
                 findings.append(

@@ -120,14 +120,20 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 | AgentMesh SDK | `@microsoft/agent-governance-sdk` | `agent-governance-typescript` |
 | Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `agent-governance-python/agent-os/extensions/copilot` |
 | AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `agent-governance-python/agent-os/extensions/mcp-server` |
+| Agent Control Specification Node SDK | `agent-control-specification` | `policy-engine/sdk/node` |
+| ACS Node native binding | `agent-control-specification-linux-x64-gnu` | `policy-engine/sdk/node/npm/agent-control-specification-linux-x64-gnu` |
+| ACS Node native binding | `agent-control-specification-linux-arm64-gnu` | `policy-engine/sdk/node/npm/agent-control-specification-linux-arm64-gnu` |
+| ACS Node native binding | `agent-control-specification-darwin-x64` | `policy-engine/sdk/node/npm/agent-control-specification-darwin-x64` |
+| ACS Node native binding | `agent-control-specification-darwin-arm64` | `policy-engine/sdk/node/npm/agent-control-specification-darwin-arm64` |
+| ACS Node native binding | `agent-control-specification-win32-x64-msvc` | `policy-engine/sdk/node/npm/agent-control-specification-win32-x64-msvc` |
+| ACS bundled OPA binary | `agent-control-specification-opa-linux-x64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-linux-x64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-linux-arm64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-linux-arm64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-darwin-x64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-darwin-x64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-darwin-arm64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-darwin-arm64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-win32-x64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-win32-x64` |
 
 The VS Code and Cursor extensions are published via their respective marketplaces,
 not npm.
-
-The ACS Node SDK package `agent-control-specification` is not in the production
-npm publish matrix yet. It declares platform native optional dependencies, so it
-needs a cross-platform native package build and publish matrix before it can be
-published as a generally usable npm artifact.
 
 ### Building & Packing
 
@@ -164,12 +170,11 @@ Publishing uses the ADO pipeline (`.github/pipelines/esrp-publish.yml` with targ
 | Package | NuGet Name | Directory |
 |---------|------------|-----------|
 | Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `agent-governance-dotnet` |
-
-The ACS .NET projects under `policy-engine/sdk/dotnet` are packable for local
-validation, but they are not in the production NuGet publish matrix yet. The
-core package requires native runtime assets for Linux, macOS, and Windows, so
-production publishing needs a native asset build matrix before these packages
-are released.
+| Agent Control Specification .NET SDK | `AgentControlSpecification` | `policy-engine/sdk/dotnet/src/AgentControlSpecification` |
+| Agent Control Specification Microsoft.Extensions.AI adapter | `AgentControlSpecification.AI` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AI` |
+| Agent Control Specification Microsoft Agent Framework adapter | `AgentControlSpecification.AgentFramework` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AgentFramework` |
+| Agent Control Specification AutoGen adapter | `AgentControlSpecification.AutoGen` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AutoGen` |
+| Agent Control Specification Semantic Kernel adapter | `AgentControlSpecification.SemanticKernel` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.SemanticKernel` |
 
 ---
 

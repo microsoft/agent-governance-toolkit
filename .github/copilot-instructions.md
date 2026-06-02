@@ -241,7 +241,7 @@ Before approving or merging ANY PR, verify ALL of the following:
    - **PyPI:** `agent-governance-toolkit-core`, `agent-governance-toolkit-integrations`, `agent-governance-toolkit-cli`, `agent-governance-toolkit-protocols`, `agent-governance-toolkit`, `agent-discovery`, `agent-lightning`, `agent-marketplace`, `agent-rag-governance`, `agt-sandbox`, `agent-control-specification`, `agt-policies`
    - **PyPI (local-only, not published):** `agent-governance-dotnet`, `agentmesh-integrations`, `agent-primitives`, `emk`
    - **PyPI (common deps):** `streamlit`, `plotly`, `pandas`, `networkx`, `aioredis`, `pypdf`, `spacy`, `slack-sdk`, `docker`, `langchain-openai`
-   - **npm:** `@microsoft/agent-os-kernel`
+   - **npm:** `@microsoft/agent-os-kernel`, `agent-control-specification`, `agent-control-specification-linux-x64-gnu`, `agent-control-specification-linux-arm64-gnu`, `agent-control-specification-darwin-x64`, `agent-control-specification-darwin-arm64`, `agent-control-specification-win32-x64-msvc`, `agent-control-specification-opa-linux-x64`, `agent-control-specification-opa-linux-arm64`, `agent-control-specification-opa-darwin-x64`, `agent-control-specification-opa-darwin-arm64`, `agent-control-specification-opa-win32-x64`
    - **crates.io:** `agentmesh`, `agentmesh-mcp`, `agent_control_specification_core`, `agent_control_specification`
 3. **New Python modules** — verify `__init__.py` exists in any new package directory
 4. **Dependencies declared** — any new `import` must have the package in `pyproject.toml` dependencies (not just transitive)

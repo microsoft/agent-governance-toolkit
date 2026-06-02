@@ -106,7 +106,26 @@ def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
     assert "after the core ESRP release completes" in text
 
 
-def test_esrp_does_not_fake_publish_acs_node_or_dotnet() -> None:
+def test_esrp_publishes_acs_node_artifacts() -> None:
     text = ESRP.read_text(encoding="utf-8")
-    assert "path: policy-engine/sdk/node" not in text
-    assert "policy-engine/sdk/dotnet" not in text
+    assert "Build_npm_agent_control_specification" in text
+    assert "agent-control-specification-linux-x64-gnu" in text
+    assert "agent-control-specification-linux-arm64-gnu" in text
+    assert "agent-control-specification-darwin-x64" in text
+    assert "agent-control-specification-darwin-arm64" in text
+    assert "agent-control-specification-win32-x64-msvc" in text
+    assert "agent-control-specification-opa-linux-x64" in text
+    assert "agent-control-specification-opa-win32-x64" in text
+    assert "Root agent-control-specification package must not embed" in text
+
+
+def test_esrp_publishes_acs_dotnet_artifacts() -> None:
+    text = ESRP.read_text(encoding="utf-8")
+    assert "Build_ACS_Native_" in text
+    assert "BuildAndPack_ACS" in text
+    assert "nuget-acs-unsigned" in text
+    assert "AgentControlSpecification/AgentControlSpecification.csproj" in text
+    assert "AgentControlSpecification.AI/AgentControlSpecification.AI.csproj" in text
+    assert "AgentControlSpecification.AgentFramework/AgentControlSpecification.AgentFramework.csproj" in text
+    assert "AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj" in text
+    assert "AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj" in text

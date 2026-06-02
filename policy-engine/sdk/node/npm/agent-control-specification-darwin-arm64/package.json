@@ -1,0 +1,13 @@
+{
+  "name": "agent-control-specification-darwin-arm64",
+  "version": "0.3.1-beta.0",
+  "description": "Native Agent Control Specification Node.js binding for macOS arm64.",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "main": "agent-control-specification.darwin-arm64.node",
+  "files": ["agent-control-specification.darwin-arm64.node"],
+  "scripts": {
+    "prepack": "node ../../scripts/verify-package-file.mjs agent-control-specification.darwin-arm64.node"
+  }
+}
