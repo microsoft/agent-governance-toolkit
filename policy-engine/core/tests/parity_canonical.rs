@@ -167,10 +167,7 @@ fn canonical_error_mapping_matches_core_and_spec() {
         let variant = row["variant"].as_str().unwrap();
         let reason = row["reason"].as_str().unwrap();
         assert_eq!(actual[variant].reason(), reason, "{variant}");
-        assert!(
-            spec.contains(reason),
-            "SPECIFICATION.md contains {reason}",
-        );
+        assert!(spec.contains(reason), "SPECIFICATION.md contains {reason}",);
     }
 }
 
