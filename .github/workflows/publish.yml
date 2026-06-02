@@ -9,7 +9,7 @@ on:
         description: >
           Package to publish. Use "all" for everything, "all-python" for all
           Python packages, "all-npm" for all npm packages, or a specific name
-          (e.g. "agent-governance-toolkit-core", "agent-governance-copilot-cli", "agent-governance-claude-code", "agent-governance-opencode").
+          (e.g. "agent-governance-toolkit-core", "agent-governance-copilot-cli", "agent-governance-claude-code", "agent-governance-opencode", "agent-governance-antigravity-cli", "agt-sandbox").
         required: true
         type: string
         default: "all"
@@ -41,7 +41,7 @@ jobs:
           INPUT: ${{ github.event.inputs.package }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          # Complete list of publishable Python packages (9 packages)
+          # Complete list of publishable Python packages (10 packages)
           ALL='[
             {"name":"agent-governance-toolkit-core","path":"agent-governance-python/agent-governance-toolkit-core"},
             {"name":"agent-governance-toolkit-integrations","path":"agent-governance-python/agent-governance-toolkit-integrations"},
@@ -51,7 +51,8 @@ jobs:
             {"name":"agent-discovery","path":"agent-governance-python/agent-discovery"},
             {"name":"agent-lightning","path":"agent-governance-python/agent-lightning"},
             {"name":"agent-marketplace","path":"agent-governance-python/agent-marketplace"},
-            {"name":"agent-rag-governance","path":"agent-governance-python/agent-rag-governance"}
+            {"name":"agent-rag-governance","path":"agent-governance-python/agent-rag-governance"},
+            {"name":"agt-sandbox","path":"agent-governance-python/agent-sandbox"}
           ]'
           # Compact the JSON
           ALL=$(echo "$ALL" | jq -c '.')
@@ -69,6 +70,8 @@ jobs:
             "@microsoft/agent-governance-claude-code",
             "agent-governance-opencode",
             "@microsoft/agent-governance-opencode",
+            "agent-governance-antigravity-cli",
+            "@microsoft/agent-governance-antigravity-cli",
             "agentmesh-sdk",
             "agent-governance-sdk",
             "@microsoft/agent-governance-sdk",
@@ -203,6 +206,7 @@ jobs:
             {"name":"agent-governance-copilot-cli","path":"agent-governance-copilot-cli","nodeVersion":"22","selectors":["agent-governance-copilot-cli","@microsoft/agent-governance-copilot-cli"]},
             {"name":"agent-governance-claude-code","path":"agent-governance-claude-code","nodeVersion":"22","selectors":["agent-governance-claude-code","@microsoft/agent-governance-claude-code"]},
             {"name":"agent-governance-opencode","path":"agent-governance-opencode","nodeVersion":"22","selectors":["agent-governance-opencode","@microsoft/agent-governance-opencode"]},
+            {"name":"agent-governance-antigravity-cli","path":"agent-governance-antigravity-cli","nodeVersion":"22","selectors":["agent-governance-antigravity-cli","@microsoft/agent-governance-antigravity-cli"]},
             {"name":"agentmesh-sdk","path":"agent-governance-typescript","nodeVersion":"20","selectors":["agentmesh-sdk","agent-governance-sdk","@microsoft/agent-governance-sdk"]},
             {"name":"agent-os-copilot-extension","path":"agent-governance-python/agent-os/extensions/copilot","nodeVersion":"20","selectors":["agent-os-copilot-extension","@microsoft/agent-os-copilot-extension"]},
             {"name":"agentos-mcp-server","path":"agent-governance-python/agent-os/extensions/mcp-server","nodeVersion":"20","selectors":["agentos-mcp-server","@microsoft/agentos-mcp-server"]}

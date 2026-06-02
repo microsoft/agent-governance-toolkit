@@ -389,7 +389,6 @@ sandboxing
 sandboxprovider
 sanitised
 sarif
-SCAK
 scikit
 scipy
 sdist
@@ -506,3 +505,11 @@ XACML
 xfail
 xunit
 ZDOTDIR
+ACMR
+scak
+httponly
+execve
+tinyrainbow
+pathe
+emnapi
+OSSF

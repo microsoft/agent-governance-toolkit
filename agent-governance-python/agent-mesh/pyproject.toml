@@ -61,6 +61,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Ring enforcement requires the hypervisor package. Kept optional so the
+# core agent-mesh install does not depend on a package version that may
+# not yet be published. When config.ring is None the ring-enforcement
+# code path is never entered and this extra is not needed.
+hypervisor = [
+    "agent_hypervisor>=3.7.0,<5.0",
+]
 dev = [
     "pytest>=7.4.0,<10.0",
     "pytest-asyncio>=0.23.0,<2.0",
@@ -77,6 +84,9 @@ dev = [
     "opentelemetry-api>=1.20.0,<2.0",
     "opentelemetry-sdk>=1.20.0,<2.0",
     "PyJWT[crypto]>=2.8.0,<3.0",
+    # Ring tests exercise the hypervisor; mirror the optional extra so
+    # `pip install agent-mesh[dev]` brings everything needed for tests.
+    "agent_hypervisor>=3.7.0,<5.0",
 ]
 redis = [
     "redis>=4.0,<8.0",
@@ -179,3 +189,4 @@ markers = [
     "slow: long-running load tests (skip with -m 'not slow')",
     "integration: end-to-end integration tests",
 ]
+

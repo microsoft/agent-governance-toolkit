@@ -49,8 +49,6 @@ $AllPackages = @(
     @{ Name = "agent-tool-registry";        Dir = "modules/atr" }
     @{ Name = "inter-agent-trust-protocol"; Dir = "modules/iatp" }
     @{ Name = "agent-control-plane";        Dir = "modules/control-plane" }
-    @{ Name = "scak";                       Dir = "modules/scak" }
-    @{ Name = "mute-agent";                 Dir = "modules/mute-agent" }
     @{ Name = "mcp-kernel-server";          Dir = "modules/mcp-kernel-server" }
     @{ Name = "agent-os-observability";     Dir = "modules/observability" }
     @{ Name = "nexus-trust-exchange";       Dir = "modules/nexus" }
