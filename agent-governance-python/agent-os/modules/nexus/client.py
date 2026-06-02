@@ -48,6 +48,10 @@ class NexusClient:
         api_key: str,
         api_url: Optional[str] = None,
         trust_threshold: int = DEFAULT_TRUST_THRESHOLD,
+        # Raw 32-byte Ed25519 private key for signing registrations and escrows.
+        # Generate with nexus.crypto.generate_keypair() and store the private bytes
+        # securely (e.g. Azure Key Vault, AWS Secrets Manager).
+        private_key_bytes: Optional[bytes] = None,
         # For local/testing - use in-memory components
         local_mode: bool = False,
     ):
@@ -55,6 +59,7 @@ class NexusClient:
         self.api_key = api_key
         self.base_url = api_url or self.DEFAULT_API_URL
         self.trust_threshold = trust_threshold
+        self._private_key_bytes = private_key_bytes
         self.local_mode = local_mode
         
         # Local cache of peer reputations
@@ -84,7 +89,7 @@ class NexusClient:
             RegistrationResult with status and initial trust score
         """
         if self.local_mode:
-            signature = self._generate_signature(self.manifest.model_dump())
+            signature = self._sign_manifest(self.manifest)
             return await self._local_registry.register(self.manifest, signature)
         
         async with aiohttp.ClientSession() as session:
@@ -446,12 +451,35 @@ class NexusClient:
             "Content-Type": "application/json",
         }
     
-    def _generate_signature(self, data: dict) -> str:
-        """Generate signature for data (placeholder)."""
-        import hashlib
-        import json
-        canonical = json.dumps(data, sort_keys=True, default=str)
-        return f"sig_{hashlib.sha256(canonical.encode()).hexdigest()[:32]}"
+    def _sign_manifest(self, manifest: AgentManifest) -> str:
+        """Return Ed25519 signature over the manifest hash for registration/update."""
+        from .crypto import manifest_hash_for_signing, sign
+        if self._private_key_bytes is None:
+            raise ValueError(
+                "private_key_bytes is required for signing. "
+                "Pass it to NexusClient.__init__ or use nexus.crypto.generate_keypair()."
+            )
+        return sign(self._private_key_bytes, manifest_hash_for_signing(manifest).encode())
+
+    def _sign_deregister(self) -> str:
+        """Return Ed25519 signature over the agent DID for deregistration."""
+        from .crypto import sign
+        if self._private_key_bytes is None:
+            raise ValueError(
+                "private_key_bytes is required for signing. "
+                "Pass it to NexusClient.__init__ or use nexus.crypto.generate_keypair()."
+            )
+        return sign(self._private_key_bytes, self.agent_did.encode())
+
+    def _sign_escrow(self, provider_did: str, task_hash: str, credits: int) -> str:
+        """Return Ed25519 signature over the escrow message."""
+        from .crypto import escrow_message, sign
+        if self._private_key_bytes is None:
+            raise ValueError(
+                "private_key_bytes is required for signing. "
+                "Pass it to NexusClient.__init__ or use nexus.crypto.generate_keypair()."
+            )
+        return sign(self._private_key_bytes, escrow_message(self.agent_did, provider_did, task_hash, credits))
     
     # ==================== Context Manager ====================
     

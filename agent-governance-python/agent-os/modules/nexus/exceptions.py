@@ -245,7 +245,7 @@ class AgentNotFoundError(RegistryError):
 
 class InvalidManifestError(RegistryError):
     """Raised when an agent manifest is invalid."""
-    
+
     def __init__(self, agent_did: str, validation_errors: list[str]):
         self.validation_errors = validation_errors
         super().__init__(
@@ -253,6 +253,18 @@ class InvalidManifestError(RegistryError):
             agent_did=agent_did
         )
         self.code = "INVALID_MANIFEST"
+
+
+class InvalidSignatureError(RegistryError):
+    """Raised when an Ed25519 signature fails verification."""
+
+    def __init__(self, agent_did: str, reason: str = ""):
+        detail = f": {reason}" if reason else ""
+        super().__init__(
+            f"Invalid signature for {agent_did}{detail}",
+            agent_did=agent_did,
+        )
+        self.code = "INVALID_SIGNATURE"
 
 
 class DMZError(NexusError):
