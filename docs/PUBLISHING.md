@@ -40,16 +40,18 @@ must not be used. See [ESRP Onboarding](https://aka.ms/esrp-onboarding).
 
 | Package | PyPI Name | Directory |
 |---------|-----------|-----------|
-| Agent Governance Toolkit Core | `agent-governance-toolkit-core` | `agent-governance-python/agent-governance-toolkit-core` |
-| Agent Governance Toolkit Integrations | `agent-governance-toolkit-integrations` | `agent-governance-python/agent-governance-toolkit-integrations` |
-| Agent Governance Toolkit CLI | `agent-governance-toolkit-cli` | `agent-governance-python/agent-governance-toolkit-cli` |
-| Agent Governance Toolkit Protocols | `agent-governance-toolkit-protocols` | `agent-governance-python/agent-governance-toolkit-protocols` |
-| Agent Governance Toolkit | `agent-governance-toolkit` | `agent-governance-python/agent-compliance` |
-| Agent Discovery | `agent-discovery` | `agent-governance-python/agent-discovery` |
-| Agent Lightning | `agent-lightning` | `agent-governance-python/agent-lightning` |
-| Agent Marketplace | `agent-marketplace` | `agent-governance-python/agent-marketplace` |
-| Agent RAG Governance | `agent-rag-governance` | `agent-governance-python/agent-rag-governance` |
-| AGT Sandbox | `agt-sandbox` | `agent-governance-python/agent-sandbox` |
+| Agent OS Kernel | `agent-os-kernel` | `agent-os` |
+| AgentMesh Platform | `agentmesh-platform` | `agent-mesh` |
+| Agent Hypervisor | `agent-hypervisor` | `agent-hypervisor` |
+| Agent Runtime | `agentmesh-runtime` | `agent-runtime` |
+| Agent SRE | `agent-sre` | `agent-sre` |
+| Agent Governance Toolkit | `agent-governance-toolkit` | `agent-compliance` |
+| Agent Lightning | `agentmesh-lightning` | `agent-lightning` |
+
+### ACS PyPI Packages
+
+| Package | PyPI Name | Directory |
+|---------|-----------|-----------|
 | Agent Control Specification Python SDK | `agent-control-specification` | `policy-engine/sdk/python` |
 | AGT Policies | `agt-policies` | `agent-governance-python/agt-policies` |
 
@@ -120,6 +122,11 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 | AgentMesh SDK | `@microsoft/agent-governance-sdk` | `agent-governance-typescript` |
 | Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `agent-governance-python/agent-os/extensions/copilot` |
 | AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `agent-governance-python/agent-os/extensions/mcp-server` |
+
+### ACS npm Packages
+
+| Package | npm Name | Directory |
+|---------|----------|-----------|
 | Agent Control Specification Node SDK | `agent-control-specification` | `policy-engine/sdk/node` |
 | ACS Node native binding | `agent-control-specification-linux-x64-gnu` | `policy-engine/sdk/node/npm/agent-control-specification-linux-x64-gnu` |
 | ACS Node native binding | `agent-control-specification-linux-arm64-gnu` | `policy-engine/sdk/node/npm/agent-control-specification-linux-arm64-gnu` |
@@ -170,6 +177,11 @@ Publishing uses the ADO pipeline (`.github/pipelines/esrp-publish.yml` with targ
 | Package | NuGet Name | Directory |
 |---------|------------|-----------|
 | Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `agent-governance-dotnet` |
+
+### ACS NuGet Packages
+
+| Package | NuGet Name | Directory |
+|---------|------------|-----------|
 | Agent Control Specification .NET SDK | `AgentControlSpecification` | `policy-engine/sdk/dotnet/src/AgentControlSpecification` |
 | Agent Control Specification Microsoft.Extensions.AI adapter | `AgentControlSpecification.AI` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AI` |
 | Agent Control Specification Microsoft Agent Framework adapter | `AgentControlSpecification.AgentFramework` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AgentFramework` |
@@ -200,6 +212,11 @@ All crates are published under the official
 |---------|------------|-----------|
 | AgentMesh Rust SDK | `agentmesh` | `agent-governance-rust/agentmesh` |
 | AgentMesh MCP Rust SDK | `agentmesh-mcp` | `agent-governance-rust/agentmesh-mcp` |
+
+### ACS Rust Crates
+
+| Package | Crate Name | Directory |
+|---------|------------|-----------|
 | Agent Control Specification Core | `agent_control_specification_core` | `policy-engine/core` |
 | Agent Control Specification Rust SDK | `agent_control_specification` | `policy-engine/sdk/rust` |
 
