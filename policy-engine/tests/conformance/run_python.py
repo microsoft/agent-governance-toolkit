@@ -57,7 +57,8 @@ class QueueRuntime:
         return InterventionPointResult(
             Verdict(Decision.ESCALATE, reason="human_review"),
             policy_input=policy_input,
-            action_identity=action_identity(policy_input),
+            input_identity=action_identity(policy_input),
+            enforced_identity=action_identity(policy_input),
         )
 
 

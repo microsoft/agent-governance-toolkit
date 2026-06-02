@@ -58,6 +58,21 @@ def test_generated_workflows_have_banner_and_least_privilege():
         assert "permissions:\n  contents: read\n" in content
 
 
+def test_generated_opa_downloads_verify_checksum():
+    for _path, content in gen.build_outputs().items():
+        if "openpolicyagent.org/downloads" in content:
+            assert "sha256sum -c -" in content
+            assert gen.OPA_LINUX_AMD64_SHA256 in content
+
+
+def test_policy_engine_python_job_uses_pinned_tooling():
+    content = gen.build_outputs()[REPO_ROOT / ".github" / "workflows" / "policy-engine-ci.yml"]
+    assert "python -m pip install --upgrade pip==24.3.1" in content
+    assert "pip install maturin==1.8.7" in content
+    assert "pytest==9.0.3" in content
+    assert "pip install ./sdk/python ./generator pytest" not in content
+
+
 def test_committed_yaml_matches_manifest():
     # The committed workflow must equal the freshly rendered output, i.e. the
     # same invariant the CI --check job enforces.
@@ -96,6 +111,17 @@ def test_unknown_toolchain_is_rejected():
         "name": "x",
         "output": ".github/workflows/x.yml",
         "job": [{"id": "a", "toolchains": ["haskell"], "step": [{"name": "n", "run": "echo hi"}]}],
+    }
+    with pytest.raises(gen.GenerationError):
+        gen.render_workflow(workflow, actions)
+
+
+def test_unknown_action_key_is_rejected():
+    actions = gen._load_actions(gen.ACTIONS_PATH)
+    workflow = {
+        "name": "x",
+        "output": ".github/workflows/x.yml",
+        "job": [{"id": "a", "toolchains": ["python"], "step": [{"name": "n", "uses": "missing-action"}]}],
     }
     with pytest.raises(gen.GenerationError):
         gen.render_workflow(workflow, actions)

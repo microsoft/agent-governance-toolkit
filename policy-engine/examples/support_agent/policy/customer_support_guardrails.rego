@@ -17,8 +17,6 @@ default agent_shutdown_verdict := {"decision": "allow"}
 # {path, value} body. Until the AGT D1.3 follow-up moves multi-pattern
 # redaction into an annotator that pre-processes the policy target, the
 # policy MUST deny when PII is detected at post_tool_call / output.
-# TODO(AGT-DELTA D1.3): replace with an annotator-driven redact step
-# (or a chain of Transform verdicts) once the host pipeline supports it.
 
 verdict := agent_startup_verdict if { input.intervention_point == "agent_startup" }
 verdict := input_verdict if { input.intervention_point == "input" }
