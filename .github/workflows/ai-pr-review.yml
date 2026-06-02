@@ -298,9 +298,9 @@ jobs:
                 commentPosted = true;
               } catch (error) {
                 if (error.status === 403 || /Resource not accessible by integration/i.test(error.message)) {
-                  core.warning('Skipping PR summary comment because this run cannot write issue comments.');
+                  core.warning('PR comment not posted due to token restrictions; writing only to job summary.');
                 } else {
-                  throw error;
+                  core.warning(`PR comment not posted: ${error.message}`);
                 }
               }
             }
