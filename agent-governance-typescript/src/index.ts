@@ -80,12 +80,15 @@ export {
   DoubleRatchet,
   SecureChannel,
   MeshClient,
+  RegistryClient,
+  RegistryError,
 } from './encryption';
 export type {
   X25519KeyPair, PreKeyBundle, X3DHResult,
   MessageHeader, EncryptedMessage, RatchetState,
   ChannelEstablishment,
   MeshClientOptions, MeshSession, WebSocketFactory,
+  RegistryClientOptions, AgentRecord, DiscoverResult,
 } from './encryption';
 
 export {

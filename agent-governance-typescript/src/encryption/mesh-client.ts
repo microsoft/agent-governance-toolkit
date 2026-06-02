@@ -18,6 +18,29 @@ import { X3DHKeyManager, type PreKeyBundle } from "./x3dh";
 import { type EncryptedMessage } from "./ratchet";
 import { RegistryClient, type RegistryClientOptions, type DiscoverResult } from "./registry-client";
 
+/**
+ * Derive the canonical AGT-main agent DID from an Ed25519 public key.
+ *
+ * Format: `did:mesh:<sha256(public_key)[:32]>` (32 hex chars = 16 bytes
+ * of digest). Matches the server's derivation in
+ * `agent-governance-python/agent-mesh/src/agentmesh/registry/app.py`
+ * (`key_hash = hashlib.sha256(public_key).hexdigest()[:32]`).
+ *
+ * If `fallback` looks like a `did:mesh:` already (callers that compute
+ * it themselves), prefer that; otherwise compute fresh from the public
+ * key. Sync function — relies on Node's `node:crypto` or the browser's
+ * SubtleCrypto can't be used synchronously so we hand-roll SHA-256 if
+ * neither is available. In practice the SDK only runs in Node so this
+ * just falls through to `require("node:crypto")`.
+ */
+function computeCanonicalDid(ed25519Public: Uint8Array, fallback?: string): string {
+  if (fallback && fallback.startsWith("did:mesh:")) return fallback;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const nodeCrypto = require("node:crypto") as typeof import("node:crypto");
+  const hex = nodeCrypto.createHash("sha256").update(ed25519Public).digest("hex");
+  return `did:mesh:${hex.slice(0, 32)}`;
+}
+
 export type WebSocketFactory = (url: string) => WebSocket;
 
 export interface MeshClientOptions {
@@ -148,9 +171,38 @@ export class MeshClient {
   private readonly autoRegister: boolean;
   private readonly oneTimePrekeyCount: number;
   private registered = false;
+  /**
+   * The agent DID used on every wire-level send (`connect.from`,
+   * `mesh_send.from`, `knock.from`, …). Starts at `options.agentDid` so
+   * back-compat is preserved when no registry is configured or when
+   * registering against a pre-2533 registry. When `registerSelf()` runs
+   * against a POP-aware registry (AGT main since 2026-05-23), the server
+   * returns the canonical `did:mesh:<sha256(public_key)[:32]>` and we
+   * adopt it here — every subsequent frame uses the canonical form so
+   * relay and registry lookups agree.
+   */
+  private activeDid: string;
+
+  /**
+   * Public read-only view of the active DID. Caller code that previously
+   * read `options.agentDid` and stored it should read this instead so
+   * post-registration DID swaps are visible.
+   */
+  get currentDid(): string {
+    return this.activeDid;
+  }
 
   constructor(options: MeshClientOptions) {
     this.options = options;
+    // Compute the canonical AGT main DID locally so the connect frame
+    // can include the matching `from` field even on the very first
+    // connect (registerSelf runs AFTER connect resolves; the relay's
+    // POP gate validates `from == "did:mesh:" + sha256(public_key)[:32]`
+    // on the connect frame, NOT on the eventual server-derived DID).
+    // We replace whatever caller-supplied DID was passed because the
+    // POP-aware relay/registry will reject any other format. Pre-POP
+    // deployments don't care, so this is back-compat-safe.
+    this.activeDid = computeCanonicalDid(options.keyManager.identityKeyEd, options.agentDid);
     this.plaintextPeers = new Set(options.plaintextPeers ?? []);
     this.knockTimeout = options.knockTimeout ?? 10_000;
     this.autoReconnect = options.autoReconnect ?? true;
@@ -165,9 +217,24 @@ export class MeshClient {
     if (options.registryClient) {
       this.registry = options.registryClient;
     } else if (options.registryUrl) {
+      // Wire an Ed25519-Timestamp signer to every registry call so
+      // `PUT /v1/agents/{did}/prekeys` and the other authed endpoints
+      // (heartbeat, reputation) pass `verify_ed25519_timestamp_auth`.
+      // The signer uses the same identity key the relay POP / connect-frame
+      // signature uses, so the registry can map `authed_did == activeDid`.
+      // The caller can override by passing their own `authSigner` via
+      // `registryClientOptions`.
+      const callerOpts = options.registryClientOptions ?? {};
+      const authSigner = callerOpts.authSigner ?? {
+        get did() { return self.activeDid; }, // late-bind: DID can change after register
+        sign: (m: Uint8Array) => options.keyManager.signMessage(m),
+      };
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
       this.registry = new RegistryClient({
         baseUrl: options.registryUrl,
-        ...(options.registryClientOptions ?? {}),
+        ...callerOpts,
+        authSigner,
       });
     } else {
       this.registry = null;
@@ -210,16 +277,36 @@ export class MeshClient {
     await new Promise<void>((resolve, reject) => {
       this.ws!.onopen = () => {
         this.connected = true;
+        // POP-enabled connect frame (AGT main since 2026-05-23 PR #2632).
+        // Pre-POP relays ignore the extra fields — back-compat preserved.
+        // The relay verifies:
+        //  - DID equals `did:mesh:` + sha256(public_key)[:32]
+        //  - Ed25519 signature over the timestamp string (NOT pub||ts)
+        //    -- distinct from registry POP which signs pub||ts
+        //
+        // Encoding gotcha: the relay decodes with stdlib `base64.b64decode`
+        // (standard base64 with +/=), while the registry decodes with
+        // `urlsafe_b64decode` (base64url with -_). Mismatch in upstream
+        // server code; we have to match each endpoint's expectation
+        // separately. Emitting standard base64 here so the relay's
+        // `base64.b64decode(pub_b64)` and signature decode succeed.
+        const pubB64 = Buffer.from(this.options.keyManager.identityKeyEd).toString("base64");
+        const tsStr = new Date().toISOString();
+        const sig = this.options.keyManager.signMessage(new TextEncoder().encode(tsStr));
+        const sigB64 = Buffer.from(sig).toString("base64");
         this.sendFrame({
           v: 1,
           type: "connect",
-          from: this.options.agentDid,
+          from: this.activeDid,
+          public_key: pubB64,
+          timestamp: tsStr,
+          signature: sigB64,
         });
         // Request any messages queued while offline (inbox replay)
         this.sendFrame({
           v: 1,
           type: "fetch_pending",
-          from: this.options.agentDid,
+          from: this.activeDid,
         });
         resolve();
       };
@@ -229,7 +316,7 @@ export class MeshClient {
         const errEvent = e as { message?: string; type?: string } | undefined;
         const detail = errEvent?.message ?? errEvent?.type ?? "ws-error";
         for (const h of this.errorHandlers) {
-          try { h("ws", this.options.agentDid, detail); } catch { /* swallow handler errors */ }
+          try { h("ws", this.activeDid, detail); } catch { /* swallow handler errors */ }
         }
         if (!this.connected) reject(new Error(`WebSocket error: ${e}`));
       };
@@ -318,9 +405,33 @@ export class MeshClient {
     const metadata: Record<string, string> = { ...(this.options.registrationMetadata ?? {}) };
     if (dn && metadata.display_name === undefined) metadata.display_name = dn;
 
-    await this.registry.register(this.options.agentDid, identityKey, caps, metadata);
+    // POP-aware registration (AGT registry built from main since 2026-05-23,
+    // PR #2533). The registry verifies Ed25519(public_key_b64 || timestamp)
+    // against the supplied `public_key` (which MUST be the Ed25519 key,
+    // not the X25519 key — the server uses pynacl `VerifyKey` on it).
+    // Server then derives the canonical DID as
+    // `did:mesh:<sha256(public_key)[:32]>` and returns it. We adopt that
+    // DID as the active DID so subsequent registry lookups + relay
+    // `connect.from` agree with the server's view.
+    const popSigner = { sign: (m: Uint8Array) => km.signMessage(m) };
+    const registerResult = await this.registry.register(
+      this.activeDid, // ignored by POP-aware registries; kept for legacy back-compat
+      identityKeyEd,  // POP path uses the Ed25519 public; legacy path tolerates
+                      // either key since it only forwards to peers verbatim.
+      caps,
+      metadata,
+      popSigner,
+    );
+    // Adopt the canonical server DID. Legacy registries return the
+    // caller-supplied DID, so this is a no-op when registering against an
+    // older deployment.
+    if (registerResult.did && registerResult.did !== this.activeDid) {
+      this.activeDid = registerResult.did;
+    }
+    // Prekey upload must use the canonical DID (the registry indexes
+    // prekeys by the DID it derived, not the one the SDK started with).
     await this.registry.uploadPrekeys(
-      this.options.agentDid,
+      this.activeDid,
       identityKey,
       identityKeyEd,
       signedPreKey,
@@ -363,7 +474,7 @@ export class MeshClient {
     if (this.reconnectTimer) return; // already scheduled
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       for (const h of this.errorHandlers) {
-        try { h("ws", this.options.agentDid, `auto-reconnect gave up after ${this.reconnectAttempts} attempts`); } catch { /* swallow */ }
+        try { h("ws", this.activeDid, `auto-reconnect gave up after ${this.reconnectAttempts} attempts`); } catch { /* swallow */ }
       }
       return;
     }
@@ -375,7 +486,7 @@ export class MeshClient {
       this.reconnectTimer = null;
       void this.reconnect().catch((err) => {
         for (const h of this.errorHandlers) {
-          try { h("ws", this.options.agentDid, `reconnect failed: ${err instanceof Error ? err.message : String(err)}`); } catch { /* swallow */ }
+          try { h("ws", this.activeDid, `reconnect failed: ${err instanceof Error ? err.message : String(err)}`); } catch { /* swallow */ }
         }
         // Schedule next attempt — onclose may not fire if connect() rejected before ws.onopen.
         this.scheduleReconnect();
@@ -396,7 +507,7 @@ export class MeshClient {
     }
     if (!this.connected || !this.ws) return;
     this.clientInitiatedClose = true;
-    this.sendFrame({ v: 1, type: "disconnect", from: this.options.agentDid });
+    this.sendFrame({ v: 1, type: "disconnect", from: this.activeDid });
     this.ws.close(1000, "client disconnect");
     this.connected = false;
     this.ws = null;
@@ -438,7 +549,7 @@ export class MeshClient {
       this.sendFrame({
         v: 1,
         type: "message",
-        from: this.options.agentDid,
+        from: this.activeDid,
         to: peerId,
         id: messageId,
         ts: new Date().toISOString(),
@@ -462,7 +573,7 @@ export class MeshClient {
     this.sendFrame({
       v: 1,
       type: "message",
-      from: this.options.agentDid,
+      from: this.activeDid,
       to: peerId,
       id: messageId,
       ts: new Date().toISOString(),
@@ -511,13 +622,13 @@ export class MeshClient {
     const [channel, establishment] = SecureChannel.createSender(
       this.options.keyManager,
       peerBundle,
-      new TextEncoder().encode(`${this.options.agentDid}|${peerId}`),
+      new TextEncoder().encode(`${this.activeDid}|${peerId}`),
     );
 
     this.sendFrame({
       v: 1,
       type: "knock",
-      from: this.options.agentDid,
+      from: this.activeDid,
       to: peerId,
       id: knockId,
       ts: new Date().toISOString(),
@@ -544,7 +655,7 @@ export class MeshClient {
     const channel = SecureChannel.createReceiver(
       this.options.keyManager,
       establishment,
-      new TextEncoder().encode(`${peerId}|${this.options.agentDid}`),
+      new TextEncoder().encode(`${peerId}|${this.activeDid}`),
     );
 
     const session: MeshSession = {
@@ -630,7 +741,7 @@ export class MeshClient {
     this.sendFrame({
       v: 1,
       type: "heartbeat",
-      from: this.options.agentDid,
+      from: this.activeDid,
       ts: new Date().toISOString(),
     });
   }
@@ -848,7 +959,7 @@ export class MeshClient {
       this.sendFrame({
         v: 1,
         type: "knock_accept",
-        from: this.options.agentDid,
+        from: this.activeDid,
         to: from,
         id: crypto.randomUUID(),
         knock_id: frame.id,
@@ -864,7 +975,7 @@ export class MeshClient {
       this.sendFrame({
         v: 1,
         type: "knock_reject",
-        from: this.options.agentDid,
+        from: this.activeDid,
         to: from,
         id: crypto.randomUUID(),
         knock_id: frame.id,
