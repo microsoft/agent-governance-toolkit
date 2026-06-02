@@ -6,27 +6,50 @@ hide:
 
 <div class="agt-hero" markdown>
 
+<div class="agt-hero-inner" markdown>
+
 # Ship agents to production without losing sleep
 
-Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents. One `pip install`, any framework.
+<p class="agt-hero-subtitle">Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents.<br>One <code>pip install</code>, any framework.</p>
 
-```
+<div class="agt-hero-cta">
+  <a class="agt-btn agt-btn-ghost" href="https://github.com/microsoft/agent-governance-toolkit">
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8a8 8 0 005.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    GitHub
+  </a>
+  <a class="agt-btn agt-btn-solid" href="quickstart/">Quick Start</a>
+</div>
+
+<div class="agt-hero-install" markdown>
+
+```bash
 pip install agent-governance-toolkit[full]
 ```
 
-<div class="agt-hero-badges">
-  <a href="quickstart/">🚀 Quick Start</a>
-  <a href="https://pypi.org/project/agent-governance-toolkit/">📦 PyPI</a>
-  <a href="https://github.com/microsoft/agent-governance-toolkit">💻 GitHub</a>
-  <a href="tutorials/index/">📚 Tutorials</a>
-  <a href="reference/comparison/">⚖️ How AGT Compares</a>
+</div>
+
+<div class="agt-hero-actions">
+  <a class="agt-action" href="https://pypi.org/project/agent-governance-toolkit/">
+    <span class="agt-action-label">PyPI</span>
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3.5 3.5h6a.5.5 0 010 1H4.707l8.147 8.146a.5.5 0 01-.708.708L4 5.207V10a.5.5 0 01-1 0V4a.5.5 0 01.5-.5z"/></svg>
+  </a>
+  <a class="agt-action" href="tutorials/">
+    <span class="agt-action-label">Tutorial</span>
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3.5 3.5h6a.5.5 0 010 1H4.707l8.147 8.146a.5.5 0 01-.708.708L4 5.207V10a.5.5 0 01-1 0V4a.5.5 0 01.5-.5z"/></svg>
+  </a>
+  <a class="agt-action" href="reference/comparison/">
+    <span class="agt-action-label">How AGT Compares</span>
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3.5 3.5h6a.5.5 0 010 1H4.707l8.147 8.146a.5.5 0 01-.708.708L4 5.207V10a.5.5 0 01-1 0V4a.5.5 0 01.5-.5z"/></svg>
+  </a>
 </div>
 
 <div class="agt-stats">
-  <div class="agt-stat"><span class="agt-stat-value">1,590+</span><span class="agt-stat-label">GitHub Stars</span></div>
+  <div class="agt-stat"><span class="agt-stat-value">3,700+</span><span class="agt-stat-label">GitHub Stars</span></div>
   <div class="agt-stat"><span class="agt-stat-value">10</span><span class="agt-stat-label">Formal Specs</span></div>
   <div class="agt-stat"><span class="agt-stat-value">5</span><span class="agt-stat-label">Languages</span></div>
   <div class="agt-stat"><span class="agt-stat-value">19</span><span class="agt-stat-label">Integrations</span></div>
+</div>
+
 </div>
 
 </div>
@@ -222,7 +245,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic AI Top 10](../docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories mapped with deterministic controls |
+| [OWASP Agentic AI Top 10](compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories mapped with deterministic controls |
 | [NIST AI RMF 1.0](reference/nist-rfi-mapping.md) | Full GOVERN, MAP, MEASURE, MANAGE alignment |
 | [EU AI Act](compliance/) | Compliance mapping with automated evidence |
 | [SOC 2](compliance/soc2-mapping.md) | Control mapping with audit trail export |
