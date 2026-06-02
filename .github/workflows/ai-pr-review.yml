@@ -276,6 +276,9 @@ jobs:
             ].join('\n');
 
             const existing = allComments.find(c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER));
+
+            let commentPosted = false;
+
             try {
               if (existing) {
                 await github.rest.issues.updateComment({
@@ -288,6 +291,7 @@ jobs:
                 });
                 core.info('Created summary comment');
               }
+              commentPosted = true;
             } catch (error) {
               if (error.status === 403 || /Resource not accessible by integration/i.test(error.message)) {
                 core.warning('Skipping PR summary comment because this run cannot write issue comments.');
@@ -299,4 +303,5 @@ jobs:
             await core.summary
               .addHeading('PR Review Summary')
               .addRaw(summaryBody, true)
+              .addRaw(commentPosted ? '\n\nPR comment posted successfully.' : '\n\nPR comment skipped due to token permissions.', true)
               .write();
