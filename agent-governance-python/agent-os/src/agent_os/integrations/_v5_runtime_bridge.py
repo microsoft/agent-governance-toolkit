@@ -129,6 +129,7 @@ class AdapterRuntimeBridge:
         self._approval_resolver = approval_resolver
         self._runtime_factory = runtime_factory
         self._injected_runtime = runtime
+        self._factory_runtime: Any | None = None
         self._builders: dict[str, Any] = {}
 
     @property
@@ -147,6 +148,10 @@ class AdapterRuntimeBridge:
         """
         if self._injected_runtime is not None:
             return self._injected_runtime
+        if self._runtime_factory is not None:
+            if self._factory_runtime is None:
+                self._factory_runtime = self._runtime_factory(self._policy)
+            return self._factory_runtime
         try:
             policy_key = hash(self._policy)
         except TypeError:
@@ -155,10 +160,7 @@ class AdapterRuntimeBridge:
         cached = AdapterRuntimeBridge._cache.get(key)
         if cached is not None:
             return cached
-        if self._runtime_factory is not None:
-            runtime = self._runtime_factory(self._policy)
-        else:
-            runtime = _build_runtime(self._policy, self._approval_resolver)
+        runtime = _build_runtime(self._policy, self._approval_resolver)
         AdapterRuntimeBridge._cache[key] = runtime
         return runtime
 

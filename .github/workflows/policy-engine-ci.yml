@@ -40,6 +40,7 @@ jobs:
       - name: Install OPA
         run: |
           curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/opa"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
@@ -69,14 +70,17 @@ jobs:
       - name: Install OPA
         run: |
           curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/opa"
           echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
       - name: Install and test
         run: |
-          python -m pip install --upgrade pip
-          pip install ./sdk/python ./generator pytest
+          python -m pip install --upgrade pip==24.3.1
+          pip install maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-build-isolation ./sdk/python
+          pip install ./generator pytest==9.0.3
           pytest sdk/python generator
 
   node:
@@ -95,6 +99,7 @@ jobs:
       - name: Install OPA
         run: |
           curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/opa"
           echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/opa" version
@@ -119,6 +124,7 @@ jobs:
       - name: Install OPA
         run: |
           curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/opa"
           echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/opa" version

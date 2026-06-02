@@ -973,7 +973,6 @@ class GovernanceMiddleware(_MiddlewareBase):
                     pass
 
         self._ctx.call_count += 1
-        self._kernel._bridge.record_post_execute(self._ctx, tool_calls=1)
         return result
 
     # ── wrap_model_call ───────────────────────────────────────────

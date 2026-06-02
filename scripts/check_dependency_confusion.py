@@ -140,14 +140,17 @@ REGISTERED_PACKAGES = {
     "autogen-agentchat", "autogen_agentchat",
     "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
     "agentdojo",
-    # Vendored ACS generator package itself (internal, path-referenced)
-    "agent-control-specification", "agent_control_specification",
     # With extras (base name is what matters)
 }
 
 # Local-only packages that should NEVER appear with version pins in
 # requirements.txt (they must use path references like -e ../primitives)
-LOCAL_ONLY_PACKAGES = {"agent-primitives", "emk"}
+LOCAL_ONLY_PACKAGES = {
+    "agent-primitives",
+    "agent-control-specification",
+    "agent_control_specification",
+    "emk",
+}
 
 # Known npm packages for this project
 REGISTERED_NPM_PACKAGES = {
@@ -233,11 +236,11 @@ def extract_package_names(install_args: str) -> list[str]:
             continue
         # Skip flags
         if token.startswith("-") or token in SAFE_PATTERNS:
-            # -r/--requirement take a filename as the next argument
-            if token in ("-r", "--requirement", "-c", "--constraint"):
+            # -e/--editable and -r/--requirement take a path as the next argument.
+            if token in ("-e", "--editable", "-r", "--requirement", "-c", "--constraint"):
                 skip_next = True
             continue
-        if token.startswith((".", "/", "\\", "http", "git+")):
+        if token.startswith((".", "/", "\\", "http", "git+")) or "/" in token or "\\" in token:
             continue
         # Skip tokens that look like code, not package names
         if any(c in token for c in ('(', ')', '=', '"', "'", ":", "[", "]")):
@@ -271,13 +274,15 @@ def check_file(filepath: str) -> list[str]:
 
     for match in PIP_INSTALL_RE.finditer(content):
         line_num = content[:match.start()].count("\n") + 1
+        line_start = content.rfind("\n", 0, match.start()) + 1
+        before_pip = content[line_start:match.start()]
+        if re.search(r'\bprint\s*\(', before_pip):
+            continue
         # For shell scripts, filter out matches that are inside a comment
         # or an echo/printf invocation. Only the current shell command
         # segment (split on ;, &&, ||, |) is examined so that
         # `echo done; pip install foo` is still flagged.
         if is_shell:
-            line_start = content.rfind("\n", 0, match.start()) + 1
-            before_pip = content[line_start:match.start()]
             # Take the last command segment on this line.
             segment = re.split(r';|&&|\|\||(?<!\|)\|(?!\|)', before_pip)[-1]
             if "#" in segment:

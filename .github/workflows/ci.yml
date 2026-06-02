@@ -38,6 +38,8 @@ jobs:
         with:
           filters: |
             python:
+              - 'policy-engine/**'
+              - 'agent-governance-python/agt-policies/**'
               - 'agent-governance-python/agent-os/**'
               - 'agent-governance-python/agent-mesh/**'
               - 'agent-governance-python/agent-hypervisor/**'
@@ -90,6 +92,9 @@ jobs:
               - 'agent-governance-python/**/pyproject.toml'
               - 'agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt'
               - '.github/workflows/ci.yml'
+            pkg-agt-policies:
+              - 'policy-engine/**'
+              - 'agent-governance-python/agt-policies/**'
             pkg-agent-os:
               - 'agent-governance-python/agent-os/**'
             pkg-agent-mesh:
@@ -137,6 +142,7 @@ jobs:
       - name: Compose changed-py-pkgs JSON list
         id: py-pkgs
         env:
+          AGP: ${{ steps.filter.outputs.pkg-agt-policies }}
           AO: ${{ steps.filter.outputs.pkg-agent-os }}
           AM: ${{ steps.filter.outputs.pkg-agent-mesh }}
           AH: ${{ steps.filter.outputs.pkg-agent-hypervisor }}
@@ -153,6 +159,7 @@ jobs:
         run: |
           set -euo pipefail
           pkgs=()
+          [ "$AGP" = "true" ] && pkgs+=('"agt-policies"')
           [ "$AO" = "true" ] && pkgs+=('"agent-os"')
           [ "$AM" = "true" ] && pkgs+=('"agent-mesh"')
           [ "$AH" = "true" ] && pkgs+=('"agent-hypervisor"')
@@ -205,6 +212,7 @@ jobs:
         package:
           [
             agent-os,
+            agt-policies,
             agent-mesh,
             agent-hypervisor,
             agent-sre,
@@ -266,6 +274,7 @@ jobs:
         package:
           [
             agent-os,
+            agt-policies,
             agent-mesh,
             agent-hypervisor,
             agent-sre,
@@ -282,6 +291,8 @@ jobs:
         python-version: [ "3.10", "3.11", "3.12", "3.13" ]
         exclude:
           - package: agent-os
+            python-version: "3.10"
+          - package: agt-policies
             python-version: "3.10"
           - package: agent-mesh
             python-version: "3.10"
@@ -347,29 +358,30 @@ jobs:
           # requirements (pydantic, pyyaml) are present — agent-os itself does
           # not depend on pyyaml.
           pip install --no-cache-dir -e agent-governance-python/agt-policies
-      - name: Install OPA (agent-os v5 runtime)
+      - name: Install OPA (ACS-backed Python policy runtime)
         # The native ACS runtime evaluates policy via OPA; without it the
         # runtime fails closed (runtime_error:policy_invocation_failed) and
         # denies everything. Same pinned binary the policy-engine CI uses.
-        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies')
         run: |
           set -euo pipefail
           curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/opa"
           echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/opa" version
-      - name: Build native ACS SDK (agent-os v5 runtime)
-        # agent-os's v5 runtime bridge routes evaluate_task through the native
+      - name: Build native ACS SDK (ACS-backed Python policy runtime)
+        # agent-os and agt-policies route evaluations through the native
         # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
-        # it from the vendored policy-engine so the bridge-backed tests run.
+        # it from the vendored policy-engine so bridge-backed tests run.
         # The wheel is abi3-py311, so one build serves all agent-os matrix
         # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
-        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies')
         run: |
           set -euo pipefail
-          pip install --no-cache-dir "maturin>=1.0,<2.0"
-          pip install --no-cache-dir ./policy-engine/sdk/python
+          pip install --no-cache-dir maturin==1.8.7  # Scorecard: version-pinned
+          pip install --no-cache-dir --no-build-isolation ./policy-engine/sdk/python
       - name: Install ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
@@ -385,7 +397,7 @@ jobs:
             agent-compliance|agent-runtime|agent-mcp-governance)
               pip install --no-cache-dir -e .
               ;;
-            agent-os|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
+            agent-os|agt-policies|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
               pip install --no-cache-dir -e ".[dev]"
               ;;
             *)

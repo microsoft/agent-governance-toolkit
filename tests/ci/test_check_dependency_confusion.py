@@ -89,6 +89,24 @@ def test_sh_known_package_is_not_flagged(tmp_path: Path) -> None:
     assert check_dep_conf.check_file(path) == []
 
 
+def test_sh_editable_path_install_is_not_flagged(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "build.sh",
+        "#!/usr/bin/env bash\npip install --no-cache-dir -e agent-governance-python/agt-policies\n",
+    )
+    assert check_dep_conf.check_file(path) == []
+
+
+def test_python_printed_pip_install_text_is_not_flagged(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        "workflow.yml",
+        "run: |\n  python - <<'PY'\n  print('OK: pip install packages are registered')\n  PY\n",
+    )
+    assert check_dep_conf.check_file(path) == []
+
+
 def test_sh_real_install_after_echo_separator_is_flagged(tmp_path: Path) -> None:
     # Regression: `echo ...; pip install <unregistered>` is a real install.
     path = _write(

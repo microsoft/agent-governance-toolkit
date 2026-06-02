@@ -103,8 +103,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
         | sh -s -- -y --profile minimal --default-toolchain stable \
     && . "$HOME/.cargo/env" \
-    && python -m pip install "maturin>=1.0,<2.0" \
-    && python -m pip install ./policy-engine/sdk/python \
+    && python -m pip install maturin==1.8.7 \
+    && python -m pip install --no-build-isolation ./policy-engine/sdk/python \
     && python -c "import agent_control_specification; print('agent_control_specification OK')"
 
 # Run as non-root for the developer workflow. The compose `dev` and

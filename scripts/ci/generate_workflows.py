@@ -34,6 +34,7 @@ MANIFEST_PATH = REPO_ROOT / ".github" / "ci" / "workflows.toml"
 ACTIONS_PATH = REPO_ROOT / ".github" / "ci" / "actions.toml"
 
 OPA_VERSION = "0.70.0"
+OPA_LINUX_AMD64_SHA256 = "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084"
 SHA_RE = re.compile(r"^[^@]+@[0-9a-f]{40}$")
 KNOWN_TOOLCHAINS = {"rust", "python", "node", "dotnet"}
 
@@ -140,6 +141,7 @@ def _opa_step(on_path: bool = False, set_env: bool = True) -> list[str]:
     lines = [
         f'curl -fsSL -o "$RUNNER_TEMP/opa" '
         f'"https://openpolicyagent.org/downloads/v{OPA_VERSION}/opa_linux_amd64_static"\n',
+        f'echo "{OPA_LINUX_AMD64_SHA256}  $RUNNER_TEMP/opa" | sha256sum -c -\n',
         'chmod +x "$RUNNER_TEMP/opa"\n',
     ]
     if set_env:

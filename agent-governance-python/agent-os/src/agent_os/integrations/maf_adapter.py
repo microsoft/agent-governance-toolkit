@@ -797,7 +797,6 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
         await call_next()
 
         ctx.call_count += 1
-        self.kernel.bridge.record_post_execute(ctx, tool_calls=1)
 
         # Log completion with a truncated result summary.
         result_summary = str(getattr(context, "result", ""))[:500]

@@ -36,6 +36,7 @@ import asyncio
 import copy
 import math
 from pathlib import Path
+import tempfile
 import threading
 from typing import Any, Awaitable, Callable, Mapping, Optional, Union
 
@@ -224,21 +225,33 @@ class AgtRuntime:
         self._manifest_path = Path(manifest_path)
         self._resolution_root = resolution_root
         self._approval_resolver = approval_resolver
+        self._resolution_bundle_dir: Any | None = None
 
         if resolution_root is not None:
             from agt.manifest_resolution import resolve_manifest
 
-            resolved = resolve_manifest(Path(resolution_root), self._manifest_path)
-            (
-                self._approval_timeout_seconds,
-                self._approval_on_timeout,
-            ) = _approval_settings_from_manifest(resolved)
-            engine_manifest, _ = _sanitize_manifest_for_acs(resolved)
-            self._control = AgentControl.from_native(
-                engine_manifest,
-                annotator_dispatcher=annotator_dispatcher,
-                policy_dispatcher=policy_dispatcher,
-            )
+            bundle_dir = tempfile.TemporaryDirectory(prefix="agt_runtime_bundle_")
+            self._resolution_bundle_dir = bundle_dir
+            try:
+                resolved = resolve_manifest(
+                    Path(resolution_root),
+                    self._manifest_path,
+                    bundle_dir=Path(bundle_dir.name),
+                )
+                (
+                    self._approval_timeout_seconds,
+                    self._approval_on_timeout,
+                ) = _approval_settings_from_manifest(resolved)
+                engine_manifest, _ = _sanitize_manifest_for_acs(resolved)
+                self._control = AgentControl.from_native(
+                    engine_manifest,
+                    annotator_dispatcher=annotator_dispatcher,
+                    policy_dispatcher=policy_dispatcher,
+                )
+            except Exception:
+                bundle_dir.cleanup()
+                self._resolution_bundle_dir = None
+                raise
         elif policy_dispatcher is not None or annotator_dispatcher is not None:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
             parsed, engine_manifest = _parse_and_sanitize_manifest_text(manifest_text)
@@ -381,6 +394,9 @@ class AgtRuntime:
     def close(self) -> None:
         """Release the underlying ACS runtime (best effort)."""
         self._control = None  # type: ignore[assignment]
+        if self._resolution_bundle_dir is not None:
+            self._resolution_bundle_dir.cleanup()
+            self._resolution_bundle_dir = None
 
 
 def _parse_and_sanitize_manifest_text(manifest_text: str) -> tuple[Mapping[str, Any], str]:

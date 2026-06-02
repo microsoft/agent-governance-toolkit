@@ -40,5 +40,5 @@ jobs:
           python3 scripts/ci/generate_workflows.py --check
       - name: Run generator self tests
         run: |
-          python3 -m pip install --upgrade pip pytest pyyaml
+          python3 -m pip install --upgrade pip==24.3.1 pytest==9.0.3 pyyaml==6.0.2
           pytest tests/ci -q

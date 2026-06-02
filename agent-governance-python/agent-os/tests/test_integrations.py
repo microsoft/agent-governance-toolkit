@@ -2036,6 +2036,36 @@ class _ScriptedPolicy:
         return self._verdicts.pop(0)
 
 
+class _BudgetGatePolicy:
+    """ACS PolicyDispatcher that denies once the snapshot budget reaches a limit."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.seen_budgets: list[int] = []
+        self.invocations: list[dict] = []
+
+    def evaluate(self, invocation):
+        self.invocations.append(dict(invocation))
+        inp = invocation.get("input") or {}
+        if inp.get("intervention_point") != "pre_tool_call":
+            return {"decision": "allow"}
+        snapshot = inp.get("snapshot") if isinstance(inp, dict) else None
+        budgets = (
+            snapshot.get("envelope", {}).get("budgets", {})
+            if isinstance(snapshot, dict)
+            else {}
+        )
+        tool_call_count = int(budgets.get("tool_call_count", -1))
+        self.seen_budgets.append(tool_call_count)
+        if tool_call_count >= self.limit:
+            return {
+                "decision": "deny",
+                "reason": "budget_tool_calls_exceeded",
+                "message": "tool-call budget exceeded",
+            }
+        return {"decision": "allow"}
+
+
 _SCENARIO_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
 metadata:
   name: integration_scenarios
@@ -2993,6 +3023,56 @@ def _skip_if_not_importable(module_path: str):
 
 
 @_V5_BRIDGE_REQUIRED
+class TestLangChainMiddlewareBridgeScenarios:
+    """Verify LangChain middleware budget accounting through the AGT bridge."""
+
+    def _middleware(self, runtime):
+        _skip_if_not_importable("agent_os.integrations.langchain_adapter")
+        kernel = LangChainKernel(
+            policy=GovernancePolicy(max_tool_calls=3),
+            _runtime=runtime,
+        )
+        return kernel.as_middleware()
+
+    def _request(self):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            tool_call={
+                "name": "scenario_tool",
+                "args": {"q": "weather"},
+                "id": "call-1",
+            }
+        )
+
+    def test_wrap_tool_call_allows_exact_budget_before_deny(self, tmp_path):
+        dispatcher = _BudgetGatePolicy(limit=3)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [],
+            dispatcher=dispatcher,
+        )
+        middleware = self._middleware(runtime)
+
+        def handler(_request):
+            result = MagicMock()
+            result.content = "ok"
+            return result
+
+        for _ in range(3):
+            middleware.wrap_tool_call(self._request(), handler)
+
+        with pytest.raises(PolicyViolationError):
+            middleware.wrap_tool_call(self._request(), handler)
+
+        # LangChain also has a host-side budget guard, so the fourth call
+        # is denied before the runtime dispatcher is invoked. The
+        # regression here is that the first three calls see exact
+        # pre-call counts, not [0, 2, ...] from double-counting.
+        assert dispatcher.seen_budgets == [0, 1, 2]
+
+
+@_V5_BRIDGE_REQUIRED
 class TestMistralBridgeScenarios:
     """Verify MistralKernel routes through the AGT 5.0 ACS runtime."""
 
@@ -3293,6 +3373,33 @@ class TestMAFBridgeScenarios:
         kernel = MAFKernel(_runtime=runtime, approval_resolver=approval_resolver)
         return GovernancePolicyMiddleware(kernel=kernel)
 
+    def _capability_guard(self, runtime):
+        import sys
+        import types as _types
+
+        sys.modules.setdefault("agent_framework", _types.ModuleType("agent_framework"))
+        _skip_if_not_importable("agent_os.integrations.maf_adapter")
+        from agent_os.integrations.maf_adapter import (
+            CapabilityGuardMiddleware,
+            MAFKernel,
+        )
+
+        kernel = MAFKernel(
+            policy=GovernancePolicy(max_tool_calls=3),
+            _runtime=runtime,
+        )
+        return CapabilityGuardMiddleware(kernel=kernel)
+
+    def _make_function_ctx(self):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            function=SimpleNamespace(name="scenario_tool"),
+            arguments={"q": "weather"},
+            metadata={},
+            result=None,
+        )
+
     def test_middleware_allow(self, tmp_path):
         runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
         mw = self._middleware(runtime)
@@ -3360,6 +3467,27 @@ class TestMAFBridgeScenarios:
         asyncio.run(mw.process(ctx, call_next))
         assert captured.get("ip") == "input"
         call_next.assert_awaited_once()
+
+    def test_capability_guard_allows_exact_budget_before_deny(self, tmp_path):
+        from agent_os.integrations.maf_adapter import MiddlewareTermination
+
+        dispatcher = _BudgetGatePolicy(limit=3)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [],
+            dispatcher=dispatcher,
+        )
+        guard = self._capability_guard(runtime)
+        call_next = AsyncMock()
+
+        for _ in range(3):
+            asyncio.run(guard.process(self._make_function_ctx(), call_next))
+
+        with pytest.raises(MiddlewareTermination):
+            asyncio.run(guard.process(self._make_function_ctx(), call_next))
+
+        assert dispatcher.seen_budgets == [0, 1, 2, 3]
+        assert call_next.await_count == 3
 
 
 @_V5_BRIDGE_REQUIRED

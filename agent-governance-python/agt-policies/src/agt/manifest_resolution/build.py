@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
+import tempfile
 from typing import Any, Optional
 
 import yaml
@@ -71,7 +72,7 @@ def resolve_manifest(
         root: Workspace root that bounds discovery.
         action_path: Path the agent action originates from.
         bundle_dir: Where to materialize the generated Rego bundle.
-            Defaults to ``root/.agt/resolved-bundle/``.
+            Defaults to a unique temporary directory outside ``root``.
 
     Returns:
         A dict-shaped ACS manifest with ``extends: []`` and a
@@ -105,7 +106,7 @@ def resolve_manifest(
 
     merged_rules = merge_documents(docs_only)
 
-    bundle_path = bundle_dir or (root / ".agt" / "resolved-bundle")
+    bundle_path = bundle_dir or Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
     rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
 
     manifest: dict[str, Any] = {
@@ -212,13 +213,18 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         message = str(rule.get("message", ""))
 
         accessor = _rego_field_accessor(field)
-        op_clause = _rego_op_clause(operator, accessor, value)
+        op_clause = _rego_op_clause(operator, accessor, value) if accessor is not None else None
         if op_clause is None:
-            # An unsupported operator MUST fail closed. We render an
-            # always-matching deny rule so any evaluation routes to deny
-            # with a reserved reason rather than silently falling through
-            # to default-allow. The merge layer should ideally catch
-            # this at validation, but this is the last line of defense.
+            # Unsupported operators or invalid field paths MUST fail
+            # closed. Render an always-matching deny rule so evaluation
+            # never silently falls through to default-allow. The merge
+            # layer should ideally catch this at validation, but this is
+            # the last line of defense.
+            invalid_detail = (
+                f"invalid field {field!r}"
+                if accessor is None
+                else f"unsupported operator {operator!r}"
+            )
             unsupported_drops.append(name)
             matchers.append(
                 f"_match_{idx} if {{\n"
@@ -228,7 +234,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
             branches.append(
                 f"verdict := {{\"decision\": \"deny\", "
                 f"\"reason\": \"runtime_error:manifest_invalid\", "
-                f"\"message\": {json.dumps(f'rule {name!r} uses unsupported operator {operator!r}; fail-closed deny')}}} if {{\n"
+                f"\"message\": {json.dumps(f'rule {name!r} has {invalid_detail}; fail-closed deny')}}} if {{\n"
                 f"    _match_{idx}\n"
                 + "".join(f"    not _match_{j}\n" for j in range(idx))
                 + "}"
@@ -260,7 +266,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
     if unsupported_drops:
         import logging
         logging.getLogger(__name__).warning(
-            "agt.manifest_resolution: %d rule(s) with unsupported operator now fail-closed: %s",
+            "agt.manifest_resolution: %d invalid rule(s) now fail-closed: %s",
             len(unsupported_drops),
             unsupported_drops,
         )
@@ -268,7 +274,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
     return header + "\n\n".join(matchers) + ("\n\n" if matchers else "") + "\n\n".join(branches) + "\n"
 
 
-def _rego_field_accessor(field: str) -> str:
+def _rego_field_accessor(field: str) -> str | None:
     """Build an inline Rego accessor for a dot-separated snapshot field.
 
     Args:
@@ -291,7 +297,7 @@ def _rego_field_accessor(field: str) -> str:
         # Validate the part is a simple identifier; reject anything
         # weird to avoid Rego injection from policy authors.
         if not part.replace("_", "").isalnum():
-            return "false"
+            return None
         expr = f"object.get({expr}, {json.dumps(part)}, null)"
     return expr
 
@@ -299,7 +305,7 @@ def _rego_field_accessor(field: str) -> str:
 def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     """Render the body of a `_match[i]` rule for a given operator.
 
-    Returns None for unsupported operators; the caller drops the rule.
+    Returns None for unsupported operators; the caller turns the rule into a fail-closed deny.
     """
     literal = json.dumps(value)
     indent = "    "
@@ -317,13 +323,29 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v <= {literal}"
     if operator == "in":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
+    if operator == "not_in":
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not _v in {literal}"
+    if operator == "exists":
+        return f"{indent}{accessor} != null"
     if operator == "contains":
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
             f"{indent}contains(_v, {literal})"
         )
-    if operator == "matches":
+    if operator == "startswith":
+        return (
+            f"{indent}_v := {accessor}\n"
+            f"{indent}_v != null\n"
+            f"{indent}startswith(_v, {literal})"
+        )
+    if operator == "endswith":
+        return (
+            f"{indent}_v := {accessor}\n"
+            f"{indent}_v != null\n"
+            f"{indent}endswith(_v, {literal})"
+        )
+    if operator in {"matches", "regex"}:
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"

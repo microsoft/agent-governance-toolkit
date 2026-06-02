@@ -853,16 +853,91 @@ def test_resolve_intervention_points_union_annotations(tmp_path: Path) -> None:
     assert set(annotations.keys()) == {"parent_note", "child_note"}
 
 
-def test_resolve_writes_bundle_under_root_by_default(tmp_path: Path) -> None:
+def test_resolve_writes_default_bundle_outside_workspace(tmp_path: Path) -> None:
     root = tmp_path
     _write(root / "governance.yaml", {"rules": []})
     manifest = resolve_manifest(root, root)
     bundle_path = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
-    # Default bundle location is root/.agt/resolved-bundle/policy
-    assert str(bundle_path).startswith(str(root / ".agt"))
+    # The default bundle location is a unique temp directory outside the
+    # governed workspace so agent-writable source files cannot clobber it.
+    assert root not in bundle_path.parents
     sha_file = bundle_path / "agt_legacy.rego.sha256"
     assert sha_file.is_file()
     assert len(sha_file.read_text().strip()) == 64  # hex sha256
+
+
+def test_resolve_invalid_field_syntax_fails_closed(tmp_path: Path) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "bad-field",
+                    "deny",
+                    {"field": "tool_call.args.amount-usd", "operator": "eq", "value": 1},
+                )
+            ],
+            "intervention_points": {
+                "pre_tool_call": {
+                    "policy_target": "$.tool_call.args",
+                    "policy_target_kind": "tool_args",
+                    "tool_name_from": "$.tool_call.name",
+                    "policy": {"id": "agt_legacy_rules"},
+                }
+            },
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert "runtime_error:manifest_invalid" in rego
+    assert "invalid field" in rego
+
+
+@pytest.mark.parametrize(
+    ("operator", "value", "expected_snippet"),
+    [
+        ("not_in", ["secret", "token"], "not _v in"),
+        ("startswith", "sec", "startswith(_v"),
+        ("endswith", "ret", "endswith(_v"),
+        ("exists", None, "!= null"),
+        ("regex", "sec.*", "regex.match"),
+    ],
+)
+def test_resolve_renders_operator_vocabulary(
+    tmp_path: Path, operator: str, value: object, expected_snippet: str
+) -> None:
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    f"op-{operator}",
+                    "deny",
+                    {"field": "tool_call.args.q", "operator": operator, "value": value},
+                )
+            ],
+            "intervention_points": {
+                "pre_tool_call": {
+                    "policy_target": "$.tool_call.args",
+                    "policy_target_kind": "tool_args",
+                    "tool_name_from": "$.tool_call.name",
+                    "policy": {"id": "agt_legacy_rules"},
+                }
+            },
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert expected_snippet in rego
+    assert "runtime_error:manifest_invalid" not in rego
 
 
 def test_resolve_explicit_bundle_dir(tmp_path: Path) -> None:

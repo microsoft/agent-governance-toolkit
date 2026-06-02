@@ -27,6 +27,7 @@ pytest.importorskip("agt.policies.runtime")
 
 from agent_os.integrations._v5_runtime_bridge import (  # noqa: E402
     _build_runtime,
+    get_runtime_bridge,
 )
 from agent_os.integrations.base import GovernancePolicy  # noqa: E402
 
@@ -113,3 +114,29 @@ def test_build_runtime_escalate_routes_through_resolver(tmp_path: Path):
     assert captured.get("enforced_identity"), (
         "AGT D1.4 enforced_identity must be handed to the resolver"
     )
+
+
+def test_runtime_factory_bypasses_process_cache_for_equal_policies():
+    """Test seams MUST NOT reuse a stale cached runtime from an equal policy."""
+    policy = GovernancePolicy(max_tool_calls=3)
+    calls: list[str] = []
+
+    def first_factory(_policy: GovernancePolicy) -> str:
+        calls.append("first")
+        return "first-runtime"
+
+    def second_factory(_policy: GovernancePolicy) -> str:
+        calls.append("second")
+        return "second-runtime"
+
+    first = get_runtime_bridge(policy, runtime_factory=first_factory)
+    second = get_runtime_bridge(
+        GovernancePolicy(max_tool_calls=3),
+        runtime_factory=second_factory,
+    )
+
+    assert first.runtime == "first-runtime"
+    assert first.runtime == "first-runtime"
+    assert second.runtime == "second-runtime"
+    assert second.runtime == "second-runtime"
+    assert calls == ["first", "second"]

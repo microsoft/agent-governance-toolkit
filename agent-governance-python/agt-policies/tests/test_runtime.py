@@ -306,6 +306,38 @@ def test_runtime_resolver_deny_blocks(tmp_path: Path) -> None:
     assert result.allowed is False
 
 
+def test_runtime_resolution_bundle_is_owned_and_cleaned_up(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    action_path = root / "agent.py"
+    action_path.write_text("# agent\n", encoding="utf-8")
+    (root / "governance.yaml").write_text(
+        """
+rules: []
+intervention_points:
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: agt_legacy_rules
+tools:
+  lookup:
+    clearance: public
+""",
+        encoding="utf-8",
+    )
+
+    runtime = AgtRuntime(action_path, resolution_root=root)
+    bundle_dir = Path(runtime._resolution_bundle_dir.name)  # type: ignore[union-attr]
+    assert bundle_dir.exists()
+    assert root not in bundle_dir.parents
+
+    runtime.close()
+
+    assert not bundle_dir.exists()
+
+
 @pytest.mark.parametrize(
     ("approval", "expected_verdict", "expected_allowed"),
     [
