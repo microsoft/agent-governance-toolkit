@@ -792,6 +792,13 @@ label.md-nav__link > .md-nav__icon::after {
   margin: 0 auto;
   line-height: 1.7;
   padding-top: 0.5rem;
+  padding-bottom: 3rem;      /* breathing room before the footer */
+}
+
+/* Material renders a zero-height ::before that normally adds the bottom
+   margin; collapse it so our explicit padding-bottom controls the spacing. */
+.md-content__inner::before {
+  display: none;
 }
 
 
