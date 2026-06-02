@@ -645,16 +645,13 @@ class DockerSandboxProvider(SandboxProvider):
                     f"Policy denied: {decision.reason}"
                 )
 
-        # Ring resource check — pre-flight before touching the container so
-        # Ring 3 agents get a clear denial rather than a code-scanner error.
-        if session_cfg is not None:
+        # Ring resource check — only when a ring is explicitly set.
+        if session_cfg is not None and session_cfg.ring is not None:
             from hypervisor.rings.enforcer import ResourceType, RingEnforcer
-            from hypervisor.models import ExecutionRing
-            session_ring = session_cfg.ring if session_cfg.ring is not None else ExecutionRing.RING_3_SANDBOX
-            ring_result = RingEnforcer().check_resource(session_ring, ResourceType.SUBPROCESS)
+            ring_result = RingEnforcer().check_resource(session_cfg.ring, ResourceType.SUBPROCESS)
             if not ring_result.allowed:
                 raise PermissionError(
-                    f"Ring {session_ring.value} agent cannot execute "
+                    f"Ring {session_cfg.ring.value} agent cannot execute "
                     f"subprocess: {ring_result.reason}"
                 )
 

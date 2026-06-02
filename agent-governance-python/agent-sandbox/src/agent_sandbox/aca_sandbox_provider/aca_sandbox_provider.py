@@ -561,23 +561,21 @@ class ACASandboxProvider(SandboxProvider):
                     f"Failed to initialize PolicyEvaluator: {exc}"
                 ) from exc
 
-        # Apply ring constraints — Ring 3 agents get deny-all egress and
-        # no network access regardless of what the policy requested.
-        from hypervisor.rings.enforcer import RING_CONSTRAINTS
-        from hypervisor.models import ExecutionRing
-        ring = cfg.ring if cfg.ring is not None else ExecutionRing.RING_3_SANDBOX
-        ring_constraints = RING_CONSTRAINTS[ring]
-        if not ring_constraints.network_allowed:
-            if allow_hosts:
-                logger.info(
-                    "Ring %s: clearing network_allowlist for agent '%s' "
-                    "(network not permitted at this ring)",
-                    ring.value,
-                    agent_id,
-                )
-            allow_hosts = []
-            net_default = "deny"
-            policy_provided = True  # ensure _apply_egress_policy is called below
+        # Apply ring constraints — only when a ring is explicitly set.
+        if cfg.ring is not None:
+            from hypervisor.rings.enforcer import RING_CONSTRAINTS
+            ring_constraints = RING_CONSTRAINTS[cfg.ring]
+            if not ring_constraints.network_allowed:
+                if allow_hosts:
+                    logger.info(
+                        "Ring %s: clearing network_allowlist for agent '%s' "
+                        "(network not permitted at this ring)",
+                        cfg.ring.value,
+                        agent_id,
+                    )
+                allow_hosts = []
+                net_default = "deny"
+                policy_provided = True  # ensure _apply_egress_policy is called below
 
         # Make sure the sandbox group exists (no-op unless requested).
         self._ensure_sandbox_group()

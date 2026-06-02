@@ -386,29 +386,27 @@ class HyperLightSandboxProvider(SandboxProvider):
             evaluator = self._build_evaluator(policy)
 
         # Apply ring constraints before resolving tool and network capabilities.
-        # Ring 3 (Sandbox) prohibits subprocess and network access, so tools
-        # and domain allowlists are cleared regardless of what the policy says.
-        from hypervisor.rings.enforcer import RING_CONSTRAINTS
-        from hypervisor.models import ExecutionRing
-        ring = base_cfg.ring if base_cfg.ring is not None else ExecutionRing.RING_3_SANDBOX
-        ring_constraints = RING_CONSTRAINTS[ring]
-        if not ring_constraints.subprocess_allowed:
-            if tool_allow:
-                logger.info(
-                    "Ring %s: clearing tool_allowlist for agent '%s' "
-                    "(subprocess not permitted at this ring)",
-                    ring.value,
-                    agent_id,
-                )
-            tool_allow = []
-        if not ring_constraints.network_allowed:
-            if net_allow:
-                logger.info(
-                    "Ring %s: clearing network_allowlist for agent '%s' "
-                    "(network not permitted at this ring)",
-                    ring.value,
-                    agent_id,
-                )
+        # Only active when a ring is explicitly set; ring=None skips silently.
+        if base_cfg.ring is not None:
+            from hypervisor.rings.enforcer import RING_CONSTRAINTS
+            ring_constraints = RING_CONSTRAINTS[base_cfg.ring]
+            if not ring_constraints.subprocess_allowed:
+                if tool_allow:
+                    logger.info(
+                        "Ring %s: clearing tool_allowlist for agent '%s' "
+                        "(subprocess not permitted at this ring)",
+                        base_cfg.ring.value,
+                        agent_id,
+                    )
+                tool_allow = []
+            if not ring_constraints.network_allowed:
+                if net_allow:
+                    logger.info(
+                        "Ring %s: clearing network_allowlist for agent '%s' "
+                        "(network not permitted at this ring)",
+                        base_cfg.ring.value,
+                        agent_id,
+                    )
             net_allow = []
 
         # Resolve tool callables. Names listed in the allowlist that the
@@ -525,17 +523,15 @@ class HyperLightSandboxProvider(SandboxProvider):
                 reason = getattr(decision, "reason", "policy denied")
                 raise PermissionError(f"Policy denied: {reason}")
 
-        # Ring resource check — deny subprocess access for Ring 3 before
-        # the code ever reaches the guest.
-        from hypervisor.rings.enforcer import ResourceType, RingEnforcer
-        from hypervisor.models import ExecutionRing
-        effective_ring = session_ring if session_ring is not None else ExecutionRing.RING_3_SANDBOX
-        ring_result = RingEnforcer().check_resource(effective_ring, ResourceType.SUBPROCESS)
-        if not ring_result.allowed:
-            raise PermissionError(
-                f"Ring {effective_ring.value} agent cannot execute "
-                f"subprocess: {ring_result.reason}"
-            )
+        # Ring resource check — only when a ring is explicitly set.
+        if session_ring is not None:
+            from hypervisor.rings.enforcer import ResourceType, RingEnforcer
+            ring_result = RingEnforcer().check_resource(session_ring, ResourceType.SUBPROCESS)
+            if not ring_result.allowed:
+                raise PermissionError(
+                    f"Ring {session_ring.value} agent cannot execute "
+                    f"subprocess: {ring_result.reason}"
+                )
 
         enforce_no_subprocess_execution(code)
 
