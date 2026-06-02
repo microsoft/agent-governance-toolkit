@@ -296,9 +296,12 @@ jobs:
                 }
                 commentPosted = true;
               } catch (error) {
-                core.warning(
-                  `Skipping PR comment: ${error.status || 'unknown'} ${error.message || String(error)}`
-                );
+                const message = error?.message || String(error);
+                if (error?.status === 403 || message.includes('Resource not accessible by integration')) {
+                  core.warning(`PR comment not posted due to token restrictions: ${message}`);
+                } else {
+                  throw error;
+                }
               }
             }
 
