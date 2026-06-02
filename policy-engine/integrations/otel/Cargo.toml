@@ -5,6 +5,7 @@ edition = "2021"
 rust-version = "1.85"
 description = "OpenTelemetry bridge for Agent Control Specification telemetry"
 license = "MIT"
+publish = false
 
 [dependencies]
 agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core" }
