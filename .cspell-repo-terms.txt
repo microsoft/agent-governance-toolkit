@@ -72,11 +72,8 @@ CODEOWNERS
 codepoint
 CommonMark
 comspec
-<<<<<<< HEAD
-connectedservicename
-=======
 confirmer
->>>>>>> 019325ce (chore: add mute-agent red-team test terms to spell-check allowlist)
+connectedservicename
 containerapps
 containerd
 contentsource
@@ -235,11 +232,8 @@ lockfile
 lockfiles
 lotl
 lstrip
-<<<<<<< HEAD
-mainpublisher
-=======
 madmin
->>>>>>> 019325ce (chore: add mute-agent red-team test terms to spell-check allowlist)
+mainpublisher
 manylinux
 markdown
 Marp
