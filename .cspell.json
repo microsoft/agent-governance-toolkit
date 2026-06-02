@@ -48,7 +48,9 @@
     "scipy",
     "croniter",
     "nbconvert",
-    "PYTHONUTF"
+    "PYTHONUTF",
+    "simplefilter",
+    "issubclass"
   ],
   "ignorePaths": [
     "**/node_modules/**",
