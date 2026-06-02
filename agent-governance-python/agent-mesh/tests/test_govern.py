@@ -223,6 +223,14 @@ rules:
 class TestRingEnforcement:
     """Tests for ring-level resource constraint enforcement in govern()."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_detectors(self):
+        """Reset shared breach-detector state between tests for isolation."""
+        from agentmesh.governance.govern import _reset_shared_breach_detectors
+        _reset_shared_breach_detectors()
+        yield
+        _reset_shared_breach_detectors()
+
     def test_ring3_denies_subprocess_action(self):
         """Ring 3 agent cannot invoke a subprocess-type action."""
         from hypervisor.models import ExecutionRing
