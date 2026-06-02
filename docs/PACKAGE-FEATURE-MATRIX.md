@@ -17,7 +17,7 @@ build governed agents in each ecosystem.
 | **MCP Security** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Execution Rings** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **SRE / SLOs** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Kill Switch** | ✅ | ✅ | ✅ | ✅ | — |
+| **Kill Switch** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Lifecycle Management** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Framework Integrations** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Unified CLI** | ✅ | — | — | — | — |
@@ -139,6 +139,7 @@ full governance stack.
 | Core governance primitives | ✅ Parity |
 | MCP security | ✅ Parity |
 | Execution rings | ✅ Parity |
+| Kill switch | ✅ Parity |
 | Lifecycle management | ✅ Parity |
 | SRE / SLOs | ✅ Parity |
 | Framework integrations | ✅ Parity |
@@ -155,6 +156,7 @@ full governance stack.
 | `audit.go` | Hash-chained audit logging, filtering, JSON export, retention cap |
 | `mcp.go` | MCP security scanning — tool poisoning, typosquatting, hidden chars/homoglyphs, rug pull |
 | `rings.go` | 4-tier execution privilege rings with default-deny access control |
+| `kill_switch.go` | Scoped execution kill switches (global, agent, capability) with registry and history |
 | `lifecycle.go` | 8-state lifecycle manager with validated transitions and transition history |
 | `client.go` | High-level client combining identity, trust, policy, and audit |
 | `policy_backends.go` | OPA/Rego remote + CLI + built-in evaluation, Cedar CLI + built-in evaluation |

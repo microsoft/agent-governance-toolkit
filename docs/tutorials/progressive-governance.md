@@ -22,15 +22,18 @@
 and you need something running today.
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agent_os.policies import PolicyEvaluator, PolicyDocument
 
-evaluator = PolicyEvaluator()
-evaluator.add_rules([
-    {"action": "web_search", "effect": "allow"},
-    {"action": "read_file", "effect": "allow"},
-    {"action": "*", "effect": "deny"},
-])
+doc = PolicyDocument.from_dict({
+    "version": "1.0",
+    "rules": [
+        {"action": "web_search", "effect": "allow"},
+        {"action": "read_file", "effect": "allow"},
+        {"action": "*", "effect": "deny"},
+    ],
+})
 
+evaluator = PolicyEvaluator(policies=[doc])
 decision = evaluator.evaluate({"action": "delete_file"})
 assert not decision.allowed  # blocked by default-deny
 ```
@@ -81,16 +84,15 @@ decision = evaluator.evaluate({"action": "read_file", "path": "/data/public/repo
 did what, or you need trust scoring between agents.
 
 ```python
-from agent_os.mesh import AgentIdentity, TrustScorer
+from agentmesh.identity import AgentIdentity
 
 identity = AgentIdentity.create(
     name="research-agent",
     capabilities=["web_search", "read_file"],
 )
 
-scorer = TrustScorer()
-score = scorer.evaluate(identity, action="web_search")
-# score.trust_level → 0.95 (high — action matches declared capabilities)
+# Identity gives each agent a verifiable SPIFFE SVID
+# Use with policy evaluation: evaluator.evaluate({"agent_id": identity.id, "action": "web_search"})
 ```
 
 > 💡 **Add this when you move to multi-agent systems.** Single-agent setups
@@ -104,19 +106,19 @@ score = scorer.evaluate(identity, action="web_search")
 rotation, or you need to detect orphaned/shadow agents.
 
 ```python
-from agent_os.lifecycle import AgentProvisioner, OrphanDetector
+from agentmesh.lifecycle import LifecycleManager, OrphanDetector
 
-provisioner = AgentProvisioner()
-agent = provisioner.create(
+manager = LifecycleManager()
+agent = manager.request_provisioning(
     name="data-analyst",
-    ttl_hours=24,
+    owner="platform-team",
     capabilities=["read_file", "web_search"],
 )
 
 detector = OrphanDetector()
 orphans = detector.scan()  # finds agents with no active owner
 for orphan in orphans:
-    provisioner.decommission(orphan.id)
+    manager.decommission(orphan.id)
 ```
 
 > 💡 **Add this when you're running agents in production at scale.** Credential
@@ -130,24 +132,24 @@ for orphan in orphans:
 or you need a complete governance dashboard with SRE capabilities.
 
 ```python
-from agent_os import GovernanceStack
+from agentmesh.governance import govern, GovernanceConfig
+from agent_os.policies import PolicyEvaluator
 
-stack = GovernanceStack(
-    policies="policies/",
-    identity=True,
-    lifecycle=True,
-    execution_rings=True,      # sandboxed execution tiers
-    sre=True,                  # circuit breakers, rate limiting
-    compliance=True,           # audit trail, NIST/OWASP mapping
-    dashboard=True,            # real-time governance dashboard
+# Wrap any agent with full governance: policies, identity, audit, SRE
+config = GovernanceConfig(
+    policy="policies/",
+    agent_id="enterprise-agent",
+    audit=True,
+    audit_file="audit/governance.jsonl",
 )
 
+safe_agent = govern(agent.run, config=config)
+
 # Everything from Levels 1–4, plus:
-# - Execution rings (sandbox → staging → production)
-# - Circuit breakers and rate limiting
-# - Compliance verification and audit export
-# - Real-time governance dashboard
-stack.start()
+# - Policy enforcement with conflict resolution
+# - Full audit trail with compliance mapping
+# - Approval workflows for high-risk actions
+result = safe_agent(action="transfer_funds", amount=10000)
 ```
 
 > 💡 **Most teams never need Level 5.** It exists for regulated industries

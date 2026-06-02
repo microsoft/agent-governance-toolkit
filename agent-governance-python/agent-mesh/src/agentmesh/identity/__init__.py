@@ -58,6 +58,14 @@ from .risk import RiskScore, RiskScorer
 from .rotation import KeyRotationManager
 from .spiffe import SVID, SPIFFEIdentity
 from .sponsor import HumanSponsor
+from .tee_keystore import (
+    LocalTEEKeyStore,
+    MockSKRKeyStore,
+    SoftwareKeyHandle,
+    TEEKeyHandle,
+    TEEKeyStore,
+    require_tee_bound_key,
+)
 
 __all__ = [
     "AgentIdentity",
@@ -87,6 +95,12 @@ __all__ = [
     "KeyStore",
     "SoftwareKeyStore",
     "PKCS11KeyStore",
+    "TEEKeyStore",
+    "TEEKeyHandle",
+    "SoftwareKeyHandle",
+    "LocalTEEKeyStore",
+    "MockSKRKeyStore",
+    "require_tee_bound_key",
     "AttestationClaims",
     "AttestationEvidence",
     "ConfidentialLevel",

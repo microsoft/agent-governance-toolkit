@@ -13,7 +13,6 @@ import hashlib
 import logging
 import os
 import secrets
-import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -72,24 +71,49 @@ class TrustStore:
         self.interactions: list[dict[str, Any]] = []
         self.handshakes: dict[str, dict[str, Any]] = {}
 
+    def _default_record(self, agent_did: str) -> dict[str, Any]:
+        """Build a non-persisted default record for an unknown DID."""
+        return {
+            "agent_did": agent_did,
+            "overall_score": 0,
+            "dimensions": {d: 0 for d in TRUST_DIMENSIONS},
+            "trust_level": "untrusted",
+            "interaction_count": 0,
+            "known": False,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        }
+
     def get_score(self, agent_did: str) -> dict[str, Any]:
-        """Return trust record for *agent_did*, creating a default if absent."""
+        """Return trust record for *agent_did* WITHOUT inserting on miss.
+
+        Unknown DIDs get a fresh ``untrusted`` record returned by value;
+        the in-memory ``self.scores`` dict is left untouched. This keeps
+        attacker queries against ``check_trust`` / ``verify_delegation``
+        from being able to grow the score table without bound.
+        Mutating callers (``update_score``, ``record_interaction``)
+        go through ``_get_or_create`` so legitimate writes still
+        persist.
+        """
+        record = self.scores.get(agent_did)
+        if record is None:
+            return self._default_record(agent_did)
+        return record
+
+    def _get_or_create(self, agent_did: str) -> dict[str, Any]:
         if agent_did not in self.scores:
-            self.scores[agent_did] = {
-                "agent_did": agent_did,
-                "overall_score": 500,
-                "dimensions": {d: 500 for d in TRUST_DIMENSIONS},
-                "trust_level": "standard",
-                "interaction_count": 0,
-                "last_updated": datetime.now(timezone.utc).isoformat(),
-            }
+            self.scores[agent_did] = self._default_record(agent_did)
         return self.scores[agent_did]
+
+    def is_known(self, agent_did: str) -> bool:
+        """Return True only for agents we've explicitly recorded interactions with."""
+        record = self.scores.get(agent_did)
+        return bool(record and record.get("known"))
 
     def update_score(
         self, agent_did: str, delta: int, dimension: str | None = None
     ) -> dict[str, Any]:
         """Apply *delta* to the agent's score (overall and optionally a dimension)."""
-        record = self.get_score(agent_did)
+        record = self._get_or_create(agent_did)
         record["overall_score"] = max(0, min(1000, record["overall_score"] + delta))
         if dimension and dimension in record["dimensions"]:
             record["dimensions"][dimension] = max(
@@ -119,6 +143,8 @@ class TrustStore:
         )
         record = self.update_score(peer_did, delta, dimension)
         record["interaction_count"] = record.get("interaction_count", 0) + 1
+        # Once we've recorded a real interaction we treat the peer as known.
+        record["known"] = True
         return {**interaction, "updated_score": record}
 
 
@@ -178,17 +204,23 @@ def check_trust(agent_did: str) -> dict:
 
     Returns the agent's overall trust score, trust level, and all five
     trust dimensions (competence, integrity, availability, predictability,
-    transparency).
+    transparency). Unknown agents (no recorded interactions) are reported
+    as untrusted regardless of ``MIN_TRUST_SCORE`` — auto-creating an
+    unknown DID at the trust threshold would let any caller bypass
+    trust checks by presenting a fresh DID.
 
     Args:
         agent_did: The DID of the agent to check (e.g. "did:mesh:abc123").
     """
+    known = _store.is_known(agent_did)
     record = _store.get_score(agent_did)
+    trusted = known and record["overall_score"] >= MIN_TRUST_SCORE
     return {
         "agent_did": agent_did,
-        "trusted": record["overall_score"] >= MIN_TRUST_SCORE,
+        "trusted": trusted,
+        "known": known,
         "overall_score": record["overall_score"],
-        "trust_level": record["trust_level"],
+        "trust_level": record["trust_level"] if known else "unknown",
         "dimensions": record["dimensions"],
         "min_trust_threshold": MIN_TRUST_SCORE,
     }
@@ -268,11 +300,13 @@ def verify_delegation(
         delegator_did: The DID of the delegator (parent agent).
         capability: The capability being delegated (e.g. "read:data").
     """
+    delegator_known = _store.is_known(delegator_did)
+    agent_known = _store.is_known(agent_did)
     delegator_record = _store.get_score(delegator_did)
     agent_record = _store.get_score(agent_did)
 
-    delegator_trusted = delegator_record["overall_score"] >= MIN_TRUST_SCORE
-    agent_trusted = agent_record["overall_score"] >= MIN_TRUST_SCORE
+    delegator_trusted = delegator_known and delegator_record["overall_score"] >= MIN_TRUST_SCORE
+    agent_trusted = agent_known and agent_record["overall_score"] >= MIN_TRUST_SCORE
 
     valid = delegator_trusted and agent_trusted
 
@@ -285,6 +319,8 @@ def verify_delegation(
         "agent_trust_score": agent_record["overall_score"],
         "delegator_trusted": delegator_trusted,
         "agent_trusted": agent_trusted,
+        "delegator_known": delegator_known,
+        "agent_known": agent_known,
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 

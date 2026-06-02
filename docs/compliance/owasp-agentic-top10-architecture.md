@@ -29,7 +29,7 @@ implementation evidence, and provides an honest coverage assessment.
 | ASI05 | Unexpected Code Execution | ✅ Full | Static reviewer detects pickle/eval |
 | ASI06 | Memory and Context Poisoning | ⚠️ Partial | Audit hash-chain; no memory sandbox |
 | ASI07 | Insecure Inter-Agent Communication | ✅ Full | Trust-gate with DID verification |
-| ASI08 | Cascading Failures | ✅ Full | Circuit breaker, rate limiter |
+| ASI08 | Cascading Agent Failures | ✅ Full | Circuit breaker, rate limiter |
 | ASI09 | Human-Agent Trust Exploitation | ⚠️ Partial | Audit trail; no UI-level guardrails |
 | ASI10 | Rogue Agents | ✅ Full | `AgentBehaviorMonitor`, quarantine |
 | ASI11 | Agent Untraceability | ✅ Full | Tamper-evident audit log (hash chain) |
@@ -181,7 +181,7 @@ verification in multi-agent orchestration code.
 
 ---
 
-### ASI08 — Cascading Failures
+### ASI08 — Cascading Agent Failures
 
 **Risk:** A failure in one agent propagates through the system.
 

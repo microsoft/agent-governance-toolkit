@@ -32,6 +32,11 @@ except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback
 
 # Known registered PyPI package names for this project
 REGISTERED_PACKAGES = {
+    # Consolidated packages (v4.0.0+)
+    "agent-governance-toolkit-core", "agent_governance_toolkit_core",
+    "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
+    "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
+    "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
     # Core packages (on PyPI) — both hyphen and underscore variants
     "agent-os-kernel", "agent_os_kernel",
     "agentmesh-platform", "agentmesh_platform",
@@ -39,11 +44,15 @@ REGISTERED_PACKAGES = {
     "agentmesh-runtime", "agentmesh_runtime",
     "agent-sre", "agent_sre",
     "agent-governance-toolkit", "agent_governance_toolkit",
+    "agent-governance-toolkit-core", "agent_governance_toolkit_core",
+    "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
+    "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
+    "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
     "agentmesh-lightning", "agentmesh_lightning",
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
     "agentmesh-discovery", "agentmesh_discovery",
-    "agent-sandbox", "agent_sandbox",
+    "agt-sandbox", "agt_sandbox",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
@@ -56,6 +65,9 @@ REGISTERED_PACKAGES = {
     "google-adk", "safety", "jupyter", "vitest", "tsup", "typescript",
     "requests",
     "twine",
+    # PyJWT — required by agent-mesh/identity/entra_verifier.py for
+    # Entra-signed JWT verification (PR #2659). Real package, on PyPI.
+    "pyjwt", "PyJWT",
     # Dashboard / visualization (used in examples)
     "streamlit", "plotly", "pandas", "networkx", "matplotlib", "pyvis",
     # Async / caching (used in examples)
@@ -107,6 +119,17 @@ REGISTERED_PACKAGES = {
     # Microsoft Agent Framework (MAF) — not yet on PyPI, used in examples
     "agent-framework", "agent_framework",
     "agent-framework-openai", "agent_framework_openai",
+    # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
+    "azure-functions", "azure_functions",
+    # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
+    "azure-identity", "azure_identity",
+    "azure-core", "azure_core",
+    # SpendGuard SDK (real PyPI package, used in examples)
+    "spendguard-sdk", "spendguard_sdk",
+    # Cedarling Python bindings (real PyPI package, optional dep)
+    "cedarling-python", "cedarling_python",
+    # Cedarling-AgentMesh integration (internal cross-package, local-only)
+    "cedarling-agentmesh", "cedarling_agentmesh",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins
     # instead of path references. See dependency confusion attack vector.
@@ -125,6 +148,9 @@ REGISTERED_NPM_PACKAGES = {
     "@microsoft/agentmesh-api", "@microsoft/agent-os-cursor",
     "@microsoft/agentmesh-mastra", "@microsoft/agentmesh-copilot-governance",
     "@microsoft/agent-governance-sdk", "@microsoft/agent-governance-copilot-cli",
+    "@microsoft/agent-governance-claude-code",
+    "@microsoft/agent-governance-opencode",
+    "@microsoft/agent-governance-antigravity-cli",
     "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
     "@microsoft/agent-os-vscode",
     # Common deps
@@ -160,6 +186,9 @@ REGISTERED_NPM_PACKAGES = {
 REGISTERED_CARGO_PACKAGES = {
     "serde", "serde_json", "serde_yaml", "sha2", "ed25519-dalek",
     "rand", "thiserror", "tempfile", "agentmesh",
+    "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
+    "opentelemetry", "regex", "regorus",
+    "assert_cmd", "predicates",
 }
 
 # Patterns that are always safe (not package names)
@@ -291,14 +320,15 @@ def check_notebook(filepath: str) -> list[str]:
         if cell.get("cell_type") != "code":
             continue
         for line in cell.get("source", []):
-            if "pip install" in line and not line.strip().startswith("#"):
-                packages = extract_package_names(line)
-                for pkg in packages:
-                    if pkg.lower() not in registered_lower:
-                        findings.append(
-                            f"  {filepath}: "
-                            f"'{pkg}' may not be registered on PyPI"
-                        )
+            if not line.strip().startswith("#"):
+                for match in PIP_INSTALL_RE.finditer(line):
+                    packages = extract_package_names(match.group(1))
+                    for pkg in packages:
+                        if pkg.lower() not in registered_lower:
+                            findings.append(
+                                f"  {filepath}: "
+                                f"'{pkg}' may not be registered on PyPI"
+                            )
     return findings
 
 

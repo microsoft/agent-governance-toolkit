@@ -17,9 +17,9 @@
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-microsoft.github.io%2Fagent--governance--toolkit-blue?logo=github)](https://microsoft.github.io/agent-governance-toolkit)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/OWASP-COMPLIANCE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](../../docs/compliance/owasp-agentic-top10-architecture.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/microsoft/agent-governance-toolkit)
 
@@ -207,18 +207,18 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 | Risk | ID | AGT 통제 |
 |------|----|-------------|
-| Agent Goal Hijacking | ASI-01 | 정책 엔진이 비인가된 에이전트 목표 변경을 차단 |
-| Excessive Capabilities | ASI-02 | 최소권한 부여 강제 적용 |
+| Agent Goal Hijack | ASI-01 | 정책 엔진이 비인가된 에이전트 목표 변경을 차단 |
+| Tool Misuse & Exploitation | ASI-02 | 최소권한 부여 강제 적용 |
 | Identity & Privilege Abuse | ASI-03 | Ed25519와 ML-DSA-65에 의한 제로트러스트 신원증명 제공|
-| Uncontrolled Code Execution | ASI-04 | 실행 격리 링(rings) 및 샌드박싱(sandboxing) |
-| Insecure Output Handling | ASI-05 | 컨텐츠 정책이 모든 출력을 검증 |
-| Memory Poisoning | ASI-06 | 무결성 체크를 통해 일화적(episodic) 메모리 구현 |
-| Unsafe Inter-Agent Comms | ASI-07 | 채널 암호화 및 신뢰 게이트 구현 |
-| Cascading Failures | ASI-08 | 써킷 브레이커 및 SLO 강제화 |
-| Human-Agent Trust Deficit | ASI-09 | 전체 감사 추적(full audit trails) 및 비행기록계(flight recorder) |
+| Agentic Supply Chain Compromise | ASI-04 | 의존성 혼동 스캔 및 도구 검증 |
+| Unexpected Code Execution | ASI-05 | 실행 격리 링(rings) 및 샌드박싱(sandboxing) |
+| Memory & Context Poisoning | ASI-06 | 무결성 체크를 통해 일화적(episodic) 메모리 구현 |
+| Insecure Inter-Agent Comms | ASI-07 | 채널 암호화 및 신뢰 게이트 구현 |
+| Cascading Agent Failures | ASI-08 | 써킷 브레이커 및 SLO 강제화 |
+| Human-Agent Trust Exploitation | ASI-09 | 전체 감사 추적(full audit trails) 및 비행기록계(flight recorder) |
 | Rogue Agents | ASI-10 | 실행 격리, 킬스위치(kill switch), 이상 탐지(anomaly detection) |
 
-전체 목록: [OWASP-COMPLIANCE.md](../../docs/OWASP-COMPLIANCE.md) · 주요 규제 대응: [EU AI Act](../../docs/compliance/), [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md), [Colorado AI Act](../../docs/compliance/)
+전체 목록: [OWASP-COMPLIANCE.md](../../docs/compliance/owasp-agentic-top10-architecture.md) · 주요 규제 대응: [EU AI Act](../../docs/compliance/), [NIST AI RMF](../../docs/compliance/nist-ai-rmf-alignment.md), [Colorado AI Act](../../docs/compliance/)
 
 ---
 
@@ -284,14 +284,14 @@ result := client.ExecuteWithGovernance("data.read", nil)
 - [Language Package Matrix](../../docs/PACKAGE-FEATURE-MATRIX.md) — 언어별 지원 기능 비교표
 - [Architecture](../../docs/ARCHITECTURE.md) — 시스템 설계, 보안 모델, 신뢰 점수 체계
 - [Architecture Decisions](../../docs/adr/README.md) — 아키텍처 결정 기록(ADR) 로그
-- [Threat Model](../../docs/THREAT_MODEL.md) — 신뢰 경계 및 STRIDE 분석
+- [Threat Model](../../docs/security/threat-model.md) — 신뢰 경계 및 STRIDE 분석
 - [API: Agent OS](../../agent-governance-python/agent-os/README.md) · [AgentMesh](../../agent-governance-python/agent-mesh/README.md) · [Agent SRE](../../agent-governance-python/agent-sre/README.md)
 
 **컴플라이언스 및 배포**
 - [Known Limitations](../../docs/LIMITATIONS.md) — 설계상의 제약 사항 및 권장되는 계층 방어 전략
-- [OWASP Compliance](../../docs/OWASP-COMPLIANCE.md) — ASI-01부터 ASI-10까지의 전체 매핑 가이드
+- [OWASP Compliance](../../docs/compliance/owasp-agentic-top10-architecture.md) — ASI-01부터 ASI-10까지의 전체 매핑 가이드
 - [Deployment Guides](../../docs/deployment/README.md) — Azure (AKS, Foundry, Container Apps), AWS (ECS/Fargate), GCP (GKE), Docker Compose 배포 가이드
-- [NIST AI RMF Alignment]../../docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](docs/compliance/) · [SOC 2 Mapping](../../docs/compliance/soc2-mapping.md)
+- [NIST AI RMF Alignment](../../docs/compliance/nist-ai-rmf-alignment.md) · [EU AI Act](../../docs/compliance/) · [SOC 2 Mapping](../../docs/compliance/soc2-mapping.md)
 
 **확장 기능**
 - [VS Code Extension](../../agent-governance-typescript/agent-os-vscode/) · [Framework Integrations](../../agent-governance-python/agentmesh-integrations/)

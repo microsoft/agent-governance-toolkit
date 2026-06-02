@@ -195,8 +195,6 @@ def cmd_status(args: argparse.Namespace) -> int:
             "emk": False,
             "amb": False,
             "atr": False,
-            "scak": False,
-            "mute_agent": False,
         },
         "env": get_env_config(),
     }
@@ -422,8 +420,6 @@ def cmd_metrics(args: argparse.Namespace) -> int:
             "emk": False,
             "amb": False,
             "atr": False,
-            "scak": False,
-            "mute_agent": False,
         },
     }
 

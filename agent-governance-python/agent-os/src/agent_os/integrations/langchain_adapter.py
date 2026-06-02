@@ -53,13 +53,12 @@ Features
 import asyncio
 import functools
 import logging
-import re
 import time
 import warnings
 from datetime import datetime
 from typing import Any, Optional
 
-from .base import BaseIntegration, GovernancePolicy
+from .base import PII_PATTERNS, BaseIntegration, GovernancePolicy
 
 logger = logging.getLogger("agent_os.langchain")
 
@@ -72,13 +71,6 @@ try:
 except ImportError:
     _SDKMiddleware = None
     _HAS_MIDDLEWARE = False
-
-# Patterns used to detect potential PII / secrets in memory writes
-_PII_PATTERNS = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
-    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
-    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
-]
 
 
 class LangChainKernel(BaseIntegration):
@@ -322,7 +314,7 @@ class LangChainKernel(BaseIntegration):
         combined = str(inputs) + str(outputs)
 
         # PII / secrets detection
-        for pattern in _PII_PATTERNS:
+        for pattern in PII_PATTERNS:
             if pattern.search(combined):
                 raise PolicyViolationError(
                     f"Memory write blocked: sensitive data detected "

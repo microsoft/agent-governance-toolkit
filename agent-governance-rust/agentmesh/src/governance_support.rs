@@ -916,11 +916,34 @@ fn evaluate_rego_rule(engine: &mut RegoEngine, package_path: &str, rule_name: &s
 }
 
 fn cedar_request(input: &HashMap<String, Value>) -> Result<CedarRequest, String> {
-    let principal = cedar_entity_uid_from_input(input, "principal", "Principal")?;
-    let action = cedar_entity_uid_from_input(input, "action", "Action")?;
-    let resource = cedar_entity_uid_from_input(input, "resource", "Resource")?;
+    // cedar-policy 4.x removed "unspecified" entities from `Request::new`: principal,
+    // action, and resource are now concrete `EntityUid`s, the constructor takes an
+    // optional schema, and it returns a validation `Result`. To preserve the prior
+    // behavior — where an absent entity acted as an unspecified one that still satisfied
+    // an unconstrained scope (e.g. `permit(principal, action, resource)`) but never a
+    // `principal == ...` constraint — we substitute a reserved placeholder UID for any
+    // absent component. No schema is supplied (`None`), preserving prior validation scope.
+    let principal = cedar_entity_uid_or_placeholder(input, "principal", "Principal")?;
+    let action = cedar_entity_uid_or_placeholder(input, "action", "Action")?;
+    let resource = cedar_entity_uid_or_placeholder(input, "resource", "Resource")?;
     let context = cedar_context(input)?;
-    Ok(CedarRequest::new(principal, action, resource, context))
+    CedarRequest::new(principal, action, resource, context, None).map_err(|error| error.to_string())
+}
+
+/// Resolve an entity UID from the input, falling back to a reserved placeholder
+/// (`<Type>::"__unspecified__"`) when the key is absent. The placeholder matches an
+/// unconstrained scope but no equality/`in` constraint, mirroring cedar 2.x's
+/// unspecified-entity semantics that 4.x's `Request::new` no longer expresses directly.
+fn cedar_entity_uid_or_placeholder(
+    input: &HashMap<String, Value>,
+    key: &str,
+    default_type: &str,
+) -> Result<CedarEntityUid, String> {
+    match cedar_entity_uid_from_input(input, key, default_type)? {
+        Some(uid) => Ok(uid),
+        None => CedarEntityUid::from_str(&format!(r#"{default_type}::"__unspecified__""#))
+            .map_err(|error| error.to_string()),
+    }
 }
 
 fn cedar_context(input: &HashMap<String, Value>) -> Result<CedarContext, String> {

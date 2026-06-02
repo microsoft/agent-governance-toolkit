@@ -42,7 +42,7 @@ package pages, and integration guides.
 
 - Public API changes should update the nearest package page or tutorial.
 - New examples should usually update docs discoverability at least once.
-- Security-sensitive changes should review `docs/security/` and `docs/THREAT_MODEL.md`.
+- Security-sensitive changes should review `docs/security/` and `docs/security/threat-model.md`.
 
 ## Validation
 

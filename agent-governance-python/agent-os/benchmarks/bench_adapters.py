@@ -101,6 +101,7 @@ def bench_governance_overhead_per_adapter(iterations: int = 5_000) -> List[Dict[
         "Gemini",
         "Mistral",
         "SemanticKernel",
+        "LangGraph",
     ]
     results = []
     for name in adapter_names:
@@ -122,12 +123,40 @@ def bench_governance_overhead_per_adapter(iterations: int = 5_000) -> List[Dict[
     return results
 
 
+def bench_langgraph_node_hook(iterations: int = 10_000) -> Dict[str, Any]:
+    """Benchmark LangGraphKernel before_node_execution hot-path overhead.
+
+    Simulates the two checks that fire on every node entry: blocked-pattern
+    scan on the state dict and the allowlist membership test.  The Cedar/OPA
+    gate is a no-op when no evaluator is configured, so this measures the
+    pure Python overhead of the governance layer.
+
+    Target: p99 < 0.1 ms (matching the adapter contract stated in #2641).
+    """
+    policy = _make_adapter_policy("langgraph")
+    state_str = str({"messages": [], "step": 0, "value": 42})
+    tool_name = "read_file"
+
+    def check() -> None:
+        # Allowlist gate
+        _ = not policy.allowed_tools or tool_name in policy.allowed_tools
+        # Blocked-pattern scan
+        for pat_str, pat_type, compiled in policy._compiled_patterns:
+            if pat_type == PatternType.SUBSTRING:
+                _ = pat_str.lower() in state_str.lower()
+            elif compiled:
+                _ = compiled.search(state_str)
+
+    return {"name": "LangGraph before_node_execution", **_sync_timer(check, iterations)}
+
+
 def run_all() -> List[Dict[str, Any]]:
     """Run all adapter benchmarks and return results."""
     results = [
         bench_policy_init(),
         bench_policy_check_tool_allowed(),
         bench_policy_pattern_match(),
+        bench_langgraph_node_hook(),
     ]
     results.extend(bench_governance_overhead_per_adapter())
     return results

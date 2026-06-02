@@ -25,9 +25,11 @@ import (
 // can run on every policy evaluation, so the previous per-call
 // `regexp.MustCompile` was wasted work.
 var (
-	cedarStatementPattern = regexp.MustCompile(`(?s)(permit|forbid)\s*\((.*?)\)\s*;`)
-	cedarActionPattern    = regexp.MustCompile(`action\s*==\s*Action::"([^"]+)"`)
-	cedarActionTokenSplit = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	cedarStatementPattern     = regexp.MustCompile(`(?s)(permit|forbid)\s*\((.*?)\)\s*;`)
+	cedarActionPattern        = regexp.MustCompile(`action\s*==\s*Action::"([^"]+)"`)
+	cedarPrincipalConstraint  = regexp.MustCompile(`principal\s*(?:==|in)\s*\w+`)
+	cedarResourceConstraint   = regexp.MustCompile(`resource\s*(?:==|in)\s*\w+`)
+	cedarActionTokenSplit     = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 )
 
 // OPAMode controls how an OPA/Rego backend evaluates policies.
@@ -148,7 +150,7 @@ func (b *OPABackend) evaluateWithMode(context map[string]interface{}) (BackendDe
 	case OPACLI:
 		return b.evaluateCLI(context)
 	case OPABuiltin:
-		return b.evaluateBuiltin(context)
+		return b.evaluateMock(context)
 	default:
 		if b.regoContent == "" {
 			return BackendDecision{}, fmt.Errorf("opa backend requires rego content or file")
@@ -157,7 +159,7 @@ func (b *OPABackend) evaluateWithMode(context map[string]interface{}) (BackendDe
 			return b.evaluateCLI(context)
 		}
 		if b.allowBuiltinFallback {
-			result, err := b.evaluateBuiltin(context)
+			result, err := b.evaluateMock(context)
 			if err != nil {
 				return BackendDecision{}, err
 			}
@@ -298,7 +300,7 @@ func (b *OPABackend) evaluateCLI(context map[string]interface{}) (BackendDecisio
 	}, nil
 }
 
-func (b *OPABackend) evaluateBuiltin(context map[string]interface{}) (BackendDecision, error) {
+func (b *OPABackend) evaluateMock(context map[string]interface{}) (BackendDecision, error) {
 	if b.regoContent == "" {
 		return BackendDecision{}, fmt.Errorf("opa builtin mode requires rego content or file")
 	}
@@ -551,7 +553,7 @@ func (b *CedarBackend) evaluateWithMode(context map[string]interface{}) (Backend
 	case CedarCLI:
 		return b.evaluateCLI(context)
 	case CedarBuiltin:
-		return b.evaluateBuiltin(context)
+		return b.evaluateMock(context)
 	default:
 		if b.policyContent == "" {
 			return BackendDecision{}, fmt.Errorf("cedar backend requires policy content or file")
@@ -560,7 +562,7 @@ func (b *CedarBackend) evaluateWithMode(context map[string]interface{}) (Backend
 			return b.evaluateCLI(context)
 		}
 		if b.allowBuiltinFallback {
-			result, err := b.evaluateBuiltin(context)
+			result, err := b.evaluateMock(context)
 			if err != nil {
 				return BackendDecision{}, err
 			}
@@ -675,7 +677,7 @@ func cedarDecisionFromCLIOutput(stdout string) (allowed bool, parsed bool) {
 	return false, false
 }
 
-func (b *CedarBackend) evaluateBuiltin(context map[string]interface{}) (BackendDecision, error) {
+func (b *CedarBackend) evaluateMock(context map[string]interface{}) (BackendDecision, error) {
 	if b.policyContent == "" {
 		return BackendDecision{}, fmt.Errorf("cedar builtin mode requires policy content or file")
 	}
@@ -691,6 +693,18 @@ func (b *CedarBackend) evaluateBuiltin(context map[string]interface{}) (BackendD
 		return BackendDecision{}, fmt.Errorf("cedar builtin: request action has unexpected type %T", request["action"])
 	}
 	statements := parseCedarStatements(b.policyContent)
+
+	// Reject policies with principal/resource constraints the mock cannot enforce
+	for _, stmt := range statements {
+		if stmt.HasPrincipalConstraint || stmt.HasResourceConstraint {
+			return BackendDecision{
+				Allowed:  false,
+				Decision: Deny,
+				Reason:   "Cedar mock evaluator does not implement principal/resource constraints; install cedarpy or the Cedar CLI for production use",
+			}, fmt.Errorf("mock evaluator cannot enforce principal/resource constraints")
+		}
+	}
+
 	hasPermit := false
 
 	for _, statement := range statements {
@@ -719,9 +733,11 @@ func (b *CedarBackend) evaluateBuiltin(context map[string]interface{}) (BackendD
 }
 
 type cedarStatement struct {
-	Effect           string
-	ActionConstraint string
-	Raw              string
+	Effect                 string
+	ActionConstraint       string
+	HasPrincipalConstraint bool
+	HasResourceConstraint  bool
+	Raw                    string
 }
 
 func buildCedarRequest(context map[string]interface{}) map[string]interface{} {
@@ -762,9 +778,11 @@ func parseCedarStatements(content string) []cedarStatement {
 			constraint = fmt.Sprintf(`Action::"%s"`, actionMatch[1])
 		}
 		statements = append(statements, cedarStatement{
-			Effect:           match[1],
-			ActionConstraint: constraint,
-			Raw:              match[0],
+			Effect:                 match[1],
+			ActionConstraint:       constraint,
+			HasPrincipalConstraint: cedarPrincipalConstraint.MatchString(match[2]),
+			HasResourceConstraint:  cedarResourceConstraint.MatchString(match[2]),
+			Raw:                    match[0],
 		})
 	}
 

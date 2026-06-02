@@ -194,6 +194,9 @@ if MODE == "server":
 
     @app.post("/agents/register", status_code=201)
     async def register_agent(request: Request):
+        # WARNING: This demo endpoint has no authentication or proof-of-possession.
+        # Do NOT use in production. See agentmesh.registry.app for the authenticated
+        # registration flow with Ed25519 proof-of-possession.
         body = await request.json()
         agent_id = body.get("agent_id")
         if not agent_id:

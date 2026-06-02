@@ -374,6 +374,24 @@ test("evaluateDirectResourceAccess denies secret reads, allows env templates, re
 
   assert.equal(
     evaluateDirectResourceAccess(policy, {
+      toolName: "web_fetch",
+      cwd: "C:\\repo",
+      rawToolArgs: { link: "http://169.254.169.254/latest/meta-data/" },
+    })?.effect,
+    "deny",
+  );
+
+  assert.equal(
+    evaluateDirectResourceAccess(policy, {
+      toolName: "web_fetch",
+      cwd: "C:\\repo",
+      rawToolArgs: { target: "http://169.254.169.254/latest/meta-data/" },
+    })?.effect,
+    "deny",
+  );
+
+  assert.equal(
+    evaluateDirectResourceAccess(policy, {
       toolName: "powershell",
       commandText: "Get-Content '.env'",
       cwd: "C:\\repo",

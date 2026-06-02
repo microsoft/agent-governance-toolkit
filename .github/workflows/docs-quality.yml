@@ -60,6 +60,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install pytest
-        run: pip install pytest==8.3.3
+        run: |
+          pip install --no-cache-dir --require-hashes --no-deps \
+            -r agent-governance-python/requirements/ci-docs-test.txt
+          pip install --no-cache-dir pytest==8.3.3  # Scorecard: version-pinned (transitive deps)
       - name: Run docs tooling tests
         run: pytest scripts/tests/test_docs_check_links.py scripts/tests/test_docs_check_frontmatter.py -q

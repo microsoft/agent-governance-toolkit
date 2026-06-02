@@ -1,0 +1,127 @@
+<!--
+    PDP callout policy fragment for AI Gateway (Azure API Management).
+
+    Place this inside the <inbound> section of the API or operation policy
+    that fronts Foundry model and MCP tool traffic.
+
+    Fail-closed by default. Set the named value `pdp-fail-open` to "true" to
+    opt a route in to fail-open; scope this to non-sensitive operations only.
+-->
+<fragment>
+    <!-- 1. Build the minimal decision request envelope (v1.0). -->
+    <set-variable name="pdpCorrelationId" value="@(context.RequestId)" />
+    <set-variable name="pdpInputDigest" value="@{
+        var body = context.Request.Body?.As<string>(preserveContent: true) ?? string.Empty;
+        using (var sha = System.Security.Cryptography.SHA256.Create())
+        {
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(body));
+            return "sha256:" + BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+        }
+    }" />
+
+    <!-- 2. Call the PDP. Timeout is tight; PDP must be fast or fail closed. -->
+    <send-request mode="new" response-variable-name="pdpResponse" timeout="2" ignore-error="true">
+        <set-url>{{pdp-base-url}}/api/decide</set-url>
+        <set-method>POST</set-method>
+        <authentication-managed-identity resource="{{pdp-aad-audience}}" />
+        <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+        </set-header>
+        <set-header name="traceparent" exists-action="override">
+            <value>@(context.Request.Headers.GetValueOrDefault("traceparent", string.Empty))</value>
+        </set-header>
+        <set-body>@{
+            return new JObject(
+                new JProperty("schemaVersion", "1.0"),
+                new JProperty("agentId",        context.Request.Headers.GetValueOrDefault("x-agent-id", string.Empty)),
+                new JProperty("callerIdentity", context.User?.Email ?? string.Empty),
+                new JProperty("tenantId",       context.Subscription?.Id ?? string.Empty),
+                new JProperty("environment",    "{{pdp-environment}}"),
+                new JProperty("operation",      context.Request.Headers.GetValueOrDefault("x-agt-operation", "model.invoke")),
+                new JProperty("target",         context.Request.Headers.GetValueOrDefault("x-agt-target", string.Empty)),
+                new JProperty("inputDigest",    (string)context.Variables["pdpInputDigest"]),
+                new JProperty("correlationId",  (string)context.Variables["pdpCorrelationId"]),
+                new JProperty("traceparent",    context.Request.Headers.GetValueOrDefault("traceparent", string.Empty))
+            ).ToString();
+        }</set-body>
+    </send-request>
+
+    <!-- 3. Enforce fail-closed on transport / schema errors. -->
+    <choose>
+        <when condition="@(((IResponse)context.Variables["pdpResponse"]) == null || ((IResponse)context.Variables["pdpResponse"]).StatusCode >= 300)">
+            <choose>
+                <when condition="@("{{pdp-fail-open}}" == "true")">
+                    <!-- Explicit opt-in: allow and annotate audit. -->
+                    <set-header name="x-agt-pdp-failmode" exists-action="override">
+                        <value>fail-open</value>
+                    </set-header>
+                </when>
+                <otherwise>
+                    <return-response>
+                        <set-status code="503" reason="PDP unavailable" />
+                        <set-header name="x-agt-correlation-id" exists-action="override">
+                            <value>@((string)context.Variables["pdpCorrelationId"])</value>
+                        </set-header>
+                        <set-body>@{
+                            return new JObject(
+                                new JProperty("error", "pdp_unavailable"),
+                                new JProperty("correlationId", (string)context.Variables["pdpCorrelationId"])
+                            ).ToString();
+                        }</set-body>
+                    </return-response>
+                </otherwise>
+            </choose>
+        </when>
+    </choose>
+
+    <!-- 4. Parse decision and enforce. -->
+    <set-variable name="pdpDecision" value="@{
+        var resp = (IResponse)context.Variables["pdpResponse"];
+        if (resp == null) { return "deny"; }
+        try {
+            var body = resp.Body.As<JObject>(preserveContent: true);
+            return (string)body["decision"] ?? "deny";
+        } catch { return "deny"; }
+    }" />
+
+    <!-- Whitelist allow/allow_with_conditions; everything else (deny,
+         require_approval, unknown values, malformed responses) is rejected. -->
+    <choose>
+        <when condition="@((string)context.Variables["pdpDecision"] == "allow" || (string)context.Variables["pdpDecision"] == "allow_with_conditions")">
+            <!-- Fall through to backend. -->
+        </when>
+        <when condition="@((string)context.Variables["pdpDecision"] == "require_approval")">
+            <return-response>
+                <set-status code="202" reason="Approval required" />
+                <set-header name="x-agt-correlation-id" exists-action="override">
+                    <value>@((string)context.Variables["pdpCorrelationId"])</value>
+                </set-header>
+                <set-body>@{
+                    return new JObject(
+                        new JProperty("status", "approval_required"),
+                        new JProperty("correlationId", (string)context.Variables["pdpCorrelationId"])
+                    ).ToString();
+                }</set-body>
+            </return-response>
+        </when>
+        <otherwise>
+            <return-response>
+                <set-status code="403" reason="Denied by PDP" />
+                <set-header name="x-agt-correlation-id" exists-action="override">
+                    <value>@((string)context.Variables["pdpCorrelationId"])</value>
+                </set-header>
+                <set-body>@{
+                    return new JObject(
+                        new JProperty("error", "denied_by_pdp"),
+                        new JProperty("decision", (string)context.Variables["pdpDecision"]),
+                        new JProperty("correlationId", (string)context.Variables["pdpCorrelationId"])
+                    ).ToString();
+                }</set-body>
+            </return-response>
+        </otherwise>
+    </choose>
+
+    <set-header name="x-agt-correlation-id" exists-action="override">
+        <value>@((string)context.Variables["pdpCorrelationId"])</value>
+    </set-header>
+</fragment>

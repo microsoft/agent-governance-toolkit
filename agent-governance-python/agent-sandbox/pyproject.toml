@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent_sandbox"
-version = "3.7.0"
-description = "Public Preview — Agent Sandbox: Docker-based execution isolation for AI agents with policy-driven resource limits, tool proxies, network enforcement, and filesystem checkpointing"
+name = "agt_sandbox"
+version = "4.0.0"
+description = "Deprecated — use agent-governance-toolkit-cli instead. Agent Sandbox: Docker-based execution isolation for AI agents"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
@@ -33,7 +33,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-dependencies = []
+dependencies = [
+    "agent-governance-toolkit-cli>=4.0.0,<5.0",
+]
 
 [project.optional-dependencies]
 docker = [
@@ -42,11 +44,17 @@ docker = [
 hyperlight = [
     "hyperlight-sandbox>=0.4.0,<0.5",
 ]
+azure = [
+    # Early-access Python SDK for Azure Container Apps sandboxes.
+    # Installed via the GitHub release wheel — see README.
+    "azure-identity>=1.19.0,<2.0",
+    "azure-core>=1.32.0,<2.0",
+]
 policy = [
-    "agent-os-kernel>=3.7.0,<4.0",
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
 ]
 full = [
-    "agent-sandbox[docker,hyperlight,policy]",
+    "agt-sandbox[docker,hyperlight,policy]",
 ]
 dev = [
     "pytest>=9.0.3,<10.0",

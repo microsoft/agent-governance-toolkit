@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 /**
- * @agentmesh/copilot-governance — GitHub Copilot Extension for agent governance review.
+ * @microsoft/agentmesh-copilot-governance — GitHub Copilot Extension for agent governance review.
  *
  * Exports three public surfaces:
  *

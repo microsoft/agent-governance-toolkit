@@ -734,8 +734,13 @@ for entry in scanner.audit_log:
 
 ## CLI — `mcp-scan`
 
-The `mcp-scan` command-line tool wraps the scanner for use in CI/CD pipelines,
-pre-commit hooks, and ad-hoc audits.
+The `mcp-scan` command-line tool wraps the scanner for pre-adoption and CI use.
+Live scans inspect tool definitions over supported MCP transports. stdio live
+scans launch local commands; Streamable HTTP and legacy SSE live scans connect to
+configured endpoints and perform the MCP 2025-11-25 lifecycle before
+`tools/list`. Use `--static-only` for untrusted PR, pre-commit, or downloaded
+configs so the CLI scans inline tool metadata plus launch/endpoint metadata
+without executing commands or connecting to remote endpoints.
 
 ### Configuration File Formats
 
@@ -790,8 +795,8 @@ Scan a config file and print findings:
 # Table output (default)
 mcp-scan scan mcp-config.json
 
-# JSON output for CI/CD
-mcp-scan scan mcp-config.json --format json
+# JSON output for CI/CD over untrusted configs
+mcp-scan scan mcp-config.json --format json --static-only
 
 # Markdown for reports
 mcp-scan scan mcp-config.json --format markdown
@@ -799,8 +804,8 @@ mcp-scan scan mcp-config.json --format markdown
 # Filter to a single server
 mcp-scan scan mcp-config.json --server code-tools
 
-# Show only warnings and above
-mcp-scan scan mcp-config.json --severity warning
+# Show only warnings and above without launching configured commands
+mcp-scan scan mcp-config.json --severity warning --static-only
 ```
 
 **Arguments:**
@@ -816,9 +821,9 @@ mcp-scan scan mcp-config.json --severity warning
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success — no critical threats found |
-| `1` | Configuration loading error |
-| `2` | Critical threats detected |
+| `0` | Success — no critical findings found |
+| `1` | Configuration loading, usage, or file error |
+| `2` | Critical MCP metadata, configuration, or inspection findings detected |
 
 **Example table output:**
 
@@ -829,22 +834,22 @@ Server: code-tools
   ✅ search — clean
   ❌ run_code — CRITICAL: Hidden required field 'system_prompt' in schema
 
-Summary: 2 tools scanned, 0 warning(s), 1 critical
+Summary: 2 primitives scanned, 0 warning(s), 1 critical
 ```
 
 ### `mcp-scan fingerprint` — Rug-Pull Detection
 
-Fingerprint tool definitions and detect changes over time:
+Fingerprint normalized MCP metadata definitions and detect changes over time:
 
 ```bash
-# Save initial fingerprints (baseline)
-mcp-scan fingerprint mcp-config.json --output fingerprints.json
+# Save initial fingerprints (baseline) without launching untrusted commands
+mcp-scan fingerprint mcp-config.json --output fingerprints.json --static-only
 
 # Later, compare against the baseline
-mcp-scan fingerprint mcp-config.json --compare fingerprints.json
+mcp-scan fingerprint mcp-config.json --compare fingerprints.json --static-only
 ```
 
-The fingerprint file stores SHA-256 hashes keyed by `server::tool`:
+The fingerprint file stores SHA-256 hashes keyed by `server::primitive` (historical JSON fields may still use `tool_name` for compatibility):
 
 ```json
 {
@@ -880,7 +885,7 @@ When comparing, the CLI reports each change type:
 |------|---------|
 | `0` | No changes detected |
 | `1` | Missing `--output` or `--compare` flag |
-| `2` | Rug pull — definitions have changed |
+| `2` | Rug pull detected, or live inspection failed before a trusted baseline could be written |
 
 ### `mcp-scan report` — Full Security Report
 
@@ -904,8 +909,8 @@ mcp-scan report mcp-config.json > security-report.md
 | `config` | Yes | — | Path to MCP config file |
 | `--format` | No | `markdown` | Report format: `markdown`, `json` |
 
-The report scans all servers without severity filtering and always exits `0`
-(informational).
+The report scans all servers without severity filtering and exits `2` when
+critical tool, configuration, or inspection findings are present.
 
 ### CI/CD Integration Example
 
@@ -915,8 +920,8 @@ Add a scan step to your GitHub Actions workflow:
 - name: MCP Security Scan
   run: |
     pip install agent-os-kernel
-    mcp-scan scan mcp-config.json --format json --severity warning
-  # Exit code 2 fails the build if critical threats are found
+    mcp-scan scan mcp-config.json --format json --severity warning --static-only
+  # Non-zero exit fails the build; --static-only avoids executing PR-supplied commands.
 ```
 
 ---

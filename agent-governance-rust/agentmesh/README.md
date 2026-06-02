@@ -73,6 +73,45 @@ policies:
 }
 ```
 
+## OpenTelemetry Policy Spans
+
+Policy-evaluation spans are available behind the opt-in `telemetry` feature. The
+default library build has no OpenTelemetry dependency, and `agentmesh` does not
+install or configure a global provider/exporter. Configure OpenTelemetry in the
+embedding application, then install an explicit sink:
+
+```toml
+[dependencies]
+agentmesh = { version = "3.7.0", features = ["telemetry"] }
+```
+
+```rust
+use agentmesh::{
+    telemetry::OtelTelemetrySink, AgentMeshClient, ClientOptions,
+};
+use std::sync::Arc;
+
+let client = AgentMeshClient::with_options(
+    "my-agent",
+    ClientOptions {
+        telemetry_sink: Some(Arc::new(OtelTelemetrySink::new())),
+        ..Default::default()
+    },
+)?;
+
+let result = client.execute_with_governance("data.read", None);
+assert!(result.allowed);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The span name is `agentmesh.policy.evaluate`. Attributes are deliberately
+sanitized: decision label, allowed flag, elapsed milliseconds, action length,
+action hash, and agent-id hash. Raw actions, agent IDs, policy YAML, context
+values, prompt text, canaries, rule bodies, and denied reasons are not emitted.
+
+Prometheus metrics and broader audit/trust/prompt/ring telemetry remain follow-up
+scope.
+
 ## MCP-Only Quick Start
 
 ```rust

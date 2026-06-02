@@ -39,3 +39,7 @@ Key architectural decisions and their rationale. Each ADR follows the standard f
 | [ADR-0008](0008-cross-org-policy-federation.md) | Cross-org policy federation above identity | Policy |
 | [ADR-0010](0010-tee-keystore-sevsnp-attestation.md) | TEE keystore with SEV-SNP attestation | Security |
 | [ADR-0011](0011-additive-policy-check-contract.md) | Additive policy check contract | Policy |
+| [ADR-0026](0026-foundry-ai-gateway-functions-pdp.md) | Azure Functions PDP behind AI Gateway for Foundry prompt-based agents | Policy |
+| [ADR-0027](0027-adopt-dual-stack-migration-for-mcp-2026-07-28.md) | Dual-stack migration for MCP `2026-07-28` | MCP |
+| [ADR-0028](0028-agt-studio-unified-ui.md) | AGT Studio, a single unified UI for governance | UI |
+| [ADR-0029](0029-policy-distribution-and-registries.md) | Policy distribution and registries with verifiable trust | Policy / Supply chain |

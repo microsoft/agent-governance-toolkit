@@ -63,7 +63,7 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 | Risk | Description | Package |
 |------|-------------|---------|
 | ASI-01 | Agent Hijacking | Agent OS (PolicyEngine) |
-| ASI-02 | Excessive Capabilities | Agent OS (CapabilitySandbox) |
+| ASI-02 | Tool Misuse & Exploitation | Agent OS (CapabilitySandbox) |
 | ASI-03 | Insecure Communication | Agent Mesh (IATP + DID) |
 | ASI-05 | Insecure Output | Agent Runtime (OutputValidator) |
 | ASI-06 | Confused Deputy | Agent OS (CapabilityGuard) |
@@ -103,5 +103,5 @@ As AI agents become increasingly autonomous, governance infrastructure is critic
 
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit) | [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) | [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) | [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) | [Agent Governance](https://github.com/microsoft/agent-governance-toolkit)
 - [Microsoft mono-repo](https://github.com/microsoft/agent-governance-toolkit) (pending public release)
-- [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+- [OWASP Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/compliance/owasp-agentic-top10-architecture.md)
 - [PyPI: agent-os](https://pypi.org/project/agent-governance-python/agent-os/)

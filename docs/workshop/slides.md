@@ -69,7 +69,7 @@ identifies the most critical risks for agentic AI systems:
 | ASI-01 | Prompt Injection |
 | ASI-02 | Insecure Tool Use |
 | ASI-03 | Excessive Agency |
-| ASI-04 | Insecure Output Handling |
+| ASI-04 | Unexpected Code Execution |
 | ASI-05 | Sensitive Information Disclosure |
 | ASI-06 | Model Denial of Service |
 | ASI-07 | Supply Chain Vulnerabilities |

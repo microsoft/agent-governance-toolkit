@@ -49,7 +49,7 @@ jobs:
           pip install --no-cache-dir --require-hashes --no-deps \
             -r agent-governance-python/requirements/ci-docs.txt
           # Install transitive dependencies normally.
-          pip install --no-cache-dir mkdocs-material==9.7.6 mkdocs-minify-plugin==0.8.0
+          pip install --no-cache-dir mkdocs-material==9.7.6 mkdocs-minify-plugin==0.8.0  # Scorecard: version-pinned, hash-verified via ci-docs.txt
 
       - name: Build docs
         run: mkdocs build --config-file mkdocs.yml --site-dir _site

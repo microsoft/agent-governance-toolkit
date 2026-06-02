@@ -12,6 +12,7 @@ a0bfee741304548463c85252302720958772a192:docs/tutorials/32-e2e-encrypted-messagi
 de392848c0fbfd2566789a8ddee41b35c8cdf798:packages/agentmesh-integrations/sb-runtime-skill/sb_runtime_agentmesh/receipts.py:generic-api-key:92
 3130880d08313227c792a6a3b5837dee0938e1c0:packages/agentmesh-integrations/agentmesh-avp/tests/test_provider.py:generic-api-key:13
 46b56f5d1af93ce62cd14b6fa67679af4d99bc80:examples/atr-community-rules/test_atr_policy.py:generic-api-key:82
+7be9ff1699cb333c3ab721c79e1cc5569aa34a4c:examples/policy-templates/fixtures/general-saas-fixtures.json:generic-api-key:82
 8144506882383949be2e09bb08b6a633e6a31827:packages/agent-os/tests/test_credential_redactor.py:generic-api-key:18
 970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh-mcp/src/mcp/response.rs:generic-api-key:326
 970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh-mcp/src/mcp/redactor.rs:generic-api-key:188
@@ -37,3 +38,13 @@ bd2e209cd4e1c1fbe49d8383fabd8bb8ba7203cb:packages/agentmesh-integrations/langgra
 2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-os/tests/test_mute_agent.py:stripe-access-token:72
 2a13c1c56d58a892b018438944db2852c1d6d5c2:packages/agent-sre/tests/unit/test_capture.py:generic-api-key:60
 2c436227c4b4640ce62c9d61c77a59da412b7ea3:agent-governance-python/agentmesh-integrations/cedarling-agentmesh/README.md:generic-api-key:73
+f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-python/agent-discovery/tests/test_process_redaction.py:private-key:21
+f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:generic-api-key:257
+f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:103
+f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:117
+f46be908f9286027b09e939a5cc7f3cd49069731:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:131
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-python/agent-discovery/tests/test_process_redaction.py:private-key:21
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:generic-api-key:257
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:103
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:117
+c88f4556b717acb6753df7b099dedfc6a5284d15:agent-governance-rust/agentmesh-mcp/src/mcp/redactor.rs:private-key:131

@@ -9,7 +9,6 @@
 
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { escapeHtml } from '../../utils/escapeHtml';
 
 interface WorkflowNode {
     id: string;
@@ -243,14 +242,37 @@ export class WorkflowDesignerPanel {
         await vscode.window.showTextDocument(doc);
     }
 
+    private _quoteGeneratedString(value: string): string {
+        return JSON.stringify(value);
+    }
+
+    private _getNodeAction(node: WorkflowNode): string {
+        const configuredAction = typeof node.config.action === 'string' ? node.config.action.trim() : '';
+        return configuredAction || 'custom_action';
+    }
+
+    private _getNodeDescription(node: WorkflowNode): string {
+        const configuredDescription = typeof node.config.description === 'string' ? node.config.description.trim() : '';
+        return configuredDescription || `Execute ${node.label}`;
+    }
+
     private _generatePythonCode(): string {
-        const nodes = this._workflow.nodes.filter(n => n.type === 'action');
+        const actionNodes = this._workflow.nodes
+            .filter(n => n.type === 'action')
+            .map((node, index) => ({
+                node,
+                action: this._getNodeAction(node),
+                description: this._getNodeDescription(node),
+                functionName: this._toSnakeCase(node.label, `step_${index + 1}`),
+            }));
         const imports = [
-            'from agent_os import KernelSpace, Policy',
+            'from agent_os import KernelSpace',
             'from agent_os.tools import create_safe_toolkit'
         ];
+        const scaffoldReason = 'Replace this scaffold with a governed implementation before executing the workflow.';
+        const emptyWorkflowReason = 'Add at least one Action node in the Workflow Designer before exporting runnable code.';
 
-        if (nodes.length === 0) {
+        if (actionNodes.length === 0) {
             return `"""
 ${this._workflow.name || 'New Workflow'}
 
@@ -265,10 +287,13 @@ toolkit = create_safe_toolkit("standard")
 
 @kernel.register
 async def run_workflow(task: str):
-    """Add action nodes to your workflow to generate code"""
-    context = {"task": task}
-    # TODO: Add workflow steps
-    return {"status": "success"}
+    """Exported workflow requires at least one action node before it can run."""
+    return {
+        "status": "blocked",
+        "reason": ${this._quoteGeneratedString(emptyWorkflowReason)},
+        "steps": [],
+        "input": {"task": task},
+    }
 
 if __name__ == "__main__":
     import asyncio
@@ -277,30 +302,26 @@ if __name__ == "__main__":
 `;
         }
 
-        const functions = nodes.map(node => {
-            const action = node.config.action || 'execute_task';
-            return `
-async def ${this._toSnakeCase(node.label)}(context):
-    """${node.config.description || 'Execute ' + node.label}"""
-    ${node.policy ? `# Policy: ${node.policy}` : '# No policy attached'}
-    # TODO: Implement ${action}
-    return {"status": "success"}
-`;
-        });
+        const functions = actionNodes.map(({ node, action, description, functionName }) => `
+async def ${functionName}(context):
+    """Generated scaffold for ${node.label}."""
+    _ = context
+    step = {
+        "step": ${this._quoteGeneratedString(node.label)},
+        "action": ${this._quoteGeneratedString(action)},
+        "status": "blocked",
+        "reason": ${this._quoteGeneratedString(scaffoldReason)},
+        "details": {
+            "description": ${this._quoteGeneratedString(description)}
+        }
+    }
+    ${node.policy ? `step["policy"] = ${this._quoteGeneratedString(node.policy)}` : ''}
+    return step
+`).join('\n');
 
-        const workflowSteps = nodes.length > 0 
-            ? nodes.map(n => `result = await ${this._toSnakeCase(n.label)}(context)`).join('\n    ')
-            : '# No action nodes defined';
-
-        const workflow = `
-async def run_workflow(task: str):
-    """${this._workflow.description || 'Agent workflow'}"""
-    context = {"task": task}
-    
-    ${workflowSteps}
-    
-    return result if 'result' in dir() else {"status": "success"}
-`;
+        const workflowSteps = actionNodes
+            .map(({ functionName }) => `steps.append(await ${functionName}(context))`)
+            .join('\n    ');
 
         return `"""
 ${this._workflow.name || 'New Workflow'}
@@ -314,10 +335,26 @@ ${imports.join('\n')}
 kernel = KernelSpace(policy="strict")
 toolkit = create_safe_toolkit("standard")
 
-${functions.join('\n')}
+${functions}
 
 @kernel.register
-${workflow}
+async def run_workflow(task: str):
+    """${this._workflow.description || 'Agent workflow'}"""
+    context = {"task": task, "toolkit": toolkit}
+    steps = []
+    
+    ${workflowSteps}
+
+    blocked_step = next((step for step in steps if step.get("status") != "completed"), None)
+    if blocked_step:
+        return {
+            "status": "blocked",
+            "reason": "Workflow contains scaffolded steps that must be implemented before execution.",
+            "blocked_step": blocked_step,
+            "steps": steps,
+        }
+
+    return {"status": "completed", "steps": steps}
 
 if __name__ == "__main__":
     import asyncio
@@ -327,10 +364,43 @@ if __name__ == "__main__":
     }
 
     private _generateTypeScriptCode(): string {
-        const nodes = this._workflow.nodes.filter(n => n.type === 'action');
+        const actionNodes = this._workflow.nodes
+            .filter(n => n.type === 'action')
+            .map((node, index) => ({
+                node,
+                action: this._getNodeAction(node),
+                description: this._getNodeDescription(node),
+                functionName: this._toCamelCase(node.label, `step${index + 1}`),
+            }));
         const workflowName = this._workflow.name || 'New Workflow';
+        const scaffoldReason = 'Replace this scaffold with a governed implementation before executing the workflow.';
+        const emptyWorkflowReason = 'Add at least one Action node in the Workflow Designer before exporting runnable code.';
+        const stepResultType = `type WorkflowStepResult = {
+  step: string;
+  action: string;
+  status: 'blocked' | 'completed';
+  reason?: string;
+  policy?: string;
+  details?: Record<string, unknown>;
+};`;
+        const blockedStepHelper = `function blockedStep(
+  step: string,
+  action: string,
+  reason: string,
+  policy?: string,
+  details?: Record<string, unknown>,
+): WorkflowStepResult {
+  return {
+    step,
+    action,
+    status: 'blocked',
+    reason,
+    ...(policy ? { policy } : {}),
+    ...(details ? { details } : {}),
+  };
+}`;
 
-        if (nodes.length === 0) {
+        if (actionNodes.length === 0) {
             return `/**
  * ${workflowName}
  * 
@@ -339,33 +409,40 @@ if __name__ == "__main__":
 
 import { AgentOS } from '@agent-governance-python/agent-os/sdk';
 
+${stepResultType}
+
 const agentOS = new AgentOS({
   policy: 'strict',
   apiKey: process.env.AGENT_OS_KEY
 });
 
-export async function runWorkflow(task: string) {
-  return agentOS.execute(async () => {
-    const context = { task };
-    // TODO: Add workflow steps by adding Action nodes in the designer
-    return { success: true };
-  });
+export async function runWorkflow(task: string): Promise<Record<string, unknown>> {
+  return agentOS.execute(async () => ({
+    status: 'blocked',
+    reason: ${this._quoteGeneratedString(emptyWorkflowReason)},
+    steps: [] as WorkflowStepResult[],
+    input: { task },
+  }));
 }
 `;
         }
 
-        const functionDefs = nodes.map(node => `
-async function ${this._toCamelCase(node.label)}(context: Record<string, unknown>): Promise<Record<string, unknown>> {
-  // ${node.config.description || 'Execute ' + node.label}
-  ${node.policy ? `// Policy: ${node.policy}` : '// No policy attached'}
-  // TODO: Implement ${node.config.action || 'action'}
-  return { status: 'success' };
+        const functionDefs = actionNodes.map(({ node, action, description, functionName }) => `
+async function ${functionName}(context: Record<string, unknown>): Promise<WorkflowStepResult> {
+  void context;
+  return blockedStep(
+    ${this._quoteGeneratedString(node.label)},
+    ${this._quoteGeneratedString(action)},
+    ${this._quoteGeneratedString(scaffoldReason)},
+    ${node.policy ? this._quoteGeneratedString(node.policy) : 'undefined'},
+    { description: ${this._quoteGeneratedString(description)} },
+  );
 }
 `).join('');
 
-        const workflowSteps = nodes.map(n => 
-            `const ${this._toCamelCase(n.label)}Result = await ${this._toCamelCase(n.label)}(context);`
-        ).join('\n    ');
+        const workflowSteps = actionNodes
+            .map(({ functionName }) => `steps.push(await ${functionName}(context));`)
+            .join('\n    ');
 
         return `/**
  * ${workflowName}
@@ -375,29 +452,72 @@ async function ${this._toCamelCase(node.label)}(context: Record<string, unknown>
 
 import { AgentOS } from '@agent-governance-python/agent-os/sdk';
 
+${stepResultType}
+
 const agentOS = new AgentOS({
   policy: 'strict',
   apiKey: process.env.AGENT_OS_KEY
 });
+
+${blockedStepHelper}
 ${functionDefs}
 
 export async function runWorkflow(task: string): Promise<Record<string, unknown>> {
   return agentOS.execute(async () => {
     const context: Record<string, unknown> = { task };
+    const steps: WorkflowStepResult[] = [];
     
     ${workflowSteps}
-    
-    return { success: true };
+
+    const blockedStepResult = steps.find(step => step.status !== 'completed');
+    if (blockedStepResult) {
+      return {
+        status: 'blocked',
+        reason: 'Workflow contains scaffolded steps that must be implemented before execution.',
+        blockedStep: blockedStepResult,
+        steps,
+      };
+    }
+
+    return { status: 'completed', steps };
   });
 }
 `;
     }
 
     private _generateGoCode(): string {
-        const nodes = this._workflow.nodes.filter(n => n.type === 'action');
+        const actionNodes = this._workflow.nodes
+            .filter(n => n.type === 'action')
+            .map((node, index) => ({
+                node,
+                action: this._getNodeAction(node),
+                description: this._getNodeDescription(node),
+                functionName: this._toSnakeCase(node.label, `step_${index + 1}`),
+            }));
         const workflowName = this._workflow.name || 'New Workflow';
+        const scaffoldReason = 'Replace this scaffold with a governed implementation before executing the workflow.';
+        const emptyWorkflowReason = 'Add at least one Action node in the Workflow Designer before exporting runnable code.';
+        const stepResultType = `type StepResult struct {
+\tStep    string                 \`json:"step"\`
+\tAction  string                 \`json:"action"\`
+\tStatus  string                 \`json:"status"\`
+\tReason  string                 \`json:"reason,omitempty"\`
+\tPolicy  string                 \`json:"policy,omitempty"\`
+\tDetails map[string]interface{} \`json:"details,omitempty"\`
+}
 
-        if (nodes.length === 0) {
+func blockedStep(step string, action string, reason string, policy string, details map[string]interface{}) StepResult {
+\treturn StepResult{
+\t\tStep:    step,
+\t\tAction:  action,
+\t\tStatus:  "blocked",
+\t\tReason:  reason,
+\t\tPolicy:  policy,
+\t\tDetails: details,
+\t}
+}`;
+
+        if (actionNodes.length === 0) {
             return `// ${workflowName}
 //
 // Auto-generated by Agent OS Workflow Designer
@@ -405,49 +525,60 @@ export async function runWorkflow(task: string): Promise<Record<string, unknown>
 package main
 
 import (
-	"context"
-	"fmt"
-	
-	agentos "github.com/microsoft/agent-governance-toolkit/sdk/go"
+\t"context"
+\t"fmt"
+\t
+\tagentos "github.com/microsoft/agent-governance-toolkit/sdk/go"
 )
 
-func main() {
-	kernel, err := agentos.NewKernel(agentos.WithPolicy("strict"))
-	if err != nil {
-		panic(err)
-	}
+${stepResultType}
 
-	result, err := kernel.Execute(context.Background(), runWorkflow, "example task")
-	if err != nil {
-		panic(err)
-	}
-	
-	fmt.Printf("Result: %v\\n", result)
+func main() {
+\tkernel, err := agentos.NewKernel(agentos.WithPolicy("strict"))
+\tif err != nil {
+\t\tpanic(err)
+\t}
+
+\tresult, err := kernel.Execute(context.Background(), runWorkflow, "example task")
+\tif err != nil {
+\t\tpanic(err)
+\t}
+\t
+\tfmt.Printf("Result: %v\\n", result)
 }
 
 func runWorkflow(ctx context.Context, task string) (map[string]interface{}, error) {
-	_ = ctx  // TODO: Use context
-	_ = task // TODO: Use task
-	// Add Action nodes in the designer to generate workflow steps
-	return map[string]interface{}{"status": "success"}, nil
+\t_ = ctx
+\treturn map[string]interface{}{
+\t\t"status": "blocked",
+\t\t"reason": ${this._quoteGeneratedString(emptyWorkflowReason)},
+\t\t"steps":  []StepResult{},
+\t\t"input": map[string]interface{}{
+\t\t\t"task": task,
+\t\t},
+\t}, nil
 }
 `;
         }
 
-        const workflowSteps = nodes.map(n => `
-	// ${n.config.description || 'Execute ' + n.label}
-	${this._toSnakeCase(n.label)}Result, err := ${this._toSnakeCase(n.label)}(ctx, workflowCtx)
-	if err != nil {
-		return nil, err
-	}
-	_ = ${this._toSnakeCase(n.label)}Result`).join('\n');
+        const workflowSteps = actionNodes.map(({ functionName }) => `
+\tstepResult, err := ${functionName}(ctx, workflowCtx)
+\tif err != nil {
+\t\treturn nil, err
+\t}
+\tsteps = append(steps, stepResult)`).join('\n');
 
-        const functionDefs = nodes.map(node => `
-func ${this._toSnakeCase(node.label)}(ctx context.Context, workflowCtx map[string]interface{}) (map[string]interface{}, error) {
-	_ = ctx         // TODO: Use context
-	_ = workflowCtx // TODO: Use workflow context
-	// TODO: Implement ${node.config.action || 'action'}
-	return map[string]interface{}{"status": "success"}, nil
+        const functionDefs = actionNodes.map(({ node, action, description, functionName }) => `
+func ${functionName}(ctx context.Context, workflowCtx map[string]interface{}) (StepResult, error) {
+\t_ = ctx
+\t_ = workflowCtx
+\treturn blockedStep(
+\t\t${this._quoteGeneratedString(node.label)},
+\t\t${this._quoteGeneratedString(action)},
+\t\t${this._quoteGeneratedString(scaffoldReason)},
+\t\t${node.policy ? this._quoteGeneratedString(node.policy) : '""'},
+\t\tmap[string]interface{}{"description": ${this._quoteGeneratedString(description)}},
+\t), nil
 }
 `).join('');
 
@@ -458,43 +589,71 @@ func ${this._toSnakeCase(node.label)}(ctx context.Context, workflowCtx map[strin
 package main
 
 import (
-	"context"
-	"fmt"
-	
-	agentos "github.com/microsoft/agent-governance-toolkit/sdk/go"
+\t"context"
+\t"fmt"
+\t
+\tagentos "github.com/microsoft/agent-governance-toolkit/sdk/go"
 )
 
-func main() {
-	kernel, err := agentos.NewKernel(agentos.WithPolicy("strict"))
-	if err != nil {
-		panic(err)
-	}
+${stepResultType}
 
-	result, err := kernel.Execute(context.Background(), runWorkflow, "example task")
-	if err != nil {
-		panic(err)
-	}
-	
-	fmt.Printf("Result: %v\\n", result)
+func main() {
+\tkernel, err := agentos.NewKernel(agentos.WithPolicy("strict"))
+\tif err != nil {
+\t\tpanic(err)
+\t}
+
+\tresult, err := kernel.Execute(context.Background(), runWorkflow, "example task")
+\tif err != nil {
+\t\tpanic(err)
+\t}
+\t
+\tfmt.Printf("Result: %v\\n", result)
 }
 
 func runWorkflow(ctx context.Context, task string) (map[string]interface{}, error) {
-	workflowCtx := map[string]interface{}{"task": task}
-	${workflowSteps}
-	
-	return map[string]interface{}{"status": "success"}, nil
+\tworkflowCtx := map[string]interface{}{"task": task}
+\tsteps := []StepResult{}
+\t${workflowSteps}
+
+\tfor _, step := range steps {
+\t\tif step.Status != "completed" {
+\t\t\treturn map[string]interface{}{
+\t\t\t\t"status": "blocked",
+\t\t\t\t"reason": "Workflow contains scaffolded steps that must be implemented before execution.",
+\t\t\t\t"blockedStep": step,
+\t\t\t\t"steps": steps,
+\t\t\t}, nil
+\t\t}
+\t}
+
+\treturn map[string]interface{}{"status": "completed", "steps": steps}, nil
 }
 ${functionDefs}
 `;
     }
 
-    private _toSnakeCase(str: string): string {
-        return str.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    private _toSnakeCase(str: string, fallback = 'step'): string {
+        const normalized = str
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        const safe = normalized || fallback;
+        return /^[a-z_]/.test(safe) ? safe : `step_${safe}`;
     }
 
-    private _toCamelCase(str: string): string {
-        return str.toLowerCase()
-            .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase());
+    private _toCamelCase(str: string, fallback = 'step'): string {
+        const segments = str
+            .trim()
+            .split(/[^a-zA-Z0-9]+/)
+            .filter(Boolean)
+            .map(segment => segment.toLowerCase());
+        if (segments.length === 0) {
+            return fallback;
+        }
+        const [first, ...rest] = segments;
+        const safe = first + rest.map(segment => segment.charAt(0).toUpperCase() + segment.slice(1)).join('');
+        return /^[a-zA-Z_$]/.test(safe) ? safe : `step${safe.charAt(0).toUpperCase()}${safe.slice(1)}`;
     }
 
     private async _saveWorkflow(): Promise<void> {
@@ -1407,9 +1566,9 @@ ${functionDefs}
             }
         });
 
-        // Toolbar buttons use ``data-action`` rather than inline ``onclick=``
+        // Toolbar buttons use "data-action" rather than inline "onclick="
         // attributes so the page is CSP-compliant under
-        // ``script-src 'nonce-...'`` (which blocks inline event handlers).
+        // "script-src 'nonce-...'" (which blocks inline event handlers).
         // A single delegated click listener bound from this nonce-gated
         // script dispatches to the appropriate function.
         const __toolbarActions = {

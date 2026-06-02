@@ -343,17 +343,17 @@ class TestAuditEntryContextFields:
         entry = _make_entry()
         assert entry.sandbox_id is None
         assert entry.environment is None
-        assert entry.container_runtime is None
+        assert entry.compute_driver is None
 
     def test_fields_can_be_set_explicitly(self):
         entry = _make_entry(
             sandbox_id="sb-123",
             environment="production",
-            container_runtime="docker",
+            compute_driver="docker",
         )
         assert entry.sandbox_id == "sb-123"
         assert entry.environment == "production"
-        assert entry.container_runtime == "docker"
+        assert entry.compute_driver == "docker"
 
     def test_context_fields_do_not_affect_hash(self):
         """Hash must remain stable when context fields differ."""
@@ -362,31 +362,31 @@ class TestAuditEntryContextFields:
             entry_id="hash-test",
             sandbox_id="sb-999",
             environment="staging",
-            container_runtime="k8s",
+            compute_driver="k8s",
         )
         # Freeze timestamps so only the context differs
         base.timestamp = with_ctx.timestamp
         assert base.compute_hash() == with_ctx.compute_hash()
 
     def test_context_fields_serialised_in_model_dump(self):
-        entry = _make_entry(sandbox_id="sb-x", environment="test", container_runtime="vm")
+        entry = _make_entry(sandbox_id="sb-x", environment="test", compute_driver="vm")
         d = entry.model_dump(mode="json")
         assert d["sandbox_id"] == "sb-x"
         assert d["environment"] == "test"
-        assert d["container_runtime"] == "vm"
+        assert d["compute_driver"] == "vm"
 
     def test_stdout_sink_includes_context_fields_in_output(self):
         entry = _make_entry(
             sandbox_id="sb-out",
             environment="staging",
-            container_runtime="containerd",
+            compute_driver="containerd",
         )
         sink = StdoutAuditSink()
         records = _capture_stdout(sink, lambda s: s.write(entry))
         rec = records[0]
         assert rec["sandbox_id"] == "sb-out"
         assert rec["environment"] == "staging"
-        assert rec["container_runtime"] == "containerd"
+        assert rec["compute_driver"] == "containerd"
 
     def test_missing_context_fields_omitted_from_stdout(self):
         entry = _make_entry()
@@ -395,7 +395,7 @@ class TestAuditEntryContextFields:
         rec = records[0]
         assert "sandbox_id" not in rec
         assert "environment" not in rec
-        assert "container_runtime" not in rec
+        assert "compute_driver" not in rec
 
 
 # ---------------------------------------------------------------------------
@@ -410,12 +410,12 @@ class TestSignedAuditEntryContextFields:
         entry = _make_entry(
             sandbox_id="sb-signed",
             environment="prod",
-            container_runtime="firecracker",
+            compute_driver="firecracker",
         )
         signed = SignedAuditEntry.from_entry(entry, previous_hash="", secret_key=SECRET_KEY)
         assert signed.sandbox_id == "sb-signed"
         assert signed.environment == "prod"
-        assert signed.container_runtime == "firecracker"
+        assert signed.compute_driver == "firecracker"
 
     def test_context_fields_excluded_from_canonical_payload(self):
         """Hash must be identical regardless of context field values."""
@@ -435,7 +435,7 @@ class TestSignedAuditEntryContextFields:
     def test_file_sink_stores_context_fields(self, tmp_path: Path):
         path = tmp_path / "ctx_audit.jsonl"
         sink = FileAuditSink(path, SECRET_KEY)
-        entry = _make_entry(sandbox_id="sb-file", environment="prod", container_runtime="crun")
+        entry = _make_entry(sandbox_id="sb-file", environment="prod", compute_driver="crun")
         sink.write(entry)
 
         entries = sink.read_entries()
@@ -443,7 +443,7 @@ class TestSignedAuditEntryContextFields:
         stored = entries[0]
         assert stored.sandbox_id == "sb-file"
         assert stored.environment == "prod"
-        assert stored.container_runtime == "crun"
+        assert stored.compute_driver == "crun"
 
     def test_file_sink_integrity_unaffected_by_context_fields(self, tmp_path: Path):
         path = tmp_path / "ctx_integrity.jsonl"
@@ -511,20 +511,20 @@ class TestAuditLogEnvAutoDetection:
         )
         assert entry.environment == "production"
 
-    def test_container_runtime_from_openshell_container_runtime(self, monkeypatch):
-        monkeypatch.setenv("OPENSHELL_CONTAINER_RUNTIME", "gvisor")
+    def test_compute_driver_from_openshell_compute_driver(self, monkeypatch):
+        monkeypatch.setenv("OPENSHELL_COMPUTE_DRIVER", "gvisor")
         log = AuditLog()
         entry = log.log(
             event_type="test",
             agent_did="did:web:a1",
             action="ping",
         )
-        assert entry.container_runtime == "gvisor"
+        assert entry.compute_driver == "gvisor"
 
     def test_all_fields_auto_populated(self, monkeypatch):
         monkeypatch.setenv("SANDBOX_ID", "sb-all")
         monkeypatch.setenv("AGT_ENVIRONMENT", "staging")
-        monkeypatch.setenv("OPENSHELL_CONTAINER_RUNTIME", "runc")
+        monkeypatch.setenv("OPENSHELL_COMPUTE_DRIVER", "runc")
         log = AuditLog()
         entry = log.log(
             event_type="test",
@@ -533,13 +533,13 @@ class TestAuditLogEnvAutoDetection:
         )
         assert entry.sandbox_id == "sb-all"
         assert entry.environment == "staging"
-        assert entry.container_runtime == "runc"
+        assert entry.compute_driver == "runc"
 
     def test_missing_env_vars_produce_none(self, monkeypatch):
         monkeypatch.delenv("SANDBOX_ID", raising=False)
         monkeypatch.delenv("OPENSHELL_SANDBOX_ID", raising=False)
         monkeypatch.delenv("AGT_ENVIRONMENT", raising=False)
-        monkeypatch.delenv("OPENSHELL_CONTAINER_RUNTIME", raising=False)
+        monkeypatch.delenv("OPENSHELL_COMPUTE_DRIVER", raising=False)
         log = AuditLog()
         entry = log.log(
             event_type="test",
@@ -548,13 +548,13 @@ class TestAuditLogEnvAutoDetection:
         )
         assert entry.sandbox_id is None
         assert entry.environment is None
-        assert entry.container_runtime is None
+        assert entry.compute_driver is None
 
     def test_empty_string_env_var_treated_as_absent(self, monkeypatch):
         monkeypatch.setenv("SANDBOX_ID", "")
         monkeypatch.setenv("OPENSHELL_SANDBOX_ID", "")
         monkeypatch.setenv("AGT_ENVIRONMENT", "")
-        monkeypatch.setenv("OPENSHELL_CONTAINER_RUNTIME", "")
+        monkeypatch.setenv("OPENSHELL_COMPUTE_DRIVER", "")
         log = AuditLog()
         entry = log.log(
             event_type="test",
@@ -563,7 +563,7 @@ class TestAuditLogEnvAutoDetection:
         )
         assert entry.sandbox_id is None
         assert entry.environment is None
-        assert entry.container_runtime is None
+        assert entry.compute_driver is None
 
     def test_env_context_captured_at_init_not_per_call(self, monkeypatch):
         """Changing env vars after init must not affect subsequent log() calls."""

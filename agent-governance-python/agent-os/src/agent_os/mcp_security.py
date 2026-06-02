@@ -186,6 +186,9 @@ _ROLE_OVERRIDE_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"respond\s+with\b", re.IGNORECASE),
     re.compile(r"always\s+return\b", re.IGNORECASE),
     re.compile(r"you\s+must\b", re.IGNORECASE),
+    re.compile(r"\bmust\s+be\s+called\b", re.IGNORECASE),
+    re.compile(r"\balways\s+call\b", re.IGNORECASE),
+    re.compile(r"\bmandatory\b", re.IGNORECASE),
     re.compile(r"your\s+role\s+is\b", re.IGNORECASE),
 ]
 
@@ -451,6 +454,7 @@ class MCPSecurityScanner:
 
             threats.extend(self._check_hidden_instructions(description, tool_name, server_name))
             threats.extend(self._check_description_injection(description, tool_name, server_name))
+            threats.extend(self._check_privilege_escalation(description, tool_name, server_name))
             if schema is not None:
                 threats.extend(self._check_schema_abuse(schema, tool_name, server_name))
             threats.extend(self._check_cross_server(tool_name, server_name))
@@ -788,6 +792,28 @@ class MCPSecurityScanner:
                     )
                 )
 
+        return threats
+
+    def _check_privilege_escalation(
+        self,
+        description: str,
+        tool_name: str,
+        server_name: str,
+    ) -> list[MCPThreat]:
+        """Detect privilege escalation and code-execution wording in descriptions."""
+        threats: list[MCPThreat] = []
+        for pattern in _PRIVILEGE_ESCALATION_PATTERNS:
+            if pattern.search(description):
+                threats.append(
+                    MCPThreat(
+                        threat_type=MCPThreatType.DESCRIPTION_INJECTION,
+                        severity=MCPSeverity.CRITICAL,
+                        tool_name=tool_name,
+                        server_name=server_name,
+                        message=f"Privilege escalation pattern in description: {pattern.pattern}",
+                        matched_pattern=pattern.pattern,
+                    )
+                )
         return threats
 
     def _check_schema_abuse(

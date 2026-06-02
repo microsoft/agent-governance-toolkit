@@ -98,6 +98,63 @@ def sync_package_json(path: Path, version: str, check: bool) -> bool:
     return True
 
 
+# --- Claude Code plugin marketplace -----------------------------------------
+
+def sync_claude_marketplace(version: str, check: bool) -> bool:
+    """Update Claude Code plugin and marketplace versions."""
+    ok = True
+
+    plugin_json_path = REPO_ROOT / "agent-governance-claude-code" / ".claude-plugin" / "plugin.json"
+    plugin_name: str | None = None
+    if plugin_json_path.exists():
+        plugin_name = json.loads(plugin_json_path.read_text(encoding="utf-8")).get("name")
+
+    targets = [
+        (plugin_json_path, ["version"]),
+        (REPO_ROOT / ".claude-plugin" / "marketplace.json", ["version"]),
+    ]
+
+    for path, keys in targets:
+        if not path.exists():
+            continue
+        data = json.loads(path.read_text(encoding="utf-8"))
+        changed = False
+        for key in keys:
+            if data.get(key) == version:
+                continue
+            if check:
+                print(f"  DRIFT {path.relative_to(REPO_ROOT)}  ({key} has {data.get(key)})")
+                ok = False
+                continue
+            data[key] = version
+            changed = True
+
+        if path.name == "marketplace.json" and plugin_name:
+            for plugin in data.get("plugins", []):
+                if plugin.get("name") != plugin_name:
+                    continue
+                if plugin.get("version") == version:
+                    continue
+                if check:
+                    print(
+                        f"  DRIFT {path.relative_to(REPO_ROOT)}  "
+                        f"({plugin_name} version has {plugin.get('version')})"
+                    )
+                    ok = False
+                    continue
+                plugin["version"] = version
+                changed = True
+
+        if changed:
+            path.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            print(f"  UPDATED {path.relative_to(REPO_ROOT)}")
+
+    return ok
+
+
 # --- Rust Cargo.toml (workspace only) ----------------------------------------
 
 _CARGO_WS_VERSION_RE = re.compile(
@@ -217,6 +274,9 @@ def main() -> int:
     print("\nNode/TypeScript (package.json):")
     for p in find_files("package.json"):
         ok &= sync_package_json(p, version, check)
+
+    print("\nClaude Code plugin marketplace:")
+    ok &= sync_claude_marketplace(version, check)
 
     # Rust
     print("\nRust (Cargo.toml workspace):")

@@ -9,11 +9,12 @@ Independent design: implements against wire spec only.
 from __future__ import annotations
 
 import base64
+import os
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from agentmesh.registry.store import AgentRecord, InMemoryRegistryStore, RegistryStore
@@ -31,8 +32,9 @@ def _utcnow() -> datetime:
 
 
 class RegisterAgentRequest(BaseModel):
-    did: str
-    public_key: str  # base64url
+    public_key: str  # base64url, Ed25519 (32 bytes)
+    proof: str  # base64url Ed25519 signature over (public_key || proof_timestamp)
+    proof_timestamp: str  # ISO 8601 UTC timestamp signed in the proof
     capabilities: list[str] = Field(default_factory=list)
     metadata: dict[str, str] = Field(default_factory=dict)
 
@@ -71,6 +73,24 @@ class SessionReputationRequest(BaseModel):
     signature: str = ""
 
 
+class IdentityVerifyRequest(BaseModel):
+    """Body for POST /v1/registry/verify (Phase 6.c).
+
+    Used by the kars mesh plugin (and any future AGT-SDK client) to
+    upgrade a registered agent from anonymous-tier to verified-tier
+    by presenting an Entra-signed JWT. The verifier validates the
+    token against the tenant's JWKS, then stamps the verified appId
+    + tenantId + timestamp + tier onto the agent record.
+
+    Fail-closed: invalid/expired/wrong-aud/wrong-tid tokens return
+    401 and leave the agent's existing tier unchanged (so a failed
+    re-verify can't accidentally downgrade a previously-verified peer).
+    """
+
+    amid: str
+    verification_token: str = Field(..., max_length=8192)
+
+
 # ── Auth ─────────────────────────────────────────────────────────────
 
 
@@ -98,6 +118,10 @@ def verify_ed25519_timestamp_auth(
         ts = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid timestamp format")
+    # Reject TZ-naive timestamps explicitly to avoid a 500 from the
+    # ``now - ts`` subtraction below.
+    if ts.tzinfo is None:
+        raise HTTPException(status_code=401, detail="Timestamp must include timezone offset")
 
     now = _utcnow()
     if abs((now - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
@@ -152,27 +176,54 @@ class RegistryServer:
 
         @app.post("/v1/agents", status_code=201)
         async def register_agent(req: RegisterAgentRequest) -> dict:
-            """Register a new agent."""
-            if store.get_agent(req.did):
-                raise HTTPException(status_code=409, detail="Agent already registered")
+            """Register a new agent with proof-of-possession."""
+            import hashlib
 
+            from nacl.exceptions import BadSignatureError
+            from nacl.signing import VerifyKey
+
+            # Decode and validate public key
             try:
                 public_key = base64.urlsafe_b64decode(req.public_key + "==")
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid public_key encoding")
-
             if len(public_key) != 32:
                 raise HTTPException(status_code=400, detail="public_key must be 32 bytes")
 
+            # Verify proof timestamp is within replay window
+            try:
+                ts = datetime.fromisoformat(req.proof_timestamp)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="Invalid proof_timestamp")
+            if abs((_utcnow() - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
+                raise HTTPException(status_code=401, detail="Proof timestamp outside replay window")
+
+            # Verify proof-of-possession: signature over (public_key || proof_timestamp)
+            try:
+                proof_bytes = base64.urlsafe_b64decode(req.proof + "==")
+                message = req.public_key.encode() + req.proof_timestamp.encode()
+                VerifyKey(public_key).verify(message, proof_bytes)
+            except BadSignatureError:
+                raise HTTPException(status_code=401, detail="Invalid proof-of-possession")
+            except Exception:
+                raise HTTPException(status_code=400, detail="Malformed proof")
+
+            # Derive DID deterministically from public key hash
+            key_hash = hashlib.sha256(public_key).hexdigest()[:32]
+            did = f"did:mesh:{key_hash}"
+
+            if store.get_agent(did):
+                raise HTTPException(status_code=409, detail="Agent already registered")
+
             record = AgentRecord(
-                did=req.did,
+                did=did,
                 public_key=public_key,
                 capabilities=req.capabilities,
                 metadata=req.metadata,
             )
             store.put_agent(record)
-            logger.info("Registered agent %s", req.did)
-            return {"did": req.did, "status": "registered"}
+            logger.info("Registered agent %s", did)
+            return {"did": did, "status": "registered"}
 
         @app.get("/v1/agents/{did}")
         async def get_agent(did: str) -> dict:
@@ -187,11 +238,59 @@ class RegistryServer:
                 "registered_at": agent.registered_at.isoformat(),
                 "last_seen": agent.last_seen.isoformat(),
                 "reputation_score": agent.reputation_score,
+                # Phase 6.c follow-up — session counters. Old clients
+                # that don't know about these keys ignore them; new
+                # clients (kars router → operator CLI) surface them as
+                # total_sessions / successful / failed / timeout in
+                # the AGT detail overlay's Reputation block.
+                "total_sessions": agent.total_sessions,
+                "successful_sessions": agent.successful_sessions,
+                "failed_sessions": agent.failed_sessions,
+                "timeout_sessions": agent.timeout_sessions,
+                "last_session_at": (
+                    agent.last_session_at.isoformat()
+                    if agent.last_session_at is not None
+                    else None
+                ),
+                # Derived field: success / total. ``None`` (JSON ``null``)
+                # signals "no sessions yet" so consumers can distinguish
+                # from "0 of N succeeded". Computing it server-side keeps
+                # clients honest (no risk of a stale client computing
+                # 0.0 because it doesn't know about the new fields).
+                "completion_rate": (
+                    agent.successful_sessions / agent.total_sessions
+                    if agent.total_sessions > 0 else None
+                ),
+                # Phase 6.c identity verification — populated when the
+                # agent has POSTed a valid Entra-signed JWT to
+                # /v1/registry/verify. All three are None for anonymous
+                # tier and for clusters that have not opted in to
+                # verification. `tier` is the human-readable label
+                # operators see in the AGT overlay.
+                "tier": agent.tier,
+                "verified_app_id": agent.verified_app_id,
+                "verified_tenant_id": agent.verified_tenant_id,
+                "verified_at": (
+                    agent.verified_at.isoformat()
+                    if agent.verified_at is not None
+                    else None
+                ),
             }
 
         @app.delete("/v1/agents/{did}", status_code=204)
-        async def deregister_agent(did: str) -> None:
-            """Deregister an agent."""
+        async def deregister_agent(
+            did: str,
+            authorization: str = Header(..., alias="Authorization"),
+        ) -> None:
+            """Deregister an agent.
+
+            Requires Ed25519-Timestamp auth and the caller's DID must
+            match the DID being deregistered — only the holder of the
+            corresponding private key can remove a registration.
+            """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != did:
+                raise HTTPException(status_code=403, detail="DID mismatch")
             if not store.delete_agent(did):
                 raise HTTPException(status_code=404, detail="Agent not found")
             logger.info("Deregistered agent %s", did)
@@ -199,11 +298,20 @@ class RegistryServer:
         # ── Pre-Keys ─────────────────────────────────────────────
 
         @app.put("/v1/agents/{did}/prekeys")
-        async def upload_prekeys(did: str, req: PreKeyBundleRequest) -> dict:
-            """Upload a pre-key bundle."""
+        async def upload_prekeys(
+            did: str,
+            req: PreKeyBundleRequest,
+            authorization: str = Header(..., alias="Authorization"),
+        ) -> dict:
+            """Upload a pre-key bundle. Requires Ed25519-Timestamp auth."""
             agent = store.get_agent(did)
             if not agent:
                 raise HTTPException(status_code=404, detail="Agent not found")
+
+            # Verify the caller owns this DID via Ed25519-Timestamp auth
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != did:
+                raise HTTPException(status_code=403, detail="DID mismatch")
 
             try:
                 agent.identity_key = base64.urlsafe_b64decode(req.identity_key + "==")
@@ -272,12 +380,26 @@ class RegistryServer:
             }
 
         @app.post("/v1/agents/{did}/heartbeat")
-        async def heartbeat(did: str) -> dict:
+        async def heartbeat(
+            did: str,
+            authorization: str | None = Header(None, alias="Authorization"),
+        ) -> dict:
             """Bump an agent's `last_seen` to keep it visible in presence
             checks. Rate-limited to at most once per 10 seconds per agent
             to prevent abuse (attacker keeping stale agents permanently
             online). Returns 429 when throttled without updating last_seen.
+
+            Authentication: required. The caller must present an
+            ``Ed25519-Timestamp`` header signed by ``did``. Without this,
+            any unauthenticated party could keep an offline agent's
+            presence record live (impersonation / DoS-mask).
             """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != did:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Authenticated DID does not match heartbeat target",
+                )
             if not store.get_agent(did):
                 raise HTTPException(status_code=404, detail="Agent not found")
             if not store.try_update_last_seen(did, min_interval_seconds=10.0):
@@ -294,20 +416,68 @@ class RegistryServer:
         # ── Reputation ───────────────────────────────────────────
 
         @app.post("/v1/agents/{did}/reputation")
-        async def submit_reputation(did: str, req: ReputationRequest) -> dict:
-            """Submit reputation feedback for an agent."""
-            agent = store.get_agent(did)
-            if not agent:
-                raise HTTPException(status_code=404, detail="Agent not found")
+        async def submit_reputation(
+            did: str,
+            req: ReputationRequest,
+            authorization: str | None = Header(None, alias="Authorization"),
+        ) -> dict:
+            """Submit reputation feedback for an agent.
 
-            # Simple exponential moving average
-            alpha = 0.3
-            agent.reputation_score = alpha * req.score + (1 - alpha) * agent.reputation_score
-            store.put_agent(agent)
-            return {"did": did, "reputation_score": round(agent.reputation_score, 4)}
+            Authentication: required. The caller must present an
+            ``Ed25519-Timestamp`` header so the reporter is bound to an
+            authenticated identity. Self-reporting is rejected — agents
+            cannot inflate their own reputation.
+
+            Phase 6.c follow-up: ALSO bumps the per-agent session
+            counters. This endpoint is the only path AGT mesh peers
+            currently take to record session feedback
+            (POST /v1/registry/reputation/session is reserved for
+            initiator/receiver pairs with explicit outcome buckets and
+            is not what the mesh SDK calls today). Without this bump,
+            `total_sessions` would stay at 0 even as `reputation_score`
+            drifts from the default 0.5 over hundreds of session
+            replies, leaving operators unable to gauge sample size.
+
+            Score → bucket mapping uses the same thresholds as the
+            session endpoint's outcome semantics for consistency with
+            the existing 5-band tier ladder:
+              score >= 0.7 → successful (peer responded well)
+              score <  0.3 → failed     (peer responded badly)
+              else         → timeout    (partial / ambiguous)
+            """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did == did:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Agents may not submit reputation about themselves",
+                )
+            # Map the score band to a per-outcome counter bucket. This
+            # keeps the legacy endpoint's bucket semantics intact while
+            # delegating the actual EMA + counter update to a single
+            # locked store call (was: get_agent → mutate → put_agent,
+            # which lost increments under concurrent submissions for
+            # the same DID).
+            if req.score >= 0.7:
+                bucket: str | None = "success"
+            elif req.score < 0.3:
+                bucket = "failed"
+            else:
+                bucket = "timeout"
+            new_score = store.apply_reputation_update(
+                did=did,
+                target_score=req.score,
+                alpha=0.3,
+                outcome_bucket=bucket,
+            )
+            if new_score is None:
+                raise HTTPException(status_code=404, detail="Agent not found")
+            return {"did": did, "reputation_score": new_score}
 
         @app.post("/v1/registry/reputation/session")
-        async def submit_session_reputation(req: SessionReputationRequest) -> dict:
+        async def submit_session_reputation(
+            req: SessionReputationRequest,
+            authorization: str | None = Header(None, alias="Authorization"),
+        ) -> dict:
             """Record a session outcome and update both endpoints' reputation.
 
             Outcome mapping (EMA, alpha=0.2):
@@ -316,8 +486,28 @@ class RegistryServer:
               - timeout → score 0.2 toward the receiver (initiator unchanged)
 
             Missing agents are silently skipped (best-effort telemetry).
-            The reporter must be a registered agent (either initiator or receiver).
+
+            Authentication: required. The caller must present an
+            ``Ed25519-Timestamp`` header and the authenticated DID MUST
+            equal ``reporter_amid``. Additionally, the reporter must be
+            a session participant (initiator or receiver). Together this
+            stops any party — authenticated or not — from forging session
+            telemetry as another agent.
+
+            Phase 6.c follow-up: in addition to bumping the EMA, this
+            handler also increments per-outcome session counters on the
+            same agent records. Operators querying `GET /v1/agents/{did}`
+            can then distinguish "0.7 from 2 sessions" (noisy) from
+            "0.7 from 200 sessions" (confident). Counters and EMA are
+            updated together inside `_apply` so they stay coherent —
+            you can't get one without the other.
             """
+            authed_did = verify_ed25519_timestamp_auth(authorization, store)
+            if authed_did != req.reporter_amid:
+                raise HTTPException(
+                    status_code=403,
+                    detail="reporter_amid does not match authenticated DID",
+                )
             # Validate reporter is a session participant
             if req.reporter_amid not in (req.initiator_amid, req.receiver_amid):
                 raise HTTPException(
@@ -333,14 +523,30 @@ class RegistryServer:
             outcome = (req.outcome or "").lower()
             alpha = 0.2
             updated: dict[str, float] = {}
+            # Map the per-request outcome to a counter bucket. The
+            # legacy code applied this branch inside _apply for each
+            # participant; the bucket is identical for both because
+            # outcome is request-scoped. We hoist it here so each
+            # _apply call is a single atomic store mutation rather
+            # than a get/mutate/put race window.
+            if outcome == "success":
+                bucket: str | None = "success"
+            elif outcome == "failed":
+                bucket = "failed"
+            elif outcome == "timeout":
+                bucket = "timeout"
+            else:
+                bucket = None  # validated below; never reaches _apply
 
             def _apply(did: str, target_score: float) -> None:
-                agent = store.get_agent(did)
-                if not agent:
-                    return
-                agent.reputation_score = alpha * target_score + (1 - alpha) * agent.reputation_score
-                store.put_agent(agent)
-                updated[did] = round(agent.reputation_score, 4)
+                new_score = store.apply_reputation_update(
+                    did=did,
+                    target_score=target_score,
+                    alpha=alpha,
+                    outcome_bucket=bucket,
+                )
+                if new_score is not None:
+                    updated[did] = new_score
 
             if outcome == "success":
                 _apply(req.receiver_amid, 1.0)
@@ -359,6 +565,116 @@ class RegistryServer:
                 "session_id": req.session_id,
                 "outcome": outcome,
                 "reputation": updated,
+            }
+
+        # ── Identity Verification (Phase 6.c) ────────────────────
+
+        @app.post("/v1/registry/verify")
+        async def verify_identity(req: IdentityVerifyRequest) -> dict:
+            """Upgrade a registered agent from anonymous → verified tier
+            by validating an Entra-signed JWT against tenant JWKS.
+
+            Opt-in: when AGENTMESH_ENTRA_AUDIENCE + AGENTMESH_ENTRA_TENANT_ID
+            are unset on the registry deployment, this endpoint returns
+            503 (verification disabled). Clusters that haven't opted in
+            keep all agents at anonymous tier — preserving full backward
+            compat with v3.7.0.
+
+            On success: stamps verified_app_id (Entra `appid` claim),
+            verified_tenant_id (`tid`), verified_at (server time), and
+            tier='verified' onto the agent record. Subsequent
+            GET /v1/agents/{did} reflects the new tier.
+
+            Fail-closed: invalid/expired/wrong-aud/wrong-tid tokens
+            return 401 and leave the agent's existing tier unchanged.
+            A previously-verified peer keeps its tier on re-verify
+            failure (defense against transient JWKS-fetch flakes that
+            could otherwise demote a legitimate peer mid-session).
+            """
+            from agentmesh.identity.entra_verifier import (
+                EntraTokenError,
+                get_verifier,
+            )
+
+            # Phase 6.c — the openclaw plugin's `agtIdentity.amid` is
+            # the bare base64-encoded public-key blob, NOT the
+            # DID-prefixed form the registry stores under. We accept
+            # both shapes via a two-step lookup: literal-amid first,
+            # then linear scan keyed by the agent's identity_key
+            # (X25519 32-byte public key) when the literal lookup
+            # misses. Linear scan is O(n) but the registry is in-
+            # memory and rarely holds >100 agents in practice — well
+            # below any threshold where this would matter.
+            agent = store.get_agent(req.amid)
+            if not agent and not req.amid.startswith("did:"):
+                # Look up by raw public-key bytes
+                import base64
+                try:
+                    pub = base64.urlsafe_b64decode(req.amid + "==")
+                except Exception:
+                    pub = None
+                if pub is not None and hasattr(store, "_agents"):
+                    for stored in store._agents.values():
+                        if (
+                            stored.identity_key == pub
+                            or stored.identity_key_ed == pub
+                        ):
+                            agent = stored
+                            req = req.model_copy(update={"amid": stored.did})
+                            break
+            if not agent:
+                logger.warning(
+                    "verify_identity got 404 for amid=%r (request body amid). "
+                    "Known agent count=%d. This usually means the plugin sent "
+                    "a different amid from the one it registered with — check "
+                    "agtIdentity.amid vs RegistryClient.register payload.",
+                    req.amid,
+                    len(store._agents) if hasattr(store, "_agents") else -1,
+                )
+                raise HTTPException(status_code=404, detail="Agent not registered")
+
+            verifier = await get_verifier()
+            if verifier is None:
+                # Opt-out path: registry deployed without env vars →
+                # verification disabled cluster-wide. Distinct from
+                # "token rejected" so clients can log/skip cleanly.
+                raise HTTPException(
+                    status_code=503,
+                    detail="Entra verification not configured on this registry",
+                )
+
+            try:
+                claims = await verifier.verify(req.verification_token)
+            except EntraTokenError as exc:
+                logger.warning(
+                    "verify_identity rejected token for %s: %s",
+                    req.amid, exc,
+                )
+                raise HTTPException(status_code=401, detail="Token verification failed")
+
+            app_id = str(claims.get("appid") or claims.get("azp") or "").strip()
+            tenant_id = str(claims.get("tid", "")).strip()
+            if not app_id:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Verified token missing appid/azp claim",
+                )
+
+            agent.verified_app_id = app_id
+            agent.verified_tenant_id = tenant_id
+            agent.verified_at = _utcnow()
+            agent.tier = "verified"
+            store.put_agent(agent)
+            logger.info(
+                "verify_identity: %s upgraded to verified tier (appid=%s tenant=%s)",
+                req.amid, app_id, tenant_id,
+            )
+            return {
+                "did": req.amid,
+                "tier": agent.tier,
+                "verified_app_id": app_id,
+                "verified_tenant_id": tenant_id,
+                "verified_at": agent.verified_at.isoformat(),
             }
 
         # ── Discovery ────────────────────────────────────────────
@@ -387,6 +703,17 @@ class RegistryServer:
 
         @app.get("/health")
         async def health() -> dict:
-            return {"status": "healthy", "service": "agentmesh-registry"}
+            # Phase 6.c — surface the verification toggle so the kars
+            # operator CLI can tell whether the cluster has opted in
+            # to verified-tier mesh peers. Same shape as relay /health.
+            entra_enabled = bool(
+                os.environ.get("AGENTMESH_ENTRA_AUDIENCE", "").strip()
+                and os.environ.get("AGENTMESH_ENTRA_TENANT_ID", "").strip()
+            )
+            return {
+                "status": "healthy",
+                "service": "agentmesh-registry",
+                "entra_verify_enabled": entra_enabled,
+            }
 
         return app

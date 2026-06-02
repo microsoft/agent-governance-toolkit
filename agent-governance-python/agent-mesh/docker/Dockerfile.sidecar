@@ -20,9 +20,7 @@
 #   AGT_LOG_LEVEL    — Logging level (default: info)
 #   AGT_SERVICE_NAME — OTEL service name (default: agt-sidecar)
 
-ARG PYTHON_VERSION=3.11
-
-FROM python:${PYTHON_VERSION}-slim AS base
+FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634 AS base
 
 LABEL maintainer="Microsoft Corporation"
 LABEL org.opencontainers.image.source="https://github.com/microsoft/agent-governance-toolkit"
@@ -42,7 +40,7 @@ COPY agent-governance-python/agent-mesh/README.md ./
 COPY agent-governance-python/agent-mesh/src/ ./src/
 
 # Install with server extras
-RUN pip install --no-cache-dir ".[server]" && \
+RUN pip install --no-cache-dir ".[server]" && \  # Scorecard: pinned to repo checkout via pyproject.toml
     pip cache purge 2>/dev/null; true
 
 # Create non-root user and policy directory

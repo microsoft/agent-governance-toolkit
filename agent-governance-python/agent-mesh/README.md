@@ -340,7 +340,7 @@ pip install -e .
 - [CrewAI Integration](./examples/integrations/crewai.md) - Multi-agent crew governance
 - [LangGraph](./src/agentmesh/integrations/langgraph/) - Trust checkpoints for graph workflows (built-in)
 - [OpenAI Swarm](./src/agentmesh/integrations/swarm/) - Trust-verified handoffs (built-in)
-- [Dify](https://github.com/microsoft/agent-governance-toolkit/tree/master/dify) - Trust middleware for Dify workflows
+- [Dify](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/src/agentmesh/integrations) - Trust middleware for Dify workflows
 
 📚 **[Browse all examples →](./examples/)**
 
@@ -634,7 +634,7 @@ classifier = EUAIActRiskClassifier(config_path="my_updated_annex_iii.yaml")
 | **Q3 2026** | AI Card spec contribution, CNCF Sandbox application |
 | **Q4 2026** | Managed cloud service (AgentMesh Cloud), SOC2 Type II |
 
-See our [full roadmap](docs/roadmap.md) for details.
+See our [full roadmap](../agent-os/docs/roadmap.md) for details.
 
 ## Known Limitations & Open Work
 
@@ -652,7 +652,7 @@ See our [full roadmap](docs/roadmap.md) for details.
 
 ### Integration Caveats (Dify)
 
-The [Dify integration](https://github.com/microsoft/agent-governance-toolkit/tree/master/dify) has these documented limitations:
+The [Dify integration](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/src/agentmesh/integrations) has these documented limitations:
 - Request body signature verification (`X-Agent-Signature` header) is not yet verified by middleware
 - Trust score time decay is not yet implemented (scores don't decay over time)
 - Audit logs are in-memory only (not persistent across multi-worker deployments)
@@ -694,9 +694,57 @@ AgentMesh unifies three major protocols: Google's A2A (Agent-to-Agent) for inter
 **Does AgentMesh help with regulatory compliance?**
 Yes. AgentMesh provides automated compliance mapping for EU AI Act, SOC 2, HIPAA, and GDPR. Combined with audit trails and deterministic policy enforcement from [Agent OS](https://github.com/microsoft/agent-governance-toolkit), it provides the documentation and safety guarantees needed for regulatory compliance.
 
+## Configuration — Environment Variables
+
+The relay and registry services read the following environment
+variables at boot. All Entra-tier variables are **opt-in** — when
+unset, the services preserve byte-identical pre-v3.7.x behavior
+(anonymous tier, shared-secret auth or open-acceptance).
+
+### Relay
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENTMESH_RELAY_TOKEN` | _unset_ | Legacy shared-secret auth on the WebSocket `connect` frame. **Bypassed when Entra verification is enabled** (see below) — Entra is the primary auth, no silent fallback. |
+| `AGENTMESH_RELAY_OFFLINE_THRESHOLD_SECS` | `90` | Heartbeat staleness window before a peer is marked offline. |
+
+### Registry
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENTMESH_REGISTRY_TOKEN` | _unset_ | Legacy shared-secret auth on registry write endpoints. |
+
+### Entra-tier verification (relay + registry)
+
+When both `AGENTMESH_ENTRA_AUDIENCE` and `AGENTMESH_ENTRA_TENANT_ID`
+are set, Entra-signed JWTs are required:
+
+- Relay `connect` frame **must** carry a valid token in the `token`
+  field. Empty/missing token is rejected at handshake.
+- Registry `POST /v1/registry/verify` upgrades anonymous agents to
+  verified tier when presented with a valid token.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENTMESH_ENTRA_AUDIENCE` | _unset_ | Expected `aud` claim. Both this and `AGENTMESH_ENTRA_TENANT_ID` must be set for verification to be enabled. |
+| `AGENTMESH_ENTRA_TENANT_ID` | _unset_ | Expected `tid` claim (the operator's Entra tenant GUID). |
+| `AGENTMESH_ENTRA_AUTHORITY` | `https://login.microsoftonline.com` | Authority host for resolving the JWKS URL. |
+| `AGENTMESH_ENTRA_JWKS_TTL_SECS` | `3600` | How long a freshly-fetched JWKS cache is considered fresh. Min `60`. |
+| `AGENTMESH_ENTRA_JWKS_MAX_STALE_SECS` | `86400` | Hard upper bound on serving from a stale cache when refetch fails. Beyond this, the verifier fails closed to bound how long a key rotated OUT of the live JWKS can still verify. Floors at `AGENTMESH_ENTRA_JWKS_TTL_SECS`. |
+
+**Fail-closed contract**: invalid/expired/wrong-aud/wrong-tid tokens
+return 401 (registry) or close the WebSocket with code 4003 (relay).
+A previously-verified peer keeps its tier on re-verify failure, so
+transient JWKS-fetch flakes don't demote legitimate peers mid-session.
+
+**Algorithm allowlist**: only RS256/RS384/RS512 are accepted. The
+verifier rejects unsupported `alg` headers (including `none` and
+`HS*`) **before** the JWKS lookup as defense-in-depth against
+algorithm-confusion attacks.
+
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ## License
 

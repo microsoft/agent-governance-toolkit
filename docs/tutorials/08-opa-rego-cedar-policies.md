@@ -33,7 +33,7 @@ start to production multi-backend deployments.
 | [OPA/Rego Backend](#oparego-backend) | Loading Rego files, package configuration, evaluation |
 | [Three Evaluation Modes](#three-evaluation-modes) | Embedded engine, remote OPA server, built-in fallback |
 | [Cedar Backend](#cedar-backend) | Cedar policy syntax, schema validation, compilation |
-| [Cedar with AgentMesh](#cedar-with-agentmesh) | Trust-aware Cedar policies via `CedarEvaluator` |
+| [Cedar with AgentMesh](#cedar-with-agentmesh) | Trust-aware Cedar policies via `CedarBackend` |
 | [BackendDecision](#backenddecision) | Normalized output format from any backend |
 | [Combining Backends](#combining-backends) | Using OPA + Cedar + YAML together |
 | [Migration Guide](#migration-guide) | Moving from YAML-only to OPA/Cedar |
@@ -581,12 +581,12 @@ The AgentMesh package provides its own Cedar evaluator at
 `agentmesh.governance.cedar` with additional features for trust-aware,
 multi-agent governance.
 
-### CedarEvaluator
+### CedarBackend
 
 ```python
-from agentmesh.governance.cedar import CedarEvaluator, CedarDecision
+from agentmesh.governance.cedar import CedarBackend, CedarDecision
 
-evaluator = CedarEvaluator(
+evaluator = CedarBackend(
     mode="auto",                           # "auto", "cedarpy", "cli", "builtin"
     policy_path="./policies/mesh.cedar",   # path to .cedar file
     policy_content=None,                   # or inline Cedar string
@@ -597,7 +597,7 @@ evaluator = CedarEvaluator(
 )
 ```
 
-Unlike the Agent-OS `CedarBackend`, `CedarEvaluator.evaluate()` takes an
+Unlike the Agent-OS `CedarBackend`, `CedarBackend.evaluate()` takes an
 explicit `action` string and a `context` dict:
 
 ```python
@@ -634,7 +634,7 @@ Combine Cedar with AgentMesh trust scoring to create policies that adapt based
 on agent reputation:
 
 ```python
-from agentmesh.governance.cedar import CedarEvaluator
+from agentmesh.governance.cedar import CedarBackend
 from agentmesh.governance.policy import PolicyEngine
 
 engine = PolicyEngine()
@@ -682,12 +682,12 @@ cedar_eval = load_cedar_into_engine(
 The AgentMesh package provides its own OPA evaluator at
 `agentmesh.governance.opa` with the same trust-aware integration pattern.
 
-### OPAEvaluator
+### OPABackend
 
 ```python
-from agentmesh.governance.opa import OPAEvaluator, OPADecision
+from agentmesh.governance.opa import OPABackend, OPADecision
 
-evaluator = OPAEvaluator(
+evaluator = OPABackend(
     mode="local",                          # "remote" or "local"
     opa_url="http://localhost:8181",        # remote OPA server URL
     rego_path="./policies/mesh.rego",      # path to .rego file
@@ -696,7 +696,7 @@ evaluator = OPAEvaluator(
 )
 ```
 
-Unlike the Agent-OS `OPABackend`, `OPAEvaluator.evaluate()` takes an explicit
+Unlike the Agent-OS `OPABackend`, `OPABackend.evaluate()` takes an explicit
 `query` string and an `input_data` dict:
 
 ```python
@@ -841,8 +841,8 @@ The toolkit has three decision types at different layers:
 | Type | Package | Used by | Key differences |
 |------|---------|---------|-----------------|
 | `BackendDecision` | `agent_os.policies.backends` | `OPABackend`, `CedarBackend` | Normalized; feeds into `PolicyEvaluator` |
-| `OPADecision` | `agentmesh.governance.opa` | `OPAEvaluator` | Includes `query` and `source` fields |
-| `CedarDecision` | `agentmesh.governance.cedar` | `CedarEvaluator` | Includes `action` and `source` fields |
+| `OPADecision` | `agentmesh.governance.opa` | `OPABackend` | Includes `query` and `source` fields |
+| `CedarDecision` | `agentmesh.governance.cedar` | `CedarBackend` | Includes `action` and `source` fields |
 
 All three share the `allowed`, `raw_result`, `evaluation_ms`, and `error`
 fields. The Agent-OS `BackendDecision` adds `action`, `reason`, and `backend`
@@ -1269,7 +1269,7 @@ print(f"Reason: {decision.reason}")
 - **OPA Playground:** Test Rego policies at [play.openpolicyagent.org](https://play.openpolicyagent.org/)
 - **Cedar Playground:** Test Cedar policies at [cedarpolicy.com/playground](https://www.cedarpolicy.com/en/playground)
 - **Custom backends:** Implement `ExternalPolicyBackend` to integrate any policy engine
-- **AgentMesh multi-backend:** Combine `PolicyEngine` with `OPAEvaluator` and `CedarEvaluator` for trust-aware governance
+- **AgentMesh multi-backend:** Combine `PolicyEngine` with `OPABackend` and `CedarBackend` for trust-aware governance
 
 ---
 
@@ -1283,9 +1283,9 @@ print(f"Reason: {decision.reason}")
 | `BackendDecision` | `agent-governance-python/agent-os/src/agent_os/policies/backends.py` |
 | `PolicyEvaluator` | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` |
 | `PolicyDecision` | `agent-governance-python/agent-os/src/agent_os/policies/evaluator.py` |
-| `OPAEvaluator` | `agent-governance-python/agent-mesh/src/agentmesh/governance/opa.py` |
+| `OPABackend` | `agent-governance-python/agent-mesh/src/agentmesh/governance/opa.py` |
 | `OPADecision` | `agent-governance-python/agent-mesh/src/agentmesh/governance/opa.py` |
-| `CedarEvaluator` | `agent-governance-python/agent-mesh/src/agentmesh/governance/cedar.py` |
+| `CedarBackend` | `agent-governance-python/agent-mesh/src/agentmesh/governance/cedar.py` |
 | `CedarDecision` | `agent-governance-python/agent-mesh/src/agentmesh/governance/cedar.py` |
 | `PolicyEngine` | `agent-governance-python/agent-mesh/src/agentmesh/governance/policy.py` |
 | OPA tests | `agent-governance-python/agent-mesh/tests/test_opa.py` |

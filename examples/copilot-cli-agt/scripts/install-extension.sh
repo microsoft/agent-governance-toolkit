@@ -26,7 +26,7 @@ fi
 
 cd "$package_root"
 if [[ ! -f "$sdk_manifest" ]]; then
-  npm install --no-fund --no-audit
+  npm ci --no-fund --no-audit  # Scorecard: prefer npm ci with lockfile
 fi
 
 extra_args=()

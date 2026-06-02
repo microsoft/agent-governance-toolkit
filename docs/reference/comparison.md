@@ -23,7 +23,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | Feature | Agent Governance Toolkit | NeMo Guardrails | Guardrails AI | LiteLLM | Portkey |
 |---------|:----------------------:|:---------------:|:-------------:|:-------:|:-------:|
 | **Agent action governance** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **LLM output validation** | ✅ (via [content-policy adapters](../agent-governance-python/agent-os/)) | ✅ | ✅ | ✅ | ✅ |
+| **LLM output validation** | ✅ (via [content-policy adapters](../../agent-governance-python/agent-os/)) | ✅ | ✅ | ✅ | ✅ |
 | **Agent identity (cryptographic)** | ✅ Ed25519 / SPIFFE | ❌ | ❌ | ❌ | ❌ |
 | **Execution sandboxing** | ✅ 4-tier rings | ❌ | ❌ | ❌ | ❌ |
 | **SRE (SLOs / error budgets)** | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -32,13 +32,13 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | **Deterministic pre-execution enforcement** | ✅ < 0.1 ms | ❌ | ❌ | ❌ | ❌ |
 | **Chaos / replay testing** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **OWASP Agentic Top 10 mapping** | **10 / 10 categories mapped** | ~2 / 10 ¹ | ~1 / 10 ¹ | ~0 / 10 ¹ | ~1 / 10 ¹ |
-| **Framework integrations** | **12+** | 3 (LangChain, NeMo-based, custom) | 2 (LangChain, custom) | N/A (gateway) | N/A (gateway) |
+| **Framework integrations** | **12+** | 5+ (LangChain, LangGraph, LlamaIndex, NeMo-based, custom) | 4+ (LangChain, LlamaIndex, OpenAI SDK, custom) | N/A (gateway) | N/A (gateway) |
 | **LLM provider routing / caching** | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **Works alongside existing tools** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 > ¹ **OWASP scoring methodology:** Each tool was assessed against the ten [OWASP Agentic Top 10 (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/) risk categories. A risk is counted as "covered" only when the tool provides a mitigation that addresses the root cause of that risk category (not merely partial or indirect coverage). Scores for NeMo, Guardrails AI, LiteLLM, and Portkey are approximate because none of those tools publish explicit OWASP Agentic Top 10 mappings; they are based on a good-faith review of each tool's documented capabilities as of early 2026.
 >
-> ² **10/10 means mitigation components exist for each risk category**, not that each risk is fully eliminated. AGT provides application-layer governance — see [Known Limitations](LIMITATIONS.md) for documented gaps including hallucination detection, indirect prompt injection into reasoning, and multi-step workflow correlation.
+> ² **10/10 means mitigation components exist for each risk category**, not that each risk is fully eliminated. AGT provides application-layer governance — see [Known Limitations](../LIMITATIONS.md) for documented gaps including hallucination detection, indirect prompt injection into reasoning, and multi-step workflow correlation.
 
 ---
 
@@ -58,7 +58,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 - Agent identity or authentication between agents
 - Runtime privilege rings or sandboxing
 - SRE / reliability patterns (SLOs, circuit breakers)
-- OWASP Agentic Top 10 risks beyond output filtering (~ASI-05)
+- OWASP Agentic Top 10 risks beyond output filtering (~ASI-01 partial)
 
 **Best used:** Alongside the Agent Governance Toolkit when you want chatbot-level dialog safety **and** full agentic action governance.
 
@@ -144,15 +144,15 @@ These two layers are **complementary, not competing**. A fully governed agentic 
 
 | Risk | Agent Governance Toolkit | NeMo Guardrails | Guardrails AI | LiteLLM | Portkey |
 |------|:------------------------:|:---------------:|:-------------:|:-------:|:-------:|
-| ASI-01 Agent Goal Hijacking | ✅ Policy engine blocks unauthorized goal changes | ⚠️ Partial (dialog rails) | ❌ | ❌ | ❌ |
-| ASI-02 Excessive Capabilities | ✅ Capability model enforces least-privilege | ❌ | ❌ | ❌ | ❌ |
-| ASI-03 Identity & Privilege Abuse | ✅ Ed25519 / SPIFFE zero-trust identity | ❌ | ❌ | ❌ | ❌ |
-| ASI-04 Uncontrolled Code Execution | ✅ 4-tier execution rings + sandboxing | ❌ | ❌ | ❌ | ❌ |
-| ASI-05 Insecure Output Handling | ✅ Content policies validate all outputs | ✅ Output filters | ✅ Schema validation | ⚠️ Basic hooks | ❌ |
-| ASI-06 Memory Poisoning | ✅ Episodic memory with integrity checks | ❌ | ❌ | ❌ | ❌ |
-| ASI-07 Unsafe Inter-Agent Communication | ✅ Encrypted channels + trust gates | ❌ | ❌ | ❌ | ❌ |
-| ASI-08 Cascading Failures | ✅ Circuit breakers + SLO enforcement | ❌ | ❌ | ⚠️ Retries only | ⚠️ Fallback routing |
-| ASI-09 Human-Agent Trust Deficit | ✅ Full audit trails + flight recorder | ❌ | ❌ | ⚠️ Logging | ⚠️ Observability |
+| ASI-01 Agent Goal Hijack | ✅ Policy engine blocks unauthorized goal changes | ⚠️ Partial (dialog rails) | ❌ | ❌ | ❌ |
+| ASI-02 Tool Misuse & Exploitation | ✅ Capability model enforces least-privilege; tool-call policy checks | ❌ | ❌ | ❌ | ❌ |
+| ASI-03 Agent Identity & Privilege Abuse | ✅ Ed25519 / SPIFFE zero-trust identity | ❌ | ❌ | ❌ | ❌ |
+| ASI-04 Agentic Supply Chain Compromise | ✅ Dependency-confusion scanning + tool verification | ❌ | ❌ | ❌ | ❌ |
+| ASI-05 Unexpected Code Execution | ✅ 4-tier execution rings + sandboxing | ❌ | ❌ | ❌ | ❌ |
+| ASI-06 Memory & Context Poisoning | ✅ Episodic memory with integrity checks | ❌ | ❌ | ❌ | ❌ |
+| ASI-07 Insecure Inter-Agent Communication | ✅ Encrypted channels + trust gates | ❌ | ❌ | ❌ | ❌ |
+| ASI-08 Cascading Agent Failures | ✅ Circuit breakers + SLO enforcement | ❌ | ❌ | ⚠️ Retries only | ⚠️ Fallback routing |
+| ASI-09 Human-Agent Trust Exploitation | ✅ Full audit trails + flight recorder | ❌ | ❌ | ⚠️ Logging | ⚠️ Observability |
 | ASI-10 Rogue Agents | ✅ Kill switch + ring isolation + anomaly detection | ❌ | ❌ | ❌ | ❌ |
 
 ---
@@ -171,4 +171,4 @@ For production agentic systems, you likely need the Agent Governance Toolkit **p
 
 ---
 
-*See also: [OWASP Compliance Mapping](../OWASP-COMPLIANCE.md) · [Architecture Overview](../README.md#architecture) · [Quick Start](../quickstart.md)*
+*See also: [OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md) · [Architecture Overview](../../README.md#architecture) · [Quick Start](../quickstart.md)*

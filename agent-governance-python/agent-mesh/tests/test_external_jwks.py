@@ -11,6 +11,7 @@ import json
 import time
 from datetime import datetime, timezone
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -309,3 +310,186 @@ def test_delegation_claims_accepts_dict_for_backwards_compat():
     assert claims.liveness_attestation_ref == "hb-1"
     assert claims.policy_context_id == "ctx-1"
     assert claims.revocation_check_url is None
+
+
+# ---------------------------------------------------------------------------
+# Security regressions — URL / trust-fetch hardening
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_revocation_url_override_on_different_host():
+    """A signed override pointing at a different host must be rejected.
+
+    Even though the override is inside the signature-verified payload, an
+    issuer (or attacker holding the issuer's key) must not be able to
+    steer verifiers at attacker-controlled or internal SSRF targets.
+    """
+    private_key, jwk = _make_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "delegation_claims": {
+            "revocation_check_url": "https://attacker.example.org/revoked.json",
+        },
+    }
+    token = _sign_jwt(private_key, payload)
+
+    fetched_urls: list[str] = []
+
+    async def tracking_get(self, url, *args, **kwargs):
+        fetched_urls.append(url)
+        request = httpx.Request("GET", url)
+        if "jwks.json" in url and "attacker" not in url:
+            return httpx.Response(200, json={"keys": [jwk]}, request=request)
+        return httpx.Response(200, json={"revoked": []}, request=request)
+
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", tracking_get):
+        identity = await provider.verify(token)
+
+    assert identity is None
+    assert not any(urlparse(u).hostname == "attacker.example.org" for u in fetched_urls)
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_revocation_url_override_with_non_https_scheme():
+    private_key, jwk = _make_keypair()
+    now = int(time.time())
+    payload = {
+        "iss": PARTNER_DOMAIN,
+        "sub": "x",
+        "exp": now + 900,
+        "delegation_claims": {
+            # Same host but http:// must be rejected — downgrade attack.
+            "revocation_check_url": f"http://{PARTNER_DOMAIN}/custom/revoked.json",
+        },
+    }
+    token = _sign_jwt(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is None
+
+
+@pytest.mark.asyncio
+async def test_verify_fails_closed_when_revocation_fetch_errors():
+    """Network/HTTP failures on revocation lookup must deny, not allow."""
+    private_key, jwk = _make_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt(private_key, payload)
+
+    async def failing_get(self, url, *args, **kwargs):
+        request = httpx.Request("GET", url)
+        if "jwks-revoked.json" in url:
+            return httpx.Response(500, request=request)
+        if "jwks.json" in url:
+            return httpx.Response(200, json={"keys": [jwk]}, request=request)
+        return httpx.Response(404, request=request)
+
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", failing_get):
+        identity = await provider.verify(token)
+    assert identity is None
+
+
+@pytest.mark.asyncio
+async def test_verify_fails_closed_when_revocation_body_malformed():
+    private_key, jwk = _make_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt(private_key, payload)
+
+    async def bad_body_get(self, url, *args, **kwargs):
+        request = httpx.Request("GET", url)
+        if "jwks-revoked.json" in url:
+            return httpx.Response(200, text="not-json", request=request)
+        if "jwks.json" in url:
+            return httpx.Response(200, json={"keys": [jwk]}, request=request)
+        return httpx.Response(404, request=request)
+
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", bad_body_get):
+        identity = await provider.verify(token)
+    assert identity is None
+
+
+@pytest.mark.asyncio
+async def test_verify_revocation_404_still_allows_token():
+    """A 404 on the revocation endpoint means 'no list published' — allow."""
+    private_key, jwk = _make_keypair()
+    now = int(time.time())
+    payload = {"iss": PARTNER_DOMAIN, "sub": "x", "exp": now + 900}
+    token = _sign_jwt(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy())
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is not None
+
+
+@pytest.mark.asyncio
+async def test_verify_tofu_strips_userinfo_from_issuer_claim():
+    """`iss` with embedded userinfo must not redirect JWKS fetch.
+
+    Without `.hostname`-based parsing, `attacker.com@trusted.com` would
+    end up as a netloc that fools naive matchers. We must fetch from
+    `trusted.com` (the actual host), and the trust tier remains 'tofu'.
+    """
+    private_key, jwk = _make_keypair()
+    now = int(time.time())
+    target_host = "victim-tenant.example.com"
+    payload = {
+        "iss": f"https://attacker.example.org@{target_host}",
+        "sub": f"did:web:{target_host}",
+        "exp": now + 900,
+    }
+    token = _sign_jwt(private_key, payload)
+
+    fetched_urls: list[str] = []
+
+    async def tracking_get(self, url, *args, **kwargs):
+        fetched_urls.append(url)
+        request = httpx.Request("GET", url)
+        if "jwks.json" in url:
+            return httpx.Response(200, json={"keys": [jwk]}, request=request)
+        return httpx.Response(404, request=request)
+
+    provider = ExternalJWKSProvider(policy=_make_policy(unknown="tofu"))
+    with patch.object(httpx.AsyncClient, "get", tracking_get):
+        identity = await provider.verify(token)
+
+    assert identity is not None
+    assert identity.issuer_domain == target_host
+    # No request should have been issued to the attacker-controlled host.
+    assert not any(urlparse(u).hostname == "attacker.example.org" for u in fetched_urls)
+
+
+@pytest.mark.asyncio
+async def test_verify_rejects_issuer_with_no_parseable_host():
+    private_key, jwk = _make_keypair()
+    now = int(time.time())
+    payload = {"iss": "://", "sub": "x", "exp": now + 900}
+    token = _sign_jwt(private_key, payload)
+    provider = ExternalJWKSProvider(policy=_make_policy(unknown="tofu"))
+    with patch.object(httpx.AsyncClient, "get", _http_mock({"keys": [jwk]})):
+        identity = await provider.verify(token)
+    assert identity is None
+
+
+def test_resolve_endpoint_matches_trusted_domain_case_insensitively():
+    policy = FederationPolicy(
+        trusted_endpoints=[
+            TrustedEndpoint(
+                domain="Partner-Corp.Example.com",
+                jwks_url=PARTNER_JWKS_URL,
+                trust_tier="verified_partner",
+            )
+        ],
+    )
+    provider = ExternalJWKSProvider(policy=policy)
+    endpoint = provider._resolve_endpoint("partner-corp.example.com")
+    assert endpoint is not None
+    assert endpoint.trust_tier == "verified_partner"

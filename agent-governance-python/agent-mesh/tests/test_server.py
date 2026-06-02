@@ -15,6 +15,24 @@ from fastapi.testclient import TestClient  # noqa: E402
 # ── Trust Engine Tests ───────────────────────────────────────────────
 
 
+def _te_registration_body(key, pub_b64, name="test-agent", sponsor_email="test@example.com"):
+    """Build a registration body with proof-of-possession for trust engine tests."""
+    import base64
+    from datetime import datetime, timezone
+
+    ts = datetime.now(timezone.utc).isoformat()
+    message = pub_b64.encode() + ts.encode()
+    sig = key.sign(message)
+    proof_b64 = base64.b64encode(sig).decode()
+    return {
+        "name": name,
+        "public_key": pub_b64,
+        "proof": proof_b64,
+        "proof_timestamp": ts,
+        "sponsor_email": sponsor_email,
+    }
+
+
 class TestTrustEngineServer:
     """Tests for the trust-engine HTTP server."""
 
@@ -55,11 +73,7 @@ class TestTrustEngineServer:
         pub_bytes = key.public_key().public_bytes_raw()
         pub_b64 = base64.b64encode(pub_bytes).decode()
 
-        resp = self.client.post("/api/v1/agents/register", json={
-            "name": "test-agent",
-            "public_key": pub_b64,
-            "sponsor_email": "test@example.com",
-        })
+        resp = self.client.post("/api/v1/agents/register", json=_te_registration_body(key, pub_b64))
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "registered"
@@ -79,11 +93,9 @@ class TestTrustEngineServer:
         pub_b64 = base64.b64encode(key.public_key().public_bytes_raw()).decode()
 
         # Register first
-        reg_resp = self.client.post("/api/v1/agents/register", json={
-            "name": "challenge-agent",
-            "public_key": pub_b64,
-            "sponsor_email": "test@example.com",
-        })
+        reg_resp = self.client.post("/api/v1/agents/register", json=_te_registration_body(
+            key, pub_b64, name="challenge-agent",
+        ))
         agent_did = reg_resp.json()["agent_did"]
 
         # Issue challenge
@@ -119,11 +131,9 @@ class TestTrustEngineServer:
         key = Ed25519PrivateKey.generate()
         pub_b64 = base64.b64encode(key.public_key().public_bytes_raw()).decode()
 
-        reg = self.client.post("/api/v1/agents/register", json={
-            "name": "verify-agent",
-            "public_key": pub_b64,
-            "sponsor_email": "verify@example.com",
-        })
+        reg = self.client.post("/api/v1/agents/register", json=_te_registration_body(
+            key, pub_b64, name="verify-agent", sponsor_email="verify@example.com",
+        ))
         assert reg.status_code == 200
         agent_did = reg.json()["agent_did"]
 

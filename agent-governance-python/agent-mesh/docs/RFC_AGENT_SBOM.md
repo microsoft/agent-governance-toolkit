@@ -501,7 +501,7 @@ When agent capabilities change:
 | ASI-03: Supply Chain | `dependencies.software` + traditional SBOM fields |
 | **ASI-04: AI Supply Chain** | **`modelProvenance` + `datasets` + `weights` (NEW in v2.0)** |
 | ASI-05: Identity Spoofing | `sponsor` + `signatures` + Entra Agent ID |
-| ASI-06: Memory Poisoning | `datasets[type=rag-source]` tracking |
+| ASI-06: Memory & Context Poisoning | `datasets[type=rag-source]` tracking |
 | ASI-07: Prompt Injection | `riskProfile.promptInjectionMitigations` |
 | ASI-08: Cascading Hallucination | `modelProvenance.fineTuning.evaluationMetrics.hallucinationRate` |
 | ASI-09: Insufficient Logging | `trust.attestations` + audit trail |

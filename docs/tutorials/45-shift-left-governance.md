@@ -436,7 +436,7 @@ properties in `Directory.Build.props` and `Directory.Build.targets`:
 These are enforced automatically for any project in the `agent-governance-dotnet/`
 directory tree.
 
-### §4.2 TypeScript (@microsoft/agentmesh-sdk)
+### §4.2 TypeScript (@microsoft/agent-governance-sdk)
 
 The TypeScript SDK uses strict compiler settings in `tsconfig.json`:
 
@@ -542,7 +542,7 @@ enforcing that nothing that ran has failed.
 | SBOM and artifact signing | [Tutorial 26 -- SBOM & Signing](26-sbom-and-signing.md) |
 | MCP tool scanning | [Tutorial 27 -- MCP Scan CLI](27-mcp-scan-cli.md) |
 | Multi-stage policy pipeline | [Tutorial 37 -- Multi-Stage Pipeline](37-multi-stage-pipeline.md) |
-| Contributor reputation deep dive | [Tutorial 46 -- Contributor Governance](46-contributor-governance.md) |
+| Contributor reputation deep dive | [Tutorial 46 -- Contributor Governance](53-contributor-governance.md) |
 | .NET SDK | [Tutorial 19 -- .NET package](19-dotnet-sdk.md) |
 | TypeScript SDK | [Tutorial 20 -- TypeScript package](20-typescript-sdk.md) |
 | Plugin marketplace | [Tutorial 10 -- Plugin Marketplace](10-plugin-marketplace.md) |

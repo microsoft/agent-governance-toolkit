@@ -12,6 +12,7 @@ This is the main sidecar that sits in front of an agent and handles:
 - Request routing
 - Telemetry and tracing
 """
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -31,6 +32,22 @@ from iatp.policy_engine import IATPPolicyEngine
 from iatp.recovery import IATPRecoveryEngine
 from iatp.security import PrivacyScrubber, SecurityValidator
 from iatp.telemetry import FlightRecorder, TraceIDGenerator, _get_utc_timestamp
+
+
+def _trusted_user_override(header_value: Optional[str]) -> bool:
+    """Return True only when ``X-User-Override`` matches the secret
+    server-side ``IATP_TRUSTED_USER_OVERRIDE_TOKEN``.
+
+    Mirrors the hardening applied to ``iatp.main`` — caller-supplied
+    bypass values are no longer self-authorizing. The header is ignored
+    entirely when the env var is unset, empty, too short (< 16 chars),
+    or matches a well-known weak value (``true``, ``yes``, ``admin``...).
+    """
+    # Delegate to the canonical implementation in ``iatp.main`` so the
+    # two helpers cannot drift apart.
+    from iatp.main import _trusted_user_override as _canonical
+    return _canonical(header_value)
+
 
 
 class SidecarProxy:
@@ -117,9 +134,16 @@ class SidecarProxy:
             Main proxy endpoint that forwards requests to the backend agent.
 
             Headers:
-            - X-User-Override: Set to "true" to bypass security warnings
+            - X-User-Override: Must equal the secret server-side
+              ``IATP_TRUSTED_USER_OVERRIDE_TOKEN`` to bypass security
+              warnings. Header is ignored entirely when env var is
+              unset. A bare ``true`` no longer authorizes.
+              Future hardening (security): replace with trusted out-of-band approval
+              provider injection (analog to KernelExecuteTool).
             - X-Agent-Trace-ID: Optional trace ID for distributed tracing
             """
+            # Normalize caller-supplied bypass to a trusted boolean.
+            user_override_trusted = _trusted_user_override(x_user_override)
             # Generate or use provided trace ID
             trace_id = x_agent_trace_id or TraceIDGenerator.generate()
 
@@ -193,7 +217,7 @@ class SidecarProxy:
             should_quarantine = self.validator.should_quarantine(self.manifest)
 
             # If there's a warning and no user override, return the warning
-            if warning and not x_user_override:
+            if warning and not user_override_trusted:
                 trust_score = self.manifest.calculate_trust_score()
                 return JSONResponse(
                     status_code=449,  # Custom status for "Retry With User Override"
@@ -210,7 +234,7 @@ class SidecarProxy:
                 )
 
             # Create quarantine session if needed
-            if should_quarantine and x_user_override:
+            if should_quarantine and user_override_trusted:
                 session = QuarantineSession(
                     session_id=TraceIDGenerator.generate(),
                     trace_id=trace_id,

@@ -4,97 +4,108 @@ hide:
   - toc
 ---
 
-<style>
-/* Hero section */
-.agt-hero {
-  background: linear-gradient(135deg, #0078D4 0%, #005A9E 100%);
-  color: white;
-  padding: 3rem 2rem;
-  border-radius: 8px;
-  margin-bottom: 2rem;
-  text-align: center;
-}
-.agt-hero h1 { color: white; border: none; margin: 0 0 0.5rem; font-size: 2rem; }
-.agt-hero p { color: rgba(255,255,255,0.9); font-size: 1.05rem; max-width: 700px; margin: 0 auto 1.5rem; }
-.agt-hero-badges { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
-.agt-hero-badges a {
-  display: inline-block;
-  background: rgba(255,255,255,0.15);
-  color: white;
-  padding: 0.5rem 1.2rem;
-  border-radius: 4px;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 0.85rem;
-  transition: background 0.2s;
-}
-.agt-hero-badges a:hover { background: rgba(255,255,255,0.25); }
-
-/* Card grid */
-.agt-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
-  margin: 1.5rem 0;
-}
-.agt-card {
-  border: 1px solid #E0E0E0;
-  border-radius: 6px;
-  padding: 1.2rem;
-  transition: box-shadow 0.2s, border-color 0.2s;
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-.agt-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #0078D4;
-}
-.agt-card-title { display: block; margin: 0 0 0.4rem; font-size: 0.95rem; font-weight: 600; color: #0078D4; }
-.agt-card-desc { display: block; margin: 0; font-size: 0.82rem; color: #616161; }
-
-[data-md-color-scheme="slate"] .agt-card { border-color: #3A3A3E; }
-[data-md-color-scheme="slate"] .agt-card:hover { border-color: #4DB8FF; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-[data-md-color-scheme="slate"] .agt-card-title { color: #4DB8FF; }
-[data-md-color-scheme="slate"] .agt-card-desc { color: #B0B0B0; }
-[data-md-color-scheme="slate"] .agt-hero { background: linear-gradient(135deg, #1A3F5C 0%, #0D2137 100%); }
-
-/* Section headers */
-.agt-section { margin-top: 2.5rem; }
-.agt-section h2 { font-size: 1.3rem; }
-
-/* Stats row */
-.agt-stats {
-  display: flex;
-  gap: 2rem;
-  justify-content: center;
-  margin: 1.5rem 0 0;
-  flex-wrap: wrap;
-}
-.agt-stat { text-align: center; }
-.agt-stat-value { font-size: 1.5rem; font-weight: 700; color: white; display: block; }
-.agt-stat-label { font-size: 0.78rem; color: rgba(255,255,255,0.7); }
-</style>
-
 <div class="agt-hero" markdown>
 
-# Agent Governance Toolkit
+# Ship agents to production without losing sleep
 
-Runtime governance for AI agents: deterministic policy enforcement, zero-trust identity, execution sandboxing, and SRE for autonomous agents.
+Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents. One `pip install`, any framework.
+
+```
+pip install agent-governance-toolkit[full]
+```
 
 <div class="agt-hero-badges">
   <a href="quickstart/">🚀 Quick Start</a>
   <a href="https://pypi.org/project/agent-governance-toolkit/">📦 PyPI</a>
   <a href="https://github.com/microsoft/agent-governance-toolkit">💻 GitHub</a>
   <a href="tutorials/index/">📚 Tutorials</a>
+  <a href="reference/comparison/">⚖️ How AGT Compares</a>
 </div>
 
 <div class="agt-stats">
-  <div class="agt-stat"><span class="agt-stat-value">13,000+</span><span class="agt-stat-label">Tests</span></div>
+  <div class="agt-stat"><span class="agt-stat-value">1,590+</span><span class="agt-stat-label">GitHub Stars</span></div>
   <div class="agt-stat"><span class="agt-stat-value">10</span><span class="agt-stat-label">Formal Specs</span></div>
   <div class="agt-stat"><span class="agt-stat-value">5</span><span class="agt-stat-label">Languages</span></div>
-  <div class="agt-stat"><span class="agt-stat-value">20+</span><span class="agt-stat-label">Integrations</span></div>
+  <div class="agt-stat"><span class="agt-stat-value">19</span><span class="agt-stat-label">Integrations</span></div>
 </div>
+
+</div>
+
+<div class="agt-section" markdown>
+
+## The problem
+
+Your AI agents call tools, browse the web, query databases, and delegate to other agents. Once deployed, they make decisions autonomously. You need answers to three questions:
+
+**1. Is this action allowed?** An agent with access to `send_email` and `query_database` should not be able to `drop_table`. OAuth scopes and IAM roles control which services an agent can reach, not what it does once connected.
+
+**2. Which agent did this?** In a multi-agent system, five agents might share a single API key. When something goes wrong, "an agent did it" is not an incident response.
+
+**3. Can you prove what happened?** Auditors and regulators need tamper-evident records of every decision: what policy was active, what the agent requested, and why it was allowed or denied.
+
+</div>
+
+<div class="agt-section" markdown>
+
+## Govern any agent in 2 lines
+
+Wrap any tool function with `govern()`. Policy enforcement, audit logging, and denial handling are automatic.
+
+```python
+from agentmesh.governance import govern
+
+safe_tool = govern(my_tool, policy="policy.yaml")
+```
+
+That's it. `safe_tool` evaluates your YAML policy on every call, logs the decision, and raises `GovernanceDenied` if the action is blocked. Works with LangChain, CrewAI, OpenAI Agents, AutoGen, Google ADK, and any other framework.
+
+```yaml
+# policy.yaml
+apiVersion: governance.toolkit/v1
+name: production-policy
+default_action: allow
+rules:
+  - name: block-destructive
+    condition: "action.type in ['drop', 'delete', 'truncate']"
+    action: deny
+    description: "Destructive operations require human approval"
+
+  - name: require-approval-for-send
+    condition: "action.type == 'send_email'"
+    action: require_approval
+    approvers: ["security-team"]
+```
+
+```
+>>> safe_tool(action="read", table="users")
+{'table': 'users', 'rows': 42}
+
+>>> safe_tool(action="drop", table="users")
+GovernanceDenied: Action denied by policy rule 'block-destructive':
+  Destructive operations require human approval
+```
+
+</div>
+
+<div class="agt-section" markdown>
+
+## How it works
+
+``` mermaid
+flowchart LR
+    A["🤖 Agent"] -->|govern| PE
+    subgraph GK [" Agent Governance Toolkit "]
+        direction LR
+        PE["Policy Engine<br>YAML · OPA · Cedar"]
+        ID["Identity<br>SPIFFE · DID · mTLS"]
+        AL["Audit Log<br>Tamper-evident"]
+        PE --> ID --> AL
+    end
+    AL -->|Allowed| T["Tool executes"]
+    PE -->|Denied| D["GovernanceDenied"]
+```
+
+Every layer is optional. Start with `govern()` and add layers as your risk profile grows. Most teams run policy enforcement + audit logging and never need the full stack.
 
 </div>
 
@@ -103,37 +114,45 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 ## Packages
 
 <div class="agt-cards">
-<a class="agt-card" href="packages/agent-os.md">
-<span class="agt-card-title">⚙️ Agent OS</span>
-<span class="agt-card-desc">Policy engine, agent lifecycle, governance gate</span>
+<a class="agt-card" data-pkg="os" href="packages/agent-os/">
+<img class="agt-card-icon" src="assets/icons/agent-os.svg" alt="Agent OS">
+<span class="agt-card-body"><span class="agt-card-title">Agent OS</span>
+<span class="agt-card-desc">Policy engine, agent lifecycle, governance gate</span></span>
 </a>
-<a class="agt-card" href="packages/agent-mesh.md">
-<span class="agt-card-title">🔗 Agent Mesh</span>
-<span class="agt-card-desc">Agent discovery, routing, and trust mesh</span>
+<a class="agt-card" data-pkg="mesh" href="packages/agent-mesh/">
+<img class="agt-card-icon" src="assets/icons/agent-mesh.svg" alt="Agent Mesh">
+<span class="agt-card-body"><span class="agt-card-title">Agent Mesh</span>
+<span class="agt-card-desc">Agent discovery, routing, and trust mesh</span></span>
 </a>
-<a class="agt-card" href="packages/agent-runtime.md">
-<span class="agt-card-title">🛡️ Agent Runtime</span>
-<span class="agt-card-desc">Execution sandboxing with four privilege rings</span>
+<a class="agt-card" data-pkg="runtime" href="packages/agent-runtime/">
+<img class="agt-card-icon" src="assets/icons/agent-runtime.svg" alt="Agent Runtime">
+<span class="agt-card-body"><span class="agt-card-title">Agent Runtime</span>
+<span class="agt-card-desc">Execution sandboxing with four privilege rings</span></span>
 </a>
-<a class="agt-card" href="packages/agent-sre.md">
-<span class="agt-card-title">📊 Agent SRE</span>
-<span class="agt-card-desc">Kill switch, SLO monitoring, chaos testing</span>
+<a class="agt-card" data-pkg="sre" href="packages/agent-sre/">
+<img class="agt-card-icon" src="assets/icons/agent-sre.svg" alt="Agent SRE">
+<span class="agt-card-body"><span class="agt-card-title">Agent SRE</span>
+<span class="agt-card-desc">Kill switch, SLO monitoring, chaos testing</span></span>
 </a>
-<a class="agt-card" href="packages/agent-compliance.md">
-<span class="agt-card-title">✅ Agent Compliance</span>
-<span class="agt-card-desc">OWASP verification, policy linting, integrity checks</span>
+<a class="agt-card" data-pkg="compliance" href="packages/agent-compliance/">
+<img class="agt-card-icon" src="assets/icons/agent-compliance.svg" alt="Agent Compliance">
+<span class="agt-card-body"><span class="agt-card-title">Agent Compliance</span>
+<span class="agt-card-desc">OWASP verification, policy linting, integrity checks</span></span>
 </a>
-<a class="agt-card" href="packages/agent-marketplace.md">
-<span class="agt-card-title">🏪 Agent Marketplace</span>
-<span class="agt-card-desc">Plugin governance and trust scoring</span>
+<a class="agt-card" data-pkg="marketplace" href="packages/agent-marketplace/">
+<img class="agt-card-icon" src="assets/icons/agent-marketplace.svg" alt="Agent Marketplace">
+<span class="agt-card-body"><span class="agt-card-title">Agent Marketplace</span>
+<span class="agt-card-desc">Plugin governance and trust scoring</span></span>
 </a>
-<a class="agt-card" href="packages/agent-lightning.md">
-<span class="agt-card-title">⚡ Agent Lightning</span>
-<span class="agt-card-desc">RL training governance with violation penalties</span>
+<a class="agt-card" data-pkg="lightning" href="packages/agent-lightning/">
+<img class="agt-card-icon" src="assets/icons/agent-lightning.svg" alt="Agent Lightning">
+<span class="agt-card-body"><span class="agt-card-title">Agent Lightning</span>
+<span class="agt-card-desc">RL training governance with violation penalties</span></span>
 </a>
-<a class="agt-card" href="packages/agent-hypervisor.md">
-<span class="agt-card-title">🔒 Agent Hypervisor</span>
-<span class="agt-card-desc">Execution audit, delta engine, commitment anchoring</span>
+<a class="agt-card" data-pkg="hypervisor" href="packages/agent-hypervisor/">
+<img class="agt-card-icon" src="assets/icons/agent-hypervisor.svg" alt="Agent Hypervisor">
+<span class="agt-card-body"><span class="agt-card-title">Agent Hypervisor</span>
+<span class="agt-card-desc">Execution audit, delta engine, commitment anchoring</span></span>
 </a>
 </div>
 </div>
@@ -144,7 +163,7 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 
 | SDK | Install |
 |-----|---------|
-| 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit` |
+| 🐍 [Python](packages/agent-compliance.md) | `pip install agent-governance-toolkit[full]` |
 | 📘 TypeScript | `npm install @microsoft/agent-governance-sdk` |
 | 🔷 [.NET](packages/dotnet-sdk.md) | `dotnet add package Microsoft.AgentGovernance` |
 | 🦀 Rust | `cargo add agent-governance` |
@@ -156,7 +175,7 @@ Runtime governance for AI agents: deterministic policy enforcement, zero-trust i
 
 ## Framework Integrations
 
-Works with any agent framework: LangChain, CrewAI, AutoGen, Google ADK, OpenAI Agents, LlamaIndex, Haystack, Mastra, MCP, A2A, and more. See the [full list](packages/index.md#framework-integrations-19).
+Works with any agent framework: LangChain, CrewAI, AutoGen, Google ADK, OpenAI Agents, LlamaIndex, Haystack, Mastra, MCP, A2A, and more. See the [full list](packages/index.md).
 
 </div>
 
@@ -203,7 +222,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic AI Top 10](security/owasp-compliance.md) | All 10 risks covered with deterministic controls |
+| [OWASP Agentic AI Top 10](../docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories mapped with deterministic controls |
 | [NIST AI RMF 1.0](reference/nist-rfi-mapping.md) | Full GOVERN, MAP, MEASURE, MANAGE alignment |
 | [EU AI Act](compliance/) | Compliance mapping with automated evidence |
 | [SOC 2](compliance/soc2-mapping.md) | Control mapping with audit trail export |

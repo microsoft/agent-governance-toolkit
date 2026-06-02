@@ -34,12 +34,12 @@ Discover → Inventory → Reconcile → Govern
 ## Step 1: Install
 
 ```bash
-pip install agentmesh-discovery
+pip install agentmesh_discovery
 ```
 
 For GitHub scanning:
 ```bash
-pip install agentmesh-discovery[github]
+pip install agentmesh_discovery[github]
 ```
 
 ---
@@ -251,7 +251,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Install agent-discovery
-        run: pip install agentmesh-discovery[github]
+        run: pip install agentmesh_discovery[github]
       
       - name: Scan repository
         run: |

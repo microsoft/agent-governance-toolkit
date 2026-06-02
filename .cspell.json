@@ -11,8 +11,12 @@
     }
   ],
   "words": [
+    "Andriushchenko",
+    "Chao",
     "GitHub",
     "Markdown",
+    "Neur",
+    "unsourced",
     "README",
     "TypeScript",
     "JavaScript",
@@ -42,7 +46,9 @@
     "fastapi",
     "structlog",
     "scipy",
-    "croniter"
+    "croniter",
+    "nbconvert",
+    "PYTHONUTF"
   ],
   "ignorePaths": [
     "**/node_modules/**",

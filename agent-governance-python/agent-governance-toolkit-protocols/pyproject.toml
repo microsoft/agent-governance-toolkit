@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-governance-toolkit-protocols"
+version = "4.0.0"
+description = "Protocol implementations (MCP governance, trust protocol, A2A, MCP receipts) for the Agent Governance Toolkit"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+maintainers = [
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
+]
+keywords = [
+    "ai-agents", "governance", "mcp", "trust-protocol",
+    "a2a", "receipts", "protocol", "security",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<10.0",
+    "pytest-asyncio>=0.23,<2.0",
+    "ruff>=0.4.0,<1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+# ============================================================================
+# Hatchling: pull protocol sources
+# ============================================================================
+[tool.hatch.build.targets.wheel]
+packages = ["_placeholder"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../agent-mcp-governance/src/agent_mcp_governance" = "agent_mcp_governance"
+"../agentmesh-integrations/a2a-protocol/a2a_agentmesh" = "a2a_agentmesh"
+"../agentmesh-integrations/mcp-receipt-governed/mcp_receipt_governed" = "mcp_receipt_governed"
+"../agentmesh-integrations/mcp-trust-proxy/mcp_trust_proxy" = "mcp_trust_proxy"
+
+[tool.hatch.build.targets.sdist]
+include = ["README.md", "LICENSE"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]

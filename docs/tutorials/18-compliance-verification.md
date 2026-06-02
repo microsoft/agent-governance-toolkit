@@ -923,7 +923,7 @@ ASI-04  Supply Chain Vulns        AgentMesh      AI-BOM v2.0, provenance trackin
 ASI-05  Unexpected Code Exec      Agent Runtime  CPU ring-inspired isolation (0–3)
 ASI-06  Memory & Context Poison   Agent OS       VFS policies, CMVK verification
 ASI-07  Insecure Inter-Agent      AgentMesh      IATP protocol, encrypted channels
-ASI-08  Cascading Failures        Agent SRE      Circuit breakers, SLO enforcement
+ASI-08  Cascading Agent Failures        Agent SRE      Circuit breakers, SLO enforcement
 ASI-09  Human-Agent Trust         Agent OS       Approval workflows, quorum logic
 ASI-10  Rogue Agents              Runtime+Mesh   Kill switch, behavioral monitoring
 ```
@@ -953,7 +953,7 @@ else:
         print(f"   - {c.control_id}: {c.name}")
 ```
 
-For the full OWASP mapping with detailed mitigations, see [`docs/OWASP-COMPLIANCE.md`](../OWASP-COMPLIANCE.md).
+For the full OWASP mapping with detailed mitigations, see [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md).
 
 ---
 
@@ -1092,7 +1092,7 @@ Badge: ![Governance](https://img.shields.io/badge/governance-100%25-brightgreen)
 
 - **[Tutorial 02 — Trust & Identity](02-trust-and-identity.md)** — Agent identity (`AgentIdentity`), trust scoring, and DID credentials that underpin ASI-05 and ASI-07 controls
 - **[Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md)** — `AuditChain` tamper-evident logging and `ComplianceEngine` behavioral monitoring (ASI-06, ASI-10)
-- **[OWASP Compliance Mapping](../OWASP-COMPLIANCE.md)** — Full OWASP Agentic Top 10 mapping with per-risk mitigation details
+- **[OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)** — Full OWASP Agentic Top 10 mapping with per-risk mitigation details
 
 ---
 

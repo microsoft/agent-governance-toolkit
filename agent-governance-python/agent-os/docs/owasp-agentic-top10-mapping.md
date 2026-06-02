@@ -16,7 +16,7 @@
 | ASI05 | Unexpected Code Execution | ✅ Fully Covered | `ExecutionSandbox`, AST analysis, `blocked_patterns` |
 | ASI06 | Memory & Context Poisoning | ✅ Fully Covered | `MemoryGuard`, SHA-256 integrity, injection detection, audit trail |
 | ASI07 | Insecure Inter-Agent Comms | ✅ Fully Covered | AgentMesh trust handshake, reputation engine |
-| ASI08 | Cascading Failures | ✅ Fully Covered | `CircuitBreaker`, chaos engine, failure triage |
+| ASI08 | Cascading Agent Failures | ✅ Fully Covered | `CircuitBreaker`, chaos engine, failure triage |
 | ASI09 | Human-Agent Trust Exploitation | ✅ Fully Covered | `require_human_approval`, `GovernanceLogger` audit trail |
 | ASI10 | Rogue Agents | ✅ Fully Covered | `TrustRoot` hierarchy, `ExecutionSandbox`, kill switch |
 
@@ -395,7 +395,7 @@ class ValidationResult:
 
 ---
 
-## ASI08 — Cascading Failures
+## ASI08 — Cascading Agent Failures
 
 **Risk:** A failure in one agent or tool propagates through the workflow, causing a chain reaction that takes down the entire multi-agent system.
 

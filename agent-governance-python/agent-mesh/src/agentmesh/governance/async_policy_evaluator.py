@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 # Concurrency statistics
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ConcurrencyStats:
     """Tracks concurrency-related metrics for the async trust evaluator.
@@ -73,40 +74,68 @@ class ConcurrencyStats:
 # Read-write lock helpers
 # ---------------------------------------------------------------------------
 
+
 class _ReadWriteLock:
-    """Simple readers-writer lock built on :class:`threading.RLock`.
+    """Simple readers-writer lock built on :class:`threading.Condition`.
 
     Multiple readers can hold the lock concurrently; a writer gets
     exclusive access (no readers **and** no other writers).
+
+    Fairness policy: writer-preference. Once a writer is waiting,
+    admission of new readers is blocked until the writer acquires.
+    This prevents writer starvation under sustained read pressure, with
+    the tradeoff that readers may starve under extreme continuous write
+    pressure.
+
+    Implemented with a condition variable so acquire/release ownership
+    for reader activity is tracked by counters rather than by a thread-
+    owned primitive. This avoids cross-thread release failures that can
+    happen with an ``RLock`` when the first reader and last reader are
+    different threads.
     """
 
     def __init__(self) -> None:
+        self._cond = threading.Condition()
         self._readers: int = 0
-        self._lock = threading.RLock()
-        self._write_lock = threading.RLock()
+        self._writers: int = 0
+        self._waiting_writers: int = 0
 
     def acquire_read(self) -> None:
-        with self._lock:
+        with self._cond:
+            while self._writers > 0 or self._waiting_writers > 0:
+                self._cond.wait()
             self._readers += 1
-            if self._readers == 1:
-                self._write_lock.acquire()
 
     def release_read(self) -> None:
-        with self._lock:
+        with self._cond:
+            if self._readers <= 0:
+                raise RuntimeError("release_read called without matching acquire_read")
             self._readers -= 1
             if self._readers == 0:
-                self._write_lock.release()
+                self._cond.notify_all()
 
     def acquire_write(self) -> None:
-        self._write_lock.acquire()
+        with self._cond:
+            self._waiting_writers += 1
+            try:
+                while self._readers > 0 or self._writers > 0:
+                    self._cond.wait()
+                self._writers += 1
+            finally:
+                self._waiting_writers -= 1
 
     def release_write(self) -> None:
-        self._write_lock.release()
+        with self._cond:
+            if self._writers <= 0:
+                raise RuntimeError("release_write called without matching acquire_write")
+            self._writers -= 1
+            self._cond.notify_all()
 
 
 # ---------------------------------------------------------------------------
 # Async-safe trust policy evaluator
 # ---------------------------------------------------------------------------
+
 
 class AsyncTrustPolicyEvaluator:
     """Thread-safe and asyncio-safe trust policy evaluator.
@@ -147,10 +176,11 @@ class AsyncTrustPolicyEvaluator:
     async def evaluate(self, context: dict[str, Any]) -> TrustPolicyDecision:
         """Evaluate trust policies against *context* with async + thread safety.
 
-        Acquires the async lock (coroutine safety) and the read side of
-        the RW lock (thread safety) so that concurrent evaluations can
-        proceed but a policy reload will block until all in-flight
-        evaluations complete.
+        Async ``evaluate`` calls are intentionally serialised with an
+        ``asyncio.Lock`` in this implementation to preserve existing
+        event-loop semantics. The executor work still acquires the read
+        side of the RW lock, so thread-level safety and writer
+        exclusivity remain enforced.
 
         Thread-safety: YES — safe to call from multiple threads via
         ``asyncio.run_coroutine_threadsafe``.
@@ -160,6 +190,10 @@ class AsyncTrustPolicyEvaluator:
         TrustPolicyDecision
             The result of evaluating the loaded trust policies.
         """
+        # Keep coroutine-level serialization here intentionally to
+        # preserve existing event-loop semantics. Thread-level safety and
+        # writer exclusivity are still enforced by _ReadWriteLock inside
+        # the executor work item.
         async with self._async_lock:
             return await asyncio.get_running_loop().run_in_executor(
                 None, self._evaluate_with_read_lock, context
@@ -180,9 +214,7 @@ class AsyncTrustPolicyEvaluator:
         """
         return self._evaluate_with_read_lock(context)
 
-    async def evaluate_batch(
-        self, contexts: list[dict[str, Any]]
-    ) -> list[TrustPolicyDecision]:
+    async def evaluate_batch(self, contexts: list[dict[str, Any]]) -> list[TrustPolicyDecision]:
         """Evaluate multiple contexts concurrently.
 
         Each context is evaluated in its own asyncio task.  All tasks
@@ -196,9 +228,7 @@ class AsyncTrustPolicyEvaluator:
         list[TrustPolicyDecision]
             One decision per input context, in the same order.
         """
-        tasks = [
-            asyncio.ensure_future(self.evaluate(ctx)) for ctx in contexts
-        ]
+        tasks = [asyncio.ensure_future(self.evaluate(ctx)) for ctx in contexts]
         return list(await asyncio.gather(*tasks))
 
     async def reload_policies(self, policies: list[TrustPolicy]) -> None:
@@ -229,9 +259,7 @@ class AsyncTrustPolicyEvaluator:
 
     # -- internal helpers --------------------------------------------------
 
-    def _evaluate_with_read_lock(
-        self, context: dict[str, Any]
-    ) -> TrustPolicyDecision:
+    def _evaluate_with_read_lock(self, context: dict[str, Any]) -> TrustPolicyDecision:
         """Run the trust evaluator under the read side of the RW lock."""
         self._rw_lock.acquire_read()
         try:
@@ -258,9 +286,7 @@ class AsyncTrustPolicyEvaluator:
         finally:
             self._rw_lock.release_read()
 
-    def _reload_with_write_lock(
-        self, policies: list[TrustPolicy]
-    ) -> None:
+    def _reload_with_write_lock(self, policies: list[TrustPolicy]) -> None:
         """Replace policies under the exclusive write lock."""
         self._rw_lock.acquire_write()
         try:

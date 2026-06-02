@@ -56,7 +56,7 @@ function addFinding(
  *
  * @example
  * ```ts
- * import { validatePolicy } from '@agentmesh/copilot-governance';
+ * import { validatePolicy } from '@microsoft/agentmesh-copilot-governance';
  * import { parse } from 'yaml'; // any YAML parser
  *
  * const result = validatePolicy(parse(yamlText));

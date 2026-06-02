@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#D97706;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#B45309;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="12" fill="url(#g)"/>
+  <!-- Lightning bolt -->
+  <polygon points="36,14 24,34 30,34 28,50 40,30 34,30"
+           fill="white"/>
+  <!-- Small sparks -->
+  <line x1="18" y1="24" x2="14" y2="22" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  <line x1="16" y1="32" x2="12" y2="32" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="46" y1="24" x2="50" y2="22" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  <line x1="48" y1="32" x2="52" y2="32" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+</svg>

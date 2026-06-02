@@ -95,12 +95,15 @@ def classify(decision):
 tools = ["search_documents", "write_file", "send_email",
          "delete_database", "transfer_funds"]
 
+results = []
 for tool in tools:
     ctx = {"tool_name": tool}
     t1 = classify(eval_v1.evaluate(ctx))
     t2 = classify(eval_v2.evaluate(ctx))
-    changed = "⚠️" if t1 != t2 else ""
-    print(f"{tool:<22s} {t1:<12s} {t2:<12s} {changed}")
+    changed = t1 != t2
+    results.append((tool, t1, t2, changed))
+    flag = "⚠️" if changed else ""
+    print(f"{tool:<22s} {t1:<12s} {t2:<12s} {flag}")
 ```
 
 ### Example output

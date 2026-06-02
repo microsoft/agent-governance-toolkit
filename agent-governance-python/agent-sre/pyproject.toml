@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_sre"
-version = "3.7.0"
-description = "Public Preview — Reliability Engineering for AI Agent Systems"
+version = "4.0.0"
+description = "Deprecated — use agent-governance-toolkit-cli instead. Reliability Engineering for AI Agent Systems"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
@@ -29,6 +29,7 @@ classifiers = [
     "Topic :: System :: Monitoring",
 ]
 dependencies = [
+    "agent-governance-toolkit-cli>=4.0.0,<5.0",
     "pydantic>=2.4.0,<3.0",
     "pyyaml>=6.0,<7.0",
     "croniter>=2.0,<7.0",
@@ -49,7 +50,7 @@ otel = [
     "opentelemetry-exporter-otlp>=1.20,<2.0",
 ]
 langfuse = ["langfuse>=2.0,<5.0"]
-arize = ["arize-phoenix>=4.0,<16.0"]
+arize = ["arize-phoenix>=4.0,<17.0"]
 langchain = ["langchain-core>=1.2.11,<2.0"]
 llamaindex = ["llama-index-core>=0.10,<1.0"]
 braintrust = ["braintrust>=0.0.100,<1.0"]
@@ -60,7 +61,7 @@ langsmith = ["langsmith>=0.1,<1.0"]
 wandb = ["wandb>=0.16,<1.0"]
 mlflow = ["mlflow>=2.10,<4.0"]
 agentops = ["agentops>=0.3,<1.0"]
-all = ["opentelemetry-exporter-otlp>=1.20,<2.0", "langfuse>=2.0,<5.0", "arize-phoenix>=4.0,<16.0", "langchain-core>=1.2.11,<2.0", "llama-index-core>=0.10,<1.0", "braintrust>=0.0.100,<1.0", "helicone>=4.0,<5.0", "ddtrace>=2.0,<5.0", "sentry-sdk>=2.0,<3.0", "langsmith>=0.1,<1.0", "wandb>=0.16,<1.0", "mlflow>=2.10,<4.0", "agentops>=0.3,<1.0"]
+all = ["opentelemetry-exporter-otlp>=1.20,<2.0", "langfuse>=2.0,<5.0", "arize-phoenix>=4.0,<17.0", "langchain-core>=1.2.11,<2.0", "llama-index-core>=0.10,<1.0", "braintrust>=0.0.100,<1.0", "helicone>=4.0,<5.0", "ddtrace>=2.0,<5.0", "sentry-sdk>=2.0,<3.0", "langsmith>=0.1,<1.0", "wandb>=0.16,<1.0", "mlflow>=2.10,<4.0", "agentops>=0.3,<1.0"]
 
 [project.scripts]
 agent-sre = "agent_sre.cli.main:cli"

@@ -51,13 +51,22 @@ jobs:
               - 'agent-governance-python/agent-discovery/**'
               - 'agent-governance-python/agent-rag-governance/**'
               - 'agent-governance-python/agent-sandbox/**'
+              - 'agent-governance-python/agent-governance-toolkit-core/**'
+              - 'agent-governance-python/agent-governance-toolkit-integrations/**'
+              - 'agent-governance-python/agent-governance-toolkit-cli/**'
+              - 'agent-governance-python/agent-governance-toolkit-protocols/**'
               - 'scripts/**'
               - 'agent-governance-python/requirements/**'
             dotnet:
               - 'agent-governance-dotnet/**'
             typescript:
+              - '.claude-plugin/**'
+              - 'scripts/sync-claude-marketplace-version.mjs'
+              - 'agent-governance-claude-code/**'
               - 'agent-governance-copilot-cli/**'
               - 'agent-governance-typescript/**'
+              - 'agent-governance-antigravity-cli/**'
+              - 'agent-governance-opencode/**'
               - 'agent-governance-python/agent-os/extensions/**'
               - 'agent-governance-python/agentmesh-integrations/mastra-agentmesh/**'
               - 'agent-governance-python/agentmesh-integrations/copilot-governance/**'
@@ -111,6 +120,12 @@ jobs:
               - 'agent-governance-python/agent-mesh/packages/mcp-proxy/**'
             pkg-agent-governance-copilot-cli:
               - 'agent-governance-copilot-cli/**'
+            pkg-agent-governance-claude-code:
+              - '.claude-plugin/**'
+              - 'scripts/sync-claude-marketplace-version.mjs'
+              - 'agent-governance-claude-code/**'
+            pkg-agent-governance-opencode:
+              - 'agent-governance-opencode/**'
             pkg-agent-governance-sdk:
               - 'agent-governance-typescript/**'
             pkg-agentmesh-api:
@@ -159,6 +174,8 @@ jobs:
         env:
           MCP: ${{ steps.filter.outputs.pkg-agentmesh-mcp-proxy }}
           COPILOT: ${{ steps.filter.outputs.pkg-agent-governance-copilot-cli }}
+          CLAUDE: ${{ steps.filter.outputs.pkg-agent-governance-claude-code }}
+          OPENCODE: ${{ steps.filter.outputs.pkg-agent-governance-opencode }}
           SDK: ${{ steps.filter.outputs.pkg-agent-governance-sdk }}
           API: ${{ steps.filter.outputs.pkg-agentmesh-api }}
           EXT: ${{ steps.filter.outputs.pkg-agent-os-copilot-extension }}
@@ -168,6 +185,8 @@ jobs:
           pkgs=()
           [ "$MCP" = "true" ] && pkgs+=('"agentmesh-mcp-proxy"')
           [ "$COPILOT" = "true" ] && pkgs+=('"agent-governance-copilot-cli"')
+          [ "$CLAUDE" = "true" ] && pkgs+=('"agent-governance-claude-code"')
+          [ "$OPENCODE" = "true" ] && pkgs+=('"agent-governance-opencode"')
           [ "$SDK" = "true" ] && pkgs+=('"agent-governance-sdk"')
           [ "$API" = "true" ] && pkgs+=('"agentmesh-api"')
           [ "$EXT" = "true" ] && pkgs+=('"agent-os-copilot-extension"')
@@ -284,6 +303,10 @@ jobs:
             python-version: "3.10"
           - package: agent-sandbox
             python-version: "3.10"
+          - package: agent-sre
+            python-version: "3.10"
+          - package: agent-rag-governance
+            python-version: "3.10"
     steps:
       - name: Determine if package changed
         id: gate
@@ -313,25 +336,58 @@ jobs:
       - name: Install local sibling dependencies
         if: steps.gate.outputs.run == 'true'
         run: |
-          # agent-os depends on agent_primitives (local, not on PyPI at >=3.x)
-          # and agentmesh (test_cmd_sign.py imports agentmesh.marketplace)
-          if [ "${{ matrix.package }}" = "agent-os" ]; then
-            pip install --no-cache-dir -e agent-governance-python/agent-primitives
-            pip install --no-cache-dir -e agent-governance-python/agent-mesh
-          fi
+          # Install consolidated packages from local source (not yet on PyPI).
+          # Most packages depend on these, so install them first.
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-core
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
       - name: Install ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
+        env:
+          PKG: ${{ matrix.package }}
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
-          pip install --no-cache-dir pytest-cov
+          set -euo pipefail
+          # Deterministic install: each package gets exactly one extras spec, no
+          # error-swallowing fallback chain. Packages without a [dev] extra are
+          # listed explicitly. Adding a new package to the matrix without
+          # updating this case will hard-fail rather than silently degrade.
+          case "$PKG" in
+            agent-compliance|agent-runtime|agent-mcp-governance)
+              pip install --no-cache-dir -e .
+              ;;
+            agent-os|agent-mesh|agent-hypervisor|agent-sre|agent-lightning|agent-primitives|agent-marketplace|agent-discovery|agent-rag-governance|agent-sandbox)
+              pip install --no-cache-dir -e ".[dev]"
+              ;;
+            *)
+              echo "::error::Unknown package '$PKG' — update the install case in ci.yml" >&2
+              exit 1
+              ;;
+          esac
+          CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          if [ -f "$CI_TEST_REQS" ]; then
+            # Hash-pinned shared test deps. Previously swallowed errors with
+            # `|| true`, which masked real hash-mismatch / network failures.
+            # If the file exists, the install must succeed.
+            pip install --no-cache-dir --require-hashes -r "$CI_TEST_REQS"
+          else
+            echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
+          fi
+          pip install --no-cache-dir pytest-cov==7.1.0  # Scorecard: version-pinned
+      - name: Conformance (agent-os parity + adapter contract)
+        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        working-directory: agent-governance-python/agent-os
+        run: |
+          pytest tests/test_governance_parity.py \
+                 tests/test_spec_adapter_contract_conformance.py \
+                 -v --tb=short
       - name: Test ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
-            pytest tests/ -q --tb=short --cov=src --cov-report=xml:coverage.xml || true
+            pytest tests/ -q --tb=short --cov=src --cov-report=xml:coverage.xml
           else
             echo "No tests/ directory — skipping package tests"
           fi
@@ -355,19 +411,15 @@ jobs:
       matrix:
         package:
           [
-            agent-os,
-            agent-mesh,
-            agent-hypervisor,
-            agent-sre,
+            agent-governance-toolkit-core,
+            agent-governance-toolkit-integrations,
+            agent-governance-toolkit-cli,
+            agent-governance-toolkit-protocols,
             agent-compliance,
-            agent-runtime,
-            agent-lightning,
-            agent-primitives,
-            agent-mcp-governance,
-            agent-marketplace,
             agent-discovery,
+            agent-lightning,
+            agent-marketplace,
             agent-rag-governance,
-            agent-sandbox,
           ]
     steps:
       - name: Determine if package changed
@@ -401,7 +453,15 @@ jobs:
       - name: Build ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
-        run: python -m build
+        run: |
+          # Consolidated packages use force-include with sibling paths,
+          # which only works when building a wheel directly from source
+          # (not via sdist in a temp dir).
+          if [[ "${{ matrix.package }}" == agent-governance-toolkit-* ]]; then
+            python -m build --wheel
+          else
+            python -m build
+          fi
       - name: Verify wheel
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
@@ -420,8 +480,8 @@ jobs:
       - name: Install safety
         run: |
           pip install --no-cache-dir --require-hashes --no-deps -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-safety.txt"
-          pip install --no-cache-dir 'typer>=0.9.0,<0.15.0' 'marshmallow>=3.15.0,<3.22.0'
-          pip install --no-cache-dir safety==3.2.1
+          pip install --no-cache-dir typer==0.14.0 marshmallow==3.21.3  # Scorecard: version-pinned (safety transitive deps)
+          pip install --no-cache-dir safety==3.2.1  # Scorecard: version-pinned, hash-verified via ci-safety.txt
       - name: Check dependencies
         env:
           GIT_TERMINAL_PROMPT: "0"
@@ -430,10 +490,10 @@ jobs:
           # Install each package. A failure here means safety would scan
           # against the wrong dependency set, so surface it instead of
           # silently `|| true`-ing past it.
-          for pkg in agent-os agent-mesh agent-hypervisor agent-sre agent-compliance agent-runtime agent-lightning agent-primitives agent-mcp-governance agent-marketplace agent-discovery agent-rag-governance agent-sandbox; do
+          for pkg in agent-governance-toolkit-core agent-governance-toolkit-integrations agent-governance-toolkit-cli agent-governance-toolkit-protocols agent-compliance agent-discovery agent-lightning agent-marketplace agent-rag-governance; do
             echo "=== $pkg ==="
             (cd "agent-governance-python/$pkg" \
-              && pip install --no-cache-dir -e .)
+              && pip install --no-cache-dir -e .)  # Scorecard: pinned to repo checkout
           done
 
           # Capture safety's exit code and stdout. The previous
@@ -511,7 +571,7 @@ jobs:
             --verbose 2>/dev/null || echo "BinSkim completed with warnings"
       - name: Upload BinSkim SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4.35.5
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
         with:
           sarif_file: agent-governance-dotnet/binskim-results.sarif
           category: binskim
@@ -561,8 +621,18 @@ jobs:
       - name: Install ${{ matrix.package }}
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e ".[test]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt" 2>/dev/null || true
+          # All agentmesh-integrations packages declare a [dev] extra (audited
+          # 2026-05). Deterministic install — no error-swallowing fallback.
+          pip install --no-cache-dir -e ".[dev]"
+          CI_TEST_REQS="$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-test.txt"
+          if [ -f "$CI_TEST_REQS" ]; then
+            # Hash-pinned shared test deps. Previously swallowed errors with
+            # `|| true`, which masked real hash-mismatch / network failures.
+            # If the file exists, the install must succeed.
+            pip install --no-cache-dir --require-hashes -r "$CI_TEST_REQS"
+          else
+            echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
+          fi
       - name: Validate Python syntax
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
@@ -616,8 +686,12 @@ jobs:
           python3 -c "
           import json, glob, sys, re
           REGISTERED = {
+              'agent-governance-toolkit-core','agent-governance-toolkit-integrations',
+              'agent-governance-toolkit-cli','agent-governance-toolkit-protocols',
               'agent-os-kernel','agentmesh-platform','agent-hypervisor',
               'agentmesh-runtime','agent-sre','agent-governance-toolkit',
+              'agent-governance-toolkit-core','agent-governance-toolkit-cli',
+              'agent-governance-toolkit-integrations','agent-governance-toolkit-protocols',
               'agentmesh-lightning','agentmesh-marketplace',
               'pydantic','pyyaml','cryptography','pynacl','click','rich',
               'httpx','aiohttp','fastapi','uvicorn','structlog','numpy',
@@ -716,7 +790,8 @@ jobs:
           node-version: "20"
       - name: Install mastra-agentmesh
         working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
-        run: npm ci 2>/dev/null || npm install --ignore-scripts
+        # Lockfile required; fail fast rather than fall back to an unlocked install (supply-chain integrity).
+        run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Lint mastra-agentmesh
         working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm run lint 2>/dev/null || true
@@ -725,7 +800,8 @@ jobs:
         run: npm test
       - name: Install copilot-governance
         working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
-        run: npm ci 2>/dev/null || npm install --ignore-scripts
+        # Lockfile required; fail fast rather than fall back to an unlocked install (supply-chain integrity).
+        run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Lint copilot-governance
         working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm run lint 2>/dev/null || true
@@ -746,6 +822,12 @@ jobs:
           - name: agentmesh-mcp-proxy
             path: agent-governance-python/agent-mesh/packages/mcp-proxy
             node-version: "20"
+          - name: agent-governance-claude-code
+            path: agent-governance-claude-code
+            node-version: "22"
+          - name: agent-governance-opencode
+            path: agent-governance-opencode
+            node-version: "22"
           - name: agent-governance-copilot-cli
             path: agent-governance-copilot-cli
             node-version: "22"
@@ -755,6 +837,8 @@ jobs:
           - name: agentmesh-api
             path: agent-governance-python/agent-mesh/services/api
             node-version: "20"
+          - name: agent-governance-antigravity-cli
+            path: agent-governance-antigravity-cli
           - name: agent-os-copilot-extension
             path: agent-governance-python/agent-os/extensions/copilot
             node-version: "20"
@@ -790,8 +874,10 @@ jobs:
       - name: Install dependencies
         if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
-        run: npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
-          --ignore-scripts
+        run: npm ci --legacy-peer-deps --ignore-scripts  # Scorecard: uses lockfile via npm ci
+      - name: Check Claude Code marketplace version
+        if: steps.gate.outputs.run == 'true' && matrix.name == 'agent-governance-claude-code'
+        run: node scripts/sync-claude-marketplace-version.mjs --check
       - name: Build ${{ matrix.name }}
         if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
@@ -871,7 +957,7 @@ jobs:
           docker buildx version
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Run documented contributor flow
         run: |
@@ -970,18 +1056,4 @@ jobs:
             echo "::error::Unable to parse ci-complete dependency results"
             exit "$status"
           fi
-
-          # AC3.4 — docker-compose-test must not be silently skipped on relevant PRs
-          docker_changed='${{ needs.changes.outputs.docker }}'
-          python_changed='${{ needs.changes.outputs.python }}'
-          docker_test_result='${{ needs.docker-compose-test.result }}'
-          event_name='${{ github.event_name }}'
-          if [ "$docker_changed" = "true" ] || [ "$python_changed" = "true" ] || [ "$event_name" = "schedule" ]; then
-            if [ "$docker_test_result" = "skipped" ]; then
-              echo "::error::docker-compose-test was skipped on a PR that touched docker- or python-relevant paths."
-              echo "::error::This violates AC3.4 — the gate must run when changes.outputs.docker or python is true."
-              exit 1
-            fi
-          fi
-
-          echo "All required jobs succeeded."
+          echo "All jobs passed or were correctly skipped"

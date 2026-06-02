@@ -112,7 +112,7 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 | AgentMesh Mastra | `@microsoft/agentmesh-mastra` | `agent-governance-python/agentmesh-integrations/mastra-agentmesh` |
 | AgentMesh API | `@microsoft/agentmesh-api` | `agent-governance-python/agent-mesh/services/api` |
 | AgentMesh MCP Proxy | `@microsoft/agentmesh-mcp-proxy` | `agent-governance-python/agent-mesh/packages/mcp-proxy` |
-| AgentMesh SDK | `@microsoft/agentmesh-sdk` | `agent-governance-typescript` |
+| AgentMesh SDK | `@microsoft/agent-governance-sdk` | `agent-governance-typescript` |
 | Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `agent-governance-python/agent-os/extensions/copilot` |
 | AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `agent-governance-python/agent-os/extensions/mcp-server` |
 
@@ -276,7 +276,6 @@ DockerHub directly. Follow onboarding at [aka.ms/mcr/onboarding](https://aka.ms/
 | IATP | `agent-governance-python/agent-os/modules/iatp/Dockerfile` | Inter-Agent Trust Protocol |
 | IATP Sidecar (Go) | `agent-governance-python/agent-os/modules/iatp/sidecar/go/Dockerfile` | Go trust sidecar |
 | Control Plane | `agent-governance-python/agent-os/modules/control-plane/Dockerfile` | Agent control plane |
-| SCAK | `agent-governance-python/agent-os/modules/scak/Dockerfile` | Safety-Critical Agent Kernel |
 | CaaS | `agent-governance-python/agent-os/modules/caas/Dockerfile` | Compliance as a Service |
 
 ### Image Requirements

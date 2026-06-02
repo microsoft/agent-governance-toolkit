@@ -30,7 +30,13 @@ RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && apt-get install -y --no-install-recommends nodejs \
     && python -m pip install --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # OPA CLI — required by OPAEvaluator local mode (opa eval subprocess)
+    && curl -fsSL -o /usr/local/bin/opa \
+        https://openpolicyagent.org/downloads/v1.4.2/opa_linux_amd64_static \
+    && echo "2c0ccdbbe0b8e2a5d12d9c42d92f1f34f494ffb32d1f3c4ddc36101be637d66f  /usr/local/bin/opa" \
+        | sha256sum -c - \
+    && chmod 755 /usr/local/bin/opa
 
 FROM base AS dev
 
@@ -55,8 +61,21 @@ COPY . /workspace
 #
 # Scorecard: pinned via pyproject.toml. Requirements file dependencies
 # have version constraints.
+# Scorecard: editable installs pinned to repo checkout via pyproject.toml
+#
+# The consolidated v4.0.0 packages (agent-governance-toolkit-{core,cli,
+# integrations,protocols}) are not yet published to PyPI, but the legacy
+# shim packages below declare hard dependencies on them. Pre-install them
+# from local source with --no-deps so the subsequent shim installs resolve
+# without reaching out to PyPI for the unpublished names.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install \
+    python -m pip install --no-deps \
+        -e "agent-governance-python/agent-governance-toolkit-core" \
+        -e "agent-governance-python/agent-governance-toolkit-integrations" \
+        -e "agent-governance-python/agent-governance-toolkit-cli" \
+        -e "agent-governance-python/agent-governance-toolkit-protocols" \
+    && python -m pip install \
+        "cedarpy>=4.0.0,<5.0" \
         -e "agent-governance-python/agent-primitives[dev]" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
         -e "agent-governance-python/agent-os[full,dev]" \

@@ -14,17 +14,20 @@ on:
   pull_request_target:
     types: [opened]
 
+# SECURITY: least-privileged default. Write scopes are granted per-job below.
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
-  models: read
 
 # SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   guide-issue:
     name: Guide First-Time Issue Author
     runs-on: ubuntu-latest
+    # SECURITY: only the issue-comment poster needs issues:write; models:read for inference.
+    permissions:
+      contents: read
+      issues: write
+      models: read
     # Only trigger for first-time contributors (never seen before or first contribution)
     if: >-
       github.event_name == 'issues' &&
@@ -65,6 +68,11 @@ jobs:
   guide-pr:
     name: Guide First-Time PR Author
     runs-on: ubuntu-latest
+    # SECURITY: only the PR-comment poster needs pull-requests:write; models:read for inference.
+    permissions:
+      contents: read
+      pull-requests: write
+      models: read
     # Only trigger for first-time contributors on PRs
     # Uses pull_request_target for security (runs on base branch context)
     if: >-

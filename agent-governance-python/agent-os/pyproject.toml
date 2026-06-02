@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_os_kernel"
-version = "3.7.0"
-description = "Public Preview — A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
+version = "4.0.0"
+description = "Deprecated — use agent-governance-toolkit-core instead. A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
@@ -41,10 +41,12 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# Core dependencies (minimal - just what's needed for kernel)
+# This package is deprecated. All functionality is now in agent-governance-toolkit-core.
+# The dependency below ensures existing installs continue to work.
 dependencies = [
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
     "pydantic>=2.4.0,<3.0",
-    "rich>=13.0.0,<16.0"
+    "rich>=13.0.0,<16.0",
 ]
 
 [project.urls]
@@ -82,6 +84,10 @@ mcp = [
     "mcp>=1.0.0,<2.0",
 ]
 
+langgraph = [
+    "langgraph>=1.0.0,<2.0",
+]
+
 nexus = [
     "agent-os-kernel[iatp]",
     "pyyaml>=6.0.0,<7.0",
@@ -94,7 +100,7 @@ full = [
     "agent-os-kernel[cmvk,iatp,amb,observability,mcp,nexus]",
 ]
 hypervisor = [
-    "agentmesh-runtime>=1.0.0,<2.0",
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
 ]
 
 # Development (includes all optional deps for full testing)
@@ -123,6 +129,7 @@ dev = [
 
 [project.scripts]
 agent-os = "agent_os.cli:main"
+mcp-scan = "agent_os.cli.mcp_scan:main"
 
 [tool.hatch.build.targets.wheel]
 packages = [
@@ -138,9 +145,6 @@ packages = [
     "modules/control-plane/src/agent_control_plane",
     "modules/observability/src/agent_os_observability",
     "modules/nexus",
-    # Layer 4 – Intelligence
-    "modules/scak/agent_kernel",
-    "modules/mute-agent/mute_agent",
     # Servers
     "modules/mcp-kernel-server/src/mcp_kernel_server",
 ]
@@ -158,8 +162,6 @@ packages = [
 "modules/control-plane/src" = ""
 "modules/observability/src" = ""
 "modules/nexus" = "nexus"
-"modules/scak" = ""
-"modules/mute-agent" = ""
 "modules/mcp-kernel-server/src" = ""
 
 [tool.hatch.build.targets.sdist]

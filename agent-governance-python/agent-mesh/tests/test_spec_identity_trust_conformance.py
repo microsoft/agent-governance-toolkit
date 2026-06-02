@@ -765,7 +765,7 @@ class TestTrustHandshake:
         ch = HandshakeChallenge.generate()
         ch.timestamp = datetime.now(timezone.utc) - timedelta(seconds=60)
         with pytest.raises(ValueError, match="expired"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 hs.respond(ch, ["read"], 500)
             )
 

@@ -10,7 +10,7 @@ Run:
     python example.py
 
 To use real Cedarling evaluation, also install the Python bindings:
-    pip install cedarling_python
+    pip install cedarling-python
 
 Or set CEDARLING_URL to point at an existing Cedarling HTTP service.
 """

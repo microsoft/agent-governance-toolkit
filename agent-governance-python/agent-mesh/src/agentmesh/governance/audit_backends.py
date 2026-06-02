@@ -86,7 +86,7 @@ class SignedAuditEntry(BaseModel):
     # ``_canonical_payload()`` so that existing HMAC chains remain verifiable.
     sandbox_id: Optional[str] = None
     environment: Optional[str] = None
-    container_runtime: Optional[str] = None
+    compute_driver: Optional[str] = None
 
     # Integrity fields
     content_hash: str = ""
@@ -128,7 +128,7 @@ class SignedAuditEntry(BaseModel):
             session_id=entry.session_id,
             sandbox_id=entry.sandbox_id,
             environment=entry.environment,
-            container_runtime=entry.container_runtime,
+            compute_driver=entry.compute_driver,
             previous_hash=previous_hash,
         )
 
@@ -147,7 +147,7 @@ class SignedAuditEntry(BaseModel):
         recomputed during verification.
 
         Also excludes execution-context fields (``sandbox_id``,
-        ``environment``, ``container_runtime``) so that they can be added
+        ``environment``, ``compute_driver``) so that they can be added
         to entries without invalidating existing HMAC chains.
         """
         payload: dict[str, Any] = {
@@ -440,7 +440,7 @@ class StdoutAuditSink:
 
     The JSON schema matches :class:`AuditEntry` (Pydantic ``model_dump``
     with ``mode="json"``), which includes the optional execution-context
-    fields (``sandbox_id``, ``environment``, ``container_runtime``) when
+    fields (``sandbox_id``, ``environment``, ``compute_driver``) when
     present.
 
     Args:

@@ -72,11 +72,11 @@ describe('safeBase64Decode', () => {
 
 describe('AgentIdentity.fromJSON with prefixed keys', () => {
   let identity: AgentIdentity;
-  let json: ReturnType<AgentIdentity['toJSON']>;
+  let json: ReturnType<AgentIdentity['exportJSON']>;
 
   beforeEach(() => {
     identity = AgentIdentity.generate('prefix-test', ['read']);
-    json = identity.toJSON();
+    json = identity.exportJSON();
   });
 
   it('round-trips with plain (unprefixed) base64 keys', () => {

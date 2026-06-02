@@ -75,4 +75,48 @@ public class McpCredentialRedactorTests
         Assert.Equal(CredentialKind.SecretAssignment, McpCredentialRedactor.InferKindFromKey("password"));
         Assert.Null(McpCredentialRedactor.InferKindFromKey("username"));
     }
+
+    [Theory]
+    [InlineData("ghp_FAKEFORTESTING000000000000000000")]
+    [InlineData("ghs_FAKEFORTESTING000000000000000000")]
+    [InlineData("gho_FAKEFORTESTING000000000000000000")]
+    [InlineData("ghu_FAKEFORTESTING000000000000000000")]
+    [InlineData("ghr_FAKEFORTESTING000000000000000000")]
+    [InlineData("github_pat_FAKE_FOR_TESTING_0000000000000000000000")]
+    public void Redact_GitHubTokenPrefixes(string token)
+    {
+        var result = _redactor.Redact($"value {token} end");
+
+        Assert.Equal("value [REDACTED_GITHUB_TOKEN] end", result.Sanitized);
+        Assert.Contains(CredentialKind.GitHubToken, result.Detected);
+    }
+
+    [Theory]
+    [InlineData("RSA PRIVATE KEY")]
+    [InlineData("EC PRIVATE KEY")]
+    [InlineData("DSA PRIVATE KEY")]
+    [InlineData("OPENSSH PRIVATE KEY")]
+    [InlineData("ENCRYPTED PRIVATE KEY")]
+    [InlineData("PRIVATE KEY")]
+    public void Redact_PemPrivateKeyVariants(string label)
+    {
+        var pem = $"-----BEGIN {label}-----\nZmFrZSBmb3IgdGVzdGluZw==\n-----END {label}-----";
+
+        var result = _redactor.Redact($"before\n{pem}\nafter");
+
+        Assert.Equal("before\n[REDACTED_PEM_PRIVATE_KEY]\nafter", result.Sanitized);
+        Assert.Contains(CredentialKind.PemPrivateKey, result.Detected);
+    }
+
+    [Theory]
+    [InlineData("-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----")]
+    [InlineData("-----BEGIN RSA PRIVATE KEY-----\nZmFrZQ==\n-----END EC PRIVATE KEY-----")]
+    [InlineData("github_pat_short")]
+    public void Redact_DoesNotRedactMalformedCredentialLookalikes(string text)
+    {
+        var result = _redactor.Redact(text);
+
+        Assert.Equal(text, result.Sanitized);
+        Assert.Empty(result.Detected);
+    }
 }

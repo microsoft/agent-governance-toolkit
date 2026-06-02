@@ -26,6 +26,11 @@ export interface AuditEvent {
 }
 
 export class AuditLogger {
+  private static readonly credentialPatterns = [
+    /(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])/g,
+    /-----BEGIN (?<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----(?:\r?\n[!-~ \t]*)*?\r?\n-----END \k<label>-----/g,
+  ];
+
   private options: AuditLoggerOptions;
   private stream: WriteStream | null = null;
   private previousHash: string = '0'.repeat(64);
@@ -72,6 +77,7 @@ export class AuditLogger {
         id,
         timestamp: time,
         ...event,
+        arguments: this.sanitizeArguments(event.arguments),
         _hash: entryHash,
       };
     }
@@ -114,14 +120,35 @@ export class AuditLogger {
     for (const [key, value] of Object.entries(args)) {
       if (sensitiveKeys.some(s => key.toLowerCase().includes(s))) {
         sanitized[key] = '[REDACTED]';
-      } else if (typeof value === 'string' && value.length > 500) {
-        sanitized[key] = value.substring(0, 500) + '...[truncated]';
       } else {
-        sanitized[key] = value;
+        sanitized[key] = this.sanitizeValue(value);
       }
     }
 
     return sanitized;
+  }
+
+  private sanitizeValue(value: any): any {
+    if (typeof value === 'string') {
+      let sanitized = value;
+      for (const pattern of AuditLogger.credentialPatterns) {
+        sanitized = sanitized.replace(pattern, '[REDACTED]');
+      }
+      if (sanitized.length > 500) {
+        return sanitized.substring(0, 500) + '...[truncated]';
+      }
+      return sanitized;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(item => this.sanitizeValue(item));
+    }
+
+    if (value && typeof value === 'object') {
+      return this.sanitizeArguments(value);
+    }
+
+    return value;
   }
 
   close(): void {

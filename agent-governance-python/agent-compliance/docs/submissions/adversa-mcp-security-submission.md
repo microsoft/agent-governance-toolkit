@@ -90,15 +90,15 @@ Identifies malicious schema patterns:
 # Install
 pip install agent-os-kernel
 
-# Scan an MCP configuration file
+# Inspect a trusted local MCP configuration by launching configured stdio commands
 mcp-scan scan mcp-config.json
 
-# Scan with verbose output
-mcp-scan scan mcp-config.json --verbose
+# Scan untrusted or PR-supplied configs without executing configured commands
+mcp-scan scan mcp-config.json --static-only
 
-# Output formats
-mcp-scan scan mcp-config.json --format json
-mcp-scan scan mcp-config.json --format table
+# Output formats for static CI/pre-merge gates
+mcp-scan scan mcp-config.json --format json --static-only
+mcp-scan scan mcp-config.json --format table --static-only
 ```
 
 ### CVE Coverage

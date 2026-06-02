@@ -119,7 +119,7 @@ function buildOwaspResponse(): string {
  *
  * @example
  * ```ts
- * import { handleAgentRequest } from '@agentmesh/copilot-governance';
+ * import { handleAgentRequest } from '@microsoft/agentmesh-copilot-governance';
  *
  * for await (const token of handleAgentRequest(parsedBody)) {
  *   res.write(`data: ${JSON.stringify(token)}\n\n`);

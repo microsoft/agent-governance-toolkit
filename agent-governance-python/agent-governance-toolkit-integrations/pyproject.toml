@@ -1,0 +1,111 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-governance-toolkit-integrations"
+version = "4.0.0"
+description = "Framework adapters for the Agent Governance Toolkit (LangChain, CrewAI, OpenAI Agents, and more)"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+maintainers = [
+    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
+]
+keywords = [
+    "ai-agents", "governance", "langchain", "crewai", "openai-agents",
+    "llamaindex", "haystack", "pydantic-ai", "multi-agent", "trust",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+# No mandatory framework deps: each adapter is an optional extra.
+dependencies = [
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
+]
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=1.2.11,<2.0"]
+crewai = ["crewai>=0.100.0,<1.0"]
+openai-agents = ["openai-agents>=0.0.3,<1.0"]
+langgraph = ["langgraph>=0.2.0,<1.0"]
+llamaindex = ["llama-index-core>=0.10,<1.0"]
+haystack = ["haystack-ai>=2.0,<3.0"]
+pydantic-ai = ["pydantic-ai>=0.0.10,<1.0"]
+flowise = []
+langflow = []
+adk = ["google-adk>=0.1.0,<1.0"]
+avp = []
+cedarling = ["cedarpy>=4.0.0,<5.0"]
+nostr-wot = []
+structural-authz = []
+openshell = ["pyyaml>=6.0,<7.0"]
+audit-export = []
+
+dev = [
+    "pytest>=8.0,<10.0",
+    "pytest-asyncio>=0.23,<2.0",
+    "ruff>=0.4.0,<1.0",
+]
+
+[project.scripts]
+openshell-agentmesh = "openshell_agentmesh.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/main/docs"
+Repository = "https://github.com/microsoft/agent-governance-toolkit"
+"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
+
+# ============================================================================
+# Hatchling: pull adapter sources from agentmesh-integrations/
+# ============================================================================
+[tool.hatch.build.targets.wheel]
+packages = ["_placeholder"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# Adapters with top-level module dirs
+"../agentmesh-integrations/langchain-agentmesh/langchain_agentmesh" = "langchain_agentmesh"
+"../agentmesh-integrations/crewai-agentmesh/crewai_agentmesh" = "crewai_agentmesh"
+"../agentmesh-integrations/openai-agents-agentmesh/openai_agents_agentmesh" = "openai_agents_agentmesh"
+"../agentmesh-integrations/langgraph-trust/langgraph_trust" = "langgraph_trust"
+"../agentmesh-integrations/llamaindex-agentmesh/llama_index" = "llama_index"
+"../agentmesh-integrations/cedarling-agentmesh/cedarling_agentmesh" = "cedarling_agentmesh"
+"../agentmesh-integrations/agentmesh-avp/agentmesh_avp" = "agentmesh_avp"
+"../agentmesh-integrations/nostr-wot/agentmesh_nostr_wot" = "agentmesh_nostr_wot"
+"../agentmesh-integrations/structural-authz-agentmesh/structural_authz_agentmesh" = "structural_authz_agentmesh"
+"../agentmesh-integrations/openshell-skill/openshell_agentmesh" = "openshell_agentmesh"
+"../agentmesh-integrations/audit-accountability-export/audit_accountability_export" = "audit_accountability_export"
+"../agentmesh-integrations/template-agentmesh/template_agentmesh" = "template_agentmesh"
+# Adapters with src/ layout
+"../agentmesh-integrations/haystack-agentmesh/src/haystack_agentmesh" = "haystack_agentmesh"
+"../agentmesh-integrations/flowise-agentmesh/src/flowise_agentmesh" = "flowise_agentmesh"
+"../agentmesh-integrations/langflow-agentmesh/src/langflow_agentmesh" = "langflow_agentmesh"
+"../agentmesh-integrations/adk-agentmesh/src/adk_agentmesh" = "adk_agentmesh"
+"../agentmesh-integrations/pydantic-ai-governance/src/pydantic_ai_governance" = "pydantic_ai_governance"
+"../agentmesh-integrations/openai-agents-trust/src/openai_agents_trust" = "openai_agents_trust"
+
+[tool.hatch.build.targets.sdist]
+include = ["README.md", "LICENSE"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]

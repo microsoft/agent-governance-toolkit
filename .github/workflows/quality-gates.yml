@@ -47,6 +47,19 @@ jobs:
           chmod +x scripts/ci/security-audit-required.sh
           scripts/ci/security-audit-required.sh "origin/$BASE_REF"
 
+  no-unauthed-registration:
+    name: No Unauthenticated Registration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          chmod +x scripts/ci/no-unauthed-registration.sh
+          scripts/ci/no-unauthed-registration.sh "origin/$BASE_REF"
+
   vendored-patch-audit:
     name: Dependency Audit Trail
     runs-on: ubuntu-latest

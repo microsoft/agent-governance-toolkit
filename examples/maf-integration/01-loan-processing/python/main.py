@@ -8,38 +8,42 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Annotated, Any
 
-# Make the in-repo AGT packages importable when running from this checkout.
+# Make the in-repo AGT packages and shared helpers importable from this checkout.
 REPO_ROOT = Path(__file__).resolve().parents[4]
 for relative_path in (
-    "packages\\agent-os\\src",
-    "packages\\agent-mesh\\src",
-    "packages\\agent-sre\\src",
+    "agent-governance-python\\agent-os\\src",
+    "agent-governance-python\\agent-mesh\\src",
+    "agent-governance-python\\agent-sre\\src",
+    "examples\\maf-integration\\shared-python",
 ):
     candidate = REPO_ROOT / relative_path
     if candidate.exists():
         sys.path.insert(0, str(candidate))
 
-from agent_framework import Agent, Message, tool
+from agent_framework import Agent, AgentResponse, tool
 from agent_framework.openai import OpenAIChatClient
 from agent_os.integrations.maf_adapter import (
     AuditTrailMiddleware,
     CapabilityGuardMiddleware,
     GovernancePolicyMiddleware,
-    MiddlewareTermination,
     RogueDetectionMiddleware,
 )
 from agent_os.policies import PolicyEvaluator
+from maf_scripted_runtime import (
+    ScriptedResponseClient,
+    function_call_response,
+    text_response,
+)
 
 try:
     from agent_sre.anomaly import RiskLevel, RogueAgentDetector, RogueDetectorConfig
 except ImportError:
     from agent_sre.anomaly import AnomalyDetector as RogueAgentDetector  # type: ignore[assignment]
+
     RiskLevel = None  # type: ignore[assignment]
     RogueDetectorConfig = None  # type: ignore[assignment]
 
@@ -152,6 +156,18 @@ def approve_small_loan_impl(amount: int) -> str:
     return f"Pre-qualified loan package created for ${amount:,} pending banker confirmation."
 
 
+def transfer_funds_impl(amount: int, destination: str) -> str:
+    return f"Transferred ${amount:,} to {destination}."
+
+
+def access_tax_records_impl(customer_id: str) -> str:
+    return f"Retrieved tax records for customer {customer_id}."
+
+
+def invoke_internal_api_impl(operation: str) -> str:
+    return f"Invoked internal banking API operation '{operation}'."
+
+
 @tool(approval_mode="never_require")
 def check_credit_score(
     customer_id: Annotated[str, Field(description="The bank customer identifier.")],
@@ -180,6 +196,39 @@ def approve_small_loan(
     return approve_small_loan_impl(amount)
 
 
+@tool(approval_mode="never_require")
+def transfer_funds(
+    amount: Annotated[int, Field(description="Amount to transfer in USD.")],
+    destination: Annotated[str, Field(description="Destination account identifier.")],
+) -> str:
+    return transfer_funds_impl(amount, destination)
+
+
+@tool(approval_mode="never_require")
+def access_tax_records(
+    customer_id: Annotated[str, Field(description="The bank customer identifier.")],
+) -> str:
+    return access_tax_records_impl(customer_id)
+
+
+@tool(approval_mode="never_require")
+def invoke_internal_api(
+    operation: Annotated[str, Field(description="The privileged internal API operation to run.")],
+) -> str:
+    return invoke_internal_api_impl(operation)
+
+
+SCENARIO_TOOLS = [
+    check_credit_score,
+    get_loan_rates,
+    summarize_account,
+    approve_small_loan,
+    transfer_funds,
+    access_tax_records,
+    invoke_internal_api,
+]
+
+
 @dataclass
 class ScenarioRuntime:
     audit_log: AuditLog
@@ -202,6 +251,7 @@ def build_runtime() -> ScenarioRuntime:
             frequency_z_threshold=1.2,
             entropy_low_threshold=0.8,
             entropy_min_actions=5,
+            capability_violation_weight=2.0,
             quarantine_risk_level=RiskLevel.MEDIUM,
         )
     )
@@ -226,12 +276,8 @@ def build_runtime() -> ScenarioRuntime:
     )
 
 
-def create_agent(runtime: ScenarioRuntime) -> tuple[Agent[Any] | None, str]:
-    client, backend = configure_client()
-    if client is None:
-        return None, backend
-
-    agent = Agent(
+def build_agent(runtime: ScenarioRuntime, client: Any) -> Agent[Any]:
+    return Agent(
         client=client,
         name=AGENT_NAME,
         instructions=(
@@ -240,128 +286,129 @@ def create_agent(runtime: ScenarioRuntime) -> tuple[Agent[Any] | None, str]:
             "prequalification. Never bypass governance rules around PII, tax data, "
             "internal transfers, or high-value approvals."
         ),
-        tools=[
-            check_credit_score,
-            get_loan_rates,
-            summarize_account,
-            approve_small_loan,
-        ],
+        tools=SCENARIO_TOOLS,
         middleware=[
             runtime.audit_middleware,
             runtime.policy_middleware,
-            runtime.capability_middleware,
             runtime.rogue_middleware,
+            runtime.capability_middleware,
         ],
     )
-    return agent, backend
 
 
-def make_agent_context(text: str) -> Any:
-    return SimpleNamespace(
-        agent=SimpleNamespace(name=AGENT_ID),
-        messages=[Message(role="user", contents=[text])],
-        metadata={},
-        result=None,
-        stream=False,
+def create_live_agent(runtime: ScenarioRuntime) -> tuple[Agent[Any] | None, str]:
+    client, backend = configure_client()
+    if client is None:
+        return None, backend
+    return build_agent(runtime, client), backend
+
+
+def create_scripted_agent(runtime: ScenarioRuntime, responses: list[AgentResponse]) -> Agent[Any]:
+    return build_agent(runtime, ScriptedResponseClient(responses))
+
+
+def latest_audit_event(runtime: ScenarioRuntime, event_type: str) -> Any | None:
+    for entry in runtime.audit_log.query(limit=1000):
+        if entry.event_type == event_type:
+            return entry
+    return None
+
+
+def extract_function_result(response: AgentResponse | None) -> str:
+    if response is None:
+        return "No response returned."
+    for message in reversed(response.messages):
+        for content in message.contents:
+            if getattr(content, "type", None) == "function_result":
+                return str(getattr(content, "result", ""))
+    return response.text or str(response)
+
+
+async def run_scripted_prompt(
+    runtime: ScenarioRuntime,
+    prompt: str,
+    responses: list[AgentResponse],
+) -> AgentResponse | None:
+    return await create_scripted_agent(runtime, responses).run(prompt)
+
+
+async def run_policy_check(runtime: ScenarioRuntime, text: str) -> tuple[bool, str]:
+    response = await run_scripted_prompt(
+        runtime,
+        text,
+        [text_response("Loan inquiry cleared for governed execution.")],
     )
-
-
-def make_function_context(tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
-    return SimpleNamespace(
-        function=SimpleNamespace(name=tool_name),
-        arguments=arguments or {},
-        metadata={},
-        result=None,
-    )
-
-
-async def run_policy_pipeline(runtime: ScenarioRuntime, text: str) -> tuple[bool, str]:
-    context = make_agent_context(text)
-
-    async def final_call() -> None:
-        context.result = "Message cleared for MAF agent execution."
-
-    async def policy_call() -> None:
-        await runtime.policy_middleware.process(context, final_call)
-
-    try:
-        await runtime.audit_middleware.process(context, policy_call)
-        decision = context.metadata.get("governance_decision")
-        return True, f"{decision.action} via {decision.matched_rule}"
-    except MiddlewareTermination as exc:
-        return False, str(exc)
+    violation = latest_audit_event(runtime, "policy_violation")
+    if violation is not None:
+        return False, response.text if response is not None else "Blocked by policy."
+    evaluation = latest_audit_event(runtime, "policy_evaluation")
+    matched_rule = evaluation.data.get("matched_rule") if evaluation is not None else "unknown"
+    return True, f"allow via {matched_rule}"
 
 
 async def run_tool_check(
     runtime: ScenarioRuntime,
     tool_name: str,
-    callback: Any,
-    arguments: dict[str, Any] | None = None,
+    arguments: dict[str, Any],
+    final_text: str,
 ) -> tuple[bool, str]:
-    context = make_function_context(tool_name, arguments)
-
-    async def final_call() -> None:
-        context.result = callback()
-
-    try:
-        await runtime.capability_middleware.process(context, final_call)
-        return True, str(context.result)
-    except MiddlewareTermination as exc:
-        return False, str(exc)
-
-
-def simulate_rogue_activity(runtime: ScenarioRuntime) -> tuple[bool, str]:
-    base = time.time() - 10
-    baseline = [
-        ("check_credit_score", base + 0.0),
-        ("check_credit_score", base + 1.2),
-        ("get_loan_rates", base + 2.4),
-        ("summarize_account", base + 2.7),
-    ]
-    for tool_name, timestamp in baseline:
-        runtime.detector.record_action(
-            agent_id=AGENT_ID,
-            action=tool_name,
-            tool_name=tool_name,
-            timestamp=timestamp,
-        )
-        runtime.detector.assess(AGENT_ID, timestamp=timestamp)
-
-    assessment = None
-    for offset in range(5):
-        timestamp = base + 3.6 + (offset * 0.1)
-        runtime.detector.record_action(
-            agent_id=AGENT_ID,
-            action="transfer_funds",
-            tool_name="transfer_funds",
-            timestamp=timestamp,
-        )
-        assessment = runtime.detector.assess(AGENT_ID, timestamp=timestamp)
-
-    assert assessment is not None
-    if assessment.quarantine_recommended:
-        runtime.audit_log.log(
-            event_type="rogue_detection",
-            agent_did=AGENT_ID,
-            action="quarantine",
-            resource="transfer_funds",
-            data=assessment.to_dict(),
-            outcome="denied",
-        )
-    return assessment.quarantine_recommended, (
-        f"risk={assessment.risk_level.value}, score={assessment.composite_score:.2f}, "
-        f"capability_score={assessment.capability_score:.2f}"
+    response = await run_scripted_prompt(
+        runtime,
+        "Continue the governed banking workflow with the next scripted tool call.",
+        [
+            function_call_response(tool_name, arguments),
+            text_response(final_text),
+        ],
     )
+    detail = extract_function_result(response)
+    return (not detail.startswith("⛔")), detail
+
+
+async def run_rogue_sequence(runtime: ScenarioRuntime) -> tuple[bool, str]:
+    baseline_calls = [
+        ("check_credit_score", {"customer_id": "C-104"}),
+        ("check_credit_score", {"customer_id": "C-204"}),
+        ("get_loan_rates", {"product": "30-year fixed mortgage"}),
+        ("summarize_account", {"customer_id": "C-104"}),
+    ]
+    for tool_name, arguments in baseline_calls:
+        await run_scripted_prompt(
+            runtime,
+            "Continue the governed banking walkthrough with the next scripted tool call.",
+            [
+                function_call_response(tool_name, arguments),
+                text_response(f"Completed {tool_name}."),
+            ],
+        )
+
+    last_detail = "No rogue activity detected."
+    for attempt in range(1, 13):
+        response = await run_scripted_prompt(
+            runtime,
+            "Continue the governed banking walkthrough with the next scripted tool call.",
+            [function_call_response("transfer_funds", {"amount": 250000, "destination": "acct-9981"})],
+        )
+        last_detail = extract_function_result(response)
+        if "quarantined" in last_detail.lower():
+            event = latest_audit_event(runtime, "rogue_detection")
+            if event is not None:
+                data = event.data
+                return True, (
+                    f"risk={data['risk_level']}, score={data['composite_score']:.2f}, "
+                    f"capability_score={data['capability_score']:.2f}"
+                )
+
+    return False, last_detail
 
 
 async def preview_live_agent() -> None:
     runtime = build_runtime()
-    agent, backend = create_agent(runtime)
+    agent, backend = create_live_agent(runtime)
     section("Optional live MAF agent run")
     if agent is None:
         show_result(
             "Skipped",
-            f"{backend}. The deterministic walkthrough below still exercises the real AGT middleware objects.",
+            f"{backend}. The default walkthrough below still runs through a scripted real MAF agent pipeline.",
         )
         return
 
@@ -381,47 +428,31 @@ async def main() -> None:
     runtime = build_runtime()
 
     section("Act 1: Policy enforcement")
-    allowed, detail = await run_policy_pipeline(runtime, SAFE_PROMPT)
+    allowed, detail = await run_policy_check(runtime, SAFE_PROMPT)
     show_result("Allowed request", detail if allowed else f"unexpected block: {detail}")
     for blocked_prompt in BLOCKED_POLICY_PROMPTS:
-        blocked, reason = await run_policy_pipeline(runtime, blocked_prompt)
+        blocked, reason = await run_policy_check(runtime, blocked_prompt)
         label = "Blocked request" if not blocked else "Unexpected allow"
         show_result(label, f"{blocked_prompt} -> {reason}")
 
     section("Act 2: Capability sandboxing")
     tool_checks = [
-        (
-            "check_credit_score",
-            lambda: check_credit_score_impl("C-104"),
-            {"customer_id": "C-104"},
-        ),
-        (
-            "get_loan_rates",
-            lambda: get_loan_rates_impl("30-year fixed mortgage"),
-            {"product": "30-year fixed mortgage"},
-        ),
-        (
-            "transfer_funds",
-            lambda: "Should never execute",
-            {"amount": 250000, "destination": "acct-9981"},
-        ),
-        (
-            "access_tax_records",
-            lambda: "Should never execute",
-            {"customer_id": "C-104"},
-        ),
+        ("check_credit_score", {"customer_id": "C-104"}, "Credit check completed."),
+        ("get_loan_rates", {"product": "30-year fixed mortgage"}, "Rate lookup completed."),
+        ("transfer_funds", {"amount": 250000, "destination": "acct-9981"}, "Should never execute"),
+        ("access_tax_records", {"customer_id": "C-104"}, "Should never execute"),
     ]
-    for tool_name, callback, arguments in tool_checks:
-        allowed, detail = await run_tool_check(runtime, tool_name, callback, arguments)
+    for tool_name, arguments, final_text in tool_checks:
+        allowed, detail = await run_tool_check(runtime, tool_name, arguments, final_text)
         status = "Allowed tool" if allowed else "Blocked tool"
         show_result(status, f"{tool_name} -> {detail}")
 
     section("Act 3: Rogue agent detection")
-    quarantined, detail = simulate_rogue_activity(runtime)
+    quarantined, detail = await run_rogue_sequence(runtime)
     if quarantined:
         show_result(
             "Quarantine",
-            f"Repeated transfer_funds telemetry triggered rogue-agent quarantine ({detail}).",
+            f"Repeated transfer_funds attempts triggered rogue-agent quarantine ({detail}).",
         )
     else:
         show_result("Detector", f"No quarantine triggered ({detail}).")

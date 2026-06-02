@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#EA580C;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#C2410C;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="12" fill="url(#g)"/>
+  <!-- Shield shape -->
+  <path d="M32 16 L46 23 L46 35 C46 43 40 49 32 52 C24 49 18 43 18 35 L18 23 Z"
+        fill="none" stroke="white" stroke-width="2.5"/>
+  <!-- Concentric rings inside shield -->
+  <circle cx="32" cy="34" r="10" fill="none" stroke="white" stroke-width="1.5" opacity="0.4"/>
+  <circle cx="32" cy="34" r="6" fill="none" stroke="white" stroke-width="1.5" opacity="0.6"/>
+  <circle cx="32" cy="34" r="2.5" fill="white"/>
+</svg>

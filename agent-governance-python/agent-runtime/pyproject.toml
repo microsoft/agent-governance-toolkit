@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_runtime"
-version = "3.7.0"
-description = "Public Preview — AgentMesh Runtime: Execution supervisor for multi-agent sessions with privilege rings, saga orchestration, and audit trails"
+version = "4.0.0"
+description = "Deprecated — use agent-governance-toolkit-core instead. AgentMesh Runtime: Execution supervisor for multi-agent sessions"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
@@ -34,7 +34,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "agent-hypervisor>=2.1.0,<4.0",
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
     "jsonschema>=4.0.0,<5.0",
 ]
 

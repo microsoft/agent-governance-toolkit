@@ -1,8 +1,8 @@
-# @agentmesh/copilot-governance
+# @microsoft/agentmesh-copilot-governance
 
 GitHub Copilot Extension that reviews agent code for governance gaps and validates policy YAML files — bringing the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit) directly into your IDE.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../../LICENSE)
 [![Part of Agent Governance Toolkit](https://img.shields.io/badge/agent--governance--toolkit-microsoft-blue)](https://github.com/microsoft/agent-governance-toolkit)
 
 ---
@@ -23,19 +23,24 @@ GitHub Copilot Extension that reviews agent code for governance gaps and validat
 ### As a library
 
 ```bash
-npm install @agentmesh/copilot-governance
+npm install @microsoft/agentmesh-copilot-governance
 ```
 
 ### As a Copilot Extension server
 
 ```bash
-npm install @agentmesh/copilot-governance
-npx copilot-governance          # starts on port 3000
+npm install @microsoft/agentmesh-copilot-governance
+npx copilot-governance          # starts on 127.0.0.1:3000 for local/dev use
 PORT=8080 npx copilot-governance
+COPILOT_GOVERNANCE_HOST=0.0.0.0 PORT=8080 npx copilot-governance
 ```
 
 Deploy this server as a GitHub App with the agent endpoint pointing to
 `https://your-host/agent`. See [GitHub Copilot Extensions docs](https://docs.github.com/en/copilot/building-copilot-extensions) for setup.
+
+For safer local development, the server binds to `127.0.0.1` by default. When you
+need external access from a container, VM, Codespace, or reverse proxy, set
+`COPILOT_GOVERNANCE_HOST=0.0.0.0` or pass `host: "0.0.0.0"` to `createServer(...)`.
 
 ---
 
@@ -118,7 +123,7 @@ policy:
 ## Programmatic Usage
 
 ```typescript
-import { reviewCode, validatePolicy, handleAgentRequest } from "@agentmesh/copilot-governance";
+import { reviewCode, validatePolicy, handleAgentRequest } from "@microsoft/agentmesh-copilot-governance";
 
 // Review agent source code
 const review = reviewCode(myAgentSource);
@@ -173,7 +178,7 @@ GitHub Copilot Chat
        │  POST /agent
        ▼
 ┌──────────────────────────────┐
-│  @agentmesh/copilot-governance│
+│  @microsoft/agentmesh-copilot-governance│
 │                              │
 │  agent.ts ─────────────────► │  detectCommand()
 │                ┌─────────────► │  reviewCode()       → reviewer.ts

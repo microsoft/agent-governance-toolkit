@@ -1,0 +1,38 @@
+# Wire-protocol-aware policy rules (Go SDK)
+#
+# Mirrors examples/policy-templates/wire-protocol-rules.yaml from the Python
+# SDK. Load with engine.LoadFromYAML("wire-protocol-rules.yaml").
+rules:
+  # ── SQL ────────────────────────────────────────────────────────────────
+  - action: db.exec
+    effect: deny
+    conditions:
+      sql.verb:
+        $in: [DROP, TRUNCATE, DELETE]
+
+  - action: db.exec
+    effect: deny
+    conditions:
+      sql.verb:
+        $in: [ALTER, GRANT, REVOKE]
+
+  - action: db.exec
+    effect: deny
+    conditions:
+      sql.target: protected
+
+  # ── Kubernetes ─────────────────────────────────────────────────────────
+  - action: k8s.request
+    effect: deny
+    conditions:
+      k8s.namespace: production
+
+  - action: k8s.request
+    effect: deny
+    conditions:
+      k8s.subresource: exec
+
+  - action: k8s.request
+    effect: deny
+    conditions:
+      k8s.verb: deletecollection

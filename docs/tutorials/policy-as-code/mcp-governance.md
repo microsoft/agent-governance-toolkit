@@ -199,7 +199,7 @@ remains useful when you want an explicit global CLI limit.
 
 The detailed evidence lives in
 [`docs/compliance/owasp-llm-top10-mapping.md`](../../compliance/owasp-llm-top10-mapping.md)
-and [`docs/OWASP-COMPLIANCE.md`](../../OWASP-COMPLIANCE.md). For MCP governance,
+and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../../docs/compliance/owasp-agentic-top10-architecture.md). For MCP governance,
 the practical alignment looks like this:
 
 | OWASP risk | How proxy policies help |
@@ -211,7 +211,7 @@ the practical alignment looks like this:
 | **ASI-05 Unexpected Code Execution** | Deny `run_shell`, `execute_command`, `eval`, and `spawn_process` |
 | **ASI-06 Memory & Context Poisoning** | Secret-path blocking and argument filtering prevent poisoned context from turning into exfiltration |
 | **ASI-07 Insecure Inter-Agent Communication** | Trust-gated MCP endpoints add authentication and trust checks before agents collaborate |
-| **ASI-08 Cascading Failures** | CLI rate limits and deny rules reduce runaway call chains |
+| **ASI-08 Cascading Agent Failures** | CLI rate limits and deny rules reduce runaway call chains |
 | **ASI-09 Human-Agent Trust Exploitation** | Audit visibility helps, and this guide naturally leads into approval workflows for sensitive actions |
 | **ASI-10 Rogue Agents** | Catch-all deny rules and rate caps confine agents that drift out of scope |
 
@@ -264,7 +264,7 @@ Use `mcp-trust-server` alongside that when you want trust operations over MCP.
 
 1. Read [`enterprise.yaml`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/policies/enterprise.yaml).
 2. Review [`docs/compliance/owasp-llm-top10-mapping.md`](../../compliance/owasp-llm-top10-mapping.md)
-   and [`docs/OWASP-COMPLIANCE.md`](../../OWASP-COMPLIANCE.md).
+   and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../../docs/compliance/owasp-agentic-top10-architecture.md).
 3. Start with `standard`, then move to `strict` or custom rules.
 
 ---

@@ -35,7 +35,7 @@ The project lead sets overall technical direction, resolves disputes when consen
 
 See [MAINTAINERS.md](MAINTAINERS.md) for the full list of current maintainers, their areas of ownership, and affiliation details.
 
-We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Code ownership areas are defined in [CODEOWNERS](CODEOWNERS).
+We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Code ownership areas are defined in [CODEOWNERS](.github/CODEOWNERS).
 
 ## Decision-Making
 
@@ -50,6 +50,25 @@ Changes that affect the project's architecture, public API surface, security mod
 ### Disputes
 
 If maintainers cannot reach consensus, the project lead makes the final decision after considering all perspectives. The rationale is documented in the relevant GitHub Issue.
+
+### Succession Planning
+
+Continuity of maintainership is essential for a foundation-hosted project.
+
+- **Project lead vacancy**: If the project lead steps down or becomes inactive for
+  60+ days, the Core Maintainers elect a new project lead by supermajority (2/3)
+  vote within 30 days. Until a new lead is confirmed, the longest-serving Core
+  Maintainer serves as acting lead.
+- **Maintainer vacancy**: If the number of Core Maintainers drops below three,
+  remaining maintainers must nominate and confirm a replacement within 30 days.
+  No architecture or governance decisions may be made until the minimum of three
+  is restored.
+- **Emeritus**: Maintainers inactive for 3+ months are moved to Emeritus status
+  in [MAINTAINERS.md](MAINTAINERS.md) and lose merge privileges. Emeritus
+  maintainers can be reinstated by consensus of current maintainers.
+- **Deadlock**: If a supermajority vote on project lead succession results in a
+  tie after two rounds of voting, the decision is escalated to the governing
+  foundation (if applicable) or resolved by the longest-serving Core Maintainer.
 
 ### Conflict of Interest
 
@@ -71,7 +90,7 @@ the relevant GitHub Issue or PR.
 
 ## Releases
 
-Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is documented in [RELEASE.md](RELEASE.md) and automated via GitHub Actions with trusted publishing and SLSA build provenance.
+Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is documented in [RELEASE.md](docs/RELEASE.md) and automated via GitHub Actions with trusted publishing and SLSA build provenance.
 
 ## Project Charter
 
@@ -84,6 +103,10 @@ All participants are expected to follow the [Microsoft Open Source Code of Condu
 ## Security
 
 Security vulnerabilities should be reported via [SECURITY.md](SECURITY.md), not through public issues.
+
+## Competition Law
+
+All participants must comply with applicable competition (antitrust) laws. See [ANTITRUST.md](ANTITRUST.md) for guidelines on appropriate discussion topics.
 
 ## Changes to Governance
 

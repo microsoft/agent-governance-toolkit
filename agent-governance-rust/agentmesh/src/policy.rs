@@ -4,6 +4,7 @@
 //! YAML-based policy evaluation engine with four-way decisions:
 //! allow, deny, requires-approval, and rate-limit.
 
+use crate::protocol_facets::extract_protocol_facets;
 use crate::types::{
     CandidateDecision, ConflictResolutionStrategy, PolicyDecision, PolicyScope, ResolutionResult,
 };
@@ -218,6 +219,16 @@ impl PolicyEngine {
         action: &str,
         context: Option<&HashMap<String, serde_yaml::Value>>,
     ) -> PolicyDecision {
+        // Enrich a copy of the context with wire-protocol facets (sql.*, k8s.*)
+        // so existing condition matching can reference protocol-level fields
+        // without any rule-schema changes. We never mutate the caller's map.
+        let enriched: Option<HashMap<String, serde_yaml::Value>> = context.map(|c| {
+            let mut owned = c.clone();
+            extract_protocol_facets(&mut owned);
+            owned
+        });
+        let effective_ctx = enriched.as_ref().or(context);
+
         let guard = self.profile.read().unwrap_or_else(|e| e.into_inner());
         let profile = match guard.as_ref() {
             Some(p) => p,
@@ -225,7 +236,7 @@ impl PolicyEngine {
         };
 
         for rule in &profile.policies {
-            if !conditions_match(&rule.conditions, context) {
+            if !conditions_match(&rule.conditions, effective_ctx) {
                 continue;
             }
 
@@ -364,6 +375,17 @@ fn conditions_match(
     conditions: &HashMap<String, serde_yaml::Value>,
     context: Option<&HashMap<String, serde_yaml::Value>>,
 ) -> bool {
+    // Condition matching is **case-sensitive** for both keys and values.
+    // Wire-protocol extractors (`protocol_facets`) emit canonical casing:
+    // SQL verbs are uppercase (`SELECT`, `DROP`, ...) while Kubernetes
+    // verbs are lowercase (`get`, `list`, `watch`, ...). Policy authors
+    // must match that casing exactly — e.g.
+    //     sql.verb: DROP            # matches
+    //     sql.verb: drop            # does NOT match
+    //     k8s.verb: get             # matches
+    //     k8s.verb: GET             # does NOT match
+    // If the rule expresses the expected value as a YAML sequence the same
+    // case-sensitive comparison is applied to each element.
     if conditions.is_empty() {
         return true;
     }
@@ -372,9 +394,22 @@ fn conditions_match(
         None => return false,
     };
     for (key, expected) in conditions {
-        match ctx.get(key) {
-            Some(actual) if actual == expected => {}
-            _ => return false,
+        let actual = match ctx.get(key) {
+            Some(v) => v,
+            None => return false,
+        };
+        // If the rule expresses the expected value as a sequence (YAML list),
+        // treat the comparison as set membership (`actual in expected`).
+        // Otherwise fall back to strict equality. This is the minimal
+        // surface needed for wire-protocol rules like
+        //   sql.verb: [DROP, TRUNCATE, DELETE]
+        // while preserving existing exact-match semantics.
+        if let serde_yaml::Value::Sequence(seq) = expected {
+            if !seq.iter().any(|v| v == actual) {
+                return false;
+            }
+        } else if actual != expected {
+            return false;
         }
     }
     true

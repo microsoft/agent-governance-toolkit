@@ -1,0 +1,24 @@
+# Gitleaks configuration — path-based allowlists for test fixtures and
+# credential redaction code that intentionally contains fake secrets and
+# regex patterns matching secret formats.
+#
+# Prefer path-based rules here over .gitleaksignore fingerprints, which
+# break on squash merges (new commit SHA = new fingerprint needed).
+
+[allowlist]
+  description = "Global allowlist for test fixtures and redaction patterns"
+  paths = [
+    # Credential redaction test fixtures (fake keys used to test redaction)
+    '''agent-governance-python/agent-discovery/tests/test_process_redaction\.py''',
+    '''agent-governance-python/agent-os/tests/test_credential_redactor\.py''',
+    '''agent-governance-dotnet/tests/AgentGovernance\.Tests/McpCredentialRedactorTests\.cs''',
+
+    # Credential redactor source (contains regex patterns that match secret formats)
+    '''agent-governance-rust/agentmesh-mcp/src/mcp/redactor\.rs''',
+
+    # MCP proxy audit tests (fake tokens in test data)
+    '''agent-governance-python/agent-mesh/packages/mcp-proxy/tests/.*\.test\.ts''',
+
+    # Security scanner tests (intentional fake credentials)
+    '''agent-governance-python/agent-compliance/tests/test_security_scanner\.py''',
+  ]

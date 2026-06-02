@@ -241,6 +241,132 @@ class TestProxyPolicyEngine:
             target_command=["test"],
             policy="permissive",
         )
-        
+
         policies = proxy.policy_engine.list_policies()
         assert "permissive-mcp-policy" in policies
+
+
+class TestMCPProxyWireProtocolContext:
+    """Verify _handle_tool_call populates sql.* and k8s.* context for policy evaluation."""
+
+    def _make_proxy(self):
+        return MCPProxy(target_command=["test"], policy="permissive")
+
+    def _make_tool_call_message(self, tool_name: str, arguments: dict) -> dict:
+        return {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": arguments},
+        }
+
+    def test_sql_query_argument_populates_sql_context(self):
+        """Tool call with 'query' argument injects sql.query into policy context."""
+        proxy = self._make_proxy()
+        captured = {}
+
+        original_evaluate = proxy.policy_engine.evaluate
+
+        def capture_evaluate(agent_did, context, stage="pre_tool"):
+            captured["context"] = context
+            return original_evaluate(agent_did, context, stage)
+
+        proxy.policy_engine.evaluate = capture_evaluate
+
+        import asyncio
+        message = self._make_tool_call_message(
+            "db_query", {"query": "SELECT * FROM users"}
+        )
+        asyncio.run(proxy._handle_tool_call(message))
+
+        assert "sql" in captured["context"]
+        assert captured["context"]["sql"]["query"] == "SELECT * FROM users"
+
+    def test_sql_sql_argument_also_works(self):
+        """Tool call with 'sql' argument (alternate key) injects sql.query."""
+        proxy = self._make_proxy()
+        captured = {}
+
+        original_evaluate = proxy.policy_engine.evaluate
+
+        def capture_evaluate(agent_did, context, stage="pre_tool"):
+            captured["context"] = context
+            return original_evaluate(agent_did, context, stage)
+
+        proxy.policy_engine.evaluate = capture_evaluate
+
+        import asyncio
+        message = self._make_tool_call_message(
+            "execute_sql", {"sql": "DROP TABLE users"}
+        )
+        asyncio.run(proxy._handle_tool_call(message))
+
+        assert "sql" in captured["context"]
+        assert captured["context"]["sql"]["query"] == "DROP TABLE users"
+
+    def test_no_sql_argument_no_sql_context(self):
+        """Tool call without query argument does not inject sql context."""
+        proxy = self._make_proxy()
+        captured = {}
+
+        original_evaluate = proxy.policy_engine.evaluate
+
+        def capture_evaluate(agent_did, context, stage="pre_tool"):
+            captured["context"] = context
+            return original_evaluate(agent_did, context, stage)
+
+        proxy.policy_engine.evaluate = capture_evaluate
+
+        import asyncio
+        message = self._make_tool_call_message(
+            "filesystem_read", {"path": "/tmp/test.txt"}
+        )
+        asyncio.run(proxy._handle_tool_call(message))
+
+        assert "sql" not in captured["context"]
+
+    def test_k8s_api_path_populates_k8s_context(self):
+        """Tool call with method + /api/ path injects k8s context."""
+        proxy = self._make_proxy()
+        captured = {}
+
+        original_evaluate = proxy.policy_engine.evaluate
+
+        def capture_evaluate(agent_did, context, stage="pre_tool"):
+            captured["context"] = context
+            return original_evaluate(agent_did, context, stage)
+
+        proxy.policy_engine.evaluate = capture_evaluate
+
+        import asyncio
+        message = self._make_tool_call_message(
+            "kubectl_api",
+            {"method": "DELETE", "path": "/api/v1/namespaces/production/pods/mypod"},
+        )
+        asyncio.run(proxy._handle_tool_call(message))
+
+        assert "k8s" in captured["context"]
+        assert captured["context"]["k8s"]["method"] == "DELETE"
+        assert captured["context"]["k8s"]["path"] == "/api/v1/namespaces/production/pods/mypod"
+
+    def test_non_k8s_path_does_not_inject_k8s_context(self):
+        """Tool call with method + non-K8s path does not inject k8s context."""
+        proxy = self._make_proxy()
+        captured = {}
+
+        original_evaluate = proxy.policy_engine.evaluate
+
+        def capture_evaluate(agent_did, context, stage="pre_tool"):
+            captured["context"] = context
+            return original_evaluate(agent_did, context, stage)
+
+        proxy.policy_engine.evaluate = capture_evaluate
+
+        import asyncio
+        message = self._make_tool_call_message(
+            "http_request",
+            {"method": "GET", "path": "/health"},
+        )
+        asyncio.run(proxy._handle_tool_call(message))
+
+        assert "k8s" not in captured["context"]

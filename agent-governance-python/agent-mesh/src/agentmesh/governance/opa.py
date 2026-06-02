@@ -191,17 +191,25 @@ class OPAEvaluator:
             )
 
     def _evaluate_local(self, query: str, input_data: dict) -> OPADecision:
-        """Evaluate using local `opa eval` CLI or built-in fallback."""
+        """Evaluate using local `opa eval` CLI.
+
+        When the OPA CLI is not available, returns a deny decision with
+        an explicit error instead of silently falling back to a mock
+        evaluator that cannot handle non-trivial Rego.
+        """
         if self._opa_available and (self.rego_path or self.rego_content):
             return self._evaluate_opa_cli(query, input_data)
 
-        # Fallback: parse simple Rego rules ourselves
-        if self.rego_content:
-            return self._evaluate_builtin(query, input_data)
-
-        if self.rego_path and Path(self.rego_path).exists():
-            self.rego_content = Path(self.rego_path).read_text()
-            return self._evaluate_builtin(query, input_data)
+        if self.rego_content or (self.rego_path and Path(self.rego_path).exists()):
+            return OPADecision(
+                allowed=False,
+                query=query,
+                source="fallback",
+                error=(
+                    "OPA CLI not available; install opa for policy evaluation: "
+                    "https://www.openpolicyagent.org/docs/latest/#running-opa"
+                ),
+            )
 
         return OPADecision(
             allowed=False,
@@ -214,7 +222,7 @@ class OPAEvaluator:
         """Run `opa eval` subprocess."""
         input_json = json.dumps(input_data)
 
-        cmd = ["opa", "eval", "--format", "json", "--input", "/dev/stdin", "--data"]
+        cmd = ["opa", "eval", "--format", "json", "--v0-compatible", "--input", "/dev/stdin", "--data"]
 
         if self.rego_path:
             cmd.append(self.rego_path)
@@ -261,15 +269,13 @@ class OPAEvaluator:
                 allowed=False, query=query, source="local", error="opa eval timed out"
             )
 
-    def _evaluate_builtin(self, query: str, input_data: dict) -> OPADecision:
-        """
-        Built-in simple Rego evaluator for common patterns.
+    def _evaluate_mock(self, query: str, input_data: dict) -> OPADecision:
+        """Mock Rego evaluator for testing/dev only.
 
-        Supports:
-        - default allow = false
-        - allow { input.role == "admin" }
-        - deny { input.action == "delete" }
-        - allow { not input.pii }
+        Supports only simple ``==``, ``!=``, and ``not`` conditions.
+        Does NOT support comprehensions, set operations, function calls,
+        builtins, virtual documents, or any non-trivial Rego feature.
+        Use a real OPA server or CLI for production.
         """
         if not self.rego_content:
             return OPADecision(allowed=False, query=query, source="fallback", error="No rego content")

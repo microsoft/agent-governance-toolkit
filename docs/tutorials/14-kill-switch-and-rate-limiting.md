@@ -75,7 +75,7 @@ Governance Toolkit:
 
 - Python ≥ 3.11
 - `pip install agent-hypervisor` (kill switch, agent rate limiter, rings)
-- `pip install agent-mesh` (service-level rate limiter, HTTP middleware)
+- `pip install agentmesh-platform` (service-level rate limiter, HTTP middleware)
 
 ---
 

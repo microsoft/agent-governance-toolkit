@@ -176,8 +176,11 @@ Apply SRE practices to your agent fleet:
 Detect attacks on MCP (Model Context Protocol) tool definitions:
 
 ```bash
-agent-governance mcp-scan --server my-mcp-server
+mcp-scan scan mcp-config.json --server my-mcp-server
 ```
+
+Use `--static-only` for untrusted configs. Live scans may launch stdio commands
+or connect to configured Streamable HTTP/SSE endpoints.
 
 Catches: tool poisoning, typosquatting, hidden instructions, rug-pull attacks.
 
@@ -187,15 +190,15 @@ Catches: tool poisoning, typosquatting, hidden instructions, rug-pull attacks.
 
 | Risk | ID | AGT Control |
 |------|----|-------------|
-| Agent Goal Hijacking | ASI-01 | Policy engine blocks unauthorized goal changes |
-| Excessive Capabilities | ASI-02 | Capability model enforces least-privilege |
+| Agent Goal Hijack | ASI-01 | Policy engine blocks unauthorized goal changes |
+| Tool Misuse & Exploitation | ASI-02 | Capability model enforces least-privilege |
 | Identity & Privilege Abuse | ASI-03 | Zero-trust identity with Ed25519 certs |
-| Uncontrolled Code Execution | ASI-04 | Execution rings + sandboxing |
-| Insecure Output Handling | ASI-05 | Content policies validate all outputs |
-| Memory Poisoning | ASI-06 | Episodic memory with integrity checks |
-| Unsafe Inter-Agent Communication | ASI-07 | Encrypted channels + trust gates |
-| Cascading Failures | ASI-08 | Circuit breakers + SLO enforcement |
-| Human-Agent Trust Deficit | ASI-09 | Full audit trails + flight recorder |
+| Agentic Supply Chain Compromise | ASI-04 | Dependency-confusion scanning + tool verification |
+| Unexpected Code Execution | ASI-05 | 4-tier execution rings + sandboxing |
+| Memory & Context Poisoning | ASI-06 | Episodic memory with integrity checks |
+| Insecure Inter-Agent Communication | ASI-07 | Encrypted channels + trust gates |
+| Cascading Agent Failures | ASI-08 | Circuit breakers + SLO enforcement |
+| Human-Agent Trust Exploitation | ASI-09 | Full audit trails + flight recorder |
 | Rogue Agents | ASI-10 | Kill switch + ring isolation + behavioral anomaly detection |
 
 ---
@@ -218,7 +221,7 @@ Catches: tool poisoning, typosquatting, hidden instructions, rug-pull attacks.
 pip install agent-governance-toolkit[full]
 ```
 
-Also available for: **TypeScript** (`npm install @microsoft/agentmesh-sdk`), **.NET** (`dotnet add package Microsoft.AgentGovernance`), **Rust** (`cargo add agentmesh`), **Go**
+Also available for: **TypeScript** (`npm install @microsoft/agent-governance-sdk`), **.NET** (`dotnet add package Microsoft.AgentGovernance`), **Rust** (`cargo add agentmesh`), **Go**
 
 ### Step 2: Your First Governed Agent
 
@@ -334,11 +337,11 @@ Works with **20+ agent frameworks** — no vendor lock-in:
 | Resource | Link |
 |----------|------|
 | GitHub Repo | [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
-| Quick Start Guide | [quickstart.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/quickstart.md) |
+| Quick Start Guide | [quickstart.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/quickstart.md) |
 | Architecture Docs | [docs/ARCHITECTURE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/ARCHITECTURE.md) |
-| OWASP Compliance | [docs/OWASP-COMPLIANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/OWASP-COMPLIANCE.md) |
+| OWASP Compliance | [../docs/compliance/owasp-agentic-top10-architecture.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/compliance/owasp-agentic-top10-architecture.md) |
 | Tutorials (27) | [docs/tutorials/](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/tutorials) |
-| Threat Model | [docs/THREAT_MODEL.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/THREAT_MODEL.md) |
+| Threat Model | [docs/security/threat-model.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/security/threat-model.md) |
 | DeepWiki | [deepwiki.com/microsoft/agent-governance-toolkit](https://deepwiki.com/microsoft/agent-governance-toolkit) |
 
 ---

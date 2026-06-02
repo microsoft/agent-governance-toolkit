@@ -42,7 +42,7 @@ pip install agentmesh-lightning        # RL training governance
 ### TypeScript / Node.js
 
 ```bash
-npm install @microsoft/agentmesh-sdk
+npm install @microsoft/agent-governance-sdk
 ```
 
 ### .NET
@@ -119,7 +119,7 @@ python governed_agent.py
 `governed_agent.ts` というファイルを作成します。
 
 ```typescript
-import { PolicyEngine, AgentIdentity, AuditLogger } from "@microsoft/agentmesh-sdk";
+import { PolicyEngine, AgentIdentity, AuditLogger } from "@microsoft/agent-governance-sdk";
 
 const identity = AgentIdentity.generate("my-agent", ["web_search", "read_file"]);
 
@@ -221,12 +221,12 @@ agent-governance integrity --manifest integrity.json
 
 | 内容 | リンク |
 |------|--------|
-| 完全なAPIリファレンス (Python) | [agent-governance-python/agent-os/README.md](agent-governance-python/agent-os/README.md) |
+| 完全なAPIリファレンス (Python) | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
 | TypeScript パッケージ ドキュメント | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
-| .NET パッケージ ドキュメント | [agent-governance-dotnet/README.md](agent-governance-dotnet/README.md) |
-| OWASP カバレッジマップ | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
-| フレームワーク統合 | [agent-governance-python/agent-os/src/agent_os/integrations/](agent-governance-python/agent-os/src/agent_os/integrations/) |
-| サンプルアプリケーション | [agent-governance-python/agent-os/examples/](agent-governance-python/agent-os/examples/) |
+| .NET パッケージ ドキュメント | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
+| OWASP カバレッジマップ | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
+| フレームワーク統合 | [agent-governance-python/agent-os/src/agent_os/integrations/](../../agent-governance-python/agent-os/src/agent_os/integrations/) |
+| サンプルアプリケーション | [agent-governance-python/agent-os/examples/](../../agent-governance-python/agent-os/examples/) |
 | コントリビュートガイド | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
 | 変更履歴 | [CHANGELOG.md](../../CHANGELOG.md) |
 

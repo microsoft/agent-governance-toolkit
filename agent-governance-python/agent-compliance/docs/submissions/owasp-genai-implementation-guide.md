@@ -670,7 +670,7 @@ assert result["success"] is False
 
 ---
 
-## ASI08: Cascading Failures
+## ASI08: Cascading Agent Failures
 
 ### Risk Description
 
@@ -1032,9 +1032,9 @@ assert "baselines" in summary or "alerts" in summary
 | **ASI03** Identity Abuse | AgentMesh | `AgentIdentity`, `TrustHandshake`, `SPIFFEIdentity` | ✅ Full |
 | **ASI04** Supply Chain | Agent OS | `MCPSecurityScanner` (fingerprinting, rug pull) | ✅ Full |
 | **ASI05** Code Execution | Agent OS | `ExecutionSandbox`, `_ASTSecurityVisitor` | ✅ Full |
-| **ASI06** Memory Poisoning | Agent OS | `MemoryGuard` | ✅ Full |
+| **ASI06** Memory & Context Poisoning | Agent OS | `MemoryGuard` | ✅ Full |
 | **ASI07** Inter-Agent Comms | AgentMesh | `TrustHandshake`, `AuditChain`, `TrustBridge` | ✅ Full |
-| **ASI08** Cascading Failures | Agent OS + SRE | `CircuitBreaker`, `ErrorBudget`, `ChaosExperiment` | ✅ Full |
+| **ASI08** Cascading Agent Failures | Agent OS + SRE | `CircuitBreaker`, `ErrorBudget`, `ChaosExperiment` | ✅ Full |
 | **ASI09** Human Oversight | Runtime | `KillSwitch`, `RingEnforcer`, `MCPGateway` | ✅ Full |
 | **ASI10** Observability | Agent SRE | `AnomalyDetector`, `TraceExporter`, `MetricsExporter` | ✅ Full |
 

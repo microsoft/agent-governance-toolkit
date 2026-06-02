@@ -825,6 +825,10 @@ class PolicyEngine:
 
         start = datetime.now(timezone.utc)
 
+        # Populate sql.* and k8s.* fields before rules run
+        from agentmesh.governance.protocol_facets import extract_protocol_facets
+        extract_protocol_facets(context)
+
         # 1. Check YAML/JSON policies first
         applicable = [p for p in self._policies.values() if p.applies_to(agent_did)]
 

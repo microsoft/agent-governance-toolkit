@@ -36,13 +36,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install consolidated v4 packages (local, --no-deps)
+        # The deprecated shim packages (agent-primitives, agent-os, ...) all
+        # declare a hard dep on agent-governance-toolkit-core>=4.0, which is
+        # not yet on PyPI. Pre-install the local consolidated packages with
+        # --no-deps so the subsequent shim installs resolve without pip
+        # reaching out to PyPI for the unpublished names.
+        run: |
+          pip install --no-cache-dir --no-deps \
+            -e agent-governance-python/agent-governance-toolkit-core \
+            -e agent-governance-python/agent-governance-toolkit-cli \
+            -e agent-governance-python/agent-governance-toolkit-integrations \
+            -e agent-governance-python/agent-governance-toolkit-protocols
+
       - name: Install agent-primitives (local sibling)
         run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
 
       - name: Install agent-os-kernel
         working-directory: agent-governance-python/agent-os
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
+          pip install --no-cache-dir -e ".[dev]"
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-yaml.txt"
 
       - name: Find and validate policy files
@@ -73,6 +86,20 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install consolidated v4 packages (local, --no-deps)
+        if: needs.changes.outputs.policies == 'true'
+        # The deprecated shim packages (agent-primitives, agent-os, ...) all
+        # declare a hard dep on agent-governance-toolkit-core>=4.0, which is
+        # not yet on PyPI. Pre-install the local consolidated packages with
+        # --no-deps so the subsequent shim installs resolve without pip
+        # reaching out to PyPI for the unpublished names.
+        run: |
+          pip install --no-cache-dir --no-deps \
+            -e agent-governance-python/agent-governance-toolkit-core \
+            -e agent-governance-python/agent-governance-toolkit-cli \
+            -e agent-governance-python/agent-governance-toolkit-integrations \
+            -e agent-governance-python/agent-governance-toolkit-protocols
+
       - name: Install agent-primitives (local sibling)
         if: needs.changes.outputs.policies == 'true'
         run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
@@ -81,7 +108,7 @@ jobs:
         if: needs.changes.outputs.policies == 'true'
         working-directory: agent-governance-python/agent-os
         run: |
-          pip install --no-cache-dir -e ".[dev]" 2>/dev/null || pip install --no-cache-dir -e .  # Install local package (Scorecard: pinned via pyproject.toml)
+          pip install --no-cache-dir -e ".[dev]"
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-policy-test.txt"
 
       - name: Run policy CLI tests
