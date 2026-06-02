@@ -509,3 +509,7 @@ ACMR
 scak
 httponly
 execve
+tinyrainbow
+pathe
+emnapi
+OSSF
