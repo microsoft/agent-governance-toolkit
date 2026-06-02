@@ -505,6 +505,7 @@ XACML
 xfail
 xunit
 ZDOTDIR
-
 ACMR
 scak
+httponly
+execve
