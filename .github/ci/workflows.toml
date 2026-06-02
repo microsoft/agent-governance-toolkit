@@ -58,11 +58,16 @@ run = "cargo clippy --workspace --all-targets -- -D warnings"
 [[workflow.job.step]]
 name = "Test"
 run = "cargo test --workspace"
+[[workflow.job.step]]
+name = "Package publishable ACS crates"
+run = """
+cargo package -p agent_control_specification_core --allow-dirty
+"""
 
 [[workflow.job]]
 id = "python"
 name = "Python SDK and generator"
-toolchains = ["python"]
+toolchains = ["python", "rust"]
 opa = true
 opa_on_path = true
 working_directory = "policy-engine"
@@ -71,10 +76,14 @@ name = "Install and test"
 run = """
 python -m pip install --upgrade pip==24.3.1
 pip install maturin==1.8.7  # Scorecard: version-pinned
+pip install build==1.2.1  # Scorecard: version-pinned
 pip install --no-build-isolation ./sdk/python
 pip install ./generator pytest==9.0.3
 pytest sdk/python generator
 """
+[[workflow.job.step]]
+name = "Package Python SDK"
+run = "python -m build --no-isolation ./sdk/python"
 
 [[workflow.job]]
 id = "node"
@@ -88,6 +97,13 @@ run = """
 npm ci
 npm test
 """
+[[workflow.job.step]]
+name = "Package Node SDK"
+run = """
+mkdir -p "$RUNNER_TEMP/acs-node-pack"
+npm pack --pack-destination "$RUNNER_TEMP/acs-node-pack"
+tar -tzf "$RUNNER_TEMP"/acs-node-pack/*.tgz | grep -E '^package/dist/.*\\.node$'
+"""
 
 [[workflow.job]]
 id = "dotnet"
@@ -98,6 +114,17 @@ working_directory = "policy-engine/sdk/dotnet"
 [[workflow.job.step]]
 name = "Build and test"
 run = """
-dotnet build AgentControlSpecification.sln
-dotnet run --project tests/AgentControlSpecification.Tests
+dotnet build AgentControlSpecification.sln --configuration Release
+dotnet run --project tests/AgentControlSpecification.Tests --configuration Release --no-build
+"""
+[[workflow.job.step]]
+name = "Package .NET SDK smoke"
+run = """
+mkdir -p "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification/AgentControlSpecification.csproj --configuration Release --no-build -p:AgentControlSpecificationAllowIncompleteNativePack=true --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.AI/AgentControlSpecification.AI.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.AgentFramework/AgentControlSpecification.AgentFramework.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+ls -la "$RUNNER_TEMP/acs-dotnet-pack"
 """

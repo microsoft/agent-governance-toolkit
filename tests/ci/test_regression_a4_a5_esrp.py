@@ -91,3 +91,22 @@ def test_a5_rust_version_validation_documents_template_vs_runtime() -> None:
         "explains template-expansion-vs-runtime-regex ordering and the role "
         "of ADO queue-time parameter ACLs as the primary defense"
     )
+
+
+def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
+    text = ESRP.read_text(encoding="utf-8")
+    assert "name: agent-control-specification" in text
+    assert "path: policy-engine/sdk/python" in text
+    assert "noBuildIsolation: 'true'" in text
+    assert "name: agt-policies" in text
+    assert "path: agent-governance-python/agt-policies" in text
+    assert "path: policy-engine" in text
+    assert "crate: agent_control_specification_core" in text
+    assert "cargo package -p agent_control_specification --allow-dirty" in text
+    assert "after the core ESRP release completes" in text
+
+
+def test_esrp_does_not_fake_publish_acs_node_or_dotnet() -> None:
+    text = ESRP.read_text(encoding="utf-8")
+    assert "path: policy-engine/sdk/node" not in text
+    assert "policy-engine/sdk/dotnet" not in text

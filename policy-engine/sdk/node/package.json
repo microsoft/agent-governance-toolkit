@@ -30,6 +30,7 @@
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
+    "dist/**/*.node",
     "tsconfig.json"
   ],
   "optionalDependencies": {

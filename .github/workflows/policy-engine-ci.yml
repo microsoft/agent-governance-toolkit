@@ -53,6 +53,9 @@ jobs:
       - name: Test
         run: |
           cargo test --workspace
+      - name: Package publishable ACS crates
+        run: |
+          cargo package -p agent_control_specification_core --allow-dirty
 
   python:
     name: Python SDK and generator
@@ -67,6 +70,11 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
       - name: Install OPA
         run: |
           curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
@@ -79,9 +87,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip==24.3.1
           pip install maturin==1.8.7  # Scorecard: version-pinned
+          pip install build==1.2.1  # Scorecard: version-pinned
           pip install --no-build-isolation ./sdk/python
           pip install ./generator pytest==9.0.3
           pytest sdk/python generator
+      - name: Package Python SDK
+        run: |
+          python -m build --no-isolation ./sdk/python
 
   node:
     name: Node SDK
@@ -107,6 +119,11 @@ jobs:
         run: |
           npm ci
           npm test
+      - name: Package Node SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/acs-node-pack"
+          npm pack --pack-destination "$RUNNER_TEMP/acs-node-pack"
+          tar -tzf "$RUNNER_TEMP"/acs-node-pack/*.tgz | grep -E '^package/dist/.*\.node$'
 
   dotnet:
     name: dotnet SDK
@@ -130,5 +147,14 @@ jobs:
           "$RUNNER_TEMP/opa" version
       - name: Build and test
         run: |
-          dotnet build AgentControlSpecification.sln
-          dotnet run --project tests/AgentControlSpecification.Tests
+          dotnet build AgentControlSpecification.sln --configuration Release
+          dotnet run --project tests/AgentControlSpecification.Tests --configuration Release --no-build
+      - name: Package .NET SDK smoke
+        run: |
+          mkdir -p "$RUNNER_TEMP/acs-dotnet-pack"
+          dotnet pack src/AgentControlSpecification/AgentControlSpecification.csproj --configuration Release --no-build -p:AgentControlSpecificationAllowIncompleteNativePack=true --output "$RUNNER_TEMP/acs-dotnet-pack"
+          dotnet pack src/AgentControlSpecification.AI/AgentControlSpecification.AI.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+          dotnet pack src/AgentControlSpecification.AgentFramework/AgentControlSpecification.AgentFramework.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+          dotnet pack src/AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+          dotnet pack src/AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+          ls -la "$RUNNER_TEMP/acs-dotnet-pack"

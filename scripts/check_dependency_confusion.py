@@ -53,6 +53,8 @@ REGISTERED_PACKAGES = {
     "agent-discovery", "agent_discovery",
     "agentmesh-discovery", "agentmesh_discovery",
     "agt-sandbox", "agt_sandbox",
+    "agt-policies", "agt_policies",
+    "agent-control-specification", "agent_control_specification",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
@@ -147,8 +149,6 @@ REGISTERED_PACKAGES = {
 # requirements.txt (they must use path references like -e ../primitives)
 LOCAL_ONLY_PACKAGES = {
     "agent-primitives",
-    "agent-control-specification",
-    "agent_control_specification",
     "emk",
 }
 

@@ -40,13 +40,18 @@ must not be used. See [ESRP Onboarding](https://aka.ms/esrp-onboarding).
 
 | Package | PyPI Name | Directory |
 |---------|-----------|-----------|
-| Agent OS Kernel | `agent-os-kernel` | `agent-os` |
-| AgentMesh Platform | `agentmesh-platform` | `agent-mesh` |
-| Agent Hypervisor | `agent-hypervisor` | `agent-hypervisor` |
-| Agent Runtime | `agentmesh-runtime` | `agent-runtime` |
-| Agent SRE | `agent-sre` | `agent-sre` |
-| Agent Governance Toolkit | `agent-governance-toolkit` | `agent-compliance` |
-| Agent Lightning | `agentmesh-lightning` | `agent-lightning` |
+| Agent Governance Toolkit Core | `agent-governance-toolkit-core` | `agent-governance-python/agent-governance-toolkit-core` |
+| Agent Governance Toolkit Integrations | `agent-governance-toolkit-integrations` | `agent-governance-python/agent-governance-toolkit-integrations` |
+| Agent Governance Toolkit CLI | `agent-governance-toolkit-cli` | `agent-governance-python/agent-governance-toolkit-cli` |
+| Agent Governance Toolkit Protocols | `agent-governance-toolkit-protocols` | `agent-governance-python/agent-governance-toolkit-protocols` |
+| Agent Governance Toolkit | `agent-governance-toolkit` | `agent-governance-python/agent-compliance` |
+| Agent Discovery | `agent-discovery` | `agent-governance-python/agent-discovery` |
+| Agent Lightning | `agent-lightning` | `agent-governance-python/agent-lightning` |
+| Agent Marketplace | `agent-marketplace` | `agent-governance-python/agent-marketplace` |
+| Agent RAG Governance | `agent-rag-governance` | `agent-governance-python/agent-rag-governance` |
+| AGT Sandbox | `agt-sandbox` | `agent-governance-python/agent-sandbox` |
+| Agent Control Specification Python SDK | `agent-control-specification` | `policy-engine/sdk/python` |
+| AGT Policies | `agt-policies` | `agent-governance-python/agt-policies` |
 
 ### Building Packages
 
@@ -119,6 +124,11 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 The VS Code and Cursor extensions are published via their respective marketplaces,
 not npm.
 
+The ACS Node SDK package `agent-control-specification` is not in the production
+npm publish matrix yet. It declares platform native optional dependencies, so it
+needs a cross-platform native package build and publish matrix before it can be
+published as a generally usable npm artifact.
+
 ### Building & Packing
 
 ```bash
@@ -155,6 +165,12 @@ Publishing uses the ADO pipeline (`.github/pipelines/esrp-publish.yml` with targ
 |---------|------------|-----------|
 | Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `agent-governance-dotnet` |
 
+The ACS .NET projects under `policy-engine/sdk/dotnet` are packable for local
+validation, but they are not in the production NuGet publish matrix yet. The
+core package requires native runtime assets for Linux, macOS, and Windows, so
+production publishing needs a native asset build matrix before these packages
+are released.
+
 ---
 
 ## Rust Crate (crates.io)
@@ -179,6 +195,8 @@ All crates are published under the official
 |---------|------------|-----------|
 | AgentMesh Rust SDK | `agentmesh` | `agent-governance-rust/agentmesh` |
 | AgentMesh MCP Rust SDK | `agentmesh-mcp` | `agent-governance-rust/agentmesh-mcp` |
+| Agent Control Specification Core | `agent_control_specification_core` | `policy-engine/core` |
+| Agent Control Specification Rust SDK | `agent_control_specification` | `policy-engine/sdk/rust` |
 
 ### Prerequisites
 

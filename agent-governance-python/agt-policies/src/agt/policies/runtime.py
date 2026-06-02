@@ -61,7 +61,7 @@ except ImportError as exc:  # pragma: no cover - exercised only without the SDK
     raise ImportError(
         "agt.policies.runtime requires the agent_control_specification Python SDK. "
         "Install it from policy-engine/sdk/python (or `pip install "
-        "agent_control_specification`) and ensure the native binding is built "
+        "agent-control-specification`) and ensure the native binding is built "
         "(needs a C toolchain like gcc and maturin to build the Rust core)."
     ) from exc
 

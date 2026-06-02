@@ -92,6 +92,13 @@ parameters:
         path: agent-governance-python/agent-rag-governance
       - name: agt-sandbox
         path: agent-governance-python/agent-sandbox
+      # ACS policy layer and Python SDK
+      - name: agent-control-specification
+        path: policy-engine/sdk/python
+        rust: 'true'
+        noBuildIsolation: 'true'
+      - name: agt-policies
+        path: agent-governance-python/agt-policies
 
   - name: npmPackages
     type: object
@@ -129,6 +136,20 @@ parameters:
         path: agent-governance-python/agent-os/extensions/mcp-server
         nodeVersion: '20'
 
+  - name: rustPackages
+    type: object
+    displayName: 'Rust crates to publish'
+    default:
+      - name: agentmesh
+        path: agent-governance-rust
+        crate: agentmesh
+      - name: agentmesh-mcp
+        path: agent-governance-rust
+        crate: agentmesh-mcp
+      - name: agent-control-specification-core
+        path: policy-engine
+        crate: agent_control_specification_core
+
 # -------------------------------------------------------
 # ESRP Configuration
 # Service connection name is hardcoded (required at compile time by ADO).
@@ -160,7 +181,7 @@ pool:
 
 stages:
   # =======================================================
-  # PYTHON (PyPI) — 10 packages (4 consolidated + 1 meta + 5 standalone)
+  # PYTHON (PyPI) — AGT packages plus ACS policy/runtime packages
   # =======================================================
   - stage: Build_PyPI
     displayName: 'Build Python Packages'
@@ -189,10 +210,35 @@ stages:
                   -r $(Build.SourcesDirectory)/.github/pipelines/release-tools/release-tools.txt
               displayName: 'Install build tools (hash-pinned)'
 
+            - ${{ if eq(coalesce(pkg.rust, 'false'), 'true') }}:
+              - script: |
+                  set -euo pipefail
+                  RUSTUP_VERSION="1.27.1"
+                  RUSTUP_SHA256="6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d"
+                  # ``${{ parameters.rustVersion }}`` is expanded at YAML template
+                  # compile time. The runtime regex is a defense-in-depth guard
+                  # if a future edit promotes rustVersion to a runtime variable.
+                  # Queue-time parameter ACLs remain the primary defense.
+                  RUST_TOOLCHAIN="${{ parameters.rustVersion }}"
+                  if ! printf '%s' "$RUST_TOOLCHAIN" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+                    echo "##[error]rustVersion must be an exact version such as 1.70.0, not a mutable channel"
+                    exit 1
+                  fi
+                  curl --proto '=https' --tlsv1.2 -fsSLo rustup-init "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init"
+                  echo "${RUSTUP_SHA256}  rustup-init" | sha256sum -c -
+                  chmod +x rustup-init
+                  ./rustup-init -y --profile minimal --default-toolchain "$RUST_TOOLCHAIN"
+                  echo "##vso[task.prependpath]$HOME/.cargo/bin"
+                  "$HOME/.cargo/bin/rustc" --version
+                  "$HOME/.cargo/bin/cargo" --version
+                displayName: 'Install Rust ${{ parameters.rustVersion }}'
+
             - script: |
                 # Consolidated packages use force-include with sibling paths,
                 # which only works when building a wheel directly from source.
-                if [[ "${{ pkg.name }}" == agent-governance-toolkit-* ]]; then
+                if [[ "${{ coalesce(pkg.noBuildIsolation, 'false') }}" == "true" ]]; then
+                  python -m build --no-isolation
+                elif [[ "${{ pkg.name }}" == agent-governance-toolkit-* ]]; then
                   python -m build --wheel
                 else
                   python -m build
@@ -544,16 +590,118 @@ stages:
             displayName: 'Push signed package to NuGet.org'
 
   # =======================================================
-  # RUST (crates.io) — agent-governance + agent-governance-mcp crates
+  # RUST (crates.io) — AgentMesh plus ACS crates
   # =======================================================
   - stage: Build_Rust
     displayName: 'Build & Test Rust Crates'
     dependsOn: []
     condition: or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all'))
     jobs:
-      - job: BuildAndTest
-        displayName: 'Build, Test, Package'
+      - ${{ each pkg in parameters.rustPackages }}:
+        - job: BuildAndTest_${{ replace(pkg.name, '-', '_') }}
+          displayName: 'Build, Test, Package ${{ pkg.name }}'
+          steps:
+            - checkout: self
+
+            - script: |
+                set -euo pipefail
+                RUSTUP_VERSION="1.27.1"
+                RUSTUP_SHA256="6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d"
+                # ``${{ parameters.rustVersion }}`` is expanded at YAML template
+                # *compile* time, before this script ever runs. The runtime
+                # regex below validates the resulting literal one more time as
+                # defense-in-depth: if a future edit promotes rustVersion to a
+                # runtime variable (e.g. ``$(rustVersion)``), the check still
+                # rejects an attacker-controlled toolchain spec like
+                # ``stable --default-toolchain malicious`` that would otherwise
+                # reach ``rustup-init``. The *primary* defense remains the ADO
+                # queue-time parameter ACL: only authorized pipeline runners
+                # may set rustVersion at all.
+                RUST_TOOLCHAIN="${{ parameters.rustVersion }}"
+                if ! printf '%s' "$RUST_TOOLCHAIN" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+                  echo "##[error]rustVersion must be an exact version such as 1.70.0, not a mutable channel"
+                  exit 1
+                fi
+                curl --proto '=https' --tlsv1.2 -fsSLo rustup-init "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init"
+                echo "${RUSTUP_SHA256}  rustup-init" | sha256sum -c -
+                chmod +x rustup-init
+                ./rustup-init -y --profile minimal --default-toolchain "$RUST_TOOLCHAIN"
+                echo "##vso[task.prependpath]$HOME/.cargo/bin"
+                "$HOME/.cargo/bin/rustc" --version
+                "$HOME/.cargo/bin/cargo" --version
+              displayName: 'Install Rust ${{ parameters.rustVersion }}'
+
+            - script: |
+                cargo build --release --workspace
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Build all crates'
+
+            - script: |
+                cargo test --release --workspace
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Run all tests'
+
+            - script: |
+                mkdir -p $(Pipeline.Workspace)/rust-packages-${{ pkg.name }}
+                echo "=== Packaging ${{ pkg.crate }} ==="
+                cargo package -p "${{ pkg.crate }}" --allow-dirty
+                cp target/package/"${{ pkg.crate }}"-*.crate $(Pipeline.Workspace)/rust-packages-${{ pkg.name }}/
+                echo "=== Packaged crates ==="
+                ls -la $(Pipeline.Workspace)/rust-packages-${{ pkg.name }}/
+              workingDirectory: '${{ pkg.path }}'
+              displayName: 'Package ${{ pkg.name }} crates'
+
+            - task: PublishPipelineArtifact@1
+              inputs:
+                targetPath: '$(Pipeline.Workspace)/rust-packages-${{ pkg.name }}'
+                artifact: 'rust-crates-${{ pkg.name }}'
+                publishLocation: 'pipeline'
+              displayName: 'Publish ${{ pkg.name }} crate artifacts'
+
+  - stage: Publish_Rust
+    displayName: 'Publish to crates.io via ESRP'
+    dependsOn: Build_Rust
+    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all')))
+    jobs:
+      - job: PublishCrates
+        displayName: 'ESRP Publish Rust crates'
         steps:
+          - ${{ each pkg in parameters.rustPackages }}:
+            - task: DownloadPipelineArtifact@2
+              inputs:
+                artifact: 'rust-crates-${{ pkg.name }}'
+                targetPath: '$(Pipeline.Workspace)/rust-publish/${{ pkg.name }}'
+              displayName: 'Download ${{ pkg.name }} crate artifacts'
+
+          - ${{ each pkg in parameters.rustPackages }}:
+            - script: |
+                echo "=== ${{ pkg.name }} crate package ==="
+                find "$(Pipeline.Workspace)/rust-publish/${{ pkg.name }}" -name "*.crate" -type f -print
+              displayName: 'List ${{ pkg.name }} crate package'
+
+            - task: EsrpRelease@11
+              displayName: 'ESRP Publish ${{ pkg.name }} to crates.io'
+              inputs:
+                connectedservicename: 'Agent Governance Toolkit'
+                usemanagedidentity: true
+                keyvaultname: '$(ESRP_KEYVAULT_NAME)'
+                signcertname: '$(ESRP_RELEASE_CERT_IDENTIFIER)'
+                clientid: '$(ESRP_CLIENT_ID)'
+                intent: 'PackageDistribution'
+                contenttype: 'Rust'
+                contentsource: 'Folder'
+                folderlocation: '$(Pipeline.Workspace)/rust-publish/${{ pkg.name }}'
+                waitforreleasecompletion: true
+                owners: '$(ESRP_OWNERS)'
+                approvers: '$(ESRP_APPROVERS)'
+                serviceendpointurl: 'https://api.esrp.microsoft.com'
+                mainpublisher: 'ESRPRELPACMAN'
+                domaintenantid: '$(MICROSOFT_TENANT_ID)'
+
+          # agent_control_specification depends on agent_control_specification_core.
+          # Cargo refuses to package it until the core crate version exists in
+          # the crates.io index, so the SDK crate is packaged and released only
+          # after the core ESRP release completes.
           - checkout: self
 
           - script: |
@@ -561,15 +709,9 @@ stages:
               RUSTUP_VERSION="1.27.1"
               RUSTUP_SHA256="6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d"
               # ``${{ parameters.rustVersion }}`` is expanded at YAML template
-              # *compile* time, before this script ever runs. The runtime
-              # regex below validates the resulting literal one more time as
-              # defense-in-depth: if a future edit promotes rustVersion to a
-              # runtime variable (e.g. ``$(rustVersion)``), the check still
-              # rejects an attacker-controlled toolchain spec like
-              # ``stable --default-toolchain malicious`` that would otherwise
-              # reach ``rustup-init``. The *primary* defense remains the ADO
-              # queue-time parameter ACL: only authorized pipeline runners
-              # may set rustVersion at all.
+              # compile time. The runtime regex is a defense-in-depth guard
+              # if a future edit promotes rustVersion to a runtime variable.
+              # Queue-time parameter ACLs remain the primary defense.
               RUST_TOOLCHAIN="${{ parameters.rustVersion }}"
               if ! printf '%s' "$RUST_TOOLCHAIN" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
                 echo "##[error]rustVersion must be an exact version such as 1.70.0, not a mutable channel"
@@ -582,58 +724,27 @@ stages:
               echo "##vso[task.prependpath]$HOME/.cargo/bin"
               "$HOME/.cargo/bin/rustc" --version
               "$HOME/.cargo/bin/cargo" --version
-            displayName: 'Install Rust ${{ parameters.rustVersion }}'
+            displayName: 'Install Rust ${{ parameters.rustVersion }} for ACS SDK package'
 
           - script: |
-              cargo build --release --workspace
-            workingDirectory: 'agent-governance-rust'
-            displayName: 'Build all crates'
-
-          - script: |
-              cargo test --release --workspace
-            workingDirectory: 'agent-governance-rust'
-            displayName: 'Run all tests'
-
-          - script: |
-              mkdir -p $(Pipeline.Workspace)/rust-packages
-              for CRATE in agentmesh agentmesh-mcp; do
-                echo "=== Packaging $CRATE ==="
-                cargo package -p $CRATE --allow-dirty
+              mkdir -p "$(Pipeline.Workspace)/rust-publish/agent-control-specification"
+              for ATTEMPT in 1 2 3 4 5; do
+                if cargo package -p agent_control_specification --allow-dirty; then
+                  break
+                fi
+                if [ "$ATTEMPT" = "5" ]; then
+                  exit 1
+                fi
+                echo "agent_control_specification_core is not visible in the crates.io index yet; retrying..."
+                sleep 30
               done
-              echo "=== Packaged crates ==="
-              ls -la target/package/*.crate
-              cp target/package/*.crate $(Pipeline.Workspace)/rust-packages/
-            workingDirectory: 'agent-governance-rust'
-            displayName: 'Package all crates'
-
-          - task: PublishPipelineArtifact@1
-            inputs:
-              targetPath: '$(Pipeline.Workspace)/rust-packages'
-              artifact: 'rust-crates'
-              publishLocation: 'pipeline'
-            displayName: 'Publish crate artifacts'
-
-  - stage: Publish_Rust
-    displayName: 'Publish to crates.io via ESRP'
-    dependsOn: Build_Rust
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', false), or(eq('${{ parameters.target }}', 'rust'), eq('${{ parameters.target }}', 'all')))
-    jobs:
-      - job: PublishCrates
-        displayName: 'ESRP Publish agentmesh + agentmesh-mcp to crates.io'
-        steps:
-          - task: DownloadPipelineArtifact@2
-            inputs:
-              artifact: 'rust-crates'
-              targetPath: '$(Pipeline.Workspace)/rust-publish'
-            displayName: 'Download crate artifacts'
-
-          - script: |
-              echo "=== Crates to publish ==="
-              ls -la $(Pipeline.Workspace)/rust-publish/
-            displayName: 'List crate packages'
+              cp target/package/agent_control_specification-*.crate "$(Pipeline.Workspace)/rust-publish/agent-control-specification/"
+              find "$(Pipeline.Workspace)/rust-publish/agent-control-specification" -name "*.crate" -type f -print
+            workingDirectory: 'policy-engine'
+            displayName: 'Package agent-control-specification crate'
 
           - task: EsrpRelease@11
-            displayName: 'ESRP Publish to crates.io'
+            displayName: 'ESRP Publish agent-control-specification to crates.io'
             inputs:
               connectedservicename: 'Agent Governance Toolkit'
               usemanagedidentity: true
@@ -643,7 +754,7 @@ stages:
               intent: 'PackageDistribution'
               contenttype: 'Rust'
               contentsource: 'Folder'
-              folderlocation: '$(Pipeline.Workspace)/rust-publish'
+              folderlocation: '$(Pipeline.Workspace)/rust-publish/agent-control-specification'
               waitforreleasecompletion: true
               owners: '$(ESRP_OWNERS)'
               approvers: '$(ESRP_APPROVERS)'
