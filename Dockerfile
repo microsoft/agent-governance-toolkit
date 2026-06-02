@@ -75,9 +75,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         -e "agent-governance-python/agent-governance-toolkit-cli" \
         -e "agent-governance-python/agent-governance-toolkit-protocols" \
     && python -m pip install \
+        "pydantic>=2.5.0,<3.0" \
+        "pyyaml>=6.0,<7.0" \
+    && python -m pip install --no-deps \
+        -e "agent-governance-python/agt-policies" \
+    && python -m pip install \
         "cedarpy>=4.0.0,<5.0" \
         -e "agent-governance-python/agent-primitives[dev]" \
-        -e "agent-governance-python/agt-policies" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
         -e "agent-governance-python/agent-os[full,dev]" \
         -e "agent-governance-python/agent-mesh[agent-os,dev,server]" \

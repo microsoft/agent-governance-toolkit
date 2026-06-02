@@ -353,11 +353,14 @@ jobs:
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
-          # agt-policies (import name `agt`) backs the agent-os v5 runtime bridge;
-          # local source, not yet on PyPI. Installed WITH deps so its runtime
-          # requirements (pydantic, pyyaml) are present — agent-os itself does
-          # not depend on pyyaml.
-          pip install --no-cache-dir -e agent-governance-python/agt-policies
+          # agt-policies backs the agent-os v5 runtime bridge. Install this
+          # local sibling without resolving agent-control-specification from
+          # PyPI; the vendored native SDK is built below for the packages that
+          # exercise the ACS-backed runtime. Keep its pure-Python runtime deps
+          # available for agent-os, which imports agt-policies but does not
+          # declare every agt-policies transitive dependency itself.
+          pip install --no-cache-dir "pydantic>=2.5.0,<3.0" "pyyaml>=6.0,<7.0"
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
       - name: Install OPA (ACS-backed Python policy runtime)
         # The native ACS runtime evaluates policy via OPA; without it the
         # runtime fails closed (runtime_error:policy_invocation_failed) and
