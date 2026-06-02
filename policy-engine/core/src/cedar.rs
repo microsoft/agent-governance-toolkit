@@ -670,6 +670,7 @@ mod tests {
     use super::*;
     use crate::{normalize_policy_output, Decision};
     use serde_json::json;
+    use std::{fs, path::PathBuf};
 
     fn invocation(policy_set: &str, input: JsonValue) -> CedarPolicyInvocation {
         CedarPolicyInvocation {
@@ -704,6 +705,66 @@ mod tests {
             "annotations": {},
             "tool": {"name": tool_name}
         })
+    }
+
+    #[cfg(feature = "cedar")]
+    fn cedar_test_dir(name: &str) -> PathBuf {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("cedar-dispatcher-tests")
+            .join(name);
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[cfg(feature = "cedar")]
+    fn write_cedar_test_file(dir: &PathBuf, name: &str, content: &str) -> String {
+        let path = dir.join(name);
+        fs::write(&path, content).unwrap();
+        path.display().to_string()
+    }
+
+    #[cfg(feature = "cedar")]
+    fn schema_for_tool_resource() -> &'static str {
+        r#"{
+            "": {
+                "entityTypes": {
+                    "Agent": {"shape": {"type": "Record", "attributes": {}}},
+                    "Tool": {"shape": {"type": "Record", "attributes": {}}},
+                    "PolicyTarget": {"shape": {"type": "Record", "attributes": {}}}
+                },
+                "actions": {
+                    "pre_tool_call": {
+                        "appliesTo": {
+                            "principalTypes": ["Agent"],
+                            "resourceTypes": ["Tool"]
+                        }
+                    }
+                }
+            }
+        }"#
+    }
+
+    #[cfg(feature = "cedar")]
+    fn schema_for_policy_target_resource() -> &'static str {
+        r#"{
+            "": {
+                "entityTypes": {
+                    "Agent": {"shape": {"type": "Record", "attributes": {}}},
+                    "Tool": {"shape": {"type": "Record", "attributes": {}}},
+                    "PolicyTarget": {"shape": {"type": "Record", "attributes": {}}}
+                },
+                "actions": {
+                    "pre_tool_call": {
+                        "appliesTo": {
+                            "principalTypes": ["Agent"],
+                            "resourceTypes": ["PolicyTarget"]
+                        }
+                    }
+                }
+            }
+        }"#
     }
 
     // ── D3.2 request mapping ──────────────────────────────────────────
@@ -1015,17 +1076,81 @@ mod tests {
 
     #[cfg(feature = "cedar")]
     #[test]
+    fn builtin_dispatcher_with_valid_schema_accepts_conformant_request() {
+        let dir = cedar_test_dir("valid-schema-accepts");
+        let schema_path = write_cedar_test_file(&dir, "schema.json", schema_for_tool_resource());
+        let mut inv = invocation(
+            "permit(principal, action == Action::\"pre_tool_call\", resource == Tool::\"hello\");",
+            tool_input("agent-1", "hello"),
+        );
+        inv.schema_path = Some(schema_path);
+
+        let output = CedarBuiltinDispatcher::new()
+            .evaluate_cedar(&inv)
+            .expect("schema-conformant cedar request should evaluate");
+        let verdict = normalize_policy_output(output).unwrap();
+
+        assert_eq!(verdict.decision, Decision::Allow);
+    }
+
+    #[cfg(feature = "cedar")]
+    #[test]
+    fn builtin_dispatcher_with_valid_schema_rejects_nonconformant_request() {
+        let dir = cedar_test_dir("valid-schema-rejects");
+        let schema_path =
+            write_cedar_test_file(&dir, "schema.json", schema_for_policy_target_resource());
+        let mut inv = invocation(
+            "permit(principal, action == Action::\"pre_tool_call\", resource);",
+            tool_input("agent-1", "hello"),
+        );
+        inv.schema_path = Some(schema_path);
+
+        let error = CedarBuiltinDispatcher::new()
+            .evaluate_cedar(&inv)
+            .unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+        assert!(
+            error.detail().contains("authorizer request")
+                || error.detail().contains("failed schema validation"),
+            "{}",
+            error.detail()
+        );
+    }
+
+    #[cfg(feature = "cedar")]
+    #[test]
     fn builtin_dispatcher_fails_closed_when_schema_path_is_missing() {
+        let missing_schema = cedar_test_dir("missing-schema").join("missing-schema.json");
         let mut inv = invocation(
             "permit(principal, action, resource);",
             tool_input("agent-1", "hello"),
         );
-        inv.schema_path = Some("/no/such/schema.json".to_string());
+        inv.schema_path = Some(missing_schema.display().to_string());
         let error = CedarBuiltinDispatcher::new()
             .evaluate_cedar(&inv)
             .unwrap_err();
         assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
         assert!(error.detail().contains("schema_path"));
+    }
+
+    #[cfg(feature = "cedar")]
+    #[test]
+    fn builtin_dispatcher_fails_closed_when_schema_path_is_malformed() {
+        let dir = cedar_test_dir("malformed-schema");
+        let schema_path = write_cedar_test_file(&dir, "schema.json", "{not valid schema json");
+        let mut inv = invocation(
+            "permit(principal, action, resource);",
+            tool_input("agent-1", "hello"),
+        );
+        inv.schema_path = Some(schema_path);
+
+        let error = CedarBuiltinDispatcher::new()
+            .evaluate_cedar(&inv)
+            .unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+        assert!(error.detail().contains("parse schema_path"));
     }
 
     #[cfg(feature = "cedar")]

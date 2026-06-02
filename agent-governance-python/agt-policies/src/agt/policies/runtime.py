@@ -33,7 +33,10 @@ wrapper should ``pytest.importorskip("agent_control_specification")``.
 from __future__ import annotations
 
 import asyncio
+import copy
+import math
 from pathlib import Path
+import threading
 from typing import Any, Awaitable, Callable, Mapping, Optional, Union
 
 import yaml
@@ -63,6 +66,10 @@ except ImportError as exc:  # pragma: no cover - exercised only without the SDK
 
 
 _DEFAULT_APPROVAL_TIMEOUT_SECONDS = 300.0
+_IMMEDIATE_APPROVAL_TIMEOUT_SECONDS = 0.0
+_TIMED_RUN_SYNC_MAX_WORKERS = 16
+_TIMED_RUN_SYNC_CANCEL_GRACE_SECONDS = 0.05
+_TIMED_RUN_SYNC_SLOTS = threading.BoundedSemaphore(_TIMED_RUN_SYNC_MAX_WORKERS)
 
 
 ApprovalCallback = Callable[
@@ -226,29 +233,35 @@ class AgtRuntime:
                 self._approval_timeout_seconds,
                 self._approval_on_timeout,
             ) = _approval_settings_from_manifest(resolved)
+            engine_manifest, _ = _sanitize_manifest_for_acs(resolved)
             self._control = AgentControl.from_native(
-                resolved,
+                engine_manifest,
                 annotator_dispatcher=annotator_dispatcher,
                 policy_dispatcher=policy_dispatcher,
             )
         elif policy_dispatcher is not None or annotator_dispatcher is not None:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
+            parsed, engine_manifest = _parse_and_sanitize_manifest_text(manifest_text)
             (
                 self._approval_timeout_seconds,
                 self._approval_on_timeout,
-            ) = _approval_settings_from_manifest_text(manifest_text)
+            ) = _approval_settings_from_manifest(parsed)
             self._control = AgentControl.from_native(
-                manifest_text,
+                engine_manifest,
                 annotator_dispatcher=annotator_dispatcher,
                 policy_dispatcher=policy_dispatcher,
             )
         else:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
+            parsed, engine_manifest = _parse_and_sanitize_manifest_text(manifest_text)
             (
                 self._approval_timeout_seconds,
                 self._approval_on_timeout,
-            ) = _approval_settings_from_manifest_text(manifest_text)
-            self._control = AgentControl.from_path(str(self._manifest_path))
+            ) = _approval_settings_from_manifest(parsed)
+            if engine_manifest == manifest_text:
+                self._control = AgentControl.from_path(str(self._manifest_path))
+            else:
+                self._control = AgentControl.from_native(engine_manifest)
 
     @property
     def control(self) -> AgentControl:
@@ -308,6 +321,12 @@ class AgtRuntime:
                 )
             except AgentControlInterruption as caught:
                 exc = caught
+            except RuntimeError as caught:
+                if _is_event_loop_binding_error(caught):
+                    return _approval_timeout_result(raw_result, snapshot, "deny")
+                return _approval_error_result(raw_result, snapshot, caught)
+            except Exception as caught:  # noqa: BLE001 - resolver errors fail closed
+                return _approval_error_result(raw_result, snapshot, caught)
 
         result = _result_from_intervention(raw_result, snapshot)
 
@@ -364,6 +383,16 @@ class AgtRuntime:
         self._control = None  # type: ignore[assignment]
 
 
+def _parse_and_sanitize_manifest_text(manifest_text: str) -> tuple[Mapping[str, Any], str]:
+    parsed = yaml.safe_load(manifest_text) or {}
+    if not isinstance(parsed, Mapping):
+        return {}, manifest_text
+    sanitized, changed = _sanitize_manifest_for_acs(parsed)
+    if not changed:
+        return parsed, manifest_text
+    return parsed, yaml.safe_dump(sanitized, sort_keys=False)
+
+
 def _approval_settings_from_manifest_text(manifest_text: str) -> tuple[float, str]:
     parsed = yaml.safe_load(manifest_text) or {}
     if not isinstance(parsed, Mapping):
@@ -371,16 +400,71 @@ def _approval_settings_from_manifest_text(manifest_text: str) -> tuple[float, st
     return _approval_settings_from_manifest(parsed)
 
 
+def _valid_approval_timeout(raw_timeout: Any) -> bool:
+    return (
+        not isinstance(raw_timeout, bool)
+        and isinstance(raw_timeout, (int, float))
+        and math.isfinite(float(raw_timeout))
+        and raw_timeout > 0
+    )
+
+
+def _sanitize_manifest_for_acs(manifest: Mapping[str, Any]) -> tuple[Mapping[str, Any], bool]:
+    sanitized = copy.deepcopy(dict(manifest))
+    approval = sanitized.get("approval")
+    if not isinstance(approval, Mapping):
+        return sanitized, False
+
+    changed = False
+    sanitized_approval = dict(approval)
+    timeout_valid = True
+    if "timeout_seconds" in approval:
+        raw_timeout = approval.get("timeout_seconds")
+        timeout_valid = _valid_approval_timeout(raw_timeout)
+        acs_timeout = max(1, int(math.ceil(float(raw_timeout)))) if timeout_valid else 1
+        if raw_timeout != acs_timeout:
+            changed = True
+        sanitized_approval["timeout_seconds"] = acs_timeout
+
+    if "on_timeout" in approval:
+        raw_on_timeout = approval.get("on_timeout")
+        acs_on_timeout = (
+            "allow"
+            if timeout_valid and str(raw_on_timeout or "deny").lower() == "allow"
+            else "deny"
+        )
+        if raw_on_timeout != acs_on_timeout:
+            changed = True
+        sanitized_approval["on_timeout"] = acs_on_timeout
+
+    sanitized["approval"] = sanitized_approval
+    return sanitized, changed
+
+
 def _approval_settings_from_manifest(manifest: Mapping[str, Any]) -> tuple[float, str]:
+    """Return approval timeout settings with invalid values failing closed.
+
+    Missing ``timeout_seconds`` preserves the 300s default. Explicit zero,
+    negative, non-finite, boolean, or non-numeric values are treated as an
+    immediate fail-closed timeout and cannot opt into ``on_timeout: allow``.
+    """
     approval = manifest.get("approval")
     if not isinstance(approval, Mapping):
         return _DEFAULT_APPROVAL_TIMEOUT_SECONDS, "deny"
+
     raw_timeout = approval.get("timeout_seconds")
     timeout = _DEFAULT_APPROVAL_TIMEOUT_SECONDS
-    if isinstance(raw_timeout, (int, float)) and raw_timeout > 0:
-        timeout = float(raw_timeout)
+    timeout_valid = True
+    if "timeout_seconds" in approval:
+        timeout_valid = _valid_approval_timeout(raw_timeout)
+        timeout = (
+            float(raw_timeout)
+            if timeout_valid
+            else _IMMEDIATE_APPROVAL_TIMEOUT_SECONDS
+        )
+
     on_timeout = str(approval.get("on_timeout") or "deny").lower()
-    if on_timeout != "allow":
+    if on_timeout != "allow" or not timeout_valid:
         on_timeout = "deny"
     return timeout, on_timeout
 
@@ -418,6 +502,35 @@ def _approval_timeout_result(
     )
 
 
+def _approval_error_result(
+    raw_result: InterventionPointResult,
+    snapshot: Mapping[str, Any],
+    exc: Exception,
+) -> EvaluationResult:
+    result = _result_from_intervention(raw_result, snapshot)
+    return result.model_copy(
+        update={
+            "verdict": "deny",
+            "allowed": False,
+            "reason": "runtime_error:approval_resolver_error",
+            "message": f"Approval resolver failed closed: {type(exc).__name__}",
+            "audit_entry": {
+                **result.audit_entry,
+                "approval_outcome": "deny",
+                "approval_error": type(exc).__name__,
+            },
+        }
+    )
+
+
+def _is_event_loop_binding_error(exc: RuntimeError) -> bool:
+    message = str(exc)
+    return (
+        "attached to a different loop" in message
+        or "bound to a different event loop" in message
+    )
+
+
 def _make_acs_resolver(
     callback: ApprovalCallback | None,
     snapshot: Mapping[str, Any],
@@ -435,9 +548,14 @@ def _make_acs_resolver(
         ip_result: InterventionPointResult,
     ) -> ApprovalResolution:
         agt_result = _result_from_intervention(ip_result, snapshot)
-        outcome = callback(intervention_point.value, agt_result)
-        if asyncio.iscoroutine(outcome):
-            outcome = await outcome  # type: ignore[assignment]
+        try:
+            outcome = callback(intervention_point.value, agt_result)
+            if asyncio.iscoroutine(outcome):
+                outcome = await outcome  # type: ignore[assignment]
+        except RuntimeError as exc:
+            if _is_event_loop_binding_error(exc):
+                await asyncio.Event().wait()
+            raise
         if not isinstance(outcome, ApprovalDecision):
             raise TypeError(
                 "approval_resolver must return an ApprovalDecision, "
@@ -460,34 +578,73 @@ def _make_acs_resolver(
     return _resolve
 
 
+def _close_unstarted_awaitable(awaitable: Awaitable[Any]) -> None:
+    close = getattr(awaitable, "close", None)
+    if callable(close):
+        close()
+
+
+def _cancel_pending_tasks(loop: asyncio.AbstractEventLoop) -> None:
+    pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+    if pending:
+        for task in pending:
+            task.cancel()
+        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    loop.run_until_complete(loop.shutdown_asyncgens())
+
+
 def _run_sync(coro: Awaitable[Any], *, timeout: float | None = None) -> Any:
-    """Run an awaitable to completion from a sync context."""
+    """Run an awaitable to completion from a sync context.
+
+    Timed calls use daemon worker threads capped by
+    ``_TIMED_RUN_SYNC_MAX_WORKERS``. CPython cannot kill a resolver that is
+    stuck in synchronous code, so a timed-out worker may remain alive; keeping
+    its semaphore slot prevents unbounded accumulation and future approvals
+    fail closed once the cap is reached.
+    """
     if timeout is None:
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(coro)  # type: ignore[arg-type]
-    # A bounded call, or a call from an existing event loop, uses a private
-    # daemon thread. If the awaitable does not stop after cancellation, the
-    # caller still receives the fail-closed timeout decision.
-    import threading
+
+    slot_acquired = False
+    if timeout is not None:
+        if timeout <= 0:
+            _close_unstarted_awaitable(coro)
+            raise TimeoutError("approval resolver timed out")
+        if not _TIMED_RUN_SYNC_SLOTS.acquire(blocking=False):
+            _close_unstarted_awaitable(coro)
+            raise TimeoutError("approval resolver timed out")
+        slot_acquired = True
 
     holder: dict[str, Any] = {}
 
     def _runner() -> None:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        task = loop.create_task(coro)  # type: ignore[arg-type]
-        holder["loop"] = loop
-        holder["task"] = task
         try:
-            holder["value"] = loop.run_until_complete(task)
+            task = loop.create_task(coro)  # type: ignore[arg-type]
+            holder["loop"] = loop
+            holder["task"] = task
+            try:
+                holder["value"] = loop.run_until_complete(task)
+            except BaseException as exc:  # noqa: BLE001 - propagate to caller
+                holder["error"] = exc
+            finally:
+                _cancel_pending_tasks(loop)
         except BaseException as exc:  # noqa: BLE001 - propagate to caller
-            holder["error"] = exc
+            holder.setdefault("error", exc)
         finally:
             loop.close()
+            if slot_acquired:
+                _TIMED_RUN_SYNC_SLOTS.release()
 
-    thread = threading.Thread(target=_runner, daemon=True)
+    thread = threading.Thread(
+        target=_runner,
+        name="agt-approval-resolver",
+        daemon=True,
+    )
     thread.start()
     thread.join(timeout)
     if thread.is_alive():
@@ -498,6 +655,7 @@ def _run_sync(coro: Awaitable[Any], *, timeout: float | None = None) -> Any:
                 loop.call_soon_threadsafe(task.cancel)
             except RuntimeError:
                 pass
+        thread.join(_TIMED_RUN_SYNC_CANCEL_GRACE_SECONDS)
         raise TimeoutError("approval resolver timed out")
     if "error" in holder:
         raise holder["error"]

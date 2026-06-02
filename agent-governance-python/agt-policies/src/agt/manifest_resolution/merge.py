@@ -36,20 +36,68 @@ def _condition_key(condition: Any) -> str:
     return json.dumps(condition, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def _condition_parts(condition: dict[str, Any]) -> tuple[str, str, Any] | None:
+    field = condition.get("field")
+    operator = condition.get("operator")
+    if not isinstance(field, str) or not field or not isinstance(operator, str):
+        return None
+    return field, operator.lower(), condition.get("value")
+
+
+def _compound_items(condition: dict[str, Any], key: str) -> list[Any] | None:
+    value = condition.get(key)
+    if isinstance(value, list):
+        return value
+    return None
+
+
+_VALUE_TEST_OPERATORS = {
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "in",
+    "not_in",
+    "contains",
+    "startswith",
+    "endswith",
+}
+
+
 def _accepts_value(operator: str, expected: Any, value: Any) -> bool:
     try:
         if operator == "eq":
             return value == expected
+        if operator == "ne":
+            return value is not None and value != expected
         if operator == "gt":
-            return value > expected
+            return value is not None and value > expected
         if operator == "gte":
-            return value >= expected
+            return value is not None and value >= expected
         if operator == "lt":
-            return value < expected
+            return value is not None and value < expected
         if operator == "lte":
-            return value <= expected
+            return value is not None and value <= expected
         if operator == "in" and isinstance(expected, list):
-            return value in expected
+            return value is not None and value in expected
+        if operator == "not_in" and isinstance(expected, list):
+            return value is not None and value not in expected
+        if operator == "contains":
+            return value is not None and expected in value
+        if operator == "startswith":
+            return (
+                isinstance(value, str)
+                and isinstance(expected, str)
+                and value.startswith(expected)
+            )
+        if operator == "endswith":
+            return (
+                isinstance(value, str)
+                and isinstance(expected, str)
+                and value.endswith(expected)
+            )
     except TypeError:
         return False
     return False
@@ -78,46 +126,151 @@ def _ranges_overlap(
         try:
             if left_upper < right_lower:
                 return False
-            if left_upper == right_lower and not (left_upper_inclusive and right_lower_inclusive):
+            if left_upper == right_lower and not (
+                left_upper_inclusive and right_lower_inclusive
+            ):
                 return False
         except TypeError:
-            return False
+            return True
     if right_upper is not None and left_lower is not None:
         try:
             if right_upper < left_lower:
                 return False
-            if right_upper == left_lower and not (right_upper_inclusive and left_lower_inclusive):
+            if right_upper == left_lower and not (
+                right_upper_inclusive and left_lower_inclusive
+            ):
                 return False
         except TypeError:
-            return False
+            return True
     return True
+
+
+def _all_values_in(values: list[Any], excluded: list[Any]) -> bool:
+    return all(
+        any(value == excluded_value for excluded_value in excluded) for value in values
+    )
+
+
+def _scalar_conditions_disjoint(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    left_parts = _condition_parts(left)
+    right_parts = _condition_parts(right)
+    if left_parts is None or right_parts is None:
+        return False
+
+    left_field, left_operator, left_value = left_parts
+    right_field, right_operator, right_value = right_parts
+    if left_field != right_field:
+        return False
+
+    if left_operator == "exists" or right_operator == "exists":
+        return False
+    if left_operator in {"matches", "regex"} or right_operator in {"matches", "regex"}:
+        return False
+
+    if left_operator == "eq":
+        if right_operator not in _VALUE_TEST_OPERATORS:
+            return False
+        return not _accepts_value(right_operator, right_value, left_value)
+    if right_operator == "eq":
+        if left_operator not in _VALUE_TEST_OPERATORS:
+            return False
+        return not _accepts_value(left_operator, left_value, right_value)
+
+    if left_operator == "in" and isinstance(left_value, list):
+        if not left_value:
+            return True
+        if right_operator not in _VALUE_TEST_OPERATORS:
+            return False
+        return not any(
+            _accepts_value(right_operator, right_value, value) for value in left_value
+        )
+    if right_operator == "in" and isinstance(right_value, list):
+        if not right_value:
+            return True
+        if left_operator not in _VALUE_TEST_OPERATORS:
+            return False
+        return not any(
+            _accepts_value(left_operator, left_value, value) for value in right_value
+        )
+
+    if left_operator == "not_in" and isinstance(left_value, list):
+        if right_operator == "not_in" and isinstance(right_value, list):
+            return False
+        if right_operator == "in" and isinstance(right_value, list):
+            return _all_values_in(right_value, left_value)
+    if right_operator == "not_in" and isinstance(right_value, list):
+        if left_operator == "in" and isinstance(left_value, list):
+            return _all_values_in(left_value, right_value)
+
+    if left_operator == "contains" and right_operator == "contains":
+        return False
+    if left_operator in {"contains", "startswith", "endswith"} or right_operator in {
+        "contains",
+        "startswith",
+        "endswith",
+    }:
+        return False
+
+    if left_operator == "ne" and right_operator == "ne":
+        return False
+
+    left_range = _range_bounds(left_operator, left_value)
+    right_range = _range_bounds(right_operator, right_value)
+    if left_range is not None and right_range is not None:
+        return not _ranges_overlap(left_range, right_range)
+
+    return False
+
+
+def _condition_unsatisfiable(condition: Any) -> bool:
+    if not isinstance(condition, dict):
+        return False
+    and_items = _compound_items(condition, "and")
+    if and_items is not None:
+        return any(_condition_unsatisfiable(item) for item in and_items) or any(
+            _conditions_disjoint(left, right)
+            for index, left in enumerate(and_items)
+            for right in and_items[index + 1 :]
+        )
+    or_items = _compound_items(condition, "or")
+    if or_items is not None:
+        return not or_items or all(_condition_unsatisfiable(item) for item in or_items)
+    if "not" in condition:
+        return False
+    parts = _condition_parts(condition)
+    return parts is not None and parts[1] == "in" and condition.get("value") == []
+
+
+def _conditions_disjoint(left: Any, right: Any) -> bool:
+    if _condition_unsatisfiable(left) or _condition_unsatisfiable(right):
+        return True
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        return False
+
+    left_or = _compound_items(left, "or")
+    if left_or is not None:
+        return all(_conditions_disjoint(item, right) for item in left_or)
+    right_or = _compound_items(right, "or")
+    if right_or is not None:
+        return all(_conditions_disjoint(left, item) for item in right_or)
+
+    left_and = _compound_items(left, "and")
+    if left_and is not None:
+        return any(_conditions_disjoint(item, right) for item in left_and)
+    right_and = _compound_items(right, "and")
+    if right_and is not None:
+        return any(_conditions_disjoint(left, item) for item in right_and)
+
+    if "not" in left or "not" in right:
+        return False
+
+    return _scalar_conditions_disjoint(left, right)
 
 
 def _conditions_overlap(parent_condition: Any, child_condition: Any) -> bool:
     if _condition_key(parent_condition) == _condition_key(child_condition):
         return True
-    if not isinstance(parent_condition, dict) or not isinstance(child_condition, dict):
-        return False
-    if parent_condition.get("field") != child_condition.get("field"):
-        return False
-
-    parent_operator = str(parent_condition.get("operator", "")).lower()
-    child_operator = str(child_condition.get("operator", "")).lower()
-    parent_value = parent_condition.get("value")
-    child_value = child_condition.get("value")
-
-    if parent_operator == "eq":
-        return _accepts_value(child_operator, child_value, parent_value)
-    if child_operator == "eq":
-        return _accepts_value(parent_operator, parent_value, child_value)
-    if parent_operator == "in" and isinstance(parent_value, list):
-        return any(_accepts_value(child_operator, child_value, value) for value in parent_value)
-    if child_operator == "in" and isinstance(child_value, list):
-        return any(_accepts_value(parent_operator, parent_value, value) for value in child_value)
-
-    parent_range = _range_bounds(parent_operator, parent_value)
-    child_range = _range_bounds(child_operator, child_value)
-    return parent_range is not None and child_range is not None and _ranges_overlap(parent_range, child_range)
+    return not _conditions_disjoint(parent_condition, child_condition)
 
 
 def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -173,7 +326,9 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     for deny_rule, deny_level in parent_denies
                     if deny_level < level
                     and _rule_action(rule) == "allow"
-                    and _conditions_overlap(deny_rule.get("condition"), rule.get("condition"))
+                    and _conditions_overlap(
+                        deny_rule.get("condition"), rule.get("condition")
+                    )
                 ),
                 None,
             )

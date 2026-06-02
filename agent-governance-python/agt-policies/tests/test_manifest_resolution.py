@@ -9,7 +9,8 @@ Cover the contract documented in
 
 from __future__ import annotations
 
-import json
+import random
+import re
 from pathlib import Path
 
 import pytest
@@ -146,6 +147,96 @@ def _rule(name: str, action: str, priority: int = 0, override: bool = False) -> 
     }
 
 
+def _rule_with_condition(
+    name: str, action: str, condition: dict, priority: int = 0
+) -> dict:
+    return {
+        "name": name,
+        "condition": condition,
+        "action": action,
+        "priority": priority,
+        "override": False,
+        "message": "",
+    }
+
+
+def _value_at(sample: dict, field: str) -> object:
+    current: object = sample
+    for part in field.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
+
+
+def _condition_matches(condition: object, sample: dict) -> bool:
+    if not isinstance(condition, dict):
+        return False
+    if "and" in condition:
+        items = condition["and"]
+        return isinstance(items, list) and all(
+            _condition_matches(item, sample) for item in items
+        )
+    if "or" in condition:
+        items = condition["or"]
+        return isinstance(items, list) and any(
+            _condition_matches(item, sample) for item in items
+        )
+    if "not" in condition:
+        return not _condition_matches(condition["not"], sample)
+
+    field = condition.get("field")
+    operator = condition.get("operator")
+    expected = condition.get("value")
+    if not isinstance(field, str) or not isinstance(operator, str):
+        return False
+    actual = _value_at(sample, field)
+    try:
+        if operator == "exists":
+            return actual is not None
+        if actual is None:
+            return False
+        if operator == "eq":
+            return actual == expected
+        if operator == "ne":
+            return actual != expected
+        if operator == "gt":
+            return actual > expected
+        if operator == "gte":
+            return actual >= expected
+        if operator == "lt":
+            return actual < expected
+        if operator == "lte":
+            return actual <= expected
+        if operator == "in":
+            return isinstance(expected, list) and actual in expected
+        if operator == "not_in":
+            return isinstance(expected, list) and actual not in expected
+        if operator == "contains":
+            return expected in actual
+        if operator == "startswith":
+            return (
+                isinstance(actual, str)
+                and isinstance(expected, str)
+                and actual.startswith(expected)
+            )
+        if operator == "endswith":
+            return (
+                isinstance(actual, str)
+                and isinstance(expected, str)
+                and actual.endswith(expected)
+            )
+        if operator in {"matches", "regex"}:
+            return (
+                isinstance(actual, str)
+                and isinstance(expected, str)
+                and re.search(expected, actual) is not None
+            )
+    except (TypeError, re.error):
+        return False
+    return False
+
+
 def test_merge_single_document_sorts_by_priority() -> None:
     doc = {"rules": [_rule("a", "allow", 1), _rule("b", "deny", 5)]}
     merged = merge_documents([doc])
@@ -201,6 +292,359 @@ def test_merge_child_allow_with_different_name_cannot_neutralize_parent_deny() -
 
     assert [rule["name"] for rule in merged] == ["org_deny"]
     assert merged[0]["action"] == "deny"
+
+
+def test_merge_child_allow_on_different_field_overlaps_parent_deny() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "tool_name", "operator": "eq", "value": "export"},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "principal", "operator": "eq", "value": "alice"},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"]
+
+
+def test_merge_ne_overlap_drops_child_allow() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "tool_name", "operator": "eq", "value": "delete"},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "tool_name", "operator": "ne", "value": "read"},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"]
+
+
+def test_merge_preserves_provably_disjoint_ne_child_allow() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "tool_name", "operator": "eq", "value": "delete"},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "tool_name", "operator": "ne", "value": "delete"},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["child_allow", "org_deny"]
+
+
+def test_merge_contains_and_matches_overlap_drop_child_allow() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "prompt", "operator": "eq", "value": "please delete all"},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "contains_allow",
+                "allow",
+                {"field": "prompt", "operator": "contains", "value": "delete"},
+                99,
+            ),
+            _rule_with_condition(
+                "matches_allow",
+                "allow",
+                {"field": "prompt", "operator": "matches", "value": "delete"},
+                98,
+            ),
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"]
+
+
+def test_merge_preserves_provably_disjoint_contains_child_allow() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "prompt", "operator": "eq", "value": "read only"},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "prompt", "operator": "contains", "value": "delete"},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["child_allow", "org_deny"]
+
+
+def test_merge_compound_conditions_drop_on_possible_overlap() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {
+                    "or": [
+                        {"field": "tool_name", "operator": "eq", "value": "delete"},
+                        {"field": "tool_name", "operator": "eq", "value": "export"},
+                    ]
+                },
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "tool_name", "operator": "eq", "value": "export"},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"]
+
+
+def test_merge_compound_conditions_preserve_provably_disjoint_child_allow() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {
+                    "and": [
+                        {"field": "tool_name", "operator": "eq", "value": "delete"},
+                        {"field": "environment", "operator": "eq", "value": "prod"},
+                    ]
+                },
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"field": "environment", "operator": "eq", "value": "dev"},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["child_allow", "org_deny"]
+
+
+def test_merge_not_condition_fails_closed_as_overlapping() -> None:
+    parent = {
+        "rules": [
+            _rule_with_condition(
+                "org_deny",
+                "deny",
+                {"field": "tool_name", "operator": "eq", "value": "delete"},
+                10,
+            )
+        ]
+    }
+    child = {
+        "rules": [
+            _rule_with_condition(
+                "child_allow",
+                "allow",
+                {"not": {"field": "principal", "operator": "eq", "value": "mallory"}},
+                99,
+            )
+        ]
+    }
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"]
+
+
+def _matching_scalar_condition(rng: random.Random, sample: dict) -> dict:
+    field = rng.choice(["tool_name", "principal", "amount", "prompt"])
+    actual = _value_at(sample, field)
+    if isinstance(actual, int):
+        operator = rng.choice(
+            ["eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists"]
+        )
+        if operator == "eq":
+            value = actual
+        elif operator == "ne":
+            value = actual + 1000
+        elif operator == "gt":
+            value = actual - 1
+        elif operator == "gte":
+            value = actual
+        elif operator == "lt":
+            value = actual + 1
+        elif operator == "lte":
+            value = actual
+        elif operator == "in":
+            value = [actual, actual + 1]
+        elif operator == "not_in":
+            value = [actual + 1, actual + 2]
+        else:
+            value = True
+        return {"field": field, "operator": operator, "value": value}
+
+    text = str(actual)
+    substring = text[: max(1, min(len(text), 3))]
+    operator = rng.choice(
+        [
+            "eq",
+            "ne",
+            "in",
+            "not_in",
+            "contains",
+            "startswith",
+            "endswith",
+            "matches",
+            "exists",
+        ]
+    )
+    if operator == "eq":
+        value = text
+    elif operator == "ne":
+        value = f"not-{text}"
+    elif operator == "in":
+        value = [text, f"other-{text}"]
+    elif operator == "not_in":
+        value = [f"other-{text}"]
+    elif operator == "contains":
+        value = substring
+    elif operator == "startswith":
+        value = text[:1]
+    elif operator == "endswith":
+        value = text[-1:]
+    elif operator == "matches":
+        value = re.escape(substring)
+    else:
+        value = True
+    return {"field": field, "operator": operator, "value": value}
+
+
+def _matching_condition(rng: random.Random, sample: dict, depth: int = 0) -> dict:
+    if depth < 2:
+        form = rng.choice(["scalar", "and", "or", "not"])
+    else:
+        form = "scalar"
+    if form == "and":
+        return {
+            "and": [
+                _matching_condition(rng, sample, depth + 1),
+                _matching_condition(rng, sample, depth + 1),
+            ]
+        }
+    if form == "or":
+        return {
+            "or": [
+                _matching_condition(rng, sample, depth + 1),
+                {"field": "tool_name", "operator": "eq", "value": "never-matches"},
+            ]
+        }
+    if form == "not":
+        return {
+            "not": {"field": "tool_name", "operator": "eq", "value": "never-matches"}
+        }
+    return _matching_scalar_condition(rng, sample)
+
+
+def test_merge_property_drops_allow_when_sample_matches_parent_and_child() -> None:
+    rng = random.Random(1337)
+    for index in range(150):
+        sample = {
+            "tool_name": rng.choice(["delete", "export", "read"]),
+            "principal": rng.choice(["alice", "bob", "carol"]),
+            "amount": rng.randint(1, 100),
+            "prompt": rng.choice(
+                ["delete all records", "export customer data", "read report"]
+            ),
+        }
+        parent_condition = _matching_condition(rng, sample)
+        child_condition = _matching_condition(rng, sample)
+        assert _condition_matches(parent_condition, sample)
+        assert _condition_matches(child_condition, sample)
+
+        parent = {
+            "rules": [_rule_with_condition("org_deny", "deny", parent_condition, 10)]
+        }
+        child = {
+            "rules": [_rule_with_condition("child_allow", "allow", child_condition, 99)]
+        }
+
+        merged = merge_documents([parent, child])
+
+        assert "child_allow" not in [rule["name"] for rule in merged], (
+            index,
+            parent_condition,
+            child_condition,
+        )
 
 
 def test_merge_child_without_override_DROPPED() -> None:
@@ -265,18 +709,21 @@ def _write(path: Path, doc: dict) -> None:
 
 def test_resolve_emits_flat_acs_manifest(tmp_path: Path) -> None:
     root = tmp_path
-    _write(root / "governance.yaml", {
-        "rules": [_rule("r1", "deny", 10)],
-        "tools": {"t": {"clearance": "public"}},
-        "intervention_points": {
-            "pre_tool_call": {
-                "policy_target": "$.tool_call.args",
-                "policy_target_kind": "tool_args",
-                "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "agt_legacy_rules"},
-            }
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [_rule("r1", "deny", 10)],
+            "tools": {"t": {"clearance": "public"}},
+            "intervention_points": {
+                "pre_tool_call": {
+                    "policy_target": "$.tool_call.args",
+                    "policy_target_kind": "tool_args",
+                    "tool_name_from": "$.tool_call.name",
+                    "policy": {"id": "agt_legacy_rules"},
+                }
+            },
         },
-    })
+    )
 
     manifest = resolve_manifest(root, root)
 
@@ -284,7 +731,9 @@ def test_resolve_emits_flat_acs_manifest(tmp_path: Path) -> None:
     assert manifest["extends"] == []
     assert "agt_legacy_rules" in manifest["policies"]
     assert manifest["policies"]["agt_legacy_rules"]["type"] == "rego"
-    assert manifest["policies"]["agt_legacy_rules"]["query"] == "data.agt.legacy.verdict"
+    assert (
+        manifest["policies"]["agt_legacy_rules"]["query"] == "data.agt.legacy.verdict"
+    )
     bundle_path = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
     assert bundle_path.is_dir()
     assert (bundle_path / "agt_legacy.rego").is_file()
@@ -316,15 +765,20 @@ def test_resolve_inherit_false_truncates_chain(tmp_path: Path) -> None:
     sub = root / "a"
     sub.mkdir()
     _write(root / "governance.yaml", {"rules": [_rule("p", "deny", 5)]})
-    _write(sub / "governance.yaml", {
-        "inherit": False,
-        "rules": [_rule("c", "allow", 1)],
-    })
+    _write(
+        sub / "governance.yaml",
+        {
+            "inherit": False,
+            "rules": [_rule("c", "allow", 1)],
+        },
+    )
 
     manifest = resolve_manifest(root, sub)
     metadata = manifest["metadata"]["resolved_from"]
     # only the child governance file remained in the chain
-    assert len(metadata["chain"]) == 2  # discovery sees both, _apply_inheritance trims later
+    assert (
+        len(metadata["chain"]) == 2
+    )  # discovery sees both, _apply_inheritance trims later
     bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
     rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
     # Only the child's rule should be in the rendered rules; reason
@@ -337,10 +791,13 @@ def test_resolve_scope_filter_drops_non_matching(tmp_path: Path) -> None:
     root = tmp_path
     sub = root / "src" / "auth"
     sub.mkdir(parents=True)
-    _write(root / "governance.yaml", {
-        "scope": "src/payments/*",
-        "rules": [_rule("p", "deny", 5)],
-    })
+    _write(
+        root / "governance.yaml",
+        {
+            "scope": "src/payments/*",
+            "rules": [_rule("p", "deny", 5)],
+        },
+    )
     _write(sub / "governance.yaml", {"rules": [_rule("c", "allow", 1)]})
 
     action = sub / "login.py"
@@ -356,30 +813,40 @@ def test_resolve_intervention_points_union_annotations(tmp_path: Path) -> None:
     root = tmp_path
     sub = root / "a"
     sub.mkdir()
-    _write(root / "governance.yaml", {
-        "rules": [_rule("p", "allow", 0)],
-        "intervention_points": {
-            "pre_tool_call": {
-                "policy_target": "$.tool_call.args",
-                "policy_target_kind": "tool_args",
-                "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "agt_legacy_rules"},
-                "annotations": {"parent_note": {"from": "$pi.snapshot.envelope.agent.id"}},
-            }
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [_rule("p", "allow", 0)],
+            "intervention_points": {
+                "pre_tool_call": {
+                    "policy_target": "$.tool_call.args",
+                    "policy_target_kind": "tool_args",
+                    "tool_name_from": "$.tool_call.name",
+                    "policy": {"id": "agt_legacy_rules"},
+                    "annotations": {
+                        "parent_note": {"from": "$pi.snapshot.envelope.agent.id"}
+                    },
+                }
+            },
         },
-    })
-    _write(sub / "governance.yaml", {
-        "rules": [_rule("c", "allow", 0)],
-        "intervention_points": {
-            "pre_tool_call": {
-                "policy_target": "$.tool_call.args",
-                "policy_target_kind": "tool_args",
-                "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "agt_legacy_rules"},
-                "annotations": {"child_note": {"from": "$pi.snapshot.envelope.session.id"}},
-            }
+    )
+    _write(
+        sub / "governance.yaml",
+        {
+            "rules": [_rule("c", "allow", 0)],
+            "intervention_points": {
+                "pre_tool_call": {
+                    "policy_target": "$.tool_call.args",
+                    "policy_target_kind": "tool_args",
+                    "tool_name_from": "$.tool_call.name",
+                    "policy": {"id": "agt_legacy_rules"},
+                    "annotations": {
+                        "child_note": {"from": "$pi.snapshot.envelope.session.id"}
+                    },
+                }
+            },
         },
-    })
+    )
 
     manifest = resolve_manifest(root, sub)
     annotations = manifest["intervention_points"]["pre_tool_call"]["annotations"]
@@ -413,10 +880,19 @@ def test_resolve_explicit_bundle_dir(tmp_path: Path) -> None:
 
 def test_resolution_reason_strings_match_d6() -> None:
     """D6 reserved reasons MUST match the host-emitted strings byte-for-byte."""
-    assert ResolutionReason.PATH_TRAVERSAL.value == "runtime_error:resolution_path_traversal"
+    assert (
+        ResolutionReason.PATH_TRAVERSAL.value
+        == "runtime_error:resolution_path_traversal"
+    )
     assert ResolutionReason.CYCLE.value == "runtime_error:resolution_cycle"
-    assert ResolutionReason.INVALID_GOVERNANCE.value == "runtime_error:resolution_invalid_governance"
-    assert ResolutionReason.MERGE_CONFLICT.value == "runtime_error:resolution_merge_conflict"
+    assert (
+        ResolutionReason.INVALID_GOVERNANCE.value
+        == "runtime_error:resolution_invalid_governance"
+    )
+    assert (
+        ResolutionReason.MERGE_CONFLICT.value
+        == "runtime_error:resolution_merge_conflict"
+    )
 
 
 def test_resolution_error_message_includes_reason_string() -> None:

@@ -9,11 +9,16 @@ use agent_control_specification_core::{
 use serde_json::json;
 use std::{
     collections::BTreeMap,
-    env,
+    env, fs,
     path::{Path, PathBuf},
-    sync::Arc,
-    time::{Duration, Instant},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 struct NoopAnnotator;
 
@@ -137,6 +142,137 @@ fn opa_dispatcher_times_out_pathological_eval() {
 }
 
 #[test]
+fn opa_default_timeout_allows_nontrivial_policy_input() {
+    let Some(runner) = require_opa_or_skip() else {
+        return;
+    };
+    let dir = test_artifact_dir("opa-default-timeout-nontrivial");
+    let policy_path = dir.join("nontrivial.rego");
+    fs::write(
+        &policy_path,
+        r#"package agent_control_specification.heavy
+
+import rego.v1
+
+matching_numbers := [n | some n in input.policy_target.value.numbers; n % 3 == 0]
+
+verdict := {"decision": "allow", "matched": count(matching_numbers)} if {
+    count(matching_numbers) >= 1000
+}
+"#,
+    )
+    .unwrap();
+    let mut adapter_config = BTreeMap::new();
+    adapter_config.insert(
+        "data_paths".to_string(),
+        json!([policy_path.display().to_string()]),
+    );
+    let input = json!({"policy_target": {"value": {"numbers": (1..=5000).collect::<Vec<_>>()}}});
+
+    let started = Instant::now();
+    let output = OpaPolicyDispatcher::with_runner(runner)
+        .evaluate(&rego_invocation(
+            "data.agent_control_specification.heavy.verdict",
+            None,
+            adapter_config,
+            input,
+        ))
+        .unwrap();
+
+    assert!(started.elapsed() < Duration::from_secs(5));
+    assert_eq!(output["decision"], json!("allow"));
+    assert_eq!(output["matched"], json!(1666));
+}
+
+#[test]
+fn opa_timeout_env_override_tiny_times_out_and_large_allows_completion() {
+    let Some(runner) = require_opa_or_skip() else {
+        return;
+    };
+    let _guard = ENV_LOCK.lock().unwrap();
+    let old_path = env::var_os("ACS_OPA_PATH");
+    let old_timeout = env::var_os("ACS_OPA_TIMEOUT_MS");
+    env::set_var("ACS_OPA_PATH", runner.executable());
+    env::set_var("ACS_OPA_TIMEOUT_MS", "1");
+    let tiny_runner = OpaRegoRunner::from_environment();
+    assert_eq!(tiny_runner.eval_timeout(), Duration::from_millis(1));
+    let slow = rego_invocation(
+        "x := numbers.range(1, 100000000)",
+        None,
+        BTreeMap::new(),
+        json!({"policy_target": {"value": {"text": "hello"}}}),
+    );
+    let tiny_error = OpaPolicyDispatcher::with_runner(tiny_runner)
+        .evaluate(&slow)
+        .unwrap_err();
+    assert_eq!(
+        tiny_error.reason(),
+        "runtime_error:policy_invocation_failed"
+    );
+    assert!(tiny_error.detail().contains("OPA eval exceeded timeout"));
+
+    env::set_var("ACS_OPA_TIMEOUT_MS", "5000");
+    let large_runner = OpaRegoRunner::from_environment();
+    assert_eq!(large_runner.eval_timeout(), Duration::from_secs(5));
+    let output = OpaPolicyDispatcher::with_runner(large_runner)
+        .evaluate(&rego_invocation(
+            "count(numbers.range(1, 5000))",
+            None,
+            BTreeMap::new(),
+            json!({"policy_target": {"value": {"text": "hello"}}}),
+        ))
+        .unwrap();
+    assert_eq!(output, json!(5000));
+    restore_env("ACS_OPA_PATH", old_path);
+    restore_env("ACS_OPA_TIMEOUT_MS", old_timeout);
+}
+
+#[cfg(unix)]
+#[test]
+fn opa_timeout_kills_child_process_without_lingering() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let dir = test_artifact_dir("opa-timeout-kills-child");
+    let pid_file = dir.join("fake-opa.pid");
+    let fake_opa = dir.join("opa");
+    fs::write(
+        &fake_opa,
+        r#"#!/bin/sh
+echo $$ > "$ACS_FAKE_OPA_PID_FILE"
+exec sleep 30
+"#,
+    )
+    .unwrap();
+    let mut permissions = fs::metadata(&fake_opa).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&fake_opa, permissions).unwrap();
+    let old_pid_file = env::var_os("ACS_FAKE_OPA_PID_FILE");
+    env::set_var("ACS_FAKE_OPA_PID_FILE", &pid_file);
+
+    let dispatcher = OpaPolicyDispatcher::with_runner(
+        OpaRegoRunner::new()
+            .with_executable(&fake_opa)
+            .with_eval_timeout(Duration::from_millis(30)),
+    );
+    let error = dispatcher
+        .evaluate(&rego_invocation(
+            "data.agent_control_specification.input.verdict",
+            None,
+            BTreeMap::new(),
+            json!({"policy_target": {"value": {"text": "hello"}}}),
+        ))
+        .unwrap_err();
+
+    assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    assert!(error.detail().contains("OPA eval exceeded timeout"));
+    let pid = fs::read_to_string(&pid_file).unwrap().trim().to_string();
+    assert!(
+        !Path::new("/proc").join(pid).exists(),
+        "timed-out fake OPA child process should be gone"
+    );
+    restore_env("ACS_FAKE_OPA_PID_FILE", old_pid_file);
+}
+
+#[test]
 fn runtime_can_use_opa_policy_dispatcher_for_rego_policy() {
     let Some(runner) = require_opa_or_skip() else {
         return;
@@ -218,6 +354,26 @@ fn fixture_path(name: &str) -> PathBuf {
         .join("fixtures")
         .join("opa")
         .join(name)
+}
+
+fn test_artifact_dir(name: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("opa-tests")
+        .join(format!("{name}-{}-{unique}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
+    root
+}
+
+fn restore_env(key: &str, value: Option<std::ffi::OsString>) {
+    match value {
+        Some(value) => env::set_var(key, value),
+        None => env::remove_var(key),
+    }
 }
 
 fn yaml_double_quoted(path: &Path) -> String {

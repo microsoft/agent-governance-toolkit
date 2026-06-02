@@ -1,5 +1,9 @@
 use agent_control_specification_core::{InterventionPoint, Manifest};
-use std::path::{Path, PathBuf};
+use serde_json::Value;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 fn fixture_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/extends")
@@ -21,6 +25,122 @@ fn assert_manifest_invalid(path: PathBuf, expected_detail: &str) {
         path.display(),
         error.detail()
     );
+}
+
+fn yaml_files_with_manifest_version(root: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    collect_files(root, &mut paths);
+    paths
+        .into_iter()
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(|ext| ext.to_str()),
+                Some("yaml" | "yml")
+            )
+        })
+        .filter(|path| {
+            fs::read_to_string(path)
+                .map(|text| text.contains("agent_control_specification_version"))
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
+fn collect_files(root: &Path, paths: &mut Vec<PathBuf>) {
+    if !root.exists() {
+        return;
+    }
+    for entry in
+        fs::read_dir(root).unwrap_or_else(|err| panic!("failed to read {}: {err}", root.display()))
+    {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            collect_files(&path, paths);
+        } else {
+            paths.push(path);
+        }
+    }
+}
+
+fn collect_manifest_versions(root: &Path, versions: &mut Vec<(String, String)>) {
+    let mut paths = Vec::new();
+    collect_files(root, &mut paths);
+    for path in paths {
+        let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
+            continue;
+        };
+        if !matches!(extension, "json" | "yaml" | "yml" | "py") {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        if !text.contains("agent_control_specification_version") {
+            continue;
+        }
+        if extension == "json" {
+            if let Ok(value) = serde_json::from_str::<Value>(&text) {
+                collect_manifest_versions_from_json(&path, &value, versions);
+                continue;
+            }
+        }
+        collect_manifest_versions_from_text(&path, &text, versions);
+    }
+}
+
+fn collect_manifest_versions_from_json(
+    path: &Path,
+    value: &Value,
+    versions: &mut Vec<(String, String)>,
+) {
+    match value {
+        Value::Object(object) => {
+            for (key, value) in object {
+                if key == "agent_control_specification_version" {
+                    if let Some(version) = value.as_str() {
+                        versions.push((path.display().to_string(), version.to_string()));
+                    }
+                }
+                if key == "manifest_yaml" {
+                    if let Some(text) = value.as_str() {
+                        collect_manifest_versions_from_text(path, text, versions);
+                    }
+                }
+                collect_manifest_versions_from_json(path, value, versions);
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_manifest_versions_from_json(path, value, versions);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_manifest_versions_from_text(
+    path: &Path,
+    text: &str,
+    versions: &mut Vec<(String, String)>,
+) {
+    for line in text.lines() {
+        let Some((_, raw_version)) = line.split_once("agent_control_specification_version:") else {
+            continue;
+        };
+        let version = raw_version
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .split("\\n")
+            .next()
+            .unwrap_or_default()
+            .split_whitespace()
+            .next()
+            .unwrap_or_default();
+        if version.chars().next().is_some_and(|ch| ch.is_ascii_digit()) {
+            versions.push((path.display().to_string(), version.to_string()));
+        }
+    }
 }
 
 #[test]
@@ -238,6 +358,73 @@ fn committed_example_manifest_loads_through_path_loader() {
     assert_eq!(manifest.agent_control_specification_version, "0.3.1-beta");
     assert_eq!(manifest.metadata["name"], "bank-agent");
     assert_eq!(manifest.intervention_points.len(), 8);
+}
+
+#[test]
+fn committed_example_and_fixture_manifest_files_load_through_path_loader() {
+    let roots = [
+        repo_root().join("examples"),
+        repo_root().join("tests/fixtures/smoke"),
+    ];
+    let mut checked = Vec::new();
+    for root in roots {
+        for path in yaml_files_with_manifest_version(&root) {
+            let display = path.display().to_string();
+            if display.contains("/examples/from_agentshield/") {
+                continue;
+            }
+            Manifest::from_path(&path)
+                .unwrap_or_else(|err| panic!("{} should load: {err}", path.display()));
+            checked.push(path);
+        }
+    }
+    for path in [
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/manifests/minimal-all-interventions.yaml"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/extends/ordered/child.yaml"),
+    ] {
+        Manifest::from_path(&path)
+            .unwrap_or_else(|err| panic!("{} should load: {err}", path.display()));
+        checked.push(path);
+    }
+    assert!(
+        checked.len() >= 10,
+        "expected committed manifests to be checked"
+    );
+}
+
+#[test]
+fn all_committed_manifest_version_values_are_supported() {
+    let roots = [
+        repo_root().join("examples"),
+        repo_root().join("spec"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"),
+        repo_root().join("sdk"),
+        repo_root().join("generator"),
+        repo_root().join("tests"),
+        repo_root()
+            .parent()
+            .expect("policy-engine should live under repository root")
+            .join("agent-governance-python"),
+    ];
+    let mut versions = Vec::new();
+    for root in roots {
+        collect_manifest_versions(&root, &mut versions);
+    }
+    versions.sort();
+    versions.dedup();
+    assert!(
+        versions.len() >= 4,
+        "expected multiple committed ACS versions"
+    );
+
+    for (source, version) in versions {
+        let yaml = format!(
+            "agent_control_specification_version: {version}\npolicies:\n  p:\n    type: test\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n"
+        );
+        Manifest::from_yaml_str(&yaml)
+            .unwrap_or_else(|err| panic!("{source} uses unsupported version {version}: {err}"));
+    }
 }
 
 #[test]
