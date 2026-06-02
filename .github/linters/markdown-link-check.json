@@ -50,7 +50,9 @@
     { "pattern": "arxiv\\.org" },
     { "pattern": "genai\\.owasp\\.org" },
     { "pattern": "learn\\.microsoft\\.com" },
-    { "pattern": "microsoft\\.com/en-us/security/blog" }
+    { "pattern": "microsoft\\.com/en-us/security/blog" },
+    { "pattern": "agent-governance-python/agent-lightning/pull" },
+    { "pattern": "^(?!https?://|mailto:|#)" }
   ],
   "timeout": "30s",
   "retryOn429": true,

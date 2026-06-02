@@ -149,8 +149,6 @@ packages = ["_placeholder"]
 "../agent-os/modules/control-plane/src/agent_control_plane" = "agent_control_plane"
 "../agent-os/modules/observability/src/agent_os_observability" = "agent_os_observability"
 "../agent-os/modules/nexus" = "nexus"
-"../agent-os/modules/scak/agent_kernel" = "agent_kernel"
-"../agent-os/modules/mute-agent/mute_agent" = "mute_agent"
 "../agent-os/modules/mcp-kernel-server/src/mcp_kernel_server" = "mcp_kernel_server"
 # --- agentmesh-primitives ---
 "../agent-primitives/agent_primitives" = "agent_primitives"

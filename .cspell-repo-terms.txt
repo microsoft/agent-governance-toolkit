@@ -391,7 +391,6 @@ sandboxing
 sandboxprovider
 sanitised
 sarif
-SCAK
 scikit
 scipy
 sdist
@@ -676,3 +675,11 @@ workstream
 writerow
 xoxb
 yamls
+ACMR
+scak
+httponly
+execve
+tinyrainbow
+pathe
+emnapi
+OSSF
