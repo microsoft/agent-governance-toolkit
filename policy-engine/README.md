@@ -1,6 +1,6 @@
 # `policy-engine/` - AGT policy engine vendored from ACS
 
-This directory is the home of the AGT policy engine. It started as a vendored copy of [`responsibleai/AgentControlSpecification`](https://github.com/responsibleai/AgentControlSpecification) at commit `318dbca` and has since been synced to upstream commit `eeaa83b`. It is being folded into AGT as the AGT 5.0 policy layer.
+This directory is the home of the AGT policy engine. It started as a vendored copy of `responsibleai/AgentControlSpecification` at commit `318dbca` and has since been synced to upstream commit `eeaa83b`. It is being folded into AGT as the AGT 5.0 policy layer.
 
 After the merge, this directory is AGT owned source. The ACS upstream repo will be archived once AGT 5.0 ships. There is no upstream tracking branch.
 

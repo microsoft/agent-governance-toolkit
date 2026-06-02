@@ -670,7 +670,7 @@ mod tests {
     use super::*;
     use crate::{normalize_policy_output, Decision};
     use serde_json::json;
-    use std::{fs, path::PathBuf};
+    use std::{fs, path::{Path, PathBuf}};
 
     fn invocation(policy_set: &str, input: JsonValue) -> CedarPolicyInvocation {
         CedarPolicyInvocation {
@@ -719,7 +719,7 @@ mod tests {
     }
 
     #[cfg(feature = "cedar")]
-    fn write_cedar_test_file(dir: &PathBuf, name: &str, content: &str) -> String {
+    fn write_cedar_test_file(dir: &Path, name: &str, content: &str) -> String {
         let path = dir.join(name);
         fs::write(&path, content).unwrap();
         path.display().to_string()

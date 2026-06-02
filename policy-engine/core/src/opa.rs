@@ -188,11 +188,11 @@ fn wait_with_timeout(mut child: Child, timeout: Duration) -> io::Result<Output> 
     let mut stdout = child
         .stdout
         .take()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to open OPA stdout pipe"))?;
+        .ok_or_else(|| io::Error::other("failed to open OPA stdout pipe"))?;
     let mut stderr = child
         .stderr
         .take()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to open OPA stderr pipe"))?;
+        .ok_or_else(|| io::Error::other("failed to open OPA stderr pipe"))?;
     let stdout_reader = thread::spawn(move || {
         let mut bytes = Vec::new();
         stdout.read_to_end(&mut bytes).map(|_| bytes)
@@ -233,7 +233,7 @@ fn wait_for_exit_or_timeout(child: &mut Child, timeout: Duration) -> io::Result<
 fn join_reader(handle: thread::JoinHandle<io::Result<Vec<u8>>>) -> io::Result<Vec<u8>> {
     handle
         .join()
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "OPA output reader thread panicked"))?
+        .map_err(|_| io::Error::other("OPA output reader thread panicked"))?
 }
 
 fn opa_command_path_arg(path: impl AsRef<Path>) -> OsString {

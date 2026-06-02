@@ -552,6 +552,7 @@ akickoff
 approvable
 artefacts
 arun
+asyncgens
 backrefs
 baprs
 bindgen
@@ -627,8 +628,11 @@ mpsc
 multibyte
 multichoice
 multisdk
+nanos
 napi
+neutralised
 neutralising
+nonconformant
 nonstring
 noresolver
 normalised
@@ -642,6 +646,7 @@ pymethods
 pymodule
 pyobject
 qualname
+randint
 realisation
 realises
 redactions
@@ -669,6 +674,7 @@ unparse
 unref
 unrepresentable
 unsetenv
+unstarted
 unsynchronised
 workiq
 workstream
