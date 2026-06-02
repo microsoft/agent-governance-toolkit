@@ -55,7 +55,8 @@
     "linenums",
     "pymdownx",
     "pygments",
-    "javascripts"
+    "javascripts",
+    "tabindex"
   ],
   "ignorePaths": [
     "**/node_modules/**",
