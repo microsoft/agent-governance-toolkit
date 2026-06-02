@@ -3,7 +3,7 @@ requires = ["setuptools>=64.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentmesh_memory"
+name = "agent-governance-toolkit-memory"
 version = "3.7.0"
 description = "Public Preview — Episodic Memory Kernel for AI agent experience storage"
 authors = [

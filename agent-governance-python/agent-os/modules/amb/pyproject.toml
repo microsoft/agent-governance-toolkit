@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0,<62.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentmesh_message_bus"
+name = "agent-governance-toolkit-message-bus"
 version = "3.7.0"
 description = "A lightweight, broker-agnostic message bus designed specifically for AI Agents"
 license = {text = "MIT"}
