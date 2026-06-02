@@ -348,6 +348,10 @@ class TestExporters:
 class TestOtlpGrpcTLSEnforcement:
     """configure_otlp_grpc must default to TLS and deny insecure on non-local endpoints."""
 
+    _otlp = pytest.importorskip(
+        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+        reason="opentelemetry-exporter-otlp-proto-grpc not installed",
+    )
     _EXPORTER_PATH = "opentelemetry.exporter.otlp.proto.grpc.trace_exporter.OTLPSpanExporter"
 
     def test_default_is_not_insecure(self):

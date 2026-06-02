@@ -3,7 +3,7 @@
 """Tests for OpenTelemetry tracing of trust operations."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from agentmesh.observability.tracing import (
     MeshTracer,
@@ -329,6 +329,11 @@ class TestConfigureTracing:
 class TestConfigureTracingTLSEnforcement:
     """Security tests: configure_tracing must default to TLS and block insecure on non-local endpoints."""
 
+    _otlp = pytest.importorskip(
+        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+        reason="opentelemetry-exporter-otlp-proto-grpc not installed",
+    )
+
     def test_default_non_local_endpoint_does_not_use_insecure(self):
         """configure_tracing() with a non-local endpoint MUST NOT pass insecure=True."""
         if not _OTEL_AVAILABLE:
@@ -350,8 +355,6 @@ class TestConfigureTracingTLSEnforcement:
         """Localhost + allow_insecure=True is permitted but must log a WARNING."""
         if not _OTEL_AVAILABLE:
             pytest.skip("opentelemetry not installed")
-
-        import logging
 
         with patch("agentmesh.observability.tracing._OTLP_AVAILABLE", True):
             with patch("agentmesh.observability.tracing.OTLPSpanExporter") as mock_exporter:
