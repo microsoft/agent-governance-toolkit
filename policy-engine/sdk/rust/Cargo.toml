@@ -5,7 +5,6 @@ edition = "2021"
 rust-version = "1.85"
 license = "MIT"
 description = "Rust SDK for the Agent Control Specification runtime."
-publish = false
 readme = "../../README.md"
 
 [dependencies]

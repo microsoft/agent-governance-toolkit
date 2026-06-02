@@ -5,7 +5,6 @@ edition = "2021"
 rust-version = "1.85"
 description = "Stateless Rust core for Agent Control Specification"
 license = "MIT"
-publish = false
 readme = "../README.md"
 keywords = ["agents", "policy", "security", "runtime"]
 categories = ["config"]
