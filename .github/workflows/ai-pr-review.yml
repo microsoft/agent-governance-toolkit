@@ -289,7 +289,11 @@ jobs:
                 core.info('Created summary comment');
               }
             } catch (error) {
-              core.warning(`Unable to post PR summary comment: ${error.message}`);
+              if (error.status === 403 || /Resource not accessible by integration/i.test(error.message)) {
+                core.warning('Skipping PR summary comment because this run cannot write issue comments.');
+              } else {
+                throw error;
+              }
             }
 
             await core.summary
