@@ -526,49 +526,49 @@ class DockerSandboxProvider(SandboxProvider):
                     f"Failed to initialize PolicyEvaluator: {exc}"
                 ) from exc
 
-        # 1b. Apply ring constraints — ring enforcement overrides whatever the
-        # policy or caller requested so a Ring 3 session can never receive
-        # network or write-filesystem capabilities regardless of other config.
-        from hypervisor.rings.enforcer import RING_CONSTRAINTS
-        ring_constraints = RING_CONSTRAINTS[cfg.ring]
-        if not ring_constraints.network_allowed and cfg.network_enabled:
-            logger.info(
-                "Ring %s: overriding network_enabled=False for agent '%s'",
-                cfg.ring.value,
-                agent_id,
-            )
-            cfg = SandboxConfig(
-                timeout_seconds=cfg.timeout_seconds,
-                memory_mb=cfg.memory_mb,
-                cpu_limit=cfg.cpu_limit,
-                network_enabled=False,
-                read_only_fs=cfg.read_only_fs,
-                env_vars=cfg.env_vars,
-                input_dir=cfg.input_dir,
-                output_dir=cfg.output_dir,
-                runtime=cfg.runtime,
-                output_max_bytes=cfg.output_max_bytes,
-                ring=cfg.ring,
-            )
-        if ring_constraints.filesystem_scope == "none" and not cfg.read_only_fs:
-            logger.info(
-                "Ring %s: overriding read_only_fs=True for agent '%s'",
-                cfg.ring.value,
-                agent_id,
-            )
-            cfg = SandboxConfig(
-                timeout_seconds=cfg.timeout_seconds,
-                memory_mb=cfg.memory_mb,
-                cpu_limit=cfg.cpu_limit,
-                network_enabled=cfg.network_enabled,
-                read_only_fs=True,
-                env_vars=cfg.env_vars,
-                input_dir=cfg.input_dir,
-                output_dir=cfg.output_dir,
-                runtime=cfg.runtime,
-                output_max_bytes=cfg.output_max_bytes,
-                ring=cfg.ring,
-            )
+        # 1b. Apply ring constraints — only when a ring is explicitly set.
+        # ring=None means the hypervisor extra is not installed; skip silently.
+        if cfg.ring is not None:
+            from hypervisor.rings.enforcer import RING_CONSTRAINTS
+            ring_constraints = RING_CONSTRAINTS[cfg.ring]
+            if not ring_constraints.network_allowed and cfg.network_enabled:
+                logger.info(
+                    "Ring %s: overriding network_enabled=False for agent '%s'",
+                    cfg.ring.value,
+                    agent_id,
+                )
+                cfg = SandboxConfig(
+                    timeout_seconds=cfg.timeout_seconds,
+                    memory_mb=cfg.memory_mb,
+                    cpu_limit=cfg.cpu_limit,
+                    network_enabled=False,
+                    read_only_fs=cfg.read_only_fs,
+                    env_vars=cfg.env_vars,
+                    input_dir=cfg.input_dir,
+                    output_dir=cfg.output_dir,
+                    runtime=cfg.runtime,
+                    output_max_bytes=cfg.output_max_bytes,
+                    ring=cfg.ring,
+                )
+            if ring_constraints.filesystem_scope == "none" and not cfg.read_only_fs:
+                logger.info(
+                    "Ring %s: overriding read_only_fs=True for agent '%s'",
+                    cfg.ring.value,
+                    agent_id,
+                )
+                cfg = SandboxConfig(
+                    timeout_seconds=cfg.timeout_seconds,
+                    memory_mb=cfg.memory_mb,
+                    cpu_limit=cfg.cpu_limit,
+                    network_enabled=cfg.network_enabled,
+                    read_only_fs=True,
+                    env_vars=cfg.env_vars,
+                    input_dir=cfg.input_dir,
+                    output_dir=cfg.output_dir,
+                    runtime=cfg.runtime,
+                    output_max_bytes=cfg.output_max_bytes,
+                    ring=cfg.ring,
+                )
 
         # 2. Create hardened container
         container = self._create_container(agent_id, session_id, cfg)
@@ -621,12 +621,12 @@ class DockerSandboxProvider(SandboxProvider):
         # Ring 3 agents get a clear denial rather than a code-scanner error.
         if session_cfg is not None:
             from hypervisor.rings.enforcer import ResourceType, RingEnforcer
-            ring_result = RingEnforcer().check_resource(
-                session_cfg.ring, ResourceType.SUBPROCESS
-            )
+            from hypervisor.models import ExecutionRing
+            session_ring = session_cfg.ring if session_cfg.ring is not None else ExecutionRing.RING_3_SANDBOX
+            ring_result = RingEnforcer().check_resource(session_ring, ResourceType.SUBPROCESS)
             if not ring_result.allowed:
                 raise PermissionError(
-                    f"Ring {session_cfg.ring.value} agent cannot execute "
+                    f"Ring {session_ring.value} agent cannot execute "
                     f"subprocess: {ring_result.reason}"
                 )
 

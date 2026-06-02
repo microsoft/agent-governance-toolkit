@@ -389,13 +389,15 @@ class HyperLightSandboxProvider(SandboxProvider):
         # Ring 3 (Sandbox) prohibits subprocess and network access, so tools
         # and domain allowlists are cleared regardless of what the policy says.
         from hypervisor.rings.enforcer import RING_CONSTRAINTS
-        ring_constraints = RING_CONSTRAINTS[base_cfg.ring]
+        from hypervisor.models import ExecutionRing
+        ring = base_cfg.ring if base_cfg.ring is not None else ExecutionRing.RING_3_SANDBOX
+        ring_constraints = RING_CONSTRAINTS[ring]
         if not ring_constraints.subprocess_allowed:
             if tool_allow:
                 logger.info(
                     "Ring %s: clearing tool_allowlist for agent '%s' "
                     "(subprocess not permitted at this ring)",
-                    base_cfg.ring.value,
+                    ring.value,
                     agent_id,
                 )
             tool_allow = []
@@ -404,7 +406,7 @@ class HyperLightSandboxProvider(SandboxProvider):
                 logger.info(
                     "Ring %s: clearing network_allowlist for agent '%s' "
                     "(network not permitted at this ring)",
-                    base_cfg.ring.value,
+                    ring.value,
                     agent_id,
                 )
             net_allow = []
@@ -525,16 +527,15 @@ class HyperLightSandboxProvider(SandboxProvider):
 
         # Ring resource check — deny subprocess access for Ring 3 before
         # the code ever reaches the guest.
-        if session_ring is not None:
-            from hypervisor.rings.enforcer import ResourceType, RingEnforcer
-            ring_result = RingEnforcer().check_resource(
-                session_ring, ResourceType.SUBPROCESS
+        from hypervisor.rings.enforcer import ResourceType, RingEnforcer
+        from hypervisor.models import ExecutionRing
+        effective_ring = session_ring if session_ring is not None else ExecutionRing.RING_3_SANDBOX
+        ring_result = RingEnforcer().check_resource(effective_ring, ResourceType.SUBPROCESS)
+        if not ring_result.allowed:
+            raise PermissionError(
+                f"Ring {effective_ring.value} agent cannot execute "
+                f"subprocess: {ring_result.reason}"
             )
-            if not ring_result.allowed:
-                raise PermissionError(
-                    f"Ring {session_ring.value} agent cannot execute "
-                    f"subprocess: {ring_result.reason}"
-                )
 
         enforce_no_subprocess_execution(code)
 

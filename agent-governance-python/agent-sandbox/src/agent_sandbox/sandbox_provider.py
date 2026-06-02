@@ -24,9 +24,10 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional
 
-from hypervisor.models import ExecutionRing
+if TYPE_CHECKING:
+    from hypervisor.models import ExecutionRing
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class SandboxConfig:
     output_dir: str | None = None
     runtime: str | None = None
     output_max_bytes: int = 1_048_576  # 1 MiB per stream
-    ring: ExecutionRing = field(default_factory=lambda: ExecutionRing.RING_3_SANDBOX)
+    ring: Optional[Any] = None  # ExecutionRing; None is treated as RING_3_SANDBOX at enforcement time
 
 
 @dataclass

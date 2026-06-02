@@ -564,13 +564,15 @@ class ACASandboxProvider(SandboxProvider):
         # Apply ring constraints — Ring 3 agents get deny-all egress and
         # no network access regardless of what the policy requested.
         from hypervisor.rings.enforcer import RING_CONSTRAINTS
-        ring_constraints = RING_CONSTRAINTS[cfg.ring]
+        from hypervisor.models import ExecutionRing
+        ring = cfg.ring if cfg.ring is not None else ExecutionRing.RING_3_SANDBOX
+        ring_constraints = RING_CONSTRAINTS[ring]
         if not ring_constraints.network_allowed:
             if allow_hosts:
                 logger.info(
                     "Ring %s: clearing network_allowlist for agent '%s' "
                     "(network not permitted at this ring)",
-                    cfg.ring.value,
+                    ring.value,
                     agent_id,
                 )
             allow_hosts = []
