@@ -250,6 +250,20 @@ body,
   z-index: 3;
 }
 
+/* The search container lives inside .md-header alongside the sticky tabs
+   row (.md-tabs, z-index: 3). Material gives .md-search only z-index: 1, so
+   within the shared header stacking context the tabs paint OVER the open
+   search results dropdown. At desktop widths (where the tabs row is shown)
+   lift the search above the tabs so its results overlay correctly. Scoped
+   to the desktop breakpoint to avoid disturbing the mobile full-screen
+   search overlay, which relies on Material's own absolute positioning. */
+@media screen and (min-width: 76.25em) {
+  .md-search {
+    position: relative;
+    z-index: 6;
+  }
+}
+
 [data-md-color-scheme="slate"] .md-header {
   background-color: var(--md-default-bg-color);
   color: var(--mslearn-text);
