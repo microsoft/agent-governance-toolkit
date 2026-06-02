@@ -375,6 +375,13 @@ jobs:
             echo "::warning::ci-test.txt not found at $CI_TEST_REQS — skipping shared test deps"
           fi
           pip install --no-cache-dir pytest-cov==7.1.0  # Scorecard: version-pinned
+      - name: Conformance (agent-os parity + adapter contract)
+        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        working-directory: agent-governance-python/agent-os
+        run: |
+          pytest tests/test_governance_parity.py \
+                 tests/test_spec_adapter_contract_conformance.py \
+                 -v --tb=short
       - name: Test ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}

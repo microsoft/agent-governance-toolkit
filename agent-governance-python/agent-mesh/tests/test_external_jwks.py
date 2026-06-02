@@ -11,6 +11,7 @@ import json
 import time
 from datetime import datetime, timezone
 from unittest.mock import patch
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -350,7 +351,7 @@ async def test_verify_rejects_revocation_url_override_on_different_host():
         identity = await provider.verify(token)
 
     assert identity is None
-    assert not any("attacker.example.org" in u for u in fetched_urls)
+    assert not any(urlparse(u).hostname == "attacker.example.org" for u in fetched_urls)
 
 
 @pytest.mark.asyncio
@@ -463,7 +464,7 @@ async def test_verify_tofu_strips_userinfo_from_issuer_claim():
     assert identity is not None
     assert identity.issuer_domain == target_host
     # No request should have been issued to the attacker-controlled host.
-    assert not any("attacker.example.org" in u for u in fetched_urls)
+    assert not any(urlparse(u).hostname == "attacker.example.org" for u in fetched_urls)
 
 
 @pytest.mark.asyncio

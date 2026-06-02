@@ -160,7 +160,7 @@ pool:
 
 stages:
   # =======================================================
-  # PYTHON (PyPI) — 9 packages (4 consolidated + 1 meta + 4 standalone)
+  # PYTHON (PyPI) — 10 packages (4 consolidated + 1 meta + 5 standalone)
   # =======================================================
   - stage: Build_PyPI
     displayName: 'Build Python Packages'
@@ -254,7 +254,7 @@ stages:
                 domaintenantid: '$(MICROSOFT_TENANT_ID)'
 
   # =======================================================
-  # NPM — 7 packages (@microsoft scope)
+  # NPM — 11 packages (@microsoft scope)
   # =======================================================
   - stage: Build_npm
     displayName: 'Build & Pack npm Packages'

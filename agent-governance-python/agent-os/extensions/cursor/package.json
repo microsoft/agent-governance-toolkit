@@ -261,10 +261,10 @@
     "@typescript-eslint/eslint-plugin": "6.0.0",
     "@typescript-eslint/parser": "6.0.0",
     "eslint": "8.0.0",
-    "typescript": "5.3.0",
+    "typescript": "5.7.3",
     "@vscode/vsce": "2.22.0"
   },
   "dependencies": {
-    "axios": "1.16.0"
+    "axios": "1.16.1"
   }
 }

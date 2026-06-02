@@ -380,8 +380,6 @@ agent-governance-python/agent-os/
 │   ├── atr/                  # Layer 2: Agent tool registry
 │   ├── observability/        # Layer 3: Prometheus + OpenTelemetry
 │   ├── control-plane/        # Layer 3: THE KERNEL (policies, signals)
-│   ├── scak/                 # Layer 4: Self-correcting agent kernel
-│   ├── mute-agent/           # Layer 4: Face/Hands architecture
 │   ├── nexus/                # Experimental: Trust exchange network
 │   └── mcp-kernel-server/    # Integration: MCP protocol support
 ├── extensions/               # IDE & AI Assistant Extensions
@@ -415,8 +413,6 @@ agent-governance-python/agent-os/
 | [`atr`](modules/atr/) | 2 | `agent-tool-registry` | Tool registry with LLM schema generation | ✅ Stable |
 | [`control-plane`](modules/control-plane/) | 3 | `agent-control-plane` | **THE KERNEL** — Policy engine, signals, VFS | ✅ Stable |
 | [`observability`](modules/observability/) | 3 | `agent-os-observability` | Prometheus metrics + OpenTelemetry tracing | ⚠️ No tests |
-| [`scak`](modules/scak/) | 4 | `scak` | Self-correcting agent kernel | ✅ Stable |
-| [`mute-agent`](modules/mute-agent/) | 4 | `mute-agent` | Decoupled reasoning/execution architecture | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
 | [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
@@ -964,13 +960,11 @@ These components are fully implemented and tested:
 | **IATP** (`inter-agent-trust-protocol`) — Sidecar trust, typed IPC | ✅ 9 test files |
 | **ATR** (`agent-tool-registry`) — Multi-LLM schema generation | ✅ 6 test files |
 | **Control Plane** (`agent-control-plane`) — Signals, VFS, protection rings | ✅ 18 test files |
-| **SCAK** (`scak`) — Self-correcting agent kernel | ✅ 23 test files |
 
 ### ⚠️ Experimental (Code Exists, Tests Missing or Incomplete)
 
 | Component | What's Missing |
 |-----------|----------------|
-| **Mute Agent** (`mute-agent`) | No tests; all layer dependencies use mock adapters |
 | **Observability** (`agent-os-observability`) | No tests; Prometheus metrics, Grafana dashboards, OTel tracing implemented |
 | **MCP Kernel Server** (`mcp-kernel-server`) | No tests; 1173-line implementation |
 | **GitHub CLI Extension** | Single bash script with simulated output |

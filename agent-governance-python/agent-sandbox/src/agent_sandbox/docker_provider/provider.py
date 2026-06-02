@@ -305,7 +305,9 @@ class DockerSandboxProvider(SandboxProvider):
     Parameters
     ----------
     image:
-        Base Docker image (default ``python:3.11-slim``).
+        Base Docker image. When ``None`` (default), the provider auto-
+        selects the hardened ``HARDENED_IMAGE_TAG`` if it is locally
+        available, and falls back to ``_LEGACY_DEFAULT_IMAGE`` otherwise.
     docker_url:
         Docker daemon URL (default: auto-detect via env).
     runtime:
@@ -315,14 +317,22 @@ class DockerSandboxProvider(SandboxProvider):
         ``ToolCallProxy`` when a policy has a ``tool_allowlist``.
     """
 
+    # Hardened, minimal-PATH image built from docker/Dockerfile.sandbox.
+    # Preferred when available; selected by ``_select_default_image``.
+    HARDENED_IMAGE_TAG: str = "agt-sandbox/python-minimal-path:3.11"
+
+    # Legacy fallback used when the hardened image is not on the local
+    # daemon. Kept stable so existing deployments do not break.
+    _LEGACY_DEFAULT_IMAGE: str = "python:3.11-slim"
+
     def __init__(
         self,
-        image: str = "python:3.11-slim",
+        image: str | None = None,
         docker_url: str | None = None,
         runtime: IsolationRuntime = IsolationRuntime.AUTO,
         tools: dict[str, Callable[..., Any]] | None = None,
     ) -> None:
-        self._image = image
+        self._image = image if image is not None else self._select_default_image()
         self._tools: dict[str, Callable[..., Any]] = tools or {}
         self._requested_runtime = runtime
 
@@ -379,6 +389,24 @@ class DockerSandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
     # Runtime detection
     # ------------------------------------------------------------------
+
+    @classmethod
+    def _select_default_image(cls) -> str:
+        """Pick the hardened image if it's available locally, else legacy.
+
+        Tries to query the local Docker daemon for ``HARDENED_IMAGE_TAG``.
+        Any failure (no Docker, image not built, permission denied) falls
+        back silently to ``python:3.11-slim`` so existing setups keep
+        working. Callers who want to force one or the other should pass
+        ``image=...`` explicitly.
+        """
+        try:
+            import docker  # type: ignore[import-untyped]
+            client = docker.from_env()
+            client.images.get(cls.HARDENED_IMAGE_TAG)
+            return cls.HARDENED_IMAGE_TAG
+        except Exception:
+            return cls._LEGACY_DEFAULT_IMAGE
 
     def _detect_runtime(self) -> IsolationRuntime:
         """Auto-detect the strongest available OCI runtime."""

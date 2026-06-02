@@ -29,6 +29,10 @@ class AttestationVerificationError(AttestationError):
     """Attestation evidence failed verification against reference values."""
 
 
+class KeyAcquisitionError(IdentityError):
+    """TEE key acquisition failed (SKR denied, attestation expired, etc.)."""
+
+
 class TrustError(AgentMeshError):
     """Errors related to trust scoring and verification."""
 
@@ -75,6 +79,7 @@ __all__ = [
     "AttestationError",
     "AttestationCollectionError",
     "AttestationVerificationError",
+    "KeyAcquisitionError",
     "TrustError",
     "TrustVerificationError",
     "TrustViolationError",

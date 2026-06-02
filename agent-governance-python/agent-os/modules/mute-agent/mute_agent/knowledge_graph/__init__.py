@@ -1,1 +1,0 @@
-"""Knowledge Graph components."""
