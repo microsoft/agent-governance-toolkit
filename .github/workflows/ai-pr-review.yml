@@ -257,13 +257,9 @@ jobs:
               return `| ${agent.icon} ${agent.label} | ${verdict.status} ${verdict.statusLabel} | ${verdict.detail} |`;
             });
 
-            const allVerdicts = rows.join('\n');
-            let overallVerdict;
-            if (allVerdicts.includes('⚠️')) {
-              overallVerdict = '**Verdict: ⚠️ AI review incomplete; ready for human review**';
-            } else {
-              overallVerdict = '**Verdict: ✅ Ready for human review**';
-            }
+            const overallVerdict = rows.some(r => r.includes('⚠️'))
+              ? '**Verdict: ⚠️ AI review incomplete; ready for human review**'
+              : '**Verdict: ✅ Ready for human review**';
 
             const summaryBody = [
               SUMMARY_MARKER,
@@ -292,13 +288,10 @@ jobs:
                 core.info('Created summary comment');
               }
             } catch (error) {
-              if (error.status === 403) {
-                core.warning(`Unable to post PR summary comment: ${error.message}`);
-                await core.summary
-                  .addHeading('PR Review Summary')
-                  .addRaw(summaryBody, true)
-                  .write();
-              } else {
-                throw error;
-              }
+              core.warning(`Unable to post PR summary comment: ${error.message}`);
             }
+
+            await core.summary
+              .addHeading('PR Review Summary')
+              .addRaw(summaryBody, true)
+              .write();
