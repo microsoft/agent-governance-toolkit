@@ -347,6 +347,18 @@ jobs:
           # requirements (pydantic, pyyaml) are present — agent-os itself does
           # not depend on pyyaml.
           pip install --no-cache-dir -e agent-governance-python/agt-policies
+      - name: Install OPA (agent-os v5 runtime)
+        # The native ACS runtime evaluates policy via OPA; without it the
+        # runtime fails closed (runtime_error:policy_invocation_failed) and
+        # denies everything. Same pinned binary the policy-engine CI uses.
+        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          chmod +x "$RUNNER_TEMP/opa"
+          echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/opa" version
       - name: Build native ACS SDK (agent-os v5 runtime)
         # agent-os's v5 runtime bridge routes evaluate_task through the native
         # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
