@@ -347,6 +347,17 @@ jobs:
           # requirements (pydantic, pyyaml) are present — agent-os itself does
           # not depend on pyyaml.
           pip install --no-cache-dir -e agent-governance-python/agt-policies
+      - name: Build native ACS SDK (agent-os v5 runtime)
+        # agent-os's v5 runtime bridge routes evaluate_task through the native
+        # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
+        # it from the vendored policy-engine so the bridge-backed tests run.
+        # The wheel is abi3-py311, so one build serves all agent-os matrix
+        # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
+        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir "maturin>=1.0,<2.0"
+          pip install --no-cache-dir ./policy-engine/sdk/python
       - name: Install ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}
