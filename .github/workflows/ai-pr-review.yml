@@ -275,38 +275,35 @@ jobs:
               '_AI review comments are untrusted advisory output. The summary reports workflow-generated completion status only, not model-authored pass/fail claims._',
             ].join('\n');
 
-            const existing = allComments.find(c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER));
+            const existing = allComments.find(
+              c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER)
+            );
 
             let commentPosted = false;
-            const isFork = context.payload.pull_request.head.repo.full_name !== context.payload.pull_request.base.repo.full_name;
-
-            if (isFork) {
-              core.warning('Skipping PR summary comment for fork PR because token permissions are restricted.');
-            } else {
-              try {
-                if (existing) {
-                  await github.rest.issues.updateComment({
-                    owner, repo, comment_id: existing.id, body: summaryBody,
-                  });
-                  core.info(`Updated summary comment ${existing.id}`);
-                } else {
-                  await github.rest.issues.createComment({
-                    owner, repo, issue_number: prNumber, body: summaryBody,
-                  });
-                  core.info('Created summary comment');
-                }
-                commentPosted = true;
-              } catch (error) {
-                if (error.status === 403 || /Resource not accessible by integration/i.test(error.message)) {
-                  core.warning('PR comment not posted due to token restrictions; writing only to job summary.');
-                } else {
-                  core.warning(`PR comment not posted: ${error.message}`);
-                }
+            try {
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id, body: summaryBody,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: prNumber, body: summaryBody,
+                });
               }
+              commentPosted = true;
+            } catch (error) {
+              core.warning(
+                `Skipping PR comment: ${error.status || 'unknown'} ${error.message || String(error)}`
+              );
             }
 
             await core.summary
               .addHeading('PR Review Summary')
               .addRaw(summaryBody, true)
-              .addRaw(commentPosted ? '\n\nPR comment posted successfully.' : '\n\nPR comment not posted; see this job summary instead.', true)
+              .addRaw(
+                commentPosted
+                  ? '\n\nPR comment posted successfully.'
+                  : '\n\nPR comment not posted; see this job summary instead.',
+                true
+              )
               .write();
