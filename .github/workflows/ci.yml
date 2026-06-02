@@ -342,6 +342,34 @@ jobs:
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
+          # agt-policies (import name `agt`) backs the agent-os v5 runtime bridge;
+          # local source, not yet on PyPI. Installed WITH deps so its runtime
+          # requirements (pydantic, pyyaml) are present — agent-os itself does
+          # not depend on pyyaml.
+          pip install --no-cache-dir -e agent-governance-python/agt-policies
+      - name: Install OPA (agent-os v5 runtime)
+        # The native ACS runtime evaluates policy via OPA; without it the
+        # runtime fails closed (runtime_error:policy_invocation_failed) and
+        # denies everything. Same pinned binary the policy-engine CI uses.
+        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          chmod +x "$RUNNER_TEMP/opa"
+          echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/opa" version
+      - name: Build native ACS SDK (agent-os v5 runtime)
+        # agent-os's v5 runtime bridge routes evaluate_task through the native
+        # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
+        # it from the vendored policy-engine so the bridge-backed tests run.
+        # The wheel is abi3-py311, so one build serves all agent-os matrix
+        # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
+        if: steps.gate.outputs.run == 'true' && matrix.package == 'agent-os'
+        run: |
+          set -euo pipefail
+          pip install --no-cache-dir "maturin>=1.0,<2.0"
+          pip install --no-cache-dir ./policy-engine/sdk/python
       - name: Install ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'
         working-directory: agent-governance-python/${{ matrix.package }}

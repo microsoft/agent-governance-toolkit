@@ -77,6 +77,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     && python -m pip install \
         "cedarpy>=4.0.0,<5.0" \
         -e "agent-governance-python/agent-primitives[dev]" \
+        -e "agent-governance-python/agt-policies" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
         -e "agent-governance-python/agent-os[full,dev]" \
         -e "agent-governance-python/agent-mesh[agent-os,dev,server]" \
@@ -88,6 +89,23 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         -e "agent-governance-python/agent-lightning[agent-os,dev]" \
     && python -m pip install \
         -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt
+
+# Stage 4: build and install the native Agent Control Specification Python SDK
+# (`agent_control_specification`). agt-policies' v5 runtime bridge hard-requires
+# this compiled binding — without it every adapter that routes a check through
+# the bridge raises at runtime. Mirrors the `test (agent-os)` CI matrix job,
+# which builds the same wheel via maturin. The C toolchain (gcc, build-essential)
+# is already provided by the base stage; only Rust + maturin are added here.
+# Scorecard: rustup installer is fetched over pinned TLS; the toolchain channel
+# is pinned to `stable` and the SDK is built from the in-repo source checkout.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cargo/registry \
+    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+        | sh -s -- -y --profile minimal --default-toolchain stable \
+    && . "$HOME/.cargo/env" \
+    && python -m pip install "maturin>=1.0,<2.0" \
+    && python -m pip install ./policy-engine/sdk/python \
+    && python -c "import agent_control_specification; print('agent_control_specification OK')"
 
 # Run as non-root for the developer workflow. The compose `dev` and
 # `dashboard` services bind-mount the repo at /workspace; running the

@@ -24,7 +24,27 @@ jobs:
         with:
           fail-on-severity: moderate
           comment-summary-in-pr: always
+          # The vendored Agent Control Specification engine (policy-engine/**)
+          # brings a Rust dependency tree whose transitive crates carry a few
+          # permissive licenses not originally on this list. Each was reviewed
+          # and added explicitly so the policy change is visible in review:
+          #   - Unicode-3.0: Unicode Consortium license used by the ICU/zerovec
+          #     family (icu_*, tinystr, yoke, zerovec, unicode-ident, ...).
+          #     OSI-approved, permissive.
+          #   - Apache-2.0 WITH LLVM-exception (ar_archive_writer, target-lexicon):
+          #     Apache-2.0 (already allowed) plus a linking exception that is
+          #     strictly MORE permissive.
+          #   - CDLA-Permissive-2.0 (webpki-roots, webpki-root-certs): Mozilla CA
+          #     trust-root data under a permissive Community Data License.
           allow-licenses: >
-            MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC,
+            MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception,
+            BSD-2-Clause, BSD-3-Clause, ISC,
             PSF-2.0, Python-2.0, 0BSD, Unlicense, CC0-1.0,
-            CC-BY-4.0, Zlib, BSL-1.0, MPL-2.0, JSON
+            CC-BY-4.0, Zlib, BSL-1.0, MPL-2.0, JSON,
+            Unicode-3.0, CDLA-Permissive-2.0
+          # futures-timer declares a non-conformant SPDX expression
+          # ("MIT/Apache-2.0") that the scanner reports as
+          # LicenseRef-bad-mitapache-2.0. The crate is in fact dual-licensed
+          # MIT OR Apache-2.0 (both allowed above), so allow it by package
+          # rather than encoding the malformed identifier in allow-licenses.
+          allow-dependencies-licenses: pkg:cargo/futures-timer

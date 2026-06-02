@@ -483,11 +483,14 @@ class TestMistralKernel:
         kernel = MistralKernel(policy=policy)
         governed = kernel.wrap(MagicMock())
 
-        with pytest.raises(MistralPolicyViolation, match="blocked"):
+        with pytest.raises(MistralPolicyViolation) as excinfo:
             governed.chat(
                 model="mistral-large-latest",
                 messages=[{"role": "user", "content": "my password is xyz"}],
             )
+        # v5 AGT engine surfaces the canonical reason on the typed
+        # PolicyCheckResult; the string message uses the engine's wording.
+        assert excinfo.value.check_result.reason == "blocked_pattern_input"
 
     def test_max_tokens_policy_enforcement(self) -> None:
         """Requesting more tokens than the policy allows should fail."""
@@ -543,11 +546,15 @@ class TestMistralKernel:
         kernel = MistralKernel(policy=policy)
         governed = kernel.wrap(client)
 
-        with pytest.raises(MistralPolicyViolation, match="not allowed"):
+        with pytest.raises(MistralPolicyViolation) as excinfo:
             governed.chat(
                 model="mistral-large-latest",
                 messages=[{"role": "user", "content": "Use a tool"}],
             )
+        # v5 AGT engine returns runtime_error:tool_unknown when the tool
+        # is not in the manifest catalog and the policy has a non-empty
+        # allowed_tools list.
+        assert "tool_unknown" in excinfo.value.check_result.reason
 
     def test_tool_definition_validation(self) -> None:
         """Passing disallowed tool definitions should be rejected."""
@@ -637,8 +644,13 @@ class TestMistralKernel:
         kernel = MistralKernel(policy=policy)
         governed = kernel.wrap(client)
 
-        with pytest.raises(MistralPolicyViolation, match="Tool call limit"):
+        with pytest.raises(MistralPolicyViolation) as excinfo:
             governed.chat(
                 model="mistral-large-latest",
                 messages=[{"role": "user", "content": "Hello"}],
             )
+        # v5 AGT host-side budget guard surfaces the canonical
+        # ``budget_tool_calls_exceeded`` reason on the PolicyCheckResult
+        # when the AGT manifest bridge has fallen back to allow for the
+        # unbound tool catalog.
+        assert excinfo.value.check_result.reason == "budget_tool_calls_exceeded"

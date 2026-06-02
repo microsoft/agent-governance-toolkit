@@ -1,0 +1,17 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: extends-ordered
+policies:
+  duplicate_policy:
+    type: test
+intervention_points:
+  output:
+    policy_target: "$snap.output"
+    policy_target_kind: assistant_output
+    policy:
+      id: shared_policy
+tools:
+  search:
+    type: Tool
+    id: search
+    clearance: [public]

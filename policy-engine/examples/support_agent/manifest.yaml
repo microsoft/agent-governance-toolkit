@@ -1,0 +1,75 @@
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: customer_support_guardrails
+extends: []
+policies:
+  customer_support_guardrails:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.customer_support_guardrails.verdict
+intervention_points:
+  input:
+    policy_target: $.input
+    policy_target_kind: user_input
+    policy:
+      id: customer_support_guardrails
+      query: data.agent_control_specification.customer_support_guardrails.input_verdict
+    annotations:
+      input_risk:
+        from: $policy_target
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    policy:
+      id: customer_support_guardrails
+      query: data.agent_control_specification.customer_support_guardrails.pre_tool_call_verdict
+    tool_name_from: $.tool_call.name
+    annotations:
+      refund_risk:
+        from: $policy_target
+      recipient_scope:
+        from: $policy_target
+  post_tool_call:
+    policy_target: $.tool_result
+    policy_target_kind: tool_result
+    policy:
+      id: customer_support_guardrails
+      query: data.agent_control_specification.customer_support_guardrails.post_tool_call_verdict
+    tool_name_from: $.tool_call.name
+    annotations:
+      pii_scan:
+        from: $policy_target
+  output:
+    policy_target: $.output
+    policy_target_kind: assistant_output
+    policy:
+      id: customer_support_guardrails
+      query: data.agent_control_specification.customer_support_guardrails.output_verdict
+    annotations:
+      pii_scan:
+        from: $policy_target
+tools:
+  issue_refund:
+    type: Tool
+    id: issue_refund
+    clearance: [customer_support, payments]
+    security_labels: [refund]
+  lookup_customer:
+    type: Tool
+    id: lookup_customer
+    clearance: [customer_support, customer_data]
+    security_labels: [customer_profile]
+  send_email:
+    type: Tool
+    id: send_email
+    clearance: [customer_support, communications]
+    security_labels: [customer_contact]
+annotators:
+  input_risk:
+    type: classifier
+  refund_risk:
+    type: classifier
+  recipient_scope:
+    type: classifier
+  pii_scan:
+    type: classifier

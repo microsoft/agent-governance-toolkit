@@ -1,0 +1,59 @@
+{
+  "annotations": {
+    "prompt_classifier": {
+      "categories": [],
+      "risk": "low"
+    }
+  },
+  "snapshot": {
+    "conversation": {
+      "id": "conv-123"
+    },
+    "model_request": {
+      "messages": [
+        {
+          "content": "Be helpful.",
+          "role": "system"
+        },
+        {
+          "content": "Summarize account policy.",
+          "role": "user"
+        }
+      ],
+      "params": {
+        "temperature": 0
+      },
+      "tools": [
+        {
+          "name": "search"
+        }
+      ]
+    }
+  },
+  "intervention_point": "pre_model_call",
+  "policy_target": {
+    "kind": "model_request",
+    "path": "$snap.model_request",
+    "value": {
+      "messages": [
+        {
+          "content": "Be helpful.",
+          "role": "system"
+        },
+        {
+          "content": "Summarize account policy.",
+          "role": "user"
+        }
+      ],
+      "params": {
+        "temperature": 0
+      },
+      "tools": [
+        {
+          "name": "search"
+        }
+      ]
+    }
+  },
+  "tool": null
+}

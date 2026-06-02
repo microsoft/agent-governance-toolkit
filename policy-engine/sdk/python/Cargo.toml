@@ -1,0 +1,18 @@
+[package]
+name = "agent_control_specification_py"
+version = "0.3.1-beta.0"
+edition = "2021"
+license = "MIT"
+description = "Python native bindings for the Agent Control Specification runtime."
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core", features = ["opa", "cedar", "default-dispatchers", "aacs", "openai_moderation", "perspective", "llama_guard", "lakera_guard", "auto"] }
+pyo3 = { version = "0.28", features = ["extension-module", "abi3-py311"] }
+serde_json = "1"
+
+[build-dependencies]
+pyo3-build-config = "0.28"

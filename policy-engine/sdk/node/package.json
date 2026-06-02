@@ -1,0 +1,97 @@
+{
+  "name": "agent-control-specification",
+  "version": "0.3.1-beta.0",
+  "description": "Thin Node.js SDK surface for the stateless Agent Control Specification runtime",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./adapters": {
+      "types": "./dist/src/adapters.d.ts",
+      "default": "./dist/src/adapters.js"
+    },
+    "./integrations/ghcp": {
+      "types": "./dist/src/integrations/ghcp.d.ts",
+      "default": "./dist/src/integrations/ghcp.js"
+    },
+    "./integrations/bootstrap": {
+      "types": "./dist/src/integrations/bootstrap.d.ts",
+      "default": "./dist/src/integrations/bootstrap.js"
+    },
+    "./integrations/opa-binary": {
+      "types": "./dist/src/integrations/opa-binary.d.ts",
+      "default": "./dist/src/integrations/opa-binary.js"
+    }
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "tsconfig.json"
+  ],
+  "optionalDependencies": {
+    "agent-control-specification-linux-x64-gnu": "0.3.1-beta.0",
+    "agent-control-specification-linux-x64-musl": "0.3.1-beta.0",
+    "agent-control-specification-linux-arm64-gnu": "0.3.1-beta.0",
+    "agent-control-specification-linux-arm64-musl": "0.3.1-beta.0",
+    "agent-control-specification-darwin-x64": "0.3.1-beta.0",
+    "agent-control-specification-darwin-arm64": "0.3.1-beta.0",
+    "agent-control-specification-win32-x64-msvc": "0.3.1-beta.0",
+    "agent-control-specification-opa-linux-x64": "0.3.1-beta.0",
+    "agent-control-specification-opa-linux-arm64": "0.3.1-beta.0",
+    "agent-control-specification-opa-darwin-x64": "0.3.1-beta.0",
+    "agent-control-specification-opa-darwin-arm64": "0.3.1-beta.0",
+    "agent-control-specification-opa-win32-x64": "0.3.1-beta.0"
+  },
+  "scripts": {
+    "vendor:opa": "node scripts/fetch-opa.mjs",
+    "build": "rm -rf dist && rm -f native.js native.d.ts *.node && napi build --platform --release --js native.js --dts native.d.ts && npm run build:dist-binary && tsc -p tsconfig.json && rm -f native.js native.d.ts *.node",
+    "build:debug": "rm -rf dist && rm -f native.js native.d.ts *.node && napi build --platform --js native.js --dts native.d.ts && npm run build:dist-binary && tsc -p tsconfig.json && rm -f native.js native.d.ts *.node",
+    "build:dist-binary": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});for(const f of ['native.js','native.d.ts'])if(fs.existsSync(f))fs.copyFileSync(f,'dist/'+f);for(const f of fs.readdirSync('.').filter(n=>n.endsWith('.node')))fs.copyFileSync(f,'dist/'+f);\"",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:real-frameworks": "node test/standalone-real-frameworks.mjs && node --test test/real-framework-adapters.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "@langchain/core": "^1.1.48",
+    "@napi-rs/cli": "^2.18.4",
+    "@openai/agents": "^0.11.6",
+    "@types/node": "^25.6.0",
+    "langchain": "^1.4.2",
+    "openclaw": "^2026.5.27",
+    "typescript": "^5.4.0"
+  },
+  "napi": {
+    "name": "agent-control-specification"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.100.0",
+    "@langchain/core": ">=1.1.0",
+    "@openai/agents": ">=0.11.0",
+    "langchain": ">=1.0.0",
+    "openclaw": ">=2026.5.27"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@langchain/core": {
+      "optional": true
+    },
+    "@openai/agents": {
+      "optional": true
+    },
+    "langchain": {
+      "optional": true
+    },
+    "openclaw": {
+      "optional": true
+    }
+  }
+}

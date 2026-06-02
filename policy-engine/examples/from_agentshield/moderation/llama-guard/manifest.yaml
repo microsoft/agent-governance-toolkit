@@ -1,0 +1,22 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "llama-guard"
+extends: []
+policies:
+  llama_guard:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.llama_guard.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    annotations:
+      llama_guard:
+        from: "$policy_target.text"
+    policy:
+      id: llama_guard
+      query: data.agent_control_specification.llama_guard.input_verdict
+annotators:
+  llama_guard:
+    type: classifier

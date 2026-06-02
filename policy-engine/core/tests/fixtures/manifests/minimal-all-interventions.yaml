@@ -1,0 +1,48 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: minimal-all-interventions
+extends: []
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  agent_startup:
+    policy_target: "$snap.agent"
+    policy_target_kind: agent_metadata
+    policy:
+      id: test_policy
+  input:
+    policy_target: "$snap.input"
+    policy_target_kind: user_input
+    policy:
+      id: test_policy
+  pre_model_call:
+    policy_target: "$snap.model_request"
+    policy_target_kind: model_request
+    policy:
+      id: test_policy
+  post_model_call:
+    policy_target: "$snap.model_response"
+    policy_target_kind: model_response
+    policy:
+      id: test_policy
+  pre_tool_call:
+    policy_target: "$snap.tool_call.args"
+    policy_target_kind: tool_args
+    policy:
+      id: test_policy
+  post_tool_call:
+    policy_target: "$snap.tool_result"
+    policy_target_kind: tool_result
+    policy:
+      id: test_policy
+  output:
+    policy_target: "$snap.output"
+    policy_target_kind: assistant_output
+    policy:
+      id: test_policy
+  agent_shutdown:
+    policy_target: "$"
+    policy_target_kind: agent_metadata
+    policy:
+      id: test_policy

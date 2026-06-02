@@ -1,0 +1,44 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-18-ifc.case-01",
+  "spec_section": "18",
+  "title": "tool clearance dominates source labels and allows flow",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  pre_tool_call:\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: p\n    policy_target: $snap.tool_call.args\ntools:\n  search:\n    type: Tool\n    clearance: internal\n    security_labels:\n      sink: retrieval\n",
+  "intervention_point": "pre_tool_call",
+  "snapshot": {
+    "ifc": {
+      "source_labels": [
+        "internal"
+      ]
+    },
+    "tool_call": {
+      "id": "call-4",
+      "name": "search",
+      "args": {
+        "q": "internal memo"
+      }
+    }
+  },
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "allow",
+    "tool_name": "search",
+    "policy_target": {
+      "q": "internal memo"
+    }
+  },
+  "references": [
+    "policy/lib/ifc.rego",
+    "docs/ifc-label-flow.md"
+  ]
+}

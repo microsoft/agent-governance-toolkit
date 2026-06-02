@@ -1,0 +1,31 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-08-intervention-points.case-01",
+  "spec_section": "8",
+  "title": "input dispatches to input policy target",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
+  "intervention_point": "input",
+  "snapshot": {
+    "input": {
+      "text": "hello"
+    }
+  },
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "allow",
+    "policy_target": {
+      "text": "hello"
+    },
+    "action_identity": "present"
+  }
+}

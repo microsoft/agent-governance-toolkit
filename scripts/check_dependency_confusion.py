@@ -135,6 +135,13 @@ REGISTERED_PACKAGES = {
     # instead of path references. See dependency confusion attack vector.
     "agent-primitives", "agent-mcp-governance", "agent_mcp_governance", "emk",
     "agentmesh-primitives", "agentmesh_primitives",
+    # Vendored ACS policy-engine SDK/generator deps (all real PyPI packages)
+    "litellm", "semantic-kernel", "semantic_kernel",
+    "autogen-agentchat", "autogen_agentchat",
+    "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
+    "agentdojo",
+    # Vendored ACS generator package itself (internal, path-referenced)
+    "agent-control-specification", "agent_control_specification",
     # With extras (base name is what matters)
 }
 
@@ -180,6 +187,9 @@ REGISTERED_NPM_PACKAGES = {
     # npm deps from agent-os-vscode
     "@types/glob", "@types/mocha", "@vscode/test-electron",
     "autoprefixer", "glob", "mocha", "postcss", "tailwindcss",
+    # Vendored ACS policy-engine node SDK deps (all real npm packages)
+    "@langchain/core", "langchain", "@openai/agents",
+    "@napi-rs/cli", "openclaw",
 }
 
 # Known Cargo crate names
@@ -189,6 +199,12 @@ REGISTERED_CARGO_PACKAGES = {
     "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
     "opentelemetry", "regex", "regorus",
     "assert_cmd", "predicates",
+    # Vendored ACS policy-engine crate deps (all real crates.io crates)
+    "url", "ureq", "jsonschema", "criterion", "tokio", "rmcp",
+    "async-openai", "rig-core", "napi", "napi-derive", "napi-build",
+    "pyo3", "pyo3-build-config",
+    # Vendored ACS workspace crates (internal, path-referenced)
+    "agent_control_specification", "agent_control_specification_core",
 }
 
 # Patterns that are always safe (not package names)

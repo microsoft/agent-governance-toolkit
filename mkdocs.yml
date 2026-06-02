@@ -97,6 +97,7 @@ nav:
     - Agent Marketplace: packages/agent-marketplace.md
     - Agent Lightning: packages/agent-lightning.md
     - Agent Hypervisor: packages/agent-hypervisor.md
+    - Agent Control Specification: packages/agent-control-specification.md
     - Antigravity CLI governance package: packages/antigravity-cli-governance.md
     - OpenCode CLI governance package: packages/opencode-governance.md
     - .NET package: packages/dotnet-sdk.md

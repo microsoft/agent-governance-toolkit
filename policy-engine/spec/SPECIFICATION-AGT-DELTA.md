@@ -1,0 +1,431 @@
+# SPECIFICATION-AGT-DELTA.md — AGT divergences from upstream ACS
+
+This document lists the AGT-owned deltas applied to the vendored ACS spec
+(`policy-engine/spec/SPECIFICATION.md`, snapshot at upstream commit
+`responsibleai/AgentControlSpecification@318dbca`). The deltas are normative.
+When `SPECIFICATION.md` and this file disagree, this file wins. M2 will inline
+these deltas into `SPECIFICATION.md`; until then both files MUST be read
+together.
+
+The deltas reflect user decisions captured in
+`/home/mhabuomar/code/agt/architecture-exploration.md` (Q1–Q14).
+
+## D1. Verdict and effects (replaces §13.1 and §14)
+
+### What changes
+- **Effects are removed from the verdict.** The `effects` array member on the
+  verdict object MUST NOT appear. Implementations MUST reject a dispatcher
+  output that contains `effects` with `runtime_error:policy_output_invalid`.
+- **A fifth decision value, `transform`, is added.** A `transform` verdict
+  permits the action and applies a single, validated replacement to the policy
+  target before the action proceeds. `transform` replaces the prior
+  `allow` + effects pattern.
+
+### Verdict members (replacing §13 table)
+
+| Member | Required | Type | Constraint |
+| --- | --- | --- | --- |
+| `decision` | yes | string | One of `allow`, `deny`, `warn`, `escalate`, `transform`. |
+| `reason` | no | string | MUST NOT start with `runtime_error:`. |
+| `message` | no | string | Free form text for a caller. |
+| `transform` | required when `decision == "transform"`; forbidden otherwise | object | `{ path: string, value: any }`. See §D1.1. |
+| `evidence` | no | object | See §D2. |
+| `result_labels` | no | array of string | Information-flow labels for the data produced at this sink. Carried through from upstream ACS unchanged. Host stores these on the produced data and supplies them as `input.ifc.source_labels` on subsequent intervention points. |
+
+### D1.1 `transform` verdict body
+
+When `decision == "transform"`:
+
+| Field | Required | Type | Constraint |
+| --- | --- | --- | --- |
+| `path` | yes | string | MUST be rooted at `$policy_target` (see §3.2). |
+| `value` | yes | any | New JSON value to set at `path`. |
+
+Application semantics:
+
+- The runtime resolves `path` against the current policy target and replaces
+  the value at that location with `value`.
+- The runtime MUST NOT change the snapshot, the annotations, the projected
+  tool, or any host state. The transformation is confined to the policy target.
+- A `transform` verdict with a `path` outside `$policy_target` MUST fail closed
+  with `runtime_error:transform_target_forbidden`.
+- A `transform` verdict whose `path` does not resolve, or whose `value` cannot
+  be set (path type mismatch), MUST fail closed with
+  `runtime_error:transform_invalid`.
+- In `evaluate_only` mode the transformation is validated but not applied
+  (matches today's `effects` behaviour in §5).
+
+Host-side ordering: hosts MUST consult the AGT runtime before applying any
+host-side input transformation that would mask or alter the value the
+runtime sees. AGT-side runs first so a `transform` verdict that redacts a
+sensitive value, or a `deny` / `escalate` verdict on it, takes precedence
+over a host-side scan.
+
+Back-compat exception. The
+`agent_os.integrations.bedrock_adapter.BedrockKernel` flag
+`enable_agt_pii_routing` defaults to `False` for v4 back-compatibility so
+host-side `_check_input` still fires first. This is the only documented
+adapter that retains the v4 host-first ordering and the only field that
+intentionally diverges from this section. v6 will flip the default to
+`True`; hosts SHOULD set the flag to `True` ahead of the v6 cut and move
+PII patterns into the AGT manifest. No other adapter MAY introduce a
+similar back-compat opt-out without an explicit spec amendment.
+
+### D1.2 Decision semantics (replacing §13.1)
+
+`allow` permits the action with no change to the policy target.
+`warn` permits the action with no change to the policy target and records a
+warning event.
+`transform` permits the action and replaces the policy target as defined in
+§D1.1.
+`deny` refuses the action.
+`escalate` defers the action to the host approval path per §17.1.
+
+`warn` no longer applies effects (there are none). Hosts that previously used
+`warn` + effects for "permit with redaction" MUST now express that as
+`transform` + a reason of their choosing, or as an annotator that performs the
+transformation upstream of the policy.
+
+### D1.3 Why this matters
+
+Effects on `warn` and `allow` blurred the line between "the policy approved
+the action as submitted" and "the policy substituted something else". A
+`transform` verdict makes the substitution explicit, makes it the only
+permitted form of value rewriting, and removes the array-of-effects surface.
+Multi-step rewriting is achieved by chaining intervention points (e.g., an
+annotator at `pre_model_call` produces a sanitized text under
+`annotations.pii_scrub.text`, and the bound policy reads from that
+annotation) rather than by emitting multiple effects from a single policy.
+
+A future `D1.4 pre_transformers` extension MAY be added if real workloads
+require declarative multi-step transformation at a single intervention point.
+Until then, hosts that need multi-step rewriting MUST use annotators.
+
+### D1.4 Action identity (replacing §13)
+
+Action identity is **bisected** by the transform decision. Two SHA-256
+identities are produced, both prefixed with `sha256:`.
+
+| Identity | Computed over | Purpose |
+| --- | --- | --- |
+| `input_identity` | The canonical policy input that was evaluated | Pins what the policy actually saw. This is the value §13 originally called "the action identity". |
+| `enforced_identity` | The canonical policy input AFTER the transform path is applied to the policy target (no change for non-transform verdicts) | Pins what the host actually carried out. Equal to `input_identity` for `allow`, `warn`, `deny`, and `escalate`. |
+
+Both identities MUST appear in every audit record per
+`AGT-EVIDENCE-1.0.md` §4 and on every `InterventionPointResult`
+returned by the runtime. The escalation approval path (§17.1) binds to
+`enforced_identity` because the approver consents to the action that
+will execute, not to the pre-transform proposal. A
+`runtime_error:approval_action_mismatch` is raised when the approved
+`enforced_identity` does not match the value recomputed from the
+current policy input.
+
+Telemetry events MAY include `input_identity` and `enforced_identity`,
+but the runtime does not emit them by default. `AGT-EVIDENCE-1.0.md`
+§3 fixes the canonical telemetry attribute list (decision, reason,
+mode, annotators, plus the AGT D2 evidence fields) and intentionally
+omits identities to keep cardinality bounded; hosts that need
+identities on telemetry MUST opt in through host-side audit
+configuration that copies the values from the `InterventionPointResult`
+before forwarding. Single-identity telemetry consumers MAY default to
+`enforced_identity`.
+
+---
+
+## D2. Verdict `evidence` field (additions to §13 and §19)
+
+A verdict MAY carry an optional `evidence` field:
+
+```json
+"evidence": {
+  "artefact": "sha256:<hex>",
+  "verification_pointers": {
+    "issuer_pubkey": "https://example.com/keys/2026.pem",
+    "policy_registry": "https://example.com/policies/v1/"
+  }
+}
+```
+
+| Field | Required | Type | Constraint |
+| --- | --- | --- | --- |
+| `artefact` | no | string | Content address of an offline-verifiable proof. SHOULD be `sha256:<lowercase-hex>` or a URI. |
+| `verification_pointers` | no | object | Map of named URLs that an auditor MAY consult to re-verify the decision. |
+
+The runtime treats `evidence` as opaque. It does not validate `artefact` or
+fetch `verification_pointers`. A dispatcher that emits a non-object `evidence`
+MUST fail closed with `runtime_error:policy_output_invalid`.
+
+The runtime MUST propagate `evidence` into telemetry events (§19). The
+telemetry events keep their upstream ACS names. The events that MAY carry
+`evidence` are:
+
+- `policy.invoked`
+- `intervention_point.allowed`
+- `intervention_point.denied`
+- `intervention_point.warned`
+- `intervention_point.escalated`
+- `intervention_point.transformed` (added by §D1)
+
+On every event listed above the runtime emits two fields when the originating
+verdict carried `evidence`:
+
+- `evidence_artefact`: the verbatim `artefact` string.
+- `evidence_verification_pointer_keys`: the sorted list of `verification_pointers`
+  keys (not their URL values, to keep telemetry cardinality bounded).
+
+The URL values themselves MUST NOT appear in telemetry. They are recovered
+from the audit record per §D2 and `AGT-EVIDENCE-1.0.md` §4.
+
+### Rationale
+
+High-assurance dispatchers (SMT-verified gates, mechanised-proof PDPs,
+TEE-attested PDPs) need a way to ship offline-verifiable evidence with their
+decision. The field is additive; existing dispatchers ignore it.
+
+This is the AGT realisation of the prior AGT `BackendDecision.proof_artefact`
+and `verification_pointers` fields (see CHANGELOG of the v4
+`agent_os.policies.backends` module), promoted to the verdict level.
+
+---
+
+## D3. Cedar as a built-in policy type (replaces §12.1)
+
+The set of built-in policy types is extended from `{rego, test, custom}` to
+`{rego, cedar, test, custom}`.
+
+### D3.1 Cedar policy
+
+A `cedar` policy targets the Cedar policy language (https://www.cedarpolicy.com).
+
+Policy definition fields:
+
+| Field | Required | Type | Meaning |
+| --- | --- | --- | --- |
+| `type` | yes | string | MUST be `"cedar"`. |
+| `policy_set` | exactly one of `policy_set` / `policy_path` | string | Inline Cedar policy text. |
+| `policy_path` | exactly one of `policy_set` / `policy_path` | string | Filesystem path to a `.cedar` policy file or directory. |
+| `entities_path` | no | string | Path to a Cedar entities JSON file. |
+| `schema_path` | no | string | Path to a Cedar schema JSON file. |
+| `query` | no | object | Cedar request template, see D3.2. |
+
+Binding fields (§12.2) MAY include `principal`, `action`, `resource`, and
+`context` JSONPath-style accessors that build the Cedar `Request` from the
+policy input.
+
+### D3.2 Cedar request mapping
+
+The Cedar runtime requires a `Request{principal, action, resource, context}`.
+The default mapping when no explicit binding is given is:
+
+| Cedar field | Policy input source | Type |
+| --- | --- | --- |
+| `principal` | `$pi.snapshot.envelope.agent.id` resolved to `Agent::"<id>"` | `Agent` entity |
+| `action` | The intervention point name, mapped as `Action::"<ip>"` (e.g., `Action::"pre_tool_call"`) | `Action` entity |
+| `resource` | `$pi.tool` projected as `Tool::"<name>"` for tool intervention points, otherwise `$pi.policy_target` projected as `PolicyTarget::"<kind>"` | entity |
+| `context` | `$pi.snapshot` (excluding `envelope.agent.id`) plus `$pi.annotations` | record |
+
+Hosts MAY override the mapping via the `query` member on either the policy
+definition or the binding. The source paths above match `AGT-SNAPSHOT-1.0.md`
+§1's `envelope` shape.
+
+### D3.3 Cedar verdict mapping
+
+Cedar's authorization result is mapped to a verdict per:
+
+| Cedar decision | ACS verdict |
+| --- | --- |
+| `Allow` | `{decision: "allow"}` |
+| `Deny` | `{decision: "deny", reason: <first policy id that contributed>}` |
+
+The Cedar policy author MAY produce `warn`, `escalate`, or `transform` by
+attaching an `advice` annotation on a Cedar policy. The advice JSON MUST match
+this shape:
+
+```json
+{
+  "verdict": "warn" | "escalate" | "transform",
+  "reason": "<optional reason string>",
+  "message": "<optional human message>",
+  "transform": {"path": "$policy_target...", "value": <any>}
+}
+```
+
+The dispatcher extracts the advice from the Cedar response, validates the
+shape against `policy-engine/spec/schema/cedar_advice.schema.json` (M2
+deliverable), and produces the corresponding verdict. Advice that does not
+match the schema MUST fail closed with `runtime_error:policy_output_invalid`.
+A `transform` advice without a `transform` body or with a `transform.path`
+outside `$policy_target` MUST fail closed with
+`runtime_error:transform_invalid` or `runtime_error:transform_target_forbidden`
+respectively.
+
+### D3.4 Dispatcher
+
+The runtime offers an optional `cedar` dispatcher that links the Cedar Rust
+crate when the `cedar` feature is enabled at build time. A host MAY supply its
+own dispatcher instead. Dispatcher errors fail closed with
+`runtime_error:policy_invocation_failed` (matching §12.3).
+
+### D3.5 Rationale
+
+The prior AGT Cedar backend lived as a `CedarBackend` in
+`agent_os.policies.backends`. Promoting it to a built-in policy type unifies
+the developer experience (same `policies.{id}.type` slot for Rego and Cedar)
+and lets the `agt-core-cedar` Cargo feature deliver Cedar evaluation in every
+SDK without per-SDK adapter code.
+
+---
+
+## D4. AGT-side resolution layer (additions to §2.2)
+
+ACS engines MAY receive a manifest with non-empty `extends` and resolve it per
+§2.2 (file-based loader behaviour). AGT hosts SHOULD instead pre-resolve the
+chain on the host side, in a layer above the engine, and pass a flat manifest
+with `extends: []`.
+
+This delta is non-normative for the engine itself — the engine continues to
+support both modes. The host-side resolution layer is described in
+`spec/agt/AGT-RESOLUTION-1.0.md`.
+
+### Rationale
+
+AGT preserves folder discovery and scope filtering (Q6), features that have no
+analog in ACS's `extends` model. Doing the resolution on the host side keeps
+the engine's contract simple and unchanged while letting AGT hosts continue to
+discover `governance.yaml` files from the action path up to the workspace
+root, filter by scope glob, and merge them.
+
+---
+
+## D5. `approval` top-level manifest section (new §24)
+
+A manifest MAY include a top-level `approval` section that configures the
+escalation backend used for `escalate` verdicts. The section is numbered §24
+to avoid colliding with upstream ACS §22 (Versioning and stability) and §23
+(References). The schema for that section is:
+
+```yaml
+approval:
+  default_resolver: webhook   # or local | callback | <custom-name>
+  timeout_seconds: 300
+  on_timeout: deny             # or allow | suspend
+  fatigue_threshold: 5         # max approvals per agent per fatigue_window_seconds
+  fatigue_window_seconds: 3600
+  resolvers:
+    webhook:
+      type: webhook
+      url: https://example.com/approve
+      auth:
+        type: bearer
+        env: AGT_APPROVAL_TOKEN
+    local:
+      type: local
+      file: /var/lib/agt/approvals/
+```
+
+| Field | Required | Type | Meaning |
+| --- | --- | --- | --- |
+| `default_resolver` | no | string | Name of the resolver consulted by default. Defaults to `deny` (no resolver). |
+| `timeout_seconds` | no | integer | Max wait before `on_timeout` triggers. |
+| `on_timeout` | no | enum | `deny` (default), `allow`, `suspend`. |
+| `fatigue_threshold` | no | integer | Soft cap; the resolver MAY reject further escalations beyond this. |
+| `fatigue_window_seconds` | no | integer | Window for the fatigue counter. |
+| `resolvers` | no | object | Named resolver configurations. Resolver types are host-extensible. |
+
+The runtime treats `approval` as opaque host configuration: it validates the
+shape per the JSON schema but does not consult it. The SDKs' approval-resolver
+plumbing reads it.
+
+### Rationale
+
+The user decision in Q13 places this in the policy layer because `approval`
+is policy-shaped configuration: it tells the engine's caller how to satisfy
+the `escalate` verdict the engine produces. Keeping it in the manifest means
+a manifest is fully self-describing for both policy decisions and the
+out-of-band human-approval channel.
+
+---
+
+## D6. Reserved reasons (additions to §16)
+
+Six reserved reasons are added:
+
+| Reason | Cause |
+| --- | --- |
+| `runtime_error:transform_target_forbidden` | A `transform` verdict carried a `path` outside `$policy_target`. |
+| `runtime_error:transform_invalid` | A `transform` verdict's path did not resolve, the value could not be set, or `value` was missing. |
+| `runtime_error:approval_resolver_missing` | An `escalate` verdict was returned but no resolver matched the manifest's `approval.default_resolver`. |
+| `runtime_error:resolution_path_traversal` | AGT-side resolution refused because the action path resolved outside the workspace root (see `AGT-RESOLUTION-1.0.md` §3). |
+| `runtime_error:resolution_cycle` | AGT-side resolution detected a cycle while merging an extends chain. |
+| `runtime_error:resolution_invalid_governance` | AGT-side resolution failed to validate a `governance.yaml` during merge. |
+| `runtime_error:resolution_merge_conflict` | AGT-side resolution found two non-rule sections (e.g., conflicting `approval` blocks) that could not be merged. |
+
+Effects-related reasons (`runtime_error:effect_invalid`,
+`runtime_error:effect_target_forbidden`) are removed by §D1.
+
+---
+
+## D7. Cargo feature split (build-only delta, no spec impact)
+
+The `core/` crate exposes two opt-out Cargo features that gate the
+heavyweight bundled dispatcher backends.
+
+- `opa` — bundled OPA Rego dispatcher reached through `crate::opa` and the
+  `Opa*` re-exports. Default-on. Disabling the feature removes the bundled
+  Rego dispatcher and the OPA arm of `crate::dispatchers::default_policy_dispatcher`;
+  the `PolicyConfig::Rego` manifest grammar stays compiled so manifests that
+  declare `type: rego` still validate and hosts may wire their own
+  `PolicyDispatcher` implementation.
+- `cedar` — bundled Cedar dispatcher (`CedarBuiltinDispatcher`) backed by
+  the upstream `cedar-policy` crate. Default-on. Disabling the feature
+  removes the builtin dispatcher and drops the `cedar-policy` build
+  dependency. The manifest grammar (`PolicyConfig::Cedar`,
+  `CedarPolicyConfig`), the `CedarPolicyDispatcher` trait, the request
+  mapping helpers (`build_cedar_request`, `translate_advice`), and the
+  always-compiled `CedarTestDispatcher` reference implementation remain
+  available regardless of the feature so hosts can supply their own cedar
+  backend without the bundled dep.
+
+Default features for the workspace include `opa` and `cedar`. Language SDK
+crates (`sdk/python`, `sdk/node`, `sdk/dotnet`, `sdk/go`, `sdk/rust`) MUST
+always enable both features so existing consumers see the historical
+surface.
+
+A later milestone MAY extract the bundled dispatchers into sibling crates
+(`agent_control_specification_opa`, `agent_control_specification_cedar`);
+the feature split shipped here keeps the same opt-out option for
+downstream Rust callers without the cross-SDK churn that a multi-crate
+refactor would require.
+
+This delta has no impact on the spec; it documents the M2 workspace shape.
+
+---
+
+## Summary of section impacts
+
+| Upstream section | Status after delta |
+| --- | --- |
+| §1 Model | Unchanged. |
+| §2 Manifest | Unchanged; D4 adds host-layer guidance. |
+| §3 Paths | Unchanged. |
+| §4 Intervention points | Unchanged. |
+| §5 Modes | **Adjusted.** Mode semantics still distinguish `enforce` from `evaluate_only`, but the apply/validate distinction now applies to the `transform` decision payload per §D1.1 (not to an effects array). In `evaluate_only` mode the runtime validates a `transform` verdict (path rooted at `$policy_target`, value present, path resolvable) without applying it. |
+| §6 Evaluation order | Step 9 ("validate effects") becomes "apply transform if any (only when `decision == transform` and `mode == enforce`); otherwise validate transform if present". |
+| §7 Policy input | Unchanged. |
+| §8 Canonical serialization | Unchanged. |
+| §9 Tools | Unchanged. |
+| §10 Annotators | Unchanged. |
+| §11 IFC | **Augmented.** The IFC label-flow contract is preserved (lattice, dominance, deny-on-flow-down). AGT hosts emit source labels at `input.ifc.source_labels` and result labels at `response.ifc.result_labels` per `AGT-SNAPSHOT-1.0.md` §2.2 / §2.7, **not** at `input.snapshot.ifc.source_labels`. AGT ships an `agt.ifc` stock library at `policy/lib/agt_ifc.rego` that reads the AGT-correct paths; the upstream `agent_control_specification.lib.ifc` library remains in `policy/lib/ifc.rego` so callers that bring the upstream snapshot shape continue to work. AGT manifest authors MUST import `data.agt.ifc`; importing the upstream library against an AGT host will fail closed on every call because the AGT host does not populate the upstream paths. |
+| §12 Policies | **Extended** — adds `cedar` type per D3. |
+| §13 Verdicts | **Replaced** by D1 + D2. |
+| §14 Effects | **Replaced** by D1. The §14 effects section is removed wholesale. |
+| §15 Resource limits | Unchanged. |
+| §16 Reserved reasons | **Extended** per D6. |
+| §17 Host obligations | §17 unchanged; §17.1 now references `approval` section per D5; approval identity binds to `enforced_identity` per D1.4. |
+| §18 Streaming and parallel tools | Unchanged. |
+| §19 Telemetry and audit | **Extended** per D2 (carries `evidence`). The set of intervention point decision events grows by `intervention_point.transformed`. The upstream `intervention_point.effect_applied` event is **removed** because effects no longer exist; hosts that consumed it MUST migrate to `intervention_point.transformed`. |
+| §20 Conformance | Conformance text reads against the deltas. |
+| §21 Security considerations | Unchanged in principle. The `transform` verdict is bounded to `$policy_target`, preserving the security boundary §21 established for effects. |
+| §22 Versioning and stability | Unchanged. The version string in `AGT-MANIFEST-1.0.md` §2 is a backwards-compatible profile of upstream ACS versioning. |
+| §23 References | Unchanged. |
+| §24 Approval (new) | **Added** per D5. |
