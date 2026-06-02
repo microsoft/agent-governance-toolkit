@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import shutil
 import subprocess
 from importlib import resources
@@ -12,6 +11,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from acs_generator import FakeLanguageModel, GenerationEngine, GenerationError
+from acs_generator.llm import OpenAICompatibleLanguageModel
 from acs_generator.validation import validate_artifacts
 
 BASE_OUT = Path("generator/.test-output")
@@ -100,6 +100,29 @@ def test_golden_happy_path_generates_valid_artifacts() -> None:
     assert "input.intervention_point" in result.rego
     assert "input.stage" not in result.rego
     assert "input.evidence" not in result.rego
+
+
+def test_openai_compatible_model_detects_azure_by_hostname_only() -> None:
+    assert OpenAICompatibleLanguageModel(
+        api_base="https://customer.openai.azure.com",
+        api_key="unused",
+    ).is_azure
+    assert not OpenAICompatibleLanguageModel(
+        api_base="https://api.example.test/.azure.com",
+        api_key="unused",
+    ).is_azure
+    assert not OpenAICompatibleLanguageModel(
+        api_base="https://azure.com.example.test",
+        api_key="unused",
+    ).is_azure
+
+
+def test_openai_compatible_model_api_version_forces_azure_mode() -> None:
+    assert OpenAICompatibleLanguageModel(
+        api_base="https://api.example.test",
+        api_key="unused",
+        api_version="2024-12-01-preview",
+    ).is_azure
 
 
 def test_generator_package_includes_wire_schemas() -> None:

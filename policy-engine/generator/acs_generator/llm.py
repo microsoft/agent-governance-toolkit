@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from typing import Protocol
-from urllib import request
+from urllib import parse, request
 
 
 class LanguageModel(Protocol):
@@ -23,7 +23,7 @@ class OpenAICompatibleLanguageModel:
         self.api_key = api_key or os.getenv("ACS_GENERATOR_API_KEY")
         self.model = model or os.getenv("ACS_GENERATOR_MODEL") or "gpt-4o-mini"
         self.api_version = api_version or os.getenv("ACS_GENERATOR_API_VERSION")
-        self.is_azure = self.api_version is not None or ".azure.com" in self.api_base
+        self.is_azure = self.api_version is not None or _is_azure_api_base(self.api_base)
 
     def complete(self, system: str, user: str) -> str:
         if not self.api_key:
@@ -52,6 +52,12 @@ class OpenAICompatibleLanguageModel:
         with request.urlopen(req, timeout=60) as response:
             body = json.loads(response.read().decode("utf-8"))
         return body["choices"][0]["message"]["content"]
+
+
+def _is_azure_api_base(api_base: str) -> bool:
+    hostname = parse.urlparse(api_base).hostname or ""
+    normalized = hostname.lower().rstrip(".")
+    return normalized == "azure.com" or normalized.endswith(".azure.com")
 
 
 class FakeLanguageModel:
