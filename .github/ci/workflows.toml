@@ -16,7 +16,8 @@
 #       id          string      job key
 #       name        string      job display name
 #       toolchains  [str]       subset of {rust, python, node, dotnet}
-#       opa         bool        install OPA, export ACS_OPA_PATH and add it to PATH
+#       opa         bool        install OPA and export ACS_OPA_PATH
+#       opa_on_path bool        also add OPA to PATH (for tools using which(opa))
 #       working_directory string defaults.run.working-directory for the job
 #       [[workflow.job.step]]   one block per run step
 #         name      string
@@ -55,6 +56,7 @@ id = "python"
 name = "Python SDK and generator"
 toolchains = ["python"]
 opa = true
+opa_on_path = true
 working_directory = "policy-engine"
 [[workflow.job.step]]
 name = "Install and test"
