@@ -9,7 +9,6 @@ const {
   createAnthropicAdapter,
   createLangChainAdapter,
   createOpenAIAgentsAdapter,
-  createOpenClawAdapter,
 } = require("../dist/index.js");
 
 const policyPath = process.env.ACS_SMOKE_POLICY ?? fileURLToPath(new URL("../../../tests/fixtures/smoke/manifest.yaml", import.meta.url));
@@ -111,48 +110,3 @@ test("Anthropic real client is enforced through the real adapter", async () => {
   await assertBlockedBy("post_model_call", () => guarded.messages.create(request));
 });
 
-test("OpenClaw real plugin entry registers ACS hooks that enforce through the real adapter", async () => {
-  const { definePluginEntry } = await import("openclaw/plugin-sdk/core");
-  const hooks = new Map();
-  const adapterPlugin = createOpenClawAdapter(control()).plugin();
-  const pluginEntry = definePluginEntry({
-    id: "acs-real-openclaw",
-    name: "ACS real OpenClaw test",
-    description: "ACS real OpenClaw hook registration test",
-    register(api) {
-      adapterPlugin.register(api);
-    },
-  });
-  pluginEntry.register({ on: (hookName, handler) => hooks.set(hookName, handler) });
-
-  await hooks.get("session_start")({ sessionId: "safe-session" }, {});
-  await assertBlockedBy("agent_startup", () => hooks.get("session_start")({ sessionId: "BLOCKME" }, {}));
-
-  assert.deepEqual(await hooks.get("before_agent_run")({ prompt: "benign", messages: [] }, {}), { outcome: "pass" });
-  await assertBlockedBy("input", () => hooks.get("before_agent_run")({ prompt: "BLOCKME", messages: [] }, {}));
-
-  await hooks.get("llm_input")({ prompt: "benign" }, {});
-  await assertBlockedBy("pre_model_call", () => hooks.get("llm_input")({ prompt: "BLOCKME" }, {}));
-
-  await hooks.get("llm_output")({ text: "benign" }, {});
-  await assertBlockedBy("post_model_call", () => hooks.get("llm_output")({ text: "BLOCKME" }, {}));
-
-  assert.deepEqual(
-    await hooks.get("before_tool_call")({ toolName: "echo_tool", params: { q: "benign" }, toolCallId: "tool-1" }, {}),
-    { params: { q: "benign" } },
-  );
-  await assertBlockedBy("pre_tool_call", () =>
-    hooks.get("before_tool_call")({ toolName: "echo_tool", params: { q: "BLOCKME" }, toolCallId: "tool-2" }, {}),
-  );
-
-  await hooks.get("after_tool_call")({ toolName: "echo_tool", params: {}, result: "benign", toolCallId: "tool-3" }, {});
-  await assertBlockedBy("post_tool_call", () =>
-    hooks.get("after_tool_call")({ toolName: "echo_tool", params: {}, result: "BLOCKME", toolCallId: "tool-4" }, {}),
-  );
-
-  await hooks.get("before_agent_finalize")({ text: "benign" }, {});
-  await assertBlockedBy("output", () => hooks.get("before_agent_finalize")({ text: "BLOCKME" }, {}));
-
-  await hooks.get("session_end")({ sessionId: "safe-session", messageCount: 1 }, {});
-  await assertBlockedBy("agent_shutdown", () => hooks.get("session_end")({ sessionId: "BLOCKME", messageCount: 1 }, {}));
-});

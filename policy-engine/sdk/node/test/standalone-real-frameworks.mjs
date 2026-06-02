@@ -10,7 +10,6 @@ const {
   createAnthropicAdapter,
   createLangChainAdapter,
   createOpenAIAgentsAdapter,
-  createOpenClawAdapter,
 } = require("../dist/index.js");
 
 const manifest = process.env.ACS_SMOKE_POLICY ?? fileURLToPath(new URL("../../../tests/fixtures/smoke/manifest.yaml", import.meta.url));
@@ -99,33 +98,7 @@ async function runAnthropicStandalone() {
   await assertBlocked("post_model_call", () => guardedClient.messages.create(request));
 }
 
-async function runOpenClawStandalone() {
-  const { definePluginEntry } = await import("openclaw/plugin-sdk/core");
-  const hooks = new Map();
-
-  const control = AgentControl.fromPath(manifest);
-  const acs = createOpenClawAdapter(control).plugin();
-
-  const realPluginEntry = definePluginEntry({
-    id: "acs-standalone-openclaw",
-    name: "ACS standalone OpenClaw",
-    description: "ACS standalone OpenClaw adapter proof",
-    register(api) {
-      acs.register(api);
-    },
-  });
-  realPluginEntry.register({ on: (hookName, handler) => hooks.set(hookName, handler) });
-
-  await hooks.get("before_agent_run")({ prompt: "benign", messages: [] }, {});
-  await assertBlocked("input", () => hooks.get("before_agent_run")({ prompt: "BLOCKME", messages: [] }, {}));
-  await hooks.get("llm_input")({ prompt: "benign" }, {});
-  await assertBlocked("pre_model_call", () => hooks.get("llm_input")({ prompt: "BLOCKME" }, {}));
-  await hooks.get("llm_output")({ text: "benign" }, {});
-  await assertBlocked("post_model_call", () => hooks.get("llm_output")({ text: "BLOCKME" }, {}));
-}
-
 await runLangChainStandalone();
 await runOpenAIAgentsStandalone();
 await runAnthropicStandalone();
-await runOpenClawStandalone();
 console.log("standalone real framework adapter proof passed");

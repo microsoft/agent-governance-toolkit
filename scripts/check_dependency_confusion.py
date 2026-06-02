@@ -192,7 +192,7 @@ REGISTERED_NPM_PACKAGES = {
     "autoprefixer", "glob", "mocha", "postcss", "tailwindcss",
     # Vendored ACS policy-engine node SDK deps (all real npm packages)
     "@langchain/core", "langchain", "@openai/agents",
-    "@napi-rs/cli", "openclaw",
+    "@napi-rs/cli",
 }
 
 # Known Cargo crate names
