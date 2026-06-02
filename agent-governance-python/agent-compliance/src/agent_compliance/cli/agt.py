@@ -250,14 +250,16 @@ def test(ctx_obj: AgtContext, policy_path: str, fixture_path: str) -> None:
     "--strict",
     is_flag=True,
     default=False,
-    help="Fail if runtime evidence shows weak or missing governance setup.",
+    hidden=True,
+    help="Deprecated: strict mode is now the default.  This flag is accepted but has no effect.",
+    is_eager=False,
+    expose_value=False,
 )
 @click.pass_obj
 def verify(
     ctx_obj: AgtContext,
     badge: bool,
     evidence_path: str | None,
-    strict: bool,
 ) -> None:
     """Run OWASP ASI 2026 governance verification."""
     try:
@@ -266,7 +268,7 @@ def verify(
         verifier = GovernanceVerifier()
 
         if evidence_path:
-            attestation = verifier.verify_evidence(evidence_path=evidence_path, strict=strict)
+            attestation = verifier.verify_evidence(evidence_path=evidence_path)
         else:
             attestation = verifier.verify()
 
