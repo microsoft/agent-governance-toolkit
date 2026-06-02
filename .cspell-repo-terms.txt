@@ -689,3 +689,7 @@ tinyrainbow
 pathe
 emnapi
 OSSF
+zerovec
+tinystr
+webpki
+mitapache
