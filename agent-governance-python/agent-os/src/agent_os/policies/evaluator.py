@@ -17,6 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .dynamic_conditions import DynamicConditionEvaluator
 from .schema import PolicyAction, PolicyDocument, PolicyOperator, PolicyRule
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ class PolicyEvaluator:
         self.policies: list[PolicyDocument] = policies or []
         self.root_dir: Path | None = Path(root_dir) if root_dir else None
         self._backends: list[Any] = []
+        self._dynamic_condition_evaluator = DynamicConditionEvaluator()
 
     def load_policies(self, directory: str | Path) -> None:
         """Load all YAML policy files from a directory."""
@@ -127,7 +129,11 @@ class PolicyEvaluator:
         self.add_backend(backend)
         return backend
 
-    def evaluate(self, context: dict[str, Any]) -> PolicyDecision:
+    def evaluate(
+        self,
+        context: dict[str, Any],
+        dynamic_context: dict[str, Any] | None = None,
+    ) -> PolicyDecision:
         """Evaluate all loaded policy rules against the given context.
 
         If ``root_dir`` is set and context contains a ``path`` key,
@@ -143,12 +149,16 @@ class PolicyEvaluator:
         """
         # Folder-scoped evaluation path
         if self.root_dir and "path" in context:
-            return self._evaluate_scoped(context)
+            return self._evaluate_scoped(context, dynamic_context)
 
         # Flat evaluation (original behavior)
-        return self._evaluate_flat(context)
+        return self._evaluate_flat(context, dynamic_context)
 
-    def _evaluate_scoped(self, context: dict[str, Any]) -> PolicyDecision:
+    def _evaluate_scoped(
+        self,
+        context: dict[str, Any],
+        dynamic_context: dict[str, Any] | None,
+    ) -> PolicyDecision:
         """Evaluate using folder-level policy discovery and merge."""
         from .discovery import discover_policies, filter_by_scope
         from .merge import merge_policies
@@ -158,7 +168,7 @@ class PolicyEvaluator:
 
         if not chain_paths:
             # No governance files found — fall back to loaded policies
-            return self._evaluate_flat(context)
+            return self._evaluate_flat(context, dynamic_context)
 
         docs = [PolicyDocument.from_yaml(p) for p in chain_paths]
 
@@ -169,12 +179,16 @@ class PolicyEvaluator:
                 filtered.append(doc)
 
         if not filtered:
-            return self._evaluate_flat(context)
+            return self._evaluate_flat(context, dynamic_context)
 
         merged_rules = merge_policies(filtered)
-        return self._evaluate_rules(merged_rules, filtered, context)
+        return self._evaluate_rules(merged_rules, filtered, context, dynamic_context)
 
-    def _evaluate_flat(self, context: dict[str, Any]) -> PolicyDecision:
+    def _evaluate_flat(
+        self,
+        context: dict[str, Any],
+        dynamic_context: dict[str, Any] | None,
+    ) -> PolicyDecision:
         """Flat evaluation using the loaded policy list (original behavior)."""
         try:
             all_rules: list[tuple[PolicyRule, PolicyDocument]] = []
@@ -186,20 +200,27 @@ class PolicyEvaluator:
             all_rules.sort(key=lambda pair: pair[0].priority, reverse=True)
 
             for rule, doc in all_rules:
-                if _match_condition(rule.condition, context):
+                if _match_condition(rule.condition, context) and self._dynamic_condition_evaluator.evaluate(
+                    rule,
+                    dynamic_context,
+                ):
                     allowed = rule.action in (PolicyAction.ALLOW, PolicyAction.AUDIT)
+                    audit_entry: dict[str, Any] = {
+                        "policy": doc.name,
+                        "rule": rule.name,
+                        "action": rule.action.value,
+                        "context_snapshot": context,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if rule.dynamic_condition is not None:
+                        audit_entry["dynamic_condition"] = rule.dynamic_condition.model_dump()
+                        audit_entry["runtime_snapshot"] = dynamic_context
                     return PolicyDecision(
                         allowed=allowed,
                         matched_rule=rule.name,
                         action=rule.action.value,
                         reason=rule.message or f"Matched rule '{rule.name}'",
-                        audit_entry={
-                            "policy": doc.name,
-                            "rule": rule.name,
-                            "action": rule.action.value,
-                            "context_snapshot": context,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        },
+                        audit_entry=audit_entry,
                     )
 
             # No YAML rule matched — consult external backends
@@ -275,25 +296,33 @@ class PolicyEvaluator:
         rules: list[PolicyRule],
         docs: list[PolicyDocument],
         context: dict[str, Any],
+        dynamic_context: dict[str, Any] | None,
     ) -> PolicyDecision:
         """Evaluate a merged rule list from folder-scoped discovery."""
         try:
             for rule in rules:
-                if _match_condition(rule.condition, context):
+                if _match_condition(rule.condition, context) and self._dynamic_condition_evaluator.evaluate(
+                    rule,
+                    dynamic_context,
+                ):
                     allowed = rule.action in (PolicyAction.ALLOW, PolicyAction.AUDIT)
+                    audit_entry: dict[str, Any] = {
+                        "policy": "folder-scoped",
+                        "rule": rule.name,
+                        "action": rule.action.value,
+                        "policy_chain": [d.name for d in docs],
+                        "context_snapshot": context,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if rule.dynamic_condition is not None:
+                        audit_entry["dynamic_condition"] = rule.dynamic_condition.model_dump()
+                        audit_entry["runtime_snapshot"] = dynamic_context
                     return PolicyDecision(
                         allowed=allowed,
                         matched_rule=rule.name,
                         action=rule.action.value,
                         reason=rule.message or f"Matched rule '{rule.name}'",
-                        audit_entry={
-                            "policy": "folder-scoped",
-                            "rule": rule.name,
-                            "action": rule.action.value,
-                            "policy_chain": [d.name for d in docs],
-                            "context_snapshot": context,
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        },
+                        audit_entry=audit_entry,
                     )
 
             # No rule matched — consult external backends

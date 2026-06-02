@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: write
       models: read
     if: >-
@@ -200,6 +200,7 @@ jobs:
     if: always()
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Collect agent comments and post summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -256,13 +257,9 @@ jobs:
               return `| ${agent.icon} ${agent.label} | ${verdict.status} ${verdict.statusLabel} | ${verdict.detail} |`;
             });
 
-            const allVerdicts = rows.join('\n');
-            let overallVerdict;
-            if (allVerdicts.includes('⚠️')) {
-              overallVerdict = '**Verdict: ⚠️ AI review incomplete; ready for human review**';
-            } else {
-              overallVerdict = '**Verdict: ✅ Ready for human review**';
-            }
+            const overallVerdict = rows.some(r => r.includes('⚠️'))
+              ? '**Verdict: ⚠️ AI review incomplete; ready for human review**'
+              : '**Verdict: ✅ Ready for human review**';
 
             const summaryBody = [
               SUMMARY_MARKER,
@@ -277,15 +274,39 @@ jobs:
               '_AI review comments are untrusted advisory output. The summary reports workflow-generated completion status only, not model-authored pass/fail claims._',
             ].join('\n');
 
-            const existing = allComments.find(c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner, repo, comment_id: existing.id, body: summaryBody,
-              });
-              core.info(`Updated summary comment ${existing.id}`);
-            } else {
-              await github.rest.issues.createComment({
-                owner, repo, issue_number: prNumber, body: summaryBody,
-              });
-              core.info('Created summary comment');
+            const existing = allComments.find(
+              c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER)
+            );
+
+            let commentPosted = false;
+
+            try {
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id, body: summaryBody,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: prNumber, body: summaryBody,
+                });
+              }
+              commentPosted = true;
+            } catch (error) {
+              const message = error?.message || String(error);
+              if (error?.status === 403 || message.includes('Resource not accessible by integration')) {
+                core.warning(`PR comment not posted due to token restrictions: ${message}`);
+              } else {
+                core.warning(`PR comment not posted: ${message}`);
+              }
             }
+
+            await core.summary
+              .addHeading('PR Review Summary')
+              .addRaw(summaryBody, true)
+              .addRaw(
+                commentPosted
+                  ? '\n\nPR comment posted successfully.'
+                  : '\n\nPR comment not posted; see this job summary instead.',
+                true
+              )
+              .write();
