@@ -10,10 +10,31 @@ trust handshakes, identity verification, scope chains, and policy checks.
 from typing import Optional, Any, Callable, TypeVar
 from functools import wraps
 import inspect
+import logging
 import os
 import time
+import urllib.parse
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+_logger = logging.getLogger(__name__)
+
+_LOCAL_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def _is_local_endpoint(endpoint: str) -> bool:
+    """Return True if *endpoint* resolves to a loopback address."""
+    if not endpoint:
+        return False
+    # Handle bare "host:port" without a scheme so urllib can parse it.
+    if "://" not in endpoint:
+        endpoint = "grpc://" + endpoint
+    try:
+        hostname = urllib.parse.urlparse(endpoint).hostname or ""
+    except Exception:
+        return False
+    return hostname in _LOCAL_HOSTS
+
 
 # Check if OpenTelemetry is available
 _OTEL_AVAILABLE = False
@@ -49,7 +70,9 @@ def setup_tracing(
     Args:
         service_name: Service name for traces
         endpoint: OTLP endpoint (default: from OTEL_EXPORTER_OTLP_ENDPOINT env)
-        insecure: Whether to use insecure connection (default: False, use TLS)
+        insecure: Whether to use insecure connection (default: False, use TLS).
+            Only permitted for loopback endpoints; raises :exc:`ValueError` for
+            non-local endpoints to prevent accidental plaintext export.
     """
     try:
         from opentelemetry import trace
@@ -66,6 +89,19 @@ def setup_tracing(
     if not endpoint:
         # No endpoint configured, skip
         return
+
+    if insecure and not _is_local_endpoint(endpoint):
+        raise ValueError(
+            f"Insecure (plaintext) OTLP transport is not permitted for "
+            f"non-local endpoint '{endpoint}'. Set insecure=False or use a "
+            f"TLS-enabled collector."
+        )
+    if insecure:
+        _logger.warning(
+            "OTLP exporter is using an insecure (plaintext) channel to %s. "
+            "This is only acceptable for local development.",
+            endpoint,
+        )
 
     # Create resource
     resource = Resource.create({
@@ -236,6 +272,7 @@ def configure_tracing(
     service_name: str = "agentmesh",
     endpoint: Optional[str] = None,
     console: bool = False,
+    allow_insecure: bool = False,
 ) -> Optional[Any]:
     """Configure OpenTelemetry tracing with optional OTLP or console export.
 
@@ -243,6 +280,9 @@ def configure_tracing(
         service_name: Service name for traces.
         endpoint: OTLP endpoint. Falls back to OTEL_EXPORTER_OTLP_ENDPOINT env var.
         console: If True, add a ConsoleSpanExporter for local debugging.
+        allow_insecure: Permit plaintext transport.  Only valid for loopback
+            endpoints (``localhost`` / ``127.0.0.1``).  Setting this for a
+            non-local endpoint raises :exc:`ValueError`.
 
     Returns:
         TracerProvider if OTel is available, else None.
@@ -251,6 +291,19 @@ def configure_tracing(
         return None
 
     endpoint = endpoint or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+
+    if allow_insecure and endpoint:
+        if not _is_local_endpoint(endpoint):
+            raise ValueError(
+                f"Insecure (plaintext) OTLP transport is not permitted for "
+                f"non-local endpoint '{endpoint}'. Remove allow_insecure=True "
+                f"or use a TLS-enabled collector."
+            )
+        _logger.warning(
+            "OTLP exporter is using an insecure (plaintext) channel to %s. "
+            "This is only acceptable for local development.",
+            endpoint,
+        )
 
     resource = Resource.create(
         {
@@ -263,7 +316,8 @@ def configure_tracing(
     provider = TracerProvider(resource=resource)
 
     if endpoint and _OTLP_AVAILABLE:
-        otlp_exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+        use_insecure = allow_insecure and _is_local_endpoint(endpoint)
+        otlp_exporter = OTLPSpanExporter(endpoint=endpoint, insecure=use_insecure)
         provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
 
     if console:
