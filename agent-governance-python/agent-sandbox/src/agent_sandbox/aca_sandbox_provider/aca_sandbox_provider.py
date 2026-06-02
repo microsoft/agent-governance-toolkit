@@ -118,6 +118,7 @@ def aca_config_from_policy(
         input_dir=base.input_dir,
         output_dir=base.output_dir,
         runtime=base.runtime,
+        ring=base.ring,
     )
 
     defaults = getattr(policy, "defaults", None)
@@ -559,6 +560,22 @@ class ACASandboxProvider(SandboxProvider):
                 raise RuntimeError(
                     f"Failed to initialize PolicyEvaluator: {exc}"
                 ) from exc
+
+        # Apply ring constraints — only when a ring is explicitly set.
+        if cfg.ring is not None:
+            from hypervisor.rings.enforcer import RING_CONSTRAINTS
+            ring_constraints = RING_CONSTRAINTS[cfg.ring]
+            if not ring_constraints.network_allowed:
+                if allow_hosts:
+                    logger.info(
+                        "Ring %s: clearing network_allowlist for agent '%s' "
+                        "(network not permitted at this ring)",
+                        cfg.ring.value,
+                        agent_id,
+                    )
+                allow_hosts = []
+                net_default = "deny"
+                policy_provided = True  # ensure _apply_egress_policy is called below
 
         # Make sure the sandbox group exists (no-op unless requested).
         self._ensure_sandbox_group()

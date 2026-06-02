@@ -287,6 +287,7 @@ class HyperLightSandboxProvider(SandboxProvider):
         self._sandboxes: dict[tuple[str, str], Any] = {}
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], HyperlightConfig] = {}
+        self._session_rings: dict[tuple[str, str], Any] = {}
         self._snapshots: dict[tuple[str, str, str], Any] = {}
 
         # Resolve the upstream SDK lazily but eagerly enough to set
@@ -384,6 +385,30 @@ class HyperLightSandboxProvider(SandboxProvider):
             net_allow = list(getattr(policy, "network_allowlist", []) or [])
             evaluator = self._build_evaluator(policy)
 
+        # Apply ring constraints before resolving tool and network capabilities.
+        # Only active when a ring is explicitly set; ring=None skips silently.
+        if base_cfg.ring is not None:
+            from hypervisor.rings.enforcer import RING_CONSTRAINTS
+            ring_constraints = RING_CONSTRAINTS[base_cfg.ring]
+            if not ring_constraints.subprocess_allowed:
+                if tool_allow:
+                    logger.info(
+                        "Ring %s: clearing tool_allowlist for agent '%s' "
+                        "(subprocess not permitted at this ring)",
+                        base_cfg.ring.value,
+                        agent_id,
+                    )
+                tool_allow = []
+            if not ring_constraints.network_allowed:
+                if net_allow:
+                    logger.info(
+                        "Ring %s: clearing network_allowlist for agent '%s' "
+                        "(network not permitted at this ring)",
+                        base_cfg.ring.value,
+                        agent_id,
+                    )
+            net_allow = []
+
         # Resolve tool callables. Names listed in the allowlist that the
         # provider does not know about fail closed at session creation
         # time so a misconfigured policy never silently degrades.
@@ -441,6 +466,7 @@ class HyperLightSandboxProvider(SandboxProvider):
             self._workers[(agent_id, session_id)] = worker
             self._sandboxes[(agent_id, session_id)] = sandbox
             self._session_configs[(agent_id, session_id)] = hl_cfg
+            self._session_rings[(agent_id, session_id)] = base_cfg.ring
             if evaluator is not None:
                 self._evaluators[(agent_id, session_id)] = evaluator
 
@@ -474,6 +500,7 @@ class HyperLightSandboxProvider(SandboxProvider):
             sandbox = self._sandboxes.get(key)
             evaluator = self._evaluators.get(key)
             cfg = self._session_configs.get(key)
+            session_ring = self._session_rings.get(key)
 
         if worker is None or sandbox is None:
             raise RuntimeError(
@@ -495,6 +522,16 @@ class HyperLightSandboxProvider(SandboxProvider):
             if not getattr(decision, "allowed", False):
                 reason = getattr(decision, "reason", "policy denied")
                 raise PermissionError(f"Policy denied: {reason}")
+
+        # Ring resource check — only when a ring is explicitly set.
+        if session_ring is not None:
+            from hypervisor.rings.enforcer import ResourceType, RingEnforcer
+            ring_result = RingEnforcer().check_resource(session_ring, ResourceType.SUBPROCESS)
+            if not ring_result.allowed:
+                raise PermissionError(
+                    f"Ring {session_ring.value} agent cannot execute "
+                    f"subprocess: {ring_result.reason}"
+                )
 
         enforce_no_subprocess_execution(code)
 
@@ -554,6 +591,7 @@ class HyperLightSandboxProvider(SandboxProvider):
             sandbox = self._sandboxes.pop(key, None)
             self._evaluators.pop(key, None)
             self._session_configs.pop(key, None)
+            self._session_rings.pop(key, None)
             # Pop any snapshots associated with this session into a
             # separate list so we can drop them on the worker thread
             # below — snapshot objects share the unsendable invariant
