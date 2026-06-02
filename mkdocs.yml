@@ -111,6 +111,7 @@ nav:
     - Agent Reliability: tutorials/05-agent-reliability.md
     - Execution Sandboxing: tutorials/06-execution-sandboxing.md
     - MCP Security Gateway: tutorials/07-mcp-security-gateway.md
+    - Agent Control Specification: tutorials/55-agent-control-specification.md
     - OPA / Rego / Cedar Policies: tutorials/08-opa-rego-cedar-policies.md
     - Prompt Injection Detection: tutorials/09-prompt-injection-detection.md
     - Plugin Marketplace: tutorials/10-plugin-marketplace.md
