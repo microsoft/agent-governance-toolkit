@@ -208,6 +208,7 @@ jobs:
 
       - name: Collect agent comments and post summary
         if: github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -297,10 +298,12 @@ jobs:
                 core.info('Created summary comment');
               }
             } catch (error) {
-              if (error.status === 403 || /Resource not accessible by integration/i.test(String(error.message))) {
-                core.warning(`Skipping PR summary comment: ${error.message}`);
+              const status = error?.status ?? error?.response?.status;
+              const message = error?.message ?? String(error);
+              if (status === 403 || /Resource not accessible by integration/i.test(message)) {
+                core.warning(`Skipping PR summary comment: ${message}`);
                 return;
-              } else {
-                throw error;
               }
+              core.warning(`Skipping PR summary due to unexpected error: ${message}`);
+              return;
             }
