@@ -16,8 +16,14 @@
 #       id          string      job key
 #       name        string      job display name
 #       toolchains  [str]       subset of {rust, python, node, dotnet}
-#       opa         bool        install OPA and export ACS_OPA_PATH
-#       opa_on_path bool        also add OPA to PATH (for tools using which(opa))
+#       opa         bool        install OPA (downloads to $RUNNER_TEMP/opa)
+#       opa_env     bool        export ACS_OPA_PATH (default true). Set false
+#                               for the Rust job: core/tests/opa.rs asserts the
+#                               "OPA executable was not found" message, which
+#                               opa_spawn_error only emits when ACS_OPA_PATH is
+#                               unset. The Rust opa tests resolve opa from PATH.
+#       opa_on_path bool        also add OPA to PATH (for tools using which(opa)
+#                               and for the Rust opa tests' require_opa_or_skip)
 #       working_directory string defaults.run.working-directory for the job
 #       [[workflow.job.step]]   one block per run step
 #         name      string
@@ -40,6 +46,8 @@ id = "rust"
 name = "Rust core and SDK"
 toolchains = ["rust"]
 opa = true
+opa_env = false
+opa_on_path = true
 working_directory = "policy-engine"
 [[workflow.job.step]]
 name = "Format"

@@ -136,19 +136,18 @@ def _toolchain_steps(toolchain: str, actions: dict[str, str]) -> list[str]:
     raise GenerationError(f"unknown toolchain: {toolchain}")
 
 
-def _opa_step(on_path: bool = False) -> list[str]:
+def _opa_step(on_path: bool = False, set_env: bool = True) -> list[str]:
     lines = [
         f'curl -fsSL -o "$RUNNER_TEMP/opa" '
         f'"https://openpolicyagent.org/downloads/v{OPA_VERSION}/opa_linux_amd64_static"\n',
         'chmod +x "$RUNNER_TEMP/opa"\n',
-        'echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"\n',
     ]
+    if set_env:
+        lines.append('echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"\n')
     if on_path:
         # The Python generator locates opa via shutil.which("opa") (PATH only),
         # unlike the Rust core which honors ACS_OPA_PATH. Jobs that run the
-        # generator opt in to also putting opa on PATH. The Rust job must NOT
-        # set this: core/tests/opa.rs asserts the "executable missing" error
-        # path, which requires opa to be absent from PATH.
+        # generator opt in to also putting opa on PATH.
         lines.append('echo "$RUNNER_TEMP" >> "$GITHUB_PATH"\n')
     lines.append('"$RUNNER_TEMP/opa" version')
     return _render_run_step("Install OPA", "".join(lines))
@@ -176,7 +175,7 @@ def _render_job(job: dict, actions: dict[str, str]) -> list[str]:
     for toolchain in toolchains:
         lines += _toolchain_steps(toolchain, actions)
     if job.get("opa"):
-        lines += _opa_step(job.get("opa_on_path", False))
+        lines += _opa_step(job.get("opa_on_path", False), job.get("opa_env", True))
     for step in steps:
         step_name = step.get("name")
         run_body = step.get("run")
