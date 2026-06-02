@@ -50,7 +50,12 @@
     "nbconvert",
     "PYTHONUTF",
     "simplefilter",
-    "issubclass"
+    "issubclass",
+    "mslearn",
+    "linenums",
+    "pymdownx",
+    "pygments",
+    "javascripts"
   ],
   "ignorePaths": [
     "**/node_modules/**",
