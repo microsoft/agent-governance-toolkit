@@ -1,5 +1,9 @@
 # Agent Control Specification Python SDK
 
+## What is the Agent Control Specification?
+
+Agent Control Specification (ACS) is a stateless, deterministic, fail-closed policy decision runtime for agent security. At each of eight intervention points across the agent loop, `Input -> Model -> Tool Call -> Tool Result -> Output`, the host submits a complete snapshot and policy manifest, then receives a normalized verdict. Verdicts are `allow`, `warn`, `deny`, `escalate`, or `transform`, with runtime errors failing closed to `deny` and no transform. This SDK is the thin Python surface over the Rust core, and ACS is vendored into AGT's `policy-engine/` as the AGT 5.0 policy layer. See the [policy engine overview](../../README.md) for where it fits with Agent OS as the kernel and host.
+
 This package is the thin Python surface for the stateless Agent Control Specification runtime.
 
 It intentionally owns Python async orchestration and host/framework integration while the native core owns deterministic intervention point evaluation. `AgentControl.from_path("manifest.yaml")` builds a control backed by the bundled Rust core through the `_native` extension, which is built when the package is installed with maturin. With no dispatcher arguments the bundled OPA policy dispatcher and annotator dispatcher are wired automatically, so a host that uses Rego policies integrates in roughly three lines. Pass `annotator_dispatcher=` and `policy_dispatcher=` (or use `from_native(manifest, ...)`) to override either bundled default with host-specific logic. The zero-config construction section in the root README describes when to supply custom dispatchers.

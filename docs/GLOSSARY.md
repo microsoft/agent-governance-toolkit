@@ -6,6 +6,7 @@ Technical terms used across the Agent Governance Toolkit, its specifications, an
 
 ### A
 
+* **Agent Control Specification (ACS)**: The stateless, deterministic, fail-closed policy decision runtime at the core of AGT's policy layer. A Rust core evaluates a complete host-supplied snapshot at intervention points across the agent loop and returns a normalized verdict (allow, warn, deny, escalate, or transform). Vendored into `policy-engine/` as the AGT 5.0 policy layer.
 * **Agent Identity**: A cryptographic identity (Ed25519 key pair) that uniquely identifies an agent. Every governance action is tied to a verified identity.
 * **Agent OS**: The core governance runtime that hosts the policy engine, lifecycle management, and governance gate. All agent actions pass through Agent OS before execution.
 * **AgentMesh**: The trust and coordination layer that handles agent discovery, routing, delegation, and inter-agent communication with cryptographic verification.
@@ -49,6 +50,7 @@ Technical terms used across the Agent Governance Toolkit, its specifications, an
 ### I
 
 * **IATP (Identity and Trust Protocol)**: A protocol for establishing and verifying agent identity across organizational boundaries. Used by AgentMesh for cross-domain trust federation.
+* **Intervention Point**: One of the eight points across the agent loop (input, model call, tool call, tool result, output, and their pre/post variants) where the Agent Control Specification runtime evaluates a snapshot and returns a verdict.
 
 ### K
 
@@ -82,9 +84,14 @@ Technical terms used across the Agent Governance Toolkit, its specifications, an
 
 ### T
 
+* **Transform Verdict**: An Agent Control Specification verdict that instructs the host to replace the value under evaluation (for example, to redact tool output) instead of allowing or denying it outright. Replaces the "effects" concept from upstream ACS in the AGT variant.
 * **Trust Ceiling**: The maximum trust score an agent can achieve, regardless of its behavior. Set by organizational policy to cap the privileges any single agent can accumulate.
 * **Trust Score**: A dynamic rating (0-1000) assigned to an agent based on its behavior history, verification status, and organizational policies. Higher scores grant access to more sensitive operations.
 * **Trust Scoring**: The process of computing and updating an agent's trust score based on governance events, compliance history, and peer attestations.
+
+### V
+
+* **Verdict**: The normalized decision returned by the Agent Control Specification runtime for an intervention point: one of allow, warn, deny, escalate, or transform, optionally with a low-cardinality reason code, host-facing message, transform body, and evidence.
 
 ### Z
 

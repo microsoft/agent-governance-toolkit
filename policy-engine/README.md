@@ -1,22 +1,63 @@
-# `policy-engine/` - AGT policy engine vendored from ACS
+# Agent Control Specification (ACS)
 
-This directory is the home of the AGT policy engine. It started as a vendored copy of `responsibleai/AgentControlSpecification` at commit `318dbca` and has since been synced to upstream commit `eeaa83b`. It is being folded into AGT as the AGT 5.0 policy layer.
+Agent Control Specification, ACS, is the policy layer of the Agent Governance Toolkit. It is a stateless, deterministic, fail closed policy decision runtime for agent security. A host acts as the policy enforcement point and calls ACS at defined intervention points with a complete JSON snapshot. ACS acts as the policy decision point, evaluates the bound policy and optional annotations through a pure logic Rust core, and returns a normalized verdict that the host enforces.
 
-After the merge, this directory is AGT owned source. The ACS upstream repo will be archived once AGT 5.0 ships. There is no upstream tracking branch.
+Define once. Enforce everywhere.
 
-## Why `policy-engine/` and not `acs/`
+ACS lives in this `policy-engine/` directory as AGT owned source. It started as a vendored copy of `responsibleai/AgentControlSpecification` at commit `318dbca` and has since been synced to upstream commit `eeaa83b`. It is folded into AGT as the AGT 5.0 policy layer, the directory is named for that role inside AGT rather than for the original project, and there is no upstream tracking branch. The upstream ACS repository will be archived once AGT 5.0 ships.
 
-The user decision in `architecture-exploration.md` Q9 and Q13 is explicit. ACS becomes the policy layer of AGT and stops existing as a standalone thing. The directory is named for its role inside AGT.
+## Why a unified policy layer
 
-## What the engine provides
+Agents no longer only generate text. They retrieve data, call tools, and execute actions across systems, so the governing question becomes who decides what an agent is allowed to do across its whole lifecycle. Today that governance is fragmented. Policies are embedded in prompts, framework hooks, and application code, enforcement is inconsistent across systems, and security teams lack centralized visibility. ACS gives AGT one portable contract for that decision so policy stops being scattered across the stack.
 
-The engine provides a stateless and deterministic policy decision runtime for agent security. A host evaluates complete snapshots at intervention points, receives a normalized verdict, and enforces allow, warn, deny, escalate, or transform outcomes.
+## What ACS is
+
+ACS is a portable, lifecycle aware policy contract for AI agents. A single manifest declares what to validate across input, model, tools, and output, when each policy is evaluated, how decisions are structured and composed, and what evidence is captured for audit. AGT hosts resolve the manifest, build the snapshot at each intervention point, and apply the returned verdict.
+
+## Core idea
 
 A single policy artifact covers the full agent loop.
 
 ```text
 Input -> Model -> Tool Call -> Tool Result -> Output
 ```
+
+## Example manifest
+
+```yaml
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: email-agent
+policies:
+  email_policy:
+    type: rego
+    bundle: ./policy
+    query: data.email_agent.verdict
+intervention_points:
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: email_policy
+tools:
+  send_email:
+    type: Tool
+    id: send_email
+    clearance: internal
+```
+
+## How ACS integrates with AGT
+
+AGT is the host and policy enforcement point around the ACS decision core. The integration spans three layers.
+
+| Layer | Role in the integration |
+| --- | --- |
+| AGT host adapters | Framework adapters in `agent-os` intercept the agent loop, build the snapshot for each intervention point, call the policy layer, and enforce the returned verdict. |
+| `agt-policies` bridge | The Python `agt.policies` package mediates between AGT host calls and the ACS runtime and normalizes verdicts for host consumption. |
+| ACS native runtime | The `agent_control_specification` Python SDK over the Rust core performs the deterministic decision and is built from `sdk/python` with maturin. |
+
+AGT folder discovery, scope, and merge pre-resolve manifests before the engine evaluates them, so the runtime always receives one fully resolved manifest. Manifest resolution rules live in [`spec/agt/AGT-RESOLUTION-1.0.md`](spec/agt/AGT-RESOLUTION-1.0.md).
 
 ## Core properties
 
@@ -26,11 +67,26 @@ Input -> Model -> Tool Call -> Tool Result -> Output
 | Deterministic | The same manifest, snapshot, mode, and dispatcher outputs produce the same verdict and transformed policy target. |
 | Fail closed | Runtime failures return `deny`, use a reserved runtime error reason, and apply no transform. |
 
-Security boundaries and host obligations are described in [`docs/security-model.md`](docs/security-model.md). Layer ownership is described in [`docs/architecture.md`](docs/architecture.md).
+Security boundaries and host obligations are described in [`docs/security-model.md`](docs/security-model.md). The stateless runtime contract is described in [`docs/stateless-runtime.md`](docs/stateless-runtime.md).
+
+## Intervention points
+
+| Intervention point | Use |
+| --- | --- |
+| `agent_startup` | Evaluate agent or session startup metadata before the run begins. |
+| `input` | Evaluate external request ingress before the agent loop begins. |
+| `pre_model_call` | Evaluate model request messages, context, and tool definitions before the model call. |
+| `post_model_call` | Evaluate the model response before the host acts on it. |
+| `pre_tool_call` | Evaluate one concrete tool invocation before execution. |
+| `post_tool_call` | Evaluate one concrete tool result before it returns to the agent or caller. |
+| `output` | Evaluate the assembled final user visible response. |
+| `agent_shutdown` | Evaluate agent or session shutdown metadata and summaries. |
+
+`pre_tool_call` and `post_tool_call` are the only tool intervention points and the only points that accept `tool_name_from`.
 
 ## Divergences from upstream ACS
 
-Recorded in `spec/acs/SPECIFICATION-AGT.md` when authored in M1.
+Recorded in [`spec/SPECIFICATION-AGT-DELTA.md`](spec/SPECIFICATION-AGT-DELTA.md).
 
 | Divergence | AGT contract |
 | --- | --- |
@@ -182,7 +238,6 @@ Policies must not emit reasons with that prefix. See specification section 15 fo
 | --- | --- |
 | Original ACS source | MIT licensed by Microsoft contributors at `responsibleai/AgentControlSpecification`. |
 | Original ACS license | Preserved at `policy-engine/LICENSE.acs`. |
-| Original ACS README | Preserved at `policy-engine/README.vendored-acs.md` for reference. |
 
 ## License
 
