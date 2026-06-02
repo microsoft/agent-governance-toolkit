@@ -279,14 +279,26 @@ jobs:
             ].join('\n');
 
             const existing = allComments.find(c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner, repo, comment_id: existing.id, body: summaryBody,
-              });
-              core.info(`Updated summary comment ${existing.id}`);
-            } else {
-              await github.rest.issues.createComment({
-                owner, repo, issue_number: prNumber, body: summaryBody,
-              });
-              core.info('Created summary comment');
+            try {
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id, body: summaryBody,
+                });
+                core.info(`Updated summary comment ${existing.id}`);
+              } else {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: prNumber, body: summaryBody,
+                });
+                core.info('Created summary comment');
+              }
+            } catch (error) {
+              if (error.status === 403) {
+                core.warning(`Unable to post PR summary comment: ${error.message}`);
+                await core.summary
+                  .addHeading('PR Review Summary')
+                  .addRaw(summaryBody, true)
+                  .write();
+              } else {
+                throw error;
+              }
             }
