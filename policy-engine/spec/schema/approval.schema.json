@@ -2,7 +2,7 @@
   "$id": "https://agent-control-specification.test/approval.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "AGT manifest approval section",
-  "description": "AGT D5 top-level approval section that configures the host approval path consulted by escalate verdicts. The engine validates this shape but treats it as opaque host configuration per SPECIFICATION-AGT-DELTA D5.",
+  "description": "AGT D5 top-level approval section that configures the host approval path consulted by escalate verdicts. The engine validates this shape but treats it as opaque host configuration per SPECIFICATION.md §24.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

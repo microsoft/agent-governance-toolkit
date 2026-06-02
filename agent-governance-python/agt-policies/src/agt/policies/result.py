@@ -7,8 +7,8 @@
 ``PolicyCheckResult`` field surface for back-compat callers (``allowed``,
 ``category``, ``matched_rule``, ``public_message``, ``detail``,
 ``reason``, ``audit_entry``) and adds the AGT-side fields produced by
-the ACS engine per ``policy-engine/spec/SPECIFICATION-AGT-DELTA.md``
-D1 (the bisected ``transform`` verdict and its payload) and D1.4 (the
+the ACS engine per ``policy-engine/spec/SPECIFICATION.md``
+§14 (the ``transform`` verdict and its payload) and §13.1 (the
 ``input_identity`` / ``enforced_identity`` pair).
 
 Callers ride the v5 surface (``verdict``, ``transform``, ``evidence``,

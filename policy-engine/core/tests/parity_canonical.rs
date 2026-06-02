@@ -159,8 +159,6 @@ fn canonical_resource_limits_match_core_defaults() {
 fn canonical_error_mapping_matches_core_and_spec() {
     let fixture = fixture("error_mapping_canonical.json");
     let spec = std::fs::read_to_string("../spec/SPECIFICATION.md").expect("spec exists");
-    let agt_delta =
-        std::fs::read_to_string("../spec/SPECIFICATION-AGT-DELTA.md").expect("AGT delta exists");
     let actual = runtime_errors();
     let rows = fixture["runtime_errors"].as_array().unwrap();
 
@@ -170,8 +168,8 @@ fn canonical_error_mapping_matches_core_and_spec() {
         let reason = row["reason"].as_str().unwrap();
         assert_eq!(actual[variant].reason(), reason, "{variant}");
         assert!(
-            spec.contains(reason) || agt_delta.contains(reason),
-            "SPECIFICATION.md or SPECIFICATION-AGT-DELTA.md contains {reason}",
+            spec.contains(reason),
+            "SPECIFICATION.md contains {reason}",
         );
     }
 }

@@ -3,8 +3,8 @@
 """Tests for agt.manifest_resolution.
 
 Cover the contract documented in
-``policy-engine/spec/agt/AGT-RESOLUTION-1.0.md`` and the deltas in
-``policy-engine/spec/SPECIFICATION-AGT-DELTA.md`` §D6.
+``policy-engine/spec/agt/AGT-RESOLUTION-1.0.md`` and the reserved
+resolution reasons in ``policy-engine/spec/SPECIFICATION.md`` §16.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@
 // AGT stock redaction transform, Cedar mirror of `policy/lib/redact.rego`.
 // The Rego library performs in place regex substitution with
 // `regex.replace` and surfaces the rewritten text in the AGT transform
-// verdict per SPECIFICATION-AGT-DELTA.md section D1.1. Cedar annotations
+// verdict per SPECIFICATION.md §14. Cedar annotations
 // are static strings, so this Cedar mirror cannot compute the replacement
 // from the snapshot. It only emits a fixed `transform` advice payload
 // that wholesale replaces `$policy_target.value` with the literal

@@ -3,7 +3,7 @@
 #
 # AGT stock budget helpers. These rules read the
 # `input.snapshot.envelope.budgets` block per AGT-SNAPSHOT-1.0.md §1 and emit
-# AGT verdicts per SPECIFICATION-AGT-DELTA.md §D1. A budget is exceeded when
+# AGT verdicts per SPECIFICATION.md §13.1. A budget is exceeded when
 # the host-tracked counter has already reached the configured limit. The
 # helpers fail safe when a counter or threshold is absent. Present malformed
 # counters fail closed instead of being coerced to zero.

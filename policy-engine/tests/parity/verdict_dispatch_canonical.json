@@ -4,7 +4,7 @@
     "core/src/verdict.rs Decision",
     "core/src/verdict.rs normalize_policy_output",
     "docs/stateless-runtime.md Evaluation flow",
-    "policy-engine/spec/SPECIFICATION-AGT-DELTA.md D1"
+    "policy-engine/spec/SPECIFICATION.md §14"
   ],
   "rows": [
     {

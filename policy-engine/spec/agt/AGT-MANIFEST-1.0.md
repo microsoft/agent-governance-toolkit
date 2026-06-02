@@ -4,8 +4,7 @@
 
 This document describes the full manifest surface AGT hosts author. An AGT
 manifest is a strict superset of the ACS manifest defined in
-`policy-engine/spec/SPECIFICATION.md` (plus
-`policy-engine/spec/SPECIFICATION-AGT-DELTA.md`), with two additional top-level
+`policy-engine/spec/SPECIFICATION.md`, with two additional top-level
 sections owned by AGT.
 
 The AGT host first resolves the manifest chain (folder discovery + scope
@@ -25,7 +24,7 @@ annotators: {...}                                        # ACS-defined; classifi
 
 # ── AGT-extended top-level sections ──
 
-approval: {...}                                          # see SPECIFICATION-AGT-DELTA §D5
+approval: {...}                                          # see SPECIFICATION.md §24
 limits: {...}                                            # see §3 below
 ```
 
@@ -91,11 +90,11 @@ An AGT host conforms to this manifest profile when it:
 4. Supplies all ACS-required fields (`policies`, `intervention_points`).
 5. MAY include `approval` and `limits` sections.
 6. Honours the engine verdict per ACS §17, including the `transform` verdict
-   per `SPECIFICATION-AGT-DELTA.md` D1.
+   per `SPECIFICATION.md` §14.
 
 An engine that receives an AGT manifest is itself just an ACS engine; the
 extra sections (`approval`, `limits`) are validated against this profile but
-their semantics are documented in `SPECIFICATION-AGT-DELTA.md`.
+their semantics are documented in `SPECIFICATION.md` §24.
 
 ## 7. Examples
 

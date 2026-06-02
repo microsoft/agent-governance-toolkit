@@ -5,7 +5,7 @@ sibling of the Rego library at `policy-engine/policy/lib/`. Each file
 mirrors the same named Rego library so a manifest author can pick the
 engine that fits the host environment and reuse the same gate semantics.
 The Cedar library realises the AGT verdict surface described in
-`policy-engine/spec/SPECIFICATION-AGT-DELTA.md` sections D1 and D3 and
+`policy-engine/spec/SPECIFICATION.md` §14 and §12.4 and
 the cedar advice schema at
 `policy-engine/spec/schema/cedar_advice.schema.json`.
 

@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 #
 # AGT stock redaction transform. Combines `agt.patterns` regex matching with
-# the AGT transform verdict shape (SPECIFICATION-AGT-DELTA.md §D1.1). The
+# the AGT transform verdict shape (SPECIFICATION.md §14). The
 # returned verdict carries `transform.path = "$policy_target"` and a fully
 # replaced value, so the dispatcher can apply the substitution without
 # additional logic on the host side. The substitution runs in Rego via

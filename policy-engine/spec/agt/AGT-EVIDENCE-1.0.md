@@ -4,7 +4,7 @@
 
 This document defines how high-assurance policy dispatchers communicate
 offline-verifiable evidence with the rest of AGT. It complements
-`SPECIFICATION-AGT-DELTA.md` D2.
+`SPECIFICATION.md` §13.3 and §19.
 
 ## 1. Motivation
 
@@ -21,7 +21,7 @@ In all three cases the evidence is opaque to the runtime and bounded in size.
 
 ## 2. Verdict-level evidence
 
-Per `SPECIFICATION-AGT-DELTA.md` D2, a verdict MAY carry:
+Per `SPECIFICATION.md` §13.3, a verdict MAY carry:
 
 ```json
 "evidence": {
@@ -47,7 +47,7 @@ Implementation requirements:
 
 The runtime always propagates evidence to telemetry events when present. The
 events that MAY carry evidence are the upstream ACS-named events listed below;
-the names match `SPECIFICATION.md` §19 and `SPECIFICATION-AGT-DELTA.md` D2.
+the names match `SPECIFICATION.md` §19.
 
 | Event | Carries evidence when |
 | --- | --- |
@@ -76,8 +76,8 @@ An AGT audit record MUST store:
 | --- | --- |
 | `evidence_artefact` | verbatim from verdict, when the verdict carried `evidence.artefact` |
 | `verification_pointers` | full map from verdict, when the verdict carried `evidence.verification_pointers` |
-| `input_identity` | `SPECIFICATION-AGT-DELTA.md` §D1.4 |
-| `enforced_identity` | `SPECIFICATION-AGT-DELTA.md` §D1.4 |
+| `input_identity` | `SPECIFICATION.md` §13.1 |
+| `enforced_identity` | `SPECIFICATION.md` §13.1 |
 | `intervention_point` | request |
 | `policy_id` | manifest |
 | `mode` | request |

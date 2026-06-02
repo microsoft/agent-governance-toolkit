@@ -32,7 +32,7 @@ class ScenarioResult:
     AGT manifest to a snapshot.
 
     Mirrors the verdict shape from
-    ``policy-engine/spec/SPECIFICATION-AGT-DELTA.md`` D1 + D2.
+    ``policy-engine/spec/SPECIFICATION.md`` §13 and §14.
     """
 
     decision: str

@@ -9,7 +9,7 @@ pub mod dispatchers;
 // AGT D1: effects are no longer part of the public verdict surface. The
 // module stays compiled so its types remain available to internal callers
 // during the M2 sunset, but it is not exported. See
-// `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` D1.
+// `policy-engine/spec/SPECIFICATION.md` §14.
 pub(crate) mod effects;
 pub mod error;
 pub mod ffi;
@@ -337,8 +337,8 @@ intervention_points:
     #[test]
     fn evaluate_only_validates_transform_without_applying_it() {
         // AGT D1 migration: the legacy effects-based evaluate-only test now
-        // exercises the transform decision per `SPECIFICATION-AGT-DELTA.md`
-        // D1.1 §5. Effects are removed from the verdict surface.
+        // exercises the transform decision per `SPECIFICATION.md` §14
+        // and §5. Effects are removed from the verdict surface.
         let manifest = manifest(
             r#"agent_control_specification_version: 0.3.1-beta
 policies:

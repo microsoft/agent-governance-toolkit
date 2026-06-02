@@ -109,6 +109,5 @@ ACS is vendored into [`policy-engine/`](../../policy-engine/) as the AGT 5.0 pol
 | .NET SDK | [`policy-engine/sdk/dotnet/`](../../policy-engine/sdk/dotnet/) |
 | Rust SDK | [`policy-engine/sdk/rust/`](../../policy-engine/sdk/rust/) |
 | Normative specification | [`policy-engine/spec/SPECIFICATION.md`](../../policy-engine/spec/SPECIFICATION.md) |
-| AGT delta | [`policy-engine/spec/SPECIFICATION-AGT-DELTA.md`](../../policy-engine/spec/SPECIFICATION-AGT-DELTA.md) |
 
 The Python SDK distribution is named `agent-control-specification` in `policy-engine/sdk/python/pyproject.toml` and is built with maturin from the vendored source.

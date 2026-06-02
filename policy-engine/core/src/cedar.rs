@@ -1,6 +1,6 @@
 //! AGT D3 cedar dispatcher surface.
 //!
-//! See `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` §D3 for the normative
+//! See `policy-engine/spec/SPECIFICATION.md` §12.4 for the normative
 //! contract. This module provides three pieces:
 //!
 //! 1. [`CedarPolicyDispatcher`] is the trait a host implements to evaluate a

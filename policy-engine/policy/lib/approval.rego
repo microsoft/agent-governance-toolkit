@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 #
 # AGT stock approval helpers. These rules produce `escalate` verdicts per
-# SPECIFICATION-AGT-DELTA.md §D1.2; the host approval path (§17.1) resolves
+# SPECIFICATION.md §13.1; the host approval path (§17.1) resolves
 # them through the resolver declared in the `approval` manifest section
 # (§D5). Approver-list helpers let manifests express "this action requires
 # named approvers" without authoring a custom Rego rule.

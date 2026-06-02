@@ -1462,7 +1462,7 @@ annotators:
 #[test]
 fn transform_applies_for_enforce_and_validates_in_evaluate_only() {
     // AGT D1 migration of the legacy multi-effect contract test. Effects are
-    // sunset by `SPECIFICATION-AGT-DELTA.md` D1; the only mutating decision
+    // sunset by `SPECIFICATION.md` §14; the only mutating decision
     // is `transform`, which carries a single replacement at one path. The
     // multi-step rewriting that this test originally covered now flows
     // through annotators per D1.3 (slated for M5). This test verifies the

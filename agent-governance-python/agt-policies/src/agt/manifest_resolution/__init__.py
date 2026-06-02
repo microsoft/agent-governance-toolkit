@@ -11,7 +11,7 @@ scope, merges them, and emits a flat ACS manifest with
 A resolution failure (path traversal, cycle, invalid governance file,
 non-mergeable section) raises :class:`ResolutionError`, whose
 ``reason()`` matches one of the reserved ``runtime_error:resolution_*``
-strings defined in ``SPECIFICATION-AGT-DELTA.md`` D6.
+strings defined in ``SPECIFICATION.md`` §16.
 """
 
 from .build import resolve_manifest

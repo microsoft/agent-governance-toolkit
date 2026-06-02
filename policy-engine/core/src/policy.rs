@@ -53,7 +53,7 @@ fn resolve_adapter_config_paths(adapter_config: &mut BTreeMap<String, JsonValue>
 pub enum PolicyConfig {
     Rego(RegoPolicyConfig),
     /// AGT D3.1 built-in Cedar policy type. See
-    /// `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` §D3.
+    /// `policy-engine/spec/SPECIFICATION.md` §12.4.
     Cedar(CedarPolicyConfig),
     Test(TestPolicyConfig),
     Custom(CustomPolicyConfig),
@@ -148,7 +148,7 @@ pub struct CedarPolicyConfig {
     /// Optional Cedar request template object. The shape is intentionally
     /// open for the AGT v5 milestone; dispatchers MAY interpret it to override
     /// the default principal/action/resource/context mapping defined in
-    /// `SPECIFICATION-AGT-DELTA.md` §D3.2.
+    /// `SPECIFICATION.md` §12.4.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query: Option<JsonValue>,
 }
@@ -485,7 +485,7 @@ mod path_resolution_tests {
 #[cfg(test)]
 mod cedar_manifest_tests {
     //! AGT M2.S2 D1 manifest-side validation for the cedar policy type, per
-    //! `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` §D3.1. These tests
+    //! `policy-engine/spec/SPECIFICATION.md` §12.4. These tests
     //! cover the strict cross-type rules: a rego policy that carries a
     //! cedar-reserved field is rejected, a cedar policy that declares the
     //! rego-shaped `bundle` field is rejected, and a cedar policy that

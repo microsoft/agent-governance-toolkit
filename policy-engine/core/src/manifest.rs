@@ -33,8 +33,8 @@ pub struct Manifest {
     pub annotators: BTreeMap<String, AnnotatorConfig>,
     /// AGT D5: optional top-level `approval` section that configures the
     /// escalation backend used for `escalate` verdicts. The runtime
-    /// validates the shape per AGT-MANIFEST-1.0 §1 and SPECIFICATION-AGT-DELTA
-    /// §D5 but does not consult resolver configuration; that plumbing lives
+    /// validates the shape per AGT-MANIFEST-1.0 §1 and SPECIFICATION.md
+    /// §24 but does not consult resolver configuration; that plumbing lives
     /// in host SDKs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approval: Option<ApprovalSection>,
@@ -50,7 +50,7 @@ pub struct Manifest {
 #[serde(deny_unknown_fields)]
 pub struct ApprovalSection {
     /// Name of the resolver consulted by default. When absent the host
-    /// approval path defaults to `deny` per SPECIFICATION-AGT-DELTA §D5.
+    /// approval path defaults to `deny` per SPECIFICATION.md §24.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_resolver: Option<String>,
     /// Maximum wait in seconds before `on_timeout` triggers.

@@ -4,7 +4,7 @@
 # AGT stock drift gate. Hosts run a behaviour-drift detector outside the
 # policy engine and attach its score under `input.annotations.drift_score`
 # (a host annotator name agreed in the manifest). This library issues a
-# warn verdict per SPECIFICATION-AGT-DELTA.md §D1 when the score crosses the
+# warn verdict per SPECIFICATION.md §13.1 when the score crosses the
 # configured threshold so a host can flag the run without blocking.
 
 package agt.drift

@@ -723,7 +723,7 @@ fn is_identifier_reason_code(reason: &str) -> bool {
 /// policy target. The returned value is the rewritten policy target. The caller
 /// decides whether to surface the rewrite per the enforcement mode.
 ///
-/// Per `SPECIFICATION-AGT-DELTA.md` D1.1 a transform whose path is outside
+/// Per `SPECIFICATION.md` §14 a transform whose path is outside
 /// `$policy_target` fails closed with `runtime_error:transform_target_forbidden`;
 /// a transform whose path does not resolve or whose value cannot be set fails
 /// closed with `runtime_error:transform_invalid`.

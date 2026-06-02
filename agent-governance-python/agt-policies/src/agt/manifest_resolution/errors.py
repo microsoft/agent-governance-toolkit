@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Reserved resolution-layer errors per SPECIFICATION-AGT-DELTA D6.
+"""Reserved resolution-layer errors per SPECIFICATION.md §16.
 
 The reserved reason strings here match the Rust core's
 ``runtime_error:resolution_*`` codes one for one. The resolution layer

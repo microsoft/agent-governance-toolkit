@@ -86,7 +86,7 @@ Security boundaries and host obligations are described in [`docs/security-model.
 
 ## Divergences from upstream ACS
 
-Recorded in [`spec/SPECIFICATION-AGT-DELTA.md`](spec/SPECIFICATION-AGT-DELTA.md).
+These behaviors are part of the normative [`spec/SPECIFICATION.md`](spec/SPECIFICATION.md), which is the single authoritative contract for this engine. The table below is a quick summary.
 
 | Divergence | AGT contract |
 | --- | --- |

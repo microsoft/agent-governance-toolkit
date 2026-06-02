@@ -7,7 +7,7 @@ use std::collections::HashMap;
 pub const DEFAULT_OTEL_METER_NAME: &str = "agent_control_specification";
 
 // AGT D1.1: `transform` is the fifth wire decision per
-// SPECIFICATION-AGT-DELTA.md §D1. OtelTelemetrySink builds one
+// SPECIFICATION.md §13.1. OtelTelemetrySink builds one
 // counter per decision so the transform path is observable alongside
 // allow / deny / warn / escalate.
 const DECISION_WIRE_STRINGS: &[&str] = &["allow", "deny", "warn", "escalate", "transform"];

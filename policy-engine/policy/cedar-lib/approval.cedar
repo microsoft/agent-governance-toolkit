@@ -3,7 +3,7 @@
 //
 // AGT stock approval helpers, Cedar mirror of `policy/lib/approval.rego`.
 // The Rego library produces `escalate` verdicts per
-// SPECIFICATION-AGT-DELTA.md section D1.2. The host approval path
+// SPECIFICATION.md §13.1. The host approval path
 // (section 17.1) resolves them through the resolver declared in the
 // `approval` manifest section (section D5). Cedar has no native
 // `escalate` decision, so this library emits the AGT `escalate` verdict

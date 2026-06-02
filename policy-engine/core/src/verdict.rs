@@ -4,7 +4,7 @@ use std::{fmt, str::FromStr};
 
 /// Verdict decision. The four values `Allow`, `Deny`, `Warn`, and `Escalate`
 /// match upstream ACS §13.1. The fifth value `Transform` is the AGT addition
-/// per `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` D1.
+/// per `policy-engine/spec/SPECIFICATION.md` §13.1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Decision {
@@ -56,7 +56,7 @@ impl FromStr for Decision {
 }
 
 /// Single-target replacement returned by a `Transform` verdict per
-/// `policy-engine/spec/SPECIFICATION-AGT-DELTA.md` D1.1.
+/// `policy-engine/spec/SPECIFICATION.md` §14.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Transform {
     /// Path rooted at `$policy_target`.
@@ -276,8 +276,8 @@ pub fn normalize_policy_output(output: JsonValue) -> Result<Verdict, RuntimeErro
     if object.contains_key("effects") {
         return Err(RuntimeError::PolicyOutputInvalid(
             "verdict 'effects' is no longer supported; remove the effects key and \
-             use the transform decision per SPECIFICATION-AGT-DELTA D1. Migrate \
-             multi-step rewriting to an annotator per D1.3"
+             use the transform decision per SPECIFICATION.md §14. Migrate \
+             multi-step rewriting to an annotator"
                 .to_string(),
         ));
     }
