@@ -299,7 +299,7 @@ fn bad_endpoint_config_reserved_reason_and_oversize_outputs_fail_closed() {
         .expect_err("missing URL should fail closed");
     assert!(missing_url_error
         .to_string()
-        .contains("missing required field 'url'"));
+        .contains("missing required field 'endpoint' or 'url'"));
 
     let reserved = runtime(
         r#"{"categoriesAnalysis":[{"category":"Violence","severity":0}]}"#,
