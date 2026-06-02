@@ -61,7 +61,7 @@ def build_manifest(plan: PolicyPlan, tool_inventory: dict[str, dict[str, Any]]) 
             config["annotations"] = annotations
         manifest["intervention_points"][point_name] = config
     annotators = {
-        annotator.name: _annotator_config(annotator.type, annotator.labels)
+        annotator.name: _annotator_config(annotator.type)
         for annotator in plan.annotators
         if annotator.name
     }
@@ -75,8 +75,5 @@ def build_manifest(plan: PolicyPlan, tool_inventory: dict[str, dict[str, Any]]) 
     return manifest, slug
 
 
-def _annotator_config(annotator_type: str, labels: tuple[str, ...]) -> dict[str, Any]:
-    config: dict[str, Any] = {"type": annotator_type}
-    if labels:
-        config["labels"] = list(labels)
-    return config
+def _annotator_config(annotator_type: str) -> dict[str, Any]:
+    return {"type": annotator_type}

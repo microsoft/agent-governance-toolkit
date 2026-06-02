@@ -96,25 +96,17 @@ tools:
 annotators:
   startup_classifier:
     type: classifier
-    labels: [bank_agent]
   prompt_classifier:
     type: classifier
-    labels: [finance_intent, sensitive_data]
   model_request_classifier:
     type: classifier
-    labels: [large_transfer, tool_instruction]
   model_response_classifier:
     type: classifier
-    labels: [tool_plan, approval_bypass]
   tool_args_classifier:
     type: classifier
-    labels: [payment_instruction, customer_profile]
   tool_result_classifier:
     type: classifier
-    labels: [customer_profile, account_identifier]
   output_classifier:
     type: classifier
-    labels: [customer_profile, account_identifier]
   shutdown_classifier:
     type: classifier
-    labels: [audit_summary]

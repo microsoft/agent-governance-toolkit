@@ -285,10 +285,6 @@
             "adapter": {
               "type": "string",
               "minLength": 1
-            },
-            "config": {
-              "type": "object",
-              "additionalProperties": true
             }
           },
           "additionalProperties": true
@@ -311,10 +307,6 @@
         },
         "data_paths": {
           "$ref": "#/$defs/string_array"
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": true
         }
       },
       "additionalProperties": true
@@ -332,10 +324,6 @@
       "properties": {
         "from": {
           "$ref": "#/$defs/path"
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": true
         }
       },
       "additionalProperties": true
@@ -352,9 +340,6 @@
             "llm",
             "endpoint"
           ]
-        },
-        "labels": {
-          "$ref": "#/$defs/string_array"
         },
         "provider": {
           "enum": [
@@ -448,10 +433,6 @@
         "aws_session_token_env": {
           "type": "string",
           "minLength": 1
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": true
         }
       },
       "additionalProperties": true
@@ -475,18 +456,6 @@
         },
         "clearance": {
           "$ref": "#/$defs/string_or_string_array"
-        },
-        "input_schema": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "output_schema": {
-          "type": "object",
-          "additionalProperties": true
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": true
         }
       },
       "additionalProperties": true
