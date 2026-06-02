@@ -77,6 +77,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     && python -m pip install \
         "cedarpy>=4.0.0,<5.0" \
         -e "agent-governance-python/agent-primitives[dev]" \
+        -e "agent-governance-python/agt-policies" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
         -e "agent-governance-python/agent-os[full,dev]" \
         -e "agent-governance-python/agent-mesh[agent-os,dev,server]" \
