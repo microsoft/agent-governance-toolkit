@@ -280,21 +280,27 @@ jobs:
             );
 
             let commentPosted = false;
-            try {
-              if (existing) {
-                await github.rest.issues.updateComment({
-                  owner, repo, comment_id: existing.id, body: summaryBody,
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner, repo, issue_number: prNumber, body: summaryBody,
-                });
+            const isFork = context.payload.pull_request.head.repo.full_name !== context.payload.pull_request.base.repo.full_name;
+
+            if (isFork) {
+              core.notice('Skipping PR comment for fork PR; writing job summary only.');
+            } else {
+              try {
+                if (existing) {
+                  await github.rest.issues.updateComment({
+                    owner, repo, comment_id: existing.id, body: summaryBody,
+                  });
+                } else {
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: prNumber, body: summaryBody,
+                  });
+                }
+                commentPosted = true;
+              } catch (error) {
+                core.warning(
+                  `Skipping PR comment: ${error.status || 'unknown'} ${error.message || String(error)}`
+                );
               }
-              commentPosted = true;
-            } catch (error) {
-              core.warning(
-                `Skipping PR comment: ${error.status || 'unknown'} ${error.message || String(error)}`
-              );
             }
 
             await core.summary
