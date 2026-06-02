@@ -256,8 +256,12 @@ class GovernanceHooks:
                 return False
 
             # ─── Increment call count ─────────────────────────────
+            # The bridge mirrors ``ctx.call_count`` into the snapshot
+            # builder via ``max(builder.tool_call_count, ctx.call_count)``
+            # on every access, so incrementing here is sufficient. Calling
+            # ``record_post_execute(tool_calls=1)`` in addition double-counts
+            # the call and trips ``max_tool_calls`` one call early.
             ctx.call_count += 1
-            kernel.bridge.record_post_execute(ctx, tool_calls=1)
 
             logger.debug(
                 "[%s] Tool ALLOW: tool=%s count=%d",

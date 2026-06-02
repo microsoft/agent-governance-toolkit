@@ -722,7 +722,11 @@ class SmolagentsKernel(BaseIntegration):
                 tool_args.clear()
                 tool_args.update(bridge_result.transform.value)
         if not bridge_result.allowed:
-            reason_text = bridge_result.reason or "Tool call blocked by AGT policy"
+            reason_text = (
+                bridge_result.check_result.public_message
+                or bridge_result.reason
+                or "Tool call blocked by AGT policy"
+            )
             error = self._raise_violation("agt_pre_tool_call", reason_text)
             return {
                 "error": str(error),
@@ -770,7 +774,12 @@ class SmolagentsKernel(BaseIntegration):
                 # the transform value type matches.
                 tool_result = bridge_result.transform.value
             elif not bridge_result.allowed:
-                reason_text = bridge_result.reason or "Tool output blocked by AGT policy"
+                detail = (
+                    bridge_result.check_result.public_message
+                    or bridge_result.reason
+                    or "Tool output blocked by AGT policy"
+                )
+                reason_text = f"{detail} (in tool observation)"
                 self._raise_violation("agt_output", reason_text)
                 if isinstance(tool_result, dict):
                     return {"error": reason_text}
@@ -1018,7 +1027,9 @@ class GovernanceStepCallback:
                 )
                 raise PolicyViolationError(
                     "agt_pre_tool_call",
-                    bridge_result.reason or f"Tool '{tool_name}' denied by AGT policy",
+                    bridge_result.check_result.public_message
+                    or bridge_result.reason
+                    or f"Tool '{tool_name}' denied by AGT policy",
                 )
 
             # Check call count (v4 contract uses ``>``)
@@ -1054,10 +1065,14 @@ class GovernanceStepCallback:
                     "observation_blocked", agent_name,
                     {"reason": bridge_result.reason, "step": self._step_count},
                 )
+                detail = (
+                    bridge_result.check_result.public_message
+                    or bridge_result.reason
+                    or "Step observation blocked by AGT policy"
+                )
                 raise PolicyViolationError(
                     "agt_output",
-                    bridge_result.reason
-                    or "Step observation blocked by AGT policy",
+                    f"{detail} (in tool observation)",
                 )
 
     def __repr__(self) -> str:

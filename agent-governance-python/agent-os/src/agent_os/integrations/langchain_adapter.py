@@ -904,6 +904,16 @@ class GovernanceMiddleware(_MiddlewareBase):
             tool_name, (tool_args,), {}, self._ctx
         )
 
+        # ─── 1b. Host-side budget guard ───────────────────────────
+        # Mirrors the v4 ``PolicyInterceptor`` ``max_tool_calls`` branch and
+        # surfaces the v4 ``max_tool_calls`` reason before the engine budget
+        # rule (which carries the v5 ``budget_tool_calls_exceeded`` wire
+        # reason). Keeps the v4 host contract stable for callers that switch
+        # on ``check_result.reason``.
+        budget_result = self._kernel._bridge.evaluate_tool_budget(self._ctx)
+        if budget_result is not None and not budget_result.allowed:
+            raise PolicyViolationError.from_check_result(budget_result.check_result)
+
         # ─── 2. AGT pre_tool_call evaluation ──────────────────────
         bridge_result = self._kernel.evaluate_pre_tool_call(
             self._ctx,

@@ -387,38 +387,45 @@ class GovernedSemanticKernel:
         }
         self._ctx.functions_invoked.append(invocation)
 
-        # AGT pre_tool_call evaluation: route the function invocation
-        # through the v5 ACS engine so transform / escalate / deny
-        # verdicts (AGT-DELTA D1.1 / D1.4) all apply uniformly.
-        self._ctx.tool_calls.append(invocation)
-        self._ctx.call_count = len(self._ctx.tool_calls)
-        bridge_result = self._wrapper.evaluate_pre_tool_call(
-            self._ctx,
-            tool_name=func_id,
-            args=dict(kwargs),
-            call_id=f"sk-call-{self._ctx.call_count}",
-        )
-        if not bridge_result.allowed:
-            raise PolicyViolationError.from_check_result(
-                bridge_result.check_result
-            )
-        if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, dict
-        ):
-            kwargs = dict(bridge_result.transform.value)
-
-        # Check allowed functions (host-side allowlist guard — the AGT
+        # Host-side allowlist guard FIRST (wildcard-aware). The AGT
         # manifest bridge emits no tools catalog when allowed_tools is
-        # empty, and SK uses wildcard entries like ``MyPlugin.*`` that
-        # the bridge does not translate).
+        # empty and cannot encode SK's plugin-wildcard entries like
+        # ``MyPlugin.*``, so the host check must run before the engine
+        # pre_tool_call check to (a) surface the v4 friendly "Function
+        # not allowed" message and (b) honour wildcard allows that the
+        # engine tool catalog would otherwise deny.
+        allowlist_matched_via_wildcard = False
         if self._wrapper.policy.allowed_tools:
             if func_id not in self._wrapper.policy.allowed_tools:
-                # Check if plugin is allowed (wildcard)
-                if plugin_name:
-                    if f"{plugin_name}.*" not in self._wrapper.policy.allowed_tools:
-                        raise PolicyViolationError(f"Function not allowed: {func_id}")
+                wildcard = f"{plugin_name}.*" if plugin_name else None
+                if wildcard and wildcard in self._wrapper.policy.allowed_tools:
+                    allowlist_matched_via_wildcard = True
                 else:
                     raise PolicyViolationError(f"Function not allowed: {func_id}")
+
+        # AGT pre_tool_call evaluation: route the function invocation
+        # through the v5 ACS engine so transform / escalate / deny
+        # verdicts (AGT-DELTA D1.1 / D1.4) all apply uniformly. Skipped
+        # when the host guard accepted the call via a plugin wildcard,
+        # because the bridge tool catalog cannot encode ``MyPlugin.*``
+        # and would deny a v4-allowed call.
+        self._ctx.tool_calls.append(invocation)
+        self._ctx.call_count = len(self._ctx.tool_calls)
+        if not allowlist_matched_via_wildcard:
+            bridge_result = self._wrapper.evaluate_pre_tool_call(
+                self._ctx,
+                tool_name=func_id,
+                args=dict(kwargs),
+                call_id=f"sk-call-{self._ctx.call_count}",
+            )
+            if not bridge_result.allowed:
+                raise PolicyViolationError.from_check_result(
+                    bridge_result.check_result
+                )
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, dict
+            ):
+                kwargs = dict(bridge_result.transform.value)
 
         # Execute
         try:
@@ -594,9 +601,7 @@ class GovernedSemanticKernel:
         # AGT input intervention point check on the memory body
         bridge_result = self._wrapper.evaluate_input(self._ctx, text)
         if not bridge_result.allowed:
-            raise PolicyViolationError.from_check_result(
-                bridge_result.check_result
-            )
+            raise _prefixed_violation("Memory save blocked", bridge_result.check_result)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, str
         ):
@@ -691,9 +696,7 @@ class GovernedSemanticKernel:
         # AGT input intervention point check on the prompt
         bridge_result = self._wrapper.evaluate_input(self._ctx, prompt)
         if not bridge_result.allowed:
-            raise PolicyViolationError.from_check_result(
-                bridge_result.check_result
-            )
+            raise _prefixed_violation("Prompt blocked", bridge_result.check_result)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, str
         ):
@@ -720,6 +723,11 @@ class GovernedSemanticKernel:
             raise PolicyViolationError.from_check_result(
                 post_result.check_result
             )
+        # v4 host post_execute hook (overridable) — honour host-side output
+        # blocks the AGT output intervention point does not encode.
+        valid, message = self._wrapper.post_execute(self._ctx, str(result))
+        if not valid:
+            raise PolicyViolationError(f"Result blocked: {message}")
         if post_result.transform is not None and isinstance(
             post_result.transform.value, str
         ):
@@ -921,6 +929,20 @@ class PolicyViolationError(_CanonicalPolicyViolationError):
     """
 
     pass
+
+
+def _prefixed_violation(prefix: str, check_result: Any) -> PolicyViolationError:
+    """Build a host-friendly :class:`PolicyViolationError` for an SK surface.
+
+    Surfaces the v4-style ``"<prefix>: <detail>"`` message that hosts match
+    on (e.g. ``"Prompt blocked"``) while preserving the structured
+    ``check_result`` and details so callers can still switch on
+    ``e.check_result.category`` per the AGT host-integration contract.
+    """
+    base = PolicyViolationError.from_check_result(check_result)
+    exc = PolicyViolationError(f"{prefix}: {base}", details=base.details)
+    exc.check_result = check_result
+    return exc
 
 
 class ExecutionStoppedError(Exception):

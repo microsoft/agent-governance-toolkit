@@ -713,7 +713,11 @@ class GoogleADKKernel(BaseIntegration):
             for key in ("input_identity", "enforced_identity")
             if key in audit_entry
         }
-        if identity_audit:
+        # Only emit the D1.4 identity-audit record on the resolver-driven
+        # approval path. Without a wired ``approval_resolver`` there is no
+        # bisected identity worth auditing, and emitting here would pollute
+        # the v4 audit sequence (e.g. the plain before/after tool+agent run).
+        if identity_audit and self._approval_resolver is not None:
             self._record(
                 "agt_pre_tool_call",
                 agent_name,

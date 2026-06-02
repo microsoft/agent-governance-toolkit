@@ -222,9 +222,11 @@ class GovernanceInterventionHandler:
                 )
                 return DropMessage
 
-            # Increment call count
+            # Increment call count. The bridge mirrors ``ctx.call_count``
+            # into the snapshot builder on every access, so calling
+            # ``record_post_execute(tool_calls=1)`` as well would double-count
+            # the call and trip ``max_tool_calls`` one call early.
             ctx.call_count += 1
-            kernel.bridge.record_post_execute(ctx, tool_calls=1)
 
             logger.debug(
                 "[%s] Tool ALLOW: tool=%s count=%d",

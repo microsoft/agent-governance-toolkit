@@ -32,6 +32,38 @@ Verdict = Literal["allow", "warn", "deny", "escalate", "transform"]
 # to_v4_check_result.
 _PERMITTING_VERDICTS = frozenset({"allow", "warn", "transform"})
 
+# Generic engine fallback message that carries no host-actionable detail.
+_GENERIC_BLOCK_MESSAGE = "Request blocked by Agent Control Specification."
+
+
+def _friendly_public_message(reason: str, verdict: str, original: str) -> str:
+    """Return a host-friendly ``public_message`` for a blocking verdict.
+
+    The v5 ACS runtime surfaces terse wire reasons (``runtime_error:tool_unknown``,
+    ``blocked_pattern_input``, ``budget_tool_calls_exceeded``) or a generic
+    fallback. v4 hosts and their tests match on human-readable phrases, so we
+    derive one from the reason/verdict while preserving any useful detail the
+    engine attached. ``original`` is returned unchanged when no mapping applies
+    so bespoke messages are never clobbered.
+    """
+    r = (reason or "").lower()
+    detail = "" if original.strip() == _GENERIC_BLOCK_MESSAGE else original.strip()
+
+    if "tool_unknown" in r or "tool_not_allowed" in r:
+        base = "Tool not allowed; not in the allowed list"
+    elif "blocked_pattern" in r:
+        base = "Blocked pattern detected; request blocked"
+    elif "budget_tool_calls" in r or "max_tool_calls" in r:
+        base = "Tool call limit exceeded"
+    elif "budget_tokens" in r or "max_tokens" in r:
+        base = "Token budget exceeded"
+    elif verdict == "escalate" or "human_approval" in r:
+        base = "Requires human approval"
+    else:
+        return original
+
+    return f"{base}: {detail}" if detail else base
+
 
 class EvaluationResult(BaseModel):
     """Result of one intervention-point evaluation.
@@ -135,14 +167,21 @@ class EvaluationResult(BaseModel):
         if self.enforced_identity is not None:
             audit_entry.setdefault("enforced_identity", self.enforced_identity)
         audit_entry.setdefault("verdict", self.verdict)
+        if self.reason:
+            audit_entry.setdefault("reason", self.reason)
 
         reason = self.reason or (self.message if not self.is_allowed() else "")
+        public_message = self.public_message
+        if not self.is_allowed():
+            public_message = _friendly_public_message(
+                reason, self.verdict, self.public_message
+            )
         return PolicyCheckResult(
             allowed=self.is_allowed(),
             action=action_map[self.verdict],
             category=category,
             matched_rule=self.matched_rule,
-            public_message=self.public_message,
+            public_message=public_message,
             detail=self.detail,
             reason=reason,
             audit_entry=audit_entry,

@@ -189,6 +189,19 @@ class AdapterRuntimeBridge:
         builder.token_count = max(builder.token_count, int(ctx.total_tokens))
         return builder
 
+    def evaluate_tool_budget(
+        self, ctx: ExecutionContext
+    ) -> Optional["BridgeResult"]:
+        """Return a deny ``BridgeResult`` if the call/token budget is exceeded.
+
+        For governed surfaces that are budgeted operations but are not named
+        tool calls routed through ``pre_tool_call`` (e.g. a LlamaIndex
+        ``.query()``), this mirrors the v4 direct ``ctx.call_count`` /
+        ``ctx.total_tokens`` comparison so ``max_tool_calls`` / ``max_tokens``
+        stay enforced. Returns ``None`` when within limits.
+        """
+        return _host_budget_check(self._policy, ctx)
+
     def record_post_execute(
         self, ctx: ExecutionContext, *, tokens: int = 0, tool_calls: int = 0
     ) -> None:

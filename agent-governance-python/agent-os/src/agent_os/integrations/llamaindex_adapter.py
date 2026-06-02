@@ -115,6 +115,15 @@ class LlamaIndexKernel(BaseIntegration):
         """Public access to the AGT ``output`` intervention point evaluation."""
         return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
 
+    def evaluate_tool_budget(self, ctx: ExecutionContext) -> Optional[BridgeResult]:
+        """Return a deny ``BridgeResult`` if the call/token budget is exceeded.
+
+        A governed ``.query()`` / ``.chat()`` is a budgeted operation in the
+        v4 contract; this keeps ``max_tool_calls`` / ``max_tokens`` enforced on
+        those paths (the v5 input/output checks alone do not count calls).
+        """
+        return self._bridge.evaluate_tool_budget(ctx)
+
     @staticmethod
     def _to_body(data: Any) -> Any:
         """Normalise a LlamaIndex payload to a JSON-serialisable body."""
@@ -203,32 +212,53 @@ class LlamaIndexKernel(BaseIntegration):
                     return bridge_result.transform.value
                 return result
 
+            def _enforce_budget(self) -> None:
+                """Block the call when the v4 tool-call/token budget is spent.
+
+                A governed ``query``/``chat`` is a budgeted operation, so
+                ``max_tool_calls`` / ``max_tokens`` must be enforced here; the
+                input/output intervention points alone do not count calls.
+                """
+                budget = self._kernel.evaluate_tool_budget(self._ctx)
+                if budget is not None and not budget.allowed:
+                    raise PolicyViolationError.from_check_result(
+                        budget.check_result
+                    )
+
             def query(self, query_str: Any, **kwargs) -> Any:
                 """Governed query."""
                 self._check_stopped()
+                self._enforce_budget()
                 query_str = self._pre(query_str)
                 result = self._original.query(query_str, **kwargs)
+                self._ctx.call_count += 1
                 return self._post(result)
 
             async def aquery(self, query_str: Any, **kwargs) -> Any:
                 """Governed async query."""
                 self._check_stopped()
+                self._enforce_budget()
                 query_str = self._pre(query_str)
                 result = await self._original.aquery(query_str, **kwargs)
+                self._ctx.call_count += 1
                 return self._post(result)
 
             def chat(self, message: str, **kwargs) -> Any:
                 """Governed chat."""
                 self._check_stopped()
+                self._enforce_budget()
                 message = self._pre(message)
                 result = self._original.chat(message, **kwargs)
+                self._ctx.call_count += 1
                 return self._post(result)
 
             async def achat(self, message: str, **kwargs) -> Any:
                 """Governed async chat."""
                 self._check_stopped()
+                self._enforce_budget()
                 message = self._pre(message)
                 result = await self._original.achat(message, **kwargs)
+                self._ctx.call_count += 1
                 return self._post(result)
 
             def stream_chat(self, message: str, **kwargs):
