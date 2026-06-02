@@ -247,7 +247,7 @@ class GovernedCallable:
         ``ring`` and ``ring_constraints`` into *context* so downstream policy
         rules can reference them (e.g. ``ring.subprocess_allowed == false``).
         """
-        from hypervisor.rings.enforcer import RING_CONSTRAINTS, ResourceType
+        from hypervisor.rings.enforcer import RING_CONSTRAINTS
 
         ring = self._config.ring
 
