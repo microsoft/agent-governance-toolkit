@@ -670,7 +670,10 @@ mod tests {
     use super::*;
     use crate::{normalize_policy_output, Decision};
     use serde_json::json;
-    use std::{fs, path::{Path, PathBuf}};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
 
     fn invocation(policy_set: &str, input: JsonValue) -> CedarPolicyInvocation {
         CedarPolicyInvocation {
