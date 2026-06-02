@@ -23,6 +23,12 @@ test_missing_budgets_defaults_to_zero if {
 	budgets.cost_usd == 0 with input as {"snapshot": {"envelope": {}}}
 }
 
+test_present_malformed_counter_is_not_coerced_to_zero if {
+	not budgets.token_count with input as snapshot_with({"token_count": "999999"})
+	budgets.malformed_budget_counter("token_count") with input as snapshot_with({"token_count": "999999"})
+	budgets.malformed_budget_counter("elapsed_seconds") with input as snapshot_with({"elapsed_seconds": null})
+}
+
 test_max_tool_calls_under_limit_does_not_match if {
 	not budgets.max_tool_calls_exceeded(10) with input as snapshot_with({"tool_call_count": 3})
 }
@@ -55,6 +61,12 @@ test_deny_if_budget_exceeded_returns_no_verdict_when_under_limits if {
 		"elapsed_seconds": 1.5,
 		"cost_usd": 0.01,
 	})
+}
+
+test_deny_if_budget_exceeded_malformed_counter if {
+	verdict := budgets.deny_if_budget_exceeded({"tool_call_count": 9999, "token_count": 1, "elapsed_seconds": 9999, "cost_usd": 9999}) with input as snapshot_with({"token_count": "999999"})
+	verdict.decision == "deny"
+	verdict.reason == "budget_counter_invalid"
 }
 
 test_deny_if_budget_exceeded_tool_calls if {

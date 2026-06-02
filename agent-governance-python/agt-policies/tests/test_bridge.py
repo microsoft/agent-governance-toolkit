@@ -12,6 +12,9 @@ generated manifest end-to-end through OPA.
 
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -131,6 +134,54 @@ def test_bridge_translates_blocked_patterns_via_patterns_library(tmp_path: Path)
     # Bound at input and output for body-level scanning.
     assert "input" in manifest["intervention_points"]
     assert "output" in manifest["intervention_points"]
+
+
+def test_bridge_blocked_patterns_match_stringified_tool_args(tmp_path: Path) -> None:
+    opa = shutil.which("opa") or str(Path.home() / ".local" / "bin" / "opa")
+    if not Path(opa).exists():
+        pytest.skip("opa binary required for bridge Rego repro")
+
+    manifest = _bridge(
+        tmp_path,
+        max_tokens=1000,
+        max_tool_calls=10,
+        allowed_tools=[],
+        blocked_patterns=["secret"],
+        require_human_approval=False,
+        confidence_threshold=0.0,
+    )
+    pre = manifest["intervention_points"]["pre_tool_call"]
+    assert pre["policy_target"] == "$.tool_call.args"
+
+    bundle = Path(manifest["policies"]["agt_governance_policy"]["bundle"])
+    cases = {
+        "string": {"policy_target": {"value": "contains secret here"}},
+        "dict": {"policy_target": {"value": {"arg": "contains secret here"}}},
+        "list": {"policy_target": {"value": ["contains secret here"]}},
+    }
+
+    for name, policy_input in cases.items():
+        input_path = tmp_path / f"{name}.json"
+        input_path.write_text(json.dumps(policy_input), encoding="utf-8")
+        completed = subprocess.run(
+            [
+                opa,
+                "eval",
+                "-f",
+                "values",
+                "-d",
+                str(bundle),
+                "-i",
+                str(input_path),
+                "data.agt.governance_policy.verdict",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        verdict = json.loads(completed.stdout)[0]
+        assert verdict["decision"] == "deny"
+        assert verdict["reason"] == "blocked_pattern_input"
 
 
 def test_bridge_translates_require_human_approval_to_escalate(tmp_path: Path) -> None:

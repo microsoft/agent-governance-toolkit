@@ -27,6 +27,13 @@ test_budget_exceeded_denies if {
 	verdict.reason == "budget_tool_calls_exceeded"
 }
 
+test_malformed_budget_counter_denies if {
+	verdict := defaults.verdict with input as object.union(base_snapshot, {"snapshot": {"envelope": {"budgets": {"tool_call_count": 0, "token_count": "999999", "elapsed_seconds": 0, "cost_usd": 0}}}})
+		with data.agt.defaults.config as {"budgets": {"tool_call_count": 99999, "token_count": 1, "elapsed_seconds": 9999, "cost_usd": 9999}}
+	verdict.decision == "deny"
+	verdict.reason == "budget_counter_invalid"
+}
+
 test_confidence_low_denies if {
 	pi := object.union(base_snapshot, {"annotations": {"confidence": {"score": 0.2}}})
 	verdict := defaults.verdict with input as pi

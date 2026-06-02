@@ -12,6 +12,7 @@ use std::{
     env,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 struct NoopAnnotator;
@@ -106,6 +107,32 @@ fn opa_dispatcher_evaluates_rego_query_with_data_paths_from_adapter_config() {
             "reason": "blocked_text",
             "message": "Input contained blocked text."
         })
+    );
+}
+
+#[test]
+fn opa_dispatcher_times_out_pathological_eval() {
+    let Some(runner) = require_opa_or_skip() else {
+        return;
+    };
+    let dispatcher =
+        OpaPolicyDispatcher::with_runner(runner.with_eval_timeout(Duration::from_millis(50)));
+    let invocation = rego_invocation(
+        "x := numbers.range(1, 100000000)",
+        None,
+        BTreeMap::new(),
+        json!({"policy_target": {"value": {"text": "hello"}}}),
+    );
+
+    let started = Instant::now();
+    let error = dispatcher.evaluate(&invocation).unwrap_err();
+
+    assert!(started.elapsed() < Duration::from_secs(5));
+    assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+    assert!(
+        error.detail().contains("OPA eval exceeded timeout"),
+        "{}",
+        error.detail()
     );
 }
 

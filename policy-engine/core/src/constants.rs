@@ -22,6 +22,15 @@ pub mod reserved_reason {
     pub const ANNOTATION_FAILED: &str = "runtime_error:annotation_failed";
 }
 
+pub(crate) mod manifest_version {
+    pub(crate) const SUPPORTED: [&str; 4] = [
+        "0.3.1-beta",
+        "0.3.1-beta-agt",
+        "0.3.0-alpha",
+        "0.3.0-alpha-agt",
+    ];
+}
+
 pub(crate) mod engine {
     pub(crate) const CEDAR: &str = "cedar";
     pub(crate) const CUSTOM: &str = "custom";

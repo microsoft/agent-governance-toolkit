@@ -36,6 +36,8 @@ import asyncio
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Optional, Union
 
+import yaml
+
 from agt.policies.result import EvaluationResult
 
 try:
@@ -58,6 +60,9 @@ except ImportError as exc:  # pragma: no cover - exercised only without the SDK
         "agent_control_specification`) and ensure the native binding is built "
         "(needs a C toolchain like gcc and maturin to build the Rust core)."
     ) from exc
+
+
+_DEFAULT_APPROVAL_TIMEOUT_SECONDS = 300.0
 
 
 ApprovalCallback = Callable[
@@ -217,6 +222,10 @@ class AgtRuntime:
             from agt.manifest_resolution import resolve_manifest
 
             resolved = resolve_manifest(Path(resolution_root), self._manifest_path)
+            (
+                self._approval_timeout_seconds,
+                self._approval_on_timeout,
+            ) = _approval_settings_from_manifest(resolved)
             self._control = AgentControl.from_native(
                 resolved,
                 annotator_dispatcher=annotator_dispatcher,
@@ -224,12 +233,21 @@ class AgtRuntime:
             )
         elif policy_dispatcher is not None or annotator_dispatcher is not None:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
+            (
+                self._approval_timeout_seconds,
+                self._approval_on_timeout,
+            ) = _approval_settings_from_manifest_text(manifest_text)
             self._control = AgentControl.from_native(
                 manifest_text,
                 annotator_dispatcher=annotator_dispatcher,
                 policy_dispatcher=policy_dispatcher,
             )
         else:
+            manifest_text = self._manifest_path.read_text(encoding="utf-8")
+            (
+                self._approval_timeout_seconds,
+                self._approval_on_timeout,
+            ) = _approval_settings_from_manifest_text(manifest_text)
             self._control = AgentControl.from_path(str(self._manifest_path))
 
     @property
@@ -258,28 +276,39 @@ class AgtRuntime:
         enforcement_mode = EnforcementMode(mode)
         acs_snapshot = _snapshot_to_acs(ip, snapshot)
 
-        async def _run() -> tuple[InterventionPointResult, Optional[BaseException]]:
-            raw = await self._control.evaluate_intervention_point(
+        async def _evaluate() -> InterventionPointResult:
+            return await self._control.evaluate_intervention_point(
                 intervention_point, acs_snapshot, enforcement_mode
             )
-            if enforcement_mode != EnforcementMode.ENFORCE:
-                return raw, None
-            if raw.verdict.decision.value != "escalate":
-                return raw, None
-            try:
+
+        raw_result = _run_sync(_evaluate())
+        exc: Optional[BaseException] = None
+        if (
+            enforcement_mode == EnforcementMode.ENFORCE
+            and raw_result.verdict.decision.value == "escalate"
+        ):
+
+            async def _enforce() -> None:
                 await self._control.enforce(
                     intervention_point,
-                    raw,
+                    raw_result,
                     enforcement_mode,
                     approval_resolver=_make_acs_resolver(
                         self._approval_resolver, snapshot
                     ),
                 )
-                return raw, None
-            except AgentControlInterruption as exc:
-                return raw, exc
 
-        raw_result, exc = _run_sync(_run())
+            try:
+                _run_sync(_enforce(), timeout=self._approval_timeout_seconds)
+            except TimeoutError:
+                return _approval_timeout_result(
+                    raw_result,
+                    snapshot,
+                    self._approval_on_timeout,
+                )
+            except AgentControlInterruption as caught:
+                exc = caught
+
         result = _result_from_intervention(raw_result, snapshot)
 
         if exc is None:
@@ -335,6 +364,60 @@ class AgtRuntime:
         self._control = None  # type: ignore[assignment]
 
 
+def _approval_settings_from_manifest_text(manifest_text: str) -> tuple[float, str]:
+    parsed = yaml.safe_load(manifest_text) or {}
+    if not isinstance(parsed, Mapping):
+        return _DEFAULT_APPROVAL_TIMEOUT_SECONDS, "deny"
+    return _approval_settings_from_manifest(parsed)
+
+
+def _approval_settings_from_manifest(manifest: Mapping[str, Any]) -> tuple[float, str]:
+    approval = manifest.get("approval")
+    if not isinstance(approval, Mapping):
+        return _DEFAULT_APPROVAL_TIMEOUT_SECONDS, "deny"
+    raw_timeout = approval.get("timeout_seconds")
+    timeout = _DEFAULT_APPROVAL_TIMEOUT_SECONDS
+    if isinstance(raw_timeout, (int, float)) and raw_timeout > 0:
+        timeout = float(raw_timeout)
+    on_timeout = str(approval.get("on_timeout") or "deny").lower()
+    if on_timeout != "allow":
+        on_timeout = "deny"
+    return timeout, on_timeout
+
+
+def _approval_timeout_result(
+    raw_result: InterventionPointResult,
+    snapshot: Mapping[str, Any],
+    on_timeout: str,
+) -> EvaluationResult:
+    result = _result_from_intervention(raw_result, snapshot)
+    if on_timeout == "allow":
+        return result.model_copy(
+            update={
+                "verdict": "allow",
+                "allowed": True,
+                "audit_entry": {
+                    **result.audit_entry,
+                    "approval_outcome": "allow",
+                    "approval_timeout": True,
+                },
+            }
+        )
+    return result.model_copy(
+        update={
+            "verdict": "deny",
+            "allowed": False,
+            "reason": "runtime_error:approval_timeout",
+            "message": "Approval resolver timed out and failed closed.",
+            "audit_entry": {
+                **result.audit_entry,
+                "approval_outcome": "deny",
+                "approval_timeout": True,
+            },
+        }
+    )
+
+
 def _make_acs_resolver(
     callback: ApprovalCallback | None,
     snapshot: Mapping[str, Any],
@@ -377,22 +460,28 @@ def _make_acs_resolver(
     return _resolve
 
 
-def _run_sync(coro: Awaitable[Any]) -> Any:
+def _run_sync(coro: Awaitable[Any], *, timeout: float | None = None) -> Any:
     """Run an awaitable to completion from a sync context."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)  # type: ignore[arg-type]
-    # An event loop is already running. Use a private loop on a new
-    # thread to keep the sync surface available even from async tests.
+    if timeout is None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)  # type: ignore[arg-type]
+    # A bounded call, or a call from an existing event loop, uses a private
+    # daemon thread. If the awaitable does not stop after cancellation, the
+    # caller still receives the fail-closed timeout decision.
     import threading
 
     holder: dict[str, Any] = {}
 
     def _runner() -> None:
         loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        task = loop.create_task(coro)  # type: ignore[arg-type]
+        holder["loop"] = loop
+        holder["task"] = task
         try:
-            holder["value"] = loop.run_until_complete(coro)  # type: ignore[arg-type]
+            holder["value"] = loop.run_until_complete(task)
         except BaseException as exc:  # noqa: BLE001 - propagate to caller
             holder["error"] = exc
         finally:
@@ -400,7 +489,16 @@ def _run_sync(coro: Awaitable[Any]) -> Any:
 
     thread = threading.Thread(target=_runner, daemon=True)
     thread.start()
-    thread.join()
+    thread.join(timeout)
+    if thread.is_alive():
+        loop = holder.get("loop")
+        task = holder.get("task")
+        if loop is not None and task is not None:
+            try:
+                loop.call_soon_threadsafe(task.cancel)
+            except RuntimeError:
+                pass
+        raise TimeoutError("approval resolver timed out")
     if "error" in holder:
         raise holder["error"]
     return holder["value"]

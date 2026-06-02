@@ -47,6 +47,15 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _validate_budget_counter(name: str, value: Any) -> None:
+    if name in ("tool_call_count", "token_count"):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{name} must be a non-negative integer, got {value!r}")
+        return
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise ValueError(f"{name} must be a non-negative number, got {value!r}")
+
+
 def _envelope(
     *,
     agent_id: str,
@@ -64,6 +73,13 @@ def _envelope(
     trace_id: str | None = None,
     span_id: str | None = None,
 ) -> dict[str, Any]:
+    for name, value in (
+        ("tool_call_count", tool_call_count),
+        ("token_count", token_count),
+        ("elapsed_seconds", elapsed_seconds),
+        ("cost_usd", cost_usd),
+    ):
+        _validate_budget_counter(name, value)
     ts = timestamp or _utcnow_iso()
     envelope: dict[str, Any] = {
         "agent": {
@@ -317,14 +333,8 @@ class SnapshotBuilder:
             raise ValueError("agent_id must be a non-empty string")
         if not isinstance(self.session_id, str) or not self.session_id:
             raise ValueError("session_id must be a non-empty string")
-        for name in ("tool_call_count", "token_count"):
-            value = getattr(self, name)
-            if not isinstance(value, int) or value < 0:
-                raise ValueError(f"{name} must be a non-negative integer, got {value!r}")
-        for name in ("elapsed_seconds", "cost_usd"):
-            value = getattr(self, name)
-            if not isinstance(value, (int, float)) or value < 0:
-                raise ValueError(f"{name} must be a non-negative number, got {value!r}")
+        for name in ("tool_call_count", "token_count", "elapsed_seconds", "cost_usd"):
+            _validate_budget_counter(name, getattr(self, name))
         if self.session_started_at is None:
             self.session_started_at = _utcnow_iso()
 

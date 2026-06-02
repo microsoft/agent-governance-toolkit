@@ -44,4 +44,10 @@ def filter_by_scope(
     root = root.resolve()
     action_path = action_path.resolve()
     action_rel = str(action_path.relative_to(root)).replace("\\", "/")
-    return fnmatch(action_rel, scope_pattern)
+    normalized_scope = scope_pattern.replace("\\", "/")
+
+    if normalized_scope.endswith("/"):
+        scope_dir = normalized_scope.rstrip("/")
+        return action_rel == scope_dir or action_rel.startswith(f"{scope_dir}/")
+
+    return fnmatch(action_rel, normalized_scope)

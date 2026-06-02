@@ -1,5 +1,6 @@
 use crate::{
     annotation::{AnnotationConfig, AnnotatorConfig},
+    constants::manifest_version,
     paths::PathRoot,
     policy::{validate_policy_binding, validate_policy_definition, PolicyBinding, PolicyConfig},
     InterventionPoint, JsonPath, JsonValue, Limits, RuntimeError,
@@ -250,10 +251,17 @@ impl Manifest {
     }
 
     pub fn validate(&self) -> Result<(), RuntimeError> {
-        if self.agent_control_specification_version.trim().is_empty() {
+        let version = self.agent_control_specification_version.trim();
+        if version.is_empty() {
             return Err(RuntimeError::ManifestInvalid(
                 "agent_control_specification_version is required".to_string(),
             ));
+        }
+        if !manifest_version::SUPPORTED.contains(&version) {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "unsupported agent_control_specification_version '{version}'; supported versions are {}",
+                manifest_version::SUPPORTED.join(", ")
+            )));
         }
 
         for extends in &self.extends {
@@ -1336,6 +1344,27 @@ intervention_points:
         let manifest = manifest_with("").expect("baseline manifest parses");
         assert!(manifest.approval.is_none());
         assert!(manifest.approval().is_none());
+    }
+
+    #[test]
+    fn manifest_rejects_unknown_agent_control_specification_version() {
+        let error = Manifest::from_yaml_str(
+            r#"agent_control_specification_version: banana
+policies:
+  test_policy:
+    type: test
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: test_policy
+"#,
+        )
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error
+            .detail()
+            .contains("unsupported agent_control_specification_version"));
     }
 
     #[test]

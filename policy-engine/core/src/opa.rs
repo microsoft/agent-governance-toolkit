@@ -7,12 +7,16 @@ use std::{
     collections::BTreeMap,
     env,
     ffi::OsString,
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
-    process::{Command, Output, Stdio},
+    process::{Child, Command, ExitStatus, Output, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 
 pub const OPA_PATH_ENV: &str = "ACS_OPA_PATH";
+pub const OPA_TIMEOUT_ENV: &str = "ACS_OPA_TIMEOUT_MS";
+const DEFAULT_OPA_TIMEOUT: Duration = Duration::from_secs(5);
 const OPA_DATA_KEYS: [&str; 2] = ["data", "data_paths"];
 const ERROR_OUTPUT_LIMIT: usize = 4096;
 
@@ -20,6 +24,7 @@ const ERROR_OUTPUT_LIMIT: usize = 4096;
 pub struct OpaRegoRunner {
     executable: PathBuf,
     data_paths: Vec<PathBuf>,
+    eval_timeout: Duration,
 }
 
 impl OpaRegoRunner {
@@ -27,21 +32,35 @@ impl OpaRegoRunner {
         Self {
             executable: PathBuf::from("opa"),
             data_paths: Vec::new(),
+            eval_timeout: DEFAULT_OPA_TIMEOUT,
         }
     }
 
     pub fn from_environment() -> Self {
-        match env::var_os(OPA_PATH_ENV) {
+        let mut runner = match env::var_os(OPA_PATH_ENV) {
             Some(value) if !value.is_empty() => {
                 Self::new().with_executable(Self::resolve_opa_executable_hint(PathBuf::from(value)))
             }
             _ => Self::new(),
+        };
+        if let Some(timeout) = eval_timeout_from_environment() {
+            runner = runner.with_eval_timeout(timeout);
         }
+        runner
     }
 
     pub fn with_executable(mut self, executable: impl Into<PathBuf>) -> Self {
         self.executable = executable.into();
         self
+    }
+
+    pub fn with_eval_timeout(mut self, timeout: Duration) -> Self {
+        self.eval_timeout = timeout;
+        self
+    }
+
+    pub fn eval_timeout(&self) -> Duration {
+        self.eval_timeout
     }
 
     fn resolve_opa_executable_hint(hint: PathBuf) -> PathBuf {
@@ -153,10 +172,68 @@ impl OpaRegoRunner {
             }
         }
 
-        child.wait_with_output().map_err(|err| {
+        wait_with_timeout(child, self.eval_timeout).map_err(|err| {
             RuntimeError::PolicyInvocationFailed(format!("failed to read OPA output: {err}"))
         })
     }
+}
+
+fn eval_timeout_from_environment() -> Option<Duration> {
+    let value = env::var(OPA_TIMEOUT_ENV).ok()?;
+    let millis = value.parse::<u64>().ok()?;
+    (millis > 0).then(|| Duration::from_millis(millis))
+}
+
+fn wait_with_timeout(mut child: Child, timeout: Duration) -> io::Result<Output> {
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to open OPA stdout pipe"))?;
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to open OPA stderr pipe"))?;
+    let stdout_reader = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stdout.read_to_end(&mut bytes).map(|_| bytes)
+    });
+    let stderr_reader = thread::spawn(move || {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).map(|_| bytes)
+    });
+
+    let status = wait_for_exit_or_timeout(&mut child, timeout)?;
+    let stdout = join_reader(stdout_reader)?;
+    let stderr = join_reader(stderr_reader)?;
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn wait_for_exit_or_timeout(child: &mut Child, timeout: Duration) -> io::Result<ExitStatus> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status);
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("OPA eval exceeded timeout of {} ms", timeout.as_millis()),
+            ));
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn join_reader(handle: thread::JoinHandle<io::Result<Vec<u8>>>) -> io::Result<Vec<u8>> {
+    handle
+        .join()
+        .map_err(|_| io::Error::new(io::ErrorKind::Other, "OPA output reader thread panicked"))?
 }
 
 fn opa_command_path_arg(path: impl AsRef<Path>) -> OsString {

@@ -154,6 +154,10 @@ def _render_rego(
         "policy_text := value if {",
         "\tvalue := input.policy_target.value",
         "\tis_string(value)",
+        "} else := value if {",
+        "\ttarget := input.policy_target.value",
+        "\tnot is_string(target)",
+        "\tvalue := json.marshal(target)",
         "}",
         "",
     ]

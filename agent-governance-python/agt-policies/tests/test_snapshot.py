@@ -186,6 +186,17 @@ def test_module_helper_skips_tenant_when_absent() -> None:
     assert "tenant" not in snap["envelope"]
 
 
+def test_module_helper_rejects_malformed_budget_counters() -> None:
+    with pytest.raises(ValueError, match="token_count"):
+        pre_tool_call_snapshot(
+            agent_id="bot", tool_name="lookup", args={}, token_count="999999"
+        )
+    with pytest.raises(ValueError, match="elapsed_seconds"):
+        input_snapshot(agent_id="bot", body="hi", elapsed_seconds=None)
+    with pytest.raises(ValueError, match="tool_call_count"):
+        input_snapshot(agent_id="bot", body="hi", tool_call_count=True)
+
+
 # ── SnapshotBuilder class ────────────────────────────────────────────
 
 
@@ -196,6 +207,8 @@ def test_builder_validates_agent_and_session_ids() -> None:
         SnapshotBuilder(agent_id="bot", session_id="")
     with pytest.raises(ValueError):
         SnapshotBuilder(agent_id="bot", token_count=-1)
+    with pytest.raises(ValueError):
+        SnapshotBuilder(agent_id="bot", token_count="999999")
     with pytest.raises(ValueError):
         SnapshotBuilder(agent_id="bot", cost_usd=-0.01)
 

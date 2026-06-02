@@ -519,7 +519,10 @@ mod builtin {
 
     use super::{build_cedar_request, CedarEntity, CedarRequest};
     use crate::{CedarPolicyInvocation, JsonValue, RuntimeError};
-    use cedar_policy::{Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request};
+    use cedar_policy::{
+        Authorizer, Context, Decision, Entities, EntityUid, PolicySet, Request, Schema,
+        ValidationMode, Validator,
+    };
     use serde_json::json;
     use std::{fs, str::FromStr};
 
@@ -530,9 +533,11 @@ mod builtin {
                 "cedar builtin dispatcher failed to parse policy_set: {err}"
             ))
         })?;
-        let entities = load_entities(invocation.entities_path.as_deref())?;
+        let schema = load_schema(invocation.schema_path.as_deref())?;
+        validate_policy_set(&policy_set, schema.as_ref())?;
+        let entities = load_entities(invocation.entities_path.as_deref(), schema.as_ref())?;
         let request = build_cedar_request(&invocation.input)?;
-        let cedar_request = build_authorizer_request(&request)?;
+        let cedar_request = build_authorizer_request(&request, schema.as_ref())?;
 
         let authorizer = Authorizer::new();
         let answer = authorizer.is_authorized(&cedar_request, &policy_set, &entities);
@@ -577,7 +582,44 @@ mod builtin {
         }
     }
 
-    fn load_entities(path: Option<&str>) -> Result<Entities, RuntimeError> {
+    fn load_schema(path: Option<&str>) -> Result<Option<Schema>, RuntimeError> {
+        let Some(path) = path else {
+            return Ok(None);
+        };
+        let json_text = fs::read_to_string(path).map_err(|err| {
+            RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher failed to read schema_path '{path}': {err}"
+            ))
+        })?;
+        let schema = Schema::from_json_str(&json_text).map_err(|err| {
+            RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher failed to parse schema_path '{path}': {err}"
+            ))
+        })?;
+        Ok(Some(schema))
+    }
+
+    fn validate_policy_set(
+        policy_set: &PolicySet,
+        schema: Option<&Schema>,
+    ) -> Result<(), RuntimeError> {
+        let Some(schema) = schema else {
+            return Ok(());
+        };
+        let result = Validator::new(schema.clone()).validate(policy_set, ValidationMode::Strict);
+        if result.validation_passed() {
+            Ok(())
+        } else {
+            Err(RuntimeError::PolicyInvocationFailed(format!(
+                "cedar builtin dispatcher policy_set failed schema validation: {result}"
+            )))
+        }
+    }
+
+    fn load_entities(
+        path: Option<&str>,
+        schema: Option<&Schema>,
+    ) -> Result<Entities, RuntimeError> {
         let Some(path) = path else {
             return Ok(Entities::empty());
         };
@@ -586,18 +628,21 @@ mod builtin {
                 "cedar builtin dispatcher failed to read entities_path '{path}': {err}"
             ))
         })?;
-        Entities::from_json_str(&json_text, None).map_err(|err| {
+        Entities::from_json_str(&json_text, schema).map_err(|err| {
             RuntimeError::PolicyInvocationFailed(format!(
                 "cedar builtin dispatcher failed to parse entities at '{path}': {err}"
             ))
         })
     }
 
-    fn build_authorizer_request(request: &CedarRequest) -> Result<Request, RuntimeError> {
+    fn build_authorizer_request(
+        request: &CedarRequest,
+        schema: Option<&Schema>,
+    ) -> Result<Request, RuntimeError> {
         let principal = entity_uid(&request.principal, "principal")?;
         let action = entity_uid(&request.action, "action")?;
         let resource = entity_uid(&request.resource, "resource")?;
-        Request::new(principal, action, resource, Context::empty(), None).map_err(|err| {
+        Request::new(principal, action, resource, Context::empty(), schema).map_err(|err| {
             RuntimeError::PolicyInvocationFailed(format!(
                 "cedar builtin dispatcher failed to build authorizer request: {err}"
             ))
@@ -966,6 +1011,21 @@ mod tests {
         let verdict = normalize_policy_output(output).unwrap();
         assert_eq!(verdict.decision, Decision::Deny);
         assert_eq!(verdict.reason.as_deref(), Some("no_matching_policy"));
+    }
+
+    #[cfg(feature = "cedar")]
+    #[test]
+    fn builtin_dispatcher_fails_closed_when_schema_path_is_missing() {
+        let mut inv = invocation(
+            "permit(principal, action, resource);",
+            tool_input("agent-1", "hello"),
+        );
+        inv.schema_path = Some("/no/such/schema.json".to_string());
+        let error = CedarBuiltinDispatcher::new()
+            .evaluate_cedar(&inv)
+            .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:policy_invocation_failed");
+        assert!(error.detail().contains("schema_path"));
     }
 
     #[cfg(feature = "cedar")]

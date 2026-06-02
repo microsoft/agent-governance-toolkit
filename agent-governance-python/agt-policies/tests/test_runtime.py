@@ -13,7 +13,10 @@ verifies the SDK builds before running this suite.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+import threading
+import time
 from typing import Any
 
 import pytest
@@ -69,9 +72,9 @@ class _ScriptedPolicy:
         return self._verdicts.pop(0)
 
 
-def _write_manifest(tmp_path: Path) -> Path:
+def _write_manifest(tmp_path: Path, approval: str = "") -> Path:
     path = tmp_path / "manifest.yaml"
-    path.write_text(_MANIFEST, encoding="utf-8")
+    path.write_text(_MANIFEST + approval, encoding="utf-8")
     return path
 
 
@@ -301,6 +304,90 @@ def test_runtime_resolver_deny_blocks(tmp_path: Path) -> None:
 
     assert result.verdict == "deny"
     assert result.allowed is False
+
+
+def test_runtime_resolver_timeout_fails_closed_by_default(tmp_path: Path) -> None:
+    policy = _ScriptedPolicy(
+        [{"decision": "escalate", "reason": "approval_required"}]
+    )
+    blocker = threading.Event()
+
+    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+        blocker.wait()
+        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
+
+    runtime = AgtRuntime(
+        _write_manifest(tmp_path, "approval:\n  timeout_seconds: 1\n"),
+        policy_dispatcher=policy,
+        approval_resolver=resolver,
+    )
+
+    started = time.monotonic()
+    result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 2.5
+    assert result.verdict == "deny"
+    assert result.allowed is False
+    assert result.reason == "runtime_error:approval_timeout"
+    assert result.audit_entry["approval_timeout"] is True
+    blocker.set()
+
+
+def test_runtime_async_resolver_timeout_fails_closed(tmp_path: Path) -> None:
+    policy = _ScriptedPolicy(
+        [{"decision": "escalate", "reason": "approval_required"}]
+    )
+
+    async def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+        await asyncio.sleep(60)
+        return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
+
+    runtime = AgtRuntime(
+        _write_manifest(tmp_path, "approval:\n  timeout_seconds: 1\n"),
+        policy_dispatcher=policy,
+        approval_resolver=resolver,
+    )
+
+    started = time.monotonic()
+    result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 2.5
+    assert result.verdict == "deny"
+    assert result.allowed is False
+    assert result.reason == "runtime_error:approval_timeout"
+
+
+def test_runtime_resolver_timeout_allows_only_when_manifest_opts_in(tmp_path: Path) -> None:
+    policy = _ScriptedPolicy(
+        [{"decision": "escalate", "reason": "approval_required"}]
+    )
+    blocker = threading.Event()
+
+    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+        blocker.wait()
+        return ApprovalDecision.deny()
+
+    runtime = AgtRuntime(
+        _write_manifest(
+            tmp_path,
+            "approval:\n  timeout_seconds: 1\n  on_timeout: allow\n",
+        ),
+        policy_dispatcher=policy,
+        approval_resolver=resolver,
+    )
+
+    started = time.monotonic()
+    result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 2.5
+    assert result.verdict == "allow"
+    assert result.allowed is True
+    assert result.audit_entry["approval_outcome"] == "allow"
+    assert result.audit_entry["approval_timeout"] is True
+    blocker.set()
 
 
 def test_runtime_resolution_root_pre_resolves_manifest(tmp_path: Path) -> None:

@@ -85,6 +85,20 @@ def test_discover_action_path_can_be_file(tmp_path: Path) -> None:
     assert len(paths) == 1
 
 
+def test_discover_rejects_out_of_root_governance_symlink(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "attacker.yaml").write_text("rules: []\n", encoding="utf-8")
+    (root / "governance.yaml").symlink_to(outside / "attacker.yaml")
+
+    with pytest.raises(ResolutionError) as exc:
+        discover_policies(root, root)
+
+    assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
+
+
 # ── filter_by_scope ──────────────────────────────────────────────────
 
 
@@ -107,6 +121,15 @@ def test_filter_uses_forward_slashes(tmp_path: Path) -> None:
     action.parent.mkdir(parents=True)
     action.touch()
     assert filter_by_scope(root / "p", "a/b/*.py", action, root) is True
+
+
+def test_filter_trailing_slash_scope_matches_subtree(tmp_path: Path) -> None:
+    root = tmp_path
+    action = root / "src" / "secure" / "pay.py"
+    action.parent.mkdir(parents=True)
+    action.touch()
+
+    assert filter_by_scope(root / "p", "src/secure/", action, root) is True
 
 
 # ── merge_documents (deny immutability) ──────────────────────────────
@@ -168,6 +191,16 @@ def test_merge_child_override_DROPPED_when_parent_is_deny() -> None:
             "message": "",
         }
     ]
+
+
+def test_merge_child_allow_with_different_name_cannot_neutralize_parent_deny() -> None:
+    parent = {"rules": [_rule("org_deny", "deny", 10)]}
+    child = {"rules": [_rule("child_allow", "allow", 99)]}
+
+    merged = merge_documents([parent, child])
+
+    assert [rule["name"] for rule in merged] == ["org_deny"]
+    assert merged[0]["action"] == "deny"
 
 
 def test_merge_child_without_override_DROPPED() -> None:

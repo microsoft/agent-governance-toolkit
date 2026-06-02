@@ -65,7 +65,12 @@ def discover_policies(action_path: Path, root: Path) -> list[Path]:
         for name in GOVERNANCE_FILENAMES:
             candidate = current / name
             if candidate.is_file():
-                candidates.append(candidate)
+                resolved_candidate = candidate.resolve()
+                if not _is_relative_to(resolved_candidate, root):
+                    raise ResolutionError.path_traversal(
+                        f"governance file {candidate} resolves outside workspace root {root}"
+                    )
+                candidates.append(resolved_candidate)
                 break
 
         if current == root or current.parent == current:
