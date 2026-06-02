@@ -719,6 +719,47 @@ label.md-nav__link > .md-nav__icon::after {
   height: 16px;
 }
 
+/*
+ * Mobile/tablet drawer: flatten to a single first-level list (GitHub-style).
+ *
+ * With navigation.sections + navigation.tabs, Material's drawer renders each
+ * top-level section as a <label> that slides to a nested child panel. That
+ * multi-level sliding UX clips content and is confusing on small screens, so
+ * we collapse it to ONE flat list of the top-level sections (Home, Getting
+ * Started, Packages, ...). Each row navigates straight to that section's
+ * landing page (wired in site.js -> wireDrawerFlatNav). Desktop, which uses
+ * the top tab bar + per-section sidebar, is intentionally left untouched.
+ */
+@media screen and (max-width: 76.1875em) {
+  /* Drop every nested child panel so only the top-level rows remain. */
+  .md-sidebar--primary .md-nav--primary .md-nav__item--nested > .md-nav {
+    display: none !important;
+  }
+
+  /* No expand/collapse chevron — the rows are plain links now. */
+  .md-sidebar--primary
+    .md-nav--primary
+    > .md-nav__list
+    > .md-nav__item
+    > .md-nav__link
+    .md-nav__icon {
+    display: none !important;
+  }
+
+  /* Full-width, comfortable rows like the GitHub global navigation panel. */
+  .md-sidebar--primary
+    .md-nav--primary
+    > .md-nav__list
+    > .md-nav__item
+    > .md-nav__link {
+    cursor: pointer;
+    padding: 10px 16px !important;
+    margin: 0;
+    border-radius: 0;
+    font-size: 15px;
+  }
+}
+
 /* Right rail (Table of Contents) */
 .md-nav--secondary .md-nav__title {
   display: none;             /* drop the redundant "Table of contents" label */
@@ -771,6 +812,33 @@ label.md-nav__link > .md-nav__icon::after {
     background-color: var(--mslearn-bg, #FFFFFF);
     box-shadow: 1px 0 0 var(--mslearn-border),
                 4px 0 16px rgba(31, 35, 40, 0.12);
+  }
+
+  /*
+   * Drawer slide must be width-independent.
+   *
+   * Material hides the drawer with a fixed `left: -12.1rem` and opens it with
+   * `translateX(12.1rem)` — both tied to its default 12.1rem width. Because we
+   * widened the drawer (17.5rem), that fixed offset no longer fully hides it,
+   * leaving a ~108px sliver poking out when the menu is "closed".
+   *
+   * Pin the drawer to `left: 0` and drive it purely off a percentage
+   * transform so it is COMPLETELY hidden when closed (translateX(-100%)) and
+   * sits fully on-screen at its real width when open (translateX(0)) — no
+   * sliver, no half-width state.
+   */
+  [dir="ltr"] .md-sidebar--primary {
+    left: 0;
+    right: auto;
+    transform: translateX(-100%);
+  }
+  [dir="rtl"] .md-sidebar--primary {
+    right: 0;
+    left: auto;
+    transform: translateX(100%);
+  }
+  [data-md-toggle="drawer"]:checked ~ .md-container .md-sidebar--primary {
+    transform: translateX(0);
   }
 
   [data-md-color-scheme="slate"] .md-sidebar--primary {
@@ -1842,6 +1910,7 @@ label.md-nav__link > .md-nav__icon::after {
   gap: 0.5rem;
   padding: 1.25rem 1rem;
   text-align: center;
+  position: relative;
 }
 
 .md-copyright {
@@ -1856,11 +1925,32 @@ label.md-nav__link > .md-nav__icon::after {
   color: var(--mslearn-text-muted);
 }
 
-/* Hide the "Made with Material for MkDocs" generator line and social links. */
+/* Hide the "Made with Material for MkDocs" generator line and source file. */
 .md-footer-meta .md-footer-meta__generator,
-.md-footer-meta .md-source-file,
-.md-footer-meta .md-social {
+.md-footer-meta .md-source-file {
   display: none;
+}
+
+/* GitHub icon pinned to the right of the footer; copyright stays centered. */
+.md-footer-meta .md-social {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.md-footer-meta .md-social__link {
+  width: 1.6rem;
+  height: 1.6rem;
+  color: var(--mslearn-text-muted);
+  transition: color 0.2s ease;
+}
+
+.md-footer-meta .md-social__link:hover {
+  color: var(--md-default-fg-color);
 }
 
 
@@ -2173,6 +2263,14 @@ label.md-nav__link > .md-nav__icon::after {
 .mermaid .nodeLabel {
   font-size: 14px !important;
   line-height: 1.4;
+}
+
+/* Soften the box corners in the "How it works" diagram */
+.mermaid .node rect,
+.mermaid rect.basic,
+.mermaid .label-container {
+  rx: 6px;
+  ry: 6px;
 }
 
 .mermaid .edgeLabel {
