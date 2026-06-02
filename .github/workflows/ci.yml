@@ -794,7 +794,7 @@ jobs:
         run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Lint mastra-agentmesh
         working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
-        run: npm run lint 2>/dev/null || true
+        run: npm run lint
       - name: Test mastra-agentmesh
         working-directory: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         run: npm test
@@ -804,7 +804,7 @@ jobs:
         run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Lint copilot-governance
         working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
-        run: npm run lint 2>/dev/null || true
+        run: npm run lint
       - name: Test copilot-governance
         working-directory: agent-governance-python/agentmesh-integrations/copilot-governance
         run: npm test
