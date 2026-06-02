@@ -100,6 +100,8 @@ def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
     assert "noBuildIsolation: 'true'" in text
     assert "name: agt-policies" in text
     assert "path: agent-governance-python/agt-policies" in text
+    assert "name: acs-generator" in text
+    assert "path: policy-engine/generator" in text
     assert "path: policy-engine" in text
     assert "crate: agent_control_specification_core" in text
     assert "cargo package -p agent_control_specification --allow-dirty" in text

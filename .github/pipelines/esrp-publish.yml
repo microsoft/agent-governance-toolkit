@@ -92,13 +92,16 @@ parameters:
         path: agent-governance-python/agent-rag-governance
       - name: agt-sandbox
         path: agent-governance-python/agent-sandbox
-      # ACS policy layer and Python SDK
+      # ACS policy layer, Python SDK, and artifact generator
       - name: agent-control-specification
         path: policy-engine/sdk/python
         rust: 'true'
         noBuildIsolation: 'true'
       - name: agt-policies
         path: agent-governance-python/agt-policies
+      - name: acs-generator
+        path: policy-engine/generator
+        noBuildIsolation: 'true'
 
   - name: npmPackages
     type: object

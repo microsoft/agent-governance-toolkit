@@ -55,6 +55,7 @@ REGISTERED_PACKAGES = {
     "agt-sandbox", "agt_sandbox",
     "agt-policies", "agt_policies",
     "agent-control-specification", "agent_control_specification",
+    "acs-generator", "acs_generator",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",

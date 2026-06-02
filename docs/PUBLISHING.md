@@ -54,6 +54,7 @@ must not be used. See [ESRP Onboarding](https://aka.ms/esrp-onboarding).
 |---------|-----------|-----------|
 | Agent Control Specification Python SDK | `agent-control-specification` | `policy-engine/sdk/python` |
 | AGT Policies | `agt-policies` | `agent-governance-python/agt-policies` |
+| Agent Control Specification Generator CLI | `acs-generator` | `policy-engine/generator` |
 
 ### Building Packages
 

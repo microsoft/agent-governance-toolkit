@@ -88,12 +88,16 @@ jobs:
           python -m pip install --upgrade pip==24.3.1
           pip install maturin==1.8.7  # Scorecard: version-pinned
           pip install build==1.2.1  # Scorecard: version-pinned
+          pip install setuptools==80.9.0  # Scorecard: version-pinned
           pip install --no-build-isolation ./sdk/python
           pip install ./generator pytest==9.0.3
           pytest sdk/python generator
       - name: Package Python SDK
         run: |
           python -m build --no-isolation ./sdk/python
+      - name: Package ACS generator
+        run: |
+          python -m build --no-isolation ./generator
 
   node:
     name: Node SDK

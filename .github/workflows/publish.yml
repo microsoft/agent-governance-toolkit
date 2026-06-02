@@ -54,7 +54,8 @@ jobs:
             {"name":"agent-rag-governance","path":"agent-governance-python/agent-rag-governance"},
             {"name":"agt-sandbox","path":"agent-governance-python/agent-sandbox"},
             {"name":"agent-control-specification","path":"policy-engine/sdk/python","rust":true,"noBuildIsolation":true},
-            {"name":"agt-policies","path":"agent-governance-python/agt-policies"}
+            {"name":"agt-policies","path":"agent-governance-python/agt-policies"},
+            {"name":"acs-generator","path":"policy-engine/generator","noBuildIsolation":true}
           ]'
           # Compact the JSON
           ALL=$(echo "$ALL" | jq -c '.')

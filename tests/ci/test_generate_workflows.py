@@ -70,6 +70,7 @@ def test_policy_engine_python_job_uses_pinned_tooling():
     assert "python -m pip install --upgrade pip==24.3.1" in content
     assert "pip install maturin==1.8.7" in content
     assert "pip install build==1.2.1" in content
+    assert "pip install setuptools==80.9.0" in content
     assert "pytest==9.0.3" in content
     assert "pip install ./sdk/python ./generator pytest" not in content
 
@@ -79,6 +80,7 @@ def test_policy_engine_workflow_packages_acs_artifacts():
     assert "cargo package -p agent_control_specification_core --allow-dirty" in content
     assert "cargo package -p agent_control_specification --allow-dirty" not in content
     assert "python -m build --no-isolation ./sdk/python" in content
+    assert "python -m build --no-isolation ./generator" in content
     assert "npm pack --pack-destination" in content
     assert "node scripts/package-native.mjs --package agent-control-specification-linux-x64-gnu" in content
     assert "agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz" in content
