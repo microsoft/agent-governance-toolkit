@@ -1,0 +1,81 @@
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: medical_records_assistant_guardrails
+extends: []
+policies:
+  medical_records_assistant_guardrails:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.medical_records_assistant_guardrails.verdict
+intervention_points:
+  input:
+    policy_target: $.input
+    policy_target_kind: user_input
+    annotations:
+      input_risk:
+        from: $.input.value
+    policy:
+      id: medical_records_assistant_guardrails
+      query: data.agent_control_specification.medical_records_assistant_guardrails.input_verdict
+  pre_model_call:
+    policy_target: $.model_request
+    policy_target_kind: model_request
+    policy:
+      id: medical_records_assistant_guardrails
+      query: data.agent_control_specification.medical_records_assistant_guardrails.pre_model_call_verdict
+  post_model_call:
+    policy_target: $.model_response
+    policy_target_kind: model_response
+    annotations:
+      phi_scan:
+        from: $.model_response.value
+    policy:
+      id: medical_records_assistant_guardrails
+      query: data.agent_control_specification.medical_records_assistant_guardrails.post_model_call_verdict
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    annotations:
+      access_scope:
+        from: $.tool_call.args
+    policy:
+      id: medical_records_assistant_guardrails
+      query: data.agent_control_specification.medical_records_assistant_guardrails.pre_tool_call_verdict
+    tool_name_from: $.tool_call.name
+  post_tool_call:
+    policy_target: $.tool_result
+    policy_target_kind: tool_result
+    annotations:
+      phi_scan:
+        from: $.tool_result.value
+    policy:
+      id: medical_records_assistant_guardrails
+      query: data.agent_control_specification.medical_records_assistant_guardrails.post_tool_call_verdict
+    tool_name_from: $.tool_call.name
+  output:
+    policy_target: $.output
+    policy_target_kind: assistant_output
+    annotations:
+      phi_scan:
+        from: $.output.value
+    policy:
+      id: medical_records_assistant_guardrails
+      query: data.agent_control_specification.medical_records_assistant_guardrails.output_verdict
+tools:
+  fetch_record:
+    type: Tool
+    id: fetch_record
+    clearance: [medical_records]
+    security_labels: [patient_record]
+  export_data:
+    type: Tool
+    id: export_data
+    clearance: [medical_records, data_export]
+    security_labels: [bulk_phi]
+annotators:
+  input_risk:
+    type: classifier
+  access_scope:
+    type: classifier
+  phi_scan:
+    type: classifier

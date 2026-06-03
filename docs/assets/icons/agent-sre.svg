@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
     <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#DC2626;stop-opacity:1"/>
-      <stop offset="100%" style="stop-color:#B91C1C;stop-opacity:1"/>
+      <stop offset="0%" style="stop-color:#cf222e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#a40e26;stop-opacity:1"/>
     </linearGradient>
   </defs>
   <rect x="6" y="6" width="52" height="52" rx="12" fill="url(#g)"/>
@@ -17,5 +17,5 @@
   <rect x="42" y="44" width="4" height="4" rx="1" fill="white" opacity="0.5"/>
   <!-- Alert dot -->
   <circle cx="46" cy="20" r="4" fill="white" opacity="0.9"/>
-  <circle cx="46" cy="20" r="2" fill="#DC2626"/>
+  <circle cx="46" cy="20" r="2" fill="#cf222e"/>
 </svg>

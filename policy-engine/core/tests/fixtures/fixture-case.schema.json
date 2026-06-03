@@ -1,0 +1,155 @@
+{
+  "$defs": {
+    "dispatcher_response": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "ok"
+          ]
+        },
+        {
+          "required": [
+            "error"
+          ]
+        }
+      ],
+      "properties": {
+        "error": {
+          "pattern": "^runtime_error:",
+          "type": "string"
+        },
+        "ok": true
+      },
+      "type": "object"
+    },
+    "evaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "additionalProperties": false,
+          "properties": {
+            "annotation_calls": {
+              "type": "array"
+            },
+            "policy_input": true,
+            "policy_invocation": true,
+            "policy_invoked": {
+              "type": "boolean"
+            },
+            "transformed_policy_target": true,
+            "verdict": true
+          },
+          "required": [
+            "verdict"
+          ],
+          "type": "object"
+        },
+        "mode": {
+          "enum": [
+            "enforce",
+            "evaluate_only"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "policy_response": {
+          "$ref": "#/$defs/dispatcher_response"
+        },
+        "snapshot": true,
+        "intervention_point": {
+          "enum": [
+            "agent_startup",
+            "input",
+            "pre_model_call",
+            "post_model_call",
+            "pre_tool_call",
+            "post_tool_call",
+            "output",
+            "agent_shutdown"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "intervention_point",
+        "mode",
+        "snapshot",
+        "expected"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://agent-control-specification.test/fixture-case.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "case_kind": {
+      "enum": [
+        "manifest",
+        "runtime"
+      ]
+    },
+    "covers": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "description": {
+      "type": "string"
+    },
+    "evaluations": {
+      "items": {
+        "$ref": "#/$defs/evaluation"
+      },
+      "type": "array"
+    },
+    "annotation_responses": {
+      "additionalProperties": {
+        "$ref": "#/$defs/dispatcher_response"
+      },
+      "type": "object"
+    },
+    "expect_valid": {
+      "type": "boolean"
+    },
+    "expected_error_reason": {
+      "pattern": "^runtime_error:",
+      "type": "string"
+    },
+    "expected_intervention_point_names": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "type": "string"
+    },
+    "intentionally_absent": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest_yaml": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "description",
+    "covers",
+    "case_kind",
+    "manifest_yaml"
+  ],
+  "title": "Agent Control Specification fixture case",
+  "type": "object"
+}

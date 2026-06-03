@@ -1,0 +1,269 @@
+{
+  "description": "Shared buffer-mode streaming conformance fixtures generated from the normative Python guard in sdk/python/.../_adapters/_sse.py. Every SDK that guards a streaming chat-completion surface must reproduce these outcomes exactly.",
+  "limits": {
+    "max_stream_bytes": 8388608,
+    "max_stream_events": 10000
+  },
+  "assemble": [
+    {
+      "name": "allow_text_only",
+      "description": "Plain text completion across deltas, finishes with stop.",
+      "input": "inputs/allow_text_only.sse",
+      "outcome": "ok",
+      "assembled": {
+        "id": "cmpl-1",
+        "created": 1,
+        "model": "gpt-x",
+        "object": "chat.completion",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Hello world"
+            },
+            "finish_reason": "stop"
+          }
+        ]
+      },
+      "allow_reemits_input_verbatim": true
+    },
+    {
+      "name": "allow_tool_call_fragments",
+      "description": "Tool call with name/id in first fragment and arguments split across chunks.",
+      "input": "inputs/allow_tool_call_fragments.sse",
+      "outcome": "ok",
+      "assembled": {
+        "id": "cmpl-1",
+        "created": 1,
+        "model": "gpt-x",
+        "object": "chat.completion",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "",
+              "tool_calls": [
+                {
+                  "id": "call_a",
+                  "type": "function",
+                  "function": {
+                    "name": "get_weather",
+                    "arguments": "{\"city\":\"SF\"}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ]
+      },
+      "allow_reemits_input_verbatim": true
+    },
+    {
+      "name": "allow_two_tool_calls",
+      "description": "Two parallel tool calls keyed by index merge in index order.",
+      "input": "inputs/allow_two_tool_calls.sse",
+      "outcome": "ok",
+      "assembled": {
+        "id": "cmpl-1",
+        "created": 1,
+        "model": "gpt-x",
+        "object": "chat.completion",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "",
+              "tool_calls": [
+                {
+                  "id": "c0",
+                  "type": "function",
+                  "function": {
+                    "name": "a",
+                    "arguments": "{}"
+                  }
+                },
+                {
+                  "id": "c1",
+                  "type": "function",
+                  "function": {
+                    "name": "b",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ]
+      },
+      "allow_reemits_input_verbatim": true
+    },
+    {
+      "name": "allow_comments_and_keepalive",
+      "description": "Comment and keepalive lines are ignored, content still assembles.",
+      "input": "inputs/allow_comments_and_keepalive.sse",
+      "outcome": "ok",
+      "assembled": {
+        "id": "cmpl-1",
+        "created": 1,
+        "model": "gpt-x",
+        "object": "chat.completion",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "hi"
+            },
+            "finish_reason": "stop"
+          }
+        ]
+      },
+      "allow_reemits_input_verbatim": true
+    },
+    {
+      "name": "fail_malformed_json",
+      "description": "A data event with malformed JSON fails closed.",
+      "input": "inputs/fail_malformed_json.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming response contained malformed SSE JSON."
+    },
+    {
+      "name": "fail_non_object_chunk",
+      "description": "A JSON data event that is not an object fails closed.",
+      "input": "inputs/fail_non_object_chunk.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming SSE chunk must be a JSON object."
+    },
+    {
+      "name": "fail_multichoice",
+      "description": "More than one choice in a chunk fails closed.",
+      "input": "inputs/fail_multichoice.sse",
+      "outcome": "fail_closed",
+      "error_message": "Multi-choice streaming responses are not guarded."
+    },
+    {
+      "name": "fail_second_choice_index",
+      "description": "A choice with a non-zero index fails closed.",
+      "input": "inputs/fail_second_choice_index.sse",
+      "outcome": "fail_closed",
+      "error_message": "Multi-choice streaming responses are not guarded."
+    },
+    {
+      "name": "fail_data_after_done",
+      "description": "A data event after [DONE] fails closed.",
+      "input": "inputs/fail_data_after_done.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming response sent data after [DONE]."
+    },
+    {
+      "name": "fail_unrepresented_choice_field",
+      "description": "A non-null unknown field on the choice fails closed because it would leak unevaluated data.",
+      "input": "inputs/fail_unrepresented_choice_field.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming choice carried unsupported fields."
+    },
+    {
+      "name": "fail_unrepresented_delta_field",
+      "description": "A non-null unknown field on the delta fails closed.",
+      "input": "inputs/fail_unrepresented_delta_field.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming delta carried unsupported fields."
+    },
+    {
+      "name": "fail_nonstring_content",
+      "description": "Non-string delta content fails closed.",
+      "input": "inputs/fail_nonstring_content.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming delta content must be a string."
+    },
+    {
+      "name": "fail_nonstring_tool_args",
+      "description": "Non-string tool_call arguments fail closed.",
+      "input": "inputs/fail_nonstring_tool_args.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming tool_call arguments must be strings."
+    },
+    {
+      "name": "fail_tool_call_no_index",
+      "description": "A tool_call fragment without an integer index fails closed.",
+      "input": "inputs/fail_tool_call_no_index.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming tool_call fragments require an integer index."
+    },
+    {
+      "name": "fail_empty_no_chunks",
+      "description": "A stream with only [DONE] and no data chunks fails closed.",
+      "input": "inputs/fail_empty_no_chunks.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming response contained no data chunks."
+    },
+    {
+      "name": "fail_terminated_before_done",
+      "description": "A stream ending before [DONE] fails closed.",
+      "input": "inputs/fail_terminated_before_done.sse",
+      "outcome": "fail_closed",
+      "error_message": "Streaming response terminated before [DONE]."
+    }
+  ],
+  "synthesize": [
+    {
+      "name": "synth_text",
+      "description": "Transformed text response renders to a single chunk plus [DONE].",
+      "response": {
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "[redacted]"
+            },
+            "finish_reason": "stop"
+          }
+        ]
+      },
+      "template": {
+        "id": "cmpl-1",
+        "created": 1,
+        "model": "gpt-x"
+      },
+      "expected_output": "inputs/synth_text.expected.sse"
+    },
+    {
+      "name": "synth_tool_calls",
+      "description": "Transformed tool-call response renders tool_calls into the synthesized delta.",
+      "response": {
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "c0",
+                  "type": "function",
+                  "function": {
+                    "name": "a",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ]
+      },
+      "template": {
+        "id": "cmpl-1",
+        "created": 1,
+        "model": "gpt-x"
+      },
+      "expected_output": "inputs/synth_tool_calls.expected.sse"
+    }
+  ]
+}

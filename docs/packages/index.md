@@ -1,6 +1,6 @@
 # Packages
 
-AGT provides 13 packages covering every layer of agent governance.
+AGT provides 14 packages covering every layer of agent governance.
 
 ```
 +------------------+     +------------------+     +------------------+
@@ -34,6 +34,7 @@ AGT provides 13 packages covering every layer of agent governance.
 | [Agent Marketplace](agent-marketplace.md) | Plugin governance, marketplace trust | `pip install agentmesh-marketplace` |
 | [Agent Lightning](agent-lightning.md) | High-performance orchestration | `pip install agentmesh-lightning` |
 | [Agent Hypervisor](agent-hypervisor.md) | Hardware-level workload isolation | `pip install agent-hypervisor` |
+| [Agent Control Specification](agent-control-specification.md) | Stateless policy decision runtime for the AGT 5.0 policy layer | vendored in `policy-engine/` |
 
 ## Language Packages & Tooling
 

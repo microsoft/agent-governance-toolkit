@@ -1,11 +1,11 @@
 /*
- * Microsoft Learn-inspired theme for MkDocs Material
- * Comprehensive styling to match learn.microsoft.com look and feel
+ * Primer-inspired theme for MkDocs Material
+ * Tokens ported from GitHub Primer Primitives (https://primer.style/primitives)
  *
  * Sections:
- *   1. Color Palette
+ *   1. Color Palette  (Primer tokens)
  *   2. Scroll Behavior
- *   3. Typography
+ *   3. Typography  (Primer system stack + type scale)
  *   4. Header
  *   5. Navigation Tabs
  *   6. Sidebar Navigation
@@ -26,48 +26,52 @@
 
 
 /* ==========================================================================
-   1. Color Palette
+   1. Color Palette  (GitHub Primer tokens)
    ========================================================================== */
 
 :root,
 [data-md-color-scheme="default"] {
-  --md-primary-fg-color: #1B4F72;
-  --md-primary-fg-color--light: #2E86C1;
-  --md-primary-fg-color--dark: #154360;
-  --md-accent-fg-color: #1B4F72;
-  --md-accent-fg-color--transparent: rgba(27, 79, 114, 0.1);
+  /* NextGen Purple 80 — brand accent for light mode */
+  --md-primary-fg-color: #8251EE;
+  --md-primary-fg-color--light: #9B7AF2;
+  --md-primary-fg-color--dark: #6A3FD9;
+  --md-accent-fg-color: #8251EE;
+  --md-accent-fg-color--transparent: rgba(130, 81, 238, 0.1);
 
-  --md-default-bg-color: #FFFFFF;
-  --md-default-bg-color--light: #F5F5F5;
+  /* Primer canvas — surfaces */
+  --md-default-bg-color: #ffffff;
+  --md-default-bg-color--light: #f6f8fa;
 
-  --md-typeset-a-color: #1B4F72;
+  --md-typeset-a-color: #8251EE;
 
-  --mslearn-text: #242424;
-  --mslearn-text-muted: #616161;
-  --mslearn-border: #E0E0E0;
-  --mslearn-surface: #F5F5F5;
-  --mslearn-code-bg: #1B1A19;
-  --mslearn-footer-bg: #242424;
+  /* Primer foreground / borders / surfaces (legacy var names kept for cascade) */
+  --mslearn-text: #1f2328;
+  --mslearn-text-muted: #59636e;
+  --mslearn-border: #d1d9e0;
+  --mslearn-surface: #f6f8fa;
+  --mslearn-code-bg: #f6f8fa;
+  --mslearn-footer-bg: #f6f8fa;
 }
 
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #5DADE2;
-  --md-primary-fg-color--light: #85C1E9;
-  --md-primary-fg-color--dark: #2E86C1;
-  --md-accent-fg-color: #5DADE2;
-  --md-accent-fg-color--transparent: rgba(93, 173, 226, 0.1);
+  /* NextGen Purple 70 — brand accent for dark mode */
+  --md-primary-fg-color: #643FB2;
+  --md-primary-fg-color--light: #8861D4;
+  --md-primary-fg-color--dark: #4F2F8E;
+  --md-accent-fg-color: #643FB2;
+  --md-accent-fg-color--transparent: rgba(100, 63, 178, 0.18);
 
-  --md-default-bg-color: #1B1B1F;
-  --md-default-bg-color--light: #242428;
+  --md-default-bg-color: #0d1117;
+  --md-default-bg-color--light: #151b23;
 
-  --md-typeset-a-color: #4DB8FF;
+  --md-typeset-a-color: #9B7AF2;
 
-  --mslearn-text: #E0E0E0;
-  --mslearn-text-muted: #A0A0A0;
-  --mslearn-border: #3A3A3E;
-  --mslearn-surface: #242428;
-  --mslearn-code-bg: #1E1E1E;
-  --mslearn-footer-bg: #141418;
+  --mslearn-text: #f0f6fc;
+  --mslearn-text-muted: #9198a1;
+  --mslearn-border: #3d444d;
+  --mslearn-surface: #151b23;
+  --mslearn-code-bg: #151b23;
+  --mslearn-footer-bg: #010409;
 }
 
 
@@ -81,19 +85,81 @@ html {
 
 
 /* ==========================================================================
-   3. Typography
+   3. Typography  (Primer system font stack + type scale)
    ========================================================================== */
 
+:root {
+  /* Primer fontStack-system */
+  --agt-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --agt-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /*
+   * Primer functional type scale
+   * https://primer.style/product/primitives/typography/
+   */
+  --agt-text-display:        48px;  /* 56px lh */
+  --agt-text-title-large:    32px;  /* 40px lh */
+  --agt-text-title-medium:   24px;  /* 32px lh */
+  --agt-text-title-small:    20px;  /* 28px lh */
+  --agt-text-subtitle:       18px;  /* 28px lh */
+  --agt-text-body-large:     16px;  /* 24px lh - markdown / prose default */
+  --agt-text-body-medium:    14px;  /* 20px lh - UI chrome default */
+  --agt-text-body-small:     12px;  /* 18px lh - captions / group headings */
+
+  /* Primer line-height tokens */
+  --agt-lh-condensed-ultra:  1;
+  --agt-lh-condensed:        1.25;
+  --agt-lh-default:          1.5;
+
+  /* Primer font-weight tokens */
+  --agt-fw-light:    300;
+  --agt-fw-normal:   400;
+  --agt-fw-medium:   500;
+  --agt-fw-semibold: 600;
+  --agt-fw-bold:     700;
+}
+
+body,
+.md-typeset,
+.md-header,
+.md-tabs,
+.md-nav,
+.md-footer {
+  font-family: var(--agt-font-sans);
+}
+
+.md-typeset code,
+.md-typeset pre,
+.md-typeset kbd,
+.md-code__content,
+.highlight pre,
+.md-clipboard {
+  font-family: var(--agt-font-mono);
+}
+
 .md-typeset {
-  font-size: 0.875rem;
-  line-height: 1.6;
+  /* Primer markdown body = text-body-large (16px / 24px) */
+  font-size: var(--agt-text-body-large);
+  line-height: var(--agt-lh-default);
   color: var(--mslearn-text);
 }
 
+/*
+ * Primer markdown heading scale.
+ *   h1  title-large    32 / 40, semibold
+ *   h2  title-medium   24 / 32, semibold (with bottom hairline)
+ *   h3  title-small    20 / 28, semibold
+ *   h4  body-large     16 / 24, semibold
+ *   h5  body-medium    14 / 20, semibold
+ *   h6  body-small     12 / 18, semibold, fg.muted
+ */
 .md-typeset h1 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: var(--agt-text-title-large);
+  font-weight: var(--agt-fw-semibold);
+  letter-spacing: -0.015em;
+  line-height: var(--agt-lh-condensed);
   color: var(--mslearn-text);
   margin-bottom: 1rem;
 }
@@ -103,41 +169,353 @@ html {
 }
 
 .md-typeset h2 {
-  font-size: 1.3rem;
-  font-weight: 600;
+  font-size: var(--agt-text-title-medium);
+  font-weight: var(--agt-fw-semibold);
   letter-spacing: -0.01em;
+  line-height: var(--agt-lh-condensed);
   border-bottom: 1px solid var(--mslearn-border);
   padding-bottom: 0.4rem;
   margin-top: 2rem;
 }
 
 .md-typeset h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: var(--agt-text-title-small);
+  font-weight: var(--agt-fw-semibold);
+  line-height: var(--agt-lh-condensed);
   margin-top: 1.5rem;
 }
 
+.md-typeset h4 {
+  font-size: var(--agt-text-body-large);
+  font-weight: var(--agt-fw-semibold);
+  line-height: var(--agt-lh-default);
+  margin-top: 1.25rem;
+}
 
-/* ==========================================================================
-   4. Header
-   ========================================================================== */
+.md-typeset h5 {
+  font-size: var(--agt-text-body-medium);
+  font-weight: var(--agt-fw-semibold);
+  line-height: var(--agt-lh-default);
+  margin-top: 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
 
-.md-header {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+.md-typeset h6 {
+  font-size: var(--agt-text-body-small);
+  font-weight: var(--agt-fw-semibold);
+  line-height: var(--agt-lh-default);
+  color: var(--mslearn-text-muted);
+  margin-top: 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.md-typeset p,
+.md-typeset li {
+  font-size: var(--agt-text-body-large);
+  line-height: var(--agt-lh-default);
 }
 
 
 /* ==========================================================================
-   5. Navigation Tabs
+   4. Header  —  GitHub-style nav bar
+   ==========================================================================
+   Anatomy (matches the spec design, both light + dark):
+   - 2px gradient accent strip at the very top edge
+   - Single dark/white canvas background, 1px hairline divider at bottom
+   - Logo + title on the left, wide search in the center, repo info + icons
+     on the right (Material auto-handles placement)
+   - Header height ~56px, vertical padding ~12px
+*/
+
+.md-header {
+  background-color: var(--md-default-bg-color);
+  color: var(--mslearn-text);
+  border-bottom: 1px solid var(--mslearn-border);
+  box-shadow: none;
+  /* Stay pinned while scrolling. Material's default is sticky; we keep it
+     explicit here so this rule isn't accidentally overridden. */
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+/* Tabs row sits flush under the sticky header and stays pinned too
+   (paired with the `navigation.tabs.sticky` feature flag in mkdocs.yml).
+   65px = measured header height at our padding + logo size. */
+.md-tabs {
+  position: sticky;
+  top: 65px;
+  z-index: 3;
+}
+
+[data-md-color-scheme="slate"] .md-header {
+  background-color: var(--md-default-bg-color);
+  color: var(--mslearn-text);
+}
+
+/* Gradient accent strip pinned to the very top edge of the header. */
+.md-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    #5BD2BE 0%,
+    #8251EE 50%,
+    #C661F7 100%
+  );
+  z-index: 1;
+}
+
+/* Header inner: keep generous padding so logo/search/icons breathe.
+   Constrain to the same container width as the page grid so the nav
+   has equal margins on the left and right at desktop widths. */
+.md-header__inner {
+  padding: 0.4rem 1rem;
+  gap: 0.25rem;
+  max-width: 76rem;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+/* Same treatment for the tabs row so its items align with the header
+   content above it (logo / search / repo info). Items are centered
+   within the constrained container. */
+.md-tabs__list {
+  max-width: 76rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  width: 100%;
+  justify-content: center;
+}
+
+/* The sticky tabs row (.md-tabs) lives inside .md-header and carries
+   z-index: 3, while the language selector (.md-select) only establishes
+   a z-index: 1 stacking context. Within the shared header context that
+   makes the tabs paint OVER the open language dropdown. Lift the option
+   (and its dropdown panel) above the tabs so it overlays correctly. */
+.md-header__option {
+  position: relative;
+  z-index: 5;
+}
+
+.md-header__title {
+  font-weight: var(--agt-fw-semibold);
+  font-size: var(--agt-text-body-medium);
+  letter-spacing: -0.005em;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Logo: keep at native size, tight against the title. Drop the right
+   padding so the product name sits flush next to the icon. */
+.md-header__button.md-logo {
+  margin: 0;
+  padding: 0.375rem 0 0.375rem 0.375rem;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* The site title acts as part of the home link — make it look clickable.
+   A small left gap keeps the text from touching the icon. */
+.md-header__title {
+  cursor: pointer;
+  margin-left: 0.375rem !important;
+}
+
+/* Header content (logo, title, search input, icons) inherits text color */
+.md-header__title,
+.md-header__topic,
+.md-header__button,
+.md-header__option {
+  color: var(--mslearn-text);
+}
+
+/*
+ * Palette toggle: Material renders one <label> per palette entry inside a
+ * single <form.md-header__option>; only the label for the *next* scheme is
+ * visible at a time — this is built-in Material behavior, no override needed.
+ */
+
+/*
+ * Hide the redundant mobile search trigger (<label for="__search">) at
+ * widths where the search input is already shown inline. Without this you
+ * get a duplicate magnifier icon next to the search field.
+ * High specificity + !important so the IconButton block can't re-show it.
+ */
+@media screen and (min-width: 60em) {
+  .md-header .md-header__inner .md-header__button[for="__search"] {
+    display: none !important;
+  }
+}
+
+/*
+ * Hide the drawer toggle (hamburger) only when the desktop tab nav is
+ * actually showing. Material's tabs surface at >= 76.25em, so below that
+ * we MUST keep the hamburger visible — otherwise users on tablet/narrow-
+ * desktop widths have no way to reach the navigation.
+ */
+@media screen and (min-width: 76.25em) {
+  .md-header .md-header__inner .md-header__button[for="__drawer"] {
+    display: none !important;
+  }
+}
+
+/*
+ * Force the logo + title to render on the left at desktop widths.
+ * Material hides the logo at < 76.25em by default.
+ */
+@media screen and (min-width: 60em) {
+  .md-header__button.md-logo {
+    display: inline-flex !important;
+  }
+  .md-header__title {
+    display: flex !important;
+    align-items: center;
+    flex: 0 0 auto;
+    min-width: 0;
+    margin-left: 0;
+  }
+  /* Material stacks site title + page title with absolute positioning;
+     show only the site title and let it flow as inline text. */
+  .md-header__title .md-header__ellipsis {
+    position: relative;
+    height: auto;
+    width: auto;
+  }
+  .md-header__title .md-header__topic {
+    position: relative;
+    opacity: 1 !important;
+    transform: none !important;
+    pointer-events: auto;
+    white-space: nowrap;
+    font-size: var(--agt-text-body-medium);
+    font-weight: var(--agt-fw-semibold);
+    letter-spacing: -0.005em;
+  }
+  /* Hide the page-title topic (second one) — keep only site title */
+  .md-header__title .md-header__topic + .md-header__topic {
+    display: none;
+  }
+}
+
+/*
+ * Header item layout order (flex):
+ *   logo → title → search → repo info → palette toggle → language switcher
+ * The search expands to fill the gap between title and repo info.
+ */
+@media screen and (min-width: 60em) {
+  .md-header__inner > .md-header__button[for="__drawer"] { order: -1; flex: 0 0 auto; }
+  .md-header__inner > .md-header__button.md-logo { order: 0; flex: 0 0 auto; }
+  .md-header__inner > .md-header__title         { order: 1; flex: 0 0 auto; }
+  /* True center: take the search out of the flex row and pin it to the
+     horizontal center of the header. The flex layout decides where the
+     left cluster (logo/title) and right cluster (repo/options) sit, and
+     the search overlays the middle without being shoved off-center by
+     uneven side widths. */
+  .md-header__inner {
+    position: relative;
+  }
+  .md-header__inner > .md-search                {
+    order: 2;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(380px, 36%);
+    margin: 0 !important;
+    z-index: 1;
+  }
+  /* Reserve room on each side so the left/right clusters never collide
+     with the centered search input. `margin-left: auto` on the first
+     right-side item pushes the whole right cluster (source + options)
+     to the trailing edge of the header. */
+  .md-header__inner > .md-header__title         { max-width: calc(50% - 260px); }
+  .md-header__inner > .md-header__source        {
+    order: 3;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(50% - 260px);
+    margin-left: auto !important;
+  }
+  .md-header__inner > .md-header__option        { order: 4; flex: 0 0 auto; }
+}
+
+/*
+ * Respect Material's runtime `hidden` attribute on header buttons. Material
+ * uses it to toggle the active palette icon; without this our IconButton
+ * `display: inline-flex` rule overrides it and both icons render.
+ */
+.md-header__button[hidden],
+.md-header__option[hidden],
+.md-header__option label[hidden] {
+  display: none !important;
+}
+
+.md-search__input {
+  background-color: var(--mslearn-surface);
+  color: var(--mslearn-text);
+}
+
+.md-search__input::placeholder {
+  color: var(--mslearn-text-muted);
+}
+
+
+/* ==========================================================================
+   5. Navigation Tabs  —  flush with header, single hairline divider
    ========================================================================== */
 
 .md-tabs {
-  background-color: var(--md-primary-fg-color);
+  background-color: var(--md-default-bg-color);
+  color: var(--mslearn-text);
+  border-bottom: 1px solid var(--mslearn-border);
+  box-shadow: none;
+}
+
+/* Tabs list spacing is set above (centered + 1rem horizontal gutter)
+   alongside the header inner so both stay aligned. */
+
+.md-tabs__item {
+  height: 44px;
+  padding: 0;
+}
+
+.md-tabs__link {
+  color: var(--mslearn-text-muted);
+  opacity: 1;
+  margin: 0;
+  padding: 0 0.875rem;
+  font-size: var(--agt-text-body-medium);
+  font-weight: var(--agt-fw-medium);
+  height: 44px;
+  line-height: 44px;
+  border-bottom: 2px solid transparent;
+  transition: color 80ms ease, border-color 80ms ease;
+}
+
+.md-tabs__link:hover {
+  color: var(--mslearn-text);
+  border-bottom-color: transparent;
 }
 
 .md-tabs__link--active,
-.md-tabs__link:hover {
-  border-bottom: 2px solid #FFFFFF;
+.md-tabs__item--active > .md-tabs__link {
+  color: var(--mslearn-text);
+  border-bottom: 2px solid var(--md-primary-fg-color);
+  font-weight: 500;
 }
 
 
@@ -145,19 +523,361 @@ html {
    6. Sidebar Navigation
    ========================================================================== */
 
+/* Constrain page-level grid so left/right rails align with the header. */
+.md-grid {
+  max-width: 76rem;          /* ~1216px, GitHub Primer container width */
+}
+
+.md-main__inner {
+  margin-top: 1.25rem;
+}
+
+/* Left & right rails: subtle background + rounded scroll container, no harsh border */
+.md-sidebar {
+  padding-top: 1.25rem;
+}
+
+.md-sidebar--primary {
+  background-color: transparent;
+}
+
 .md-sidebar__scrollwrap {
-  border-right: 1px solid var(--mslearn-border);
+  border-right: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mslearn-border) transparent;
 }
 
-.md-nav__link {
-  font-size: 0.8rem;
+.md-sidebar__scrollwrap::-webkit-scrollbar {
+  width: 6px;
 }
 
-.md-nav__link--active {
+.md-sidebar__scrollwrap::-webkit-scrollbar-thumb {
+  background-color: var(--mslearn-border);
+  border-radius: 3px;
+}
+
+/*
+ * Primary nav (left rail) — Primer NavList
+ * https://primer.style/product/components/nav-list/
+ *
+ * Tokens (from primer/primitives v8 — light scheme):
+ *   row text          : fg.default          #1f2328
+ *   row text muted    : fg.muted            #59636e
+ *   row hover bg      : canvas.subtle       #f6f8fa
+ *   row active bg     : actionListItem.default.activeBg  rgba(208,215,222,0.48)
+ *   accent rail       : accent.fg           #0969da  (we override to brand purple)
+ *   group heading     : fg.muted, 12px, 600, no uppercase
+ *   item radius       : 6px
+ *   item padding      : 6px 12px            (Primer uses 8px; +4px feels right at site scale)
+ *   leading visual gap: 8px
+ */
+
+/* Group / section headings (Getting Started, Packages, ...) */
+.md-nav__title {
+  font-size: 12px;
   font-weight: 600;
-  color: var(--md-primary-fg-color) !important;
-  border-left: 3px solid var(--md-primary-fg-color);
-  padding-left: 0.6rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--mslearn-text-muted);
+  padding: 6px 12px;
+  margin: 12px 0 4px;
+  line-height: 1.4;
+}
+
+/* First section heading: no top margin */
+.md-nav--primary > .md-nav__list > .md-nav__item:first-child > .md-nav__title,
+.md-nav--primary > .md-nav__title:first-child {
+  margin-top: 0;
+}
+
+/*
+ * Hide every section/group title at the top of the primary nav.
+ *
+ * - Level-0 (`.md-nav--primary > .md-nav__title`) is Material's drawer/lifted
+ *   header that combines the site logo with the brand name. The page header
+ *   already shows that brand, so repeating it here just clutters the rail
+ *   (and on mobile produces the awkward overlapping "logo + Governance
+ *   Toolkit" stack).
+ * - Level-1 / Level-2 are the section captions Material renders above
+ *   nested groups; they duplicate the row that owns the group.
+ *
+ * Result: the rail starts directly with the first nav row.
+ *
+ * IMPORTANT: desktop-only. In the mobile/tablet drawer (< 76.25em) these
+ * titles double as the drawer header and the per-section BACK buttons, so
+ * hiding them there strands the user inside a section with no way back to
+ * the top-level list. Keep them visible in drawer mode.
+ */
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary > .md-nav__title,
+  .md-nav--primary .md-nav[data-md-level="1"] > .md-nav__title,
+  .md-nav--primary .md-nav[data-md-level="2"] > .md-nav__title {
+    display: none !important;
+  }
+}
+
+/*
+ * With `navigation.sections` + `navigation.tabs`, when you're inside a tab
+ * Material "lifts" the active section so its children become the visible
+ * sidebar list. The active section's own row (e.g. "Packages") still
+ * renders at the top of the lifted nav, where it duplicates the active
+ * top-tab AND the page H1. Hide it so the sidebar starts straight at the
+ * first child row ("Overview", "Agent OS", ...).
+ *
+ * IMPORTANT: only do this at desktop widths where the tab row actually
+ * renders the section name. In drawer/hamburger mode (< 76.25em) there is
+ * no tab row, so hiding the active section would make it unreachable —
+ * keep it visible there.
+ *
+ * Targets the `<label class="md-nav__link">` that toggles a nested group
+ * for the active top-level section in the lifted primary nav.
+ */
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary.md-nav--lifted
+    > .md-nav__list
+    > .md-nav__item--active
+    > .md-nav__link,
+  .md-nav--primary
+    > .md-nav__list
+    > .md-nav__item--section.md-nav__item--active
+    > .md-nav__link {
+    display: none !important;
+  }
+}
+
+/* Nav rows — Primer NavList.Item */
+.md-nav__link {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--mslearn-text);
+  padding: 6px 12px !important;
+  border-radius: 6px;
+  margin: 2px 0;
+  position: relative;
+  transition: background-color 80ms linear, color 80ms linear;
+}
+
+.md-nav__link:hover {
+  background-color: var(--mslearn-surface-subtle, #f6f8fa);
+  color: var(--mslearn-text);
+}
+
+.md-nav__link:focus-visible {
+  outline: 2px solid var(--md-primary-fg-color);
+  outline-offset: -2px;
+}
+
+/*
+ * Active item — Primer aria-current=page styling.
+ *   subtle filled bg + 4px rounded left rail in brand purple, semibold text.
+ */
+.md-nav__link--active,
+.md-nav__item--active > .md-nav__link {
+  font-weight: 600;
+  color: var(--mslearn-text) !important;
+  background-color: rgba(208, 215, 222, 0.48);
+}
+
+.md-nav__link--active::before,
+.md-nav__item--active > .md-nav__link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 6px;
+  background-color: var(--md-primary-fg-color);
+}
+
+/* Dark scheme — swap hover/active bg to canvas.subtle/overlay equivalents */
+[data-md-color-scheme="slate"] .md-nav__link:hover {
+  background-color: rgba(177, 186, 196, 0.12);
+}
+[data-md-color-scheme="slate"] .md-nav__link--active,
+[data-md-color-scheme="slate"] .md-nav__item--active > .md-nav__link {
+  background-color: rgba(177, 186, 196, 0.16);
+  color: var(--mslearn-text) !important;
+}
+
+/* Nested sub-nav indentation — Primer indents sub-items 16px from parent */
+.md-nav__item .md-nav .md-nav__link {
+  padding-left: 28px;
+}
+.md-nav__item .md-nav .md-nav .md-nav__link {
+  padding-left: 44px;
+}
+
+/* Expand/collapse caret on nested items — render Primer-style chevron-down */
+.md-nav__icon {
+  color: var(--mslearn-text-muted);
+}
+.md-nav__item--nested > .md-nav__link > .md-nav__icon::after,
+label.md-nav__link > .md-nav__icon::after {
+  width: 16px;
+  height: 16px;
+}
+
+/*
+ * Mobile/tablet drawer: flatten to a single first-level list (GitHub-style).
+ *
+ * With navigation.sections + navigation.tabs, Material's drawer renders each
+ * top-level section as a <label> that slides to a nested child panel. That
+ * multi-level sliding UX clips content and is confusing on small screens, so
+ * we collapse it to ONE flat list of the top-level sections (Home, Getting
+ * Started, Packages, ...). Each row navigates straight to that section's
+ * landing page (wired in site.js -> wireDrawerFlatNav). Desktop, which uses
+ * the top tab bar + per-section sidebar, is intentionally left untouched.
+ */
+@media screen and (max-width: 76.1875em) {
+  /* Drop every nested child panel so only the top-level rows remain. */
+  .md-sidebar--primary .md-nav--primary .md-nav__item--nested > .md-nav {
+    display: none !important;
+  }
+
+  /* No expand/collapse chevron — the rows are plain links now. */
+  .md-sidebar--primary
+    .md-nav--primary
+    > .md-nav__list
+    > .md-nav__item
+    > .md-nav__link
+    .md-nav__icon {
+    display: none !important;
+  }
+
+  /* Full-width, comfortable rows like the GitHub global navigation panel. */
+  .md-sidebar--primary
+    .md-nav--primary
+    > .md-nav__list
+    > .md-nav__item
+    > .md-nav__link {
+    cursor: pointer;
+    padding: 10px 16px !important;
+    margin: 0;
+    border-radius: 0;
+    font-size: 15px;
+  }
+}
+
+/* Right rail (Table of Contents) */
+.md-nav--secondary .md-nav__title {
+  display: none;             /* drop the redundant "Table of contents" label */
+}
+
+.md-nav--secondary .md-nav__link {
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.25rem 0.6rem;
+  margin: 0;
+  color: var(--mslearn-text-muted);
+}
+
+.md-nav--secondary .md-nav__link:hover {
+  background-color: transparent;
+  color: var(--md-primary-fg-color);
+  border-left-color: var(--mslearn-border);
+}
+
+.md-nav--secondary .md-nav__link--active {
+  background-color: transparent;
+  border-left: 2px solid var(--md-primary-fg-color);
+  border-radius: 0;
+}
+
+.md-nav--secondary .md-nav__link--active::before {
+  display: none;
+}
+
+
+/*
+ * Drawer / hamburger menu — Primer overlay surface
+ * https://primer.style/product/components/nav-list/
+ *
+ * Material renders the primary nav as a slide-out drawer below 76.25em.
+ * Style it as a Primer overlay panel:
+ *   - 280px wide white surface, soft right-edge shadow instead of a hard rule
+ *   - 20px horizontal gutter, 16px top/bottom
+ *   - hairline divider between every top-level row (only at root level —
+ *     nested rows keep the rounded NavList look)
+ *   - drawer's purple "lifted" header is removed (see hide rule above)
+ */
+[dir] .md-sidebar--primary {
+  /* When the drawer slides in, give it a white canvas + soft shadow */
+}
+
+@media screen and (max-width: 76.1875em) {
+  .md-sidebar--primary {
+    width: 17.5rem;                           /* 280px */
+    background-color: var(--mslearn-bg, #FFFFFF);
+    box-shadow: 1px 0 0 var(--mslearn-border),
+                4px 0 16px rgba(31, 35, 40, 0.12);
+  }
+
+  /*
+   * Drawer slide must be width-independent.
+   *
+   * Material hides the drawer with a fixed `left: -12.1rem` and opens it with
+   * `translateX(12.1rem)` — both tied to its default 12.1rem width. Because we
+   * widened the drawer (17.5rem), that fixed offset no longer fully hides it,
+   * leaving a ~108px sliver poking out when the menu is "closed".
+   *
+   * Pin the drawer to `left: 0` and drive it purely off a percentage
+   * transform so it is COMPLETELY hidden when closed (translateX(-100%)) and
+   * sits fully on-screen at its real width when open (translateX(0)) — no
+   * sliver, no half-width state.
+   */
+  [dir="ltr"] .md-sidebar--primary {
+    left: 0;
+    right: auto;
+    transform: translateX(-100%);
+  }
+  [dir="rtl"] .md-sidebar--primary {
+    right: 0;
+    left: auto;
+    transform: translateX(100%);
+  }
+  [data-md-toggle="drawer"]:checked ~ .md-container .md-sidebar--primary {
+    transform: translateX(0);
+  }
+
+  [data-md-color-scheme="slate"] .md-sidebar--primary {
+    background-color: var(--mslearn-surface, #161b22);
+    box-shadow: 1px 0 0 rgba(240, 246, 252, 0.1),
+                4px 0 16px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Inner gutter so rows don't kiss the drawer edges */
+  .md-sidebar--primary .md-sidebar__scrollwrap {
+    padding: 16px 16px 24px;
+  }
+
+  /* Hairline divider between every top-level item (Primer ActionList
+     "show-dividers" pattern). Apply only to direct children of the root
+     <ul>, not to nested groups. */
+  .md-sidebar--primary .md-nav--primary > .md-nav__list > .md-nav__item {
+    border-bottom: 1px solid var(--mslearn-border);
+  }
+  .md-sidebar--primary .md-nav--primary > .md-nav__list > .md-nav__item:last-child {
+    border-bottom: 0;
+  }
+
+  /* Slight extra row height in drawer mode for touch targets */
+  .md-sidebar--primary .md-nav__link {
+    padding: 10px 12px !important;
+    margin: 0;                                /* dividers handle separation */
+    border-radius: 0;
+  }
+
+  /* Active rail still works at this size */
+  .md-sidebar--primary .md-nav__link--active::before {
+    top: 8px;
+    bottom: 8px;
+  }
+
+  [data-md-color-scheme="slate"] .md-sidebar--primary .md-nav--primary > .md-nav__list > .md-nav__item {
+    border-bottom-color: rgba(240, 246, 252, 0.1);
+  }
 }
 
 
@@ -165,39 +885,120 @@ html {
    7. Content Area
    ========================================================================== */
 
+.md-content {
+  padding: 0 1.25rem;
+}
+
 .md-content__inner {
-  max-width: 900px;
+  max-width: 56rem;          /* ~896px, comfortable measure for prose */
+  margin: 0 auto;
   line-height: 1.7;
+  padding-top: 0.5rem;
+  padding-bottom: 3rem;      /* breathing room before the footer */
+}
+
+/* Material renders a zero-height ::before that normally adds the bottom
+   margin; collapse it so our explicit padding-bottom controls the spacing. */
+.md-content__inner::before {
+  display: none;
 }
 
 
 /* ==========================================================================
-   8. Tables
+   8. Tables  —  Primer DataTable style
+   https://primer.style/product/components/data-table/
    ========================================================================== */
 
+/*
+ * Wrapper: rounded container with single 1px border. border-collapse:separate
+ * is required so the outer border-radius clips cleanly. Inner separators are
+ * drawn as cell border-tops (Primer pattern).
+ */
 .md-typeset table:not([class]) {
+  display: table;
+  width: 100%;
   border: 1px solid var(--mslearn-border);
-  border-collapse: collapse;
-  font-size: 0.82rem;
-  display: block;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  border-radius: 6px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;       /* 13px, Primer table body */
+  line-height: 1.4;
+  margin: 1.25rem 0;
+  background-color: var(--md-default-bg-color);
+}
+
+/* For very wide tables, allow horizontal scroll without breaking the radius. */
+.md-typeset .md-typeset__scrollwrap,
+.md-typeset .md-typeset__table {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Header */
+.md-typeset table:not([class]) thead {
+  background-color: var(--mslearn-surface);
 }
 
 .md-typeset table:not([class]) th {
   background-color: var(--mslearn-surface);
+  color: var(--mslearn-text);
   font-weight: 600;
-  text-transform: none;
+  font-size: 0.75rem;          /* 12px, Primer table header */
   letter-spacing: 0;
-  border-bottom: 2px solid var(--md-primary-fg-color);
-}
-
-[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
-  background-color: #2A2A2E;
-}
-
-.md-typeset table:not([class]) td {
+  text-transform: none;
+  text-align: left;
+  padding: 0.5rem 0.75rem;     /* 8px 12px */
   border-bottom: 1px solid var(--mslearn-border);
+  white-space: nowrap;
+}
+
+/* Body cells */
+.md-typeset table:not([class]) td {
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  color: var(--mslearn-text);
+  border-bottom: 1px solid var(--mslearn-border);
+  border-top: none;
+}
+
+/* Strip the last row's bottom border so it doesn't double up with the wrapper */
+.md-typeset table:not([class]) tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Row hover (Primer pattern) */
+.md-typeset table:not([class]) tbody tr {
+  transition: background-color 80ms ease;
+}
+
+.md-typeset table:not([class]) tbody tr:hover {
+  background-color: var(--mslearn-surface);
+}
+
+/* Inline code inside cells: tighter padding so it doesn't dominate the row */
+.md-typeset table:not([class]) td code,
+.md-typeset table:not([class]) th code {
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  background-color: var(--mslearn-surface);
+  border: 1px solid var(--mslearn-border);
+  border-radius: 4px;
+}
+
+.md-typeset table:not([class]) tbody tr:hover td code,
+.md-typeset table:not([class]) tbody tr:hover th code {
+  background-color: var(--md-default-bg-color);
+}
+
+/* Dark mode tweaks */
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th,
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) thead {
+  background-color: var(--mslearn-surface);
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 
@@ -219,29 +1020,29 @@ html {
 .md-typeset details.note,
 .md-typeset .admonition.info,
 .md-typeset details.info {
-  border-left-color: #0078D4;
-  background-color: rgba(0, 120, 212, 0.04);
+  border-left-color: #0969da;
+  background-color: rgba(9, 105, 218, 0.04);
 }
 
 .md-typeset .admonition.note > .admonition-title,
 .md-typeset details.note > summary,
 .md-typeset .admonition.info > .admonition-title,
 .md-typeset details.info > summary {
-  background-color: rgba(0, 120, 212, 0.1);
+  background-color: rgba(9, 105, 218, 0.08);
 }
 
 [data-md-color-scheme="slate"] .md-typeset .admonition.note,
 [data-md-color-scheme="slate"] .md-typeset details.note,
 [data-md-color-scheme="slate"] .md-typeset .admonition.info,
 [data-md-color-scheme="slate"] .md-typeset details.info {
-  background-color: rgba(0, 120, 212, 0.08);
+  background-color: rgba(68, 147, 248, 0.08);
 }
 
 [data-md-color-scheme="slate"] .md-typeset .admonition.note > .admonition-title,
 [data-md-color-scheme="slate"] .md-typeset details.note > summary,
 [data-md-color-scheme="slate"] .md-typeset .admonition.info > .admonition-title,
 [data-md-color-scheme="slate"] .md-typeset details.info > summary {
-  background-color: rgba(0, 120, 212, 0.15);
+  background-color: rgba(68, 147, 248, 0.15);
 }
 
 /* ── Tip / Hint ── */
@@ -351,31 +1152,174 @@ html {
 
 /* ==========================================================================
    10. Code Blocks
-   ========================================================================== */
+   ==========================================================================
+   Theme-aware via --mslearn-code-bg / --mslearn-text variables:
+     light scheme  →  bg #f6f8fa, text #1f2328
+     dark  scheme  →  bg #151b23, text #e6edf3
+*/
 
-.md-typeset pre > code {
+.md-typeset pre > code,
+.md-typeset .highlight pre,
+.md-typeset .highlight pre > code,
+.md-typeset .codehilite pre,
+.md-typeset .codehilite pre > code {
   background-color: var(--mslearn-code-bg);
-  color: #D4D4D4;
+  color: var(--mslearn-text);
   border-radius: 6px;
-  font-size: 0.82rem;
+  font-size: var(--agt-text-body-medium);
   font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", monospace;
 }
 
-[data-md-color-scheme="default"] .md-typeset pre > code {
-  background-color: #1B1A19;
-  color: #D4D4D4;
+/* More breathing room inside the code surface (Primer uses 16px). */
+.md-typeset .highlight pre,
+.md-typeset .codehilite pre,
+.md-typeset pre > code {
+  padding: 16px 20px !important;
+  line-height: 1.55;
 }
 
+/* Inline `code` chips — surface bg, theme text */
 .md-typeset code {
   background-color: var(--mslearn-surface);
+  color: var(--mslearn-text);
   border-radius: 3px;
   padding: 0.15em 0.4em;
   font-size: 0.85em;
   font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", monospace;
 }
 
-[data-md-color-scheme="slate"] .md-typeset code {
-  background-color: #2A2A2E;
+/* Re-apply pre>code background so inline rule above doesn't override it */
+.md-typeset pre > code {
+  background-color: var(--mslearn-code-bg);
+  padding: 0;
+}
+
+/* Material's stock highlighter wraps tokens with .highlight; ensure the
+   wrapper itself is also theme-aware so the gutter/line-number column
+   matches the code surface. */
+.md-typeset .highlight,
+.md-typeset .codehilite {
+  background-color: var(--mslearn-code-bg);
+  border-radius: 6px;
+}
+
+/* Line-number gutter */
+.md-typeset .highlight .linenos,
+.md-typeset .codehilite .linenos {
+  color: var(--mslearn-text-muted);
+  background-color: transparent;
+  border-right: 0;
+}
+
+/* Pygments table-style line numbers (used when linenums: true). */
+.md-typeset .highlighttable .linenos {
+  padding: 16px 12px 16px 16px;
+  background-color: transparent;
+  border-right: 1px solid var(--mslearn-border);
+  user-select: none;
+}
+.md-typeset .highlighttable .linenos pre {
+  padding: 0 !important;
+  background: transparent;
+  color: var(--mslearn-text-muted);
+  font-size: var(--agt-text-body-medium);
+  line-height: 1.55;
+}
+.md-typeset .highlighttable .code {
+  padding: 0;
+}
+.md-typeset .highlighttable .code .highlight {
+  background-color: transparent;
+  border-radius: 0;
+}
+.md-typeset .highlighttable .code pre {
+  padding-left: 16px !important;
+}
+
+/*
+ * Copy-to-clipboard button — make it visible at rest (Primer IconButton),
+ * then bolder on hover with a styled tooltip.
+ * Material 9.7.6 markup: .md-code__nav > .md-code__button[data-md-type=copy]
+ *   The icon glyph is rendered via Material's own ::after rule with
+ *   mask-image: var(--md-code-copy-icon). Do NOT override ::after.
+ * Older markup:           .md-clipboard
+ */
+.md-typeset .md-code__nav {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+.md-typeset .md-clipboard,
+.md-typeset .md-code__button {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0;
+  background-color: var(--mslearn-surface) !important;
+  color: var(--mslearn-text) !important;
+  border: 1px solid var(--mslearn-border) !important;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 1;
+  transition: background-color 80ms linear, color 80ms linear,
+              border-color 80ms linear;
+}
+.md-typeset .md-clipboard:hover,
+.md-typeset .md-code__button:hover,
+.md-typeset .md-code__button.focus-visible {
+  background-color: var(--mslearn-bg) !important;
+  color: var(--md-primary-fg-color) !important;
+  border-color: var(--md-primary-fg-color) !important;
+}
+
+/*
+ * Tooltip — "Copy to clipboard" pill above the button on hover.
+ * Use ::before so we don't clobber Material's ::after icon mask.
+ */
+.md-typeset .highlight,
+.md-typeset .codehilite,
+.md-typeset .highlighttable {
+  position: relative;
+}
+.md-typeset .md-clipboard::before,
+.md-typeset .md-code__button::before {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  padding: 4px 8px;
+  background-color: #24292f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 80ms linear, transform 80ms linear;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.md-typeset .md-clipboard:hover::before,
+.md-typeset .md-clipboard:focus-visible::before,
+.md-typeset .md-code__button:hover::before,
+.md-typeset .md-code__button:focus-visible::before {
+  opacity: 1;
+  transform: translateY(0);
+}
+[data-md-color-scheme="slate"] .md-typeset .md-clipboard::before,
+[data-md-color-scheme="slate"] .md-typeset .md-code__button::before {
+  background-color: #6e7681;
+  color: #ffffff;
+}
+
+/* Reserve top-right space inside the code surface for the button. */
+.md-typeset pre[id^="__code"] > .md-code__content {
+  padding-right: 48px;
 }
 
 
@@ -425,151 +1369,414 @@ html {
 }
 
 .agt-card-title {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--agt-text-body-large);
+  font-weight: var(--agt-fw-semibold);
   margin: 0 0 0.35rem;
   display: block;
 }
 
 .agt-card-desc {
-  font-size: 0.82rem;
+  font-size: var(--agt-text-body-medium);
   color: var(--mslearn-text-muted);
   margin: 0;
-  line-height: 1.5;
+  line-height: var(--agt-lh-default);
   display: block;
 }
 
-/* ── Per-package card accent colors ── */
-.agt-card[data-pkg="os"]          { border-left: 3px solid #0E9AA7; }
-.agt-card[data-pkg="mesh"]        { border-left: 3px solid #7C3AED; }
-.agt-card[data-pkg="runtime"]     { border-left: 3px solid #EA580C; }
-.agt-card[data-pkg="sre"]         { border-left: 3px solid #DC2626; }
-.agt-card[data-pkg="compliance"]  { border-left: 3px solid #16A34A; }
-.agt-card[data-pkg="marketplace"] { border-left: 3px solid #4F46E5; }
-.agt-card[data-pkg="lightning"]   { border-left: 3px solid #D97706; }
-.agt-card[data-pkg="hypervisor"]  { border-left: 3px solid #1E40AF; }
+/*
+ * Per-package accent colors — Primer "scale" palette.
+ *   light scheme uses scale.*.5 (foreground at 600-level)
+ *   dark  scheme uses scale.*.4 (foreground at 400-level for AA contrast on dark bg)
+ *   https://primer.style/foundations/primitives/color
+ */
+.agt-card[data-pkg="os"]          { border-left: 3px solid #0969da; } /* accent.blue */
+.agt-card[data-pkg="mesh"]        { border-left: 3px solid #8250df; } /* done.purple */
+.agt-card[data-pkg="runtime"]     { border-left: 3px solid #bc4c00; } /* severe.orange */
+.agt-card[data-pkg="sre"]         { border-left: 3px solid #cf222e; } /* danger.red */
+.agt-card[data-pkg="compliance"]  { border-left: 3px solid #1a7f37; } /* success.green */
+.agt-card[data-pkg="marketplace"] { border-left: 3px solid #bf3989; } /* sponsors.pink */
+.agt-card[data-pkg="lightning"]   { border-left: 3px solid #9a6700; } /* attention.yellow */
+.agt-card[data-pkg="hypervisor"]  { border-left: 3px solid #c4432b; } /* scale.coral.5 */
 
-.agt-card[data-pkg="os"]:hover          { border-color: #0E9AA7; }
-.agt-card[data-pkg="mesh"]:hover        { border-color: #7C3AED; }
-.agt-card[data-pkg="runtime"]:hover     { border-color: #EA580C; }
-.agt-card[data-pkg="sre"]:hover         { border-color: #DC2626; }
-.agt-card[data-pkg="compliance"]:hover  { border-color: #16A34A; }
-.agt-card[data-pkg="marketplace"]:hover { border-color: #4F46E5; }
-.agt-card[data-pkg="lightning"]:hover   { border-color: #D97706; }
-.agt-card[data-pkg="hypervisor"]:hover  { border-color: #1E40AF; }
+.agt-card[data-pkg="os"]:hover          { border-color: #0969da; }
+.agt-card[data-pkg="mesh"]:hover        { border-color: #8250df; }
+.agt-card[data-pkg="runtime"]:hover     { border-color: #bc4c00; }
+.agt-card[data-pkg="sre"]:hover         { border-color: #cf222e; }
+.agt-card[data-pkg="compliance"]:hover  { border-color: #1a7f37; }
+.agt-card[data-pkg="marketplace"]:hover { border-color: #bf3989; }
+.agt-card[data-pkg="lightning"]:hover   { border-color: #9a6700; }
+.agt-card[data-pkg="hypervisor"]:hover  { border-color: #c4432b; }
 
-.agt-card[data-pkg="os"]          .agt-card-title { color: #0E9AA7; }
-.agt-card[data-pkg="mesh"]        .agt-card-title { color: #7C3AED; }
-.agt-card[data-pkg="runtime"]     .agt-card-title { color: #EA580C; }
-.agt-card[data-pkg="sre"]         .agt-card-title { color: #DC2626; }
-.agt-card[data-pkg="compliance"]  .agt-card-title { color: #16A34A; }
-.agt-card[data-pkg="marketplace"] .agt-card-title { color: #4F46E5; }
-.agt-card[data-pkg="lightning"]   .agt-card-title { color: #D97706; }
-.agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #1E40AF; }
+.agt-card[data-pkg="os"]          .agt-card-title { color: #0969da; }
+.agt-card[data-pkg="mesh"]        .agt-card-title { color: #8250df; }
+.agt-card[data-pkg="runtime"]     .agt-card-title { color: #bc4c00; }
+.agt-card[data-pkg="sre"]         .agt-card-title { color: #cf222e; }
+.agt-card[data-pkg="compliance"]  .agt-card-title { color: #1a7f37; }
+.agt-card[data-pkg="marketplace"] .agt-card-title { color: #bf3989; }
+.agt-card[data-pkg="lightning"]   .agt-card-title { color: #9a6700; }
+.agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #c4432b; }
 
-[data-md-color-scheme="slate"] .agt-card[data-pkg="os"]          .agt-card-title { color: #2DD4BF; }
-[data-md-color-scheme="slate"] .agt-card[data-pkg="mesh"]        .agt-card-title { color: #A78BFA; }
-[data-md-color-scheme="slate"] .agt-card[data-pkg="runtime"]     .agt-card-title { color: #FB923C; }
-[data-md-color-scheme="slate"] .agt-card[data-pkg="sre"]         .agt-card-title { color: #F87171; }
-[data-md-color-scheme="slate"] .agt-card[data-pkg="compliance"]  .agt-card-title { color: #4ADE80; }
-[data-md-color-scheme="slate"] .agt-card[data-pkg="marketplace"] .agt-card-title { color: #818CF8; }
-[data-md-color-scheme="slate"] .agt-card[data-pkg="lightning"]   .agt-card-title { color: #FBBF24; }
-[data-md-color-scheme="slate"] .agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #60A5FA; }
+/* Dark scheme: shift to the scale.*.4 step for adequate contrast on dark bg */
+[data-md-color-scheme="slate"] .agt-card[data-pkg="os"]          .agt-card-title { color: #4493f8; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="mesh"]        .agt-card-title { color: #a371f7; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="runtime"]     .agt-card-title { color: #db6d28; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="sre"]         .agt-card-title { color: #f85149; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="compliance"]  .agt-card-title { color: #3fb950; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="marketplace"] .agt-card-title { color: #db61a2; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="lightning"]   .agt-card-title { color: #d29922; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="hypervisor"]  .agt-card-title { color: #f78166; }
+
+[data-md-color-scheme="slate"] .agt-card[data-pkg="os"]          { border-left-color: #4493f8; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="mesh"]        { border-left-color: #a371f7; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="runtime"]     { border-left-color: #db6d28; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="sre"]         { border-left-color: #f85149; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="compliance"]  { border-left-color: #3fb950; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="marketplace"] { border-left-color: #db61a2; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="lightning"]   { border-left-color: #d29922; }
+[data-md-color-scheme="slate"] .agt-card[data-pkg="hypervisor"]  { border-left-color: #f78166; }
 
 
 /* ==========================================================================
    12. Hero Section
+   ==========================================================================
+   Clean Primer canvas with a tiled SVG dot pattern (inspired by
+   magicui.design DotPattern). The dot grid sits behind the content and is
+   masked with a radial gradient so it fades softly to the edges. Text and
+   buttons use default Primer color tokens — no inverted dark surface.
    ========================================================================== */
 
 .agt-hero {
-  background: linear-gradient(135deg, #1B2838 0%, #0D3B66 40%, #1E3A5F 70%, #2A1B3D 100%);
-  color: #FFFFFF;
-  padding: 3rem 2rem;
-  border-radius: 8px;
-  margin-bottom: 2rem;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin: -1.2rem -1.2rem 2.5rem;
+  padding: 5rem 2rem 4rem;
+  border-radius: 0;
   text-align: center;
+  color: var(--mslearn-text);
+  background-color: var(--mslearn-bg, #FFFFFF);
 }
 
 [data-md-color-scheme="slate"] .agt-hero {
-  background: linear-gradient(135deg, #0F1923 0%, #0A2847 40%, #15293F 70%, #1A1128 100%);
+  color: var(--mslearn-text);
+  background-color: var(--mslearn-bg, #0d1117);
+}
+
+/* Dot pattern
+   ----------------------------------------------------------------------
+   Drawn as an inline SVG <pattern> via background-image. The gradient
+   mask fades dots toward the edges (Primer canvas-subtle feel). */
+.agt-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><circle cx='1' cy='1' r='1' fill='%23afb8c1' opacity='0.55'/></svg>");
+  background-size: 20px 20px;
+  background-position: 0 0;
+  -webkit-mask-image: radial-gradient(ellipse 65% 60% at 50% 45%, #000 35%, transparent 80%);
+          mask-image: radial-gradient(ellipse 65% 60% at 50% 45%, #000 35%, transparent 80%);
+}
+
+[data-md-color-scheme="slate"] .agt-hero::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><circle cx='1' cy='1' r='1' fill='%2330363d' opacity='1'/></svg>");
+}
+
+.agt-hero-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 960px;
+  margin: 0 auto;
 }
 
 .agt-hero h1,
 .agt-hero h2,
 .agt-hero p {
-  color: #FFFFFF;
+  color: var(--mslearn-text);
   border: none;
   margin-top: 0;
 }
 
 .agt-hero h1 {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
+  font-size: 54px;
+  font-weight: var(--agt-fw-semibold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 auto 1rem;
+  max-width: 18ch;
 }
 
+/* Hide the toc-plugin pilcrow anchor (¶) on the hero headline. */
+.agt-hero h1 .headerlink,
+.agt-hero h1 a.headerlink {
+  display: none !important;
+}
+
+.agt-hero-subtitle,
 .agt-hero p {
-  font-size: 1rem;
-  opacity: 0.92;
+  font-size: var(--agt-text-subtitle);
+  line-height: 1.55;
+  color: var(--mslearn-text-muted);
   max-width: 640px;
-  margin-left: auto;
-  margin-right: auto;
+  margin: 0 auto 2rem;
 }
 
-.agt-hero-badges {
+.agt-hero-subtitle code {
+  background: var(--mslearn-surface, #f6f8fa);
+  border: 1px solid var(--mslearn-border);
+  color: var(--mslearn-text);
+  padding: 0.05em 0.45em;
+  border-radius: 5px;
+  font-size: 0.92em;
+}
+
+/* Primary / secondary CTA pair (Primer Button) */
+.agt-hero-cta {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  gap: 0.75rem;
+  margin: 0 auto 2.5rem;
+}
+
+.agt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  margin-top: 1rem;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: background-color 80ms cubic-bezier(0.33, 1, 0.68, 1),
+              border-color 80ms cubic-bezier(0.33, 1, 0.68, 1),
+              box-shadow 80ms cubic-bezier(0.33, 1, 0.68, 1),
+              color 80ms cubic-bezier(0.33, 1, 0.68, 1);
 }
 
-.agt-hero-badges img {
-  height: 20px;
+/* Lock hero CTA label to 14px — wins over the later generic
+   `.agt-btn { font-size: 0.875rem }` in Section 20 (root font is scaled). */
+.agt-hero .agt-btn {
+  font-size: 14px;
 }
 
+/* Secondary / default Primer button — subtle elevation + inset highlight.
+   `.agt-hero` prefix gives this enough specificity to win over the
+   generic `.agt-btn` base in Section 20 below. */
+.agt-hero .agt-btn-ghost {
+  background: #f6f8fa;
+  color: #24292f;
+  border-color: rgba(31, 35, 40, 0.15);
+  box-shadow:
+    0 1px 0 rgba(31, 35, 40, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.agt-hero .agt-btn-ghost:hover {
+  background: #f3f4f6;
+  border-color: rgba(31, 35, 40, 0.15);
+  color: #24292f;
+  text-decoration: none;
+}
+
+.agt-hero .agt-btn-ghost:active {
+  background: #ebecf0;
+  border-color: rgba(31, 35, 40, 0.15);
+  box-shadow: inset 0 1px 0 rgba(208, 215, 222, 0.20);
+  transition: none;
+}
+
+[data-md-color-scheme="slate"] .agt-hero .agt-btn-ghost {
+  background: #21262d;
+  color: #c9d1d9;
+  border-color: rgba(240, 246, 252, 0.1);
+  box-shadow: 0 0 transparent, 0 0 transparent;
+}
+[data-md-color-scheme="slate"] .agt-hero .agt-btn-ghost:hover {
+  background: #30363d;
+  border-color: #8b949e;
+  color: #c9d1d9;
+}
+
+/* Primary Primer button — brand purple with Primer-style elevation */
+.agt-hero .agt-btn-solid {
+  background: var(--md-primary-fg-color);
+  color: #FFFFFF;
+  border-color: rgba(31, 35, 40, 0.15);
+  box-shadow:
+    0 1px 0 rgba(31, 35, 40, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.agt-hero .agt-btn-solid:hover {
+  background: var(--md-primary-fg-color--dark, #6f42c1);
+  border-color: rgba(31, 35, 40, 0.15);
+  color: #FFFFFF;
+  text-decoration: none;
+}
+
+.agt-hero .agt-btn-solid:active {
+  background: var(--md-primary-fg-color--dark, #6f42c1);
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.15);
+  transition: none;
+}
+
+[data-md-color-scheme="slate"] .agt-hero .agt-btn-solid {
+  border-color: rgba(240, 246, 252, 0.1);
+}
+
+.agt-hero .agt-btn:focus-visible {
+  outline: 2px solid var(--md-primary-fg-color);
+  outline-offset: 2px;
+}
+
+/* Hero install snippet — real fenced code block so Material auto-injects
+   the clipboard copy button. We constrain width and center the wrapper so
+   it visually matches the rest of the hero. */
+.agt-hero-install {
+  max-width: min(560px, 100%);
+  width: 100%;
+  margin: 0 auto 2.25rem;
+  text-align: left;
+}
+
+.agt-hero-install .highlight,
+.agt-hero-install pre {
+  margin: 0 !important;
+  border-radius: 10px;
+  border: 1px solid var(--mslearn-border);
+  box-shadow: 0 1px 0 rgba(31, 35, 40, 0.04);
+  background: var(--mslearn-surface, #f6f8fa) !important;
+}
+
+.agt-hero-install pre > code {
+  background: transparent !important;
+  font-family: var(--agt-font-mono);
+  font-size: 14px;
+  color: var(--mslearn-text);
+  padding: 14px 16px !important;
+  display: block;
+}
+
+/* Make Material's modern code-nav copy button always visible on the
+   hero snippet. Material's newer template renders
+   `<nav class="md-code__nav"><button class="md-code__button" data-md-type="copy">`
+   instead of the legacy `.md-clipboard`. */
+.agt-hero-install .md-code__nav,
+.agt-hero-install .md-code__button,
+.agt-hero-install .md-clipboard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  color: var(--mslearn-text-muted);
+}
+
+/* Center the masked copy glyph within the 32px button. */
+.agt-hero-install .md-code__button::after,
+.agt-hero-install .md-clipboard::after {
+  margin: 0;
+}
+.agt-hero-install .md-code__button:hover,
+.agt-hero-install .md-clipboard:hover {
+  color: var(--md-primary-fg-color);
+}
+
+[data-md-color-scheme="slate"] .agt-hero-install .highlight,
+[data-md-color-scheme="slate"] .agt-hero-install pre {
+  background: rgba(177, 186, 196, 0.06) !important;
+  border-color: rgba(240, 246, 252, 0.1);
+}
+
+/* Three outline action cards */
+.agt-hero-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  max-width: 720px;
+  margin: 0 auto 3rem;
+}
+
+.agt-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 10px;
+  background: var(--mslearn-bg, #FFFFFF);
+  border: 1px solid var(--mslearn-border);
+  color: var(--mslearn-text);
+  text-decoration: none;
+  font-weight: var(--agt-fw-semibold);
+  font-size: var(--agt-text-body-large);
+  transition: background-color 120ms ease, border-color 120ms ease,
+              transform 120ms ease, box-shadow 120ms ease;
+}
+
+.agt-action:hover {
+  background: var(--mslearn-surface, #f6f8fa);
+  border-color: var(--md-primary-fg-color);
+  color: var(--mslearn-text);
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(31, 35, 40, 0.04);
+}
+
+[data-md-color-scheme="slate"] .agt-action {
+  background: transparent;
+  border-color: rgba(240, 246, 252, 0.16);
+  color: var(--mslearn-text);
+}
+[data-md-color-scheme="slate"] .agt-action:hover {
+  background: rgba(177, 186, 196, 0.08);
+  border-color: var(--md-primary-fg-color);
+}
+
+.agt-action svg { color: var(--mslearn-text-muted); flex: none; }
+
+.agt-action:focus-visible {
+  outline: 2px solid var(--md-primary-fg-color);
+  outline-offset: 2px;
+}
+
+/* Stats row */
 .agt-stats {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 2rem;
-  margin-top: 1.5rem;
+  gap: 2.5rem 3rem;
+  margin: 0 auto;
 }
 
 .agt-stat {
   text-align: center;
+  min-width: 5rem;
 }
 
 .agt-stat-value {
   display: block;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #FFFFFF;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: var(--agt-fw-light);
+  line-height: 1.05;
+  color: var(--mslearn-text);
+  letter-spacing: -0.01em;
 }
 
 .agt-stat-label {
   display: block;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* Hero badge links */
-.agt-hero-badges a {
-  display: inline-block;
-  background: rgba(255, 255, 255, 0.15);
-  color: #FFFFFF;
-  padding: 0.5rem 1.2rem;
-  border-radius: 4px;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 0.85rem;
-  transition: background 0.2s;
-}
-
-.agt-hero-badges a:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: #FFFFFF;
+  margin-top: 0.35rem;
+  font-size: var(--agt-text-body-medium);
+  font-weight: var(--agt-fw-normal);
+  color: var(--mslearn-text-muted);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* Section spacing */
@@ -673,29 +1880,291 @@ html {
 
 /* ==========================================================================
    15. Footer
-   ========================================================================== */
+   ==========================================================================
+   - Footer background matches the page background (no separate dark bar)
+   - Hide Material's prev/next nav block; keep only the copyright line
+   - Center the copyright text and add a top divider for separation
+*/
 
 .md-footer {
-  background-color: var(--mslearn-footer-bg);
+  background-color: var(--md-default-bg-color);
+  color: var(--mslearn-text-muted);
+  border-top: 1px solid var(--mslearn-border);
+}
+
+/* Hide the prev/next page nav block. */
+.md-footer__inner {
+  display: none;
+}
+
+.md-footer-meta {
+  background-color: var(--md-default-bg-color);
+  color: var(--mslearn-text-muted);
+}
+
+.md-footer-meta__inner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  position: relative;
+}
+
+.md-copyright {
+  width: 100%;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--mslearn-text-muted);
+  text-align: center;
+}
+
+.md-copyright__highlight {
+  color: var(--mslearn-text-muted);
+}
+
+/* Hide the "Made with Material for MkDocs" generator line and source file. */
+.md-footer-meta .md-footer-meta__generator,
+.md-footer-meta .md-source-file {
+  display: none;
+}
+
+/* GitHub icon pinned to the right of the footer; copyright stays centered. */
+.md-footer-meta .md-social {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.md-footer-meta .md-social__link {
+  width: 1.6rem;
+  height: 1.6rem;
+  color: var(--mslearn-text-muted);
+  transition: color 0.2s ease;
+}
+
+.md-footer-meta .md-social__link:hover {
+  color: var(--md-default-fg-color);
 }
 
 
 /* ==========================================================================
-   16. Search
-   ========================================================================== */
+   16. Search  —  Primer-style search panel
+   ==========================================================================
+   Goals:
+   - Widen the dropdown so result snippets don't get clipped horizontally
+   - Add a proper page-dimming backdrop (Primer/Material style)
+   - Round corners + 1px border + shadow on the result panel
+   - Constrain code blocks inside results so they don't overflow the panel
+   - Keep the input rounded and bordered like a Primer text field
+*/
 
+/* Input field — GitHub command-bar style (borderless surface)
+   - Borderless rounded surface, sits inside the dark/white header
+   - 36px tall, magnifier on the left, no visible border
+   - Focus reveals the brand-purple border without growing the box
+*/
 .md-search__input {
-  border-radius: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background-color: var(--mslearn-surface);
+  height: 36px;
+  padding: 0 0.75rem 0 2.25rem;     /* room for the magnifier on the left */
+  font-size: 14px;
+  color: var(--mslearn-text);
+  box-shadow: none;
+  transition: border-color 80ms ease, box-shadow 80ms ease,
+              background-color 80ms ease;
+}
+
+/* Lock form/inner widths so the input does NOT expand when focused/active.
+   Material's stock CSS grows the form on focus — override that. */
+.md-search__form,
+[data-md-toggle="search"]:checked ~ .md-header .md-search__form,
+.md-search__inner,
+[data-md-toggle="search"]:checked ~ .md-header .md-search__inner {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  float: none !important;
+}
+
+.md-search__input::placeholder {
+  color: var(--mslearn-text-muted);
+}
+
+[data-md-toggle="search"]:checked ~ .md-header .md-search__input,
+.md-search__input:focus,
+.md-search__input:focus-visible {
+  border-color: var(--md-primary-fg-color);
+  box-shadow: inset 0 0 0 1px var(--md-primary-fg-color);
+  outline: none;
+  background-color: var(--md-default-bg-color);
+}
+
+/* Material draws its own ::before shadow on the form wrapper — kill it so
+   we don't get a stacked second border under the input. */
+.md-search__form,
+.md-search__form::before {
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+
+/* The magnifier icon Material puts at the start of the input. */
+.md-search__icon[for="__search"],
+.md-search__icon.md-icon[for="__search"] {
+  color: var(--mslearn-text-muted);
+}
+
+.md-search__input::placeholder {
+  color: var(--mslearn-text-muted);
+}
+
+[data-md-toggle="search"]:checked ~ .md-header .md-search__input,
+.md-search__input:focus,
+.md-search__input:focus-visible {
+  border-color: var(--md-primary-fg-color);
+  box-shadow: inset 0 0 0 1px var(--md-primary-fg-color);
+  outline: none;
+}
+
+/* Backdrop dim when search is open */
+.md-search__overlay {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+[data-md-toggle="search"]:checked ~ .md-header .md-search__overlay {
+  opacity: 1;
+}
+
+/* Widen the dropdown panel */
+@media screen and (min-width: 60em) {
+  .md-search__inner {
+    width: 100%;
+    margin: 0;
+    float: none;
+    padding: 0;
+  }
+
+  /* Result panel: rounded, bordered, shadowed.
+     Use longhand corners + !important — Material has a stock rule that sets
+     bottom-left/right to 2px which would otherwise leak through the shorthand. */
+  .md-search__output {
+    border-top-left-radius: 8px !important;
+    border-top-right-radius: 8px !important;
+    border-bottom-left-radius: 8px !important;
+    border-bottom-right-radius: 8px !important;
+    border: 1px solid var(--mslearn-border);
+    box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
+    background-color: var(--md-default-bg-color);
+    margin-top: 0.375rem;
+    overflow: hidden;
+    max-height: calc(100vh - 6rem);
+  }
+
+  [data-md-color-scheme="slate"] .md-search__output {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Result meta line ("234 matching documents") */
+.md-search-result__meta {
+  background-color: var(--mslearn-surface);
+  color: var(--mslearn-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--mslearn-border);
+}
+
+/* Result item rows */
+.md-search-result__item {
+  border-bottom: 1px solid var(--mslearn-border);
+}
+
+.md-search-result__item:last-child {
+  border-bottom: none;
+}
+
+.md-search-result__link {
+  transition: background-color 80ms ease;
+}
+
+.md-search-result__link:hover,
+.md-search-result__link[data-md-state="active"] {
+  background-color: var(--mslearn-surface);
+}
+
+/* Result title */
+.md-search-result__article--document .md-search-result__title,
+.md-search-result__title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--mslearn-text);
+}
+
+.md-search-result__teaser {
+  font-size: 0.8125rem;
+  color: var(--mslearn-text-muted);
+  line-height: 1.4;
+}
+
+/* Highlight matches in brand purple */
+.md-search-result__teaser mark,
+.md-search-result__article mark {
+  background-color: transparent;
+  color: var(--md-primary-fg-color);
+  font-weight: 600;
+}
+
+/*
+ * Constrain code blocks inside search results so they don't overflow the
+ * dropdown. Result snippets often include <pre> blocks that would otherwise
+ * stretch past the panel width.
+ */
+.md-search-result__article {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.md-search-result .md-typeset pre,
+.md-search-result .md-typeset code,
+.md-search-result pre,
+.md-search-result code {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 0.75rem;
+}
+
+.md-search-result .md-typeset .highlight,
+.md-search-result .highlight,
+.md-search-result__article > .highlight,
+.md-search-result__article > pre {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 
 /* ==========================================================================
    17. Breadcrumbs
-   ========================================================================== */
+   ==========================================================================
+   The top tab bar already communicates the section, and pages have an H1.
+   The Material breadcrumb (`navigation.path`) only repeats that section
+   name above each page, so we suppress it site-wide. */
 
 .md-path {
-  font-size: 0.75rem;
-  opacity: 0.8;
+  display: none !important;
 }
 
 
@@ -705,19 +2174,32 @@ html {
 
 @media (max-width: 768px) {
   .agt-hero {
-    padding: 2rem 1.25rem;
+    padding: 3rem 1.25rem 2.5rem;
   }
 
   .agt-hero h1 {
-    font-size: 1.5rem;
+    font-size: clamp(1.85rem, 8vw, 2.4rem);
+  }
+
+  /* Pilcrow already hidden via the desktop rule; keep parity for clarity. */
+  .agt-hero h1 .headerlink {
+    display: none !important;
+  }
+
+  .agt-hero-subtitle {
+    font-size: var(--agt-text-body-large);
   }
 
   .agt-stats {
-    gap: 1rem;
+    gap: 1.25rem 2rem;
   }
 
   .agt-stat-value {
-    font-size: 1.2rem;
+    font-size: 1.5rem;
+  }
+
+  .agt-hero-actions {
+    grid-template-columns: 1fr;
   }
 
   .agt-cards {
@@ -783,9 +2265,215 @@ html {
   line-height: 1.4;
 }
 
+/* Soften the box corners in the "How it works" diagram */
+.mermaid .node rect,
+.mermaid rect.basic,
+.mermaid .label-container {
+  rx: 6px;
+  ry: 6px;
+}
+
 .mermaid .edgeLabel {
   font-size: 13px !important;
   font-weight: 600;
+}
+
+/* ==========================================================================
+   20. Buttons  —  Primer Button + IconButton
+   https://primer.style/product/components/button/
+   https://primer.style/product/components/icon-button/
+   ==========================================================================
+
+   Primer Button anatomy (medium, default size):
+     - 32px height, 6px border-radius, 1px solid border
+     - 14px / 500 weight label, 0 14px padding
+     - Variants: default (canvas-subtle), primary (brand purple), invisible
+     - Hover: subtle bg shift, no scale; transition ~80ms
+     - Focus: 2px outline using accent color, 2px offset
+*/
+
+/* Base — applies to Material's .md-button and any .agt-btn */
+.md-typeset .md-button,
+.agt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 32px;
+  padding: 0 0.875rem;             /* 0 14px */
+  background-color: var(--mslearn-surface);
+  color: var(--mslearn-text);
+  border: 1px solid var(--mslearn-border);
+  border-radius: 6px;
+  font-family: var(--agt-font-sans, inherit);
+  font-weight: 500;
+  font-size: 0.875rem;             /* 14px */
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 80ms ease, border-color 80ms ease,
+              box-shadow 80ms ease, transform 80ms ease;
+}
+
+.md-typeset .md-button:hover,
+.agt-btn:hover {
+  background-color: var(--md-default-bg-color);
+  border-color: var(--mslearn-text-muted);
+  color: var(--mslearn-text);
+  text-decoration: none;
+}
+
+.md-typeset .md-button:active,
+.agt-btn:active {
+  transform: translateY(0.5px);
+}
+
+.md-typeset .md-button:focus-visible,
+.agt-btn:focus-visible {
+  outline: 2px solid var(--md-primary-fg-color);
+  outline-offset: 2px;
+}
+
+.md-typeset .md-button[disabled],
+.agt-btn[disabled],
+.agt-btn.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Primary — brand purple */
+.md-typeset .md-button--primary,
+.agt-btn--primary {
+  background-color: var(--md-primary-fg-color);
+  color: #FFFFFF;
+  border-color: transparent;
+}
+
+.md-typeset .md-button--primary:hover,
+.agt-btn--primary:hover {
+  background-color: var(--md-accent-fg-color);
+  color: #FFFFFF;
+  border-color: transparent;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary,
+[data-md-color-scheme="slate"] .agt-btn--primary {
+  background-color: var(--md-primary-fg-color);
+}
+
+/* Invisible — no border/bg, looks like a link until hover */
+.agt-btn--invisible {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--md-primary-fg-color);
+}
+
+.agt-btn--invisible:hover {
+  background-color: var(--mslearn-surface);
+  border-color: transparent;
+  color: var(--md-primary-fg-color);
+}
+
+/* Danger */
+.agt-btn--danger {
+  color: #cf222e;
+  background-color: var(--mslearn-surface);
+  border-color: var(--mslearn-border);
+}
+
+.agt-btn--danger:hover {
+  background-color: #cf222e;
+  border-color: #cf222e;
+  color: #FFFFFF;
+}
+
+/* Sizes */
+.agt-btn--small {
+  height: 28px;
+  padding: 0 0.625rem;             /* 0 10px */
+  font-size: 0.8125rem;            /* 13px */
+}
+
+.agt-btn--large {
+  height: 40px;
+  padding: 0 1rem;                 /* 0 16px */
+  font-size: 0.9375rem;            /* 15px */
+}
+
+/*
+ * Primer IconButton
+ * https://primer.style/product/components/icon-button/
+ * Square, same height as Button, content centered. Used for header icons,
+ * search clear, palette toggle, copy-code button, etc.
+ */
+.agt-icon-btn,
+.md-typeset .md-clipboard,
+.md-header__option > label.md-header__button:not([hidden]),
+.md-header__option > .md-select > .md-header__button,
+.md-header__button.md-icon:not([hidden]):not([for="__drawer"]):not([for="__search"]) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  color: var(--mslearn-text-muted);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 80ms ease, color 80ms ease,
+              border-color 80ms ease;
+}
+
+/* Primer IconButton uses a 16px icon inside a 32px button. */
+.md-header__option > label.md-header__button svg,
+.md-header__option > label.md-header__button img,
+.md-header__option > .md-select > .md-header__button svg,
+.md-header__option > .md-select > .md-header__button img,
+.md-header__button.md-icon svg,
+.md-header__button.md-icon img {
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0;
+  display: block;
+}
+
+.agt-icon-btn:hover,
+.md-typeset .md-clipboard:hover,
+.md-header__option > label.md-header__button:hover,
+.md-header__option > .md-select > .md-header__button:hover,
+.md-header__button.md-icon:hover {
+  background-color: var(--mslearn-surface);
+  color: var(--mslearn-text);
+  border-color: var(--mslearn-border);
+}
+
+.agt-icon-btn:focus-visible,
+.md-header__option > label.md-header__button:focus-visible,
+.md-header__option > .md-select > .md-header__button:focus-visible,
+.md-header__button.md-icon:focus-visible {
+  outline: 2px solid var(--md-primary-fg-color);
+  outline-offset: 2px;
+  background-color: var(--mslearn-surface);
+}
+
+.agt-icon-btn--small {
+  width: 28px;
+  height: 28px;
+}
+
+.agt-icon-btn--large {
+  width: 40px;
+  height: 40px;
+}
+
+/* Code-block copy button: ensure it doesn't fight the new IconButton style */
+.md-typeset .md-clipboard::after {
+  color: currentColor;
 }
 
 .mermaid .cluster-label .nodeLabel {

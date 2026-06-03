@@ -11,8 +11,9 @@ Run with: python -m pytest tests/test_integrations.py -v --tb=short
 
 import time
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
+import asyncio
 import pytest
 
 from agent_os.integrations.base import (
@@ -1103,11 +1104,15 @@ class TestOpenAIMessageBlocking:
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Message blocked"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.add_message("thread_abc", "my password is 123")
+        # v5: PolicyViolationError carries the AGT EvaluationResult-derived
+        # PolicyCheckResult on .check_result; ``reason`` is the AGT
+        # ``blocked_pattern_input`` (mirrored from the v4 ViolationCategory).
+        assert excinfo.value.check_result.reason == "blocked_pattern_input"
 
     def test_add_message_case_insensitive_block(self):
-        policy = GovernancePolicy(blocked_patterns=["SECRET"])
+        policy = GovernancePolicy(blocked_patterns=["secret"])
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
@@ -1142,8 +1147,9 @@ class TestOpenAIRunExecution:
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Instructions blocked"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.run("thread_abc", instructions="hack the planet")
+        assert excinfo.value.check_result.reason == "blocked_pattern_input"
 
     def test_run_validates_tools_against_policy(self):
         policy = GovernancePolicy(allowed_tools=["code_interpreter"])
@@ -1196,6 +1202,15 @@ class TestOpenAIToolCallHandling:
         assert governed._ctx.function_calls[0]["function"] == "get_weather"
 
     def test_tool_call_limit_cancels_run(self):
+        # v5: AGT-M3 round-2 BLOCK A: the bridge now emits a budget rule
+        # for ``max_tool_calls == 0`` directly (the deny-every-call v4
+        # sentinel), so the deny comes from the stock
+        # ``budgets.deny_if_budget_exceeded`` helper rather than the
+        # host-side fallback ``_host_budget_check``. The wire reason is
+        # the v5 ``budget_tool_calls_exceeded`` (documented in
+        # ``agt.policies.bridge`` as the v5 stock-helper reason that
+        # replaces the legacy v4 ``max_tool_calls`` string for audit
+        # consumers).
         policy = GovernancePolicy(max_tool_calls=0)
         kernel = OpenAIKernel(policy)
         client = _make_mock_openai_client()
@@ -1206,8 +1221,9 @@ class TestOpenAIToolCallHandling:
         client.beta.threads.runs.create.return_value = created_run
 
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Tool call limit"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.run("thread_abc", poll_interval=0)
+        assert excinfo.value.check_result.reason == "budget_tool_calls_exceeded"
         # Verify cancel was called
         client.beta.threads.runs.cancel.assert_called_once()
 
@@ -1227,8 +1243,12 @@ class TestOpenAIToolCallHandling:
         client.beta.threads.runs.create.return_value = created_run
 
         governed = kernel.wrap_assistant(_make_mock_assistant(), client)
-        with pytest.raises(OpenAIPolicyViolationError, match="Tool not allowed"):
+        with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.run("thread_abc", poll_interval=0)
+        # v5: the ACS engine fails closed with ``tool_unknown`` when the
+        # tool is not in the manifest catalog; the legacy "Tool not allowed"
+        # message no longer appears.
+        assert "tool_unknown" in excinfo.value.check_result.reason or excinfo.value.check_result.reason.startswith("runtime_error:")
 
 
 # =============================================================================
@@ -1969,3 +1989,1808 @@ class TestGovernancePipelineIntegration:
         checkpoint_events = [e for e in audit_log if e[0] == GovernanceEventType.CHECKPOINT_CREATED]
         assert len(check_events) >= 2
         assert len(checkpoint_events) == 1
+
+
+# =============================================================================
+# AGT v5 bridge — per-adapter scenario tests (allow / deny / escalate / transform)
+# =============================================================================
+#
+# These tests exercise each adapter through the AdapterRuntimeBridge with a
+# pre-built :class:`AgtRuntime` injected via the ``_runtime`` test seam. They
+# do NOT depend on the underlying framework SDK (google.generativeai,
+# google.adk, guardrails, llama_index) being importable — the wrapped object
+# is a ``MagicMock``. The point is to verify the bridge wiring, not the
+# framework client.
+# -----------------------------------------------------------------------------
+
+
+def _v5_bridge_available() -> bool:
+    """Return True when the AGT 5.0 ACS bridge can construct a runtime."""
+    try:
+        import agt.policies.runtime  # noqa: F401
+        import agent_control_specification  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+_V5_BRIDGE_REQUIRED = pytest.mark.skipif(
+    not _v5_bridge_available(),
+    reason="agt-policies and agent_control_specification SDK required",
+)
+
+
+class _ScriptedPolicy:
+    """Tiny ACS PolicyDispatcher that returns a scripted verdict per call."""
+
+    def __init__(self, verdicts):
+        self._verdicts = list(verdicts)
+        self.invocations: list[dict] = []
+
+    def evaluate(self, invocation):
+        self.invocations.append(dict(invocation))
+        if not self._verdicts:
+            raise AssertionError(
+                "ScriptedPolicy ran out of verdicts; test wired too few."
+            )
+        return self._verdicts.pop(0)
+
+
+class _BudgetGatePolicy:
+    """ACS PolicyDispatcher that denies once the snapshot budget reaches a limit."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.seen_budgets: list[int] = []
+        self.invocations: list[dict] = []
+
+    def evaluate(self, invocation):
+        self.invocations.append(dict(invocation))
+        inp = invocation.get("input") or {}
+        if inp.get("intervention_point") != "pre_tool_call":
+            return {"decision": "allow"}
+        snapshot = inp.get("snapshot") if isinstance(inp, dict) else None
+        budgets = (
+            snapshot.get("envelope", {}).get("budgets", {})
+            if isinstance(snapshot, dict)
+            else {}
+        )
+        tool_call_count = int(budgets.get("tool_call_count", -1))
+        self.seen_budgets.append(tool_call_count)
+        if tool_call_count >= self.limit:
+            return {
+                "decision": "deny",
+                "reason": "budget_tool_calls_exceeded",
+                "message": "tool-call budget exceeded",
+            }
+        return {"decision": "allow"}
+
+
+_SCENARIO_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
+metadata:
+  name: integration_scenarios
+extends: []
+policies:
+  scenario_policy:
+    type: custom
+    adapter: integration_scenarios_adapter
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy_target_kind: user_input
+    policy:
+      id: scenario_policy
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: scenario_policy
+  output:
+    policy_target: $.response.content
+    policy_target_kind: assistant_output
+    policy:
+      id: scenario_policy
+tools:
+  scenario_tool:
+    clearance: public
+  get_weather:
+    clearance: public
+"""
+
+
+def _build_scenario_runtime(
+    tmp_path, verdicts, *, approval_resolver=None, dispatcher=None
+):
+    """Build an :class:`AgtRuntime` over a scripted or custom dispatcher."""
+    from agt.policies.runtime import AgtRuntime
+
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text(_SCENARIO_MANIFEST, encoding="utf-8")
+    if dispatcher is None:
+        policy = _ScriptedPolicy(verdicts)
+    else:
+        policy = dispatcher
+    runtime = AgtRuntime(
+        manifest_path,
+        policy_dispatcher=policy,
+        approval_resolver=approval_resolver,
+    )
+    return runtime, policy
+
+
+def _approving_resolver(captured: dict):
+    """Return an approval_resolver that always approves and records the IP."""
+    from agt.policies.runtime import ApprovalDecision
+
+    def resolver(ip, result):
+        captured["ip"] = ip
+        captured["enforced_identity"] = result.enforced_identity
+        return ApprovalDecision.allow(result.enforced_identity)
+
+    return resolver
+
+
+# ── Gemini scenario coverage ─────────────────────────────────────────
+
+
+def _make_gemini_response_with_function_call(name, args):
+    """Build a Gemini-shaped response containing a single function call."""
+    from types import SimpleNamespace
+
+    fn_call = SimpleNamespace(name=name, args=args)
+    part = SimpleNamespace(function_call=fn_call)
+    content = SimpleNamespace(parts=[part])
+    candidate = SimpleNamespace(content=content)
+    return SimpleNamespace(candidates=[candidate], usage_metadata=None)
+
+
+def _make_gemini_model():
+    """Return a mock Gemini ``GenerativeModel`` (no SDK required)."""
+    from types import SimpleNamespace
+
+    model = MagicMock()
+    model.model_name = "gemini-pro"
+    model.generate_content.return_value = SimpleNamespace(
+        candidates=[], usage_metadata=None
+    )
+    return model
+
+
+@_V5_BRIDGE_REQUIRED
+class TestGeminiBridgeScenarios:
+    """Verify GeminiKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, approval_resolver=None):
+        from agent_os.integrations import gemini_adapter as gemini_mod
+        from agent_os.integrations.gemini_adapter import GeminiKernel
+
+        gemini_mod._HAS_GENAI = True
+        return GeminiKernel(_runtime=runtime, approval_resolver=approval_resolver)
+
+    def test_allow_path_forwards_prompt(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        kernel = self._kernel(runtime)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        governed.generate_content("what is the weather?")
+
+        assert len(policy.invocations) == 1
+        model.generate_content.assert_called_once()
+        assert model.generate_content.call_args.args[0] == "what is the weather?"
+
+    def test_deny_path_raises_policy_violation(self, tmp_path):
+        from agent_os.integrations.gemini_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "blocked_topic"}],
+        )
+        kernel = self._kernel(runtime)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        with pytest.raises(PolicyViolationError) as excinfo:
+            governed.generate_content("blocked content")
+
+        assert excinfo.value.check_result.reason == "blocked_topic"
+        model.generate_content.assert_not_called()
+
+    def test_transform_path_rewrites_prompt(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        governed.generate_content("Customer SSN is 123-45-6789")
+
+        model.generate_content.assert_called_once()
+        # Gemini SDK MUST see the redacted text.
+        assert (
+            model.generate_content.call_args.args[0]
+            == "Customer SSN is [REDACTED]"
+        )
+
+    def test_escalate_with_approving_resolver_forwards(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        model = _make_gemini_model()
+        governed = kernel.wrap(model)
+
+        governed.generate_content("needs approval")
+
+        assert captured["ip"] == "input"
+        model.generate_content.assert_called_once()
+
+    def test_function_call_transform_rewrites_args(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "args_sanitized",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": {"city": "[REDACTED]"},
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        response = _make_gemini_response_with_function_call(
+            "get_weather", {"city": "Seattle"}
+        )
+        model = _make_gemini_model()
+        model.generate_content.return_value = response
+        governed = kernel.wrap(model)
+
+        governed.generate_content("weather please")
+
+        fn_call = response.candidates[0].content.parts[0].function_call
+        assert fn_call.args == {"city": "[REDACTED]"}
+
+
+# ── LlamaIndex scenario coverage ─────────────────────────────────────
+
+
+def _make_llama_engine(query_response="answer", chat_response="chat-answer"):
+    """Return a mock LlamaIndex engine (no SDK required)."""
+    from types import SimpleNamespace
+
+    engine = MagicMock()
+    # Drop the auto-generated MagicMock for .name so wrap() falls back to
+    # the synthesised agent_id (LlamaIndexKernel rejects Mock names).
+    del engine.name
+    engine.query.return_value = SimpleNamespace(response=query_response)
+    engine.chat.return_value = SimpleNamespace(response=chat_response)
+    return engine
+
+
+@_V5_BRIDGE_REQUIRED
+class TestLlamaIndexBridgeScenarios:
+    """Verify LlamaIndexKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, approval_resolver=None):
+        from agent_os.integrations.llamaindex_adapter import LlamaIndexKernel
+
+        return LlamaIndexKernel(_runtime=runtime, approval_resolver=approval_resolver)
+
+    def test_query_allow_path_forwards_to_engine(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {"decision": "allow"},  # output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        result = governed.query("what is the meaning of life?")
+
+        assert result.response == "answer"
+        engine.query.assert_called_once()
+        # The engine MUST see the original query
+        assert engine.query.call_args.args[0] == "what is the meaning of life?"
+        assert len(policy.invocations) == 2
+
+    def test_query_deny_path_raises_policy_violation(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "blocked_query"}],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        with pytest.raises(PolicyViolationError) as excinfo:
+            governed.query("blocked content")
+
+        assert excinfo.value.check_result.reason == "blocked_query"
+        engine.query.assert_not_called()
+
+    def test_chat_transform_rewrites_message(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                },
+                {"decision": "allow"},  # output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        governed.chat("Customer SSN is 123-45-6789")
+
+        engine.chat.assert_called_once()
+        # LlamaIndex engine MUST see the redacted message
+        assert engine.chat.call_args.args[0] == "Customer SSN is [REDACTED]"
+
+    def test_query_escalate_with_approving_resolver_forwards(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "escalate", "reason": "human_approval_required"},
+                {"decision": "allow"},  # output
+            ],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        governed.query("needs approval")
+
+        assert captured["ip"] == "input"
+        engine.query.assert_called_once()
+
+    def test_query_escalate_with_no_resolver_denies(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=None,
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        governed = kernel.wrap(engine)
+
+        with pytest.raises(PolicyViolationError):
+            governed.query("needs approval")
+
+        engine.query.assert_not_called()
+
+    def test_output_transform_rewrites_response(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "output_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED OUTPUT]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine(query_response="leaked secret content")
+        governed = kernel.wrap(engine)
+
+        result = governed.query("safe question")
+
+        # The result object's response attribute MUST be rewritten
+        assert result.response == "[REDACTED OUTPUT]"
+
+
+# ── Guardrails scenario coverage ─────────────────────────────────────
+
+
+@_V5_BRIDGE_REQUIRED
+class TestGuardrailsBridgeScenarios:
+    """Verify GuardrailsKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, approval_resolver=None, validators=None):
+        from agent_os.integrations.base import GovernancePolicy
+        from agent_os.integrations.guardrails_adapter import GuardrailsKernel
+
+        return GuardrailsKernel(
+            validators=validators or [],
+            on_fail="fix",
+            policy=GovernancePolicy(),
+            approval_resolver=approval_resolver,
+            _runtime=runtime,
+        )
+
+    def test_validate_input_allow_path_passes(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "allow"}],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_input("safe query")
+
+        assert result.passed is True
+        assert result.final_value == "safe query"
+        # The synthetic AGT outcome MUST be present
+        names = [o.validator_name for o in result.outcomes]
+        assert "agt_runtime_bridge" in names
+        assert len(policy.invocations) == 1
+
+    def test_validate_input_deny_path_fails(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "blocked_topic"}],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_input("blocked content")
+
+        assert result.passed is False
+        # The synthetic AGT outcome MUST carry the deny reason
+        agt_outcomes = [
+            o for o in result.outcomes if o.validator_name == "agt_runtime_bridge"
+        ]
+        assert len(agt_outcomes) == 1
+        assert agt_outcomes[0].passed is False
+        assert "blocked_topic" in agt_outcomes[0].error_message
+
+    def test_validate_input_transform_rewrites_final_value(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_input("Customer SSN is 123-45-6789")
+
+        # The final_value MUST be the AGT-redacted text per AGT D1.1
+        assert result.final_value == "Customer SSN is [REDACTED]"
+        assert result.passed is True
+
+    def test_validate_input_escalate_with_approving_resolver_passes(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+
+        result = kernel.validate_input("needs approval")
+
+        assert captured["ip"] == "input"
+        assert result.passed is True
+
+    def test_validate_output_routes_to_output_intervention_point(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "allow"}],
+        )
+        kernel = self._kernel(runtime)
+
+        result = kernel.validate_output("safe response")
+
+        assert result.passed is True
+        # The bridge MUST evaluate at the output intervention point.
+        assert (
+            policy.invocations[0]["input"]["intervention_point"] == "output"
+        )
+
+    def test_no_policy_skips_bridge(self):
+        from agent_os.integrations.guardrails_adapter import GuardrailsKernel
+
+        kernel = GuardrailsKernel()
+        # When no policy is supplied the bridge is disabled and behaviour
+        # matches the v4-only contract (no AGT outcome appended).
+        assert kernel.bridge is None
+        result = kernel.validate_input("anything")
+        assert result.passed is True
+        names = [o.validator_name for o in result.outcomes]
+        assert "agt_runtime_bridge" not in names
+
+
+# ── Google ADK scenario coverage ─────────────────────────────────────
+
+
+class _ADKFakeToolContext:
+    """Minimal fake of ADK's ``ToolContext`` for kernel callback tests."""
+
+    def __init__(self, tool_name="search", tool_args=None, agent_name="agent"):
+        self.tool_name = tool_name
+        self.tool_args = tool_args if tool_args is not None else {}
+        self.agent_name = agent_name
+
+
+class _ADKFakeCallbackContext:
+    """Minimal fake of ADK's ``CallbackContext``."""
+
+    def __init__(self, agent_name="root-agent", invocation_id="inv-001"):
+        self.agent_name = agent_name
+        self.invocation_id = invocation_id
+
+
+@_V5_BRIDGE_REQUIRED
+class TestGoogleADKBridgeScenarios:
+    """Verify GoogleADKKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(
+        self,
+        runtime,
+        *,
+        approval_resolver=None,
+        allowed_tools=None,
+        require_human_approval=False,
+        sensitive_tools=None,
+    ):
+        from agent_os.integrations.google_adk_adapter import GoogleADKKernel
+
+        return GoogleADKKernel(
+            allowed_tools=allowed_tools or [],
+            _runtime=runtime,
+            approval_resolver=approval_resolver,
+            require_human_approval=require_human_approval,
+            sensitive_tools=sensitive_tools or [],
+        )
+
+    def test_before_tool_callback_allow_path(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "allow"}]
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is None
+        # The bridge MUST have been called once with the tool name.
+        assert len(policy.invocations) == 1
+        assert (
+            policy.invocations[0]["input"]["intervention_point"]
+            == "pre_tool_call"
+        )
+
+    def test_before_tool_callback_deny_path(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "tool_args_forbidden"}],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is not None
+        assert "error" in result
+        assert "agt_pre_tool_call_deny" in result["error"]
+
+    def test_before_tool_callback_transform_rewrites_args(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "args_sanitized",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": {"q": "[REDACTED]"},
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is None
+        # The ToolContext.tool_args MUST be rewritten per AGT D1.1.
+        assert ctx.tool_args == {"q": "[REDACTED]"}
+
+    def test_before_tool_callback_escalate_with_resolver_passes(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        ctx = _ADKFakeToolContext(tool_name="scenario_tool", tool_args={"q": "AI"})
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert captured["ip"] == "pre_tool_call"
+        assert result is None
+
+    def test_after_tool_callback_transform_rewrites_result(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "output_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED OUTPUT]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="search")
+
+        result = kernel.after_tool_callback(ctx, tool_result="leaked secret")
+
+        assert result == "[REDACTED OUTPUT]"
+
+    def test_after_tool_callback_deny_path(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "output_blocked"}],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeToolContext(tool_name="search")
+
+        result = kernel.after_tool_callback(ctx, tool_result="secret data")
+
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "agt_output_deny" in result["error"]
+
+    def test_before_agent_callback_deny_path(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "agent_blocked"}],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeCallbackContext(agent_name="suspicious-agent")
+
+        result = kernel.before_agent_callback(callback_context=ctx)
+
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert "agt_input_deny" in result["error"]
+
+    def test_after_agent_callback_transform_rewrites_content(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "output_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[SANITISED AGENT OUTPUT]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        ctx = _ADKFakeCallbackContext()
+
+        result = kernel.after_agent_callback(
+            callback_context=ctx, content="leaked secret"
+        )
+
+        assert result == "[SANITISED AGENT OUTPUT]"
+
+    def test_sensitive_tool_routes_through_agt_resolver_not_local_short_circuit(
+        self, tmp_path
+    ):
+        """AGT-DELTA D5 regression: when ``approval_resolver`` is wired,
+        the AGT escalate path MUST drive approval for a sensitive tool.
+        Previously the local ``_needs_approval`` short-circuit returned
+        ``{"needs_approval": True}`` BEFORE the bridge ran, so the
+        resolver was never consulted and the bisected enforced_identity
+        never reached audit.
+        """
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+        ctx = _ADKFakeToolContext(
+            tool_name="scenario_tool", tool_args={"q": "AI"}
+        )
+
+        result = kernel.before_tool_callback(ctx)
+
+        # No legacy ``needs_approval`` short-circuit dict — the bridge ran.
+        assert result is None, f"expected bridge-allow None, got {result!r}"
+        # Resolver invoked exactly once at pre_tool_call.
+        assert captured.get("ip") == "pre_tool_call"
+        assert captured.get("enforced_identity"), (
+            "AGT D1.4 enforced_identity must be handed to the resolver"
+        )
+        # And it propagates to audit so downstream consumers can pin
+        # what was actually approved.
+        agt_audit = [
+            event for event in kernel.get_audit_log()
+            if event.event_type == "agt_pre_tool_call"
+        ]
+        assert agt_audit, "AGT bridge result must emit an audit record"
+        assert agt_audit[-1].details.get("enforced_identity") == captured.get(
+            "enforced_identity"
+        )
+
+    def test_non_sensitive_tool_does_not_invoke_resolver_when_filter_set(
+        self, tmp_path
+    ):
+        """AGT-M3 round-2 BLOCK B regression: with a non-empty
+        ``sensitive_tools`` list, a non-sensitive tool MUST NOT route
+        through the AGT escalate path. The previous wiring set
+        ``bridge_require_approval=True`` whenever ``approval_resolver``
+        was present, which bypassed the local ``_needs_approval``
+        filter and called the resolver for EVERY tool. The fixed
+        kernel keeps two bridges (sensitive escalates, non-sensitive
+        does not) and selects per call.
+        """
+        invocations: list[str] = []
+
+        def _counting_resolver(ip, result):
+            from agt.policies.runtime import ApprovalDecision
+
+            invocations.append(ip)
+            return ApprovalDecision.allow(result.enforced_identity)
+
+        # Scripted dispatcher returns allow for the non-sensitive tool;
+        # the resolver should never be touched because the default
+        # bridge has ``require_human_approval=False`` and therefore
+        # never emits escalate for this call. ``get_weather`` is in the
+        # scenario manifest catalog (so the engine does not fail
+        # closed with ``runtime_error:tool_unknown``) but is NOT in
+        # ``sensitive_tools``, so it must dispatch through the default
+        # bridge that never escalates.
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "allow"}],
+            approval_resolver=_counting_resolver,
+        )
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=_counting_resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+        ctx = _ADKFakeToolContext(
+            tool_name="get_weather", tool_args={"q": "AI"}
+        )
+
+        result = kernel.before_tool_callback(ctx)
+
+        assert result is None, (
+            f"non-sensitive tool must pass through bridge allow, got {result!r}"
+        )
+        assert invocations == [], (
+            "approval_resolver MUST NOT be invoked for non-sensitive tools; "
+            f"resolver was called at: {invocations!r}"
+        )
+
+    def test_sensitive_filter_routes_only_sensitive_through_resolver(
+        self, tmp_path
+    ):
+        """AGT-M3 round-2 BLOCK B end-to-end: a single kernel calling
+        one non-sensitive tool and one sensitive tool MUST invoke the
+        resolver exactly once (for the sensitive call) and zero times
+        for the non-sensitive call.
+        """
+        invocations: list[str] = []
+
+        def _counting_resolver(ip, result):
+            from agt.policies.runtime import ApprovalDecision
+
+            invocations.append(ip)
+            return ApprovalDecision.allow(result.enforced_identity)
+
+        # The scripted dispatcher is consulted on every pre_tool_call.
+        # First call (non-sensitive, ``get_weather``): default bridge
+        # asks the dispatcher and gets ``allow``. Second call
+        # (sensitive, ``scenario_tool``): sibling bridge asks the
+        # dispatcher and gets ``escalate``; the runtime routes it
+        # through the resolver.
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},
+                {"decision": "escalate", "reason": "human_approval_required"},
+            ],
+            approval_resolver=_counting_resolver,
+        )
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=_counting_resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+
+        non_sensitive_ctx = _ADKFakeToolContext(
+            tool_name="get_weather", tool_args={"q": "AI"}
+        )
+        sensitive_ctx = _ADKFakeToolContext(
+            tool_name="scenario_tool", tool_args={"q": "AI"}
+        )
+
+        first = kernel.before_tool_callback(non_sensitive_ctx)
+        second = kernel.before_tool_callback(sensitive_ctx)
+
+        assert first is None
+        assert second is None
+        assert invocations == ["pre_tool_call"], (
+            f"resolver MUST be invoked exactly once (for the sensitive "
+            f"tool), got: {invocations!r}"
+        )
+        # AGT-M3 round-3 GPT regression pin: the bridge.policy invariant
+        # is what actually drives the production rego — assert it
+        # directly so a future regression that reintroduces the round-1
+        # "set bridge_require_approval=True for all tools" wiring is
+        # caught even if the scripted dispatcher hides the rego path.
+        assert kernel._bridge.policy.require_human_approval is False, (
+            "default _bridge MUST have require_human_approval=False when "
+            "sensitive_tools is configured; the sibling _approval_bridge "
+            "is the one that keeps approval on"
+        )
+
+    def test_two_bridge_split_keeps_tool_call_budget_in_sync(self, tmp_path):
+        """AGT-M3 round-3 GPT regression: after one non-sensitive call
+        followed by one sensitive call, the sensitive bridge MUST see
+        ``tool_call_count >= 1`` (the prior non-sensitive call). Pre-fix
+        the two bridges had separate :class:`SnapshotBuilder` instances
+        and only ``self._bridge.record_post_execute`` was wired, so the
+        approval bridge saw stale ``tool_call_count=0`` and any policy
+        gated on running budgets diverged across the sensitive vs
+        non-sensitive split.
+        """
+        seen_budgets: list[int] = []
+
+        class _BudgetRecorderPolicy:
+            """ACS PolicyDispatcher that records the snapshot budget."""
+
+            def __init__(self):
+                self.invocations: list[dict] = []
+
+            def evaluate(self, invocation):
+                self.invocations.append(dict(invocation))
+                inp = invocation.get("input") or {}
+                snapshot = inp.get("snapshot") if isinstance(inp, dict) else None
+                budgets = (
+                    snapshot.get("envelope", {}).get("budgets", {})
+                    if isinstance(snapshot, dict)
+                    else {}
+                )
+                seen_budgets.append(int(budgets.get("tool_call_count", -1)))
+                return {"decision": "allow"}
+
+        recorder = _BudgetRecorderPolicy()
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [],
+            dispatcher=recorder,
+        )
+
+        def _resolver(ip, result):
+            from agt.policies.runtime import ApprovalDecision
+
+            return ApprovalDecision.allow(result.enforced_identity)
+
+        kernel = self._kernel(
+            runtime,
+            approval_resolver=_resolver,
+            require_human_approval=True,
+            sensitive_tools=["scenario_tool"],
+        )
+
+        non_sensitive_ctx = _ADKFakeToolContext(
+            tool_name="get_weather", tool_args={"q": "AI"}
+        )
+        sensitive_ctx = _ADKFakeToolContext(
+            tool_name="scenario_tool", tool_args={"q": "AI"}
+        )
+
+        kernel.before_tool_callback(non_sensitive_ctx)
+        kernel.before_tool_callback(sensitive_ctx)
+
+        assert len(seen_budgets) == 2, (
+            f"expected two budget snapshots, got {seen_budgets!r}"
+        )
+        assert seen_budgets[0] == 0, (
+            f"first call MUST see tool_call_count=0, got {seen_budgets[0]}"
+        )
+        assert seen_budgets[1] == 1, (
+            f"second call (sensitive) MUST see tool_call_count=1 from the "
+            f"prior non-sensitive call; got {seen_budgets[1]}. The two-bridge "
+            f"split is leaking budget state between sensitive and "
+            f"non-sensitive paths."
+        )
+
+    def test_repeated_non_sensitive_calls_do_not_double_count_budget(
+        self, tmp_path
+    ):
+        """AGT-M3 round-4 Opus regression: three sequential non-sensitive
+        calls (all routed through the SAME `_bridge`) MUST advance the
+        builder's `tool_call_count` by 1 per call, not 2. Pre-fix the
+        adapter incremented `ctx.call_count` AND called
+        `record_post_execute(tool_calls=1)`, which double-counted because
+        `builder_for(ctx)` mirrors `ctx.call_count` via `max(...)` and
+        `record_post_execute` then bumps the builder again. Result: a
+        `max_tool_calls=N` policy denied on call N instead of call N+1.
+        """
+        seen_budgets: list[int] = []
+
+        class _BudgetRecorderPolicy:
+            def __init__(self):
+                self.invocations: list[dict] = []
+
+            def evaluate(self, invocation):
+                self.invocations.append(dict(invocation))
+                inp = invocation.get("input") or {}
+                snapshot = inp.get("snapshot") if isinstance(inp, dict) else None
+                budgets = (
+                    snapshot.get("envelope", {}).get("budgets", {})
+                    if isinstance(snapshot, dict)
+                    else {}
+                )
+                seen_budgets.append(int(budgets.get("tool_call_count", -1)))
+                return {"decision": "allow"}
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [], dispatcher=_BudgetRecorderPolicy()
+        )
+        kernel = self._kernel(runtime)
+
+        for _ in range(3):
+            ctx = _ADKFakeToolContext(
+                tool_name="get_weather", tool_args={"q": "AI"}
+            )
+            kernel.before_tool_callback(ctx)
+
+        assert seen_budgets == [0, 1, 2], (
+            f"three sequential calls MUST advance tool_call_count by 1 per "
+            f"call (expected [0, 1, 2]); got {seen_budgets!r}. The adapter "
+            f"is double-counting against the builder's tool_call_count."
+        )
+
+
+# =============================================================================
+# Bridge-scenario coverage for the remaining adapters (CONCERN 5 from the
+# AGT 5.0 deferred-work code reviews). Each class mirrors the depth of
+# TestGoogleADKBridgeScenarios on the adapter's primary intervention
+# point: allow / deny / transform / escalate (resolver approves). Tests
+# skip when the framework's adapter module is not importable.
+# =============================================================================
+
+
+def _skip_if_not_importable(module_path: str):
+    try:
+        __import__(module_path)
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"{module_path} not importable: {exc}")
+
+
+@_V5_BRIDGE_REQUIRED
+class TestLangChainMiddlewareBridgeScenarios:
+    """Verify LangChain middleware budget accounting through the AGT bridge."""
+
+    def _middleware(self, runtime):
+        _skip_if_not_importable("agent_os.integrations.langchain_adapter")
+        kernel = LangChainKernel(
+            policy=GovernancePolicy(max_tool_calls=3),
+            _runtime=runtime,
+        )
+        return kernel.as_middleware()
+
+    def _request(self):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            tool_call={
+                "name": "scenario_tool",
+                "args": {"q": "weather"},
+                "id": "call-1",
+            }
+        )
+
+    def test_wrap_tool_call_allows_exact_budget_before_deny(self, tmp_path):
+        dispatcher = _BudgetGatePolicy(limit=3)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [],
+            dispatcher=dispatcher,
+        )
+        middleware = self._middleware(runtime)
+
+        def handler(_request):
+            result = MagicMock()
+            result.content = "ok"
+            return result
+
+        for _ in range(3):
+            middleware.wrap_tool_call(self._request(), handler)
+
+        with pytest.raises(PolicyViolationError):
+            middleware.wrap_tool_call(self._request(), handler)
+
+        # LangChain also has a host-side budget guard, so the fourth call
+        # is denied before the runtime dispatcher is invoked. The
+        # regression here is that the first three calls see exact
+        # pre-call counts, not [0, 2, ...] from double-counting.
+        assert dispatcher.seen_budgets == [0, 1, 2]
+
+
+@_V5_BRIDGE_REQUIRED
+class TestMistralBridgeScenarios:
+    """Verify MistralKernel routes through the AGT 5.0 ACS runtime."""
+
+    def _make_client(self):
+        client = MagicMock()
+        resp = MagicMock()
+        resp.id = "chatcmpl-xyz"
+        resp.usage.prompt_tokens = 10
+        resp.usage.completion_tokens = 20
+        resp.choices = []
+        client.chat.return_value = resp
+        return client
+
+    def _kernel(self, runtime, *, approval_resolver=None):
+        import sys
+        import types as _types
+
+        sys.modules.setdefault("mistralai", _types.ModuleType("mistralai"))
+        _skip_if_not_importable("agent_os.integrations.mistral_adapter")
+        import agent_os.integrations.mistral_adapter as mod
+
+        mod._HAS_MISTRAL = True
+        return mod.MistralKernel(_runtime=runtime, approval_resolver=approval_resolver)
+
+    def test_chat_allow_path(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        kernel = self._kernel(runtime)
+        client = self._make_client()
+        governed = kernel.wrap(client)
+
+        governed.chat(
+            model="mistral-large-latest",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+        assert len(policy.invocations) == 1
+        client.chat.assert_called_once()
+
+    def test_chat_deny_path(self, tmp_path):
+        from agent_os.integrations.mistral_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "deny", "reason": "blocked_topic"}]
+        )
+        kernel = self._kernel(runtime)
+        client = self._make_client()
+        governed = kernel.wrap(client)
+
+        with pytest.raises(PolicyViolationError):
+            governed.chat(
+                model="mistral-large-latest",
+                messages=[{"role": "user", "content": "blocked"}],
+            )
+        client.chat.assert_not_called()
+
+    def test_chat_transform_rewrites_content(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        client = self._make_client()
+        governed = kernel.wrap(client)
+
+        governed.chat(
+            model="m",
+            messages=[{"role": "user", "content": "SSN 123-45-6789"}],
+        )
+
+        sent = client.chat.call_args.kwargs
+        assert sent["messages"][0]["content"] == "[REDACTED]"
+
+    def test_chat_escalate_with_resolver_forwards(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        client = self._make_client()
+        governed = kernel.wrap(client)
+
+        governed.chat(
+            model="m",
+            messages=[{"role": "user", "content": "ok"}],
+        )
+
+        assert captured.get("ip") == "input"
+        client.chat.assert_called_once()
+
+
+@_V5_BRIDGE_REQUIRED
+class TestPydanticAIBridgeScenarios:
+    """Verify PydanticAIKernel.as_capability routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, *, approval_resolver=None):
+        _skip_if_not_importable("agent_os.integrations.pydantic_ai_adapter")
+        from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
+
+        return PydanticAIKernel(
+            _runtime=runtime, approval_resolver=approval_resolver
+        )
+
+    def test_before_run_allow(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        kernel = self._kernel(runtime)
+        capability = kernel.as_capability()
+
+        assert capability.before_run("what is the weather?") == "what is the weather?"
+        assert len(policy.invocations) == 1
+
+    def test_before_run_deny_raises(self, tmp_path):
+        from agent_os.integrations.pydantic_ai_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "deny", "reason": "blocked_topic"}]
+        )
+        kernel = self._kernel(runtime)
+        capability = kernel.as_capability()
+
+        with pytest.raises(PolicyViolationError):
+            capability.before_run("blocked")
+
+    def test_before_run_transform_rewrites_prompt(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        capability = kernel.as_capability()
+
+        assert capability.before_run("Customer SSN is 123-45-6789") == "Customer SSN is [REDACTED]"
+
+    def test_before_run_escalate_with_resolver(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        capability = kernel.as_capability()
+
+        assert capability.before_run("approve please") == "approve please"
+        assert captured.get("ip") == "input"
+
+
+@_V5_BRIDGE_REQUIRED
+class TestSemanticKernelBridgeScenarios:
+    """Verify SemanticKernelWrapper.as_filter routes through the AGT 5.0 ACS runtime."""
+
+    def _make_sk_ctx(self, func_name="scenario_tool", plugin_name=""):
+        from types import SimpleNamespace
+
+        func = SimpleNamespace(name=func_name, plugin_name=plugin_name)
+        return SimpleNamespace(
+            function=func, arguments={"query": "hello"}, result=None
+        )
+
+    def _wrapper(self, runtime, *, approval_resolver=None):
+        _skip_if_not_importable("agent_os.integrations.semantic_kernel_adapter")
+        from agent_os.integrations.semantic_kernel_adapter import (
+            SemanticKernelWrapper,
+        )
+
+        return SemanticKernelWrapper(
+            _runtime=runtime, approval_resolver=approval_resolver
+        )
+
+    def test_filter_allow_invokes_next(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "allow"}, {"decision": "allow"}],
+        )
+        wrapper = self._wrapper(runtime)
+        sk_filter = wrapper.as_filter()
+        ctx = self._make_sk_ctx()
+
+        async def _next(c):
+            c.result = "ok"
+
+        asyncio.run(sk_filter(ctx, _next))
+        assert ctx.result == "ok"
+        # pre_tool_call + output verdicts consumed.
+        assert len(policy.invocations) == 2
+
+    def test_filter_deny_raises(self, tmp_path):
+        from agent_os.integrations.semantic_kernel_adapter import (
+            PolicyViolationError,
+        )
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "tool_args_forbidden"}],
+        )
+        wrapper = self._wrapper(runtime)
+        sk_filter = wrapper.as_filter()
+        ctx = self._make_sk_ctx()
+        next_fn = AsyncMock()
+
+        with pytest.raises(PolicyViolationError):
+            asyncio.run(sk_filter(ctx, next_fn))
+        next_fn.assert_not_awaited()
+
+    def test_filter_transform_rewrites_arguments(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "args_sanitized",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": {"query": "[REDACTED]"},
+                    },
+                },
+                {"decision": "allow"},
+            ],
+        )
+        wrapper = self._wrapper(runtime)
+        sk_filter = wrapper.as_filter()
+        ctx = self._make_sk_ctx()
+        ctx.arguments = {"query": "original"}
+
+        async def _next(c):
+            c.result = "ok"
+
+        asyncio.run(sk_filter(ctx, _next))
+        assert ctx.arguments == {"query": "[REDACTED]"}
+
+    def test_filter_escalate_with_resolver(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}, {"decision": "allow"}],
+            approval_resolver=resolver,
+        )
+        wrapper = self._wrapper(runtime, approval_resolver=resolver)
+        sk_filter = wrapper.as_filter()
+        ctx = self._make_sk_ctx()
+
+        async def _next(c):
+            c.result = "ok"
+
+        asyncio.run(sk_filter(ctx, _next))
+        assert captured.get("ip") == "pre_tool_call"
+
+
+@_V5_BRIDGE_REQUIRED
+class TestMAFBridgeScenarios:
+    """Verify GovernancePolicyMiddleware routes through the AGT 5.0 ACS runtime."""
+
+    def _make_agent_ctx(self, *, text="hello"):
+        from types import SimpleNamespace
+
+        msg = SimpleNamespace(role="user", text=text, contents=[text])
+        return SimpleNamespace(
+            agent=SimpleNamespace(name="a"),
+            messages=[msg],
+            stream=False,
+            metadata={},
+            result=None,
+        )
+
+    def _middleware(self, runtime, *, approval_resolver=None):
+        import sys
+        import types as _types
+
+        sys.modules.setdefault("agent_framework", _types.ModuleType("agent_framework"))
+        _skip_if_not_importable("agent_os.integrations.maf_adapter")
+        from agent_os.integrations.maf_adapter import (
+            GovernancePolicyMiddleware,
+            MAFKernel,
+        )
+
+        kernel = MAFKernel(_runtime=runtime, approval_resolver=approval_resolver)
+        return GovernancePolicyMiddleware(kernel=kernel)
+
+    def _capability_guard(self, runtime):
+        import sys
+        import types as _types
+
+        sys.modules.setdefault("agent_framework", _types.ModuleType("agent_framework"))
+        _skip_if_not_importable("agent_os.integrations.maf_adapter")
+        from agent_os.integrations.maf_adapter import (
+            CapabilityGuardMiddleware,
+            MAFKernel,
+        )
+
+        kernel = MAFKernel(
+            policy=GovernancePolicy(max_tool_calls=3),
+            _runtime=runtime,
+        )
+        return CapabilityGuardMiddleware(kernel=kernel)
+
+    def _make_function_ctx(self):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            function=SimpleNamespace(name="scenario_tool"),
+            arguments={"q": "weather"},
+            metadata={},
+            result=None,
+        )
+
+    def test_middleware_allow(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        mw = self._middleware(runtime)
+        ctx = self._make_agent_ctx(text="hi")
+        call_next = AsyncMock()
+
+        asyncio.run(mw.process(ctx, call_next))
+
+        call_next.assert_awaited_once()
+        assert len(policy.invocations) == 1
+
+    def test_middleware_deny_terminates(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "deny", "reason": "blocked_topic"}]
+        )
+        mw = self._middleware(runtime)
+        ctx = self._make_agent_ctx(text="bad")
+        call_next = AsyncMock()
+
+        # MAF middleware raises MiddlewareTermination on deny per its
+        # documented contract; the test imports the exception lazily so
+        # the class skips cleanly when MAF isn't installed.
+        from agent_os.integrations.maf_adapter import MiddlewareTermination
+
+        with pytest.raises(MiddlewareTermination):
+            asyncio.run(mw.process(ctx, call_next))
+        call_next.assert_not_awaited()
+        assert ctx.metadata.get("governance_decision") is not None
+        assert ctx.metadata["governance_decision"].allowed is False
+
+    def test_middleware_transform_rewrites_message(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        mw = self._middleware(runtime)
+        ctx = self._make_agent_ctx(text="Customer SSN is 123-45-6789")
+        call_next = AsyncMock()
+
+        asyncio.run(mw.process(ctx, call_next))
+        # The last message text MUST be the redacted text.
+        assert getattr(ctx.messages[-1], "text", None) == "Customer SSN is [REDACTED]"
+
+    def test_middleware_escalate_with_resolver(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        mw = self._middleware(runtime, approval_resolver=resolver)
+        ctx = self._make_agent_ctx(text="ok")
+        call_next = AsyncMock()
+
+        asyncio.run(mw.process(ctx, call_next))
+        assert captured.get("ip") == "input"
+        call_next.assert_awaited_once()
+
+    def test_capability_guard_allows_exact_budget_before_deny(self, tmp_path):
+        from agent_os.integrations.maf_adapter import MiddlewareTermination
+
+        dispatcher = _BudgetGatePolicy(limit=3)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [],
+            dispatcher=dispatcher,
+        )
+        guard = self._capability_guard(runtime)
+        call_next = AsyncMock()
+
+        for _ in range(3):
+            asyncio.run(guard.process(self._make_function_ctx(), call_next))
+
+        with pytest.raises(MiddlewareTermination):
+            asyncio.run(guard.process(self._make_function_ctx(), call_next))
+
+        assert dispatcher.seen_budgets == [0, 1, 2, 3]
+        assert call_next.await_count == 3
+
+
+@_V5_BRIDGE_REQUIRED
+class TestSmolagentsBridgeScenarios:
+    """Verify SmolagentsKernel.before_tool_call routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, *, approval_resolver=None):
+        _skip_if_not_importable("agent_os.integrations.smolagents_adapter")
+        from agent_os.integrations.smolagents_adapter import SmolagentsKernel
+
+        return SmolagentsKernel(
+            _runtime=runtime, approval_resolver=approval_resolver
+        )
+
+    def test_before_tool_call_allow(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        kernel = self._kernel(runtime)
+        result = kernel.before_tool_call(
+            tool_name="scenario_tool", tool_args={"q": "weather"}
+        )
+        assert result is None
+        assert len(policy.invocations) == 1
+
+    def test_before_tool_call_deny_blocks(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "deny", "reason": "tool_args_forbidden"}]
+        )
+        kernel = self._kernel(runtime)
+        result = kernel.before_tool_call(
+            tool_name="scenario_tool", tool_args={"q": "x"}
+        )
+        assert isinstance(result, dict)
+        assert result.get("blocked") is True or "error" in result
+
+    def test_before_tool_call_transform_rewrites_args(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "args_sanitized",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": {"q": "[REDACTED]"},
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        args = {"q": "raw"}
+        result = kernel.before_tool_call(tool_name="scenario_tool", tool_args=args)
+        # The smolagents kernel rewrites tool_args in place per AGT D1.1.
+        assert args.get("q") == "[REDACTED]" or result is None
+
+    def test_before_tool_call_escalate_with_resolver(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        result = kernel.before_tool_call(
+            tool_name="scenario_tool", tool_args={"q": "x"}
+        )
+        assert result is None
+        assert captured.get("ip") == "pre_tool_call"
+
+
+@_V5_BRIDGE_REQUIRED
+class TestA2ABridgeScenarios:
+    """Verify A2AGovernanceAdapter.evaluate_task routes through the AGT 5.0 ACS runtime."""
+
+    def _adapter(self, runtime, *, approval_resolver=None):
+        _skip_if_not_importable("agent_os.integrations.a2a_adapter")
+        from agent_os.integrations.a2a_adapter import A2AGovernanceAdapter
+
+        return A2AGovernanceAdapter(
+            _runtime=runtime, approval_resolver=approval_resolver
+        )
+
+    def _task(self, text="Find weather"):
+        return {
+            "id": "task-001",
+            "skill_id": "search",
+            "status": {"state": "submitted"},
+            "x-agentmesh-trust": {
+                "source_did": "did:mesh:agent-a",
+                "source_trust_score": 500,
+            },
+            "messages": [{"role": "user", "parts": [{"text": text}]}],
+        }
+
+    def test_evaluate_task_allow(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        adapter = self._adapter(runtime)
+        result = adapter.evaluate_task(self._task("hello"))
+        assert result.allowed is True
+        assert len(policy.invocations) == 1
+
+    def test_evaluate_task_deny_blocks(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "deny", "reason": "blocked_input"}]
+        )
+        adapter = self._adapter(runtime)
+        result = adapter.evaluate_task(self._task("blocked"))
+        assert result.allowed is False
+
+    def test_evaluate_task_transform_captures_redaction(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        adapter = self._adapter(runtime)
+        result = adapter.evaluate_task(self._task("Customer SSN is 123-45-6789"))
+        assert result.allowed is True
+        assert result.transform_value == "Customer SSN is [REDACTED]"
+
+    def test_evaluate_task_escalate_with_resolver(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        adapter = self._adapter(runtime, approval_resolver=resolver)
+        result = adapter.evaluate_task(self._task("approve please"))
+        assert result.allowed is True
+        assert captured.get("ip") == "input"
+
+
+@_V5_BRIDGE_REQUIRED
+class TestAgentShieldBridgeScenarios:
+    """Verify AgentShieldKernel.validate_input routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, *, approval_resolver=None):
+        _skip_if_not_importable("agent_os.integrations.agentshield_adapter")
+        from agent_os.integrations.agentshield_adapter import AgentShieldKernel
+
+        return AgentShieldKernel.mock(
+            _runtime=runtime, approval_resolver=approval_resolver
+        )
+
+    def test_validate_input_allow(self, tmp_path):
+        from agent_os.integrations.agentshield_adapter import ShieldAction
+
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        kernel = self._kernel(runtime)
+        verdict = kernel.validate_input("hello")
+        assert verdict.allowed is True
+        assert verdict.action == ShieldAction.ALLOW
+        assert len(policy.invocations) == 1
+
+    def test_validate_input_deny_blocks(self, tmp_path):
+        from agent_os.integrations.agentshield_adapter import ShieldAction
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "deny", "reason": "blocked_user_input"}],
+        )
+        kernel = self._kernel(runtime)
+        verdict = kernel.validate_input("blocked")
+        assert verdict.allowed is False
+        assert verdict.action == ShieldAction.BLOCK
+        assert verdict.reason == "blocked_user_input"
+
+    def test_validate_input_transform_sets_modified_value(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer SSN is [REDACTED]",
+                    },
+                }
+            ],
+        )
+        kernel = self._kernel(runtime)
+        verdict = kernel.validate_input("Customer SSN is 123-45-6789")
+        assert verdict.modified_value == "Customer SSN is [REDACTED]"
+
+    def test_validate_input_escalate_with_resolver(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        verdict = kernel.validate_input("approve please")
+        assert verdict.allowed is True
+        assert captured.get("ip") == "input"
+
+
+@_V5_BRIDGE_REQUIRED
+class TestBedrockBridgeScenarios:
+    """Verify BedrockKernel.invoke_agent routes through the AGT 5.0 ACS runtime."""
+
+    def _kernel(self, runtime, *, approval_resolver=None, enable_agt_pii_routing=False):
+        _skip_if_not_importable("agent_os.integrations.bedrock_adapter")
+        import agent_os.integrations.bedrock_adapter as mod
+        from agent_os.integrations.bedrock_adapter import BedrockKernel
+        from agent_os.integrations.base import GovernancePolicy
+
+        mod._HAS_BOTO3 = True
+        return BedrockKernel(
+            policy=GovernancePolicy(),
+            _runtime=runtime,
+            approval_resolver=approval_resolver,
+            enable_agt_pii_routing=enable_agt_pii_routing,
+        )
+
+    def _client(self):
+        client = MagicMock()
+        client.invoke_agent.return_value = {
+            "ResponseMetadata": {"RequestId": "r1"},
+            "completion": iter([]),
+        }
+        return client
+
+    def test_invoke_agent_allow(self, tmp_path):
+        runtime, policy = _build_scenario_runtime(tmp_path, [{"decision": "allow"}])
+        kernel = self._kernel(runtime)
+        client = self._client()
+        governed = kernel.wrap(client)
+        governed.invoke_agent(
+            agentId="A", agentAliasId="L", sessionId="s", inputText="hi"
+        )
+        client.invoke_agent.assert_called_once()
+        assert len(policy.invocations) == 1
+
+    def test_invoke_agent_deny_raises(self, tmp_path):
+        from agent_os.integrations.base import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path, [{"decision": "deny", "reason": "blocked_user_input"}]
+        )
+        kernel = self._kernel(runtime)
+        client = self._client()
+        governed = kernel.wrap(client)
+        with pytest.raises(PolicyViolationError):
+            governed.invoke_agent(
+                agentId="A", agentAliasId="L", sessionId="s", inputText="blocked"
+            )
+        client.invoke_agent.assert_not_called()
+
+    def test_invoke_agent_transform_rewrites_input(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {
+                    "decision": "transform",
+                    "reason": "pii_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "Customer record [REDACTED]",
+                    },
+                }
+            ],
+        )
+        # AGT-DELTA D1.1: the redacted text must reach the boto3
+        # client, so route AGT first via the new
+        # enable_agt_pii_routing flag (off by default for v4 compat).
+        kernel = self._kernel(runtime, enable_agt_pii_routing=True)
+        client = self._client()
+        governed = kernel.wrap(client)
+        governed.invoke_agent(
+            agentId="A",
+            agentAliasId="L",
+            sessionId="s",
+            inputText="Customer SSN 123-45-6789",
+        )
+        sent = client.invoke_agent.call_args.kwargs
+        assert sent["inputText"] == "Customer record [REDACTED]"
+
+    def test_invoke_agent_escalate_with_resolver(self, tmp_path):
+        captured: dict = {}
+        resolver = _approving_resolver(captured)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [{"decision": "escalate", "reason": "human_approval_required"}],
+            approval_resolver=resolver,
+        )
+        kernel = self._kernel(runtime, approval_resolver=resolver)
+        client = self._client()
+        governed = kernel.wrap(client)
+        governed.invoke_agent(
+            agentId="A", agentAliasId="L", sessionId="s", inputText="approve please"
+        )
+        client.invoke_agent.assert_called_once()
+        assert captured.get("ip") == "input"

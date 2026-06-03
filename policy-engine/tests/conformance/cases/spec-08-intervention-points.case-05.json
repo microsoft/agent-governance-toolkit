@@ -1,0 +1,38 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-08-intervention-points.case-05",
+  "spec_section": "8",
+  "title": "post tool call dispatch projects known tool",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  post_tool_call:\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: p\n    policy_target: $snap.tool_result\ntools:\n  search:\n    type: Tool\n    clearance: internal\n    security_labels:\n      sink: retrieval\n",
+  "intervention_point": "post_tool_call",
+  "snapshot": {
+    "tool_call": {
+      "id": "call-2",
+      "name": "search",
+      "args": {
+        "q": "acs"
+      }
+    },
+    "tool_result": {
+      "hits": 1
+    }
+  },
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "allow",
+    "policy_target": {
+      "hits": 1
+    },
+    "tool_name": "search"
+  }
+}

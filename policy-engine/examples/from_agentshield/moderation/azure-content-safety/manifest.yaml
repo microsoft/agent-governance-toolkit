@@ -1,0 +1,40 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "azure-content-safety"
+extends: []
+policies:
+  azure_content_safety:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.azure_content_safety.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    annotations:
+      aacs:
+        from: "$policy_target.text"
+    policy:
+      id: azure_content_safety
+      query: data.agent_control_specification.azure_content_safety.input_verdict
+  post_tool_call:
+    policy_target: "$.tool_result"
+    policy_target_kind: tool_result
+    annotations:
+      aacs:
+        from: "$policy_target.text"
+    policy:
+      id: azure_content_safety
+      query: data.agent_control_specification.azure_content_safety.post_tool_call_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    annotations:
+      aacs:
+        from: "$policy_target.text"
+    policy:
+      id: azure_content_safety
+      query: data.agent_control_specification.azure_content_safety.output_verdict
+annotators:
+  aacs:
+    type: classifier

@@ -1,0 +1,133 @@
+[
+  {
+    "name": "tool_call_count_at_limit_denies",
+    "request": {
+      "principal": "Agent::\"agent-x\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {
+          "agent": {"id": "agent-x"},
+          "budgets": {"tool_call_count": 10, "token_count": 0}
+        },
+        "tool_call": {"name": "search", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"max_tool_calls": 10, "max_tokens": 1000}, "parents": []},
+      {"uid": {"type": "Agent", "id": "agent-x"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["budget_tool_calls_exceeded"],
+    "num_errors": 0
+  },
+  {
+    "name": "tool_call_count_above_limit_denies",
+    "request": {
+      "principal": "Agent::\"agent-x\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {
+          "agent": {"id": "agent-x"},
+          "budgets": {"tool_call_count": 25, "token_count": 0}
+        },
+        "tool_call": {"name": "search", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"max_tool_calls": 10, "max_tokens": 1000}, "parents": []},
+      {"uid": {"type": "Agent", "id": "agent-x"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["budget_tool_calls_exceeded"],
+    "num_errors": 0
+  },
+  {
+    "name": "tool_call_count_under_limit_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"agent-x\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {
+          "agent": {"id": "agent-x"},
+          "budgets": {"tool_call_count": 3, "token_count": 0}
+        },
+        "tool_call": {"name": "search", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"max_tool_calls": 10, "max_tokens": 1000}, "parents": []},
+      {"uid": {"type": "Agent", "id": "agent-x"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "token_count_above_limit_denies",
+    "request": {
+      "principal": "Agent::\"agent-x\"",
+      "action": "Action::\"pre_model_call\"",
+      "resource": "PolicyTarget::\"messages\"",
+      "context": {
+        "envelope": {
+          "agent": {"id": "agent-x"},
+          "budgets": {"tool_call_count": 0, "token_count": 2048}
+        }
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "messages"}, "attrs": {"max_tool_calls": 9999, "max_tokens": 1024}, "parents": []},
+      {"uid": {"type": "Agent", "id": "agent-x"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["budget_tokens_exceeded"],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_threshold_attribute_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"agent-x\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {
+          "agent": {"id": "agent-x"},
+          "budgets": {"tool_call_count": 1000, "token_count": 1000}
+        },
+        "tool_call": {"name": "search", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "agent-x"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_budget_counter_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"agent-x\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {
+          "agent": {"id": "agent-x"},
+          "budgets": {}
+        },
+        "tool_call": {"name": "search", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"max_tool_calls": 10, "max_tokens": 1000}, "parents": []},
+      {"uid": {"type": "Agent", "id": "agent-x"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]

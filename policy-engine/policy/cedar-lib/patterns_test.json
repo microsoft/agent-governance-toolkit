@@ -1,0 +1,110 @@
+[
+  {
+    "name": "email_in_input_body_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "ping alice@example.com tomorrow"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["pii_email_pattern_in_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "email_in_output_content_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "response": {"content": "your manager is bob@corp.example"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["pii_email_pattern_in_output"],
+    "num_errors": 0
+  },
+  {
+    "name": "ssn_format_in_input_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "ssn 123-45-6789 here"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["pii_ssn_pattern_in_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "credit_card_format_in_input_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "card 4111-1111-1111-1111 expires soon"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["pii_credit_card_pattern_in_input", "pii_ssn_pattern_in_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "benign_text_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "nothing sensitive here"}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_body_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]

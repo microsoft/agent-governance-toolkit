@@ -1,0 +1,92 @@
+[
+  {
+    "name": "drift_above_threshold_permits_with_advice",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {"drift_score": 70}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"drift_threshold": 50}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.drift.warn"],
+    "num_errors": 0
+  },
+  {
+    "name": "drift_at_threshold_permits_with_advice",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {"drift_score": 50}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"drift_threshold": 50}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.drift.warn"],
+    "num_errors": 0
+  },
+  {
+    "name": "drift_below_threshold_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {"drift_score": 20}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"drift_threshold": 50}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_drift_score_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"drift_threshold": 50}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_threshold_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {"drift_score": 70}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]

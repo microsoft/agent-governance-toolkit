@@ -1,0 +1,57 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "bank-manager"
+extends: []
+policies:
+  bank_manager:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.bank_manager.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    annotations:
+      input_security:
+        annotator: input_security
+        from: "$.input.text"
+    policy:
+      id: bank_manager
+      query: data.agent_control_specification.bank_manager.input_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      tool_adherence:
+        annotator: tool_adherence
+        from: "$.tool_call"
+      fraud_classifier:
+        annotator: fraud_classifier
+        from: "$.tool_call"
+    policy:
+      id: bank_manager
+      query: data.agent_control_specification.bank_manager.pre_tool_call_verdict
+  post_tool_call:
+    policy_target: "$.tool_result"
+    policy_target_kind: tool_result
+    policy:
+      id: bank_manager
+      query: data.agent_control_specification.bank_manager.post_tool_call_verdict
+annotators:
+  input_security:
+    type: llm
+  tool_adherence:
+    type: llm
+  fraud_classifier:
+    type: classifier
+tools:
+  read_account: {}
+  read_transaction_history: {}
+  prepare_transfer: {}
+  request_customer_approval: {}
+  create_transfer: {}
+  freeze_account: {}
+  enable_admin_mode: {}
+  http.request: {}
+  fraud_detection_agent: {}

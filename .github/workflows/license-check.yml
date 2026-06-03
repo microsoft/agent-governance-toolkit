@@ -34,6 +34,9 @@ jobs:
           LH_MISSING=0
           for ext in ts js py cs rs go; do
             for file in $(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- "*.${ext}" 2>/dev/null || echo ""); do
+              # Skip the vendored ACS subtree (third-party MIT, see
+              # policy-engine/LICENSE.acs) which must not carry a Microsoft header.
+              case "$file" in policy-engine/*) continue;; esac
               if [ -f "$file" ] && ! grep -q "Copyright (c) Microsoft Corporation" "$file" 2>/dev/null; then
                 echo "MISSING license header: $file"
                 LH_MISSING=$((LH_MISSING + 1))
@@ -44,6 +47,7 @@ jobs:
           # Also check untracked/new files
           for ext in ts js py cs rs go; do
             for file in $(git ls-files --others --exclude-standard "*.${ext}" 2>/dev/null | head -20); do
+              case "$file" in policy-engine/*) continue;; esac
               if [ -f "$file" ] && ! grep -q "Copyright (c) Microsoft Corporation" "$file" 2>/dev/null; then
                 echo "MISSING license header: $file"
                 LH_MISSING=$((LH_MISSING + 1))

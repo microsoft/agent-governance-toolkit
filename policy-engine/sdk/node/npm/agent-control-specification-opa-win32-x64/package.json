@@ -1,0 +1,13 @@
+{
+  "name": "agent-control-specification-opa-win32-x64",
+  "version": "0.3.1-beta.0",
+  "description": "Open Policy Agent (opa) binary for win32/x64, bundled for agent-control-specification.",
+  "license": "Apache-2.0",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "files": ["bin/opa.exe"],
+  "preferUnplugged": true,
+  "scripts": {
+    "prepack": "node ../../scripts/verify-package-file.mjs bin/opa.exe"
+  }
+}

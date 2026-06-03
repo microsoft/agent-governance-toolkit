@@ -1,0 +1,190 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "fail_closed_errors"
+  ],
+  "description": "Runtime failures deny by default with reserved runtime_error:* reasons and no fail-open path.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": null,
+        "policy_invoked": false,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:path_missing"
+        }
+      },
+      "mode": "enforce",
+      "name": "missing-policy_target-path",
+      "snapshot": {
+        "output": {}
+      },
+      "intervention_point": "output"
+    },
+    {
+      "expected": {
+        "annotation_calls": [
+          {
+            "preliminary_policy_input": {
+              "annotations": {},
+              "snapshot": {
+                "input": {
+                  "text": "hello"
+                }
+              },
+              "intervention_point": "input",
+              "policy_target": {
+                "kind": null,
+                "path": "$snap.input",
+                "value": {
+                  "text": "hello"
+                }
+              },
+              "tool": null
+            },
+            "annotator_name": "slow_classifier"
+          }
+        ],
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "input": {
+              "text": "hello"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": null,
+            "path": "$snap.input",
+            "value": {
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": false,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:annotation_timeout"
+        }
+      },
+      "mode": "enforce",
+      "name": "annotations-timeout",
+      "snapshot": {
+        "input": {
+          "text": "hello"
+        }
+      },
+      "intervention_point": "input"
+    },
+    {
+      "expected": {
+        "policy_input": null,
+        "policy_invoked": false,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:tool_unknown"
+        }
+      },
+      "mode": "enforce",
+      "name": "unknown-tool",
+      "snapshot": {
+        "tool_call": {
+          "args": {},
+          "id": "missing-tool-call",
+          "name": "unknown_tool"
+        }
+      },
+      "intervention_point": "pre_tool_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "model_response": {
+              "content": "ok"
+            }
+          },
+          "intervention_point": "post_model_call",
+          "policy_target": {
+            "kind": null,
+            "path": "$snap.model_response",
+            "value": {
+              "content": "ok"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:policy_invocation_failed"
+        }
+      },
+      "mode": "enforce",
+      "name": "policy-invocation-error",
+      "policy_response": {
+        "error": "runtime_error:policy_invocation_failed"
+      },
+      "snapshot": {
+        "model_response": {
+          "content": "ok"
+        }
+      },
+      "intervention_point": "post_model_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "model_request": {
+              "messages": []
+            }
+          },
+          "intervention_point": "pre_model_call",
+          "policy_target": {
+            "kind": null,
+            "path": "$snap.model_request",
+            "value": {
+              "messages": []
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:policy_output_invalid"
+        }
+      },
+      "mode": "enforce",
+      "name": "invalid-policy-output",
+      "policy_response": {
+        "ok": {
+          "decision": "not_a_decision"
+        }
+      },
+      "snapshot": {
+        "model_request": {
+          "messages": []
+        }
+      },
+      "intervention_point": "pre_model_call"
+    }
+  ],
+  "annotation_responses": {
+    "slow_classifier": {
+      "error": "runtime_error:annotation_timeout"
+    }
+  },
+  "id": "fail-closed-errors",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n    annotations:\n      slow_classifier:\n        from: $policy_target.text\n  pre_model_call:\n    policy:\n      id: test_policy\n    policy_target: $snap.model_request\n  post_model_call:\n    policy:\n      id: test_policy\n    policy_target: $snap.model_response\n  pre_tool_call:\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_call.args\n  output:\n    policy:\n      id: test_policy\n    policy_target: $snap.output.required\ntools:\n  search:\n    type: Tool\n    id: search\n    clearance:\n    - public\nannotators:\n  slow_classifier:\n    type: classifier\n",
+  "schema_version": 1
+}

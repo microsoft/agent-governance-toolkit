@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "source": [
+    "core/src/verdict.rs Decision",
+    "core/src/verdict.rs normalize_policy_output",
+    "docs/stateless-runtime.md Evaluation flow",
+    "policy-engine/spec/SPECIFICATION.md §14"
+  ],
+  "rows": [
+    {
+      "id": "allow",
+      "input": {
+        "decision": "allow"
+      },
+      "normalized_decision": "allow",
+      "permits": true,
+      "expected_error_reason": null
+    },
+    {
+      "id": "deny",
+      "input": {
+        "decision": "deny",
+        "reason": "policy_blocked"
+      },
+      "normalized_decision": "deny",
+      "permits": false,
+      "expected_error_reason": null
+    },
+    {
+      "id": "warn",
+      "input": {
+        "decision": "warn",
+        "reason": "policy_warned"
+      },
+      "normalized_decision": "warn",
+      "permits": true,
+      "expected_error_reason": null
+    },
+    {
+      "id": "escalate",
+      "input": {
+        "decision": "escalate",
+        "reason": "approval_required"
+      },
+      "normalized_decision": "escalate",
+      "permits": false,
+      "expected_error_reason": null
+    },
+    {
+      "id": "transform",
+      "input": {
+        "decision": "transform",
+        "reason": "redacted",
+        "transform": {
+          "path": "$policy_target.flag",
+          "value": true
+        }
+      },
+      "normalized_decision": "transform",
+      "permits": true,
+      "expected_error_reason": null
+    },
+    {
+      "id": "invalid-decision",
+      "input": {
+        "decision": "block"
+      },
+      "normalized_decision": null,
+      "permits": false,
+      "expected_error_reason": "runtime_error:policy_output_invalid"
+    },
+    {
+      "id": "effects-rejected-per-agt-d1",
+      "input": {
+        "decision": "allow",
+        "effects": [
+          {
+            "type": "replace",
+            "path": "$policy_target.flag",
+            "value": true
+          }
+        ]
+      },
+      "normalized_decision": null,
+      "permits": false,
+      "expected_error_reason": "runtime_error:policy_output_invalid"
+    }
+  ]
+}
