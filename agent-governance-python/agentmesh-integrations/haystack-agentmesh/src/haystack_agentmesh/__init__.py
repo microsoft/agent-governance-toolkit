@@ -1,7 +1,8 @@
-"""AgentMesh governance components for Haystack pipelines."""
-
-from haystack_agentmesh.governance import GovernancePolicyChecker
-from haystack_agentmesh.trust_gate import TrustGate
-from haystack_agentmesh.audit import AuditLogger
-
-__all__ = ["GovernancePolicyChecker", "TrustGate", "AuditLogger"]
+import warnings
+warnings.warn(
+    "haystack-agentmesh is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[haystack] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
