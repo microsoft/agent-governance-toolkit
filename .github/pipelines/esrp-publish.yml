@@ -310,7 +310,10 @@ stages:
             - script: |
                 # Consolidated packages use force-include with sibling paths,
                 # which only works when building a wheel directly from source.
-                if [[ "${{ coalesce(pkg.noBuildIsolation, 'false') }}" == "true" ]]; then
+                if [[ "${{ pkg.name }}" == "agent-control-specification" ]]; then
+                  rm -rf dist
+                  python -m maturin build --release --sdist --out dist --compatibility manylinux_2_39
+                elif [[ "${{ coalesce(pkg.noBuildIsolation, 'false') }}" == "true" ]]; then
                   python -m build --no-isolation
                 elif [[ "${{ pkg.name }}" == agent-governance-toolkit-* ]]; then
                   python -m build --wheel
@@ -507,7 +510,7 @@ stages:
                 if [ -n "${{ coalesce(native.linkerEnv, '') }}" ]; then
                   export ${{ native.linkerEnv }}="${{ native.linker }}"
                 fi
-                npx napi build --release --target ${{ native.rustTarget }} --js native.js --dts native.d.ts
+                npx napi build --platform --release --target ${{ native.rustTarget }} --js native.js --dts native.d.ts
                 test -s "${{ native.binary }}"
                 mkdir -p "$(Pipeline.Workspace)/npm-out"
                 node scripts/package-native.mjs \
@@ -730,6 +733,17 @@ stages:
                 artifact: 'acs-dotnet-native-${{ native.rid }}'
                 targetPath: '$(Build.SourcesDirectory)/policy-engine/sdk/dotnet/src/AgentControlSpecification/runtimes'
               displayName: 'Download ACS native asset ${{ native.rid }}'
+
+          - script: |
+              curl --proto '=https' --tlsv1.2 -fSLo "$(Pipeline.Workspace)/opa" \
+                --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+                "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+              echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $(Pipeline.Workspace)/opa" | sha256sum -c -
+              chmod +x "$(Pipeline.Workspace)/opa"
+              echo "##vso[task.prependpath]$(Pipeline.Workspace)"
+              echo "##vso[task.setvariable variable=ACS_OPA_PATH]$(Pipeline.Workspace)/opa"
+              "$(Pipeline.Workspace)/opa" version
+            displayName: 'Install OPA for ACS .NET tests'
 
           - script: |
               dotnet build AgentControlSpecification.sln \
@@ -961,6 +975,17 @@ stages:
                 "$HOME/.cargo/bin/rustc" --version
                 "$HOME/.cargo/bin/cargo" --version
               displayName: 'Install Rust ${{ parameters.rustVersion }}'
+
+            - script: |
+                curl --proto '=https' --tlsv1.2 -fSLo "$(Pipeline.Workspace)/opa" \
+                  --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+                  "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+                echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $(Pipeline.Workspace)/opa" | sha256sum -c -
+                chmod +x "$(Pipeline.Workspace)/opa"
+                echo "##vso[task.prependpath]$(Pipeline.Workspace)"
+                "$(Pipeline.Workspace)/opa" version
+              condition: eq('${{ pkg.path }}', 'policy-engine')
+              displayName: 'Install OPA for ACS tests'
 
             - script: |
                 cargo build --release --workspace

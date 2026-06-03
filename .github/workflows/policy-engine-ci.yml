@@ -94,7 +94,7 @@ jobs:
           pytest sdk/python generator
       - name: Package Python SDK
         run: |
-          python -m build --no-isolation ./sdk/python
+          python -m maturin build --release --sdist --out sdk/python/dist --compatibility manylinux_2_39 --manifest-path sdk/python/Cargo.toml
       - name: Package ACS generator
         run: |
           python -m build --no-isolation ./generator

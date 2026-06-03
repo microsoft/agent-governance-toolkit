@@ -149,7 +149,10 @@ jobs:
         env:
           BUILD_NO_ISOLATION: ${{ matrix.noBuildIsolation || 'false' }}
         run: |
-          if [[ "$BUILD_NO_ISOLATION" == "true" ]]; then
+          if [[ "${{ matrix.name }}" == "agent-control-specification" ]]; then
+            rm -rf dist
+            python -m maturin build --release --sdist --out dist --compatibility manylinux_2_39
+          elif [[ "$BUILD_NO_ISOLATION" == "true" ]]; then
             python -m build --no-isolation
           elif [[ "${{ matrix.name }}" == agent-governance-toolkit-* ]]; then
             python -m build --wheel

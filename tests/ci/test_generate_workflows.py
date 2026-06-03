@@ -80,7 +80,7 @@ def test_policy_engine_workflow_packages_acs_artifacts():
     content = gen.build_outputs()[REPO_ROOT / ".github" / "workflows" / "policy-engine-ci.yml"]
     assert "cargo package -p agent_control_specification_core --allow-dirty" in content
     assert "cargo package -p agent_control_specification --allow-dirty" not in content
-    assert "python -m build --no-isolation ./sdk/python" in content
+    assert "python -m maturin build --release --sdist --out sdk/python/dist --compatibility manylinux_2_39 --manifest-path sdk/python/Cargo.toml" in content
     assert "python -m build --no-isolation ./generator" in content
     assert "npm pack --pack-destination" in content
     assert "node scripts/package-native.mjs --package agent-control-specification-linux-x64-gnu" in content

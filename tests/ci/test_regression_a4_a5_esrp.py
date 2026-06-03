@@ -97,6 +97,7 @@ def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
     text = ESRP.read_text(encoding="utf-8")
     assert "name: agent-control-specification" in text
     assert "path: policy-engine/sdk/python" in text
+    assert "python -m maturin build --release --sdist --out dist --compatibility manylinux_2_39" in text
     assert "noBuildIsolation: 'true'" in text
     assert "name: agt-policies" in text
     assert "path: agent-governance-python/agt-policies" in text
@@ -118,6 +119,7 @@ def test_esrp_publishes_acs_node_artifacts() -> None:
     assert "agent-control-specification-win32-x64-msvc" in text
     assert "agent-control-specification-opa-linux-x64" in text
     assert "agent-control-specification-opa-win32-x64" in text
+    assert "npx napi build --platform --release --target ${{ native.rustTarget }}" in text
     assert "Root agent-control-specification package must not embed" in text
 
 
@@ -126,8 +128,17 @@ def test_esrp_publishes_acs_dotnet_artifacts() -> None:
     assert "Build_ACS_Native_" in text
     assert "BuildAndPack_ACS" in text
     assert "nuget-acs-unsigned" in text
+    assert "Install OPA for ACS .NET tests" in text
     assert "AgentControlSpecification/AgentControlSpecification.csproj" in text
     assert "AgentControlSpecification.AI/AgentControlSpecification.AI.csproj" in text
     assert "AgentControlSpecification.AgentFramework/AgentControlSpecification.AgentFramework.csproj" in text
     assert "AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj" in text
     assert "AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj" in text
+
+
+def test_esrp_installs_opa_for_policy_engine_rust_tests() -> None:
+    text = ESRP.read_text(encoding="utf-8")
+    assert "Install OPA for ACS tests" in text
+    assert "--retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20" in text
+    assert "openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static" in text
+    assert "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084" in text
