@@ -22,6 +22,7 @@ import { get } from "node:https";
 const VERSION = process.env.OPA_VERSION ?? "0.70.0";
 const here = dirname(fileURLToPath(import.meta.url));
 const npmDir = join(here, "..", "npm");
+const MAX_FETCH_ATTEMPTS = 5;
 
 // node platform-arch -> { asset on the OPA download host, sub-package, bin name }
 const TARGETS = {
@@ -69,12 +70,32 @@ function fetch(url, redirectsLeft = 5) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(url) {
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetch(url);
+    } catch (error) {
+      lastError = error;
+      if (attempt === MAX_FETCH_ATTEMPTS) break;
+      const delayMs = attempt * 5000;
+      process.stderr.write(`fetch attempt ${attempt} failed for ${url}: ${error?.message ?? error}; retrying in ${delayMs / 1000}s\n`);
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
 async function vendorOne(key) {
   const target = TARGETS[key];
   if (target === undefined) throw new Error(`unknown platform '${key}'. Known: ${Object.keys(TARGETS).join(", ")}`);
   const url = `https://openpolicyagent.org/downloads/v${VERSION}/${target.asset}`;
   process.stdout.write(`fetching ${key} <- ${url}\n`);
-  const buf = await fetch(url);
+  const buf = await fetchWithRetry(url);
   const digest = createHash("sha256").update(buf).digest("hex");
 
   const expected = CHECKSUMS[VERSION]?.[key];

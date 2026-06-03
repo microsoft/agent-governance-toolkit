@@ -53,7 +53,7 @@ jobs:
             {"name":"agent-marketplace","path":"agent-governance-python/agent-marketplace"},
             {"name":"agent-rag-governance","path":"agent-governance-python/agent-rag-governance"},
             {"name":"agt-sandbox","path":"agent-governance-python/agent-sandbox"},
-            {"name":"agent-control-specification","path":"policy-engine/sdk/python","rust":true,"noBuildIsolation":true},
+            {"name":"agent-control-specification","path":"policy-engine/sdk/python"},
             {"name":"agt-policies","path":"agent-governance-python/agt-policies"},
             {"name":"acs-generator","path":"policy-engine/generator","noBuildIsolation":true}
           ]'
@@ -149,7 +149,9 @@ jobs:
         env:
           BUILD_NO_ISOLATION: ${{ matrix.noBuildIsolation || 'false' }}
         run: |
-          if [[ "$BUILD_NO_ISOLATION" == "true" ]]; then
+          if [[ "${{ matrix.name }}" == "agent-control-specification" ]]; then
+            bash "$GITHUB_WORKSPACE/scripts/ci/build_acs_python_wheel.sh" "$GITHUB_WORKSPACE"
+          elif [[ "$BUILD_NO_ISOLATION" == "true" ]]; then
             python -m build --no-isolation
           elif [[ "${{ matrix.name }}" == agent-governance-toolkit-* ]]; then
             python -m build --wheel

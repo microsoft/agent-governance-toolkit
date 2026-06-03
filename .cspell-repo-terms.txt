@@ -407,6 +407,7 @@ serviceendpointurl
 sess
 setattr
 setdefault
+setvariable
 setext
 setitem
 setuid

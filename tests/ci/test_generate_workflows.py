@@ -63,6 +63,7 @@ def test_generated_opa_downloads_verify_checksum():
         if "openpolicyagent.org/downloads" in content:
             assert "sha256sum -c -" in content
             assert gen.OPA_LINUX_AMD64_SHA256 in content
+            assert "--retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20" in content
 
 
 def test_policy_engine_python_job_uses_pinned_tooling():
@@ -79,7 +80,7 @@ def test_policy_engine_workflow_packages_acs_artifacts():
     content = gen.build_outputs()[REPO_ROOT / ".github" / "workflows" / "policy-engine-ci.yml"]
     assert "cargo package -p agent_control_specification_core --allow-dirty" in content
     assert "cargo package -p agent_control_specification --allow-dirty" not in content
-    assert "python -m build --no-isolation ./sdk/python" in content
+    assert "bash ../scripts/ci/build_acs_python_wheel.sh .." in content
     assert "python -m build --no-isolation ./generator" in content
     assert "npm pack --pack-destination" in content
     assert "node scripts/package-native.mjs --package agent-control-specification-linux-x64-gnu" in content

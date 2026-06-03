@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ESRP = REPO_ROOT / ".github" / "pipelines" / "esrp-publish.yml"
 LOCKFILE = REPO_ROOT / ".github" / "pipelines" / "release-tools" / "release-tools.txt"
 SRC = REPO_ROOT / ".github" / "pipelines" / "release-tools" / "release-tools.in"
+ACS_PYTHON_WHEEL_HELPER = REPO_ROOT / "scripts" / "ci" / "build_acs_python_wheel.sh"
 
 
 def test_a4_release_tools_lockfile_exists_and_pins_hashes() -> None:
@@ -97,7 +98,7 @@ def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
     text = ESRP.read_text(encoding="utf-8")
     assert "name: agent-control-specification" in text
     assert "path: policy-engine/sdk/python" in text
-    assert "noBuildIsolation: 'true'" in text
+    assert "build_acs_python_wheel.sh" in text
     assert "name: agt-policies" in text
     assert "path: agent-governance-python/agt-policies" in text
     assert "name: acs-generator" in text
@@ -106,6 +107,17 @@ def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
     assert "crate: agent_control_specification_core" in text
     assert "cargo package -p agent_control_specification --allow-dirty" in text
     assert "after the core ESRP release completes" in text
+
+
+def test_acs_python_wheel_helper_uses_pinned_manylinux_build() -> None:
+    text = ACS_PYTHON_WHEEL_HELPER.read_text(encoding="utf-8")
+    assert "manylinux_2_28_x86_64@sha256:" in text
+    assert "https://static.rust-lang.org/rustup/archive/" in text
+    assert "6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d" in text
+    assert 'RUST_TOOLCHAIN="1.89.0"' in text
+    assert '--default-toolchain "${RUST_TOOLCHAIN}"' in text
+    assert "--require-hashes --no-deps" in text
+    assert "--compatibility manylinux_2_28" in text
 
 
 def test_esrp_publishes_acs_node_artifacts() -> None:
@@ -118,6 +130,7 @@ def test_esrp_publishes_acs_node_artifacts() -> None:
     assert "agent-control-specification-win32-x64-msvc" in text
     assert "agent-control-specification-opa-linux-x64" in text
     assert "agent-control-specification-opa-win32-x64" in text
+    assert "npx napi build --platform --release --target ${{ native.rustTarget }}" in text
     assert "Root agent-control-specification package must not embed" in text
 
 
@@ -126,8 +139,17 @@ def test_esrp_publishes_acs_dotnet_artifacts() -> None:
     assert "Build_ACS_Native_" in text
     assert "BuildAndPack_ACS" in text
     assert "nuget-acs-unsigned" in text
+    assert "Install OPA for ACS .NET tests" in text
     assert "AgentControlSpecification/AgentControlSpecification.csproj" in text
     assert "AgentControlSpecification.AI/AgentControlSpecification.AI.csproj" in text
     assert "AgentControlSpecification.AgentFramework/AgentControlSpecification.AgentFramework.csproj" in text
     assert "AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj" in text
     assert "AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj" in text
+
+
+def test_esrp_installs_opa_for_policy_engine_rust_tests() -> None:
+    text = ESRP.read_text(encoding="utf-8")
+    assert "Install OPA for ACS tests" in text
+    assert "--retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20" in text
+    assert "openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static" in text
+    assert "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084" in text
