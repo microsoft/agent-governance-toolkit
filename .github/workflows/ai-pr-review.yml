@@ -200,6 +200,7 @@ jobs:
     if: always()
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Collect agent comments and post summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -278,14 +279,22 @@ jobs:
             ].join('\n');
 
             const existing = allComments.find(c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner, repo, comment_id: existing.id, body: summaryBody,
-              });
-              core.info(`Updated summary comment ${existing.id}`);
-            } else {
-              await github.rest.issues.createComment({
-                owner, repo, issue_number: prNumber, body: summaryBody,
-              });
-              core.info('Created summary comment');
+            try {
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id, body: summaryBody,
+                });
+                core.info(`Updated summary comment ${existing.id}`);
+              } else {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: prNumber, body: summaryBody,
+                });
+                core.info('Created summary comment');
+              }
+            } catch (error) {
+              if (error?.status === 403 && String(error?.message || '').includes('Resource not accessible')) {
+                core.warning('Unable to post advisory AI review summary because this run token cannot write PR comments.');
+              } else {
+                throw error;
+              }
             }
