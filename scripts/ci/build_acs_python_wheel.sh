@@ -17,9 +17,9 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 docker run --rm \
-  -e RUSTUP_VERSION \
-  -e RUSTUP_SHA256 \
-  -e RUST_TOOLCHAIN \
+  -e "RUSTUP_VERSION=$RUSTUP_VERSION" \
+  -e "RUSTUP_SHA256=$RUSTUP_SHA256" \
+  -e "RUST_TOOLCHAIN=$RUST_TOOLCHAIN" \
   -v "$ROOT:/work" \
   -w /work/policy-engine \
   "$IMAGE" \
