@@ -25,9 +25,17 @@ docker run --rm \
   "$IMAGE" \
   /bin/bash -lc '
     set -euo pipefail
-    curl --proto '"'"'=https'"'"' --tlsv1.2 -fSLo /tmp/rustup-init \
-      --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
-      "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init"
+    for attempt in 1 2 3 4 5; do
+      if curl --proto '"'"'=https'"'"' --tlsv1.2 -fSLo /tmp/rustup-init \
+        --connect-timeout 20 \
+        "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init"; then
+        break
+      fi
+      if [ "$attempt" = "5" ]; then
+        exit 1
+      fi
+      sleep $((attempt * 5))
+    done
     echo "${RUSTUP_SHA256}  /tmp/rustup-init" | sha256sum -c -
     chmod +x /tmp/rustup-init
     /tmp/rustup-init -y --profile minimal --default-toolchain "${RUST_TOOLCHAIN}"
