@@ -7,6 +7,7 @@ Ed25519 cryptographic helpers for Nexus signature generation and verification.
 import base64
 import hashlib
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from cryptography.exceptions import InvalidSignature
@@ -20,6 +21,8 @@ from cryptography.hazmat.primitives.serialization import (
 
 if TYPE_CHECKING:
     from .schemas.manifest import AgentManifest
+
+_log = logging.getLogger(__name__)
 
 
 def generate_keypair() -> tuple[bytes, str]:
@@ -68,7 +71,10 @@ def verify(verification_key: str, message: bytes, signature: str) -> bool:
         sig_bytes = base64.b64decode(signature)
         Ed25519PublicKey.from_public_bytes(key_bytes).verify(sig_bytes, message)
         return True
-    except (InvalidSignature, Exception):
+    except InvalidSignature:
+        return False
+    except Exception as exc:
+        _log.warning("verify: unexpected exception – possible malformed key or signature: %s", exc)
         return False
 
 
@@ -80,7 +86,11 @@ def manifest_hash_for_signing(manifest: "AgentManifest") -> str:
     across registration calls and matches what AgentRegistry._compute_manifest_hash
     produces internally.
     """
-    data = manifest.model_dump(exclude={"registered_at", "last_seen", "trust_score"})
+    data = manifest.model_dump(exclude={
+        "registered_at",  # set by registry after verification; unset at signing time
+        "last_seen",      # activity timestamp, always None at signing time; changes post-registration
+        "trust_score",    # computed by reputation engine after registration; not signed by agent
+    })
     canonical = json.dumps(data, sort_keys=True, default=str)
     return hashlib.sha256(canonical.encode()).hexdigest()
 
