@@ -25,6 +25,7 @@ from hypervisor.rings.enforcer import (
     RingCheckResult,
     RingEnforcer,
 )
+from hypervisor.sandbox import DENIED_COMMANDS, MINIMAL_SANDBOX_PATH
 from hypervisor.session.isolation import (
     IsolationLevel,
     SessionIsolationManager,
@@ -428,6 +429,23 @@ class TestRingEnforcerResources:
         # Ring 0 has its own constraints
         c = enforcer.get_constraints(ExecutionRing.RING_0_ROOT)
         assert c.max_concurrent_tools == 32
+
+    def test_ring3_sandbox_path_is_curated(self):
+        """Ring-3 image exposes only the curated sandbox PATH.
+
+        Verifies that the sandbox module's PATH constant is consistent
+        with the ``docker/Dockerfile.sandbox`` build artefact: a single
+        curated directory, not a standard system bin directory.
+        """
+        assert MINIMAL_SANDBOX_PATH == "/usr/local/sandbox/bin"
+        assert ":" not in MINIMAL_SANDBOX_PATH, (
+            "MINIMAL_SANDBOX_PATH must be a single directory"
+        )
+
+    def test_ring3_denylist_covers_network_tools(self):
+        """Ring-3 denylist must include all primary network exfiltration tools."""
+        required = {"curl", "wget", "nc"}
+        assert required.issubset(set(DENIED_COMMANDS))
 
 
 # ── Session Isolation Tests ──────────────────────────────────────────
