@@ -1,0 +1,124 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: canonical-all-interventions
+  description: Frozen stateless manifest contract covering every intervention point.
+extends:
+  - ./base-controls.yaml
+policies:
+  lifecycle_policy:
+    type: test
+  input_policy:
+    type: rego
+    bundle: ./policy/input.tar.gz
+  model_policy:
+    type: test
+  tool_authz_policy:
+    type: test
+  output_policy:
+    type: test
+intervention_points:
+  agent_startup:
+    policy_target: "$snap.agent"
+    policy_target_kind: agent_metadata
+    annotations:
+      startup_context:
+        from: "$policy_target.id"
+    policy:
+      id: lifecycle_policy
+  input:
+    policy_target: "$snap.input"
+    policy_target_kind: user_input
+    annotations:
+      actor_context:
+        from: "$pi.snapshot.actor.id"
+      prompt_classifier:
+        from: "$policy_target.text"
+    policy:
+      id: input_policy
+      query: data.agent_control_specification.input.verdict
+  pre_model_call:
+    policy_target: "$snap.model_request"
+    policy_target_kind: model_request
+    annotations:
+      prompt_classifier:
+        from: "$policy_target.messages[1].content"
+    policy:
+      id: model_policy
+  post_model_call:
+    policy_target: "$snap.model_response"
+    policy_target_kind: model_response
+    annotations:
+      response_judge:
+        from: "$policy_target.content"
+    policy:
+      id: model_policy
+  pre_tool_call:
+    policy_target: "$snap.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$snap.tool_call.name"
+    annotations:
+      actor_context:
+        from: "$pi.snapshot.actor.id"
+      tool_risk:
+        from: "$policy_target.query"
+    policy:
+      id: tool_authz_policy
+  post_tool_call:
+    policy_target: "$snap.tool_result"
+    policy_target_kind: tool_result
+    tool_name_from: "$snap.tool_call.name"
+    annotations:
+      tool_result_scanner:
+        from: "$policy_target"
+    policy:
+      id: output_policy
+  output:
+    policy_target: "$snap.output"
+    policy_target_kind: assistant_output
+    annotations:
+      output_safety:
+        from: "$policy_target.content"
+    policy:
+      id: output_policy
+  agent_shutdown:
+    policy_target: "$"
+    policy_target_kind: agent_metadata
+    annotations:
+      shutdown_context:
+        from: "$pi.snapshot.reason"
+    policy:
+      id: lifecycle_policy
+tools:
+  search:
+    type: Tool
+    id: search
+    clearance:
+      - public
+      - customer_profile
+    security_labels:
+      - customer_profile
+annotators:
+  actor_context:
+    type: endpoint
+    endpoint: https://annotators.invalid/actor-context
+  output_safety:
+    type: llm
+    model: safety-reviewer
+  prompt_classifier:
+    type: classifier
+    classifier: prompt-risk-v1
+  response_judge:
+    type: llm
+    model: response-reviewer
+  shutdown_context:
+    type: endpoint
+    endpoint: https://annotators.invalid/shutdown-context
+  startup_context:
+    type: endpoint
+    endpoint: https://annotators.invalid/startup-context
+  tool_result_scanner:
+    type: classifier
+    classifier: result-scanner-v1
+  tool_risk:
+    type: classifier
+    classifier: tool-risk-v1

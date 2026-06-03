@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: acs-mediated-app
+  namespace: acs-agents
+  labels:
+    app.kubernetes.io/name: acs-mediated-app
+    app.kubernetes.io/part-of: acs-sidecar-reference
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: acs-mediated-app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

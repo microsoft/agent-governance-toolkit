@@ -7,6 +7,20 @@ LangChain Integration for Agent-OS
 Provides kernel-level governance for LangChain agents and chains using
 the LangChain ``AgentMiddleware`` system.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
+translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, an :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
+keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
+outbound prompt or tool arguments before the LangChain runnable sees
+them; ``escalate`` verdicts route through the configured approval
+resolver per AGT-DELTA D1.4.
+
 **Preferred (native middleware)**::
 
     from agent_os.integrations import LangChainKernel
@@ -40,11 +54,13 @@ the LangChain ``AgentMiddleware`` system.
 Features
 --------
 - Native ``AgentMiddleware`` integration (``wrap_tool_call``, ``wrap_model_call``)
-- Inherits ``BaseIntegration`` — Cedar/OPA, ``pre_execute``, ``post_execute``
-- Tool allowlist/blocklist enforcement via ``wrap_tool_call``
+- Policy evaluation routed through the AGT 5.0 ACS engine
+- Transform-verdict rewriting of tool arguments and model inputs
+- Escalate-verdict approval routing via the configured resolver
+- Tool allowlist/blocklist enforcement at the AGT pre_tool_call hook
 - Content filtering on model input/output and tool arguments
 - PII / secrets detection in memory writes
-- Full audit trail with event recording
+- Full audit trail with AGT bisected input/enforced identities
 - Health check endpoint
 - Backward-compatible ``wrap()`` / deep hooks
   (deprecated, will be removed in a future release)
@@ -56,8 +72,14 @@ import logging
 import time
 import warnings
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
+from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import PII_PATTERNS, BaseIntegration, GovernancePolicy
 
 logger = logging.getLogger("agent_os.langchain")
@@ -110,21 +132,37 @@ class LangChainKernel(BaseIntegration):
         timeout_seconds: float = 300.0,
         deep_hooks_enabled: bool = True,
         evaluator: Any = None,
+        *,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
         """Initialise the LangChain governance kernel.
 
         Args:
             policy: Governance policy to enforce. When ``None`` the default
-                ``GovernancePolicy`` is used.
+                ``GovernancePolicy`` is used. The policy is translated to
+                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
+                is constructed over it at init time.
             timeout_seconds: Default timeout in seconds for async operations
                 (default 300).
             deep_hooks_enabled: When ``True`` (default), the kernel will
                 apply deep integration hooks — tool registry interception,
                 memory write validation, and sub-agent spawn detection —
                 during :meth:`wrap`.
-            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
-                evaluation. When set, Cedar policies are consulted before
-                standard ``GovernancePolicy`` checks.
+            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
+                policy evaluation. Retained for backward compatibility;
+                the primary decision path now runs through the AGT 5.0
+                runtime.
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature matches
+                :data:`agt.policies.runtime.ApprovalCallback`. When
+                ``None`` an escalate verdict fails closed to ``deny``.
+            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
+                so scenario tests can wire a scripted policy dispatcher
+                without OPA on PATH. Not part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public surface.
         """
         super().__init__(policy, evaluator=evaluator)
         self.timeout_seconds = timeout_seconds
@@ -135,6 +173,46 @@ class LangChainKernel(BaseIntegration):
         self._tool_invocations: list[dict[str, Any]] = []
         self._memory_audit_log: list[dict[str, Any]] = []
         self._delegation_chains: list[dict[str, Any]] = []
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: Any,
+        *,
+        tool_name: str,
+        args: dict[str, Any],
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for a LangChain tool invocation."""
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=args, call_id=call_id
+        )
+
+    @staticmethod
+    def _to_body(data: Any) -> Any:
+        """Normalise a LangChain input payload to a JSON-serialisable body."""
+        if isinstance(data, (str, dict)):
+            return data
+        if hasattr(data, "content"):
+            return str(getattr(data, "content"))
+        if isinstance(data, list):
+            return str(data)
+        return str(data)
 
     # ── Deep Integration Hooks ────────────────────────────────────
 
@@ -707,8 +785,14 @@ class LangChainKernel(BaseIntegration):
         }
 
 
-class PolicyViolationError(Exception):
-    """Raised when a LangChain agent/chain violates governance policy."""
+class PolicyViolationError(_CanonicalPolicyViolationError):
+    """Raised when a LangChain agent/chain violates governance policy.
+
+    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
+    canonical ``from_check_result`` constructor is available while
+    preserving the legacy ``agent_os.integrations.langchain_adapter.PolicyViolationError``
+    import path for v4 callers.
+    """
 
     pass
 
@@ -820,20 +904,36 @@ class GovernanceMiddleware(_MiddlewareBase):
             tool_name, (tool_args,), {}, self._ctx
         )
 
-        # ─── 2. Cedar/OPA pre_execute gate ────────────────────────
-        input_data = {
-            "tool_name": tool_name,
-            "tool_args": tool_args,
-        }
-        allowed, reason = self._kernel.pre_execute(self._ctx, input_data)
-        if not allowed:
+        # ─── 1b. Host-side budget guard ───────────────────────────
+        # Mirrors the v4 ``PolicyInterceptor`` ``max_tool_calls`` branch and
+        # surfaces the v4 ``max_tool_calls`` reason before the engine budget
+        # rule (which carries the v5 ``budget_tool_calls_exceeded`` wire
+        # reason). Keeps the v4 host contract stable for callers that switch
+        # on ``check_result.reason``.
+        budget_result = self._kernel._bridge.evaluate_tool_budget(self._ctx)
+        if budget_result is not None and not budget_result.allowed:
+            raise PolicyViolationError.from_check_result(budget_result.check_result)
+
+        # ─── 2. AGT pre_tool_call evaluation ──────────────────────
+        bridge_result = self._kernel.evaluate_pre_tool_call(
+            self._ctx,
+            tool_name=tool_name,
+            args=tool_args if isinstance(tool_args, dict) else {"value": tool_args},
+            call_id=tool_call.get("id", "call-1") if isinstance(tool_call, dict) else "call-1",
+        )
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, dict
+        ) and isinstance(tool_call, dict):
+            tool_args = bridge_result.transform.value
+            tool_call["args"] = tool_args
+        if not bridge_result.allowed:
             logger.info(
-                "[%s] Policy DENY (pre_execute) on tool '%s': %s",
+                "[%s] Policy DENY (AGT pre_tool_call) on tool '%s': %s",
                 self._name,
                 tool_name,
-                reason,
+                bridge_result.reason,
             )
-            raise PolicyViolationError(reason)
+            raise PolicyViolationError.from_check_result(bridge_result.check_result)
         logger.info("[%s] Policy ALLOW on tool '%s'", self._name, tool_name)
 
         # ─── 3. Record invocation ─────────────────────────────────
@@ -849,33 +949,30 @@ class GovernanceMiddleware(_MiddlewareBase):
             self._kernel._last_error = str(exc)
             raise
 
-        # ─── 5. Post-execution validation ─────────────────────────
+        # ─── 5. Post-execution validation via AGT output hook ─────
         result_str = str(getattr(result, "content", result))
 
-        # Blocked-pattern check on output
-        matched = self._kernel.policy.matches_pattern(result_str)
-        if matched:
+        post_result = self._kernel._bridge.evaluate_output(self._ctx, content=result_str)
+        if not post_result.allowed:
             logger.info(
-                "[%s] Policy DENY: blocked pattern '%s' in tool '%s' output",
-                self._name,
-                matched[0],
-                tool_name,
-            )
-            raise PolicyViolationError(
-                f"Blocked pattern '{matched[0]}' detected in tool '{tool_name}' output"
-            )
-
-        # Drift detection / checkpointing via base post_execute
-        valid, reason = self._kernel.post_execute(self._ctx, result_str)
-        if not valid:
-            logger.info(
-                "[%s] Policy DENY (post_execute) on tool '%s' result: %s",
+                "[%s] Policy DENY (AGT output) on tool '%s' result: %s",
                 self._name,
                 tool_name,
-                reason,
+                post_result.reason,
             )
-            raise PolicyViolationError(reason)
+            raise PolicyViolationError.from_check_result(post_result.check_result)
+        if post_result.transform is not None and isinstance(
+            post_result.transform.value, str
+        ):
+            # Rewrite the tool result content so downstream consumers see
+            # the AGT-redacted text per AGT-DELTA D1.1.
+            if hasattr(result, "content"):
+                try:
+                    result.content = post_result.transform.value
+                except Exception:  # noqa: BLE001 — best-effort rewrite on opaque message
+                    pass
 
+        self._ctx.call_count += 1
         return result
 
     # ── wrap_model_call ───────────────────────────────────────────
@@ -933,18 +1030,31 @@ class GovernanceMiddleware(_MiddlewareBase):
             len(input_text),
         )
 
-        # ─── 1. Content filter on input ───────────────────────────
+        # ─── 1. AGT input intervention point ──────────────────────
         if input_text.strip():
-            allowed, reason = self._kernel.pre_execute(
+            pre_result = self._kernel.evaluate_input(
                 self._ctx, input_text.strip()
             )
-            if not allowed:
+            if not pre_result.allowed:
                 logger.info(
-                    "[%s] Policy DENY (pre_execute) on model input: %s",
+                    "[%s] Policy DENY (AGT input) on model input: %s",
                     self._name,
-                    reason,
+                    pre_result.reason,
                 )
-                raise PolicyViolationError(reason)
+                raise PolicyViolationError.from_check_result(pre_result.check_result)
+            if pre_result.transform is not None and isinstance(
+                pre_result.transform.value, str
+            ):
+                # Rewrite the most recent user message content per AGT D1.1.
+                for msg in reversed(messages):
+                    if hasattr(msg, "content") and isinstance(
+                        getattr(msg, "content"), str
+                    ):
+                        try:
+                            msg.content = pre_result.transform.value
+                        except Exception:  # noqa: BLE001 — best-effort rewrite
+                            pass
+                        break
             logger.info("[%s] Policy ALLOW on model input", self._name)
 
         # ─── 2. Execute the model call ────────────────────────────
@@ -955,33 +1065,28 @@ class GovernanceMiddleware(_MiddlewareBase):
             self._kernel._last_error = str(exc)
             raise
 
-        # ─── 3. Content filter on output ──────────────────────────
+        # ─── 3. AGT output intervention point ─────────────────────
         response_msg = getattr(response, "message", response)
         output_text = getattr(response_msg, "content", str(response_msg))
         if isinstance(output_text, str) and output_text.strip():
-            # Blocked-pattern check on model output
-            matched = self._kernel.policy.matches_pattern(output_text)
-            if matched:
-                logger.info(
-                    "[%s] Policy DENY: blocked pattern '%s' in model output",
-                    self._name,
-                    matched[0],
-                )
-                raise PolicyViolationError(
-                    f"Blocked pattern '{matched[0]}' detected in model output"
-                )
-
-            # Drift detection / checkpointing via base post_execute
-            valid, reason = self._kernel.post_execute(
-                self._ctx, output_text.strip()
+            post_result = self._kernel._bridge.evaluate_output(
+                self._ctx, content=output_text.strip()
             )
-            if not valid:
+            if not post_result.allowed:
                 logger.info(
-                    "[%s] Policy DENY (post_execute) on model output: %s",
+                    "[%s] Policy DENY (AGT output) on model output: %s",
                     self._name,
-                    reason,
+                    post_result.reason,
                 )
-                raise PolicyViolationError(reason)
+                raise PolicyViolationError.from_check_result(post_result.check_result)
+            if post_result.transform is not None and isinstance(
+                post_result.transform.value, str
+            ):
+                if hasattr(response_msg, "content"):
+                    try:
+                        response_msg.content = post_result.transform.value
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
 
         return response
 

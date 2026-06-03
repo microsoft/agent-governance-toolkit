@@ -1,0 +1,97 @@
+[
+  {
+    "name": "approvers_set_without_grant_permits_with_escalate_advice",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"wire_transfer\"",
+      "context": {
+        "tool_call": {"name": "wire_transfer", "args": {}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "wire_transfer"}, "attrs": {"approvers": ["alice", "bob"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.approval.approver_required"],
+    "num_errors": 0
+  },
+  {
+    "name": "annotator_required_true_permits_with_escalate_advice",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"wire_transfer\"",
+      "context": {
+        "tool_call": {"name": "wire_transfer", "args": {}},
+        "annotations": {"approval": {"required": true}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "wire_transfer"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.approval.annotator_required"],
+    "num_errors": 0
+  },
+  {
+    "name": "approval_granted_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"wire_transfer\"",
+      "context": {
+        "tool_call": {"name": "wire_transfer", "args": {}},
+        "annotations": {"approval": {"granted": true}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "wire_transfer"}, "attrs": {"approvers": ["alice", "bob"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "empty_approver_list_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"safe_tool\"",
+      "context": {
+        "tool_call": {"name": "safe_tool", "args": {}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "safe_tool"}, "attrs": {"approvers": []}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "no_approvers_and_no_annotation_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"safe_tool\"",
+      "context": {
+        "tool_call": {"name": "safe_tool", "args": {}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "safe_tool"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]

@@ -35,6 +35,12 @@ SKIP_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv",
     "dist", "build", ".eggs", ".tox", ".mypy_cache",
     "vendor", "third_party",
+    # Vendored third-party subtree: the Agent Control Specification (ACS) is
+    # MIT-licensed by a third party (Copyright (c) 2026 responsibleai, see
+    # policy-engine/LICENSE.acs). Stamping a Microsoft copyright header onto
+    # these files would misattribute the upstream copyright, so the subtree is
+    # exempt from Microsoft-header enforcement.
+    "policy-engine",
 }
 
 # Files to skip (generated, vendored, etc.)

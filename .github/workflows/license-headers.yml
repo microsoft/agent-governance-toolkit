@@ -33,4 +33,7 @@ jobs:
             echo "No source files changed."
             exit 0
           fi
-          python scripts/check_license_headers.py "$changed"
+          # Pass each changed file as a separate argument (the list is
+          # newline-separated; a single quoted arg would be read as one path).
+          mapfile -t changed_files <<< "$changed"
+          python scripts/check_license_headers.py "${changed_files[@]}"

@@ -41,7 +41,7 @@ jobs:
           INPUT: ${{ github.event.inputs.package }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          # Complete list of publishable Python packages (10 packages)
+          # Complete list of publishable Python packages.
           ALL='[
             {"name":"agent-governance-toolkit-core","path":"agent-governance-python/agent-governance-toolkit-core"},
             {"name":"agent-governance-toolkit-integrations","path":"agent-governance-python/agent-governance-toolkit-integrations"},
@@ -52,7 +52,10 @@ jobs:
             {"name":"agent-lightning","path":"agent-governance-python/agent-lightning"},
             {"name":"agent-marketplace","path":"agent-governance-python/agent-marketplace"},
             {"name":"agent-rag-governance","path":"agent-governance-python/agent-rag-governance"},
-            {"name":"agt-sandbox","path":"agent-governance-python/agent-sandbox"}
+            {"name":"agt-sandbox","path":"agent-governance-python/agent-sandbox"},
+            {"name":"agent-control-specification","path":"policy-engine/sdk/python","rust":true,"noBuildIsolation":true},
+            {"name":"agt-policies","path":"agent-governance-python/agt-policies"},
+            {"name":"acs-generator","path":"policy-engine/generator","noBuildIsolation":true}
           ]'
           # Compact the JSON
           ALL=$(echo "$ALL" | jq -c '.')
@@ -131,18 +134,24 @@ jobs:
 
       - name: Install build tools
         run: |
-          # Require hash verification via requirements file (CWE-295)
-          printf '%s\n' \
-            'build==1.2.1 --hash=sha256:75e10f767a433d9a86e50d83f418e83efc18ede923ee5ff7df93b6cb0306c5d4' \
-            'packaging==26.2 --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e' \
-            'pyproject_hooks==1.2.0 --hash=sha256:9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913' \
-            > /tmp/build-req.txt
-          pip install --no-cache-dir --require-hashes -r /tmp/build-req.txt
+          python -m pip install --no-cache-dir --disable-pip-version-check \
+            --require-hashes --no-deps \
+            -r .github/pipelines/release-tools/release-tools.txt
+
+      - name: Install Rust toolchain for native Python package
+        if: ${{ matrix.rust == true }}
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          rustup default 1.89.0
 
       - name: Build ${{ matrix.name }}
         working-directory: ${{ matrix.path }}
+        env:
+          BUILD_NO_ISOLATION: ${{ matrix.noBuildIsolation || 'false' }}
         run: |
-          if [[ "${{ matrix.name }}" == agent-governance-toolkit-* ]]; then
+          if [[ "$BUILD_NO_ISOLATION" == "true" ]]; then
+            python -m build --no-isolation
+          elif [[ "${{ matrix.name }}" == agent-governance-toolkit-* ]]; then
             python -m build --wheel
           else
             python -m build

@@ -5,6 +5,20 @@ OpenAI Assistants Integration
 
 Wraps OpenAI Assistants API with Agent OS governance.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` constructor
+is translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, the resulting :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
+keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
+outbound message or instructions before the OpenAI client sees them;
+``escalate`` verdicts route through the configured approval resolver
+per AGT-DELTA D1.4.
+
 Usage:
     from agent_os.integrations import OpenAIKernel
     from openai import OpenAI
@@ -28,11 +42,13 @@ Usage:
     run = governed_assistant.run(thread.id)  # Governed execution
 
 Features:
-- Pre-execution policy checks
-- Tool call interception and validation
+- Pre-execution policy checks via the AGT 5.0 ACS runtime
+- Tool call interception and validation at the AGT pre_tool_call hook
+- Transform-verdict redaction of outbound messages and instructions
+- Escalate-verdict approval routing via the configured resolver
 - Real-time run monitoring
 - SIGKILL support (cancel run on violation)
-- Full audit trail
+- Full audit trail with AGT bisected input/enforced identities
 """
 
 import json
@@ -44,7 +60,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Optional
 
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
+from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 
 logger = logging.getLogger("agent_os.openai")
 
@@ -155,16 +177,31 @@ class OpenAIKernel(BaseIntegration):
         policy: Optional[GovernancePolicy] = None,
         max_retries: int = 3,
         timeout_seconds: float = 300.0,
+        *,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
         """Initialise the OpenAI governance kernel.
 
         Args:
             policy: Governance policy to enforce. When ``None`` the default
-                ``GovernancePolicy`` is used.
+                ``GovernancePolicy`` is used. The policy is translated to
+                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
+                is constructed over it at init time.
             max_retries: Maximum number of retry attempts for transient
                 OpenAI errors (default 3).
             timeout_seconds: Default timeout in seconds for operations
                 (default 300).
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature matches
+                :data:`agt.policies.runtime.ApprovalCallback`. When
+                ``None`` an escalate verdict fails closed to ``deny``.
+            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
+                so scenario tests can wire a scripted policy dispatcher
+                without OPA on PATH. Not part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public surface.
         """
         super().__init__(policy)
         self.max_retries = max_retries
@@ -174,6 +211,49 @@ class OpenAIKernel(BaseIntegration):
         self._cancelled_runs: set[str] = set()
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def evaluate_input(
+        self, ctx: ExecutionContext, input_data: Any
+    ) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        return self._evaluate_pre_execute(ctx, input_data)
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: ExecutionContext,
+        *,
+        tool_name: str,
+        args: dict[str, Any],
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for a single tool invocation."""
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=args, call_id=call_id
+        )
+
+    def _evaluate_pre_execute(
+        self, ctx: ExecutionContext, input_data: Any
+    ) -> BridgeResult:
+        body: Any
+        if isinstance(input_data, (str, dict)):
+            body = input_data
+        elif hasattr(input_data, "content"):
+            body = str(getattr(input_data, "content"))
+        else:
+            body = str(input_data)
+        return self._bridge.evaluate_input(ctx, body=body)
 
     def wrap(self, agent: Any, client: Any = None) -> "GovernedAssistant":
         """Wrap an OpenAI Assistant with governance.
@@ -400,8 +480,12 @@ class GovernedAssistant:
     ) -> Any:
         """Add a message to a thread with pre-execution policy checks.
 
-        The message content is validated against ``blocked_patterns`` before
-        being sent to the OpenAI API.
+        The message content is validated against the configured AGT
+        manifest at the ``input`` intervention point. A ``transform``
+        verdict (AGT-DELTA D1.1) rewrites ``content`` before it is sent
+        to the OpenAI API; a ``deny`` verdict raises
+        :class:`PolicyViolationError`; an ``escalate`` verdict that the
+        approval resolver refuses is surfaced as a ``deny``.
 
         Args:
             thread_id: Target thread.
@@ -413,12 +497,16 @@ class GovernedAssistant:
             The created OpenAI message object.
 
         Raises:
-            PolicyViolationError: If the content matches a blocked pattern.
+            PolicyViolationError: If the content fails the AGT policy
+                evaluation.
         """
-        # Pre-check: blocked patterns
-        allowed, reason = self._kernel.pre_execute(self._ctx, content)
-        if not allowed:
-            raise PolicyViolationError(f"Message blocked: {reason}")
+        bridge_result = self._kernel.evaluate_input(self._ctx, content)
+        if not bridge_result.allowed:
+            raise PolicyViolationError.from_check_result(bridge_result.check_result)
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, str
+        ):
+            content = bridge_result.transform.value
 
         message = self._client.beta.threads.messages.create(
             thread_id=thread_id,
@@ -475,11 +563,15 @@ class GovernedAssistant:
             PolicyViolationError: If policy is violated
             RunCancelledException: If run was SIGKILL'd
         """
-        # Pre-check
+        # Pre-check (AGT input intervention point)
         if instructions:
-            allowed, reason = self._kernel.pre_execute(self._ctx, instructions)
-            if not allowed:
-                raise PolicyViolationError(f"Instructions blocked: {reason}")
+            bridge_result = self._kernel.evaluate_input(self._ctx, instructions)
+            if not bridge_result.allowed:
+                raise PolicyViolationError.from_check_result(bridge_result.check_result)
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, str
+            ):
+                instructions = bridge_result.transform.value
 
         # Validate tools against policy
         if tools:
@@ -513,11 +605,15 @@ class GovernedAssistant:
 
         Yields events as they arrive, with real-time policy checks.
         """
-        # Pre-check
+        # Pre-check (AGT input intervention point)
         if instructions:
-            allowed, reason = self._kernel.pre_execute(self._ctx, instructions)
-            if not allowed:
-                raise PolicyViolationError(f"Instructions blocked: {reason}")
+            bridge_result = self._kernel.evaluate_input(self._ctx, instructions)
+            if not bridge_result.allowed:
+                raise PolicyViolationError.from_check_result(bridge_result.check_result)
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, str
+            ):
+                instructions = bridge_result.transform.value
 
         # Create streaming run
         with self._client.beta.threads.runs.stream(
@@ -588,76 +684,96 @@ class GovernedAssistant:
 
     def _handle_tool_calls(self, thread_id: str, run: Any) -> Any:
         """
-        Handle tool calls with policy validation.
+        Handle tool calls with AGT 5.0 policy validation at the
+        ``pre_tool_call`` intervention point.
         """
         tool_calls = run.required_action.submit_tool_outputs.tool_calls
         tool_outputs = []
 
         for tool_call in tool_calls:
             # Record tool call
+            func_name = (
+                tool_call.function.name if hasattr(tool_call, "function") else None
+            )
+            raw_args = (
+                tool_call.function.arguments
+                if hasattr(tool_call, "function")
+                else None
+            )
             call_info = {
                 "id": tool_call.id,
                 "type": tool_call.type,
-                "function": tool_call.function.name if hasattr(tool_call, 'function') else None,
-                "arguments": tool_call.function.arguments if hasattr(tool_call, 'function') else None,
-                "timestamp": datetime.now().isoformat()
+                "function": func_name,
+                "arguments": raw_args,
+                "timestamp": datetime.now().isoformat(),
             }
             self._ctx.function_calls.append(call_info)
             self._ctx.tool_calls.append(call_info)
+            self._ctx.call_count = len(self._ctx.tool_calls)
 
-            # Check tool call count
-            if len(self._ctx.tool_calls) > self._kernel.policy.max_tool_calls:
+            try:
+                parsed_args = json.loads(raw_args) if raw_args else {}
+            except (TypeError, ValueError):
+                parsed_args = {}
+
+            bridge_result = self._kernel.evaluate_pre_tool_call(
+                self._ctx,
+                tool_name=func_name or "",
+                args=parsed_args,
+                call_id=tool_call.id,
+            )
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, dict
+            ):
+                parsed_args = bridge_result.transform.value
+                raw_args = json.dumps(parsed_args)
+            if not bridge_result.allowed:
                 self._kernel.cancel_run(thread_id, run.id, self._client)
-                raise PolicyViolationError(
-                    f"Tool call limit exceeded: {len(self._ctx.tool_calls)} > {self._kernel.policy.max_tool_calls}"
+                raise PolicyViolationError.from_check_result(
+                    bridge_result.check_result
                 )
-
-            # Validate function name
-            if hasattr(tool_call, 'function'):
-                func_name = tool_call.function.name
-                if self._kernel.policy.allowed_tools:
-                    if func_name not in self._kernel.policy.allowed_tools:
-                        self._kernel.cancel_run(thread_id, run.id, self._client)
-                        raise PolicyViolationError(
-                            f"Tool not allowed: {func_name}"
-                        )
-
-            # Check human approval requirement
-            if self._kernel.policy.require_human_approval:
+            if bridge_result.verdict == "escalate":
+                # Escalate with no resolver decision: surface as awaiting
+                # approval to the OpenAI API rather than executing.
                 tool_outputs.append({
                     "tool_call_id": tool_call.id,
                     "output": json.dumps({
                         "status": "requires_approval",
-                        "function": func_name if hasattr(tool_call, 'function') else "unknown",
-                        "message": "Tool execution requires human approval per governance policy"
-                    })
+                        "function": func_name or "unknown",
+                        "message": "Tool execution requires human approval per governance policy",
+                    }),
                 })
                 continue
 
             # Execute via tool registry if available
             output = None
-            if hasattr(self, '_tool_registry') and self._tool_registry:
-                func_name_exec = tool_call.function.name if hasattr(tool_call, 'function') else None
-                if func_name_exec and func_name_exec in self._tool_registry:
+            if hasattr(self, "_tool_registry") and self._tool_registry:
+                if func_name and func_name in self._tool_registry:
                     try:
-                        args = json.loads(tool_call.function.arguments) if hasattr(tool_call, 'function') else {}
-                        result = self._tool_registry[func_name_exec](**args)
-                        output = json.dumps(result) if not isinstance(result, str) else result
+                        result = self._tool_registry[func_name](**parsed_args)
+                        output = (
+                            json.dumps(result)
+                            if not isinstance(result, str)
+                            else result
+                        )
                     except Exception as e:
-                        logger.warning("Tool execution failed for %s", func_name_exec, exc_info=True)
+                        logger.warning(
+                            "Tool execution failed for %s", func_name, exc_info=True
+                        )
                         output = json.dumps({"status": "error", "message": str(e)})
 
             if output is None:
                 output = json.dumps({
                     "status": "no_executor",
-                    "function": tool_call.function.name if hasattr(tool_call, 'function') else "unknown",
-                    "message": "No tool executor registered for this function"
+                    "function": func_name or "unknown",
+                    "message": "No tool executor registered for this function",
                 })
 
             tool_outputs.append({
                 "tool_call_id": tool_call.id,
-                "output": output
+                "output": output,
             })
+            self._kernel.bridge.record_post_execute(self._ctx, tool_calls=1)
 
         # Submit outputs
         return self._client.beta.threads.runs.submit_tool_outputs(
@@ -749,10 +865,13 @@ class GovernedAssistant:
         return getattr(self._assistant, name)
 
 
-class PolicyViolationError(Exception):
+class PolicyViolationError(_CanonicalPolicyViolationError):
     """Raised when an assistant action violates governance policy.
 
-    Contains a human-readable reason describing which policy was violated.
+    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
+    canonical ``from_check_result`` constructor is available while
+    preserving the legacy ``agent_os.integrations.openai_adapter.PolicyViolationError``
+    import path for v4 callers.
     """
 
     pass

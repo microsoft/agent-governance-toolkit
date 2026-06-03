@@ -7,6 +7,20 @@ Provides governance for CrewAI crews and agents via **native execution hooks**
 (``@before_tool_call``, ``@after_tool_call``, ``@before_llm_call``,
 ``@after_llm_call``) introduced in CrewAI 0.80+.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
+translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, an :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
+keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
+outbound LLM message text and tool result before CrewAI forwards them;
+``escalate`` verdicts route through the configured approval resolver
+per AGT-DELTA D1.4.
+
 Recommended usage (native hooks)::
 
     from agent_os.integrations.crewai_adapter import CrewAIKernel, GovernancePolicy
@@ -28,10 +42,15 @@ Legacy usage (deprecated)::
 import functools
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
 from .base import (
     PII_PATTERNS,
     BaseIntegration,
@@ -200,52 +219,49 @@ class GovernanceHooks:
                 name, tool_name, agent_name,
             )
 
-            # ─── 1. Tool allowlist check ───────────────────────
-            if kernel.policy.allowed_tools:
-                if tool_name not in kernel.policy.allowed_tools:
+            # Host-side defensive pattern scan on the tool name and the
+            # serialised arguments. The AGT manifest bridge only emits a
+            # pattern check against ``input.policy_target.value`` (a
+            # string), so tool-name and dict-arg pattern matching stays
+            # on the host side to preserve the v4 behavioural contract.
+            for candidate in (tool_name, str(tool_input)):
+                matched = kernel.policy.matches_pattern(candidate)
+                if matched:
                     logger.info(
-                        "[%s] Policy DENY: tool '%s' not in allowed_tools",
-                        name, tool_name,
+                        "[%s] Policy DENY: blocked pattern '%s' in tool name/args",
+                        name, matched[0],
                     )
                     return False
 
-            # ─── 2. Blocked-pattern scan on arguments ─────────────
-            args_str = str(tool_input)
-            matched = kernel.policy.matches_pattern(args_str)
-            if matched:
-                logger.info(
-                    "[%s] Policy DENY: blocked pattern '%s' in tool args",
-                    name, matched[0],
-                )
-                return False
-
-            # ─── 3. Blocked-pattern scan on tool name ─────────────
-            name_matched = kernel.policy.matches_pattern(tool_name)
-            if name_matched:
-                logger.info(
-                    "[%s] Policy DENY: blocked pattern '%s' in tool name",
-                    name, name_matched[0],
-                )
-                return False
-
-            # ─── 4. Cedar/OPA pre_execute gate ────────────────────
-            allowed, reason = kernel.pre_execute(
-                ctx, {"tool_name": tool_name, "tool_args": tool_input},
+            # ─── AGT pre_tool_call evaluation ────────────────────
+            bridge_result = kernel.evaluate_pre_tool_call(
+                ctx,
+                tool_name=tool_name,
+                args=tool_input,
+                call_id=getattr(context, "tool_call_id", "call-1"),
             )
-            if not allowed:
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, dict
+            ):
+                try:
+                    context.tool_input = bridge_result.transform.value
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
+            if not bridge_result.allowed:
                 logger.info(
-                    "[%s] Policy DENY (pre_execute): %s", name, reason,
+                    "[%s] Policy DENY (AGT pre_tool_call): %s",
+                    name,
+                    bridge_result.reason,
                 )
                 return False
 
-            # ─── 5. Increment call count / max check ──────────────
+            # ─── Increment call count ─────────────────────────────
+            # The bridge mirrors ``ctx.call_count`` into the snapshot
+            # builder via ``max(builder.tool_call_count, ctx.call_count)``
+            # on every access, so incrementing here is sufficient. Calling
+            # ``record_post_execute(tool_calls=1)`` in addition double-counts
+            # the call and trips ``max_tool_calls`` one call early.
             ctx.call_count += 1
-            if kernel.policy.max_tool_calls and ctx.call_count > kernel.policy.max_tool_calls:
-                logger.info(
-                    "[%s] Policy DENY: max_tool_calls (%d) exceeded",
-                    name, kernel.policy.max_tool_calls,
-                )
-                return False
 
             logger.debug(
                 "[%s] Tool ALLOW: tool=%s count=%d",
@@ -294,25 +310,23 @@ class GovernanceHooks:
             tool_result = getattr(context, "tool_result", None)
 
             if tool_result and isinstance(tool_result, str):
-                # Blocked-pattern check on output
-                matched = kernel.policy.matches_pattern(tool_result)
-                if matched:
+                # AGT output intervention point evaluates the tool result
+                post_result = kernel.evaluate_output(ctx, tool_result)
+                if not post_result.allowed:
                     logger.info(
-                        "[%s] Policy DENY: blocked pattern '%s' in tool output",
-                        name, matched[0],
+                        "[%s] Policy DENY (AGT output) on tool output: %s",
+                        name, post_result.reason,
                     )
-                    raise PolicyViolationError(
-                        f"Blocked pattern '{matched[0]}' detected in tool output"
+                    raise PolicyViolationError.from_check_result(
+                        post_result.check_result
                     )
-
-                # Drift detection / checkpointing via base post_execute
-                valid, reason = kernel.post_execute(ctx, tool_result)
-                if not valid:
-                    logger.info(
-                        "[%s] Policy DENY (post_execute) on tool output: %s",
-                        name, reason,
-                    )
-                    raise PolicyViolationError(reason)
+                if post_result.transform is not None and isinstance(
+                    post_result.transform.value, str
+                ):
+                    try:
+                        context.tool_result = post_result.transform.value
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
 
             logger.debug("[%s] after_tool_call OK: tool=%s", name, tool_name)
             return None
@@ -351,7 +365,11 @@ class GovernanceHooks:
             """
             messages = getattr(context, "messages", None) or []
 
-            # ─── 1. Content filter on input messages ──────────────
+            # ─── 1. Defensive content-pattern scan on input messages ─
+            # Mirrors the v4 behaviour because the AGT input intervention
+            # point in the manifest bridge pattern-matches a single
+            # ``policy_target.value`` string; multi-message scans stay
+            # on the host side.
             for msg in messages:
                 content = None
                 if isinstance(msg, dict):
@@ -370,20 +388,38 @@ class GovernanceHooks:
                         )
                         return False
 
-            # ─── 2. Cedar/OPA pre_execute gate ────────────────────
+            # ─── 2. AGT input intervention point on combined messages ─
             combined_input = " ".join(
                 str(m.get("content", m) if isinstance(m, dict) else m)
                 for m in messages
             ) if messages else ""
 
             if combined_input.strip():
-                allowed, reason = kernel.pre_execute(ctx, combined_input)
-                if not allowed:
+                pre_result = kernel.evaluate_input(ctx, combined_input)
+                if not pre_result.allowed:
                     logger.info(
-                        "[%s] Policy DENY (pre_execute) on LLM input: %s",
-                        name, reason,
+                        "[%s] Policy DENY (AGT input) on LLM input: %s",
+                        name, pre_result.reason,
                     )
                     return False
+                if pre_result.transform is not None and isinstance(
+                    pre_result.transform.value, str
+                ):
+                    # Rewrite the last user message content per AGT D1.1.
+                    for msg in reversed(messages):
+                        if isinstance(msg, dict) and isinstance(
+                            msg.get("content"), str
+                        ):
+                            msg["content"] = pre_result.transform.value
+                            break
+                        if hasattr(msg, "content") and isinstance(
+                            getattr(msg, "content"), str
+                        ):
+                            try:
+                                msg.content = pre_result.transform.value
+                            except Exception:  # noqa: BLE001 — best-effort rewrite
+                                pass
+                            break
 
             return None  # allow
 
@@ -426,25 +462,25 @@ class GovernanceHooks:
             response = getattr(context, "response", None)
 
             if response and isinstance(response, str) and response.strip():
-                # Blocked-pattern check on LLM output
-                matched = kernel.policy.matches_pattern(response)
-                if matched:
+                # AGT output intervention point evaluates the LLM response
+                post_result = kernel.evaluate_output(ctx, response.strip())
+                if not post_result.allowed:
                     logger.info(
-                        "[%s] Policy DENY: blocked pattern '%s' in LLM output",
-                        name, matched[0],
+                        "[%s] Policy DENY (AGT output) on LLM output: %s",
+                        name, post_result.reason,
                     )
-                    raise PolicyViolationError(
-                        f"Blocked pattern '{matched[0]}' detected in LLM output"
+                    raise PolicyViolationError.from_check_result(
+                        post_result.check_result
                     )
-
-                # Drift detection / checkpointing
-                valid, reason = kernel.post_execute(ctx, response.strip())
-                if not valid:
-                    logger.info(
-                        "[%s] Policy DENY (post_execute) on LLM output: %s",
-                        name, reason,
-                    )
-                    raise PolicyViolationError(reason)
+                if post_result.transform is not None and isinstance(
+                    post_result.transform.value, str
+                ):
+                    # Replace the LLM response per AGT D1.1.
+                    try:
+                        context.response = post_result.transform.value
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
+                    return post_result.transform.value
 
             return None  # keep original response
 
@@ -514,6 +550,10 @@ class CrewAIKernel(BaseIntegration):
         policy: Optional[GovernancePolicy] = None,
         deep_hooks_enabled: bool = True,
         evaluator: Any = None,
+        *,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
         super().__init__(policy, evaluator=evaluator)
         self.deep_hooks_enabled = deep_hooks_enabled
@@ -521,10 +561,70 @@ class CrewAIKernel(BaseIntegration):
         self._step_log: list[dict[str, Any]] = []
         self._memory_audit_log: list[dict[str, Any]] = []
         self._delegation_log: list[dict[str, Any]] = []
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
         logger.debug(
             "CrewAIKernel initialized with policy=%s deep_hooks_enabled=%s",
             policy, deep_hooks_enabled,
         )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
+
+    def evaluate_output(self, ctx: Any, output_data: Any) -> BridgeResult:
+        """Public access to the AGT ``output`` intervention point evaluation."""
+        return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: Any,
+        *,
+        tool_name: str,
+        args: Any,
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for a CrewAI tool call."""
+        normalised: dict[str, Any]
+        if isinstance(args, dict):
+            normalised = args
+        elif isinstance(args, str):
+            normalised = {"arguments": args}
+        else:
+            normalised = {"value": args}
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=normalised, call_id=call_id
+        )
+
+    @staticmethod
+    def _to_body(data: Any) -> Any:
+        """Normalise a CrewAI payload to a JSON-serialisable body.
+
+        v4 callers passed dicts and CrewAI-specific objects to
+        :meth:`pre_execute`; the AGT manifest bridge only pattern-matches
+        a string ``policy_target.value``, so the adapter stringifies
+        non-string payloads here so the v4 pattern contract still
+        holds.
+        """
+        if isinstance(data, str):
+            return data
+        if isinstance(data, dict):
+            return str(data)
+        if hasattr(data, "content"):
+            return str(getattr(data, "content"))
+        if hasattr(data, "description"):
+            return str(getattr(data, "description"))
+        return str(data)
 
     # ── Native hooks (recommended) ────────────────────────────────
 

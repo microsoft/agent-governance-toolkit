@@ -1,0 +1,141 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "aggregated_streaming_semantics"
+  ],
+  "description": "Streaming cases use aggregated post-model and final-output policy_targets; chunk-level verdicts are intentionally absent.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "model_response": {
+              "content": "Hello",
+              "stream": {
+                "aggregated": "Hello",
+                "chunks": [
+                  "Hel",
+                  "lo"
+                ]
+              },
+              "tool_calls": []
+            }
+          },
+          "intervention_point": "post_model_call",
+          "policy_target": {
+            "kind": "model_response",
+            "path": "$snap.model_response",
+            "value": {
+              "content": "Hello",
+              "stream": {
+                "aggregated": "Hello",
+                "chunks": [
+                  "Hel",
+                  "lo"
+                ]
+              },
+              "tool_calls": []
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "post-model-aggregated-stream",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "model_response": {
+          "content": "Hello",
+          "stream": {
+            "aggregated": "Hello",
+            "chunks": [
+              "Hel",
+              "lo"
+            ]
+          },
+          "tool_calls": []
+        }
+      },
+      "intervention_point": "post_model_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "aggregated_from_stream": true,
+              "content": "Hello world",
+              "stream": {
+                "aggregated": "Hello world",
+                "chunks": [
+                  "Hello",
+                  " world"
+                ]
+              }
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "aggregated_from_stream": true,
+              "content": "Hello world",
+              "stream": {
+                "aggregated": "Hello world",
+                "chunks": [
+                  "Hello",
+                  " world"
+                ]
+              }
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "final-output-aggregated-stream",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "output": {
+          "aggregated_from_stream": true,
+          "content": "Hello world",
+          "stream": {
+            "aggregated": "Hello world",
+            "chunks": [
+              "Hello",
+              " world"
+            ]
+          }
+        }
+      },
+      "intervention_point": "output"
+    }
+  ],
+  "id": "aggregated-streaming-semantics",
+  "intentionally_absent": [
+    "stream_chunk_intervention_point",
+    "token_level_enforcement",
+    "chunk_level_verdicts"
+  ],
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  post_model_call:\n    policy_target_kind: model_response\n    policy:\n      id: test_policy\n    policy_target: $snap.model_response\n  output:\n    policy_target_kind: assistant_output\n    policy:\n      id: test_policy\n    policy_target: $snap.output\n",
+  "schema_version": 1
+}

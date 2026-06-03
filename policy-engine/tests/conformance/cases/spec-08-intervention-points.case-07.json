@@ -1,0 +1,29 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-08-intervention-points.case-07",
+  "spec_section": "8",
+  "title": "unconfigured intervention point fails closed",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
+  "intervention_point": "output",
+  "snapshot": {
+    "output": {
+      "text": "orphan"
+    }
+  },
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "runtime_error:intervention_point_unknown",
+    "transformed_policy_target": null
+  }
+}

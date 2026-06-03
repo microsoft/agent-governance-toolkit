@@ -1,0 +1,200 @@
+{
+  "$id": "https://agent-control-specification.test/wire/effect.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification effect",
+  "description": "Single policy target mutation described by the Rust Effect type.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/replace"
+    },
+    {
+      "$ref": "#/$defs/append"
+    },
+    {
+      "$ref": "#/$defs/prepend"
+    },
+    {
+      "$ref": "#/$defs/redact"
+    }
+  ],
+  "$defs": {
+    "base_path": {
+      "type": "string",
+      "pattern": "^\\$policy_target(\\.|\\[|$)",
+      "description": "JSON path rooted at $policy_target. Other roots are rejected by the core."
+    },
+    "replace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "path",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "const": "replace"
+        },
+        "path": {
+          "$ref": "#/$defs/base_path"
+        },
+        "value": true
+      }
+    },
+    "append": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "path",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "const": "append"
+        },
+        "path": {
+          "$ref": "#/$defs/base_path"
+        },
+        "value": true
+      }
+    },
+    "prepend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "path",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "const": "prepend"
+        },
+        "path": {
+          "$ref": "#/$defs/base_path"
+        },
+        "value": true
+      }
+    },
+    "redact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "path"
+      ],
+      "properties": {
+        "type": {
+          "const": "redact"
+        },
+        "path": {
+          "$ref": "#/$defs/base_path"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Rust regex crate pattern. The core derives Unicode scalar value spans from non empty matches."
+        },
+        "values": {
+          "type": "array",
+          "description": "Literal strings. The core derives Unicode scalar value spans from non empty occurrences.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "spans": {
+          "type": "array",
+          "description": "Ordered non overlapping Unicode scalar value offsets into the selected string. These offsets are not UTF-8 bytes, UTF-16 code units, or grapheme clusters. The core enforces ordering and bounds.",
+          "items": {
+            "$ref": "#/$defs/redaction_span"
+          }
+        },
+        "replacement": {
+          "type": "string",
+          "description": "Replacement for pattern and values forms. Defaults to [REDACTED]."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "pattern"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "values"
+                ]
+              },
+              {
+                "required": [
+                  "spans"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "values"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "pattern"
+                ]
+              },
+              {
+                "required": [
+                  "spans"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "spans"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "pattern"
+                ]
+              },
+              {
+                "required": [
+                  "values"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "redaction_span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "replacement"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replacement": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

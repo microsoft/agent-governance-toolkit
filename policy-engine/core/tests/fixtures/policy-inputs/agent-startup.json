@@ -1,0 +1,27 @@
+{
+  "annotations": {
+    "startup_context": {
+      "deployment": "prod",
+      "region": "us-east"
+    }
+  },
+  "snapshot": {
+    "agent": {
+      "id": "agent-007",
+      "version": "1.0.0"
+    },
+    "metadata": {
+      "deployment": "prod"
+    }
+  },
+  "intervention_point": "agent_startup",
+  "policy_target": {
+    "kind": "agent_metadata",
+    "path": "$snap.agent",
+    "value": {
+      "id": "agent-007",
+      "version": "1.0.0"
+    }
+  },
+  "tool": null
+}

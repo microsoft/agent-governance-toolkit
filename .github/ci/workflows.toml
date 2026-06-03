@@ -1,0 +1,136 @@
+# Source of truth for generated CI workflows.
+#
+# Edit this file (and actions.toml) instead of the generated YAML under
+# .github/workflows/*. Regenerate with:
+#   python3 scripts/ci/generate_workflows.py --write
+# CI runs `--check` and fails when the committed YAML drifts from this source.
+#
+# Schema (validated by scripts/ci/generate_workflows.py):
+#   [[workflow]]                one block per generated workflow file
+#     id            string      stable identifier
+#     name          string      workflow `name:` value
+#     output        string      path of the generated YAML, repo relative
+#     pull_request_paths  [str] path filters that trigger the workflow on PRs
+#     push_branches       [str] branches that trigger the workflow on push
+#     [[workflow.job]]          one block per job
+#       id          string      job key
+#       name        string      job display name
+#       toolchains  [str]       subset of {rust, python, node, dotnet}
+#       opa         bool        install OPA (downloads to $RUNNER_TEMP/opa)
+#       opa_env     bool        export ACS_OPA_PATH (default true). Set false
+#                               for the Rust job: core/tests/opa.rs asserts the
+#                               "OPA executable was not found" message, which
+#                               opa_spawn_error only emits when ACS_OPA_PATH is
+#                               unset. The Rust opa tests resolve opa from PATH.
+#       opa_on_path bool        also add OPA to PATH (for tools using which(opa)
+#                               and for the Rust opa tests' require_opa_or_skip)
+#       working_directory string defaults.run.working-directory for the job
+#       [[workflow.job.step]]   one block per run step
+#         name      string
+#         run       string      shell body (single or multi line)
+
+[[workflow]]
+id = "policy-engine-ci"
+name = "policy-engine-ci"
+output = ".github/workflows/policy-engine-ci.yml"
+pull_request_paths = [
+  "policy-engine/**",
+  ".github/ci/**",
+  ".github/workflows/policy-engine-ci.yml",
+  "scripts/ci/generate_workflows.py",
+]
+push_branches = ["main"]
+
+[[workflow.job]]
+id = "rust"
+name = "Rust core and SDK"
+toolchains = ["rust"]
+opa = true
+opa_env = false
+opa_on_path = true
+working_directory = "policy-engine"
+[[workflow.job.step]]
+name = "Format"
+run = "cargo fmt --all -- --check"
+[[workflow.job.step]]
+name = "Clippy"
+run = "cargo clippy --workspace --all-targets -- -D warnings"
+[[workflow.job.step]]
+name = "Test"
+run = "cargo test --workspace"
+[[workflow.job.step]]
+name = "Package publishable ACS crates"
+run = """
+cargo package -p agent_control_specification_core --allow-dirty
+"""
+
+[[workflow.job]]
+id = "python"
+name = "Python SDK and generator"
+toolchains = ["python", "rust"]
+opa = true
+opa_on_path = true
+working_directory = "policy-engine"
+[[workflow.job.step]]
+name = "Install and test"
+run = """
+python -m pip install --upgrade pip==24.3.1
+pip install maturin==1.8.7  # Scorecard: version-pinned
+pip install build==1.2.1  # Scorecard: version-pinned
+pip install setuptools==80.9.0  # Scorecard: version-pinned
+pip install --no-build-isolation ./sdk/python
+pip install ./generator pytest==9.0.3
+pytest sdk/python generator
+"""
+[[workflow.job.step]]
+name = "Package Python SDK"
+run = "python -m build --no-isolation ./sdk/python"
+[[workflow.job.step]]
+name = "Package ACS generator"
+run = "python -m build --no-isolation ./generator"
+
+[[workflow.job]]
+id = "node"
+name = "Node SDK"
+toolchains = ["node"]
+opa = true
+working_directory = "policy-engine/sdk/node"
+[[workflow.job.step]]
+name = "Install and test"
+run = """
+npm ci
+npm test
+"""
+[[workflow.job.step]]
+name = "Package Node SDK"
+run = """
+mkdir -p "$RUNNER_TEMP/acs-node-pack"
+npm pack --pack-destination "$RUNNER_TEMP/acs-node-pack"
+node scripts/package-native.mjs --package agent-control-specification-linux-x64-gnu --binary dist/agent-control-specification.linux-x64-gnu.node --pack-destination "$RUNNER_TEMP/acs-node-pack"
+tar -tzf "$RUNNER_TEMP"/acs-node-pack/agent-control-specification-0.3.1-beta.0.tgz | grep -E '^package/dist/native\\.js$'
+tar -tzf "$RUNNER_TEMP"/acs-node-pack/agent-control-specification-linux-x64-gnu-0.3.1-beta.0.tgz | grep -E '^package/agent-control-specification\\.linux-x64-gnu\\.node$'
+"""
+
+[[workflow.job]]
+id = "dotnet"
+name = "dotnet SDK"
+toolchains = ["dotnet"]
+opa = true
+working_directory = "policy-engine/sdk/dotnet"
+[[workflow.job.step]]
+name = "Build and test"
+run = """
+dotnet build AgentControlSpecification.sln --configuration Release
+dotnet run --project tests/AgentControlSpecification.Tests --configuration Release --no-build
+"""
+[[workflow.job.step]]
+name = "Package .NET SDK smoke"
+run = """
+mkdir -p "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification/AgentControlSpecification.csproj --configuration Release --no-build -p:AgentControlSpecificationAllowIncompleteNativePack=true --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.AI/AgentControlSpecification.AI.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.AgentFramework/AgentControlSpecification.AgentFramework.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.AutoGen/AgentControlSpecification.AutoGen.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+dotnet pack src/AgentControlSpecification.SemanticKernel/AgentControlSpecification.SemanticKernel.csproj --configuration Release --no-build --output "$RUNNER_TEMP/acs-dotnet-pack"
+ls -la "$RUNNER_TEMP/acs-dotnet-pack"
+"""

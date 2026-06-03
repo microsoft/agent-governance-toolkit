@@ -1,0 +1,43 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-08-intervention-points.case-02",
+  "spec_section": "8",
+  "title": "pre model call dispatches and preserves deny reason",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  pre_model_call:\n    policy:\n      id: p\n    policy_target: $snap.model_request\n",
+  "intervention_point": "pre_model_call",
+  "snapshot": {
+    "model_request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  "policy_response": {
+    "decision": "deny",
+    "reason": "model_request_denied"
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "model_request_denied",
+    "policy_target": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "transformed_policy_target": null
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "preliminary_policy_input_before_annotations"
+  ],
+  "description": "Annotators receive preliminary policy input with an empty annotations object before final policy input is built.",
+  "evaluations": [
+    {
+      "expected": {
+        "annotation_calls": [
+          {
+            "preliminary_policy_input": {
+              "annotations": {},
+              "snapshot": {
+                "actor": {
+                  "id": "u-42",
+                  "type": "User"
+                },
+                "input": {
+                  "text": "transfer funds"
+                }
+              },
+              "intervention_point": "input",
+              "policy_target": {
+                "kind": "user_input",
+                "path": "$snap.input",
+                "value": {
+                  "text": "transfer funds"
+                }
+              },
+              "tool": null
+            },
+            "annotator_name": "actor_context"
+          },
+          {
+            "preliminary_policy_input": {
+              "annotations": {},
+              "snapshot": {
+                "actor": {
+                  "id": "u-42",
+                  "type": "User"
+                },
+                "input": {
+                  "text": "transfer funds"
+                }
+              },
+              "intervention_point": "input",
+              "policy_target": {
+                "kind": "user_input",
+                "path": "$snap.input",
+                "value": {
+                  "text": "transfer funds"
+                }
+              },
+              "tool": null
+            },
+            "annotator_name": "classifier"
+          }
+        ],
+        "policy_input": {
+          "annotations": {
+            "actor_context": {
+              "tier": "gold"
+            },
+            "classifier": {
+              "risk": "low"
+            }
+          },
+          "snapshot": {
+            "actor": {
+              "id": "u-42",
+              "type": "User"
+            },
+            "input": {
+              "text": "transfer funds"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "text": "transfer funds"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "annotations-sees-preliminary-input",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "actor": {
+          "id": "u-42",
+          "type": "User"
+        },
+        "input": {
+          "text": "transfer funds"
+        }
+      },
+      "intervention_point": "input"
+    }
+  ],
+  "annotation_responses": {
+    "actor_context": {
+      "ok": {
+        "tier": "gold"
+      }
+    },
+    "classifier": {
+      "ok": {
+        "risk": "low"
+      }
+    }
+  },
+  "id": "preliminary-policy-input-before-annotations",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n    annotations:\n      classifier:\n        from: $policy_target.text\n      actor_context:\n        from: $pi.snapshot.actor.id\nannotators:\n  classifier:\n    type: classifier\n  actor_context:\n    type: classifier\n",
+  "schema_version": 1
+}

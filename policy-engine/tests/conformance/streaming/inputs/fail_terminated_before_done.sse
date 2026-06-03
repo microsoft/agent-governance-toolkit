@@ -1,0 +1,2 @@
+data: {"id":"cmpl-1","created":1,"model":"gpt-x","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}
+

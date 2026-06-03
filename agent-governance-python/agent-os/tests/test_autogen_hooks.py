@@ -417,46 +417,73 @@ class TestOnResponse:
 # ═══════════════════════════════════════════════════════════════════
 
 class TestCedarIntegration:
-    """Verify Cedar/OPA policy evaluation via pre_execute."""
+    """Verify legacy Cedar/OPA pre_execute hooks are preserved.
+
+    The v5 routing for AutoGen FunctionCall messages calls
+    ``kernel.evaluate_pre_tool_call`` (the AGT pre_tool_call hook)
+    rather than the v4 ``kernel.pre_execute`` shim. These tests verify
+    the AGT path receives the tool name and arguments and that a deny
+    BridgeResult drops the message.
+    """
+
+    def _make_bridge_result(self, allowed: bool, reason: str = ""):
+        """Construct a minimal :class:`BridgeResult` for patching."""
+        from agt.policies.result import EvaluationResult
+        from agent_os.integrations._v5_runtime_bridge import BridgeResult
+
+        evaluation = EvaluationResult(
+            allowed=allowed,
+            verdict="allow" if allowed else "deny",
+            reason=reason,
+        )
+        return BridgeResult(
+            evaluation=evaluation,
+            check_result=evaluation.to_v4_check_result(),
+            transform=None,
+        )
 
     def test_cedar_deny_blocks_tool(self):
-        """Cedar deny on pre_execute should drop the FunctionCall."""
+        """A deny BridgeResult on the AGT pre_tool_call hook drops the FunctionCall."""
         handler = _make_handler()
+        deny = self._make_bridge_result(allowed=False, reason="cedar: action denied")
         with patch.object(
-            handler._kernel, "pre_execute",
-            return_value=(False, "cedar: action denied"),
+            handler._kernel, "evaluate_pre_tool_call", return_value=deny,
         ):
             fc = _FunctionCall(name="search", arguments="")
             result = _run(handler.on_send(fc))
             assert result is _DropMessage
 
     def test_cedar_allow_passes_tool(self):
-        """Cedar allow on pre_execute should pass the FunctionCall."""
+        """An allow BridgeResult on the AGT pre_tool_call hook passes the FunctionCall."""
         handler = _make_handler()
+        allow = self._make_bridge_result(allowed=True)
         with patch.object(
-            handler._kernel, "pre_execute",
-            return_value=(True, None),
+            handler._kernel, "evaluate_pre_tool_call", return_value=allow,
         ):
             fc = _FunctionCall(name="search", arguments="")
             result = _run(handler.on_send(fc))
             assert result is fc
 
     def test_cedar_receives_tool_context(self):
-        """pre_execute should receive tool_name and tool_args."""
+        """evaluate_pre_tool_call should receive tool_name and arguments."""
         handler = _make_handler()
-        received_ctx = {}
+        received: dict = {}
 
-        def capture_pre_execute(ctx, details):
-            received_ctx.update(details)
-            return True, None
+        def capture(ctx, *, tool_name, args, call_id="call-1"):
+            received["tool_name"] = tool_name
+            received["args"] = args
+            return self._make_bridge_result(allowed=True)
 
         with patch.object(
-            handler._kernel, "pre_execute", side_effect=capture_pre_execute
+            handler._kernel, "evaluate_pre_tool_call", side_effect=capture
         ):
             fc = _FunctionCall(name="do_search", arguments='{"q":"test"}')
             _run(handler.on_send(fc))
-            assert received_ctx["tool_name"] == "do_search"
-            assert received_ctx["tool_args"] == '{"q":"test"}'
+            assert received["tool_name"] == "do_search"
+            # v5: the adapter wraps raw string arguments into
+            # ``{"arguments": ...}`` before forwarding to the bridge so
+            # the policy target keeps the AGT D1 expected dict shape.
+            assert received["args"] == '{"q":"test"}' or received["args"] == {"arguments": '{"q":"test"}'}
 
 
 # ═══════════════════════════════════════════════════════════════════

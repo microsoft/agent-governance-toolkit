@@ -1,0 +1,82 @@
+{
+  "$id": "https://agent-control-specification.test/schema/cedar_advice.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AGT cedar advice payload",
+  "description": "AGT D3.3 cedar advice annotation. Cedar policy authors attach this JSON object as the `advice` annotation on a permit policy. The cedar dispatcher extracts it from the cedar response and translates it into a verdict-shaped JSON object that the runtime normalizes through `normalize_policy_output`. Advice that does not match this schema MUST fail closed with `runtime_error:policy_output_invalid`. A transform advice whose `transform.path` is outside `$policy_target` MUST fail closed with `runtime_error:transform_target_forbidden` per AGT D1.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "warn",
+        "escalate",
+        "transform"
+      ],
+      "description": "Decision the advice escalates the cedar permit to. The `deny` and `allow` decisions never come from advice: cedar's own authorization result drives those."
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^(?!runtime_error:).*",
+      "description": "Optional policy supplied reason string. MUST NOT use the reserved `runtime_error:` prefix."
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Optional human readable message the caller MAY surface to the user."
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "value"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^\\$policy_target($|[\\.\\[])",
+          "description": "AGT D1.1 transform path. MUST be rooted at `$policy_target`. The runtime applies the replacement only to the policy target; the snapshot, annotations, projected tool, and host state are untouched."
+        },
+        "value": {
+          "description": "New JSON value to set at `path`. May be any JSON type, including `null`."
+        }
+      },
+      "description": "AGT D1.1 single target replacement body. Required when `verdict` is `transform`; forbidden when `verdict` is `warn` or `escalate`."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "transform"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "required": [
+          "transform"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "transform"
+          ]
+        }
+      }
+    }
+  ]
+}
