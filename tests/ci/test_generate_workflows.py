@@ -63,6 +63,7 @@ def test_generated_opa_downloads_verify_checksum():
         if "openpolicyagent.org/downloads" in content:
             assert "sha256sum -c -" in content
             assert gen.OPA_LINUX_AMD64_SHA256 in content
+            assert "--retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20" in content
 
 
 def test_policy_engine_python_job_uses_pinned_tooling():

@@ -368,7 +368,9 @@ jobs:
         if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies')
         run: |
           set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/opa" "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
+          curl --proto '=https' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" \
+            --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            "https://openpolicyagent.org/downloads/v0.70.0/opa_linux_amd64_static"
           echo "00d114b94fdb1606a48cccdfc73c9ccdc62c38721150131ae578d5ff3df5c084  $RUNNER_TEMP/opa" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/opa"
           echo "ACS_OPA_PATH=$RUNNER_TEMP/opa" >> "$GITHUB_ENV"
