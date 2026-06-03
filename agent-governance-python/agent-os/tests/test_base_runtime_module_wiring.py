@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """Tests for BaseIntegration runtime module wiring (issue #2477)."""
 
 from __future__ import annotations
@@ -143,7 +145,7 @@ def test_supply_chain_module_blocks_high_severity_findings(tmp_path: Path):
 
     pkg_json = tmp_path / "package.json"
     pkg_json.write_text(
-        '{"name":"demo","version":"1.0.0","dependencies":{"react":"^18.2.0"}}',
+        '{"name":"demo","version":"1.0.0","dependencies":{"react":"*"}}',
         encoding="utf-8",
     )
 
