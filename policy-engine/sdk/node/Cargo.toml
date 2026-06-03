@@ -1,0 +1,22 @@
+[package]
+name = "agent-control-specification-node"
+version = "0.3.1-beta.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Node.js napi-rs bindings for Agent Control Specification core"
+license = "MIT"
+publish = false
+
+[lib]
+path = "native/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core", features = ["opa", "cedar", "default-dispatchers", "aacs", "openai_moderation", "perspective", "llama_guard", "lakera_guard", "auto"] }
+napi = { version = "2", default-features = false, features = ["napi8", "async", "serde-json", "tokio_rt"] }
+napi-derive = "2"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[build-dependencies]
+napi-build = "2"

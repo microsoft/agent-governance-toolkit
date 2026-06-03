@@ -5,6 +5,20 @@ Google Gemini Integration
 
 Wraps Google's Generative AI SDK with Agent OS governance.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
+translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, an :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
+keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
+outbound prompt or tool arguments before the Gemini client sees them;
+``escalate`` verdicts route through the configured approval resolver
+per AGT-DELTA D1.4.
+
 Usage:
     from agent_os.integrations.gemini_adapter import GeminiKernel
     import google.generativeai as genai
@@ -20,10 +34,12 @@ Usage:
     response = governed.generate_content("Hello")
 
 Features:
-- Pre-execution policy checks on prompts
-- Tool call interception and validation
+- Pre-execution policy checks via the AGT 5.0 ACS runtime
+- Tool call interception at the AGT pre_tool_call hook
+- Transform-verdict rewriting of outbound prompts and tool arguments
+- Escalate-verdict approval routing via the configured resolver
 - Token limit enforcement
-- Content filtering via blocked patterns
+- Content filtering via the AGT manifest bridge
 - Audit logging for all calls
 - Health check endpoint
 """
@@ -34,8 +50,14 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable, Optional
 
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
+from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger("agent_os.gemini")
@@ -79,8 +101,14 @@ class GeminiContext(ExecutionContext):
     completion_tokens: int = 0
 
 
-class PolicyViolationError(Exception):
-    """Raised when a Gemini request violates governance policy."""
+class PolicyViolationError(_CanonicalPolicyViolationError):
+    """Raised when a Gemini request violates governance policy.
+
+    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
+    canonical ``from_check_result`` constructor is available while
+    preserving the legacy ``agent_os.integrations.gemini_adapter.PolicyViolationError``
+    import path for v4 callers.
+    """
 
     pass
 
@@ -101,16 +129,68 @@ class GeminiKernel(BaseIntegration):
     def __init__(
         self,
         policy: GovernancePolicy | None = None,
+        *,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ) -> None:
         """Initialise the Gemini governance kernel.
 
         Args:
-            policy: Governance policy to enforce. Uses default when ``None``.
+            policy: Governance policy to enforce. When ``None`` the default
+                ``GovernancePolicy`` is used. The policy is translated to
+                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
+                is constructed over it at init time.
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature matches
+                :data:`agt.policies.runtime.ApprovalCallback`. When
+                ``None`` an escalate verdict fails closed to ``deny``.
+            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
+                so scenario tests can wire a scripted policy dispatcher
+                without OPA on PATH. Not part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public surface.
         """
         super().__init__(policy)
         self._wrapped_models: dict[int, Any] = {}
         self._start_time = time.monotonic()
         self._last_error: str | None = None
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def evaluate_input(self, ctx: ExecutionContext, input_data: Any) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        body: Any
+        if isinstance(input_data, (str, dict)):
+            body = input_data
+        elif hasattr(input_data, "content"):
+            body = str(getattr(input_data, "content"))
+        else:
+            body = str(input_data)
+        return self._bridge.evaluate_input(ctx, body=body)
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: ExecutionContext,
+        *,
+        tool_name: str,
+        args: dict[str, Any],
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for a Gemini function call."""
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=args, call_id=call_id
+        )
 
     def wrap(self, model: Any) -> GovernedGeminiModel:
         """Wrap a Gemini GenerativeModel with governance.
@@ -193,9 +273,10 @@ class GovernedGeminiModel:
     def generate_content(self, contents: Any, **kwargs: Any) -> Any:
         """Generate content with governance enforcement.
 
-        Validates prompt content against blocked patterns, enforces
-        tool-call allowlists, checks token limits, and records an
-        audit trail.
+        Validates prompt content against the configured AGT manifest at
+        the ``input`` intervention point, validates each function-call
+        block returned by the model at the ``pre_tool_call`` intervention
+        point, enforces token limits, and records an audit trail.
 
         Args:
             contents: The prompt content (string, list, or Content object).
@@ -207,11 +288,15 @@ class GovernedGeminiModel:
         Raises:
             PolicyViolationError: If a governance policy is violated.
         """
-        # --- pre-execution checks ---
+        # --- pre-execution checks via AGT input intervention point ---
         content_str = str(contents)
-        allowed, reason = self._kernel.pre_execute(self._ctx, content_str)
-        if not allowed:
-            raise PolicyViolationError(f"Content blocked: {reason}")
+        bridge_result = self._kernel.evaluate_input(self._ctx, content_str)
+        if not bridge_result.allowed:
+            raise PolicyViolationError.from_check_result(bridge_result.check_result)
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, str
+        ):
+            contents = bridge_result.transform.value
 
         # Validate tools against policy
         tools = kwargs.get("tools")
@@ -253,7 +338,7 @@ class GovernedGeminiModel:
                     f"{self._kernel.policy.max_tokens}"
                 )
 
-        # Check for function calls in candidates
+        # Check for function calls in candidates via AGT pre_tool_call
         candidates = getattr(response, "candidates", [])
         for candidate in candidates:
             content = getattr(candidate, "content", None)
@@ -265,31 +350,34 @@ class GovernedGeminiModel:
                 if fn_call is None:
                     continue
                 fn_name = getattr(fn_call, "name", "")
+                fn_args = dict(getattr(fn_call, "args", {}))
                 call_info = {
                     "name": fn_name,
-                    "args": dict(getattr(fn_call, "args", {})),
+                    "args": fn_args,
                     "timestamp": datetime.now().isoformat(),
                 }
                 self._ctx.function_calls.append(call_info)
                 self._ctx.tool_calls.append(call_info)
+                self._ctx.call_count = len(self._ctx.tool_calls)
 
-                if len(self._ctx.tool_calls) > self._kernel.policy.max_tool_calls:
-                    raise PolicyViolationError(
-                        f"Tool call limit exceeded: "
-                        f"{len(self._ctx.tool_calls)} > "
-                        f"{self._kernel.policy.max_tool_calls}"
+                tool_result = self._kernel.evaluate_pre_tool_call(
+                    self._ctx,
+                    tool_name=fn_name,
+                    args=fn_args,
+                    call_id=f"call-{len(self._ctx.tool_calls)}",
+                )
+                if not tool_result.allowed:
+                    raise PolicyViolationError.from_check_result(
+                        tool_result.check_result
                     )
-
-                if self._kernel.policy.allowed_tools:
-                    if fn_name not in self._kernel.policy.allowed_tools:
-                        raise PolicyViolationError(
-                            f"Tool not allowed: {fn_name}"
-                        )
-
-                if self._kernel.policy.require_human_approval:
-                    raise PolicyViolationError(
-                        f"Tool '{fn_name}' requires human approval per governance policy"
-                    )
+                if tool_result.transform is not None and isinstance(
+                    tool_result.transform.value, dict
+                ):
+                    try:
+                        fn_call.args = tool_result.transform.value
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
+                self._kernel.bridge.record_post_execute(self._ctx, tool_calls=1)
 
         # Post-execute bookkeeping
         self._kernel.post_execute(self._ctx, response)

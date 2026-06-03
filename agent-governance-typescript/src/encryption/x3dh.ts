@@ -115,6 +115,18 @@ export class X3DHKeyManager {
     return this.ed25519Public;
   }
 
+  /**
+   * Sign an arbitrary message with the Ed25519 identity private key.
+   *
+   * Used for registry registration proof-of-possession (the server
+   * verifies `Ed25519(public_key || proof_timestamp)` against
+   * `identityKeyEd`) and for the relay's `connect` frame Ed25519
+   * timestamp signature.
+   */
+  signMessage(message: Uint8Array): Uint8Array {
+    return ed25519.sign(message, this.ed25519Private);
+  }
+
   generateSignedPreKey(): { keyId: number; publicKey: Uint8Array; signature: Uint8Array } {
     const keyPair = generateX25519KeyPair();
     const signature = ed25519.sign(keyPair.publicKey, this.ed25519Private);

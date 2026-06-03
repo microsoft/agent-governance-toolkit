@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+        <Compile Include="../IntegrationShared/SmokePolicy.cs" Link="SmokePolicy.cs" />
+    <ProjectReference Include="../../src/AgentControlSpecification.AI/AgentControlSpecification.AI.csproj" />
+    <PackageReference Include="Anthropic.SDK" Version="5.*" />
+  </ItemGroup>
+</Project>

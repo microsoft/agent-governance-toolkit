@@ -15,6 +15,7 @@ import json
 import logging
 import platform
 import sys
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -190,10 +191,11 @@ class GovernanceAttestation:
     controls_total: int = 0
 
     mode: str = "components"
-    strict: bool = False
+    strict: bool = True
     evidence_source: str = ""
     evidence_checks: list[EvidenceCheck] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
+    allow_failures_used: bool = False
 
     def coverage_pct(self) -> int:
         """Percentage of controls covered."""
@@ -321,6 +323,7 @@ class GovernanceAttestation:
                 for c in self.evidence_checks
             ],
             "failures": self.failures,
+            "allow_failures_used": self.allow_failures_used,
         }
         return json.dumps(payload, indent=2)
 
@@ -362,6 +365,7 @@ class GovernanceAttestation:
                 for c in self.evidence_checks
             ],
             "failures": self.failures,
+            "allow_failures_used": self.allow_failures_used,
             "verified_at": self.verified_at,
             "toolkit_version": self.toolkit_version,
             "python_version": self.python_version,
@@ -512,9 +516,28 @@ class GovernanceVerifier:
         self,
         evidence_path: str | Path,
         *,
-        strict: bool = False,
+        strict: bool = True,
+        allow_failures: bool = False,
     ) -> GovernanceAttestation:
-        """Run governance verification and validate runtime evidence."""
+        """Run governance verification and validate runtime evidence.
+
+        Evidence failures always force ``passed=False`` unless the caller
+        explicitly opts in to ``allow_failures=True``.  That escape hatch is
+        **for development and testing only** — it emits a loud ``UserWarning``
+        and must never be used in production.
+
+        Args:
+            evidence_path: Path to the ``agt-evidence.json`` file produced at
+                runtime.
+            strict: Stored in the attestation JSON as metadata.  Defaults to
+                ``True`` (the safe value).  Changing it to ``False`` records
+                the looser intent but **does not** suppress failure enforcement;
+                use ``allow_failures`` for that.
+            allow_failures: Development/test escape hatch.  When ``True``,
+                evidence failures do **not** force ``passed=False``, but a
+                ``UserWarning`` is always emitted.  Do not set this in
+                production code.
+        """
         attestation = self.verify()
         attestation.mode = "evidence"
         attestation.strict = strict
@@ -526,8 +549,18 @@ class GovernanceVerifier:
             check.message for check in attestation.evidence_checks if check.status == "fail"
         ]
 
-        if strict and attestation.failures:
-            attestation.passed = False
+        if attestation.failures:
+            if allow_failures:
+                attestation.allow_failures_used = True
+                warnings.warn(
+                    "verify_evidence(allow_failures=True): evidence failures will NOT "
+                    "force passed=False.  This mode is for development and testing only "
+                    "— do not use it in production.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            else:
+                attestation.passed = False
 
         attestation.recalculate_hash()
         return attestation

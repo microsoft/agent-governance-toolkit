@@ -1,0 +1,73 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "rego_prepared_invocation"
+  ],
+  "description": "The runtime prepares typed Rego dispatcher invocations from final policy input.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "intervention_point": "input",
+          "snapshot": {
+            "input": {
+              "text": "hello"
+            }
+          },
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invocation": {
+          "bundle": "./policy/input.tar.gz",
+          "canonical_input": "{\"annotations\":{},\"intervention_point\":\"input\",\"policy_target\":{\"kind\":\"user_input\",\"path\":\"$snap.input\",\"value\":{\"text\":\"hello\"}},\"snapshot\":{\"input\":{\"text\":\"hello\"}},\"tool\":null}",
+          "input": {
+            "annotations": {},
+            "intervention_point": "input",
+            "snapshot": {
+              "input": {
+                "text": "hello"
+              }
+            },
+            "policy_target": {
+              "kind": "user_input",
+              "path": "$snap.input",
+              "value": {
+                "text": "hello"
+              }
+            },
+            "tool": null
+          },
+          "query": "data.agent_control_specification.input.verdict",
+          "type": "rego"
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "intervention_point": "input",
+      "mode": "enforce",
+      "name": "rego-prepared",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "input": {
+          "text": "hello"
+        }
+      }
+    }
+  ],
+  "id": "prepared-policy-invocations",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  input_rego_policy:\n    type: rego\n    bundle: ./policy/input.tar.gz\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: input_rego_policy\n      query: data.agent_control_specification.input.verdict\n    policy_target: $snap.input\ntools:\n  search:\n    type: Tool\n    id: search\n    clearance:\n    - public\n",
+  "schema_version": 1
+}

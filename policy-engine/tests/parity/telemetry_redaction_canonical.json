@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "source": [
+    "docs/observability.md Event model",
+    "docs/stateless-runtime.md Telemetry",
+    "spec/SPECIFICATION.md section 16",
+    "core/src/telemetry.rs TelemetryEvent and TelemetryEventType",
+    "core/src/runtime.rs telemetry emission helpers"
+  ],
+  "redaction_contract": {
+    "guaranteed_withheld_fields": [
+      "policy_target.value",
+      "snapshot.input",
+      "snapshot.output",
+      "snapshot.model_request",
+      "snapshot.model_response",
+      "snapshot.messages",
+      "snapshot.tool_call.args",
+      "snapshot.tool_result",
+      "annotations.*",
+      "transform.value",
+      "secrets",
+      "pii"
+    ],
+    "safe_attribute_classes": [
+      "stable ids",
+      "names",
+      "modes",
+      "decisions",
+      "reason codes",
+      "durations",
+      "counts",
+      "lengths",
+      "span counts"
+    ],
+    "free_text_policy_reasons": "reported as policy_reason unless shaped as a low cardinality identifier"
+  },
+  "events": [
+    {
+      "name": "decision",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "error_class",
+        "policy_id",
+        "annotators",
+        "enforcement_mode",
+        "duration_ms",
+        "action_identity"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "transform.value",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "annotator_dispatch",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "annotators",
+        "reason_code",
+        "error_class",
+        "duration_ms"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "transform.value",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "policy_evaluation",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "policy_id",
+        "reason_code",
+        "error_class",
+        "duration_ms",
+        "metadata.policy_type"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "transform.value",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "evaluation_timing",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "error_class",
+        "policy_id",
+        "enforcement_mode",
+        "duration_ms",
+        "action_identity"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "transform.value",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "intervention_point.transformed",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "policy_id",
+        "enforcement_mode",
+        "decision",
+        "duration_ms",
+        "reason_code",
+        "annotators",
+        "evidence_artefact",
+        "evidence_verification_pointer_keys"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "transform.value",
+        "evidence.verification_pointers.<url>",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "annotator_failed",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "annotators",
+        "reason_code",
+        "error_class"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "transform.value",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "policy_failed",
+      "emitted_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "policy_id",
+        "reason_code",
+        "error_class",
+        "metadata.policy_type"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "transform.value",
+        "secrets",
+        "pii"
+      ]
+    }
+  ],
+  "sdk_enforcement_boundary_events": [
+    {
+      "name": "decision",
+      "producer": "sdk-approval",
+      "reserved_reason": "runtime_error:approval_resolver_failed",
+      "safe_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "error_class",
+        "enforcement_mode",
+        "duration_ms",
+        "action_identity"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "decision",
+      "producer": "sdk-streaming",
+      "reserved_reason": "runtime_error:streaming_unsupported",
+      "safe_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "error_class",
+        "enforcement_mode",
+        "duration_ms",
+        "action_identity"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "decision",
+      "producer": "sdk-adapter",
+      "reserved_reason": "runtime_error:adapter_unsupported",
+      "safe_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "error_class",
+        "enforcement_mode",
+        "duration_ms",
+        "action_identity"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    },
+    {
+      "name": "decision",
+      "producer": "sdk-wire",
+      "reserved_reason": "runtime_error:request_invalid",
+      "safe_attribute_keys": [
+        "event_type",
+        "intervention_point",
+        "decision",
+        "reason_code",
+        "error_class",
+        "enforcement_mode",
+        "duration_ms",
+        "action_identity"
+      ],
+      "guaranteed_withheld_fields": [
+        "policy_target.value",
+        "snapshot.input",
+        "snapshot.output",
+        "snapshot.model_request",
+        "snapshot.model_response",
+        "snapshot.messages",
+        "snapshot.tool_call.args",
+        "snapshot.tool_result",
+        "annotations.*",
+        "effect.value",
+        "effect.spans[].replacement",
+        "secrets",
+        "pii"
+      ]
+    }
+  ]
+}

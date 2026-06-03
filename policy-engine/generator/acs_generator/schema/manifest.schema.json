@@ -1,0 +1,511 @@
+{
+  "$id": "https://agent-control-specification.test/manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_control_specification_version"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "metadata"
+      ]
+    },
+    {
+      "required": [
+        "extends"
+      ],
+      "properties": {
+        "extends": {
+          "minItems": 1
+        }
+      }
+    },
+    {
+      "required": [
+        "policies"
+      ]
+    },
+    {
+      "required": [
+        "intervention_points"
+      ]
+    },
+    {
+      "required": [
+        "tools"
+      ]
+    },
+    {
+      "required": [
+        "annotators"
+      ]
+    }
+  ],
+  "properties": {
+    "agent_control_specification_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "extends": {
+      "description": "Ordered array of manifest path or HTTPS URL references. File-based loaders resolve entries relative to the including manifest, merge additively, and validate the resolved manifest. URL object entries may include an optional sha256 or SRI integrity pin.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/extends_entry"
+      }
+    },
+    "policies": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/non_empty_key"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/policy"
+      }
+    },
+    "intervention_points": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "agent_startup",
+          "input",
+          "pre_model_call",
+          "post_model_call",
+          "pre_tool_call",
+          "post_tool_call",
+          "output",
+          "agent_shutdown"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/intervention_point"
+      },
+      "minProperties": 1
+    },
+    "tools": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/non_empty_key"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/tool"
+      }
+    },
+    "annotators": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/non_empty_key"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/annotator"
+      }
+    },
+    "approval": {
+      "description": "AGT D5 optional top-level approval section. See approval.schema.json for the full shape.",
+      "$ref": "approval.schema.json"
+    }
+  },
+  "$defs": {
+    "extends_entry": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "anyOf": [
+            {
+              "pattern": "^https://"
+            },
+            {
+              "not": {
+                "pattern": "^[A-Za-z][A-Za-z0-9+.-]*://"
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^https://"
+            },
+            "integrity": {
+              "type": "string",
+              "pattern": "^sha256-[A-Za-z0-9+/_=-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[A-Fa-f0-9]{64}$"
+            }
+          },
+          "not": {
+            "required": [
+              "integrity",
+              "sha256"
+            ]
+          }
+        }
+      ]
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "non_empty_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "string_or_string_array": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "$ref": "#/$defs/string_array"
+        }
+      ]
+    },
+    "string_map": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "policy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "rego"
+            },
+            "query": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bundle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "data_paths": {
+              "$ref": "#/$defs/string_array"
+            },
+            "data": {
+              "type": [
+                "object",
+                "array",
+                "string"
+              ]
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "test"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "description": "AGT D3: cedar is a built-in policy type. Exactly one of policy_set or policy_path is required.",
+          "properties": {
+            "type": {
+              "const": "cedar"
+            },
+            "policy_set": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entities_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "schema_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "query": {
+              "type": "object"
+            }
+          },
+          "oneOf": [
+            { "required": [ "policy_set" ], "not": { "required": [ "policy_path" ] } },
+            { "required": [ "policy_path" ], "not": { "required": [ "policy_set" ] } }
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "adapter"
+          ],
+          "properties": {
+            "type": {
+              "const": "custom"
+            },
+            "adapter": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "policy_binding": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1
+        },
+        "data_paths": {
+          "$ref": "#/$defs/string_array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "annotation": {
+      "type": "object",
+      "required": [
+        "from"
+      ],
+      "not": {
+        "required": [
+          "annotator"
+        ]
+      },
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/path"
+        }
+      },
+      "additionalProperties": true
+    },
+    "annotator": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "classifier",
+            "llm",
+            "endpoint"
+          ]
+        },
+        "provider": {
+          "enum": [
+            "openai",
+            "openai_compatible",
+            "azure_openai",
+            "bedrock",
+            "gemini",
+            "ollama"
+          ]
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deployment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_key_env": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_key_header": {
+          "type": "string",
+          "minLength": 1
+        },
+        "headers": {
+          "$ref": "#/$defs/string_map"
+        },
+        "provider_config": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "label_field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "system_prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "aws_region": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aws_access_key_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aws_access_key_id_env": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aws_secret_access_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aws_secret_access_key_env": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aws_session_token": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aws_session_token_env": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "tool": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "security_labels": {
+          "$ref": "#/$defs/string_or_string_array"
+        },
+        "clearance": {
+          "$ref": "#/$defs/string_or_string_array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "intervention_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "policy_target"
+          ]
+        },
+        {
+          "required": [
+            "policy"
+          ]
+        },
+        {
+          "required": [
+            "annotations"
+          ],
+          "properties": {
+            "annotations": {
+              "minProperties": 1
+            }
+          }
+        }
+      ],
+      "properties": {
+        "policy_target": {
+          "$ref": "#/$defs/path"
+        },
+        "policy_target_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tool_name_from": {
+          "$ref": "#/$defs/path"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/annotation"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/policy_binding"
+        }
+      }
+    }
+  }
+}

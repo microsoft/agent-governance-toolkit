@@ -182,7 +182,13 @@ class TestCrewAIToolInterception:
         assert tool._governed is True
 
     def test_human_approval_blocks_task(self):
-        """require_human_approval should block execution at kickoff."""
+        """``require_human_approval`` should escalate to the AGT approval path.
+
+        v5: the AGT manifest bridge translates
+        ``require_human_approval=True`` into an ``escalate_if_approver_required``
+        rule that returns an ``escalate`` verdict. With no approval
+        resolver wired, the runtime fails closed to ``deny``.
+        """
         tool = self._make_tool("web_search")
         agent = self._make_agent(tools=[tool])
         crew = self._make_crew(agents=[agent])
@@ -191,8 +197,7 @@ class TestCrewAIToolInterception:
         kernel = CrewAIKernel(policy=policy)
         governed = kernel.wrap(crew)
 
-        # With the base pre_execute check, kickoff is blocked immediately
-        with pytest.raises(PolicyViolationError, match="requires human approval"):
+        with pytest.raises(PolicyViolationError):
             governed.kickoff()
 
     def test_call_count_tracks_across_tools(self):

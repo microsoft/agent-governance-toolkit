@@ -1,0 +1,47 @@
+agent_control_specification_version: 0.3.1-beta
+policies:
+  software_engineering_assistant_guardrails:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.software_engineering_assistant_guardrails.verdict
+intervention_points:
+  input:
+    policy_target: $.input
+    policy_target_kind: user_input
+    annotations:
+      input_risk:
+        from: $.input.text
+    policy:
+      id: software_engineering_assistant_guardrails
+      query: data.agent_control_specification.software_engineering_assistant_guardrails.input_verdict
+  output:
+    policy_target: $.output
+    policy_target_kind: assistant_output
+    annotations:
+      secret_scan:
+        from: $.output.text
+    policy:
+      id: software_engineering_assistant_guardrails
+      query: data.agent_control_specification.software_engineering_assistant_guardrails.output_verdict
+tools:
+  run_shell:
+    type: Tool
+    id: run_shell
+    security_labels: [shell]
+  read_file:
+    type: Tool
+    id: read_file
+    security_labels: [filesystem]
+  write_file:
+    type: Tool
+    id: write_file
+    security_labels: [filesystem, write]
+annotators:
+  input_risk:
+    type: classifier
+  shell_command_risk:
+    type: classifier
+  write_path_risk:
+    type: classifier
+  secret_scan:
+    type: classifier

@@ -1,0 +1,56 @@
+[
+  {
+    "name": "pii_detected_permits_with_transform_advice",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {"pii_detected": true}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.redact.pii"],
+    "num_errors": 0
+  },
+  {
+    "name": "pii_flag_false_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {"pii_detected": false}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_annotation_does_not_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]

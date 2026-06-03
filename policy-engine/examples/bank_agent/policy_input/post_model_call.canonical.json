@@ -1,0 +1,76 @@
+{
+  "annotations": {
+    "model_response_classifier": {
+      "contains_approval_bypass": false,
+      "labels": [
+        "tool_plan"
+      ],
+      "risk_score": 0.25
+    }
+  },
+  "intervention_point": "post_model_call",
+  "snapshot": {
+    "actor": {
+      "id": "customer-123",
+      "risk_tier": "standard",
+      "roles": [
+        "customer"
+      ]
+    },
+    "agent": {
+      "capabilities": [
+        "balance_lookup",
+        "wire_transfer"
+      ],
+      "id": "bank-agent-instance-001",
+      "mode": "production",
+      "name": "bank-agent",
+      "version": "1.0.0-demo"
+    },
+    "model_response": {
+      "message": {
+        "content": "I will prepare the transfer details and confirm eligibility first.",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "args": {
+              "amount": 25000,
+              "currency": "USD",
+              "from_account_id": "CHK-00112233",
+              "to_account_id": "BRK-00445566"
+            },
+            "id": "call-transfer-001",
+            "name": "wire_transfer"
+          }
+        ]
+      }
+    },
+    "session": {
+      "created_at": "2025-02-03T10:15:00Z",
+      "id": "session-bank-001"
+    }
+  },
+  "policy_target": {
+    "kind": "model_response",
+    "path": "$.model_response",
+    "value": {
+      "message": {
+        "content": "I will prepare the transfer details and confirm eligibility first.",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "args": {
+              "amount": 25000,
+              "currency": "USD",
+              "from_account_id": "CHK-00112233",
+              "to_account_id": "BRK-00445566"
+            },
+            "id": "call-transfer-001",
+            "name": "wire_transfer"
+          }
+        ]
+      }
+    }
+  },
+  "tool": null
+}

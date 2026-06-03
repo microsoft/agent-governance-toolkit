@@ -1,0 +1,30 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-12-dispatcher.case-01",
+  "spec_section": "12",
+  "title": "policy dispatcher failure fails closed",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: custom\n    adapter: fixture\nintervention_points:\n  pre_model_call:\n    policy:\n      id: p\n    policy_target: $snap.model_request\n",
+  "intervention_point": "pre_model_call",
+  "snapshot": {
+    "model_request": {
+      "messages": []
+    }
+  },
+  "policy_behavior": "error",
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "runtime_error:policy_invocation_failed",
+    "transformed_policy_target": null
+  }
+}

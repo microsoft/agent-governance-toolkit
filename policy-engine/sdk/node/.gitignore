@@ -1,0 +1,8 @@
+node_modules/
+dist/
+target/
+*.node
+native.js
+native.d.ts
+npm/*/bin/opa
+npm/*/bin/opa.exe

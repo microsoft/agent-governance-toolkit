@@ -1,0 +1,28 @@
+{
+  "annotations": {
+    "output_safety": {
+      "contains_pii": false,
+      "risk": "low"
+    }
+  },
+  "snapshot": {
+    "output": {
+      "citations": [
+        "policy-doc-1"
+      ],
+      "content": "Your account policy summary is ready."
+    }
+  },
+  "intervention_point": "output",
+  "policy_target": {
+    "kind": "assistant_output",
+    "path": "$snap.output",
+    "value": {
+      "citations": [
+        "policy-doc-1"
+      ],
+      "content": "Your account policy summary is ready."
+    }
+  },
+  "tool": null
+}

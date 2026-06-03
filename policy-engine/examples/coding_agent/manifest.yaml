@@ -1,0 +1,28 @@
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: software_engineering_assistant_guardrails
+extends:
+  - ./base.manifest.yaml
+intervention_points:
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    annotations:
+      shell_command_risk:
+        from: $.tool_call.args
+      write_path_risk:
+        from: $.tool_call.args
+    policy:
+      id: software_engineering_assistant_guardrails
+      query: data.agent_control_specification.software_engineering_assistant_guardrails.pre_tool_call_verdict
+    tool_name_from: $.tool_call.name
+  post_tool_call:
+    policy_target: $.tool_result
+    policy_target_kind: tool_result
+    annotations:
+      secret_scan:
+        from: $.tool_result
+    policy:
+      id: software_engineering_assistant_guardrails
+      query: data.agent_control_specification.software_engineering_assistant_guardrails.post_tool_call_verdict
+    tool_name_from: $.tool_call.name

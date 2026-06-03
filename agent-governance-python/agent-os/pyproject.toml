@@ -144,9 +144,6 @@ packages = [
     "modules/control-plane/src/agent_control_plane",
     "modules/observability/src/agent_os_observability",
     "modules/nexus",
-    # Layer 4 – Intelligence
-    "modules/scak/agent_kernel",
-    "modules/mute-agent/mute_agent",
     # Servers
     "modules/mcp-kernel-server/src/mcp_kernel_server",
 ]
@@ -164,8 +161,6 @@ packages = [
 "modules/control-plane/src" = ""
 "modules/observability/src" = ""
 "modules/nexus" = "nexus"
-"modules/scak" = ""
-"modules/mute-agent" = ""
 "modules/mcp-kernel-server/src" = ""
 
 [tool.hatch.build.targets.sdist]

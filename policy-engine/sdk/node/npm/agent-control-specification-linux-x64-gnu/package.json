@@ -1,0 +1,14 @@
+{
+  "name": "agent-control-specification-linux-x64-gnu",
+  "version": "0.3.1-beta.0",
+  "description": "Native Agent Control Specification Node.js binding for linux/x64 glibc.",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "libc": ["glibc"],
+  "main": "agent-control-specification.linux-x64-gnu.node",
+  "files": ["agent-control-specification.linux-x64-gnu.node"],
+  "scripts": {
+    "prepack": "node ../../scripts/verify-package-file.mjs agent-control-specification.linux-x64-gnu.node"
+  }
+}

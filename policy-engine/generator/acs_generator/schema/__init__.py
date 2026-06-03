@@ -1,0 +1,1 @@
+"""Packaged ACS manifest schema."""
