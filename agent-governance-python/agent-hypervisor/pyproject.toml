@@ -47,7 +47,7 @@ nexus = [
 ]
 api = [
     "fastapi>=0.115.0,<1.0",
-    "uvicorn>=0.27.0,<1.0",
+    "uvicorn>=0.49.0,<1.0",
 ]
 full = [
     "agent-hypervisor[nexus]",
