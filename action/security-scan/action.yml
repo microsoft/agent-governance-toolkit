@@ -30,9 +30,8 @@ inputs:
     required: false
     default: '3.12'
   toolkit-version:
-    description: 'Agent Governance Toolkit version to install (default: latest)'
-    required: false
-    default: ''
+    description: 'Exact Agent Governance Toolkit version to install (for example, 3.7.0)'
+    required: true
 
 outputs:
   status:
@@ -52,7 +51,7 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: ${{ inputs.python-version }}
 
@@ -61,11 +60,19 @@ runs:
       env:
         AGT_TOOLKIT_VERSION: ${{ inputs.toolkit-version }}
       run: |
-        if [ -n "$AGT_TOOLKIT_VERSION" ]; then
-          pip install --quiet "agent-governance-toolkit[security]==$AGT_TOOLKIT_VERSION"
-        else
-          pip install --quiet "agent-governance-toolkit[security]"
+        if [ -z "$AGT_TOOLKIT_VERSION" ]; then
+          echo "::error::toolkit-version must be set to an exact published version"
+          exit 1
         fi
+        # Enforce exact version (PEP 440-like). Only release / pre-release
+        # forms are accepted: X.Y.Z, X.Y.ZaN, X.Y.ZbN, X.Y.ZrcN. Post / dev /
+        # local-version syntax is rejected so the install line below cannot be
+        # coerced into resolving an unintended distribution.
+        if ! printf '%s' "$AGT_TOOLKIT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$'; then
+          echo "::error::toolkit-version must be an exact release or pre-release (e.g. 3.7.0 or 3.7.0rc1); got: $AGT_TOOLKIT_VERSION"
+          exit 1
+        fi
+        python -m pip install --quiet --no-cache-dir --disable-pip-version-check "agent-governance-toolkit[security]==$AGT_TOOLKIT_VERSION"
 
     - name: Run security scan
       id: scan

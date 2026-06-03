@@ -100,9 +100,9 @@ Cross-references every rule in the ASI starter policy packs
 
 | Pack | Default Action | Max Tokens | Max Tool Calls | Confidence |
 |------|:--------------:|:----------:|:--------------:|:----------:|
-| `healthcare` | `deny` | 8,192 | 25 | 0.90 |
-| `financial-services` | `deny` | 8,192 | 30 | 0.90 |
-| `general-saas` | `deny` | 16,384 | 50 | 0.80 |
+| `healthcare` | `deny` | 8,192 | 15 | 0.95 |
+| `financial-services` | `deny` | 6,000 | 20 | 0.95 |
+| `general-saas` | `deny` | 12,000 | 30 | 0.85 |
 
 All packs implement **deny-all by default**, enforcing the
 [Least Agency principle](owasp-agentic-top10-architecture.md).

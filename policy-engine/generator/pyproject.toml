@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acs-generator"
+version = "0.3.1b0"
+description = "Agentic policy artifact generator for Agent Control Specification"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.0",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.0"]
+
+[project.scripts]
+acs-generate = "acs_generator.cli:main"
+acs = "acs_generator.cli:main"
+
+[tool.setuptools]
+packages = ["acs_generator", "acs_generator.schema", "acs_generator.schema.wire"]
+
+[tool.setuptools.package-data]
+"acs_generator.schema" = ["*.json"]
+"acs_generator.schema.wire" = ["*.schema.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

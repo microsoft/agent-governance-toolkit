@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Callable, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from types import MappingProxyType  # noqa: F401 — reserved for future immutable dict enforcement
+from urllib.parse import urlparse
 from .agent_kernel import ExecutionRequest, ActionType, PolicyRule
 import logging
 import uuid
@@ -33,6 +34,52 @@ import warnings
 logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
+
+
+_VALID_HOSTNAME_RE = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)*$")
+
+
+def _extract_host(value: Any) -> Optional[str]:
+    """Parse a URL or bare host string to a normalized hostname.
+
+    Uses urlparse's `.hostname` property so userinfo (`user@host`) and
+    explicit ports are excluded. Returns None when no host can be parsed
+    or when the result is not a syntactically valid DNS name, so callers
+    can fail closed instead of doing substring matches on attacker-
+    supplied strings.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    try:
+        parsed = urlparse(candidate if "://" in candidate else f"//{candidate}", scheme="")
+    except ValueError:
+        return None
+    host = parsed.hostname
+    if not host:
+        return None
+    host = host.lower()
+    if host.endswith("."):
+        host = host[:-1]
+    if not host or not _VALID_HOSTNAME_RE.match(host):
+        return None
+    return host
+
+
+def _host_matches(host: str, rule: str) -> bool:
+    """True if `host` equals `rule` or is a proper subdomain of `rule`.
+
+    Rule is normalized the same way as a parsed host (lowercased,
+    trailing dot stripped, port and userinfo discarded via `_extract_host`).
+    Substring matching is deliberately avoided — "evil.com" must not
+    match "safe-evil.com" or "safe.com/path?evil.com".
+    """
+    rule_host = _extract_host(rule)
+    if rule_host is None:
+        return False
+    return host == rule_host or host.endswith("." + rule_host)
 
 
 @dataclass
@@ -557,17 +604,28 @@ class PolicyEngine:
             # Check domain restrictions if applicable
             if "url" in request.parameters or "domain" in request.parameters:
                 url = request.parameters.get("url", request.parameters.get("domain", ""))
+                host = _extract_host(url)
 
-                # Check blocked domains
+                # If the request advertises a URL/domain we cannot parse a
+                # hostname out of, fail closed — substring matching on raw
+                # strings is unsafe and the policy intent here is allow/deny
+                # by host, not by arbitrary text.
+                if host is None:
+                    return False
+
+                # Check blocked domains: exact host match or proper subdomain.
+                # Substring matching is unsafe — "evil.com" would otherwise
+                # match "https://safe.com/?ref=evil.com" or be evaded by
+                # "https://safe-evil.com.attacker/".
                 for blocked in policy.blocked_domains:
-                    if blocked in url:
+                    if _host_matches(host, blocked):
                         return False
 
                 # Check allowed domains (if list is not empty, only allow listed domains)
                 if policy.allowed_domains:
                     allowed = False
                     for allowed_domain in policy.allowed_domains:
-                        if allowed_domain in url:
+                        if _host_matches(host, allowed_domain):
                             allowed = True
                             break
                     if not allowed:

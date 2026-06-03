@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import textwrap
 import threading
@@ -1209,14 +1210,123 @@ class TestCommandAllowlist:
         _validate_command(sys.executable)  # Used by all stdio tests
 
 
+class TestLaunchEnvAndCwdGuards:
+    """Verify env-key blocklist and untrusted-cwd guard close the
+    config-controlled RCE class identified by the red-team review."""
+
+    def setup_method(self):
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=False)
+
+    def teardown_method(self):
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=False)
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "PYTHONPATH",
+            "PYTHONSTARTUP",
+            "LD_PRELOAD",
+            "NODE_OPTIONS",
+            "DYLD_INSERT_LIBRARIES",
+            "RUBYOPT",
+            "BASH_ENV",
+            "PERL5OPT",
+            "DOTNET_STARTUP_HOOKS",
+            "JAVA_TOOL_OPTIONS",
+            "PATH",
+            "PATHEXT",
+            "HOME",
+            "USERPROFILE",
+        ],
+    )
+    def test_runtime_hijack_env_key_is_blocked(self, key):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys, _validate_env
+
+        assert _blocked_command_env_keys({key: "x"}) == [key]
+        with pytest.raises(RuntimeError, match="hijack"):
+            _validate_env({key: "x"})
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "UV_INDEX_URL",
+            "NPM_CONFIG_REGISTRY",
+            "PIP_INDEX_URL",
+            "POETRY_HTTP_BASIC_FOO_USERNAME",
+            "GIT_SSH_COMMAND",
+            "GEM_HOME",
+        ],
+    )
+    def test_runtime_hijack_env_prefix_is_blocked(self, key):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys
+
+        assert _blocked_command_env_keys({key: "x"}) == [key]
+
+    def test_blocked_check_is_case_insensitive(self):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys
+
+        # Attacker tries lowercase to dodge the constant set.
+        assert _blocked_command_env_keys({"pythonpath": "x"}) == ["PYTHONPATH"]
+        assert _blocked_command_env_keys({"Ld_PreLoad": "x"}) == ["LD_PRELOAD"]
+
+    def test_benign_env_passes(self):
+        from agent_os.cli.mcp_scan import _blocked_command_env_keys, _validate_env
+
+        assert _blocked_command_env_keys({"MY_CONFIG": "x", "FOO": "bar"}) == []
+        _validate_env({"MY_CONFIG": "x"})  # must not raise
+
+    def test_empty_or_none_env_passes(self):
+        from agent_os.cli.mcp_scan import _validate_env
+
+        _validate_env(None)
+        _validate_env({})
+
+    def test_env_check_bypassed_under_allow_all(self):
+        from agent_os.cli.mcp_scan import _validate_env
+
+        _configure_command_policy(allow_all=True)
+        _validate_env({"LD_PRELOAD": "/tmp/evil.so"})  # must not raise
+
+    def test_untrusted_cwd_is_blocked_by_default(self, tmp_path):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        with pytest.raises(RuntimeError, match="comes from the MCP config"):
+            _validate_launch_cwd(tmp_path)
+
+    def test_untrusted_cwd_none_passes(self):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        _validate_launch_cwd(None)
+        _validate_launch_cwd("")
+
+    def test_untrusted_cwd_opt_in_flag_bypasses(self, tmp_path):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=True)
+        _validate_launch_cwd(tmp_path)  # must not raise
+
+    def test_untrusted_cwd_bypassed_under_allow_all(self, tmp_path):
+        from agent_os.cli.mcp_scan import _validate_launch_cwd
+
+        _configure_command_policy(allow_all=True)
+        _validate_launch_cwd(tmp_path)  # must not raise
+
+
 class TestCommandAllowlistCLI:
-    """Test --allow-commands flag via CLI entry point."""
+    """Test --unsafe-allow-all-commands flag (legacy --allow-commands alias) via CLI entry point."""
 
     def setup_method(self):
         _configure_command_policy(allow_all=False)
+        # Default tests to local-dev env so the unsafe flag is permitted.
+        self._prev_env = os.environ.get("AGENT_OS_ENV")
+        os.environ["AGENT_OS_ENV"] = "local"
 
     def teardown_method(self):
         _configure_command_policy(allow_all=False)
+        if self._prev_env is None:
+            os.environ.pop("AGENT_OS_ENV", None)
+        else:
+            os.environ["AGENT_OS_ENV"] = self._prev_env
 
     def test_scan_blocks_disallowed_command(self, tmp_path: Path):
         config = tmp_path / "mcp.json"
@@ -1227,9 +1337,43 @@ class TestCommandAllowlistCLI:
     def test_scan_allow_commands_flag_permits_execution(self, tmp_path: Path):
         config = tmp_path / "mcp.json"
         config.write_text(json.dumps({"mcpServers": {"custom": {"command": "curl", "args": ["--version"]}}}))
-        # With --allow-commands, the command is permitted (will fail on connect but not on validation)
+        # With the legacy alias, the command is permitted (will fail on connect but not on validation)
         ret = main(["scan", str(config), "--allow-commands"])
         assert ret == 2  # fails on inspection (curl isn't an MCP server) but NOT on allowlist
+
+    def test_scan_unsafe_flag_permits_execution_under_local_env(self, tmp_path: Path):
+        config = tmp_path / "mcp.json"
+        config.write_text(json.dumps({"mcpServers": {"custom": {"command": "curl", "args": ["--version"]}}}))
+        ret = main(["scan", str(config), "--unsafe-allow-all-commands"])
+        assert ret == 2  # not blocked by allowlist gate
+
+    def test_unsafe_flag_refuses_to_engage_in_prod_env(self, tmp_path: Path, capsys):
+        config = tmp_path / "mcp.json"
+        config.write_text(json.dumps({"mcpServers": {"custom": {"command": "curl", "args": ["--version"]}}}))
+        os.environ["AGENT_OS_ENV"] = "production"
+        ret = main(["scan", str(config), "--unsafe-allow-all-commands"])
+        err = capsys.readouterr().err
+        assert ret == 2
+        assert "AGENT_OS_ENV" in err
+        assert "dev" in err
+
+    def test_unsafe_flag_refuses_to_engage_when_env_unset(self, tmp_path: Path, capsys):
+        config = tmp_path / "mcp.json"
+        config.write_text(json.dumps({"mcpServers": {"custom": {"command": "curl", "args": ["--version"]}}}))
+        os.environ.pop("AGENT_OS_ENV", None)
+        ret = main(["scan", str(config), "--unsafe-allow-all-commands"])
+        err = capsys.readouterr().err
+        assert ret == 2
+        assert "AGENT_OS_ENV" in err
+
+    def test_unsafe_flag_legacy_alias_also_env_gated(self, tmp_path: Path, capsys):
+        config = tmp_path / "mcp.json"
+        config.write_text(json.dumps({"mcpServers": {"custom": {"command": "curl", "args": ["--version"]}}}))
+        os.environ["AGENT_OS_ENV"] = "staging"
+        ret = main(["scan", str(config), "--allow-commands"])
+        err = capsys.readouterr().err
+        assert ret == 2
+        assert "AGENT_OS_ENV" in err
 
     def test_static_only_skips_command_validation(self, tmp_path: Path):
         config = tmp_path / "mcp.json"

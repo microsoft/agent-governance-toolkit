@@ -8,7 +8,17 @@
 #   agent-governance-typescript/src/encryption/
 #   agent-governance-dotnet/src/Security/
 #
+# The vendored ACS policy-engine subtree (policy-engine/**) is a third-party
+# tree (MIT, (c) responsibleai) with its own crypto modules and upstream
+# security review; its SHA-256 content-addressing and identity primitives are
+# governed upstream, so it is exempted here the same way it is exempted from
+# the repo license-header gate.
+#
 # Everything else should use the SDK's public API, not raw primitives.
+#
+# Per-file exemptions: credential_vault.py/.ts (sanctioned secret stores) and
+# agt-policies/.../manifest_resolution/build.py (writes a non-security SHA-256
+# content checksum of a generated rego bundle, asserted by its tests).
 set -euo pipefail
 
 BASE_REF="${1:-origin/main}"
@@ -44,6 +54,7 @@ ALLOWED_PATHS=(
   'agent-governance-typescript/src/encryption/'
   'agent-governance-dotnet/src/'
   'agent-governance-golang/'
+  'policy-engine/'
 )
 
 PATTERN=$(IFS='|'; echo "${CRYPTO_PATTERNS[*]}")
@@ -56,7 +67,9 @@ ADDED=$(git diff "$BASE_REF"...HEAD --diff-filter=ACMR -U0 -- \
   ':!agent-governance-typescript/src/encryption/**' \
   ':!agent-governance-dotnet/**' \
   ':!agent-governance-golang/**' \
+  ':!policy-engine/**' \
   ':!agent-governance-python/agent-os/src/agent_os/credential_vault.py' \
+  ':!agent-governance-python/agt-policies/src/agt/manifest_resolution/build.py' \
   ':!agent-governance-typescript/src/credential-vault.ts' \
   ':!*test*' ':!*spec*' ':!ci/no-custom-crypto.sh' \
   | grep -E '^\+[^+]' || true)

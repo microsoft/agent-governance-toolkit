@@ -1,0 +1,21 @@
+[package]
+name = "agent_control_specification"
+version = "0.3.1-beta.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Rust SDK for the Agent Control Specification runtime."
+readme = "../../README.md"
+
+[dependencies]
+agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core", features = ["opa", "cedar", "default-dispatchers", "aacs", "openai_moderation", "perspective", "llama_guard", "lakera_guard", "auto"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[example]]
+name = "basic_host"
+path = "../../examples/basic_host.rs"
+
+[[example]]
+name = "ifc_agent"
+path = "../../examples/ifc_agent/demo.rs"

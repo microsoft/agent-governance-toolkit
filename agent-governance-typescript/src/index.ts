@@ -4,6 +4,14 @@ export { AgentIdentity, IdentityRegistry, stripKeyPrefix, safeBase64Decode } fro
 export { TrustManager } from './trust';
 export { PolicyEngine, PolicyConflictResolver } from './policy';
 export type { PolicyDecision } from './policy';
+export {
+  FacetRegistry,
+  defaultRegistry,
+  extractProtocolFacets,
+  extractSqlFacets,
+  extractK8sFacets,
+} from './protocol-facets';
+export type { FacetExtractor } from './protocol-facets';
 export { AuditLogger } from './audit';
 export { AgentMeshClient } from './client';
 export { GenericFrameworkAdapter, FrameworkInvocationHandle } from './framework-adapter';
@@ -72,12 +80,15 @@ export {
   DoubleRatchet,
   SecureChannel,
   MeshClient,
+  RegistryClient,
+  RegistryError,
 } from './encryption';
 export type {
   X25519KeyPair, PreKeyBundle, X3DHResult,
   MessageHeader, EncryptedMessage, RatchetState,
   ChannelEstablishment,
   MeshClientOptions, MeshSession, WebSocketFactory,
+  RegistryClientOptions, AgentRecord, DiscoverResult,
 } from './encryption';
 
 export {

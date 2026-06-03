@@ -1,0 +1,21 @@
+{
+  "benches": {
+    "apply_redaction_effects": {
+      "ns_per_iter": 1227,
+      "p95_ns": 1291
+    },
+    "build_policy_input_representative_snapshot": {
+      "ns_per_iter": 704,
+      "p95_ns": 814
+    },
+    "manifest_parse_extends_merge": {
+      "ns_per_iter": 80295,
+      "p95_ns": 87470
+    },
+    "normalize_verdict_with_effects": {
+      "ns_per_iter": 2470,
+      "p95_ns": 2692
+    }
+  },
+  "format_version": 1
+}

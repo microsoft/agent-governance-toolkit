@@ -1,0 +1,44 @@
+name: ci-generation-check
+
+# Guards the deterministic CI workflow generator. When the manifest under
+# .github/ci or the generator script changes, regenerate and fail on any drift
+# so the committed YAML under .github/workflows always matches its source.
+# This workflow is intentionally hand authored because it is the meta check
+# that guards generation; it is not itself generated.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - '.github/ci/**'
+      - '.github/workflows/**'
+      - 'scripts/ci/generate_workflows.py'
+      - 'tests/ci/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-generated-workflows:
+    name: Check generated workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Verify generated workflows are up to date
+        run: |
+          python3 scripts/ci/generate_workflows.py --check
+      - name: Run generator self tests
+        run: |
+          python3 -m pip install --upgrade pip==24.3.1 pytest==9.0.3 pyyaml==6.0.2
+          pytest tests/ci -q

@@ -5,6 +5,20 @@ Microsoft Semantic Kernel Integration
 
 Wraps Semantic Kernel with Agent OS governance.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
+translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, an :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
+keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
+outbound function arguments or prompt content before Semantic Kernel
+sees them; ``escalate`` verdicts route through the configured approval
+resolver per AGT-DELTA D1.4.
+
 Usage:
     from agent_os.integrations import SemanticKernelWrapper
     from semantic_kernel import Kernel
@@ -16,11 +30,13 @@ Usage:
     result = await governed_sk.invoke(function, input="...")
 
 Features:
-- Function invocation governance
-- Plugin/skill validation
+- Function invocation governance via the AGT 5.0 ACS runtime
+- Plugin/skill validation at the AGT pre_tool_call hook
+- Transform-verdict rewriting of arguments and prompts
+- Escalate-verdict approval routing via the configured resolver
 - Memory access control
 - Token limit enforcement
-- Full audit trail
+- Full audit trail with AGT bisected input/enforced identities
 - POSIX-style signals
 """
 
@@ -28,8 +44,14 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
+from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
 
@@ -92,6 +114,10 @@ class SemanticKernelWrapper(BaseIntegration):
         policy: Optional[GovernancePolicy] = None,
         timeout_seconds: float = 300.0,
         evaluator: Any = None,
+        *,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
         """Initialise the Semantic Kernel governance wrapper.
 
@@ -99,10 +125,23 @@ class SemanticKernelWrapper(BaseIntegration):
             kernel: Optional Semantic Kernel instance.  Can also be
                 provided later via :meth:`wrap`.
             policy: Governance policy to enforce. When ``None`` the default
-                ``GovernancePolicy`` is used.
+                ``GovernancePolicy`` is used. The policy is translated to
+                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
+                is constructed over it at init time.
             timeout_seconds: Default timeout in seconds (default 300).
-            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
-                evaluation.
+            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
+                policy evaluation. Retained for backward compatibility;
+                the primary decision path now runs through the AGT 5.0
+                runtime.
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature matches
+                :data:`agt.policies.runtime.ApprovalCallback`. When
+                ``None`` an escalate verdict fails closed to ``deny``.
+            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
+                so scenario tests can wire a scripted policy dispatcher
+                without OPA on PATH. Not part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public surface.
         """
         super().__init__(policy, evaluator=evaluator)
         self._kernel = kernel
@@ -112,6 +151,44 @@ class SemanticKernelWrapper(BaseIntegration):
         self.timeout_seconds = timeout_seconds
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this wrapper."""
+        return self._bridge
+
+    def evaluate_input(
+        self, ctx: ExecutionContext, input_data: Any
+    ) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        body: Any
+        if isinstance(input_data, (str, dict)):
+            body = input_data
+        elif hasattr(input_data, "content"):
+            body = str(getattr(input_data, "content"))
+        else:
+            body = str(input_data)
+        return self._bridge.evaluate_input(ctx, body=body)
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: ExecutionContext,
+        *,
+        tool_name: str,
+        args: dict[str, Any],
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for a Semantic Kernel function call."""
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=args, call_id=call_id
+        )
 
     def as_filter(self) -> "GovernanceFunctionFilter":
         """Create a governance filter for Semantic Kernel's native filter system.
@@ -310,20 +387,45 @@ class GovernedSemanticKernel:
         }
         self._ctx.functions_invoked.append(invocation)
 
-        # Pre-execution check
-        allowed, reason = self._wrapper.pre_execute(self._ctx, kwargs)
-        if not allowed:
-            raise PolicyViolationError(f"Invocation blocked: {reason}")
-
-        # Check allowed functions
+        # Host-side allowlist guard FIRST (wildcard-aware). The AGT
+        # manifest bridge emits no tools catalog when allowed_tools is
+        # empty and cannot encode SK's plugin-wildcard entries like
+        # ``MyPlugin.*``, so the host check must run before the engine
+        # pre_tool_call check to (a) surface the v4 friendly "Function
+        # not allowed" message and (b) honour wildcard allows that the
+        # engine tool catalog would otherwise deny.
+        allowlist_matched_via_wildcard = False
         if self._wrapper.policy.allowed_tools:
             if func_id not in self._wrapper.policy.allowed_tools:
-                # Check if plugin is allowed (wildcard)
-                if plugin_name:
-                    if f"{plugin_name}.*" not in self._wrapper.policy.allowed_tools:
-                        raise PolicyViolationError(f"Function not allowed: {func_id}")
+                wildcard = f"{plugin_name}.*" if plugin_name else None
+                if wildcard and wildcard in self._wrapper.policy.allowed_tools:
+                    allowlist_matched_via_wildcard = True
                 else:
                     raise PolicyViolationError(f"Function not allowed: {func_id}")
+
+        # AGT pre_tool_call evaluation: route the function invocation
+        # through the v5 ACS engine so transform / escalate / deny
+        # verdicts (AGT-DELTA D1.1 / D1.4) all apply uniformly. Skipped
+        # when the host guard accepted the call via a plugin wildcard,
+        # because the bridge tool catalog cannot encode ``MyPlugin.*``
+        # and would deny a v4-allowed call.
+        self._ctx.tool_calls.append(invocation)
+        self._ctx.call_count = len(self._ctx.tool_calls)
+        if not allowlist_matched_via_wildcard:
+            bridge_result = self._wrapper.evaluate_pre_tool_call(
+                self._ctx,
+                tool_name=func_id,
+                args=dict(kwargs),
+                call_id=f"sk-call-{self._ctx.call_count}",
+            )
+            if not bridge_result.allowed:
+                raise PolicyViolationError.from_check_result(
+                    bridge_result.check_result
+                )
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, dict
+            ):
+                kwargs = dict(bridge_result.transform.value)
 
         # Execute
         try:
@@ -337,10 +439,28 @@ class GovernedSemanticKernel:
             else:
                 raise ValueError("Must provide either function or plugin_name+function_name")
 
-            # Post-execution check
-            valid, reason = self._wrapper.post_execute(self._ctx, result)
-            if not valid:
-                raise PolicyViolationError(f"Result blocked: {reason}")
+            # AGT output intervention point evaluation on the function
+            # result. AGT-DELTA D1.1: a transform verdict rewrites the
+            # value the caller sees, mirroring the GovernanceFunctionFilter
+            # path (semantic_kernel_adapter.py:1161-1167) and the
+            # llamaindex_adapter post hook (llamaindex_adapter.py:187-203).
+            post_result = self._wrapper.bridge.evaluate_output(
+                self._ctx, content=str(result)
+            )
+            if not post_result.allowed:
+                raise PolicyViolationError.from_check_result(
+                    post_result.check_result
+                )
+            if post_result.transform is not None and isinstance(
+                post_result.transform.value, str
+            ):
+                if hasattr(result, "value"):
+                    try:
+                        result.value = post_result.transform.value
+                        return result
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
+                return post_result.transform.value
 
             return result
 
@@ -455,8 +575,10 @@ class GovernedSemanticKernel:
     ) -> Any:
         """Save information to kernel memory with governance checks.
 
-        The text content is validated against ``blocked_patterns`` before
-        being persisted.  The operation is recorded in the audit trail.
+        The text content is validated at the AGT ``input`` intervention
+        point before being persisted. A ``transform`` verdict (AGT-DELTA
+        D1.1) rewrites the text before the memory backend sees it. The
+        operation is recorded in the audit trail.
 
         Args:
             collection: Memory collection name.
@@ -476,10 +598,14 @@ class GovernedSemanticKernel:
         if self._wrapper.is_killed():
             raise ExecutionKilledError("Kernel received SIGKILL")
 
-        # Pre-check content
-        allowed, reason = self._wrapper.pre_execute(self._ctx, text)
-        if not allowed:
-            raise PolicyViolationError(f"Memory save blocked: {reason}")
+        # AGT input intervention point check on the memory body
+        bridge_result = self._wrapper.evaluate_input(self._ctx, text)
+        if not bridge_result.allowed:
+            raise _prefixed_violation("Memory save blocked", bridge_result.check_result)
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, str
+        ):
+            text = bridge_result.transform.value
 
         # Record operation
         self._ctx.memory_operations.append({
@@ -558,16 +684,23 @@ class GovernedSemanticKernel:
         """
         Invoke a prompt with governance.
 
-        This is for direct chat/completion calls.
+        This is for direct chat/completion calls. The prompt is
+        evaluated at the AGT ``input`` intervention point. ``transform``
+        verdicts (AGT-DELTA D1.1) rewrite the prompt before Semantic
+        Kernel sees it.
         """
         # Check signals
         if self._wrapper.is_killed():
             raise ExecutionKilledError("Kernel received SIGKILL")
 
-        # Pre-check prompt
-        allowed, reason = self._wrapper.pre_execute(self._ctx, prompt)
-        if not allowed:
-            raise PolicyViolationError(f"Prompt blocked: {reason}")
+        # AGT input intervention point check on the prompt
+        bridge_result = self._wrapper.evaluate_input(self._ctx, prompt)
+        if not bridge_result.allowed:
+            raise _prefixed_violation("Prompt blocked", bridge_result.check_result)
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, str
+        ):
+            prompt = bridge_result.transform.value
 
         # Record
         self._ctx.functions_invoked.append({
@@ -580,10 +713,31 @@ class GovernedSemanticKernel:
         # This works with SK's chat completion service pattern
         result = await self._kernel.invoke_prompt(prompt, **kwargs)
 
-        # Post-check result
-        valid, reason = self._wrapper.post_execute(self._ctx, result)
+        # AGT output intervention point evaluation on the result.
+        # AGT-DELTA D1.1: a transform verdict rewrites the value the
+        # caller sees.
+        post_result = self._wrapper.bridge.evaluate_output(
+            self._ctx, content=str(result)
+        )
+        if not post_result.allowed:
+            raise PolicyViolationError.from_check_result(
+                post_result.check_result
+            )
+        # v4 host post_execute hook (overridable) — honour host-side output
+        # blocks the AGT output intervention point does not encode.
+        valid, message = self._wrapper.post_execute(self._ctx, str(result))
         if not valid:
-            raise PolicyViolationError(f"Result blocked: {reason}")
+            raise PolicyViolationError(f"Result blocked: {message}")
+        if post_result.transform is not None and isinstance(
+            post_result.transform.value, str
+        ):
+            if hasattr(result, "value"):
+                try:
+                    result.value = post_result.transform.value
+                    return result
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
+            return post_result.transform.value
 
         return result
 
@@ -619,10 +773,16 @@ class GovernedSemanticKernel:
         if self._wrapper.is_killed():
             raise ExecutionKilledError("Kernel received SIGKILL")
 
-        # Pre-check goal
-        allowed, reason = self._wrapper.pre_execute(self._ctx, goal)
-        if not allowed:
-            raise PolicyViolationError(f"Plan goal blocked: {reason}")
+        # AGT input intervention point check on the planner goal
+        bridge_result = self._wrapper.evaluate_input(self._ctx, goal)
+        if not bridge_result.allowed:
+            raise PolicyViolationError.from_check_result(
+                bridge_result.check_result
+            )
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, str
+        ):
+            goal = bridge_result.transform.value
 
         # Create plan
         if planner:
@@ -759,10 +919,30 @@ class GovernedPlan:
 # Exceptions
 # ============================================================================
 
-class PolicyViolationError(Exception):
-    """Raised when a Semantic Kernel function violates governance policy."""
+class PolicyViolationError(_CanonicalPolicyViolationError):
+    """Raised when a Semantic Kernel function violates governance policy.
+
+    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
+    canonical ``from_check_result`` constructor is available while
+    preserving the legacy ``agent_os.integrations.semantic_kernel_adapter.PolicyViolationError``
+    import path for v4 callers.
+    """
 
     pass
+
+
+def _prefixed_violation(prefix: str, check_result: Any) -> PolicyViolationError:
+    """Build a host-friendly :class:`PolicyViolationError` for an SK surface.
+
+    Surfaces the v4-style ``"<prefix>: <detail>"`` message that hosts match
+    on (e.g. ``"Prompt blocked"``) while preserving the structured
+    ``check_result`` and details so callers can still switch on
+    ``e.check_result.category`` per the AGT host-integration contract.
+    """
+    base = PolicyViolationError.from_check_result(check_result)
+    exc = PolicyViolationError(f"{prefix}: {base}", details=base.details)
+    exc.check_result = check_result
+    return exc
 
 
 class ExecutionStoppedError(Exception):
@@ -882,8 +1062,11 @@ class GovernanceFunctionFilter:
         """Filter protocol implementation for Semantic Kernel.
 
         Called by the SK runtime before/after each function invocation.
-        Validates the function against governance policy, calls ``next()``
-        to proceed, then runs post-execution checks.
+        Routes the call through the AGT 5.0 ACS engine at the
+        ``pre_tool_call`` intervention point. ``transform`` verdicts
+        (AGT-DELTA D1.1) rewrite ``context.arguments`` before the
+        function executes; ``escalate`` verdicts route through the
+        configured approval resolver per AGT-DELTA D1.4.
 
         Args:
             context: SK's ``FunctionInvocationContext`` or
@@ -906,14 +1089,23 @@ class GovernanceFunctionFilter:
             "timestamp": datetime.now().isoformat(),
         })
 
-        # Check allowed_tools
+        # Check allowed_tools (host-side allowlist guard — the AGT
+        # manifest bridge does not encode SK's plugin-wildcard pattern
+        # ``MyPlugin.*``).
+        allowlist_matched_via_wildcard = False
         if self._wrapper.policy.allowed_tools:
             if full_name not in self._wrapper.policy.allowed_tools:
                 wildcard = f"{plugin_name}.*" if plugin_name else None
-                if not wildcard or wildcard not in self._wrapper.policy.allowed_tools:
-                    raise PolicyViolationError(f"Function not allowed: {full_name}")
+                if wildcard and wildcard in self._wrapper.policy.allowed_tools:
+                    allowlist_matched_via_wildcard = True
+                else:
+                    raise PolicyViolationError(
+                        f"Function not allowed: {full_name}"
+                    )
 
-        # Check blocked patterns in arguments
+        # Check blocked patterns in arguments (host-side defensive scan
+        # because the AGT manifest bridge only pattern-matches the
+        # input intervention point's policy_target).
         args = getattr(context, "arguments", None)
         if args:
             args_str = str(args)
@@ -925,29 +1117,73 @@ class GovernanceFunctionFilter:
                     )
 
         # Check call count (post_execute_check also increments call_count,
-        # so we check against the current value before post_execute runs)
+        # so we check against the current value before post_execute runs).
+        # This mirrors the v4 PolicyInterceptor max_tool_calls branch and
+        # holds even when the AGT manifest bridge does not bind
+        # pre_tool_call for the active policy.
         if self._ctx.call_count >= self._wrapper.policy.max_tool_calls:
             raise PolicyViolationError(
                 f"Tool call limit exceeded: "
                 f"{self._ctx.call_count} >= {self._wrapper.policy.max_tool_calls}"
             )
 
-        # Pre-execute (Cedar/OPA)
-        allowed, reason = self._wrapper.pre_execute(self._ctx, {
-            "function": full_name,
-            "arguments": str(args) if args else "",
-        })
-        if not allowed:
-            raise PolicyViolationError(f"Invocation blocked: {reason}")
+        # AGT pre_tool_call intervention point evaluation.
+        # Wildcard-allowed function names cannot be encoded in the AGT
+        # manifest tool catalog, so when the host-side guard accepted
+        # the call via a plugin wildcard (``MyPlugin.*``) we skip the
+        # bridge tool-catalog check and rely on the v4-equivalent host
+        # checks above.
+        if not allowlist_matched_via_wildcard:
+            args_dict: dict[str, Any]
+            if isinstance(args, dict):
+                args_dict = dict(args)
+            elif args is None:
+                args_dict = {}
+            else:
+                args_dict = {"_value": args}
+            bridge_result = self._wrapper.evaluate_pre_tool_call(
+                self._ctx,
+                tool_name=full_name,
+                args=args_dict,
+                call_id=f"sk-filter-{self._ctx.call_count + 1}",
+            )
+            if not bridge_result.allowed:
+                raise PolicyViolationError.from_check_result(
+                    bridge_result.check_result
+                )
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, dict
+            ):
+                try:
+                    context.arguments = bridge_result.transform.value
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
 
         # Proceed with execution
         await next(context)
 
-        # Post-execute drift detection
+        # AGT output intervention point evaluation on the function result.
         result = getattr(context, "result", None)
-        valid, reason = self._wrapper.post_execute(self._ctx, result)
-        if not valid:
-            raise PolicyViolationError(f"Result blocked: {reason}")
+        if result is not None:
+            post_result = self._wrapper.bridge.evaluate_output(
+                self._ctx, content=str(result)
+            )
+            if not post_result.allowed:
+                raise PolicyViolationError.from_check_result(
+                    post_result.check_result
+                )
+            if post_result.transform is not None and isinstance(
+                post_result.transform.value, str
+            ):
+                try:
+                    context.result = post_result.transform.value
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
+
+        # Advance the per-context call counter so subsequent invocations
+        # see the running budget. The v4 base.post_execute_check did
+        # this implicitly; the v5 path now does it explicitly.
+        self._ctx.call_count += 1
 
     def __repr__(self) -> str:
         return "GovernanceFunctionFilter(wrapper=SemanticKernelWrapper)"

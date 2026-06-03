@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
+from agent_sandbox.code_scanner import enforce_no_subprocess_execution
 from agent_sandbox.hyperlight_provider.config import (
     HyperlightConfig,
     hyperlight_config_from_policy,
@@ -494,6 +495,8 @@ class HyperLightSandboxProvider(SandboxProvider):
             if not getattr(decision, "allowed", False):
                 reason = getattr(decision, "reason", "policy denied")
                 raise PermissionError(f"Policy denied: {reason}")
+
+        enforce_no_subprocess_execution(code)
 
         execution_id = uuid.uuid4().hex[:8]
         timeout_s = (cfg.max_execution_time_ms / 1000.0) if cfg else 60.0

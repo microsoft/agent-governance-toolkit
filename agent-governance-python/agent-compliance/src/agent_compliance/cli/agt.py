@@ -9,6 +9,7 @@ Single entry point that namespaces all governance commands:
     agt verify          OWASP ASI compliance verification
     agt integrity       Module integrity checks
     agt lint-policy     Policy file linting
+    agt test            Replay policy test fixtures
     agt doctor          Diagnose installation health
     agt version         Show installed package versions
 
@@ -178,6 +179,7 @@ def cli(
       agt verify              Check OWASP ASI compliance
       agt doctor              Diagnose installation health
       agt lint-policy ./dir   Lint policy files
+      agt test ./p ./f        Replay policy test fixtures
       agt integrity           Verify module integrity
 
     \b
@@ -200,6 +202,42 @@ cli.add_command(cred)
 
 
 @cli.command()
+@click.argument("policy_path", type=click.Path(exists=True))
+@click.argument("fixture_path", type=click.Path(exists=True))
+@click.pass_obj
+def test(ctx_obj: AgtContext, policy_path: str, fixture_path: str) -> None:
+    """Replay policy test fixtures and report verdict mismatches.
+
+    \b
+    POLICY_PATH   Directory or YAML file containing policy rules.
+    FIXTURE_PATH  Directory or JSON/YAML file containing test fixtures.
+
+    \b
+    Exit code 0 when all fixtures pass, 1 on any mismatch.
+    Designed for CI gating on policy changes.
+
+    \b
+    Example:
+      agt test examples/policy-templates/general-saas.yaml fixtures/
+      agt test policies/ fixtures/regression-suite.json
+    """
+    try:
+        from agent_compliance.policy_test import print_report, replay
+
+        report = replay(policy_path, fixture_path)
+        print_report(report, use_json=ctx_obj.output_json)
+
+        if not report.ok:
+            raise SystemExit(1)
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        _handle_error(e, ctx_obj.output_json)
+        raise SystemExit(1)
+
+
+@cli.command()
 @click.option("--badge", is_flag=True, default=False, help="Output markdown badge only.")
 @click.option(
     "--evidence",
@@ -212,14 +250,16 @@ cli.add_command(cred)
     "--strict",
     is_flag=True,
     default=False,
-    help="Fail if runtime evidence shows weak or missing governance setup.",
+    hidden=True,
+    help="Deprecated: strict mode is now the default.  This flag is accepted but has no effect.",
+    is_eager=False,
+    expose_value=False,
 )
 @click.pass_obj
 def verify(
     ctx_obj: AgtContext,
     badge: bool,
     evidence_path: str | None,
-    strict: bool,
 ) -> None:
     """Run OWASP ASI 2026 governance verification."""
     try:
@@ -228,7 +268,7 @@ def verify(
         verifier = GovernanceVerifier()
 
         if evidence_path:
-            attestation = verifier.verify_evidence(evidence_path=evidence_path, strict=strict)
+            attestation = verifier.verify_evidence(evidence_path=evidence_path)
         else:
             attestation = verifier.verify()
 

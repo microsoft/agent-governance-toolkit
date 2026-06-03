@@ -1,0 +1,4 @@
+data: {"id":"cmpl-1","object":"chat.completion.chunk","created":1,"model":"gpt-x","choices":[{"index":0,"delta":{"content":"a"},"finish_reason":null},{"index":1,"delta":{"content":"b"},"finish_reason":null}]}
+
+data: [DONE]
+

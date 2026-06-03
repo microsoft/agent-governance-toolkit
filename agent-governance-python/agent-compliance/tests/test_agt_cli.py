@@ -545,7 +545,6 @@ class TestVerifyCommand:
         assert "OWASP" in result.output
         assert "--badge" in result.output
         assert "--evidence" in result.output
-        assert "--strict" in result.output
 
     def test_verify_runs(self, runner: CliRunner):
         result = runner.invoke(cli, ["verify"])
@@ -592,11 +591,11 @@ class TestVerifyCommand:
         ) as mocked:
             result = runner.invoke(
                 cli,
-                ["verify", "--evidence", str(evidence_path), "--strict"],
+                ["verify", "--evidence", str(evidence_path)],
             )
 
         assert result.exit_code == 0
-        mocked.assert_called_once_with(evidence_path=str(evidence_path), strict=True)
+        mocked.assert_called_once_with(evidence_path=str(evidence_path))
 
     def test_verify_evidence_json_mode(self, runner: CliRunner, tmp_path: Path):
         evidence_path = tmp_path / "agt-evidence.json"

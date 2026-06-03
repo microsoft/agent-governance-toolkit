@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ACS conformance case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "spec_section",
+    "title",
+    "operation",
+    "sdk_support",
+    "manifest_yaml",
+    "intervention_point",
+    "snapshot",
+    "policy_response",
+    "expected"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^spec-[0-9][A-Za-z0-9._-]*\\.case-[0-9]{2}$"
+    },
+    "spec_section": {
+      "type": "string",
+      "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claimable": {
+      "type": "boolean"
+    },
+    "operation": {
+      "enum": [
+        "build",
+        "evaluate",
+        "approval_action_mismatch"
+      ]
+    },
+    "sdk_support": {
+      "type": "object",
+      "required": [
+        "rust",
+        "python",
+        "node",
+        "dotnet"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rust": {
+          "enum": [
+            "required",
+            "optional",
+            "skip"
+          ]
+        },
+        "python": {
+          "enum": [
+            "required",
+            "optional",
+            "skip"
+          ]
+        },
+        "node": {
+          "enum": [
+            "required",
+            "optional",
+            "skip"
+          ]
+        },
+        "dotnet": {
+          "enum": [
+            "required",
+            "optional",
+            "skip"
+          ]
+        }
+      }
+    },
+    "manifest_yaml": {
+      "type": "string",
+      "minLength": 1
+    },
+    "intervention_point": {
+      "enum": [
+        "input",
+        "pre_model_call",
+        "post_model_call",
+        "pre_tool_call",
+        "post_tool_call",
+        "output"
+      ]
+    },
+    "snapshot": {},
+    "policy_response": {},
+    "mode": {
+      "enum": [
+        "enforce",
+        "evaluate_only"
+      ]
+    },
+    "policy_behavior": {
+      "enum": [
+        "error"
+      ]
+    },
+    "annotator_outputs": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "annotator_behavior": {
+      "enum": [
+        "error",
+        "timeout"
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_snapshot_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_policy_input_depth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_annotators_per_point": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_annotator_output_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_policy_output_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_extends_depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_merged_manifest_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "required": [
+        "decision"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "deny",
+            "warn",
+            "escalate",
+            "transform"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transformed_policy_target": {},
+        "policy_target": {},
+        "tool_name": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "annotator_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "action_identity": {
+          "enum": [
+            "present",
+            "absent"
+          ]
+        }
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(docs|policy|tests|examples|spec)/(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+      }
+    }
+  }
+}

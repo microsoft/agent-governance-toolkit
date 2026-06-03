@@ -10,17 +10,17 @@ see [GOVERNANCE.md](GOVERNANCE.md).
 
 | Name | Organization | GitHub | Role | Since |
 |------|-------------|--------|------|-------|
-| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | Project lead, creator | Oct 2024 |
+| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | Project lead, creator | Mar 2026 |
 
 ## Core Maintainers
 
 | Name | Organization | GitHub | Area | Since |
 |------|-------------|--------|------|-------|
-| Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | Python SDK, Agent OS | Jan 2025 |
-| Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | .NET SDK, CI/CD | Feb 2025 |
-| Andrew Lee Rubinger | Aileron | [@ALRubinger](https://github.com/ALRubinger) | Governance runtime, integrations | May 2026 |
-| Kevin Knapp | MythologIQ | [@Knapp-Kevin](https://github.com/Knapp-Kevin) | Policy engine, LangChain integration | May 2026 |
-| Nishar Miya | Dayos | [@miyannishar](https://github.com/miyannishar) | Observability, adopter integrations | May 2026 |
+| Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | Python SDK, Agent OS | Apr 2026 |
+| Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | .NET SDK, CI/CD | Apr 2026 |
+| Kevin Knapp | MythologIQ | [@Knapp-Kevin](https://github.com/Knapp-Kevin) | Policy engine, LangChain integration | Apr 2026 |
+| Nishar Miya | Dayos | [@miyannishar](https://github.com/miyannishar) | Observability, adopter integrations | Apr 2026 |
+| Prashan Sapkota | Robert Half Inc. | [@prashansapkota](https://github.com/prashansapkota) | Cloud infrastructure, deployment | Apr 2026 |
 
 ## Package Maintainers
 
@@ -28,9 +28,9 @@ Package maintainers have publish rights to one or more registries (PyPI, npm, Nu
 
 | Name | Organization | GitHub | Package(s) | Since |
 |------|-------------|--------|-----------|-------|
-| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | agent-os-kernel, agentmesh-platform, agent-governance-toolkit (PyPI) | Oct 2024 |
-| Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | @microsoft/agent-governance (npm), Microsoft.AgentGovernance (NuGet) | Jan 2025 |
-| Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | Microsoft.AgentGovernance.* (NuGet) | Feb 2025 |
+| Imran Siddique | Microsoft | [@imran-siddique](https://github.com/imran-siddique) | agent-os-kernel, agentmesh-platform, agent-governance-toolkit (PyPI) | Mar 2026 |
+| Jack Batzner | Microsoft | [@jackbatzner](https://github.com/jackbatzner) | @microsoft/agent-governance (npm), Microsoft.AgentGovernance (NuGet) | Apr 2026 |
+| Elton Carr | Microsoft | [@eltoncarr-ms](https://github.com/eltoncarr-ms) | Microsoft.AgentGovernance.* (NuGet) | Apr 2026 |
 
 _We welcome additional maintainers from any organization. See
 [Contributing](#becoming-a-maintainer) below._
@@ -49,4 +49,6 @@ contributing and reach out in [GitHub Discussions](https://github.com/microsoft/
 
 ## Emeritus Maintainers
 
-None yet.
+| Name | Organization | GitHub | Contribution Period |
+|------|-------------|--------|-------------------|
+| Andrew Lee Rubinger | Aileron | [@ALRubinger](https://github.com/ALRubinger) | May 2026 |

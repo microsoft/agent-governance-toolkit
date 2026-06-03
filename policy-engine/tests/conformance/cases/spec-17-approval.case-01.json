@@ -1,0 +1,26 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-17-approval.case-01",
+  "spec_section": "17",
+  "title": "approval action identity mismatch fails closed",
+  "claimable": true,
+  "operation": "approval_action_mismatch",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
+  "intervention_point": "input",
+  "snapshot": {
+    "input": "hi"
+  },
+  "policy_response": {
+    "decision": "escalate"
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "runtime_error:approval_action_mismatch"
+  }
+}

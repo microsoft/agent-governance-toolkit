@@ -1,0 +1,25 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "cg-google-chat"
+extends: []
+policies:
+  cg_google_chat:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.cg_google_chat.verdict
+intervention_points:
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      message_dlp:
+        from: "$policy_target.message"
+    policy:
+      id: cg_google_chat
+      query: data.agent_control_specification.cg_google_chat.pre_tool_call_verdict
+tools:
+  google_chat.send_message: {}
+annotators:
+  message_dlp:
+    type: classifier

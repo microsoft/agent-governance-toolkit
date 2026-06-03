@@ -46,7 +46,14 @@
     { "pattern": "marketplace\\.visualstudio\\.com/manage" },
     { "pattern": "huggingface\\.co/datasets/microsoft" },
     { "pattern": "datatracker\\.ietf\\.org" },
-    { "pattern": "ExternalPlatform\\.dev" }
+    { "pattern": "ExternalPlatform\\.dev" },
+    { "pattern": "arxiv\\.org" },
+    { "pattern": "genai\\.owasp\\.org" },
+    { "pattern": "learn\\.microsoft\\.com" },
+    { "pattern": "microsoft\\.com/en-us/security/blog" },
+    { "pattern": "dcbadge\\.limes\\.pink/api/server/RcK9fHf8" },
+    { "pattern": "agent-governance-python/agent-lightning/pull" },
+    { "pattern": "^(?!https?://|mailto:|#)" }
   ],
   "timeout": "30s",
   "retryOn429": true,

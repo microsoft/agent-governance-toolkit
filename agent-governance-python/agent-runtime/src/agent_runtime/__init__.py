@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """
 Agent Runtime — Execution supervisor for multi-agent sessions.
 
@@ -16,6 +17,15 @@ The ``agent-hypervisor`` package remains available for backward compatibility
 and will be deprecated in a future release.
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agentmesh-runtime is deprecated. Use agent-governance-toolkit-core instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 from hypervisor import (  # noqa: F401
     __version__,
     # Core
@@ -89,6 +99,15 @@ from hypervisor import (  # noqa: F401
     KillResult,
 )
 
+from agent_runtime.deploy import (  # noqa: E402
+    DeploymentResult,
+    DeploymentStatus,
+    DeploymentTarget,
+    DockerDeployer,
+    GovernanceConfig,
+    KubernetesDeployer,
+)
+
 __all__ = [
     "__version__",
     "Hypervisor",
@@ -149,24 +168,6 @@ __all__ = [
     "RateLimitExceeded",
     "KillSwitch",
     "KillResult",
-]
-
-# ============================================================================
-# Deployment Runtime (v3.0.2+)
-# ============================================================================
-
-from agent_runtime.deploy import (
-    DeploymentResult,
-    DeploymentStatus,
-    DeploymentTarget,
-    DockerDeployer,
-    GovernanceConfig,
-    KubernetesDeployer,
-)
-
-# Update __all__ to include new exports
-__all__ = [
-    *__all__,
     "DeploymentResult",
     "DeploymentStatus",
     "DeploymentTarget",

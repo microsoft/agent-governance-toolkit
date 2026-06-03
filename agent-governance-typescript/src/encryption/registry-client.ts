@@ -43,6 +43,30 @@ function fromBase64Url(s: string): Uint8Array {
   return out;
 }
 
+/**
+ * sha256(bytes) → lowercase hex. Used to deterministically derive the
+ * canonical `did:mesh:<hex32>` server DID when a 409 conflict occurs
+ * during POP registration and the server didn't return a body to parse.
+ * Matches `hashlib.sha256(public_key).hexdigest()` on the Python side.
+ */
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  // Node 18+ exposes Web Crypto via globalThis.crypto.
+  const c = (globalThis as { crypto?: { subtle?: SubtleCrypto } }).crypto;
+  if (c?.subtle) {
+    const ab: ArrayBuffer = bytes.buffer instanceof ArrayBuffer
+      ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      : new Uint8Array(bytes).buffer;
+    const digest = await c.subtle.digest("SHA-256", ab);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  // Fallback: node:crypto (CommonJS require to keep browser bundlers happy).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const nodeCrypto = require("node:crypto") as typeof import("node:crypto");
+  return nodeCrypto.createHash("sha256").update(bytes).digest("hex");
+}
+
 // ── Public types ─────────────────────────────────────────────────
 
 export interface RegistryClientOptions {
@@ -118,23 +142,80 @@ export class RegistryClient {
    * Register the agent in the registry. Idempotent: a 409 response
    * (already registered) resolves successfully without throwing.
    *
-   * @param identityKey   X25519 long-term identity public key (32 bytes)
+   * @param did           Client-supplied DID hint. Ignored when `popSigner`
+   *                      is provided (the server derives the canonical
+   *                      `did:mesh:<sha256(public_key)[:32]>` itself); kept
+   *                      for back-compat with pre-2533 (May-23-2026)
+   *                      registries that accept a body-supplied DID.
+   * @param identityKey   When `popSigner` is set: the **Ed25519** identity
+   *                      public key (32 bytes). The server verifies the
+   *                      proof against this key.
+   *                      When `popSigner` is unset: legacy X25519 public
+   *                      key path, preserves the old wire shape.
    * @param capabilities  Capability strings the agent advertises. Include
    *                      friendly display name here so peers can find this
    *                      agent via `discover(name)`.
    * @param metadata      Arbitrary string metadata (e.g. {display_name}).
+   * @param popSigner     Optional Ed25519 signer. When set, the client
+   *                      attaches proof-of-possession (the new wire
+   *                      shape introduced by AGT PR #2533, mandatory on
+   *                      registries built from main after 2026-05-23).
+   *                      Required by `ghcr.io/microsoft/agentmesh/registry:4.0.0+`.
+   * @returns The canonical agent DID (server-derived when popSigner is
+   *          set; falls back to the caller-supplied `did` otherwise).
    */
   async register(
     did: string,
     identityKey: Uint8Array,
     capabilities: string[] = [],
     metadata: Record<string, string> = {},
-  ): Promise<void> {
+    popSigner?: { sign: (msg: Uint8Array) => Uint8Array },
+  ): Promise<{ did: string }> {
     if (identityKey.length !== 32) {
       throw new Error(
         `RegistryClient.register: identityKey must be 32 bytes, got ${identityKey.length}`,
       );
     }
+    // POP path (new wire shape, AGT PR #2533+).
+    if (popSigner) {
+      const publicKeyB64 = toBase64Url(identityKey);
+      const proofTimestamp = new Date().toISOString();
+      // Server verifies Ed25519(public_key_b64_str || proof_timestamp_str)
+      // — the strings as transmitted, NOT the raw key bytes. See
+      // agent-governance-python/agent-mesh/src/agentmesh/registry/app.py
+      // line ~204: `message = req.public_key.encode() + req.proof_timestamp.encode()`.
+      const popMessage = new TextEncoder().encode(publicKeyB64 + proofTimestamp);
+      const proof = popSigner.sign(popMessage);
+      const body = JSON.stringify({
+        public_key: publicKeyB64,
+        proof: toBase64Url(proof),
+        proof_timestamp: proofTimestamp,
+        capabilities,
+        metadata,
+      });
+      const resp = await this.request("POST", "/v1/agents", body);
+      if (resp.status === 201 || resp.status === 200) {
+        // Parse the server-derived DID out of the response body.
+        try {
+          const j = JSON.parse(resp.bodyText) as { did?: string };
+          if (j.did) return { did: j.did };
+        } catch { /* fall through */ }
+        return { did };
+      }
+      if (resp.status === 409) {
+        // Already registered — server didn't necessarily return a DID body.
+        // Re-derive it deterministically the same way the server does so the
+        // caller can use the canonical form for subsequent lookups.
+        const sha256 = await sha256Hex(identityKey);
+        return { did: `did:mesh:${sha256.slice(0, 32)}` };
+      }
+      throw new RegistryError(
+        `register failed: ${resp.status}`,
+        resp.status,
+        resp.bodyText,
+      );
+    }
+    // Legacy path (pre-2533 registries that accept body `did` + X25519 key).
     const body = JSON.stringify({
       did,
       public_key: toBase64Url(identityKey),
@@ -142,8 +223,8 @@ export class RegistryClient {
       metadata,
     });
     const resp = await this.request("POST", "/v1/agents", body);
-    if (resp.status === 201 || resp.status === 200) return;
-    if (resp.status === 409) return; // already registered — idempotent
+    if (resp.status === 201 || resp.status === 200) return { did };
+    if (resp.status === 409) return { did }; // already registered — idempotent
     throw new RegistryError(
       `register failed: ${resp.status}`,
       resp.status,

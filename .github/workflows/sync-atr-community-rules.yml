@@ -10,6 +10,8 @@
 #   * Uses the built-in gh CLI, no third-party GitHub Actions beyond pinned
 #     actions/checkout and actions/setup-python / setup-node (Scorecard requirement).
 #   * npm dependency is installed with --no-save so the main repo lock files stay clean.
+#     The tarball's SHA-512 is verified against a committed value before install so
+#     a same-version registry republish (supply-chain compromise) aborts the workflow.
 #   * No changes to the curated atr_security_policy.yaml — that file remains hand-maintained.
 #   * Runs sync WITHOUT --strict-regex: a small number of ATR rules use Unicode escape
 #     sequences valid in PCRE/JS but not Python re; strict mode would abort the sync.
@@ -53,14 +55,62 @@ jobs:
       - name: Install Python dependencies
         run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-yaml.txt
 
-      - name: Pull latest ATR package
+      - name: Pull and verify ATR package
         id: atr
+        env:
+          # Pinned SHA-512 for agent-threat-rules@2.0.12 tarball published on
+          # the npm registry. If the registry republishes the same version with
+          # different bytes (compromise / typosquat / overwrite), the integrity
+          # check below fails and the workflow aborts. Update this value
+          # together with the version bump above. Obtain a fresh value via:
+          #   curl -s https://registry.npmjs.org/agent-threat-rules/<ver> \
+          #     | jq -r .dist.integrity
+          ATR_VERSION: "2.0.12"
+          ATR_INTEGRITY: "sha512-+9voboBnYRUx6E9PijhL1lgMBznoolkmS2sQ1Y9QFpGWIrVD50ekjSYmrduS+2ISSs676+tRA/v8V5b8qrn9uQ=="
         run: |
           set -euo pipefail
-          npm install --no-save --no-package-lock agent-threat-rules@2.0.12 --silent
-          ATR_VERSION=$(node -p "require('./node_modules/agent-threat-rules/package.json').version")
-          echo "version=$ATR_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Pulled agent-threat-rules@$ATR_VERSION"
+          # Fetch the registry metadata, pin the tarball URL by version, and
+          # verify the downloaded tarball's SHA-512 against the committed
+          # ``ATR_INTEGRITY`` value before installing. This detects a malicious
+          # republish at the same version number (the threat that ``npm install
+          # <pkg>@<ver>`` alone cannot detect without a lockfile).
+          #
+          # The integrity check only proves the bytes match what npm published.
+          # It does NOT prove the published bytes are benign. ``--ignore-scripts``
+          # below blocks lifecycle script execution (preinstall/install/
+          # postinstall) so a compromised publisher cannot get RCE in a job
+          # that holds contents:write + pull-requests:write + GITHUB_TOKEN
+          # even if their bytes pass the SHA-512 gate.
+          TARBALL_URL=$(curl -fsSL "https://registry.npmjs.org/agent-threat-rules/$ATR_VERSION" \
+            | python -c "import sys,json; print(json.load(sys.stdin)['dist']['tarball'])")
+          echo "Tarball URL: $TARBALL_URL"
+          # Use mktemp so the tarball lives at an unpredictable per-run path —
+          # defense-in-depth against TOCTOU on shared (e.g. self-hosted) runners.
+          ATR_TARBALL=$(mktemp -t atr.XXXXXX.tgz)
+          trap 'rm -f "$ATR_TARBALL"' EXIT
+          curl -fsSL "$TARBALL_URL" -o "$ATR_TARBALL"
+          ACTUAL_B64=$(openssl dgst -sha512 -binary "$ATR_TARBALL" | base64 -w0)
+          ACTUAL_INTEGRITY="sha512-$ACTUAL_B64"
+          if [ "$ACTUAL_INTEGRITY" != "$ATR_INTEGRITY" ]; then
+            echo "::error::agent-threat-rules@$ATR_VERSION integrity mismatch." >&2
+            echo "::error::  expected: $ATR_INTEGRITY" >&2
+            echo "::error::  actual:   $ACTUAL_INTEGRITY" >&2
+            echo "::error::Refuse to install — possible supply-chain compromise." >&2
+            exit 1
+          fi
+          echo "Integrity OK ($ACTUAL_INTEGRITY)"
+          # --ignore-scripts: even with integrity verified, do NOT execute
+          # preinstall/install/postinstall hooks from the package. The sync
+          # script only reads files under node_modules/agent-threat-rules/rules/
+          # so package lifecycle execution is unnecessary.
+          npm install --no-save --no-package-lock --ignore-scripts "$ATR_TARBALL" --silent
+          PKG_VERSION=$(node -p "require('./node_modules/agent-threat-rules/package.json').version")
+          if [ "$PKG_VERSION" != "$ATR_VERSION" ]; then
+            echo "::error::Installed package reports version $PKG_VERSION, expected $ATR_VERSION" >&2
+            exit 1
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Pulled and verified agent-threat-rules@$PKG_VERSION"
 
       - name: Regenerate full policy
         id: regen

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0,<62.0", "wheel"]
+requires = ["setuptools>=78.1.1,<83.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_message_bus"
-version = "3.7.0"
+version = "4.0.0"
 description = "A lightweight, broker-agnostic message bus designed specifically for AI Agents"
 license = {text = "MIT"}
 readme = "README.md"

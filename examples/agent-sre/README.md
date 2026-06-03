@@ -11,7 +11,7 @@ Runnable examples demonstrating AGT's SRE observability and cost governance capa
 ## Prerequisites
 
 - Python 3.10+
-- `pip install agent-sre`
+- `pip install agent-governance-toolkit-cli`
 
 ## Related
 

@@ -1,0 +1,146 @@
+[
+  {
+    "name": "secret_clearance_dominates_confidential_source_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "hi", "ifc": {"source_labels": ["confidential"]}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {"clearance_dominated_labels": ["public", "internal", "confidential", "secret"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "internal_clearance_with_confidential_source_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "hi", "ifc": {"source_labels": ["confidential"]}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {"clearance_dominated_labels": ["public", "internal"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["ifc_clearance_violation_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "multi_label_max_sensitivity_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "hi", "ifc": {"source_labels": ["public", "confidential", "internal"]}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {"clearance_dominated_labels": ["public", "internal"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["ifc_clearance_violation_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "empty_source_labels_denies_fail_closed",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "hi", "ifc": {"source_labels": []}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {"clearance_dominated_labels": ["public", "internal", "confidential", "secret"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["ifc_clearance_violation_empty_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "unrecognized_label_denies_fail_closed",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "input": {"body": "hi", "ifc": {"source_labels": ["unknown"]}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {"clearance_dominated_labels": ["public", "internal", "confidential", "secret"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["ifc_clearance_violation_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "output_with_result_labels_within_clearance_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "response": {"content": "hi", "ifc": {"result_labels": ["internal"]}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"clearance_dominated_labels": ["public", "internal", "confidential", "secret"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "output_with_result_labels_beyond_clearance_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "response": {"content": "hi", "ifc": {"result_labels": ["secret"]}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"clearance_dominated_labels": ["public", "internal"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["ifc_clearance_violation_output"],
+    "num_errors": 0
+  },
+  {
+    "name": "input_policy_does_not_match_output_action",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "input": {"body": "hi", "ifc": {"source_labels": ["secret"]}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"clearance_dominated_labels": ["public"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]

@@ -5,7 +5,16 @@ import { AuditEntry } from "../types";
 
 const auditLog: AuditEntry[] = [];
 
-function computeHash(entry: Omit<AuditEntry, "hash">): string {
+function computeChainHash(entry: Omit<AuditEntry, "hash">): string {
+  // SHA-256 is used here as a content-addressed *integrity* hash over a
+  // hash-chained audit-log entry (Merkle-style tamper-evidence), NOT for
+  // password storage or any authentication secret. The threat model is
+  // "detect after-the-fact mutation of historical audit entries", for which
+  // a fast cryptographic hash is the correct primitive. Do not replace with
+  // bcrypt/scrypt/argon2 — those are password-KDFs with different goals
+  // (slowdown vs. brute force) and would make every audit append O(100ms).
+  // lgtm [js/insufficient-password-hash]
+  // codeql[js/insufficient-password-hash]
   const data = JSON.stringify({
     id: entry.id,
     timestamp: entry.timestamp,
@@ -35,7 +44,7 @@ export function appendAuditEntry(
     previous_hash: previousHash,
   };
 
-  const entry: AuditEntry = { ...partial, hash: computeHash(partial) };
+  const entry: AuditEntry = { ...partial, hash: computeChainHash(partial) };
   auditLog.push(entry);
   return entry;
 }
@@ -53,7 +62,7 @@ export function verifyChain(): boolean {
     if (entry.previous_hash !== expectedPrev) return false;
 
     const { hash, ...partial } = entry;
-    if (hash !== computeHash(partial)) return false;
+    if (hash !== computeChainHash(partial)) return false;
   }
   return true;
 }

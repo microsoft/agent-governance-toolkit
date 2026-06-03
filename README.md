@@ -22,6 +22,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
+[![Discord](https://dcbadge.limes.pink/api/server/RcK9fHf8?style=flat)](https://discord.gg/RcK9fHf8)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -47,7 +48,7 @@ Your AI agents call tools, browse the web, query databases, and delegate to othe
 
 **3. Can you prove what happened?** Auditors and regulators need tamper-evident records of every decision: what policy was active, what the agent requested, and why it was allowed or denied.
 
-Prompt-level safety ("please follow the rules") is not a control surface. It is a polite request to a stochastic system. [OWASP LLM01:2025](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) states this explicitly: *"it is unclear if there are fool-proof methods of prevention for prompt injection."* The published numbers back this up. On [JailbreakBench (Chao et al., NeurIPS 2024)](https://arxiv.org/abs/2404.01318), the standard open robustness benchmark for LLM jailbreaks, adaptive attacks reach **near-100% attack success rates** against frontier safety-aligned models. [Andriushchenko et al., 2024](https://arxiv.org/abs/2404.02151) report 100% ASR on GPT-4, GPT-3.5, Claude 3, and Llama-3 using simple prompt-only attacks, and even the strongest published prompt-layer defenses leak double-digit residual ASR. Microsoft's own [AI Red Teaming Agent](https://learn.microsoft.com/azure/ai-foundry/concepts/ai-red-teaming-agent) formalizes **Attack Success Rate (ASR)**, the rate of policy violations under adversarial input, as the canonical metric for this class of failure, and [*Lessons from Red Teaming 100 Generative AI Products*](https://www.microsoft.com/en-us/security/blog/2025/01/13/3-takeaways-from-red-teaming-100-generative-ai-products/) concludes that *"AI red teaming is never complete"* because model-layer defenses are probabilistic by construction.
+Prompt-level safety ("please follow the rules") is not a control surface. It is a polite request to a stochastic system. [OWASP LLM01:2025](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) states this explicitly: *"it is unclear if there are fool-proof methods of prevention for prompt injection."* The published numbers back this up. [Andriushchenko et al. (ICLR 2025)](https://arxiv.org/abs/2404.02151) report **100% attack success rate** on GPT-4o, GPT-3.5, Claude 3, and Llama-3 using adaptive attacks with logprob access and suffix optimization, evaluated against the [JailbreakBench](https://arxiv.org/abs/2404.01318) benchmark (Chao et al., NeurIPS 2024). Microsoft's own [AI Red Teaming Agent](https://learn.microsoft.com/azure/ai-foundry/concepts/ai-red-teaming-agent) formalizes **Attack Success Rate (ASR)**, the rate of policy violations under adversarial input, as the canonical metric for this class of failure. [*Lessons from Red Teaming 100 Generative AI Products*](https://www.microsoft.com/en-us/security/blog/2025/01/13/3-takeaways-from-red-teaming-100-generative-ai-products/) reinforces the point: *"mitigations do not eliminate risk entirely"* and red teaming must be a continuous process because model-layer defenses are probabilistic by construction.
 
 AGT does not try to win that fight inside the prompt. Every tool call, message send, and delegation is intercepted in deterministic application code *before* the model's intent reaches the wire. Actions the AGT kernel denies are not "unlikely." They are **structurally impossible**. That is the difference between asking an agent to behave and making it incapable of misbehaving.
 
@@ -59,6 +60,13 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 
 ```bash
 pip install agent-governance-toolkit[full]
+```
+
+For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
+
+```text
+/plugin marketplace add microsoft/agent-governance-toolkit
+/plugin install agt-governance@agent-governance-toolkit
 ```
 
 Govern any tool function in two lines:
@@ -221,6 +229,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | Package | Description |
 |---------|-------------|
 | [**Agent OS**](agent-governance-python/agent-os/) | Policy engine, agent lifecycle, governance gate |
+| [**Agent Control Specification**](policy-engine/) ([README](policy-engine/README.md)) | Stateless, deterministic, fail-closed policy decision runtime (Rust core) backing the AGT policy layer |
 | [**Agent Mesh**](agent-governance-python/agent-mesh/) | Agent discovery, routing, and trust mesh |
 | [**Agent Runtime**](agent-governance-python/agent-runtime/) | Execution sandboxing with four privilege rings |
 | [**Agent SRE**](agent-governance-python/agent-sre/) | Kill switch, SLO monitoring, chaos testing |
@@ -249,6 +258,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
 | **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
 | **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
+| **OpenCode** | [`@microsoft/agent-governance-opencode`](agent-governance-opencode/) | `npm install @microsoft/agent-governance-opencode` |
 | **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
 | **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
 | **Rust** | [`agent-governance`](https://crates.io/crates/agent-governance) | `cargo add agent-governance` |
@@ -258,19 +268,19 @@ All five language SDKs implement core governance (policy, identity, trust, audit
 See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
-<summary><b>Individual Python packages</b></summary>
+<summary><b>Python distributions (v4.0.0 — consolidated)</b></summary>
 
-| Package | PyPI | Description |
-|---------|------|-------------|
-| Agent OS | [`agent-os-kernel`](https://pypi.org/project/agent-os-kernel/) | Policy engine, capability model, audit logging, MCP gateway |
-| AgentMesh | [`agentmesh-platform`](https://pypi.org/project/agentmesh-platform/) | Zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
-| Agent Runtime | [`agentmesh-runtime`](agent-governance-python/agent-runtime/) | Privilege rings, saga orchestration, termination control |
-| Agent SRE | [`agent-sre`](https://pypi.org/project/agent-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
-| Agent Compliance | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | OWASP verification, integrity checks, policy linting |
-| Agent Discovery | [`agent-discovery`](agent-governance-python/agent-discovery/) | Shadow AI discovery, inventory, risk scoring |
-| Agent Hypervisor | [`agent-hypervisor`](agent-governance-python/agent-hypervisor/) | Execution plan validation, reversibility verification |
-| Agent Marketplace | [`agentmesh-marketplace`](agent-governance-python/agent-marketplace/) | Plugin lifecycle management |
-| Agent Lightning | [`agentmesh-lightning`](agent-governance-python/agent-lightning/) | RL training governance |
+As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
+
+| Distribution | PyPI | What's included |
+|--------------|------|-----------------|
+| `agent-governance-toolkit-core` | [`agent-governance-toolkit-core`](https://pypi.org/project/agent-governance-toolkit-core/) | Policy engine, capability model, audit, MCP gateway, zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
+| `agent-governance-toolkit-runtime` | [`agent-governance-toolkit-runtime`](https://pypi.org/project/agent-governance-toolkit-runtime/) | Privilege rings, saga orchestration, termination control, execution plan validation |
+| `agent-governance-toolkit-sre` | [`agent-governance-toolkit-sre`](https://pypi.org/project/agent-governance-toolkit-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
+| `agent-governance-toolkit-cli` | [`agent-governance-toolkit-cli`](https://pypi.org/project/agent-governance-toolkit-cli/) | `agt` CLI, OWASP verification, integrity checks, policy linting |
+| `agent-governance-toolkit[full]` | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Meta-package installing all of the above |
+
+Previous package names (`agent-os-kernel`, `agentmesh-platform`, `agentmesh-runtime`, `agent-sre`, `agent-discovery`, `agent-hypervisor`, `agentmesh-marketplace`, `agentmesh-lightning`) remain installable as stub packages that redirect to the consolidated distributions.
 
 </details>
 
@@ -329,6 +339,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | Specification | Scope | Tests |
 |---|---|---|
 | [Agent OS Policy Engine](docs/specs/AGENT-OS-POLICY-ENGINE-1.0.md) | Policy evaluation, rule merging, fail-closed semantics | 68 |
+| [Agent Control Specification](policy-engine/spec/SPECIFICATION.md) | Stateless intervention-point policy runtime, verdicts, transform, fail-closed | -- |
 | [AgentMesh Identity and Trust](docs/specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | Credentials, trust scoring, delegation chains | 135 |
 | [Agent Hypervisor Execution Control](docs/specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | Privilege rings, saga orchestration, kill switch | 80 |
 | [AgentMesh Trust and Coordination](docs/specs/AGENTMESH-TRUST-COORDINATION-1.0.md) | Peer trust negotiation, mesh-wide policy | 62 |
@@ -339,7 +350,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | [Audit and Compliance](docs/specs/AUDIT-COMPLIANCE-1.0.md) | Merkle audit, compliance mapping, Decision BOM | 157 |
 | [AgentMesh Wire Protocol](docs/specs/AGENTMESH-WIRE-1.0.md) | Message format, routing, serialization | -- |
 
-**992 conformance tests** ensure code stays aligned to specs. [25 Architecture Decision Records](docs/adr/) document why.
+**992 conformance tests** ensure code stays aligned to specs. [29 Architecture Decision Records](docs/adr/) document why.
 
 ---
 
@@ -377,7 +388,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 | Category | Links |
 |----------|-------|
 | **Getting Started** | [Quick Start](docs/quickstart.md) · [Tutorials](docs/tutorials/) (60+) · [FAQ](docs/FAQ.md) |
-| **Architecture** | [System Design](docs/ARCHITECTURE.md) · [Threat Model](docs/security/threat-model.md) · [ADRs](docs/adr/) (25) |
+| **Architecture** | [System Design](docs/ARCHITECTURE.md) · [Threat Model](docs/security/threat-model.md) · [ADRs](docs/adr/) (29) |
 | **Specifications** | [All Specs](docs/specs/) (10 formal specs, 992 conformance tests) |
 | **API Reference** | [Agent OS](agent-governance-python/agent-os/README.md) · [AgentMesh](agent-governance-python/agent-mesh/README.md) · [Agent SRE](agent-governance-python/agent-sre/README.md) |
 | **Compliance** | [OWASP](docs/compliance/owasp-agentic-top10-architecture.md) · [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md) |
@@ -388,7 +399,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 ## Contributing
 
-[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/RcK9fHf8) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 **Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md).
 
@@ -407,6 +418,24 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 ## Important Notes
 
 If you use the Agent Governance Toolkit to build applications that operate with third-party agent frameworks or services, you do so at your own risk. We recommend reviewing all data being shared with third-party services and being cognizant of third-party practices for retention and location of data.
+
+## Official Sources
+
+The only official sources for the Agent Governance Toolkit are:
+
+| Resource | Location |
+|----------|----------|
+| **Source code** | [github.com/microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit) |
+| **Documentation** | [microsoft.github.io/agent-governance-toolkit](https://microsoft.github.io/agent-governance-toolkit/) |
+| **Python packages** | [pypi.org/user/agentgovtoolkit](https://pypi.org/user/agentgovtoolkit/) |
+| **npm packages** | `@microsoft/agent-governance-sdk` on [npmjs.com](https://www.npmjs.com/) |
+| **NuGet packages** | `Microsoft.AgentGovernance.*` on [nuget.org](https://www.nuget.org/) |
+| **Rust crates** | `agent-governance`, `agent-governance-mcp` on [crates.io](https://crates.io/) |
+
+The project team does not maintain or endorse any third-party websites,
+packages, or documentation sites claiming to be official. If you encounter a
+suspicious site or package using the Agent Governance Toolkit name, please
+report it through the channels described in [SECURITY.md](SECURITY.md).
 
 ## License
 

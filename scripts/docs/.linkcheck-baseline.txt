@@ -111,10 +111,8 @@ docs/packages/agent-os.md	modules/control-plane/
 docs/packages/agent-os.md	modules/emk/
 docs/packages/agent-os.md	modules/iatp/
 docs/packages/agent-os.md	modules/mcp-kernel-server/
-docs/packages/agent-os.md	modules/mute-agent/
 docs/packages/agent-os.md	modules/nexus/
 docs/packages/agent-os.md	modules/observability/
-docs/packages/agent-os.md	modules/scak/
 docs/packages/agent-sre.md	LICENSE
 docs/packages/agent-sre.md	agent-governance-python/benchmarks/results/BENCHMARKS.md
 docs/packages/agent-sre.md	docs/

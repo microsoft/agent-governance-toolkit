@@ -1,0 +1,124 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "parallel_tool_call_per_invocation_semantics"
+  ],
+  "description": "Parallel tool calls are represented as independent intervention_point evaluations for each invocation id.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "parallel_batch_id": "batch-1",
+            "tool_call": {
+              "args": {
+                "query": "weather"
+              },
+              "id": "call-a",
+              "name": "search"
+            }
+          },
+          "intervention_point": "pre_tool_call",
+          "policy_target": {
+            "kind": "tool_args",
+            "path": "$snap.tool_call.args",
+            "value": {
+              "query": "weather"
+            }
+          },
+          "tool": {
+            "clearance": [
+              "public"
+            ],
+            "id": "search",
+            "name": "search",
+            "type": "Tool"
+          }
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "parallel-call-a-allowed",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "parallel_batch_id": "batch-1",
+        "tool_call": {
+          "args": {
+            "query": "weather"
+          },
+          "id": "call-a",
+          "name": "search"
+        }
+      },
+      "intervention_point": "pre_tool_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "parallel_batch_id": "batch-1",
+            "tool_call": {
+              "args": {
+                "customer_id": "c-123"
+              },
+              "id": "call-b",
+              "name": "customer_lookup"
+            }
+          },
+          "intervention_point": "pre_tool_call",
+          "policy_target": {
+            "kind": "tool_args",
+            "path": "$snap.tool_call.args",
+            "value": {
+              "customer_id": "c-123"
+            }
+          },
+          "tool": {
+            "clearance": [
+              "banking"
+            ],
+            "id": "customer_lookup",
+            "name": "customer_lookup",
+            "type": "Tool"
+          }
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "deny",
+          "reason": "sensitive_lookup"
+        }
+      },
+      "mode": "enforce",
+      "name": "parallel-call-b-denied",
+      "policy_response": {
+        "ok": {
+          "decision": "deny",
+          "reason": "sensitive_lookup"
+        }
+      },
+      "snapshot": {
+        "parallel_batch_id": "batch-1",
+        "tool_call": {
+          "args": {
+            "customer_id": "c-123"
+          },
+          "id": "call-b",
+          "name": "customer_lookup"
+        }
+      },
+      "intervention_point": "pre_tool_call"
+    }
+  ],
+  "id": "parallel-tool-call-per-invocation",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  pre_tool_call:\n    policy_target_kind: tool_args\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_call.args\ntools:\n  search:\n    type: Tool\n    id: search\n    clearance:\n    - public\n  customer_lookup:\n    type: Tool\n    id: customer_lookup\n    clearance:\n    - banking\n",
+  "schema_version": 1
+}

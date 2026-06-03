@@ -181,6 +181,13 @@ public sealed class PolicyEngine
             ["agent_did"] = normalizedDid
         };
 
+        // Enrich the evaluation context with wire-protocol facets (sql.*,
+        // k8s.*, plus any caller-registered protocols) before rules run, so
+        // policy authors can reference protocol-level fields without any
+        // extra wiring. We mutate evalContext (an internal copy), never
+        // the caller's dictionary.
+        ProtocolFacets.ExtractProtocolFacets(evalContext);
+
         var internalEvaluation = EvaluateInternalPolicies(snapshot, evalContext, evaluatedAt, sw);
         sw.Stop();
 

@@ -1,0 +1,109 @@
+{
+  "$id": "https://agent-control-specification.test/wire/verdict.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification verdict (AGT D1/D2)",
+  "description": "Policy output normalized by the Rust core into a Verdict. AGT D1 replaces the upstream effects[] array with the transform decision; AGT D2 adds the optional evidence object.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision"
+  ],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny",
+        "warn",
+        "escalate",
+        "transform"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^(?!runtime_error:).*",
+      "description": "Policy supplied reason. The runtime_error prefix is reserved for core failures."
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "transform": {
+      "$ref": "#/$defs/transform",
+      "description": "AGT D1.1: present only when decision == transform; the runtime applies it to the policy target in enforce mode and validates it in evaluate_only mode."
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence",
+      "description": "AGT D2: optional opaque evidence object carried by high-assurance dispatchers (SMT-verified gates, mechanised-proof PDPs, TEE-attested PDPs). The runtime treats it as opaque and propagates it to telemetry per AGT-EVIDENCE-1.0 §3."
+    },
+    "result_labels": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "description": "Policy supplied information-flow labels for the data produced at this sink. The core returns them verbatim; the host persists them with the produced data and re-supplies them as input.ifc.source_labels (AGT-SNAPSHOT §2.2) on later evaluations. The core stores and propagates nothing."
+    }
+  },
+  "allOf": [
+    {
+      "description": "AGT D1.1: transform body is REQUIRED iff decision == transform.",
+      "if": { "properties": { "decision": { "const": "transform" } } },
+      "then": { "required": [ "transform" ] },
+      "else": {
+        "not": { "required": [ "transform" ] },
+        "description": "Transform body is FORBIDDEN on non-transform decisions."
+      }
+    },
+    {
+      "description": "AGT D1: the legacy effects[] member on the verdict is REJECTED. Even an explicit null or empty array fails closed because the key MUST NOT appear.",
+      "not": {
+        "anyOf": [
+          { "required": [ "effects" ] }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "value"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^\\$policy_target(\\.|\\[|$)",
+          "description": "Path rooted at $policy_target. Other roots fail closed with runtime_error:transform_target_forbidden."
+        },
+        "value": true
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artefact": {
+          "type": [ "string", "null" ],
+          "description": "Content address or URI of an offline-verifiable proof. SHOULD be sha256:<lowercase-hex> or a URI."
+        },
+        "verification_pointers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Map of short identifiers (e.g. issuer_pubkey, policy_registry, attestation_endpoint) to URIs an auditor MAY consult."
+        }
+      }
+    }
+  }
+}

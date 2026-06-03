@@ -247,9 +247,11 @@ class TestWrapToolCall:
         # First call succeeds — post_execute increments to 1
         mw.wrap_tool_call(_make_tool_request(), handler)
 
-        # Second call blocked by pre_execute check
-        with pytest.raises(PolicyViolationError, match="Max tool calls"):
+        # Second call blocked by the AGT pre_tool_call host-budget guard
+        # (the v5 bridge surfaces the v4 ``max_tool_calls`` reason).
+        with pytest.raises(PolicyViolationError) as excinfo:
             mw.wrap_tool_call(_make_tool_request(), handler)
+        assert excinfo.value.check_result.reason == "max_tool_calls"
 
     def test_non_dict_tool_call_handled(self):
         """Gracefully handles non-dict tool_call attribute."""
@@ -421,7 +423,13 @@ class TestAsMiddlewareIntegration:
         )
         mw.wrap_model_call(model_req, model_handler)
 
-        assert mw.context.call_count >= 2
+        # v5: ``call_count`` is incremented by the AGT pre_tool_call
+        # hook on the tool path; model calls do not increment the
+        # tool-call counter. Assert that the host saw the tool call
+        # and the model call returned successfully (no exception).
+        assert mw.context.call_count >= 1
+        assert tool_handler.call_count == 1
+        assert model_handler.call_count == 1
 
     def test_cedar_evaluator_passed_through(self):
         """Cedar evaluator on the kernel is accessible via the middleware."""

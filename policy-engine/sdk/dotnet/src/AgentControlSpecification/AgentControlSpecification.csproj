@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>AgentControlSpecification</PackageId>
+    <Version>0.3.1-beta.0</Version>
+    <Authors>Agent Control Specification contributors</Authors>
+    <Description>Thin .NET SDK surface for the stateless Agent Control Specification runtime.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>AgentControlSpecification.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <Import Project="AgentControlSpecification.NativeLibrary.targets" />
+</Project>

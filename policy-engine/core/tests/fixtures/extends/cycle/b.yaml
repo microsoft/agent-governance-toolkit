@@ -1,0 +1,11 @@
+agent_control_specification_version: "0.3.1-beta"
+extends:
+  - a.yaml
+policies:
+  cycle_policy:
+    type: test
+intervention_points:
+  input:
+    policy_target: "$snap.input"
+    policy:
+      id: cycle_policy

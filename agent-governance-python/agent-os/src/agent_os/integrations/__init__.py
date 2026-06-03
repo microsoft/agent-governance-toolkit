@@ -89,6 +89,8 @@ _LAZY_ADAPTER_MAP: dict[str, tuple[str, str]] = {
     "GuardrailsKernel": (".guardrails_adapter", "GuardrailsKernel"),
     "LangChainGovernanceMiddleware": (".langchain_adapter", "GovernanceMiddleware"),
     "LangChainKernel": (".langchain_adapter", "LangChainKernel"),
+    "LangGraphKernel": (".langgraph_adapter", "LangGraphKernel"),
+    "LangGraphGovernedGraph": (".langgraph_adapter", "GovernedGraph"),
     "MAFAuditTrailMiddleware": (".maf_adapter", "AuditTrailMiddleware"),
     "MAFCapabilityGuardMiddleware": (".maf_adapter", "CapabilityGuardMiddleware"),
     "MAFGovernancePolicyMiddleware": (".maf_adapter", "GovernancePolicyMiddleware"),
@@ -186,6 +188,9 @@ __all__ = [
     "BoundedSemaphore",
     # LangChain
     "LangChainKernel",
+    # LangGraph
+    "LangGraphKernel",
+    "LangGraphGovernedGraph",
     # LlamaIndex
     "LlamaIndexKernel",
     # CrewAI

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langgraph_agentmesh"
-version = "3.7.0"
+version = "4.0.0"
 description = "Trust-gated checkpoint nodes for LangGraph — cryptographic identity, policy enforcement, and trust-aware routing for multi-agent graphs"
 readme = "README.md"
 license = {text = "MIT"}
@@ -45,7 +45,7 @@ langgraph = [
     "langgraph>=0.2.0,<1.0",
 ]
 agentmesh = [
-    "agentmesh-platform>=0.1.0,<1.0",
+    "agent-governance-toolkit-core>=4.0.0,<5.0",
 ]
 dev = [
     "pytest>=7.0,<8.0",

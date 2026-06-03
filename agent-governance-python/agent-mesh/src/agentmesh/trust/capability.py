@@ -317,6 +317,7 @@ class CapabilityRegistry:
         to_agent: str,
         from_agent: str,
         resource_ids: Optional[list[str]] = None,
+        require_grantor_capability: bool = False,
     ) -> CapabilityGrant:
         """Grant a capability to an agent.
 
@@ -329,10 +330,35 @@ class CapabilityRegistry:
             from_agent: DID of the agent issuing the grant.
             resource_ids: Optional specific resource IDs to scope the
                 grant to.
+            require_grantor_capability: When ``True``, verify that
+                ``from_agent`` already holds ``capability`` (i.e. can
+                actually delegate it). Bootstrap/admin grants set this
+                to ``False``. Callers that accept grants over the
+                network MUST set this to ``True`` to prevent privilege
+                escalation via unauthenticated grantor claims.
+
+        Raises:
+            PermissionError: If ``require_grantor_capability`` is
+                ``True`` and ``from_agent`` does not hold the
+                requested capability.
+            ValueError: If ``from_agent == to_agent`` (self-grant) or
+                the capability string is malformed.
 
         Returns:
             The newly created ``CapabilityGrant``.
         """
+        if from_agent == to_agent:
+            # Self-grants are meaningless and would bypass delegation
+            # checks (an agent could "grant" itself any capability).
+            raise ValueError("Cannot self-grant a capability")
+
+        if require_grantor_capability:
+            grantor_scope = self._scopes.get(from_agent)
+            if grantor_scope is None or not grantor_scope.has_capability(capability):
+                raise PermissionError(
+                    f"Grantor {from_agent} does not hold capability {capability!r}"
+                )
+
         grant = CapabilityGrant.create(
             capability=capability,
             granted_to=to_agent,

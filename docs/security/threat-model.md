@@ -206,6 +206,50 @@ states can result in agents running without effective governance:
 
 > *These vectors were identified in external red-team analysis by [Periculo](https://www.periculo.co.uk/cyber-security-blog/red-teaming-the-microsoft-agent-governance-toolkit-15-bypass-vectors).*
 
+## Project Impersonation and Typo-Squatting
+
+OSS projects face impersonation risks from third-party websites, packages, or
+repositories that use the project name to appear official. Common attack vectors:
+
+| Vector | Description |
+|--------|-------------|
+| **Domain squatting** | Registering `your-project-name.com/.io/.dev` with cloned README/docs |
+| **Package typo-squatting** | Publishing `agent-os-kernal` (typo) or `agent_os_kernel` (underscore variant) to PyPI/npm |
+| **Repository cloning** | Forking the repo, modifying install instructions to point to attacker-hosted binaries |
+| **Fake documentation sites** | Hosting a lookalike docs site that injects malicious install commands |
+
+### How AGT Mitigates This
+
+AGT's existing components address the root cause: identity should be
+cryptographic, not name-based.
+
+| AGT Component | How It Helps |
+|---------------|--------------|
+| **AgentMesh DID Identity** ([Tutorial 02](../tutorials/02-trust-and-identity.md)) | Agents prove identity with Ed25519 credentials. An impersonator can clone the name but cannot forge the DID. |
+| **Ed25519 Artifact Signing** ([Tutorial 26](../tutorials/26-sbom-and-signing.md)) | Every release artifact carries a cryptographic signature. Tampered or repackaged artifacts fail verification. |
+| **Plugin Marketplace Verification** ([Tutorial 10](../tutorials/10-plugin-marketplace.md)) | Plugins are verified against a trusted-key ring before installation. Unsigned or wrongly-signed plugins are rejected. |
+| **SBOM Attestation** ([Tutorial 26](../tutorials/26-sbom-and-signing.md)) | GitHub attestations bind SBOMs to specific releases, proving provenance through the official build pipeline. |
+| **AI-BOM / Provenance Tracking** | Supply chain metadata for models, tools, and packages is tracked and verifiable. |
+
+### Recommended Defenses for All OSS Projects
+
+1. **State the official source in README and docs.** Add a clear note listing
+   the official GitHub repository, official documentation site, and official
+   package registry URLs. State that the team does not maintain or endorse
+   third-party websites claiming to be official.
+2. **Monitor for typo-squatted packages.** Periodically search PyPI, npm, and
+   crates.io for packages with names similar to yours (common substitutions:
+   hyphens/underscores, transposed characters, added/dropped suffixes).
+3. **Sign release artifacts.** Use Ed25519 signing (AGT SDK) or Sigstore so
+   users can verify authenticity before installing.
+4. **Use GitHub attestations.** Bind build provenance to releases so users can
+   verify artifacts were built by the official CI pipeline.
+5. **Register obvious domain variants.** If your project is widely used,
+   consider registering the `.com`/`.io`/`.dev` variants of your project name
+   and redirecting to the official repository.
+6. **Report impersonation.** Use your organization's security reporting
+   channels for takedown requests against impersonating sites or packages.
+
 ## Recommended Operational Practices
 
 - Keep policy scope narrow and prefer deny-by-default for high-risk tools

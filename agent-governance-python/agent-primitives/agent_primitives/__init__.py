@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """
 Agent Primitives - Shared data models for Agent OS.
 
@@ -7,6 +8,15 @@ This is a Layer 1 primitive package providing foundational models
 used across the Agent OS stack.
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agentmesh-primitives is deprecated. Use agent-governance-toolkit-core instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 __version__ = "3.2.2"
 
 from .failures import (

@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """
 Agent OS - A Safety-First Kernel for Autonomous AI Agents
 
@@ -36,15 +37,23 @@ Optional ecosystem packages (import directly):
     - emk: Episodic memory kernel
     - amb_core: Agent message bus
     - atr: Agent tool registry
-    - agent_kernel: Self-correcting kernel
-    - mute_agent: Reasoning/execution split
 
 Installation:
     pip install agent-os-kernel[full]  # Everything
     pip install agent-os-kernel        # Core
 """
 
+
 from __future__ import annotations
+
+import warnings as _warnings
+_warnings.warn(
+    "agent-os-kernel is deprecated. Use agent-governance-toolkit-core instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 
 __version__ = "3.2.2"
 __author__ = "Microsoft Corporation"
@@ -72,8 +81,6 @@ AVAILABLE_PACKAGES: dict[str, bool] = {
     "emk": _check_optional("emk"),
     "amb": _check_optional("amb_core"),
     "atr": _check_optional("atr"),
-    "scak": _check_optional("agent_kernel"),
-    "mute_agent": _check_optional("mute_agent"),
 }
 
 

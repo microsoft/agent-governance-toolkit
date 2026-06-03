@@ -6,9 +6,25 @@ HuggingFace smolagents Integration for Agent-OS
 
 Provides kernel-level governance for smolagents agent workflows.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` derived
+from :class:`PolicyConfig` is translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, an :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``before_tool_call`` / ``after_tool_call`` tuple-shaped API is preserved
+so v4 callers keep working. ``transform`` verdicts (AGT-DELTA D1.1)
+rewrite the outbound tool arguments and tool result before smolagents
+sees them; ``escalate`` verdicts route through the configured approval
+resolver per AGT-DELTA D1.4.
+
 Features:
 - Extends BaseIntegration with wrap/unwrap for smolagents agents
-- Policy enforcement via tool-call interception
+- Policy evaluation routed through the AGT 5.0 ACS engine
+- Transform-verdict rewriting of tool arguments and tool results
+- Escalate-verdict approval routing via the configured resolver
 - Tool allow/block lists
 - Content filtering with blocked patterns
 - Human approval workflow for sensitive tools
@@ -40,9 +56,15 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
-from .base import BaseIntegration, GovernancePolicy
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
+from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
+from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -85,10 +107,22 @@ class PolicyConfig:
     max_budget: float | None = None
 
 
-class PolicyViolationError(Exception):
-    """Raised when a governance policy is violated."""
+class PolicyViolationError(_CanonicalPolicyViolationError):
+    """Raised when a governance policy is violated.
 
-    def __init__(self, policy_name: str, description: str, severity: str = "high"):
+    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
+    canonical ``from_check_result`` constructor is available while
+    preserving the legacy ``smolagents_adapter.PolicyViolationError``
+    signature (``policy_name`` / ``description`` / ``severity``) for v4
+    callers.
+    """
+
+    def __init__(
+        self,
+        policy_name: str = "governance",
+        description: str = "",
+        severity: str = "high",
+    ):
         self.policy_name = policy_name
         self.description = description
         self.severity = severity
@@ -133,7 +167,37 @@ class SmolagentsKernel(BaseIntegration):
         require_human_approval: bool = False,
         sensitive_tools: list[str] | None = None,
         max_budget: float | None = None,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
+        """Initialise the smolagents governance kernel.
+
+        Args:
+            policy: Smolagents-specific :class:`PolicyConfig`. When
+                ``None`` a config is constructed from the convenience
+                kwargs.
+            on_violation: Optional callback invoked on policy
+                violations. Defaults to logging the error.
+            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
+                policy evaluation. Retained for backward compatibility;
+                the primary decision path now runs through the AGT 5.0
+                runtime.
+            max_tool_calls, max_agent_calls, timeout_seconds,
+            allowed_tools, blocked_tools, blocked_patterns,
+            require_human_approval, sensitive_tools, max_budget:
+                Convenience kwargs used to construct a ``PolicyConfig``
+                when ``policy`` is ``None``.
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature matches
+                :data:`agt.policies.runtime.ApprovalCallback`. When
+                ``None`` an escalate verdict fails closed to ``deny``.
+            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
+                so scenario tests can wire a scripted policy dispatcher
+                without OPA on PATH. Not part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public surface.
+        """
         if policy is not None:
             self._sm_config = policy
         else:
@@ -149,13 +213,17 @@ class SmolagentsKernel(BaseIntegration):
                 max_budget=max_budget,
             )
 
-        # Initialize BaseIntegration with a GovernancePolicy mapped from PolicyConfig
+        # Initialize BaseIntegration with a GovernancePolicy mapped from PolicyConfig.
+        # ``require_human_approval`` is intentionally NOT mapped — smolagents
+        # has its own per-tool ``sensitive_tools`` gate which the AGT
+        # ``require_human_approval`` field cannot represent. The smolagents
+        # approval workflow stays host-side; the AGT runtime governs the
+        # other policy fields.
         governance_policy = GovernancePolicy(
             max_tool_calls=self._sm_config.max_tool_calls,
             timeout_seconds=self._sm_config.timeout_seconds,
             allowed_tools=list(self._sm_config.allowed_tools),
             blocked_patterns=list(self._sm_config.blocked_patterns),
-            require_human_approval=self._sm_config.require_human_approval,
             log_all_calls=self._sm_config.log_all_calls,
         )
         super().__init__(policy=governance_policy, evaluator=evaluator)
@@ -181,6 +249,86 @@ class SmolagentsKernel(BaseIntegration):
         # Wrapped agents registry and original forward methods
         self._wrapped_agents: dict[str, Any] = {}
         self._original_forwards: dict[str, Callable[..., Any]] = {}
+
+        # AGT 5.0 bridge — routes every intervention point through the
+        # ACS-backed runtime per AGT-DELTA D1.1/D1.4.
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def evaluate_input(
+        self, ctx: ExecutionContext, input_data: Any
+    ) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: ExecutionContext,
+        *,
+        tool_name: str,
+        args: Any,
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for a smolagents tool invocation."""
+        normalised: dict[str, Any]
+        if isinstance(args, dict):
+            normalised = args
+        elif isinstance(args, str):
+            normalised = {"arguments": args}
+        else:
+            normalised = {"value": args}
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=normalised, call_id=call_id
+        )
+
+    def evaluate_output(
+        self, ctx: ExecutionContext, output_data: Any
+    ) -> BridgeResult:
+        """AGT ``output`` intervention point evaluation for tool results."""
+        return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
+
+    @staticmethod
+    def _to_body(data: Any) -> Any:
+        """Normalise a smolagents payload to a JSON-serialisable body.
+
+        smolagents tool args may be dicts or strings; tool results may
+        also be dicts. The AGT manifest bridge pattern-matches a string
+        ``policy_target.value``, so the adapter stringifies non-string
+        payloads before forwarding so the v4 contract still holds.
+        """
+        if isinstance(data, (str, dict)):
+            return data
+        if hasattr(data, "content"):
+            return str(getattr(data, "content"))
+        return str(data)
+
+    def _get_or_create_context(self, agent_name: str) -> ExecutionContext:
+        """Return (and lazily create) the :class:`ExecutionContext` for ``agent_name``.
+
+        The bridge requires a v4 :class:`ExecutionContext` to derive the
+        per-session :class:`SnapshotBuilder`. Smolagents identifies agents
+        only by name, so we maintain one ``ExecutionContext`` per agent
+        name inside the inherited ``self.contexts`` dict.
+        """
+        ctx = self.contexts.get(agent_name)
+        if ctx is None:
+            ctx = ExecutionContext(
+                agent_id=agent_name,
+                session_id=f"smol-{agent_name}-{int(time.time())}",
+                policy=self.policy,
+            )
+            self.contexts[agent_name] = ctx
+        return ctx
 
     # ------------------------------------------------------------------
     # BaseIntegration abstract methods
@@ -463,6 +611,15 @@ class SmolagentsKernel(BaseIntegration):
         Pre-execution governance check for a tool call.
 
         Returns None to allow execution, or a dict with error info to block it.
+
+        Order preserves the v4 contract: host-side guards
+        (timeout / count / budget / tool-allowed / sensitive-tool
+        approval / content-pattern) run first; only when they all pass
+        does the AGT ``pre_tool_call`` intervention point fire through
+        the :class:`AdapterRuntimeBridge`. A ``deny`` verdict surfaces
+        as a blocking dict; a ``transform`` verdict (AGT-DELTA D1.1)
+        rewrites ``tool_args`` in place; an ``escalate`` verdict that
+        the configured approval resolver refuses is surfaced as a deny.
         """
         if tool_args is None:
             tool_args = {}
@@ -475,7 +632,8 @@ class SmolagentsKernel(BaseIntegration):
             error = self._raise_violation("timeout", reason)
             return {"error": str(error), "policy": "timeout"}
 
-        # Check tool count
+        # Check tool count (v4 contract uses ``>`` — increment first
+        # then test).
         self._tool_call_count += 1
         if self._tool_call_count > self._sm_config.max_tool_calls:
             error = self._raise_violation(
@@ -490,27 +648,18 @@ class SmolagentsKernel(BaseIntegration):
             error = self._raise_violation("budget_exceeded", reason)
             return {"error": str(error), "policy": "budget_exceeded"}
 
-        # Check tool allowed
+        # Check tool allowed (blocked_tools list is smolagents-specific
+        # and not represented in the v4 GovernancePolicy; keep the host
+        # guard so the v4 contract still holds for blocked_tools).
         ok, reason = self._check_tool_allowed(tool_name)
         if not ok:
             error = self._raise_violation("tool_filter", reason)
             return {"error": str(error), "policy": "tool_filter"}
 
-        # Check content in arguments
-        if isinstance(tool_args, dict):
-            for value in tool_args.values():
-                if isinstance(value, str):
-                    ok, reason = self._check_content(value)
-                    if not ok:
-                        error = self._raise_violation("content_filter", reason)
-                        return {"error": str(error), "policy": "content_filter"}
-        elif isinstance(tool_args, str):
-            ok, reason = self._check_content(tool_args)
-            if not ok:
-                error = self._raise_violation("content_filter", reason)
-                return {"error": str(error), "policy": "content_filter"}
-
-        # Human approval check
+        # Human approval check (host-side — smolagents has a per-tool
+        # ``sensitive_tools`` concept that the v4 ``require_human_approval``
+        # AGT field cannot represent; gate before the AGT eval so the
+        # adapter still returns the v4 approval shape).
         if self._needs_approval(tool_name):
             call_id = f"{agent_name}:{tool_name}:{self._tool_call_count}"
             if call_id not in self._approved_calls:
@@ -534,8 +683,65 @@ class SmolagentsKernel(BaseIntegration):
                     "policy": "human_approval_required",
                 }
 
-        # Track budget spend
+        # Host-side defensive content check on argument *values*. The
+        # AGT manifest bridge only pattern-matches a string
+        # ``policy_target.value``, so keep the host-side scan for dict
+        # values to preserve the v4 behavioural contract (mirrors the
+        # crewai/autogen adapters).
+        if isinstance(tool_args, dict):
+            for value in tool_args.values():
+                if isinstance(value, str):
+                    ok, reason = self._check_content(value)
+                    if not ok:
+                        error = self._raise_violation("content_filter", reason)
+                        return {"error": str(error), "policy": "content_filter"}
+        elif isinstance(tool_args, str):
+            ok, reason = self._check_content(tool_args)
+            if not ok:
+                error = self._raise_violation("content_filter", reason)
+                return {"error": str(error), "policy": "content_filter"}
+
+        # ─── AGT pre_tool_call evaluation ────────────────────────────
+        # Pass the pre-increment ``ctx.call_count`` so the bridge's
+        # ``max_tool_calls`` host-side guard mirrors the v4 ``>``
+        # contract (the host counter above has already advanced).
+        ctx = self._get_or_create_context(agent_name)
+        ctx.call_count = max(0, self._tool_call_count - 1)
+        bridge_result = self.evaluate_pre_tool_call(
+            ctx,
+            tool_name=tool_name,
+            args=tool_args,
+            call_id=f"{agent_name}:{tool_name}:{self._tool_call_count}",
+        )
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, dict
+        ):
+            # Mutate the caller's dict in place so the smolagents tool
+            # receives the AGT-redacted arguments per AGT-DELTA D1.1.
+            if isinstance(tool_args, dict):
+                tool_args.clear()
+                tool_args.update(bridge_result.transform.value)
+        if not bridge_result.allowed:
+            reason_text = (
+                bridge_result.check_result.public_message
+                or bridge_result.reason
+                or "Tool call blocked by AGT policy"
+            )
+            error = self._raise_violation("agt_pre_tool_call", reason_text)
+            return {
+                "error": str(error),
+                "policy": "agt_pre_tool_call",
+                "verdict": bridge_result.verdict,
+            }
+
+        # Track budget spend. The next intervention point will see the
+        # updated ``ctx.call_count`` via ``builder_for`` (which mirrors
+        # ``ctx.call_count`` into the snapshot builder), so we do NOT
+        # call ``record_post_execute`` here — that would double-count
+        # against the AGT ``max_tool_calls`` rule which fires on
+        # ``tool_call_count >= max``.
         self._budget_spent += cost
+        ctx.call_count = self._tool_call_count
 
         return None  # Allow execution
 
@@ -548,14 +754,40 @@ class SmolagentsKernel(BaseIntegration):
         """
         Post-execution governance check for a tool call.
 
-        Inspects tool output for blocked patterns.
-        Returns the (possibly modified) tool_result, or raises on violation.
+        Inspects tool output for blocked patterns via the AGT ``output``
+        intervention point. ``deny`` verdicts surface as a redacted
+        sentinel; ``transform`` verdicts rewrite ``tool_result`` per
+        AGT-DELTA D1.1.
         """
         self._record("after_tool", agent_name, {
             "tool": tool_name,
             "result_type": type(tool_result).__name__,
         })
 
+        # ─── AGT output intervention point ───────────────────────────
+        ctx = self._get_or_create_context(agent_name)
+        if isinstance(tool_result, (str, dict)):
+            bridge_result = self.evaluate_output(ctx, tool_result)
+            if bridge_result.transform is not None:
+                # Replace the tool result with the AGT-redacted payload
+                # per AGT-DELTA D1.1. Preserve the original type when
+                # the transform value type matches.
+                tool_result = bridge_result.transform.value
+            elif not bridge_result.allowed:
+                detail = (
+                    bridge_result.check_result.public_message
+                    or bridge_result.reason
+                    or "Tool output blocked by AGT policy"
+                )
+                reason_text = f"{detail} (in tool observation)"
+                self._raise_violation("agt_output", reason_text)
+                if isinstance(tool_result, dict):
+                    return {"error": reason_text}
+                return f"[BLOCKED] {reason_text}"
+
+        # Host-side fallback content scan for legacy callers that
+        # didn't match the AGT pattern policy (mirrors the previous
+        # behaviour for non-pattern-driven kernels).
         if isinstance(tool_result, str):
             ok, reason = self._check_content(tool_result)
             if not ok:
@@ -720,7 +952,10 @@ class GovernanceStepCallback:
 
         Called by the smolagents runtime after each agent step completes.
         Inspects the step for tool calls and validates them against the
-        governance policy.
+        governance policy via the AGT 5.0 ``pre_tool_call`` intervention
+        point. Observations are validated via the AGT ``output``
+        intervention point so transform/deny/escalate verdicts flow
+        through the same engine.
 
         Args:
             step: A ``smolagents.MemoryStep`` (or similar) containing
@@ -733,6 +968,7 @@ class GovernanceStepCallback:
         self._step_count += 1
         agent_name = getattr(agent, "name", None) or str(id(agent))
         config = self._kernel._sm_config
+        ctx = self._kernel._get_or_create_context(agent_name)
 
         # Extract tool calls from the step
         tool_calls = getattr(step, "tool_calls", None) or []
@@ -747,7 +983,8 @@ class GovernanceStepCallback:
             tool_name = getattr(tc, "tool_name", None) or getattr(tc, "name", str(tc))
             tool_args = getattr(tc, "tool_arguments", None) or getattr(tc, "arguments", {})
 
-            # Blocked tools
+            # Blocked tools (host-side guard; blocked_tools is
+            # smolagents-specific and not encoded in GovernancePolicy).
             if tool_name in config.blocked_tools:
                 self._kernel._record(
                     "tool_blocked", agent_name,
@@ -758,32 +995,44 @@ class GovernanceStepCallback:
                     f"Tool '{tool_name}' is explicitly blocked",
                 )
 
-            # Allowed tools check
-            if config.allowed_tools and tool_name not in config.allowed_tools:
+            # ─── AGT pre_tool_call evaluation ───────────────────────
+            self._kernel._tool_call_count += 1
+            # Pass the pre-increment count to the bridge so the AGT
+            # ``max_tool_calls`` rule (``>=``) lines up with the v4
+            # ``>`` contract used by the host-side guard below.
+            ctx.call_count = max(0, self._kernel._tool_call_count - 1)
+            bridge_result = self._kernel.evaluate_pre_tool_call(
+                ctx,
+                tool_name=tool_name,
+                args=tool_args if isinstance(tool_args, (dict, str)) else {"value": tool_args},
+                call_id=f"{agent_name}:{tool_name}:{self._step_count}",
+            )
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, dict
+            ):
+                # Rewrite the tool-call args in place per AGT-DELTA D1.1
+                # so the subsequent smolagents executor sees the
+                # sanitised payload.
+                try:
+                    if hasattr(tc, "tool_arguments"):
+                        tc.tool_arguments = bridge_result.transform.value
+                    elif hasattr(tc, "arguments"):
+                        tc.arguments = bridge_result.transform.value
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
+            if not bridge_result.allowed:
                 self._kernel._record(
                     "tool_blocked", agent_name,
-                    {"tool": tool_name, "reason": "not_in_allowlist"},
+                    {"tool": tool_name, "reason": bridge_result.reason},
                 )
                 raise PolicyViolationError(
-                    "tool_not_allowed",
-                    f"Tool '{tool_name}' is not in the allowed list",
+                    "agt_pre_tool_call",
+                    bridge_result.check_result.public_message
+                    or bridge_result.reason
+                    or f"Tool '{tool_name}' denied by AGT policy",
                 )
 
-            # Blocked patterns in arguments
-            args_str = str(tool_args)
-            for pattern in config.blocked_patterns:
-                if pattern.lower() in args_str.lower():
-                    self._kernel._record(
-                        "pattern_blocked", agent_name,
-                        {"tool": tool_name, "pattern": pattern},
-                    )
-                    raise PolicyViolationError(
-                        "blocked_pattern",
-                        f"Blocked pattern '{pattern}' in arguments for '{tool_name}'",
-                    )
-
-            # Increment and check call count
-            self._kernel._tool_call_count += 1
+            # Check call count (v4 contract uses ``>``)
             if self._kernel._tool_call_count > config.max_tool_calls:
                 raise PolicyViolationError(
                     "max_tool_calls_exceeded",
@@ -791,25 +1040,40 @@ class GovernanceStepCallback:
                     f"{self._kernel._tool_call_count} > {config.max_tool_calls}",
                 )
 
+            # Mirror the post-increment count into ctx so the next
+            # intervention point's ``builder_for`` sees it. Do NOT call
+            # ``record_post_execute`` here — that would double-count
+            # against the AGT budget rule.
+            ctx.call_count = self._kernel._tool_call_count
+
             # Audit
             self._kernel._record(
                 "tool_executed", agent_name,
                 {"tool": tool_name, "step": self._step_count},
             )
 
-        # Scan observation for blocked patterns
+        # Scan observation via the AGT ``output`` intervention point.
         if observation:
-            obs_str = str(observation)
-            for pattern in config.blocked_patterns:
-                if pattern.lower() in obs_str.lower():
-                    self._kernel._record(
-                        "observation_blocked", agent_name,
-                        {"pattern": pattern, "step": self._step_count},
-                    )
-                    raise PolicyViolationError(
-                        "blocked_pattern_in_observation",
-                        f"Blocked pattern '{pattern}' in step observation",
-                    )
+            bridge_result = self._kernel.evaluate_output(ctx, observation)
+            if bridge_result.transform is not None:
+                try:
+                    step.observation = bridge_result.transform.value
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
+            elif not bridge_result.allowed:
+                self._kernel._record(
+                    "observation_blocked", agent_name,
+                    {"reason": bridge_result.reason, "step": self._step_count},
+                )
+                detail = (
+                    bridge_result.check_result.public_message
+                    or bridge_result.reason
+                    or "Step observation blocked by AGT policy"
+                )
+                raise PolicyViolationError(
+                    "agt_output",
+                    f"{detail} (in tool observation)",
+                )
 
     def __repr__(self) -> str:
         return f"GovernanceStepCallback(steps={self._step_count})"

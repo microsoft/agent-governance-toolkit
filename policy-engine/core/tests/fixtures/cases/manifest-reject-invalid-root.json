@@ -1,0 +1,12 @@
+{
+  "case_kind": "manifest",
+  "covers": [
+    "invalid_root_rejection"
+  ],
+  "description": "InterventionPoint policy_target paths must use the $snap root; other roots fail validation.",
+  "expect_valid": false,
+  "expected_error_reason": "runtime_error:manifest_invalid",
+  "id": "manifest-reject-invalid-root",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $pi.input\n",
+  "schema_version": 1
+}

@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import Header, HTTPException
 from pydantic import BaseModel, Field
 
 from agentmesh.identity.agent_id import AgentDID, AgentIdentity, IdentityRegistry
@@ -80,7 +80,69 @@ class RegisterAgentRequest(BaseModel):
 class GrantCapabilityRequest(BaseModel):
     capability: str = Field(..., description="Capability string (e.g., 'read:data')")
     to_agent: str = Field(..., description="DID of grantee")
-    from_agent: str = Field(..., description="DID of grantor")
+    # ``from_agent`` is intentionally NOT in the request body — the grantor
+    # is the caller authenticated via the Ed25519-Timestamp header. Accepting
+    # an arbitrary ``from_agent`` from the body lets any caller claim to grant
+    # capabilities on behalf of any other agent. Pydantic v2 by default
+    # silently ignores unknown fields, which means an old client that still
+    # sends ``from_agent`` would not get any feedback that the field is
+    # being dropped. ``extra="forbid"`` surfaces that as a 422 so client
+    # bugs are caught early.
+    model_config = {"extra": "forbid"}
+
+
+def _verify_ed25519_timestamp(authorization: str | None) -> str:
+    """Verify an ``Ed25519-Timestamp`` Authorization header. Returns the DID.
+
+    Format: ``Ed25519-Timestamp <did> <iso8601> <base64(signature)>``
+
+    The signature is verified against the public key registered for ``<did>``
+    in the trust-engine identity registry. The timestamp must be within a
+    5-minute replay window.
+    """
+    import base64
+    from datetime import datetime, timedelta, timezone
+
+    from nacl.exceptions import BadSignatureError
+    from nacl.signing import VerifyKey
+
+    REPLAY_WINDOW = timedelta(minutes=5)
+
+    if not authorization or not authorization.startswith("Ed25519-Timestamp "):
+        raise HTTPException(401, "Missing or invalid Authorization header")
+
+    parts = authorization.split(" ", 3)
+    if len(parts) != 4:
+        raise HTTPException(401, "Malformed Ed25519-Timestamp header")
+
+    _scheme, did, ts_str, sig_b64 = parts
+
+    try:
+        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(401, "Invalid timestamp format")
+    # Reject TZ-naive timestamps explicitly — otherwise the
+    # ``datetime.now(tz) - ts`` subtraction below raises ``TypeError``
+    # and surfaces as an unhelpful 500.
+    if ts.tzinfo is None:
+        raise HTTPException(401, "Timestamp must include timezone offset")
+    if abs((datetime.now(timezone.utc) - ts).total_seconds()) > REPLAY_WINDOW.total_seconds():
+        raise HTTPException(401, "Timestamp outside replay window")
+
+    identity = registry.get(did)
+    if identity is None:
+        raise HTTPException(401, "Caller not registered")
+
+    try:
+        pub_bytes = base64.b64decode(identity.public_key)
+        sig = base64.urlsafe_b64decode(sig_b64 + "==")
+        VerifyKey(pub_bytes).verify(ts_str.encode("utf-8"), sig)
+    except BadSignatureError:
+        raise HTTPException(401, "Invalid signature")
+    except Exception:
+        raise HTTPException(401, "Signature verification failed")
+
+    return did
 
 
 # ── Endpoints ────────────────────────────────────────────────────────
@@ -210,14 +272,44 @@ async def verify_handshake(req: VerifyRequest) -> VerifyResponse:
 
 
 @app.post("/api/v1/capabilities/grant", tags=["capabilities"])
-async def grant_capability(req: GrantCapabilityRequest) -> dict[str, Any]:
-    """Grant a capability to an agent."""
-    grant = capability_registry.grant(
-        capability=req.capability,
-        to_agent=req.to_agent,
-        from_agent=req.from_agent,
-    )
-    return {"status": "granted", "grant_id": grant.grant_id, "capability": req.capability}
+async def grant_capability(
+    req: GrantCapabilityRequest,
+    authorization: str = Header(..., alias="Authorization"),
+) -> dict[str, Any]:
+    """Grant a capability to an agent.
+
+    Authentication: required. The caller must present an
+    ``Ed25519-Timestamp`` header signed by the grantor DID. The
+    grantor is taken from the authenticated identity, never from
+    the request body, to prevent any caller from issuing grants on
+    behalf of arbitrary agents.
+
+    Authorisation: the grantor MUST already hold ``capability`` —
+    you cannot delegate authority you do not possess.
+    """
+    from_agent = _verify_ed25519_timestamp(authorization)
+
+    if not req.to_agent or not req.to_agent.startswith("did:mesh:"):
+        raise HTTPException(400, "to_agent must be a did:mesh: DID")
+
+    try:
+        grant = capability_registry.grant(
+            capability=req.capability,
+            to_agent=req.to_agent,
+            from_agent=from_agent,
+            require_grantor_capability=True,
+        )
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+    return {
+        "status": "granted",
+        "grant_id": grant.grant_id,
+        "capability": req.capability,
+        "granted_by": from_agent,
+    }
 
 
 @app.get("/api/v1/capabilities/{agent_did:path}", tags=["capabilities"])

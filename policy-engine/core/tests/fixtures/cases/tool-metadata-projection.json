@@ -1,0 +1,72 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "tool_metadata_projection"
+  ],
+  "description": "Tool intervention points project only the current tool catalog entry into policy_input.tool.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "tool_call": {
+              "args": {
+                "amount": 2500,
+                "currency": "USD"
+              },
+              "id": "transfer-1",
+              "name": "wire_transfer"
+            }
+          },
+          "intervention_point": "pre_tool_call",
+          "policy_target": {
+            "kind": "tool_args",
+            "path": "$snap.tool_call.args",
+            "value": {
+              "amount": 2500,
+              "currency": "USD"
+            }
+          },
+          "tool": {
+            "clearance": [
+              "banking",
+              "payments"
+            ],
+            "id": "wire_transfer",
+            "name": "wire_transfer",
+            "security_labels": [
+              "payment_receipt"
+            ],
+            "type": "Tool"
+          }
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "projects-current-tool",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "tool_call": {
+          "args": {
+            "amount": 2500,
+            "currency": "USD"
+          },
+          "id": "transfer-1",
+          "name": "wire_transfer"
+        }
+      },
+      "intervention_point": "pre_tool_call"
+    }
+  ],
+  "id": "tool-metadata-projection",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  pre_tool_call:\n    policy_target_kind: tool_args\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_call.args\ntools:\n  wire_transfer:\n    type: Tool\n    id: wire_transfer\n    clearance:\n    - banking\n    - payments\n    security_labels:\n    - payment_receipt\n",
+  "schema_version": 1
+}

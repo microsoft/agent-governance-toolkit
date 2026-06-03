@@ -7,6 +7,20 @@ Provides governance for Microsoft AutoGen agents via **native intervention
 handlers** (``DefaultInterventionHandler`` with ``on_send``,
 ``on_publish``, ``on_response``) introduced in AutoGen v0.4+.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
+translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, an :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
+keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
+outbound ``FunctionCall`` arguments and message content before the
+AutoGen runtime forwards them; ``escalate`` verdicts route through the
+configured approval resolver per AGT-DELTA D1.4.
+
 Recommended usage (native intervention handler)::
 
     from agent_os.integrations.autogen_adapter import AutoGenKernel
@@ -29,21 +43,24 @@ Legacy usage (deprecated)::
 
 import functools
 import logging
-import re
 import time
 from datetime import datetime
 from typing import Any, Callable, Optional
 
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy, PolicyViolationError
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
+from .base import (
+    PII_PATTERNS,
+    BaseIntegration,
+    ExecutionContext,
+    GovernancePolicy,
+    PolicyViolationError,
+)
 
 logger = logging.getLogger("agent_os.autogen")
-
-# Patterns used to detect potential PII / secrets in state changes
-_PII_PATTERNS = [
-    re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),           # SSN
-    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
-    re.compile(r"\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+", re.IGNORECASE),
-]
 
 # ── Graceful import of AutoGen native intervention handlers ───────
 # AutoGen v0.4+ provides DefaultInterventionHandler with on_send,
@@ -154,7 +171,7 @@ class GovernanceInterventionHandler:
         ctx = self._ctx
         name = self._name
 
-        # ─── 1. FunctionCall governance ───────────────────────
+        # ─── 1. FunctionCall governance via AGT pre_tool_call ────
         if _FUNCTION_CALL_AVAILABLE and isinstance(message, FunctionCall):
             tool_name = getattr(message, "name", "unknown")
             tool_args = getattr(message, "arguments", "")
@@ -163,55 +180,53 @@ class GovernanceInterventionHandler:
                 "[%s] on_send: FunctionCall tool=%s", name, tool_name,
             )
 
-            # Allowlist check
-            if kernel.policy.allowed_tools:
-                if tool_name not in kernel.policy.allowed_tools:
+            # Host-side defensive pattern scan on the tool name and the
+            # serialised arguments. The AGT manifest bridge only emits a
+            # pattern check against ``input.policy_target.value`` (a
+            # string), so tool-name and dict-arg pattern matching stays
+            # on the host side to preserve the v4 behavioural contract.
+            for candidate in (tool_name, str(tool_args)):
+                matched = kernel.policy.matches_pattern(candidate)
+                if matched:
                     logger.info(
-                        "[%s] Policy DENY: tool '%s' not in allowed_tools",
-                        name, tool_name,
+                        "[%s] Policy DENY: blocked pattern '%s' in tool name/args",
+                        name, matched[0],
                     )
                     return DropMessage
 
-            # Blocked-pattern scan on tool name
-            name_matched = kernel.policy.matches_pattern(tool_name)
-            if name_matched:
-                logger.info(
-                    "[%s] Policy DENY: blocked pattern '%s' in tool name",
-                    name, name_matched[0],
-                )
-                return DropMessage
-
-            # Blocked-pattern scan on arguments
-            args_str = str(tool_args)
-            matched = kernel.policy.matches_pattern(args_str)
-            if matched:
-                logger.info(
-                    "[%s] Policy DENY: blocked pattern '%s' in tool args",
-                    name, matched[0],
-                )
-                return DropMessage
-
-            # Cedar/OPA pre_execute gate
-            allowed, reason = kernel.pre_execute(
-                ctx, {"tool_name": tool_name, "tool_args": tool_args},
+            bridge_result = kernel.evaluate_pre_tool_call(
+                ctx,
+                tool_name=tool_name,
+                args=tool_args,
+                call_id=getattr(message, "id", "call-1"),
             )
-            if not allowed:
+            if bridge_result.transform is not None:
+                # Rewrite the FunctionCall arguments per AGT D1.1 before
+                # forwarding the message to the recipient.
+                replacement = bridge_result.transform.value
+                if isinstance(replacement, dict) and "arguments" in replacement:
+                    try:
+                        message.arguments = replacement["arguments"]
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
+                elif isinstance(replacement, str):
+                    try:
+                        message.arguments = replacement
+                    except Exception:  # noqa: BLE001 — best-effort rewrite
+                        pass
+            if not bridge_result.allowed:
                 logger.info(
-                    "[%s] Policy DENY (pre_execute): %s", name, reason,
+                    "[%s] Policy DENY (AGT pre_tool_call): %s",
+                    name,
+                    bridge_result.reason,
                 )
                 return DropMessage
 
-            # Increment call count
+            # Increment call count. The bridge mirrors ``ctx.call_count``
+            # into the snapshot builder on every access, so calling
+            # ``record_post_execute(tool_calls=1)`` as well would double-count
+            # the call and trip ``max_tool_calls`` one call early.
             ctx.call_count += 1
-            if (
-                kernel.policy.max_tool_calls
-                and ctx.call_count > kernel.policy.max_tool_calls
-            ):
-                logger.info(
-                    "[%s] Policy DENY: max_tool_calls (%d) exceeded",
-                    name, kernel.policy.max_tool_calls,
-                )
-                return DropMessage
 
             logger.debug(
                 "[%s] Tool ALLOW: tool=%s count=%d",
@@ -219,19 +234,29 @@ class GovernanceInterventionHandler:
             )
             return message
 
-        # ─── 2. General message content governance ────────────
+        # ─── 2. General message content governance via AGT input ───
         content = self._extract_content(message)
         if content:
-            matched = kernel.policy.matches_pattern(content)
-            if matched:
+            bridge_result = kernel.evaluate_input(ctx, content)
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, str
+            ):
+                try:
+                    self._apply_content(message, bridge_result.transform.value)
+                except Exception:  # noqa: BLE001 — best-effort rewrite
+                    pass
+            if not bridge_result.allowed:
                 logger.info(
-                    "[%s] Policy DENY: blocked pattern '%s' in message",
-                    name, matched[0],
+                    "[%s] Policy DENY (AGT input): %s",
+                    name,
+                    bridge_result.reason,
                 )
                 return DropMessage
 
-            # PII check on outbound messages
-            for pii_pattern in _PII_PATTERNS:
+            # PII check on outbound messages (retained as a defensive
+            # secondary guard; the AGT manifest can override via the
+            # input intervention point binding).
+            for pii_pattern in PII_PATTERNS:
                 if pii_pattern.search(content):
                     logger.info(
                         "[%s] Policy DENY: PII detected in message "
@@ -282,7 +307,7 @@ class GovernanceInterventionHandler:
                 return DropMessage
 
             # PII check
-            for pii_pattern in _PII_PATTERNS:
+            for pii_pattern in PII_PATTERNS:
                 if pii_pattern.search(content):
                     logger.info(
                         "[%s] Policy DENY (publish): PII detected",
@@ -372,6 +397,25 @@ class GovernanceInterventionHandler:
             return str(content)
         return ""
 
+    @staticmethod
+    def _apply_content(message: Any, new_content: str) -> None:
+        """Rewrite a message's content in place per AGT D1.1 transform.
+
+        Mirrors :meth:`_extract_content`. Strings are immutable so the
+        AutoGen runtime keeps the original reference; for dicts and
+        objects with a ``content`` attribute the new value is written
+        through. Best-effort: opaque message types fall through
+        silently.
+        """
+        if isinstance(message, dict):
+            message["content"] = new_content
+            return
+        if hasattr(message, "content"):
+            try:
+                message.content = new_content
+            except Exception:  # noqa: BLE001 — best-effort rewrite
+                pass
+
     # ── Convenience properties ────────────────────────────────────
 
     @property
@@ -434,12 +478,18 @@ class AutoGenKernel(BaseIntegration):
         on_error: Optional[Callable[[Exception, str], Any]] = None,
         deep_hooks_enabled: bool = True,
         evaluator: Any = None,
+        *,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
         """Initialise the AutoGen governance kernel.
 
         Args:
             policy: Governance policy to enforce. When ``None`` the default
-                ``GovernancePolicy`` is used.
+                ``GovernancePolicy`` is used. The policy is translated to
+                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
+                is constructed over it at init time.
             timeout_seconds: Default timeout in seconds (default 300).
             on_error: Optional callback invoked on errors with ``(exception,
                 agent_id)`` arguments.  When ``None``, errors propagate
@@ -447,8 +497,19 @@ class AutoGenKernel(BaseIntegration):
             deep_hooks_enabled: When ``True`` (default), apply deep
                 integration hooks — function call pipeline interception,
                 GroupChat message routing, and state change tracking.
-            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
-                evaluation.
+            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
+                policy evaluation. Retained for backward compatibility;
+                the primary decision path now runs through the AGT 5.0
+                runtime.
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature matches
+                :data:`agt.policies.runtime.ApprovalCallback`. When
+                ``None`` an escalate verdict fails closed to ``deny``.
+            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
+                so scenario tests can wire a scripted policy dispatcher
+                without OPA on PATH. Not part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public surface.
         """
         super().__init__(policy, evaluator=evaluator)
         self.timeout_seconds = timeout_seconds
@@ -462,6 +523,61 @@ class AutoGenKernel(BaseIntegration):
         self._function_call_log: list[dict[str, Any]] = []
         self._groupchat_message_log: list[dict[str, Any]] = []
         self._state_change_log: list[dict[str, Any]] = []
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: Any,
+        *,
+        tool_name: str,
+        args: Any,
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for an AutoGen FunctionCall."""
+        normalised: dict[str, Any]
+        if isinstance(args, dict):
+            normalised = args
+        elif isinstance(args, str):
+            normalised = {"arguments": args}
+        else:
+            normalised = {"value": args}
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=normalised, call_id=call_id
+        )
+
+    @staticmethod
+    def _to_body(data: Any) -> Any:
+        """Normalise an AutoGen payload to a JSON-serialisable body.
+
+        v4 callers passed dicts like ``{"recipient": ..., "message":
+        ...}`` to :meth:`pre_execute` and relied on ``str(input_data)``
+        matching against ``blocked_patterns``. The AGT manifest bridge
+        only pattern-matches a string ``policy_target.value``, so the
+        adapter stringifies dict bodies before forwarding them so the
+        v4 pattern contract still holds.
+        """
+        if isinstance(data, str):
+            return data
+        if isinstance(data, dict):
+            return str(data)
+        if hasattr(data, "content"):
+            return str(getattr(data, "content"))
+        return str(data)
 
     # ── Native intervention handler (recommended) ─────────────────
 
@@ -936,7 +1052,7 @@ class AutoGenKernel(BaseIntegration):
                 content = str(args[0]) if args else str(kwargs)
 
                 # PII check
-                for pattern in _PII_PATTERNS:
+                for pattern in PII_PATTERNS:
                     if pattern.search(content):
                         raise PolicyViolationError(
                             f"State update blocked for '{agent_id}': "

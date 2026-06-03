@@ -1,0 +1,15 @@
+agent_control_specification_version: "0.3.1-beta"
+extends:
+  - base.yaml
+policies:
+  output_policy:
+    type: test
+intervention_points:
+  input:
+    policy_target: "$snap.other_input"
+    policy:
+      id: shared_policy
+  output:
+    policy_target: "$snap.output"
+    policy:
+      id: output_policy

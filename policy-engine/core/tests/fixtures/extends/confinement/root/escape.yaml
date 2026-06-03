@@ -1,0 +1,5 @@
+agent_control_specification_version: "0.3.1-beta"
+extends:
+  - ../outside.yaml
+metadata:
+  name: escape-attempt

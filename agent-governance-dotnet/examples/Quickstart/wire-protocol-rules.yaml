@@ -1,0 +1,47 @@
+# Wire-protocol-aware policy rules (.NET SDK)
+#
+# Mirrors examples/policy-templates/wire-protocol-rules.yaml from the Python
+# SDK. Load with engine.LoadYaml(File.ReadAllText(path)).
+apiVersion: governance.toolkit/v1
+name: wire-protocol-rules
+scope: global
+default_action: allow
+
+rules:
+  # ── SQL ──────────────────────────────────────────────────────────────────
+  - name: deny-destructive-sql-drop
+    description: Block DROP statements outright.
+    condition: "sql.verb == 'DROP'"
+    action: deny
+    priority: 100
+
+  - name: deny-destructive-sql-truncate
+    condition: "sql.verb == 'TRUNCATE'"
+    action: deny
+    priority: 100
+
+  - name: deny-destructive-sql-delete
+    condition: "sql.verb == 'DELETE'"
+    action: deny
+    priority: 100
+
+  - name: deny-writes-to-protected
+    condition: "sql.target == 'protected'"
+    action: deny
+    priority: 100
+
+  # ── Kubernetes ───────────────────────────────────────────────────────────
+  - name: deny-k8s-production-namespace
+    condition: "k8s.namespace == 'production'"
+    action: deny
+    priority: 110
+
+  - name: deny-k8s-exec
+    condition: "k8s.subresource == 'exec'"
+    action: deny
+    priority: 100
+
+  - name: deny-k8s-deletecollection
+    condition: "k8s.verb == 'deletecollection'"
+    action: deny
+    priority: 100
