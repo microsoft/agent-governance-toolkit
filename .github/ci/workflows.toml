@@ -84,7 +84,7 @@ pytest sdk/python generator
 """
 [[workflow.job.step]]
 name = "Package Python SDK"
-run = "python -m maturin build --release --sdist --out sdk/python/dist --compatibility manylinux_2_39 --manifest-path sdk/python/Cargo.toml"
+run = "bash ../scripts/ci/build_acs_python_wheel.sh .."
 [[workflow.job.step]]
 name = "Package ACS generator"
 run = "python -m build --no-isolation ./generator"

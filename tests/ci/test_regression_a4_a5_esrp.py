@@ -29,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ESRP = REPO_ROOT / ".github" / "pipelines" / "esrp-publish.yml"
 LOCKFILE = REPO_ROOT / ".github" / "pipelines" / "release-tools" / "release-tools.txt"
 SRC = REPO_ROOT / ".github" / "pipelines" / "release-tools" / "release-tools.in"
+ACS_PYTHON_WHEEL_HELPER = REPO_ROOT / "scripts" / "ci" / "build_acs_python_wheel.sh"
 
 
 def test_a4_release_tools_lockfile_exists_and_pins_hashes() -> None:
@@ -97,8 +98,7 @@ def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
     text = ESRP.read_text(encoding="utf-8")
     assert "name: agent-control-specification" in text
     assert "path: policy-engine/sdk/python" in text
-    assert "python -m maturin build --release --sdist --out dist --compatibility manylinux_2_39" in text
-    assert "noBuildIsolation: 'true'" in text
+    assert "build_acs_python_wheel.sh" in text
     assert "name: agt-policies" in text
     assert "path: agent-governance-python/agt-policies" in text
     assert "name: acs-generator" in text
@@ -107,6 +107,13 @@ def test_esrp_publishes_acs_python_and_rust_artifacts() -> None:
     assert "crate: agent_control_specification_core" in text
     assert "cargo package -p agent_control_specification --allow-dirty" in text
     assert "after the core ESRP release completes" in text
+
+
+def test_acs_python_wheel_helper_uses_pinned_manylinux_build() -> None:
+    text = ACS_PYTHON_WHEEL_HELPER.read_text(encoding="utf-8")
+    assert "manylinux_2_28_x86_64@sha256:" in text
+    assert "--require-hashes --no-deps" in text
+    assert "--compatibility manylinux_2_28" in text
 
 
 def test_esrp_publishes_acs_node_artifacts() -> None:

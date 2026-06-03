@@ -95,8 +95,6 @@ parameters:
       # ACS policy layer, Python SDK, and artifact generator
       - name: agent-control-specification
         path: policy-engine/sdk/python
-        rust: 'true'
-        noBuildIsolation: 'true'
       - name: agt-policies
         path: agent-governance-python/agt-policies
       - name: acs-generator
@@ -311,8 +309,7 @@ stages:
                 # Consolidated packages use force-include with sibling paths,
                 # which only works when building a wheel directly from source.
                 if [[ "${{ pkg.name }}" == "agent-control-specification" ]]; then
-                  rm -rf dist
-                  python -m maturin build --release --sdist --out dist --compatibility manylinux_2_39
+                  bash "$(Build.SourcesDirectory)/scripts/ci/build_acs_python_wheel.sh" "$(Build.SourcesDirectory)"
                 elif [[ "${{ coalesce(pkg.noBuildIsolation, 'false') }}" == "true" ]]; then
                   python -m build --no-isolation
                 elif [[ "${{ pkg.name }}" == agent-governance-toolkit-* ]]; then
