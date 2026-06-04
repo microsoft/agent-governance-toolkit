@@ -1,6 +1,6 @@
 # ACS Threat And Security Model
 
-This document describes the threat and security model for the Agent Control Specification. ACS is a stateless, deterministic, intervention point policy runtime for agent systems. It evaluates one complete host supplied snapshot at one intervention point, builds a canonical policy input, gathers host supplied annotations, invokes policy, normalizes the result into a verdict, validates effects, and optionally returns a transformed policy target in enforce mode.
+This document describes the threat and security model for the Agent Control Specification. ACS is a stateless, deterministic, intervention point policy runtime for agent systems. It evaluates one complete host supplied snapshot at one intervention point, builds a canonical policy input, gathers host supplied annotations, invokes policy, normalizes the result into a verdict, validates any `transform` verdict, and optionally returns a transformed policy target in enforce mode.
 
 The model applies only when a host application routes governed activity through ACS at the declared intervention points. ACS does not own the agent loop, model, tools, credentials, durable memory, approval workflow, network calls, or backend authorization. It computes portable policy decisions and transformations. The host carries those decisions out.
 
@@ -13,8 +13,8 @@ ACS is designed to provide portable security enforcement for consequential agent
 - ACS evaluates policy before or after each configured lifecycle boundary named by the specification.
 - ACS keeps the runtime stateless so a verdict depends on the manifest, the explicit snapshot, the mode, and dispatcher outputs for one call.
 - ACS keeps the runtime deterministic so identical inputs produce identical verdicts and identical transformed policy targets across supported SDKs.
-- ACS fails closed when runtime validation, path resolution, annotation dispatch, policy dispatch, policy output normalization, or effect validation cannot complete safely.
-- ACS confines policy effects to the configured policy target and prevents effects from mutating the raw snapshot, annotations, projected tool metadata, or hidden host state.
+- ACS fails closed when runtime validation, path resolution, annotation dispatch, policy dispatch, policy output normalization, or transform validation cannot complete safely.
+- ACS confines transform application to the configured policy target and prevents `allow`, `warn`, `deny`, or `escalate` from mutating the raw snapshot, annotations, projected tool metadata, or hidden host state.
 - ACS exposes a frozen policy input contract so Rust, Python, Node, and .NET integrations can interoperate with the same policy bundle.
 - ACS keeps policy artifacts reviewable through a portable manifest and Rego bundle contract.
 - ACS separates pure policy enforcement from host owned I/O so agent frameworks can integrate without surrendering model calls, tool execution, streams, or async runtimes to the core.
@@ -29,7 +29,7 @@ ACS protects assets only on mediated paths. A path is mediated when the host sup
 - Model response integrity is protected when `post_model_call` policy evaluates the model response before the host acts on it.
 - User input and external request data are protected when `input` policy evaluates ingress data before the host uses it in the agent loop.
 - Final disclosure is protected when `output` policy evaluates the assembled response before the host returns it to a caller or downstream system.
-- Policy intent is protected by manifest validation, policy binding validation, reserved runtime error reasons, effect validation, and fail closed construction rules for unresolved `extends`.
+- Policy intent is protected by manifest validation, policy binding validation, reserved runtime error reasons, transform validation, and fail closed construction rules for unresolved `extends`.
 - Policy portability is protected by the canonical policy input shape, canonical serialization, and shared Rust core behavior surfaced through SDK and FFI bindings.
 - Sensitive data is protected to the extent policy denies, escalates, warns, or transforms the policy target before the host performs disclosure or action.
 - Telemetry minimization is protected by runtime events that carry content safe metadata and do not include policy target values, tool arguments, tool results, annotation values, model messages, secrets, or personal data.
@@ -41,7 +41,7 @@ An ACS deployment has several principals and components with distinct security r
 - The end user provides prompts, uploaded content, request payloads, or workflow intent that may be benign, malicious, or compromised.
 - Retrieved content authors control documents, search results, web pages, database rows, emails, tickets, or other data that may later influence the agent.
 - The host application owns the agent loop, framework adapter, model call, tool registry, tool execution, credentials, transport facts, approval path, stream aggregation, and final response handling.
-- The Rust core owns manifest validation, path resolution, tool projection, annotation input validation, policy input construction, policy invocation preparation, verdict normalization, runtime error normalization, and policy target effect validation and application.
+- The Rust core owns manifest validation, path resolution, tool projection, annotation input validation, policy input construction, policy invocation preparation, verdict normalization, runtime error normalization, and policy target transform validation and application.
 - The C ABI and SDKs expose the Rust core to Rust, Python, Node, and .NET hosts while preserving the frozen wire contract.
 - Policy authors and security reviewers author the manifest, Rego bundle, policy queries, tool metadata, annotator declarations, and per point bindings.
 - OPA or a host supplied policy dispatcher evaluates Rego or a custom policy backend and returns verdict shaped JSON.
@@ -65,7 +65,7 @@ ACS is intended to sit at boundaries where untrusted content enters an agent loo
 - Manifest and Rego artifacts cross from a trusted policy review process into the runtime as security critical configuration.
 - Annotation requests cross from the runtime boundary into host supplied classifier, LLM, or endpoint services, which may receive sensitive prompt or tool data selected by the manifest.
 - Policy dispatch crosses from the runtime boundary into OPA or a host supplied policy engine.
-- SDK and FFI calls cross a language boundary where shape translation must preserve JSON values, path semantics, decisions, effects, and character offsets.
+- SDK and FFI calls cross a language boundary where shape translation must preserve JSON values, path semantics, decisions, transform bodies, and character offsets.
 - The host enforcement boundary lies after ACS returns a verdict. The host must block, transform, escalate, or proceed in accordance with the result.
 
 Untrusted user input, model output, and tool output must be treated as data unless trusted host code explicitly grants authority. The manifest and Rego bundle are trusted policy. The host integration code is trusted to invoke ACS on every declared path. An uninstrumented call path is outside the ACS guarantee.
@@ -76,7 +76,7 @@ The trusted computing base is the set of components that must behave correctly f
 
 Always in the trusted computing base are the Rust core, the C ABI surface, the selected SDK binding, the host integration code that routes governed activity through ACS, the manifest, the Rego bundle or custom policy backend, the policy dispatcher, and the deployment controls that protect those artifacts from unauthorized modification.
 
-Conditionally in the trusted computing base are annotator dispatchers, classifier services, LLM judge services, endpoint annotation services, approval resolvers, human approvers, telemetry sinks used as audit evidence, OPA binaries, package registries, CI systems, container images, and framework adapters. They become trusted when their result can affect an allow, deny, warn, escalate, effect, approval, or audit decision.
+Conditionally in the trusted computing base are annotator dispatchers, classifier services, LLM judge services, endpoint annotation services, approval resolvers, human approvers, telemetry sinks used as audit evidence, OPA binaries, package registries, CI systems, container images, and framework adapters. They become trusted when their result can affect an allow, deny, warn, escalate, transform, approval, or audit decision.
 
 The LLM is not trusted to follow instructions, separate data from commands, protect secrets, or propose safe tool arguments. Tools are not trusted to return instruction free or secret free content. Backend services remain trusted for their own authorization decisions because ACS does not replace backend access control.
 
@@ -84,7 +84,7 @@ The LLM is not trusted to follow instructions, separate data from commands, prot
 
 ACS assumes an attacker may be an external user, a compromised user account, a malicious insider using legitimate application access, a malicious retrieved content author, a compromised data source visible to the agent, or a malicious tool output source.
 
-Attackers may control user prompts, uploaded files, request payloads, chat history visible to the host, retrieved documents, web pages, search results, database rows, emails, tickets, tool outputs, model influenced tool call arguments, and final model text. Attackers may also cause malformed snapshots, missing fields, unexpected JSON types, large payloads, unavailable annotator services, malformed annotator responses, policy dispatcher failures, malformed policy outputs, and malformed effects through paths they can influence.
+Attackers may control user prompts, uploaded files, request payloads, chat history visible to the host, retrieved documents, web pages, search results, database rows, emails, tickets, tool outputs, model influenced tool call arguments, and final model text. Attackers may also cause malformed snapshots, missing fields, unexpected JSON types, large payloads, unavailable annotator services, malformed annotator responses, policy dispatcher failures, malformed policy outputs, and malformed transforms through paths they can influence.
 
 ACS does not assume attackers can directly modify the Rust core, selected SDK, trusted host code, approved manifest, approved Rego bundle, OPA binary, trusted deployment platform, or tool implementation. Compromise of those components is a host, platform, or supply chain problem that ACS can document but cannot by itself defeat.
 
@@ -116,9 +116,9 @@ ACS supports information flow control as stateless policy logic. The core perfor
 
 ### Sensitive Data Leakage In Outputs
 
-An attacker can cause sensitive data to appear in model responses, tool results, final output, telemetry, approval payloads, or annotation requests. ACS can evaluate `post_model_call`, `post_tool_call`, and `output`, and valid effects can replace, append, prepend, or redact policy target strings and arrays before the host discloses them.
+An attacker can cause sensitive data to appear in model responses, tool results, final output, telemetry, approval payloads, or annotation requests. ACS can evaluate `post_model_call`, `post_tool_call`, and `output`, and a valid `transform` verdict can replace the configured policy target before the host discloses it.
 
-Redaction spans are counted in characters. A host or policy tool that computes spans in bytes, UTF-16 code units, grapheme clusters, or display cells can redact the wrong content. Cross SDK callers are responsible for using ACS character offset semantics when constructing redaction effects.
+Redaction helpers that compute spans must convert their result into a `transform` verdict over the selected policy target. A host or policy tool that computes replacement boundaries in bytes, UTF-16 code units, grapheme clusters, or display cells can redact the wrong content before returning that transform body.
 
 ### Policy Bypass Through Uninstrumented Paths
 
@@ -126,7 +126,7 @@ An application can accidentally or deliberately call a model, execute a tool, pr
 
 ### Fail Open On Malformed Policy Or Runtime Error
 
-Malformed manifests, unresolved manifest inheritance, failed HTTPS manifest fetches, invalid paths, unknown intervention points, unknown tools, annotation failures, policy dispatcher failures, invalid policy outputs, and invalid effects could otherwise lead to unintended allow decisions. ACS treats runtime failures as `deny` verdicts with reserved `runtime_error:*` reasons. The core validates manifests before use. File based loaders compose file and HTTPS `extends` before runtime construction. `Runtime::with_telemetry` rejects a manifest whose `extends` list remains unresolved, which means string and FFI loaders must receive an already composed manifest before an enforcing runtime can be constructed.
+Malformed manifests, unresolved manifest inheritance, failed HTTPS manifest fetches, invalid paths, unknown intervention points, unknown tools, annotation failures, policy dispatcher failures, invalid policy outputs, and invalid transforms could otherwise lead to unintended allow decisions. ACS treats runtime failures as `deny` verdicts with reserved `runtime_error:*` reasons. The core validates manifests before use. File based loaders compose file and HTTPS `extends` before runtime construction. `Runtime::with_telemetry` rejects a manifest whose `extends` list remains unresolved, which means string and FFI loaders must receive an already composed manifest before an enforcing runtime can be constructed.
 
 ### Supply Chain Of Policy Bundles And Runtime Artifacts
 
@@ -176,10 +176,10 @@ When the host correctly integrates ACS at the declared intervention points and e
 - The runtime fails closed when annotation input paths are invalid, when an annotator dispatch fails, or when an annotator dispatch times out.
 - The runtime prepares typed policy invocations and fails closed when policy preparation or dispatch fails.
 - The runtime fails closed when policy output is not a valid verdict object or when policy uses the reserved `runtime_error:*` reason prefix.
-- The runtime validates all effects before returning success.
-- The runtime applies effects only in enforce mode and only for `allow` and `warn` verdicts.
-- The runtime never applies effects for `deny`, `escalate`, or runtime error outcomes.
-- The runtime rejects effects that target anything outside `$policy_target`.
+- The runtime validates any `transform` verdict before returning success.
+- The runtime applies a transformed policy target only in enforce mode and only for `transform` verdicts.
+- The runtime never mutates the policy target for `allow`, `warn`, `deny`, `escalate`, or runtime error outcomes.
+- The runtime rejects transform paths that target anything outside `$policy_target`.
 - The runtime returns no transformed policy target in evaluate only mode.
 - The runtime rejects unresolved `extends` during enforcing runtime construction, so file based loaders must compose inherited file and HTTPS manifests before use and string or FFI loaders must receive an already merged manifest.
 - The runtime emits only low cardinality telemetry metadata and not policy target values, tool arguments, tool results, annotation values, model messages, secrets, or personal data.
@@ -194,10 +194,10 @@ Integrations must preserve these invariants for the security model to hold.
 - The host must not expose parallel unguarded model, tool, tool result, or output paths for governed workflows.
 - The snapshot must contain the complete facts the policy relies on, including actor, tenant, conversation, approvals, prior decisions, transport, model request, tool call, tool result, and output facts as applicable.
 - The policy target selected by the manifest must be the value the host will actually send, execute, store, or disclose after enforcement.
-- The host must apply the transformed policy target returned by ACS in enforce mode before continuing. Only `allow` and `warn` verdicts return transformed targets.
+- The host must apply the transformed policy target returned by ACS before continuing with a `transform` verdict in enforce mode. No other verdict mutates the policy target.
 - The host must block a `deny` verdict in enforce mode.
 - The host must route an `escalate` verdict to a host approval path and must fail closed if no path is configured, the path fails, or the path returns an unrecognized outcome.
-- The host must not execute an escalated action until approval succeeds. `escalate` verdicts validate effects but do not return or apply transformed targets.
+- The host must not execute an escalated action until approval succeeds. `escalate` verdicts do not return or apply transformed targets.
 - The host must bind approval to the reviewed actor, tenant, policy version, intervention point, tool name, arguments, and relevant snapshot facts.
 - The host must aggregate streams before calling `post_model_call` or `output` because ACS evaluates complete snapshots.
 - The host must call `pre_tool_call` and `post_tool_call` separately for each concrete tool invocation, including parallel invocations.
@@ -242,16 +242,16 @@ Residual risk remains even when ACS is correctly integrated.
 | Tool output injection | The `post_tool_call` point evaluates tool results before reuse, and later points can evaluate resulting model requests and outputs. | The host does not feed tool output back to the model or caller before mediation. | Partially mitigated. |
 | Exfiltration through tool calls | The `pre_tool_call` point evaluates exact tool arguments with projected tool metadata and can deny, warn, escalate, or transform the target. | Tool credentials, destinations, and backend authorization are least privilege and host controlled. | Partially mitigated. |
 | Unauthorized tool authority | Tool projection fails closed for unknown tools, and Rego can enforce actor, tenant, label, clearance, and workflow rules over the snapshot and tool metadata. | The tool catalog is accurate and all governed tools use mediated execution. | In scope mitigated for expressed policy. |
-| Sensitive data leakage in final output | The `output` point can deny, warn, escalate, replace, append, prepend, or redact the configured output target. | The host waits for the verdict and applies transformed output before disclosure. | In scope mitigated for expressed policy. |
+| Sensitive data leakage in final output | The `output` point can deny, warn, escalate, or transform the configured output target. | The host waits for the verdict and applies transformed output before disclosure. | In scope mitigated for expressed policy. |
 | Sensitive data leakage in telemetry | Runtime telemetry emits low cardinality metadata and excludes policy targets, tool arguments, results, annotation values, model messages, secrets, and personal data. | Host logs, policy dispatchers, annotators, approval paths, and external telemetry follow their own data minimization controls. | Partially mitigated. |
 | Policy bypass through uninstrumented paths | ACS defines required intervention points and host obligations, but it cannot observe paths never routed through it. | Adapter coverage, tests, code review, and platform controls prevent bypass paths. | Host responsibility. |
-| Fail open on malformed policy | Manifest validation, reserved runtime errors, policy output normalization, effect validation, and unresolved `extends` rejection cause runtime failures to deny. | The host treats runtime `deny` as blocking in enforce mode. | In scope mitigated. |
+| Fail open on malformed policy | Manifest validation, reserved runtime errors, policy output normalization, transform validation, and unresolved `extends` rejection cause runtime failures to deny. | The host treats runtime `deny` as blocking in enforce mode. | In scope mitigated. |
 | Supply chain compromise of policy bundle | The manifest and Rego bundle are explicit reviewable artifacts, and canonical policy input supports reproducible evaluation. | The deployment signs, reviews, pins, scans, and protects bundles, packages, OPA, SDKs, and native libraries. | Host responsibility. |
 | Classifier or annotator outage | Annotator failures and timeouts fail closed as runtime errors. | The host configures bounded dispatcher behavior and accepts the availability impact of fail closed checks. | In scope mitigated for runtime behavior. |
 | Policy dispatcher outage | Policy dispatch failure yields a runtime error and a deny verdict. | The host treats deny as blocking and operates policy infrastructure reliably. | In scope mitigated for runtime behavior. |
-| Malformed policy output | Verdict normalization rejects invalid decisions, invalid types, invalid effects, and reserved runtime error reasons. | The policy dispatcher output is routed through core normalization and not interpreted directly by the host. | In scope mitigated. |
-| Effect escape from policy target | Effect validation requires paths rooted at `$policy_target` and fails closed on forbidden targets. | The host maps only the transformed policy target back into its controlled object. | In scope mitigated. |
-| Redaction offset mismatch | The spec and core define string redaction spans in characters. | Span producers and SDK hosts convert from bytes, UTF-16 units, or grapheme calculations before returning effects. | Host responsibility. |
+| Malformed policy output | Verdict normalization rejects invalid decisions, invalid types, invalid transforms, and reserved runtime error reasons. | The policy dispatcher output is routed through core normalization and not interpreted directly by the host. | In scope mitigated. |
+| Transform escape from policy target | Transform validation requires paths rooted at `$policy_target` and fails closed on forbidden targets. | The host maps only the transformed policy target back into its controlled object. | In scope mitigated. |
+| Redaction mismatch | The spec and core replace only the selected policy target path carried by a `transform` verdict. | Span or chunk based redaction systems must convert their result into a valid `transform` body before returning it. | Host responsibility. |
 | Parameter tampering after evaluation | ACS returns the verdict and transformed target for the value it evaluated. | The host executes the same immutable invocation or applies the returned transformed target before execution. | Host responsibility. |
 | Token streaming leakage | The model requires complete snapshots for `post_model_call` and `output`. | The host buffers streams and does not emit chunks before policy evaluation, or it explicitly accepts the leakage risk. | Out of scope. |
 | Backend authorization failure | Rego can check snapshot facts and tool metadata before invocation. | Backend services enforce identity, tenant, permission, quota, and business authorization independently. | Host responsibility. |
@@ -270,7 +270,7 @@ A deployment should satisfy these checks before relying on ACS for security enfo
 - The host records the manifest version, bundle version, policy query, and runtime version with security decisions when audit requirements need that evidence.
 - The host treats every runtime error reason as a blocking deny in enforce mode.
 - The host blocks `deny` verdicts and fails closed on missing or failed approval paths for `escalate` verdicts.
-- The host applies transformed policy targets for `allow` and `warn` verdicts before model calls, tool execution, tool result reuse, or output disclosure.
+- The host applies transformed policy targets only for `transform` verdicts before model calls, tool execution, tool result reuse, or output disclosure.
 - The host binds tool evaluation to the exact tool name and arguments executed.
 - The host aggregates streams before `post_model_call` and `output` evaluation.
 - The host evaluates each parallel tool invocation independently and handles partial batch failure deliberately.
@@ -278,6 +278,6 @@ A deployment should satisfy these checks before relying on ACS for security enfo
 - The host validates annotator, policy, approval, model, telemetry, and tool service authentication and transport security.
 - The host configures dispatcher timeouts, retries, circuit breakers, payload limits, rate limits, and concurrency limits.
 - The host treats annotation requests, approval payloads, policy inputs, and host logs as sensitive data flows.
-- The host has tests for malformed manifests, unresolved `extends`, missing paths, unknown tools, annotator failures, policy dispatcher failures, malformed policy outputs, invalid effects, and redaction offset edge cases.
+- The host has tests for malformed manifests, unresolved `extends`, missing paths, unknown tools, annotator failures, policy dispatcher failures, malformed policy outputs, invalid transforms, and redaction edge cases.
 - The host has an operational plan for policy outages and the resulting fail closed behavior.
 - The host documents which threats are accepted because they are outside ACS, including unmediated paths, token streaming leakage, backend authorization, host compromise, and supply chain compromise.

@@ -243,6 +243,10 @@ class OpenAIKernel(BaseIntegration):
             ctx, tool_name=tool_name, args=args, call_id=call_id
         )
 
+    def evaluate_output(self, ctx: ExecutionContext, output_data: Any) -> BridgeResult:
+        """AGT ``output`` evaluation for buffered OpenAI stream output."""
+        return self._bridge.evaluate_output(ctx, content=str(output_data))
+
     def _evaluate_pre_execute(
         self, ctx: ExecutionContext, input_data: Any
     ) -> BridgeResult:
@@ -603,7 +607,8 @@ class GovernedAssistant:
         """
         Stream a governed run.
 
-        Yields events as they arrive, with real-time policy checks.
+        Buffers events, post-checks the complete stream, then yields them
+        only after governance allows disclosure.
         """
         # Pre-check (AGT input intervention point)
         if instructions:
@@ -622,14 +627,29 @@ class GovernedAssistant:
             instructions=instructions,
             **kwargs
         ) as stream:
+            events = []
             for event in stream:
                 # Check for cancellation
                 if hasattr(event, 'data') and hasattr(event.data, 'id'):
                     if self._kernel.is_cancelled(event.data.id):
                         raise RunCancelledException("Run was cancelled (SIGKILL)")
 
-                # Yield event
-                yield event
+                events.append(event)
+
+            bridge_result = self._kernel.evaluate_output(self._ctx, events)
+            if not bridge_result.allowed:
+                raise PolicyViolationError.from_check_result(
+                    bridge_result.check_result
+                )
+            if bridge_result.transform is not None:
+                transformed = bridge_result.transform.value
+                if not isinstance(transformed, list):
+                    raise PolicyViolationError(
+                        "OpenAI stream output transform must return a list of stream events "
+                        "to preserve the streaming API contract"
+                    )
+                events = transformed
+            yield from events
 
     def _poll_run(
         self,

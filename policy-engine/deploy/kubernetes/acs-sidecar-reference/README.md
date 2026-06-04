@@ -18,9 +18,9 @@ Pod in acs-agents
   - ConfigMap mounted at /etc/acs and /policy
 ```
 
-ACS enforcement is inside the app process. The host calls the ACS runtime at `input`, `pre_model_call`, `post_model_call`, `pre_tool_call`, `post_tool_call`, and `output` with complete snapshots. A deny verdict blocks the wrapped operation before the model call, tool call, tool result reuse, or final disclosure proceeds. Runtime validation, missing paths, dispatcher failure, malformed policy output, and invalid effects fail closed.
+ACS enforcement is inside the app process. The host calls the ACS runtime at `input`, `pre_model_call`, `post_model_call`, `pre_tool_call`, `post_tool_call`, and `output` with complete snapshots. A deny verdict blocks the wrapped operation before the model call, tool call, tool result reuse, or final disclosure proceeds. Runtime validation, missing paths, dispatcher failure, malformed policy output, and invalid transforms fail closed.
 
-Istio provides encrypted workload to workload transport, SPIFFE identity, sidecar telemetry, and mesh policy attachment points. Istio does not understand ACS snapshots, policy targets, tool metadata, effects, or intervention points. The mesh does not replace adapter mediation. An unguarded model or tool path inside the app remains outside the ACS envelope even when the pod uses mTLS.
+Istio provides encrypted workload to workload transport, SPIFFE identity, sidecar telemetry, and mesh policy attachment points. Istio does not understand ACS snapshots, policy targets, tool metadata, transform verdicts, or intervention points. The mesh does not replace adapter mediation. An unguarded model or tool path inside the app remains outside the ACS envelope even when the pod uses mTLS.
 
 OPA runs as a sidecar in the same pod. The app policy dispatcher reaches OPA over loopback at `http://127.0.0.1:8181`. The manifest declares the Rego bundle path as `/policy` and each intervention point binds a query under `data.agent_control_specification.acs_sidecar_reference`. The example mounts the same ConfigMap into the app for the manifest and into OPA for the Rego module.
 
