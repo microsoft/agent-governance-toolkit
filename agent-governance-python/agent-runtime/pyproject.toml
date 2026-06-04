@@ -35,7 +35,7 @@ classifiers = [
 ]
 dependencies = [
     "agent-governance-toolkit-core>=4.0.0,<5.0",
-    "jsonschema>=4.0.0,<5.0",
+    "jsonschema>=4.26.0,<5.0",
 ]
 
 [project.urls]
