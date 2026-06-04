@@ -6,6 +6,7 @@ addinfourl
 AEAD
 aenter
 aexit
+aiter
 AgentGovernance
 AgentMesh
 AgentOS
@@ -31,6 +32,7 @@ arrowsize
 asctime
 ASGI
 aspnet
+astream
 asynccontextmanager
 asyncio
 atexit
@@ -372,6 +374,7 @@ removeprefix
 removesuffix
 repr
 repudiable
+replayable
 requireapproval
 reqwest
 returncode

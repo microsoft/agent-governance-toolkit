@@ -69,7 +69,7 @@ class _ReplayableStreamResponse:
     def __getattr__(self, name: str) -> Any:
         value = getattr(self._original, name)
         if callable(value):
-            raise PolicyViolationError(
+            raise AttributeError(
                 f"LlamaIndex stream response method {name!r} is unavailable "
                 "after transform replay because it may access the original stream"
             )
@@ -89,7 +89,7 @@ class _ReplayableAsyncStreamResponse:
     def __getattr__(self, name: str) -> Any:
         value = getattr(self._original, name)
         if callable(value):
-            raise PolicyViolationError(
+            raise AttributeError(
                 f"LlamaIndex async stream response method {name!r} is unavailable "
                 "after transform replay because it may access the original stream"
             )

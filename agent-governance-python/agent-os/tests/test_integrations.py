@@ -2836,7 +2836,7 @@ class TestLlamaIndexBridgeScenarios:
         result.print_response_stream()
 
         assert capsys.readouterr().out == "[REDACTED STREAM]"
-        with pytest.raises(PolicyViolationError, match="unavailable"):
+        with pytest.raises(AttributeError, match="unavailable"):
             result.leak_original_chunks()
 
     async def test_astream_chat_blocks_output_before_disclosure(self, tmp_path):
