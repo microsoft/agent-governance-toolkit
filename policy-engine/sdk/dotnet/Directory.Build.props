@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <Authors>Microsoft</Authors>
+    <Company>Microsoft Corporation</Company>
+    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
+    <PackageProjectUrl>https://github.com/microsoft/agent-governance-toolkit</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/microsoft/agent-governance-toolkit</RepositoryUrl>
+  </PropertyGroup>
+</Project>
