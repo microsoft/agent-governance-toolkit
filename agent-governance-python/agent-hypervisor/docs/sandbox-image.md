@@ -9,6 +9,10 @@ fetch tools, alternative interpreters, compiler toolchain, and shells)
 are removed from their original filesystem locations so they cannot be
 reached by absolute path even if code tries to bypass `PATH`.
 
+A final hardening layer also clears every setuid/setgid bit (`chmod a-s`)
+so a sandboxed workload cannot escalate privileges through binaries such
+as `su`, `mount`, or `ping`.
+
 ## Extending the allowed-binary list
 
 To add a new binary to the sandbox image:

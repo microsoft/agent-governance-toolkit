@@ -86,4 +86,9 @@ every entry.
 These represent the primary denylist-bypass vectors: a sandboxed agent
 that can invoke these commands can exfiltrate data, compile new
 executables, or spawn unrestricted subshells.
+
+In the built image these binaries are additionally removed from their
+original filesystem locations (see ``docker/Dockerfile.sandbox``), so
+they cannot be reached by absolute path either — PATH pinning and
+filesystem removal are defence-in-depth layers, not alternatives.
 """

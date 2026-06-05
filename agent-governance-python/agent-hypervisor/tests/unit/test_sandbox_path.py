@@ -41,7 +41,6 @@ from hypervisor.sandbox import (
     MINIMAL_SANDBOX_PATH,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -184,3 +183,39 @@ def test_extra_binary_outside_allowed_is_not_resolvable(tmp_path: Path) -> None:
     curated.mkdir()
     result = shutil.which("curl", path=str(curated))
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Dockerfile enforcement test
+# ---------------------------------------------------------------------------
+
+
+def test_dockerfile_removes_denied_binaries_at_filesystem_level() -> None:
+    """The Dockerfile must physically remove (``rm -f``) representative denied
+    binaries — network fetch tools and shells — rather than only dropping them
+    from PATH.
+
+    A binary that is merely PATH-pinned could still be invoked by absolute
+    path, so filesystem removal is required to keep the built image consistent
+    with ``DENIED_COMMANDS``.
+    """
+    dockerfile = Path(__file__).resolve().parents[2] / "docker" / "Dockerfile.sandbox"
+    text = dockerfile.read_text(encoding="utf-8")
+
+    assert "rm -f" in text, "Dockerfile must remove denied binaries with rm -f"
+    for path in ("/usr/bin/curl", "/usr/bin/wget", "/bin/bash", "/bin/sh"):
+        assert path in text, (
+            f"{path!r} must be removed from the filesystem in Dockerfile.sandbox "
+            "so the image matches DENIED_COMMANDS"
+        )
+
+
+def test_dockerfile_strips_setuid_bits() -> None:
+    """The Dockerfile must clear setuid/setgid bits to block privilege
+    escalation through binaries such as su, mount, or ping.
+    """
+    dockerfile = Path(__file__).resolve().parents[2] / "docker" / "Dockerfile.sandbox"
+    text = dockerfile.read_text(encoding="utf-8")
+    assert "chmod a-s" in text, (
+        "Dockerfile must strip setuid/setgid bits with 'chmod a-s'"
+    )

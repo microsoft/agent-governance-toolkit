@@ -13,7 +13,12 @@
 #    their original filesystem locations so they cannot be reached even
 #    by absolute path.  This is defence-in-depth on top of PATH pinning.
 # 3. The workload user (uid 1001, no shell) cannot escalate privileges via
-#    setuid binaries because we strip them with dpkg-statoverride.
+#    setuid/setgid binaries: every such bit is cleared (chmod a-s) in the
+#    final hardening layer.
+# 4. Shells (bash, sh, dash, zsh, ksh, fish) are removed from the filesystem
+#    in that same final layer, not merely dropped from PATH, so they cannot
+#    be reached even by absolute path.  This keeps the image consistent with
+#    the DENIED_COMMANDS denylist in src/hypervisor/sandbox/__init__.py.
 #
 # Intentionally present binaries and rationale
 # ────────────────────────────────────────────
@@ -88,6 +93,28 @@ WORKDIR /workspace
 # collision with the dev user (uid 1000) used in the development image.
 RUN useradd --create-home --shell /bin/false --uid 1001 sandbox \
     && chown -R sandbox:sandbox /workspace
+
+# ── Step 5: Final hardening — strip privilege bits and remove shells ──
+# This runs last on purpose: earlier RUN layers rely on the bash SHELL, so
+# the shells can only be deleted once no further build steps need them.  The
+# shell executing this layer keeps running after its own binary is unlinked
+# (the inode stays live until the process exits), so removing bash here is
+# safe.  After this layer only USER and an exec-form CMD remain, neither of
+# which needs a shell.
+#
+#   * chmod a-s on every setuid/setgid file removes the privilege-escalation
+#     surface (su, mount, ping, ...) that a sandboxed workload must never use.
+#   * rm -f on the shells makes the image match DENIED_COMMANDS: a shell that
+#     was only dropped from PATH could still be spawned by absolute path.
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} + 2>/dev/null || true \
+    && rm -f \
+        /bin/bash /usr/bin/bash \
+        /bin/sh /usr/bin/sh \
+        /bin/dash /usr/bin/dash \
+        /bin/zsh /usr/bin/zsh \
+        /bin/ksh /usr/bin/ksh \
+        /usr/bin/fish \
+    && true
 
 USER sandbox
 
