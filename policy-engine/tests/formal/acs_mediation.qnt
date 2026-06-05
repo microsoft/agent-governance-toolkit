@@ -4,8 +4,8 @@ module acs_mediation {
     runtimeErrorReason: str,
     policyDecision: str,
     enforceMode: bool,
-    effectsRequested: bool,
-    effectsApplied: bool,
+    transformRequested: bool,
+    transformApplied: bool,
     approvalPathConfigured: bool,
     approvalOutcome: str,
     approvalRouted: bool,
@@ -17,8 +17,8 @@ module acs_mediation {
 
   var st: MediationState
 
-  pure val Verdicts = Set("allow", "warn", "deny", "escalate")
-  pure val PolicyDecisions = Set("allow", "warn", "deny", "escalate")
+  pure val Verdicts = Set("allow", "warn", "deny", "escalate", "transform")
+  pure val PolicyDecisions = Set("allow", "warn", "deny", "escalate", "transform")
   pure val ApprovalOutcomes = Set("recognized", "missing", "failed", "unrecognized")
   pure val RuntimeErrorReasons = Set(
     "none",
@@ -33,6 +33,8 @@ module acs_mediation {
     "runtime_error:policy_output_invalid",
     "runtime_error:effect_invalid",
     "runtime_error:effect_target_forbidden",
+    "runtime_error:transform_invalid",
+    "runtime_error:transform_target_forbidden",
     "runtime_error:resource_limit_exceeded",
     "runtime_error:approval_action_mismatch",
   )
@@ -42,8 +44,8 @@ module acs_mediation {
     runtimeErrorReason: "none",
     policyDecision: "deny",
     enforceMode: true,
-    effectsRequested: false,
-    effectsApplied: false,
+    transformRequested: false,
+    transformApplied: false,
     approvalPathConfigured: false,
     approvalOutcome: "missing",
     approvalRouted: false,
@@ -62,8 +64,8 @@ module acs_mediation {
       runtimeErrorReason: reasonValue,
       policyDecision: "deny",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: false,
+      transformRequested: true,
+      transformApplied: false,
       approvalPathConfigured: false,
       approvalOutcome: "missing",
       approvalRouted: false,
@@ -74,15 +76,15 @@ module acs_mediation {
     },
   }
 
-  action policyAllowWithEffect = all {
+  action policyAllow = all {
     st.phase == "ready",
     st' = {
       phase: "terminal",
       runtimeErrorReason: "none",
       policyDecision: "allow",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: true,
+      transformRequested: false,
+      transformApplied: false,
       approvalPathConfigured: false,
       approvalOutcome: "missing",
       approvalRouted: false,
@@ -93,34 +95,53 @@ module acs_mediation {
     },
   }
 
-  action policyAllowEvaluateOnly = all {
+  action policyTransform = all {
     st.phase == "ready",
     st' = {
       phase: "terminal",
       runtimeErrorReason: "none",
-      policyDecision: "allow",
-      enforceMode: false,
-      effectsRequested: true,
-      effectsApplied: false,
+      policyDecision: "transform",
+      enforceMode: true,
+      transformRequested: true,
+      transformApplied: true,
       approvalPathConfigured: false,
       approvalOutcome: "missing",
       approvalRouted: false,
-      verdict: "allow",
+      verdict: "transform",
       verdictCount: 1,
-      reason: "policy:allow",
-      explicitAllowDecision: true,
+      reason: "policy:transform",
+      explicitAllowDecision: false,
     },
   }
 
-  action policyWarnWithEffect = all {
+  action policyTransformEvaluateOnly = all {
+    st.phase == "ready",
+    st' = {
+      phase: "terminal",
+      runtimeErrorReason: "none",
+      policyDecision: "transform",
+      enforceMode: false,
+      transformRequested: true,
+      transformApplied: false,
+      approvalPathConfigured: false,
+      approvalOutcome: "missing",
+      approvalRouted: false,
+      verdict: "transform",
+      verdictCount: 1,
+      reason: "policy:transform",
+      explicitAllowDecision: false,
+    },
+  }
+
+  action policyWarn = all {
     st.phase == "ready",
     st' = {
       phase: "terminal",
       runtimeErrorReason: "none",
       policyDecision: "warn",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: true,
+      transformRequested: false,
+      transformApplied: false,
       approvalPathConfigured: false,
       approvalOutcome: "missing",
       approvalRouted: false,
@@ -131,15 +152,15 @@ module acs_mediation {
     },
   }
 
-  action policyDenyEffectSuppressed = all {
+  action policyDenyTransformSuppressed = all {
     st.phase == "ready",
     st' = {
       phase: "terminal",
       runtimeErrorReason: "none",
       policyDecision: "deny",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: false,
+      transformRequested: true,
+      transformApplied: false,
       approvalPathConfigured: false,
       approvalOutcome: "missing",
       approvalRouted: false,
@@ -157,8 +178,8 @@ module acs_mediation {
       runtimeErrorReason: "none",
       policyDecision: "escalate",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: false,
+      transformRequested: true,
+      transformApplied: false,
       approvalPathConfigured: true,
       approvalOutcome: "recognized",
       approvalRouted: true,
@@ -176,8 +197,8 @@ module acs_mediation {
       runtimeErrorReason: "none",
       policyDecision: "escalate",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: false,
+      transformRequested: true,
+      transformApplied: false,
       approvalPathConfigured: false,
       approvalOutcome: "missing",
       approvalRouted: false,
@@ -195,8 +216,8 @@ module acs_mediation {
       runtimeErrorReason: "none",
       policyDecision: "escalate",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: false,
+      transformRequested: true,
+      transformApplied: false,
       approvalPathConfigured: true,
       approvalOutcome: "failed",
       approvalRouted: true,
@@ -214,8 +235,8 @@ module acs_mediation {
       runtimeErrorReason: "none",
       policyDecision: "escalate",
       enforceMode: true,
-      effectsRequested: true,
-      effectsApplied: false,
+      transformRequested: true,
+      transformApplied: false,
       approvalPathConfigured: true,
       approvalOutcome: "unrecognized",
       approvalRouted: true,
@@ -243,12 +264,15 @@ module acs_mediation {
     runtimeError("runtime_error:policy_output_invalid"),
     runtimeError("runtime_error:effect_invalid"),
     runtimeError("runtime_error:effect_target_forbidden"),
+    runtimeError("runtime_error:transform_invalid"),
+    runtimeError("runtime_error:transform_target_forbidden"),
     runtimeError("runtime_error:resource_limit_exceeded"),
     runtimeError("runtime_error:approval_action_mismatch"),
-    policyAllowWithEffect,
-    policyAllowEvaluateOnly,
-    policyWarnWithEffect,
-    policyDenyEffectSuppressed,
+    policyAllow,
+    policyTransform,
+    policyTransformEvaluateOnly,
+    policyWarn,
+    policyDenyTransformSuppressed,
     policyEscalateRecognized,
     policyEscalateNoPath,
     policyEscalateFailedPath,
@@ -259,11 +283,11 @@ module acs_mediation {
   pure def RuntimeErrorsDeny =
     st.phase != "terminal" or st.runtimeErrorReason == "none" or st.verdict == "deny"
 
-  pure def NoEffectsOnDenyOrEscalate =
-    st.phase != "terminal" or not(st.verdict == "deny" or st.verdict == "escalate") or not(st.effectsApplied)
+  pure def NoTransformOnDenyWarnAllowOrEscalate =
+    st.phase != "terminal" or st.verdict == "transform" or not(st.transformApplied)
 
-  pure def EffectsOnlyOnAllowOrWarn =
-    st.phase != "terminal" or not(st.effectsApplied) or (st.verdict == "allow" or st.verdict == "warn")
+  pure def TransformOnlyForTransformVerdict =
+    st.phase != "terminal" or not(st.transformApplied) or st.verdict == "transform"
 
   pure def EscalateWithoutValidApprovalDenies =
     st.phase != "terminal" or st.policyDecision != "escalate" or st.runtimeErrorReason != "none" or

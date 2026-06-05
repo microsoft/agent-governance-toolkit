@@ -10,7 +10,7 @@ cargo test --test security_conformance
 
 Fail closed reserved reasons. Every reserved `runtime_error:` value reachable through build and evaluate execution is exercised through `tests/conformance/fail_closed_error_parity.json`. The core test also enumerates the complete section 15 table and checks `RuntimeError::reason()` for all thirteen variants.
 
-Error paths do not apply effects. Runtime errors return deny verdicts with empty effect lists and no transformed policy target. Invalid or forbidden policy effects fail closed before a transform is exposed.
+Error paths do not apply transforms. Runtime errors return deny verdicts with no transformed policy target. Invalid or forbidden transform verdicts fail closed before a transformed target is exposed.
 
 Extends confinement and URL loading. File based manifest path extends are confined to the top level manifest directory. Escaping paths fail closed during manifest loading. HTTPS URL extends use bounded fetches with optional SHA-256 pins. Plain `http`, unsupported schemes, hash mismatches, cycles, and URL body limit breaches fail closed.
 

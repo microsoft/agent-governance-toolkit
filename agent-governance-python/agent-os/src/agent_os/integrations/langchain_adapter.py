@@ -203,6 +203,10 @@ class LangChainKernel(BaseIntegration):
             ctx, tool_name=tool_name, args=args, call_id=call_id
         )
 
+    def evaluate_output(self, ctx: Any, output_data: Any) -> BridgeResult:
+        """AGT ``output`` evaluation for buffered LangChain output."""
+        return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
+
     @staticmethod
     def _to_body(data: Any) -> Any:
         """Normalise a LangChain input payload to a JSON-serialisable body."""
@@ -724,8 +728,8 @@ class LangChainKernel(BaseIntegration):
                 """Governed streaming execution.
 
                 The input is policy-checked before streaming begins.
-                Individual chunks are yielded as-is; a post-execution
-                check runs after the stream is fully consumed.
+                Output chunks are buffered and post-checked before any
+                chunk is yielded so policy can block disclosure.
 
                 Args:
                     input_data: Input to pass to the chain/agent.
@@ -746,9 +750,77 @@ class LangChainKernel(BaseIntegration):
                     raise PolicyViolationError(reason)
                 logger.info("Policy ALLOW on stream")
 
-                yield from self._original.stream(input_data, **kwargs)
+                chunks = list(self._original.stream(input_data, **kwargs))
+                bridge_result = self._kernel.evaluate_output(self._ctx, chunks)
+                if not bridge_result.allowed:
+                    logger.info("Policy DENY on stream result: %s", bridge_result.reason)
+                    raise PolicyViolationError.from_check_result(
+                        bridge_result.check_result
+                    )
+                if bridge_result.transform is not None:
+                    transformed = bridge_result.transform.value
+                    chunks = transformed if isinstance(transformed, list) else [transformed]
+                valid, reason = self._kernel.post_execute(self._ctx, chunks)
+                if not valid:
+                    logger.info("Policy DENY on stream bookkeeping: %s", reason)
+                    raise PolicyViolationError(reason)
+                yield from chunks
 
-                self._kernel.post_execute(self._ctx, None)
+            async def astream(self, input_data: Any, **kwargs):
+                """Governed async streaming execution."""
+                async for chunk in self._govern_async_stream("astream", input_data, **kwargs):
+                    yield chunk
+
+            async def astream_log(self, input_data: Any, **kwargs):
+                """Governed async streaming log execution."""
+                async for chunk in self._govern_async_stream("astream_log", input_data, **kwargs):
+                    yield chunk
+
+            async def astream_events(self, input_data: Any, **kwargs):
+                """Governed async streaming events execution."""
+                async for chunk in self._govern_async_stream("astream_events", input_data, **kwargs):
+                    yield chunk
+
+            async def _govern_async_stream(self, method_name: str, input_data: Any, **kwargs):
+                logger.debug("%s called with input=%r kwargs=%r", method_name, input_data, kwargs)
+                allowed, reason = self._kernel.pre_execute(self._ctx, input_data)
+                if not allowed:
+                    logger.info("Policy DENY on %s: %s", method_name, reason)
+                    raise PolicyViolationError(reason)
+                logger.info("Policy ALLOW on %s", method_name)
+
+                stream = getattr(self._original, method_name)(input_data, **kwargs)
+                if hasattr(stream, "__await__"):
+                    stream = await stream
+                if not hasattr(stream, "__aiter__"):
+                    raise PolicyViolationError(
+                        f"{method_name} returned an uninspectable async stream; "
+                        "cannot enforce output mediation before disclosure"
+                    )
+                chunks = [chunk async for chunk in stream]
+                bridge_result = self._kernel.evaluate_output(self._ctx, chunks)
+                if not bridge_result.allowed:
+                    logger.info("Policy DENY on %s result: %s", method_name, bridge_result.reason)
+                    raise PolicyViolationError.from_check_result(
+                        bridge_result.check_result
+                    )
+                if bridge_result.transform is not None:
+                    transformed = bridge_result.transform.value
+                    if isinstance(transformed, list):
+                        chunks = transformed
+                    elif method_name in {"astream_log", "astream_events"}:
+                        raise PolicyViolationError(
+                            f"{method_name} output transform must return a list "
+                            "to preserve the async stream API contract"
+                        )
+                    else:
+                        chunks = [transformed]
+                valid, reason = self._kernel.post_execute(self._ctx, chunks)
+                if not valid:
+                    logger.info("Policy DENY on %s bookkeeping: %s", method_name, reason)
+                    raise PolicyViolationError(reason)
+                for chunk in chunks:
+                    yield chunk
 
             # Passthrough for non-execution methods
             def __getattr__(self, name):
