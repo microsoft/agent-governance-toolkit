@@ -6,7 +6,6 @@
     <IsPackable>true</IsPackable>
     <PackageId>AgentControlSpecification</PackageId>
     <Version>0.3.1-beta.0</Version>
-    <Authors>Agent Control Specification contributors</Authors>
     <Description>Thin .NET SDK surface for the stateless Agent Control Specification runtime.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
