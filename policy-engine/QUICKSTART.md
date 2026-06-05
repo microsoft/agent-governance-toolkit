@@ -6,7 +6,7 @@ If you only want to build the repository and run its tests, see the [SDK matrix]
 
 ## How ACS fits into a host
 
-Your host owns the agent loop and acts as the Policy Enforcement Point. At each intervention point the host hands ACS a JSON snapshot of what is about to happen, such as the incoming request, a model call, or a concrete tool invocation. ACS acts as the Policy Decision Point. It evaluates the policy bound to that point and returns a verdict, an optional list of policy target scoped effects, and the policy input that produced the decision.
+Your host owns the agent loop and acts as the Policy Enforcement Point. At each intervention point the host hands ACS a JSON snapshot of what is about to happen, such as the incoming request, a model call, or a concrete tool invocation. ACS acts as the Policy Decision Point. It evaluates the policy bound to that point and returns a verdict, an optional transformed policy target only when the verdict is `transform`, and the policy input that produced the decision.
 
 ACS holds no state between calls, so the host supplies the full snapshot every time. The host is also responsible for acting on the verdict. ACS decides, the host enforces.
 
@@ -95,7 +95,7 @@ verdict := {
 }
 ```
 
-A verdict must carry a `decision` of `allow`, `deny`, `warn`, or `escalate`. The optional `reason` is a low cardinality code, and `message` is host facing text. A policy may also return an `effects` array to transform the policy target. Reasons must not use the reserved `runtime_error:` prefix.
+A verdict must carry a `decision` of `allow`, `deny`, `warn`, `escalate`, or `transform`. The optional `reason` is a low cardinality code, and `message` is host facing text. A policy may return a `transform` body only with the `transform` decision; `allow`, `warn`, `deny`, and `escalate` never mutate the policy target. Reasons must not use the reserved `runtime_error:` prefix.
 
 ## Step 4. Construct the runtime
 
@@ -127,7 +127,7 @@ var control = AgentControl.FromPath("manifest.yaml");
 
 ## Step 5. Evaluate at an intervention point
 
-Call the SDK at the boundary you declared. Pass the intervention point and the snapshot. The result carries `verdict`, optional `effects`, and the policy input.
+Call the SDK at the boundary you declared. Pass the intervention point and the snapshot. The result carries `verdict`, an optional transformed policy target for `transform`, and the policy input.
 
 ```rust
 use agent_control_specification::{Decision, EnforcementMode, InterventionPoint};
@@ -175,12 +175,13 @@ The Rust SDK takes the `EnforcementMode` on `evaluate_intervention_point`. The P
 
 | Decision | Host action |
 | --- | --- |
-| `allow` | Proceed with the action. Apply any returned effects to the policy target first. |
-| `warn` | Proceed, but record the warning. Effects still apply. |
-| `deny` | Block the action. Surface `reason` and `message`. No effects are applied. |
+| `allow` | Proceed with the original policy target. |
+| `warn` | Proceed with the original policy target, but record the warning. |
+| `deny` | Block the action. Surface `reason` and `message`. |
 | `escalate` | Suspend the action and ask a human or an external authority for approval before proceeding. |
+| `transform` | Proceed only with the returned transformed policy target. |
 
-When a policy returns effects, the runtime resolves and applies them to the policy target and exposes the transformed value on the result. Read the transformed policy target rather than the original when the decision allows the action to proceed. Redaction is the common case. A Rego policy emits a `redact` effect with a `pattern` regex or a `values` literal list, and the core turns it into the transformed policy target with no host span computation.
+When a policy returns `transform`, the runtime validates the transform path, applies it to the policy target in `enforce` mode, and exposes the transformed value on the result. Read the transformed policy target rather than the original before executing a tool, sending a model request, storing a tool result, or disclosing output. Redaction is the common case, but the core never mutates on `allow`, `warn`, `deny`, or `escalate`.
 
 ## Step 7. Mediate the whole agent loop
 
@@ -197,7 +198,7 @@ A real host guards more than one point. Wire each relevant intervention point at
 | `output` | The final user visible response is assembled, before it is sent. |
 | `agent_shutdown` | A session or run ends. |
 
-Driving each point by hand with `evaluate_intervention_point` works, but every SDK also ships orchestration helpers that bundle evaluation, enforcement, effect application, and approval into one call. Prefer these for ordinary hosts.
+Driving each point by hand with `evaluate_intervention_point` works, but every SDK also ships orchestration helpers that bundle evaluation, enforcement, transform application, and approval into one call. Prefer these for ordinary hosts.
 
 | Helper | Points it guards |
 | --- | --- |
@@ -213,7 +214,7 @@ Two common needs do not require host dispatcher code beyond the bundled defaults
 
 Annotators attach derived signals, such as a classifier score, under `annotations.<name>` in the policy input so a policy can read them. Declare them in the manifest `annotators` block and opt a point in with an `annotations` map. The bundled `classifier`, `llm`, and `endpoint` annotators issue network calls, so a zero-config annotator needs a reachable endpoint and any credentials it requires. Reference dispatcher examples live under repository checkout path `integrations/annotators`.
 
-Redaction needs no custom dispatcher. Emit a `redact` effect from the policy and read the transformed policy target as described in Step 6. The repository checkout path `examples/support_agent` redacts PII this way.
+Redaction needs no custom dispatcher. Return a `transform` verdict whose `transform.value` contains the redacted policy target, then read the transformed policy target as described in Step 6. The repository checkout path `examples/support_agent` redacts PII this way.
 
 ## Step 9. Verify your integration
 

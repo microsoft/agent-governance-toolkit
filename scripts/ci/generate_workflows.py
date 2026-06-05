@@ -139,7 +139,8 @@ def _toolchain_steps(toolchain: str, actions: dict[str, str]) -> list[str]:
 
 def _opa_step(on_path: bool = False, set_env: bool = True) -> list[str]:
     lines = [
-        f'curl -fsSL -o "$RUNNER_TEMP/opa" '
+        f'curl --proto \'=https\' --tlsv1.2 -fSLo "$RUNNER_TEMP/opa" '
+        '--retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 '
         f'"https://openpolicyagent.org/downloads/v{OPA_VERSION}/opa_linux_amd64_static"\n',
         f'echo "{OPA_LINUX_AMD64_SHA256}  $RUNNER_TEMP/opa" | sha256sum -c -\n',
         'chmod +x "$RUNNER_TEMP/opa"\n',
