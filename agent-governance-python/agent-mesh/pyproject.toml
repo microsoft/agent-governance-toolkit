@@ -107,7 +107,7 @@ storage = [
 observability = [
     "opentelemetry-api>=1.42.1,<2.0",
     "opentelemetry-sdk>=1.42.1,<2.0",
-    "opentelemetry-instrumentation-fastapi>=0.41b0,<1.0",
+    "opentelemetry-instrumentation-fastapi>=0.63b1,<1.0",
     "opentelemetry-exporter-otlp>=1.20.0,<2.0",
     "prometheus-client>=0.19.0,<1.0",
 ]
@@ -135,7 +135,7 @@ all = [
     "asyncpg>=0.29.0,<1.0",
     "opentelemetry-api>=1.42.1,<2.0",
     "opentelemetry-sdk>=1.42.1,<2.0",
-    "opentelemetry-instrumentation-fastapi>=0.41b0,<1.0",
+    "opentelemetry-instrumentation-fastapi>=0.63b1,<1.0",
     "opentelemetry-exporter-otlp>=1.20.0,<2.0",
     "prometheus-client>=0.19.0,<1.0",
 ]
