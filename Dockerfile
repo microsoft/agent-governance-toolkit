@@ -32,7 +32,8 @@ RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && python -m pip install --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
     && rm -rf /var/lib/apt/lists/* \
     # OPA CLI — required by OPAEvaluator local mode (opa eval subprocess)
-    && curl -fsSL -o /usr/local/bin/opa \
+    && curl --proto '=https' --tlsv1.2 -fSLo /usr/local/bin/opa \
+        --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
         https://openpolicyagent.org/downloads/v1.4.2/opa_linux_amd64_static \
     && echo "2c0ccdbbe0b8e2a5d12d9c42d92f1f34f494ffb32d1f3c4ddc36101be637d66f  /usr/local/bin/opa" \
         | sha256sum -c - \

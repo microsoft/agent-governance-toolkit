@@ -9,20 +9,20 @@ Read the [Required Integration Invariants](security-model.md#required-integratio
 | Mode | Operational use | Host behavior |
 | --- | --- | --- |
 | `evaluate_only` | Shadow evaluation, policy tuning, and pre-production comparison. | Record verdicts and reasons while the host may continue with the original action. Do not claim enforcement coverage from this mode. |
-| `enforce` | Production blocking and transformation. | Block `deny`, route `escalate` to a host approval path, and apply returned transformed policy targets for `allow` and `warn`. |
+| `enforce` | Production blocking and transformation. | Block `deny`, route `escalate` to a host approval path, and apply returned transformed policy targets only for `transform`. |
 
 Start new policies in `evaluate_only` on mirrored or low risk traffic. Promote to `enforce` only after telemetry shows expected allow, warn, deny, and escalate rates for each governed intervention point.
 
 ## Fail closed posture
 
-Runtime failures become deny verdicts with reserved runtime error reasons. The host must treat those verdicts as blocking in `enforce` mode. Do not add a fail open bypass around manifest validation, path resolution, annotator dispatch, policy dispatch, policy output normalization, effect validation, approval identity checks, or resource limits.
+Runtime failures become deny verdicts with reserved runtime error reasons. The host must treat those verdicts as blocking in `enforce` mode. Do not add a fail open bypass around manifest validation, path resolution, annotator dispatch, policy dispatch, policy output normalization, transform validation, approval identity checks, or resource limits.
 
 | Failure class | Reserved reason family |
 | --- | --- |
 | Manifest, intervention point, path, and tool projection failures | `runtime_error:manifest_invalid`, `runtime_error:intervention_point_unknown`, `runtime_error:path_missing`, `runtime_error:path_type_mismatch`, `runtime_error:tool_unknown` |
 | Annotator failures | `runtime_error:annotation_failed`, `runtime_error:annotation_timeout` |
 | Policy dispatcher and output failures | `runtime_error:policy_invocation_failed`, `runtime_error:policy_output_invalid` |
-| Effect and approval failures | `runtime_error:effect_invalid`, `runtime_error:effect_target_forbidden`, `runtime_error:approval_action_mismatch` |
+| Transform and approval failures | `runtime_error:transform_invalid`, `runtime_error:transform_target_forbidden`, legacy `runtime_error:effect_*` compatibility reasons, `runtime_error:approval_action_mismatch` |
 | Resource limits | `runtime_error:resource_limit_exceeded` |
 
 ## Host integration invariants
@@ -32,9 +32,9 @@ The security model defines the normative invariants. Operationally, every worklo
 | Area | Production check |
 | --- | --- |
 | Mediation coverage | Inventory every governed model request, model response, tool call, tool result, user input, final output, startup path, and shutdown path. Tests should fail when any governed path skips ACS. |
-| Stream handling | Aggregate streamed model and final output before `post_model_call` and `output`. Release content only after the verdict allows it or warns with any transformed target applied. |
+| Stream handling | Aggregate streamed model and final output before `post_model_call` and `output`. Release content only after the verdict is `allow` or `warn`, or after a `transform` verdict has produced the transformed target to release. |
 | Policy target binding | Ensure the manifest `policy_target` selects the exact value the host will send, execute, store, or disclose. Treat the evaluated value as immutable until the host applies the verdict. |
-| Transform application | Map `transformed_policy_target` back into the host object for `allow` and `warn` in `enforce` mode. Do not apply effects for `deny` or `escalate`. |
+| Transform application | Map `transformed_policy_target` back into the host object only when the verdict is `transform` in `enforce` mode. `allow`, `warn`, `deny`, and `escalate` never mutate the policy target. |
 | Deny handling | Stop the governed action on `deny`. Preserve the decision, reason, intervention point, policy id, manifest version, bundle version, and runtime version when audit requires it. |
 | Escalation | Route `escalate` to a host approval path. Fail closed when no path is configured, the path fails, or the result does not match the current action identity. |
 | Parallel tools | Evaluate each concrete tool invocation with separate `pre_tool_call` and `post_tool_call` calls. Handle partial batch failure deliberately. |

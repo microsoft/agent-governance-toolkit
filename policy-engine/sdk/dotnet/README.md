@@ -51,7 +51,7 @@ In enforce mode a `deny` verdict throws `AgentControlBlockedException`. An `esca
 
 The framework-adapter shapes accept the same resolver so approval flows through the adapter layer. `AgentControlDelegatingChatClient` (via `UseAgentControl`), `AgentControlSemanticKernelFunctionFilter`, and `AgentControlAutoGenMiddleware` take an `approvalResolver` at construction; `AgentControlToolInvocationFilter`, `AgentControlAgentMiddleware`, and `AgentControlMcpToolProvider` take a per-call `approvalResolver` on their invocation method, mirroring where each shape accepts its enforcement mode.
 
-- allow proceeds with the original action target. `escalate` verdicts validate effects but do not return or apply transformed targets
+- allow proceeds with the original action target. `escalate` verdicts do not return or apply transformed targets
 - deny, an unrecognized result, or a resolver that throws raises `AgentControlBlockedException` (the original exception is preserved as `InnerException`)
 - suspend raises `AgentControlSuspendedException` carrying the opaque host handle
 - with no resolver an `escalate` verdict fails closed to a block

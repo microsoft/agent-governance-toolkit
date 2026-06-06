@@ -173,7 +173,7 @@ jobs:
         if: github.event.pull_request.head.repo.full_name != github.repository
         run: echo "::notice::Running on fork PR -- composite action resolved from base branch (safe)"
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           # SECURITY: pull_request_target defaults to base branch checkout (safe).
           persist-credentials: false
@@ -200,6 +200,7 @@ jobs:
     if: always()
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Collect agent comments and post summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -278,14 +279,22 @@ jobs:
             ].join('\n');
 
             const existing = allComments.find(c => isWorkflowComment(c) && c.body && c.body.includes(SUMMARY_MARKER));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner, repo, comment_id: existing.id, body: summaryBody,
-              });
-              core.info(`Updated summary comment ${existing.id}`);
-            } else {
-              await github.rest.issues.createComment({
-                owner, repo, issue_number: prNumber, body: summaryBody,
-              });
-              core.info('Created summary comment');
+            try {
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id, body: summaryBody,
+                });
+                core.info(`Updated summary comment ${existing.id}`);
+              } else {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: prNumber, body: summaryBody,
+                });
+                core.info('Created summary comment');
+              }
+            } catch (error) {
+              if (error?.status === 403 && String(error?.message || '').includes('Resource not accessible')) {
+                core.warning('Unable to post advisory AI review summary because this run token cannot write PR comments.');
+              } else {
+                throw error;
+              }
             }
