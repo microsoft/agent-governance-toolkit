@@ -312,7 +312,6 @@ Apache 2.0 - See [LICENSE](../../LICENSE)
 
 - **AgentMesh**: https://github.com/microsoft/agent-governance-toolkit
 - **MCP Specification**: https://modelcontextprotocol.io
-- **MCP Security Discussion**: https://github.com/anthropics/anthropic-cookbook/discussions
 
 ---
 

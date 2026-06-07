@@ -114,7 +114,7 @@
 
 ### 🛡️ OWASP Agentic Top 10 Coverage
 
-Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security risks](docs/owasp-agentic-top10-mapping.md):
+Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security risks](../compliance/owasp-asi-policy-mapping.md):
 
 | Risk | Coverage | Module |
 |------|----------|--------|
@@ -129,7 +129,7 @@ Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security
 | ASI09 Human-Agent Trust | ✅ Full | Human approval workflows, audit logging |
 | ASI10 Rogue Agents | ✅ Full | Agent Runtime kill switch + ring isolation |
 
-> 📄 [Full OWASP mapping →](docs/owasp-agentic-top10-mapping.md)
+> 📄 [Full OWASP mapping →](../compliance/owasp-asi-policy-mapping.md)
 
 ### 🌐 The Agent Governance Ecosystem
 
