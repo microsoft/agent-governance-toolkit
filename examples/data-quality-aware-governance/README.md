@@ -27,7 +27,7 @@ Request
   │       ├─ NO  → Block (policy violation)
   │       └─ YES → proceed to Layer 2
   │
-Layer 2: Data Trust Registry
+Layer 2: Data Quality Registry
     └─ Is the target dataset trustworthy right now?
         ├─ Freshness Check
         ├─ Quality Check
@@ -84,6 +84,7 @@ Where the snapshot contains:
 - dataset_owner_did — DID of the dataset owner
 - quality_score — current quality assessment
 - drift_score — statistical drift measurement relative to baseline
+- drift_threshold — maximum acceptable drift before governance blocks access
 
 This means:
 - AGT evaluates the **typed fields** at policy decision time
