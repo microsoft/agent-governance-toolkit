@@ -738,3 +738,4 @@ Mytholog
 miyannishar
 Dayos
 prashansapkota
+syft
