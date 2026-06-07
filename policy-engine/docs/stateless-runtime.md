@@ -14,7 +14,7 @@ For each intervention-point evaluation, the host calls `Runtime::evaluate_interv
 6. Builds final policy input with annotation results inserted under the compatibility `annotations` field.
 7. Prepares the configured Rego policy invocation and calls the host-supplied `PolicyDispatcher`.
 8. Normalizes the policy result into a common verdict.
-9. Validates effects and, in `enforce` mode, applies policy-target-only effects for `allow` and `warn`.
+9. Validates any `transform` verdict and, in `enforce` mode, applies the replacement only when the decision is `transform`.
 
 The runtime never performs network I/O, reads policy bundles, calls models, executes tools, stores approvals, expires facts, or drives an async event loop. Operationally, request-scoped structs passed through the host call stack are still stateless; module-level/process-level mutable session registries, global current-session state, and hidden maps keyed by user/session/request are not.
 
@@ -46,7 +46,7 @@ Every manifest path has an explicit root and a small deterministic grammar: fiel
 | `policy_target` | `$snap`, `$`, `$.field` |
 | `tool_name_from` | `$snap`, `$`, `$.field` |
 | annotation `from` | preliminary `$pi`, `$policy_target`, `$tool`, `$snap`, `$`, `$.field` |
-| effect `path` | `$policy_target` only |
+| `transform.path` | `$policy_target` only |
 
 ## Annotators
 
@@ -66,13 +66,13 @@ Policies should return reasons from their own namespace. `runtime_error:*` is re
 
 ## Telemetry
 
-`Runtime::with_telemetry` accepts an optional `TelemetrySink`. The default constructor uses a no-op sink. Events use the stable kinds `decision`, `annotator_dispatch`, `policy_evaluation`, `evaluation_timing`, `effect_applied`, `annotator_failed`, and `policy_failed`. Events carry stable metadata such as intervention point, enforcement mode, policy id, annotator names, decision, reason code, error class, duration, effect count, and action identity when available. Policy target values, tool args/results, annotation values, model messages, secrets, and PII are not emitted.
+`Runtime::with_telemetry` accepts an optional `TelemetrySink`. The default constructor uses a no-op sink. Events use the stable kinds `decision`, `annotator_dispatch`, `policy_evaluation`, `evaluation_timing`, `intervention_point.transformed`, `annotator_failed`, and `policy_failed`. Events carry stable metadata such as intervention point, enforcement mode, policy id, annotator names, decision, reason code, error class, duration, transform status, and action identity when available. Policy target values, tool args/results, annotation values, model messages, transform replacement values, secrets, and PII are not emitted.
 
-## Effects and transformed policy targets
+## Transform verdicts and transformed policy targets
 
-When policy returns valid policy-target-only effects and the mode is `enforce`, `InterventionPointResult::transformed_policy_target` contains the changed policy target. The host is responsible for mapping it back into the model request, tool arguments, tool result, or final output it controls.
+`transform` is the only mutating verdict. When policy returns a valid `transform` verdict and the mode is `enforce`, `InterventionPointResult::transformed_policy_target` contains the changed policy target. The host is responsible for mapping it back into the model request, tool arguments, tool result, or final output it controls.
 
-In `evaluate_only`, effects are validated but not applied, so `transformed_policy_target` remains `None`.
+In `evaluate_only`, a `transform` verdict is validated but not applied, so `transformed_policy_target` remains `None`. `allow`, `warn`, `deny`, and `escalate` never mutate the policy target.
 
 ## Streaming and parallel tool calls
 

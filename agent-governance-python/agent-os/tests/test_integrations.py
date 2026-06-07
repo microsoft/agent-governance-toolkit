@@ -56,6 +56,15 @@ def _make_mock_chain(name="test-chain"):
     return chain
 
 
+async def _async_chunks(chunks):
+    for chunk in chunks:
+        yield chunk
+
+
+async def _collect_async(async_iterable):
+    return [chunk async for chunk in async_iterable]
+
+
 def _make_mock_crew():
     """Create a mock CrewAI crew."""
     crew = MagicMock()
@@ -924,11 +933,82 @@ class TestLangChainKernelWrap:
         chunks = list(governed.stream("go"))
         assert chunks == ["chunk-1", "chunk-2"]
 
+    def test_stream_increments_call_count(self):
+        chain = _make_mock_chain()
+        governed = LangChainKernel().wrap(chain)
+
+        list(governed.stream("go"))
+
+        assert governed._ctx.call_count == 1
+
+    def test_stream_blocks_after_max_tool_calls(self):
+        policy = GovernancePolicy(max_tool_calls=1)
+        chain = _make_mock_chain()
+        governed = LangChainKernel(policy).wrap(chain)
+
+        list(governed.stream("first"))
+
+        with pytest.raises(PolicyViolationError, match="Max tool calls"):
+            list(governed.stream("second"))
+
+    def test_stream_blocks_output_before_disclosure(self):
+        policy = GovernancePolicy(blocked_patterns=["secret"])
+        chain = _make_mock_chain()
+        chain.stream.return_value = iter(["safe chunk", "secret chunk"])
+        governed = LangChainKernel(policy).wrap(chain)
+
+        with pytest.raises(PolicyViolationError, match="Blocked pattern"):
+            list(governed.stream("go"))
+
+        chain.stream.assert_called_once_with("go")
+
     def test_stream_blocks_on_violation(self):
         policy = GovernancePolicy(blocked_patterns=["nope"])
         governed = LangChainKernel(policy).wrap(_make_mock_chain())
         with pytest.raises(PolicyViolationError):
             list(governed.stream("nope"))
+
+    async def test_astream_blocks_output_before_disclosure(self):
+        policy = GovernancePolicy(blocked_patterns=["secret"])
+        chain = _make_mock_chain()
+        chain.astream.return_value = _async_chunks(["safe chunk", "secret chunk"])
+        governed = LangChainKernel(policy).wrap(chain)
+
+        with pytest.raises(PolicyViolationError, match="Blocked pattern"):
+            await _collect_async(governed.astream("go"))
+
+        chain.astream.assert_called_once_with("go")
+
+    async def test_astream_transform_replays_redacted_chunks(self):
+        from types import SimpleNamespace
+
+        chain = _make_mock_chain()
+        chain.astream.return_value = _async_chunks(["secret", " stream"])
+        governed = LangChainKernel().wrap(chain)
+        governed._kernel.evaluate_output = MagicMock(
+            return_value=SimpleNamespace(
+                allowed=True,
+                transform=SimpleNamespace(value=["[REDACTED STREAM]"]),
+            )
+        )
+
+        assert await _collect_async(governed.astream("go")) == ["[REDACTED STREAM]"]
+
+    async def test_astream_events_rejects_non_event_transform(self):
+        from types import SimpleNamespace
+
+        chain = _make_mock_chain()
+        chain.astream_events.return_value = _async_chunks([{"event": "raw"}])
+        governed = LangChainKernel().wrap(chain)
+        governed._kernel.evaluate_output = MagicMock(
+            return_value=SimpleNamespace(
+                allowed=True,
+                transform=SimpleNamespace(value="[REDACTED]"),
+            )
+        )
+
+        with pytest.raises(PolicyViolationError, match="must return a list"):
+            await _collect_async(governed.astream_events("go"))
 
     def test_invoke_increments_call_count(self):
         chain = _make_mock_chain()
@@ -1150,6 +1230,61 @@ class TestOpenAIRunExecution:
         with pytest.raises(OpenAIPolicyViolationError) as excinfo:
             governed.run("thread_abc", instructions="hack the planet")
         assert excinfo.value.check_result.reason == "blocked_pattern_input"
+
+    def test_run_stream_blocks_output_before_disclosure(self):
+        policy = GovernancePolicy(blocked_patterns=["secret"])
+        kernel = OpenAIKernel(policy)
+        client = _make_mock_openai_client()
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__.return_value = iter(["safe event", "secret event"])
+        stream_ctx.__exit__.return_value = None
+        client.beta.threads.runs.stream.return_value = stream_ctx
+        governed = kernel.wrap_assistant(_make_mock_assistant(), client)
+
+        with pytest.raises(OpenAIPolicyViolationError, match="Blocked pattern"):
+            list(governed.run_stream("thread_abc"))
+
+        client.beta.threads.runs.stream.assert_called_once()
+
+    def test_run_stream_rejects_non_event_transform(self):
+        from types import SimpleNamespace
+
+        kernel = OpenAIKernel()
+        client = _make_mock_openai_client()
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__.return_value = iter(["raw event"])
+        stream_ctx.__exit__.return_value = None
+        client.beta.threads.runs.stream.return_value = stream_ctx
+        governed = kernel.wrap_assistant(_make_mock_assistant(), client)
+        kernel.evaluate_output = MagicMock(
+            return_value=SimpleNamespace(
+                allowed=True,
+                transform=SimpleNamespace(value="[REDACTED]"),
+            )
+        )
+
+        with pytest.raises(OpenAIPolicyViolationError, match="must return a list"):
+            list(governed.run_stream("thread_abc"))
+
+    def test_run_stream_accepts_event_list_transform(self):
+        from types import SimpleNamespace
+
+        kernel = OpenAIKernel()
+        client = _make_mock_openai_client()
+        stream_ctx = MagicMock()
+        stream_ctx.__enter__.return_value = iter(["raw event"])
+        stream_ctx.__exit__.return_value = None
+        client.beta.threads.runs.stream.return_value = stream_ctx
+        governed = kernel.wrap_assistant(_make_mock_assistant(), client)
+        transformed_event = MagicMock(name="transformed_event")
+        kernel.evaluate_output = MagicMock(
+            return_value=SimpleNamespace(
+                allowed=True,
+                transform=SimpleNamespace(value=[transformed_event]),
+            )
+        )
+
+        assert list(governed.run_stream("thread_abc")) == [transformed_event]
 
     def test_run_validates_tools_against_policy(self):
         policy = GovernancePolicy(allowed_tools=["code_interpreter"])
@@ -2066,6 +2201,33 @@ class _BudgetGatePolicy:
         return {"decision": "allow"}
 
 
+class _OutputBudgetGatePolicy:
+    """PolicyDispatcher that denies output once the snapshot budget reaches a limit."""
+
+    def __init__(self, limit: int):
+        self.limit = limit
+        self.invocations: list[dict] = []
+
+    def evaluate(self, invocation):
+        self.invocations.append(dict(invocation))
+        inp = invocation.get("input") or {}
+        if inp.get("intervention_point") != "output":
+            return {"decision": "allow"}
+        snapshot = inp.get("snapshot") if isinstance(inp, dict) else None
+        budgets = (
+            snapshot.get("envelope", {}).get("budgets", {})
+            if isinstance(snapshot, dict)
+            else {}
+        )
+        if int(budgets.get("tool_call_count", -1)) >= self.limit:
+            return {
+                "decision": "deny",
+                "reason": "budget_tool_calls_exceeded",
+                "message": "tool-call budget exceeded at output",
+            }
+        return {"decision": "allow"}
+
+
 _SCENARIO_MANIFEST = """agent_control_specification_version: 0.3.0-alpha-agt
 metadata:
   name: integration_scenarios
@@ -2286,6 +2448,39 @@ def _make_llama_engine(query_response="answer", chat_response="chat-answer"):
     return engine
 
 
+class _LlamaStreamResponse:
+    def __init__(self, chunks):
+        self.response_gen = iter(chunks)
+        self.metadata = {"source": "test"}
+
+
+class _ReadOnlyLlamaStreamResponse:
+    def __init__(self, chunks):
+        self._chunks = chunks
+        self.metadata = {"source": "test"}
+
+    @property
+    def response_gen(self):
+        return iter(self._chunks)
+
+    def print_response_stream(self):
+        for chunk in self.response_gen:
+            print(chunk, end="")
+
+    def leak_original_chunks(self):
+        return list(self.response_gen)
+
+
+class _AsyncMethodLlamaStreamResponse:
+    def __init__(self, chunks):
+        self._chunks = chunks
+        self.metadata = {"source": "test"}
+
+    async def async_response_gen(self):
+        for chunk in self._chunks:
+            yield chunk
+
+
 @_V5_BRIDGE_REQUIRED
 class TestLlamaIndexBridgeScenarios:
     """Verify LlamaIndexKernel routes through the AGT 5.0 ACS runtime."""
@@ -2417,6 +2612,329 @@ class TestLlamaIndexBridgeScenarios:
 
         # The result object's response attribute MUST be rewritten
         assert result.response == "[REDACTED OUTPUT]"
+
+    def test_retrieve_blocks_output_before_return(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {"decision": "deny", "reason": "retrieve_output_blocked"},  # output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        engine.retrieve.return_value = ["secret doc"]
+        governed = kernel.wrap(engine)
+
+        with pytest.raises(PolicyViolationError) as excinfo:
+            governed.retrieve("safe question")
+
+        assert excinfo.value.check_result.reason == "retrieve_output_blocked"
+        engine.retrieve.assert_called_once_with("safe question")
+
+    def test_retrieve_blocks_after_max_tool_calls(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # first input
+                {"decision": "allow"},  # first output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        kernel.policy.max_tool_calls = 1
+        engine = _make_llama_engine()
+        engine.retrieve.return_value = ["doc"]
+        governed = kernel.wrap(engine)
+
+        governed.retrieve("first")
+
+        with pytest.raises(PolicyViolationError, match="Tool call limit"):
+            governed.retrieve("second")
+
+        assert engine.retrieve.call_count == 1
+
+    def test_retrieve_allows_first_call_with_output_budget_policy(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        dispatcher = _OutputBudgetGatePolicy(limit=1)
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [],
+            dispatcher=dispatcher,
+        )
+        kernel = self._kernel(runtime)
+        kernel.policy.max_tool_calls = 1
+        engine = _make_llama_engine()
+        engine.retrieve.return_value = ["doc"]
+        governed = kernel.wrap(engine)
+
+        assert governed.retrieve("first") == ["doc"]
+
+        with pytest.raises(PolicyViolationError, match="Tool call limit"):
+            governed.retrieve("second")
+
+        assert engine.retrieve.call_count == 1
+        assert [
+            invocation["input"]["intervention_point"]
+            for invocation in dispatcher.invocations
+        ] == ["input", "output"]
+
+    def test_stream_chat_blocks_output_before_disclosure(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {"decision": "deny", "reason": "stream_output_blocked"},  # output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        engine.stream_chat.return_value = iter(["safe chunk", "secret chunk"])
+        governed = kernel.wrap(engine)
+
+        with pytest.raises(PolicyViolationError) as excinfo:
+            list(governed.stream_chat("stream please"))
+
+        assert excinfo.value.check_result.reason == "stream_output_blocked"
+        assert engine.stream_chat.call_args.args[0] == "stream please"
+        assert (
+            policy.invocations[0]["input"]["intervention_point"] == "input"
+        )
+        assert (
+            policy.invocations[1]["input"]["intervention_point"] == "output"
+        )
+
+    def test_stream_chat_blocks_after_max_tool_calls(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # first input
+                {"decision": "allow"},  # first output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        kernel.policy.max_tool_calls = 1
+        engine = _make_llama_engine()
+        engine.stream_chat.return_value = iter(["first"])
+        governed = kernel.wrap(engine)
+
+        list(governed.stream_chat("first"))
+
+        with pytest.raises(PolicyViolationError, match="Tool call limit"):
+            list(governed.stream_chat("second"))
+
+        assert engine.stream_chat.call_count == 1
+
+    def test_stream_chat_transform_returns_redacted_stream(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "stream_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED STREAM]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        engine.stream_chat.return_value = iter(["secret", " stream"])
+        governed = kernel.wrap(engine)
+
+        assert list(governed.stream_chat("stream please")) == ["[REDACTED STREAM]"]
+
+    def test_stream_chat_transform_preserves_response_gen_object_shape(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "stream_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED STREAM]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        stream_response = _LlamaStreamResponse(["secret", " stream"])
+        engine = _make_llama_engine()
+        engine.stream_chat.return_value = stream_response
+        governed = kernel.wrap(engine)
+
+        result = governed.stream_chat("stream please")
+
+        assert result is stream_response
+        assert result.metadata == {"source": "test"}
+        assert list(result.response_gen) == ["[REDACTED STREAM]"]
+
+    def test_stream_chat_transform_proxies_read_only_response_gen(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "stream_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED STREAM]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        stream_response = _ReadOnlyLlamaStreamResponse(["secret", " stream"])
+        engine = _make_llama_engine()
+        engine.stream_chat.return_value = stream_response
+        governed = kernel.wrap(engine)
+
+        result = governed.stream_chat("stream please")
+
+        assert result is not stream_response
+        assert result.metadata == {"source": "test"}
+        assert list(result.response_gen) == ["[REDACTED STREAM]"]
+
+    def test_stream_chat_transform_proxy_prints_redacted_stream(self, tmp_path, capsys):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "stream_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED STREAM]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        stream_response = _ReadOnlyLlamaStreamResponse(["secret", " stream"])
+        engine = _make_llama_engine()
+        engine.stream_chat.return_value = stream_response
+        governed = kernel.wrap(engine)
+
+        result = governed.stream_chat("stream please")
+        result.print_response_stream()
+
+        assert capsys.readouterr().out == "[REDACTED STREAM]"
+        with pytest.raises(AttributeError, match="unavailable"):
+            result.leak_original_chunks()
+
+    async def test_astream_chat_blocks_output_before_disclosure(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {"decision": "deny", "reason": "async_stream_output_blocked"},  # output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        engine.astream_chat.return_value = _async_chunks(["safe chunk", "secret chunk"])
+        governed = kernel.wrap(engine)
+
+        with pytest.raises(PolicyViolationError) as excinfo:
+            await _collect_async(await governed.astream_chat("stream please"))
+
+        assert excinfo.value.check_result.reason == "async_stream_output_blocked"
+        assert engine.astream_chat.call_args.args[0] == "stream please"
+
+    async def test_astream_chat_blocks_after_max_tool_calls(self, tmp_path):
+        from agent_os.integrations.llamaindex_adapter import PolicyViolationError
+
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # first input
+                {"decision": "allow"},  # first output
+            ],
+        )
+        kernel = self._kernel(runtime)
+        kernel.policy.max_tool_calls = 1
+        engine = _make_llama_engine()
+        engine.astream_chat.return_value = _async_chunks(["first"])
+        governed = kernel.wrap(engine)
+
+        await _collect_async(await governed.astream_chat("first"))
+
+        with pytest.raises(PolicyViolationError, match="Tool call limit"):
+            await _collect_async(await governed.astream_chat("second"))
+
+        assert engine.astream_chat.call_count == 1
+
+    async def test_astream_chat_transform_returns_redacted_async_stream(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "async_stream_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED ASYNC STREAM]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        engine = _make_llama_engine()
+        engine.astream_chat.return_value = _async_chunks(["secret", " stream"])
+        governed = kernel.wrap(engine)
+
+        stream = await governed.astream_chat("stream please")
+
+        assert await _collect_async(stream) == ["[REDACTED ASYNC STREAM]"]
+
+    async def test_astream_chat_transform_preserves_async_response_gen_method(self, tmp_path):
+        runtime, _policy = _build_scenario_runtime(
+            tmp_path,
+            [
+                {"decision": "allow"},  # input
+                {
+                    "decision": "transform",
+                    "reason": "async_stream_redaction",
+                    "transform": {
+                        "path": "$policy_target",
+                        "value": "[REDACTED ASYNC STREAM]",
+                    },
+                },
+            ],
+        )
+        kernel = self._kernel(runtime)
+        stream_response = _AsyncMethodLlamaStreamResponse(["secret", " stream"])
+        engine = _make_llama_engine()
+        engine.astream_chat.return_value = stream_response
+        governed = kernel.wrap(engine)
+
+        result = await governed.astream_chat("stream please")
+
+        assert result is stream_response
+        assert result.metadata == {"source": "test"}
+        assert await _collect_async(result.async_response_gen()) == [
+            "[REDACTED ASYNC STREAM]"
+        ]
 
 
 # ── Guardrails scenario coverage ─────────────────────────────────────
