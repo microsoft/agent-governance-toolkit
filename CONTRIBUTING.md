@@ -1,12 +1,13 @@
 # Contributing to Agent Governance Toolkit
 
-This project welcomes contributions and suggestions. Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+This project welcomes contributions and suggestions.
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide a
-CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+AGT is proposed for AAIF hosting in `aaif/project-proposals#19`. Until the
+contribution agreement is executed, the existing Microsoft CLA automation may
+still run on pull requests. After transfer, the LF/AAIF contribution process
+supersedes the Microsoft CLA. Do not describe the project as donated until TC
+approval, Governing Board approval, governance finalization, and contribution
+agreement execution are complete.
 
 ### Developer Certificate of Origin (DCO)
 
@@ -23,9 +24,9 @@ git commit -s -m "feat: add new policy engine"
 This adds a line like `Signed-off-by: Your Name <your.email@example.com>` to the commit message.
 A CI check will verify that all commits in a pull request include this trailer.
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+This project follows the [Code of Conduct](CODE_OF_CONDUCT.md). During AAIF
+contribution finalization, the reporting path is being aligned with LF/AAIF
+project policy.
 
 ## How to Contribute
 
@@ -137,7 +138,7 @@ term home for that language.
 | Tutorials, architecture, package docs | `docs/` |
 | Runnable framework integrations | `examples/` |
 | Interactive or live demos | `examples/demos/` |
-| Azure DevOps publishing/release automation | `.github/pipelines/` |
+| Release automation | `.github/workflows/` |
 | GitHub Actions, PR automation, templates | `.github/` |
 
 If a directory contains an `AGENTS.md` file, read it before you start. It captures local
@@ -213,6 +214,11 @@ Disclosure of AI tool usage is not required by default. Disclosure **is** requir
 
 In both cases, identify which parts of the submission fall into these categories so reviewers can
 adjust their review accordingly.
+
+Linux Foundation policy allows AI-generated contributions only when the
+contributor has the right to contribute the output under the project license and
+provides required attribution for any third-party material. Contributors remain
+responsible for validating generated code and explaining it during review.
 
 **Autonomous contributions are not accepted by default.** All contributions must have a responsible
 human who directed the work and can explain and defend it. The following autonomous agent behaviors
@@ -457,9 +463,9 @@ pytest tests/ -x -q
 > AI-only approvals and bot approvals do NOT satisfy this requirement.
 
 This policy is enforced by:
-1. **CODEOWNERS** — every file requires review from `@microsoft/agent-governance-toolkit`
-2. **`require-maintainer-approval.yml`** — CI check that blocks merge without human maintainer approval
-3. **Branch protection** — CODEOWNERS review required on `main`
+1. **CODEOWNERS** — every file requires review from the owners listed in `.github/CODEOWNERS`
+2. **Branch protection** — CODEOWNERS review is required on `main`
+3. **Human review policy** — AI-only approvals and bot approvals do not satisfy maintainer review
 
 **Why this policy exists:** PRs #357 and #362 were auto-merged without maintainer review and reintroduced a command injection vulnerability (`subprocess.run(shell=True)`) that had been fixed for MSRC Case 111178 just days earlier. AI code review agents did not catch the security regression.
 

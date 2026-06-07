@@ -40,13 +40,14 @@ Discussions. Meeting notes are posted publicly.
 
 ### 3. Intellectual Property Policy
 
-**License:** All code and documentation in this repository is licensed under the
-[MIT License](LICENSE).
+**License:** All code and documentation in this repository is currently licensed
+under the [MIT License](LICENSE). Any LF/AAIF-directed license transition must be
+handled explicitly and must not silently relicense existing contributions.
 
-**Contributions:** All contributors must agree to the
-[Microsoft CLA](https://cla.opensource.microsoft.com) before their first
-contribution can be merged. The CLA grants a perpetual, worldwide, non-exclusive,
-royalty-free license for the contribution.
+**Contributions:** Until the AAIF contribution agreement is executed, existing
+Microsoft CLA automation may remain in force. After transfer, the LF/AAIF
+contribution process supersedes the Microsoft CLA. The project also requires DCO
+sign-off unless the foundation process explicitly replaces it.
 
 **Inbound = Outbound:** Contributions are accepted under the same license as the
 project (MIT). No contributor may submit code under a more restrictive license.
@@ -67,9 +68,9 @@ Rust, Go) must pass conformance tests before release.
 
 ### 5. Trademark
 
-"Agent Governance Toolkit" and "AGT" are trademarks of Microsoft Corporation.
-Use of these marks in derivative works requires compliance with the
-[Microsoft Trademark Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks).
+"Agent Governance Toolkit" and "AGT" are currently Microsoft-origin marks.
+If the project is accepted into AAIF under these names, the marks and related
+project accounts must transfer through the LF/AAIF contribution process.
 
 ### 6. Amendments
 
@@ -79,8 +80,7 @@ Discussions. The voting thresholds in [GOVERNANCE.md](GOVERNANCE.md) apply.
 
 ### 7. Foundation Transition
 
-If the project is accepted into a foundation (e.g., the AI Alliance, Linux
-Foundation, or similar), this charter will be superseded by the foundation's
-technical charter template. The TSC will work with the foundation to ensure
-continuity of governance, maintainer rights, and contributor agreements during
-the transition.
+If the project is accepted into AAIF, this charter will be superseded by the
+foundation's technical charter template. The TSC will work with the foundation to
+ensure continuity of governance, maintainer rights, package ownership, security
+response, release authority, and contributor agreements during the transition.

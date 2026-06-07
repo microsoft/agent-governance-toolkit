@@ -28,7 +28,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/microsoft/agentmesh
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/agent-governance-toolkit
 
 jobs:
   build-push:

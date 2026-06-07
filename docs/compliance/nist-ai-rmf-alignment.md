@@ -181,13 +181,13 @@ diversity, expertise requirements, or contributor roles.
 | Component | File | Notes |
 |-----------|------|-------|
 | Contributing guide | `CONTRIBUTING.md` | Contribution process, DCO, PR workflow |
-| Code of conduct | `CODE_OF_CONDUCT.md` | Microsoft Open Source Code of Conduct |
+| Code of conduct | `CODE_OF_CONDUCT.md` | Repository Code of Conduct |
 | Community guide | `COMMUNITY.md` | Community structure, communication channels |
 | Security policy | `SECURITY.md` | Vulnerability reporting process |
 
 **How AGT addresses this subcategory:** Community documentation establishes
 contribution norms, inclusive conduct standards, and security reporting
-processes. The Microsoft Open Source Code of Conduct provides an organizational
+processes. The repository Code of Conduct provides an organizational
 commitment to diversity and inclusion.
 
 **Gaps:** No machine-readable role definitions, no expertise verification

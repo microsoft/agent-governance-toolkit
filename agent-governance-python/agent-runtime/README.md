@@ -14,7 +14,7 @@
 </div>
 
 > [!IMPORTANT]
-> **Public Preview** — The `agentmesh-runtime` package on PyPI is a Microsoft-signed
+> **Public Preview** — The `agentmesh-runtime` package on PyPI is a
 > public preview release. APIs may change before GA.
 
 ---

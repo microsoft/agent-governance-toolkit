@@ -22,7 +22,7 @@
 - [ ] I have added tests that prove my fix/feature works
 - [ ] All new and existing tests pass (pytest)
 - [ ] I have updated documentation as needed
-- [ ] I have signed the [Microsoft CLA](https://cla.opensource.microsoft.com/)
+- [ ] My commits include the required DCO sign-off
 
 ## Attribution & Prior Art
 <!-- REQUIRED for new features, integrations, or architectural patterns -->

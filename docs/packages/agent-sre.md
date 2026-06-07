@@ -12,7 +12,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-governance-python/agent-sre/)
 
 > [!IMPORTANT]
-> **Public Preview** — The `agent-sre` package on PyPI is a Microsoft-signed
+> **Public Preview** — The `agent-sre` package on PyPI is a
 > public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent SRE.

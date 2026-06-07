@@ -12,7 +12,8 @@ third-party's policies.
 
 ## Project Name
 
-"Agent Governance Toolkit" and "AGT" are used to identify this
-open-source project. If this project transitions to a foundation,
-trademark ownership and usage guidelines will be updated to reflect
-the foundation's trademark policy.
+"Agent Governance Toolkit" and "AGT" are currently Microsoft-origin project
+marks used to identify this open-source project. AGT is proposed for AAIF hosting
+in `aaif/project-proposals#19`. If the project is accepted under these names,
+the marks and related project accounts must transfer through the LF/AAIF
+contribution process and usage guidelines will follow LF/AAIF trademark policy.

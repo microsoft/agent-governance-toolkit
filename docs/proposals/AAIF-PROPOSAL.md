@@ -6,7 +6,7 @@
 **Requested Level:** Member Project
 **License:** MIT
 **Primary Contact:** Agent Governance Toolkit Team (agentgovtoolkit@microsoft.com)
-**Status:** 🟢 Ready for submission -- Public Preview shipped (v3.7.0). 5 SDK languages. 19 framework integrations. Microsoft-signed releases via ESRP.
+**Status:** 🟡 Submitted for AAIF Growth review as `aaif/project-proposals#19`; paperwork is in review and the contribution agreement is unsigned. Public Preview shipped (v3.7.0). 5 SDK languages. 19 framework integrations. Canonical releases are being moved to foundation-operable GitHub release workflows.
 
 ---
 
@@ -135,7 +135,7 @@ The toolkit is unique in providing **external, runtime, mandatory** governance:
 
 - **License:** MIT
 - **Code of Conduct:** Contributor Covenant v2.1 ([CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md))
-- **Contributing Guide:** [CONTRIBUTING.md](../../CONTRIBUTING.md) with CLA + DCO sign-off
+- **Contributing Guide:** [CONTRIBUTING.md](../../CONTRIBUTING.md) with DCO sign-off and transitional contribution-process guidance
 - **Governance:** [GOVERNANCE.md](../../GOVERNANCE.md) with decision-making matrix, succession planning, dispute resolution
 - **Technical Charter:** [CHARTER.md](../../CHARTER.md) covering TSC structure, IP policy, and foundation transition
 - **Security:** [SECURITY.md](../../SECURITY.md) with vulnerability reporting and threat model

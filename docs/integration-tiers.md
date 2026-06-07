@@ -75,7 +75,7 @@ services:
     image: your-agent:latest
     ports: ["8080:8080"]
   governance-sidecar:
-    image: ghcr.io/microsoft/agentmesh/governance:latest
+    image: ghcr.io/aaif/agent-governance-toolkit/governance:latest
     ports: ["8081:8081"]
     volumes:
       - ./policy.yaml:/app/policy.yaml

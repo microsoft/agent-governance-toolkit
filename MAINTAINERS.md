@@ -3,6 +3,8 @@
 This file lists the current maintainers of the Agent Governance Toolkit.
 For governance rules, decision-making process, and how to become a maintainer,
 see [GOVERNANCE.md](GOVERNANCE.md).
+For operational ownership, release authority, security response, and spec review
+authority, see [OWNERS.md](OWNERS.md).
 
 **Last updated:** May 2026
 
@@ -24,7 +26,9 @@ see [GOVERNANCE.md](GOVERNANCE.md).
 
 ## Package Maintainers
 
-Package maintainers have publish rights to one or more registries (PyPI, npm, NuGet, crates.io).
+Package maintainers currently have publish rights to one or more registries (PyPI,
+npm, NuGet, crates.io). As AGT finalizes AAIF contribution, canonical release
+authority moves to the release-manager role in [OWNERS.md](OWNERS.md).
 
 | Name | Organization | GitHub | Package(s) | Since |
 |------|-------------|--------|-----------|-------|

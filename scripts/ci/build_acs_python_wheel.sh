@@ -44,7 +44,7 @@ docker run --rm \
     cargo --version
     /opt/python/cp311-cp311/bin/python -m pip install --no-cache-dir --disable-pip-version-check \
       --require-hashes --no-deps \
-      -r /work/.github/pipelines/release-tools/release-tools.txt
+      -r /work/.github/release-tools/release-tools.txt
     rm -rf /work/policy-engine/sdk/python/dist
     mkdir -p /work/policy-engine/sdk/python/dist
     /opt/python/cp311-cp311/bin/python -m maturin build \

@@ -81,7 +81,7 @@ Tools, plugins, APIs, storage, and external services
 | STRIDE category | Example risk in AGT | Primary mitigations |
 |-----------------|---------------------|---------------------|
 | **Spoofing** | Malicious agent impersonates a trusted peer | AgentMesh Ed25519 identity, DID-style identities, challenge-response handshakes, trust scoring |
-| **Tampering** | Policies, audit logs, or artifacts are altered in transit or at rest | Agent OS policy interception, signed attestations, Merkle/hash-chain audit trails, ESRP-oriented publishing controls |
+| **Tampering** | Policies, audit logs, or artifacts are altered in transit or at rest | Agent OS policy interception, signed attestations, Merkle/hash-chain audit trails, SBOMs, and provenance attestations |
 | **Repudiation** | A user or agent denies having taken a high-risk action | Immutable audit trail, replay tooling, trust and approval metadata, SRE event correlation |
 | **Information Disclosure** | Agent leaks secrets, PII, or internal context through tools or messages | Capability scoping, MCP governance, VFS-style access control, prompt/content sanitization, least-privilege runtime boundaries |
 | **Denial of Service** | Cascading failures, expensive loops, or runaway agents | Agent SRE circuit breakers, error budgets, runtime kill switch, bounded execution rings, rate and token controls |

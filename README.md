@@ -32,7 +32,9 @@
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
 
 > [!IMPORTANT]
-> **Public Preview** -- production-quality, Microsoft-signed releases. May have breaking changes before GA.
+> **Public Preview** -- production-quality releases while AGT completes AAIF
+> contribution finalization. Package names and registries may change during the
+> transition; see [package migration](docs/package-migration.md).
 
 Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents. One `pip install`, any framework.
 
@@ -252,25 +254,34 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 ## Install
 
+AGT is proposed for AAIF hosting in `aaif/project-proposals#19`. The current
+package names below remain usable during the transition. The canonical package
+identity and compatibility plan are tracked in
+[`docs/package-migration.md`](docs/package-migration.md).
+
 | Language | Package | Command |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
-| **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) | `npm install @microsoft/agent-governance-sdk` |
-| **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) | `npx @microsoft/agent-governance-copilot-cli install` |
-| **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) | `claude --plugin-dir ./agent-governance-claude-code` |
-| **OpenCode** | [`@microsoft/agent-governance-opencode`](agent-governance-opencode/) | `npm install @microsoft/agent-governance-opencode` |
-| **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) | `dotnet add package Microsoft.AgentGovernance` |
-| **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
-| **Rust** | [`agent-governance`](https://crates.io/crates/agent-governance) | `cargo add agent-governance` |
+| **TypeScript** | [`@microsoft/agent-governance-sdk`](agent-governance-typescript/) compatibility package | `npm install @microsoft/agent-governance-sdk` |
+| **Copilot CLI** | [`@microsoft/agent-governance-copilot-cli`](agent-governance-copilot-cli/) compatibility package | `npx @microsoft/agent-governance-copilot-cli install` |
+| **Claude Code** | [`@microsoft/agent-governance-claude-code`](agent-governance-claude-code/) compatibility package | `claude --plugin-dir ./agent-governance-claude-code` |
+| **OpenCode** | [`@microsoft/agent-governance-opencode`](agent-governance-opencode/) compatibility package | `npm install @microsoft/agent-governance-opencode` |
+| **.NET** | [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) compatibility package | `dotnet add package Microsoft.AgentGovernance` |
+| **.NET MCP** | `Microsoft.AgentGovernance.Extensions.ModelContextProtocol` compatibility package | `dotnet add package Microsoft.AgentGovernance.Extensions.ModelContextProtocol` |
+| **Rust** | [`agentmesh`](https://crates.io/crates/agentmesh) | `cargo add agentmesh` |
+| **Rust MCP** | [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) | `cargo add agentmesh-mcp` |
 | **Go** | [`agent-governance-toolkit`](agent-governance-golang/) | `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang` |
 
 All five language SDKs implement core governance (policy, identity, trust, audit). Python has the full stack. Copilot CLI and Claude Code are first-party developer surfaces built on the TypeScript SDK.
 See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
-<summary><b>Python distributions (v4.0.0 — consolidated)</b></summary>
+<summary><b>Python distributions (v4.0.0 — consolidation target)</b></summary>
 
-As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
+The Python packaging target is to consolidate the historical package set into
+top-level distributions while retaining old names only as explicit compatibility
+stubs. See [`docs/package-migration.md`](docs/package-migration.md) for the
+authoritative package map and current migration status.
 
 | Distribution | PyPI | What's included |
 |--------------|------|-----------------|
@@ -280,7 +291,7 @@ As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
 | `agent-governance-toolkit-cli` | [`agent-governance-toolkit-cli`](https://pypi.org/project/agent-governance-toolkit-cli/) | `agt` CLI, OWASP verification, integrity checks, policy linting |
 | `agent-governance-toolkit[full]` | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Meta-package installing all of the above |
 
-Previous package names (`agent-os-kernel`, `agentmesh-platform`, `agentmesh-runtime`, `agent-sre`, `agent-discovery`, `agent-hypervisor`, `agentmesh-marketplace`, `agentmesh-lightning`) remain installable as stub packages that redirect to the consolidated distributions.
+Previous package names (`agent-os-kernel`, `agentmesh-platform`, `agentmesh-runtime`, `agent-sre`, `agent-discovery`, `agent-hypervisor`, `agentmesh-marketplace`, `agentmesh-lightning`) must remain installable only as documented compatibility stubs or deprecations. They should not ship duplicate source alongside the consolidated packages.
 
 </details>
 
@@ -411,7 +422,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 | [CHARTER.md](docs/CHARTER.md) | Technical charter (LF Projects format) |
 | [MAINTAINERS.md](MAINTAINERS.md) | Maintainers and organizations |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting and response SLAs |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Microsoft Open Source Code of Conduct |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community conduct expectations and reporting |
 | [ANTITRUST.md](ANTITRUST.md) | Competition law guidelines for participants |
 | [TRADEMARKS.md](TRADEMARKS.md) | Trademark usage policy |
 

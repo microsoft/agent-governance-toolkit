@@ -50,5 +50,5 @@ body:
     attributes:
       label: Code of Conduct
       options:
-        - label: I agree to follow the Microsoft Open Source Code of Conduct
+        - label: I agree to follow the project Code of Conduct
           required: true

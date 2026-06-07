@@ -9,7 +9,7 @@ integrating everything into CI/CD pipelines.
 
 > **Package:** `agent-compliance` (Python) · GitHub Actions workflows
 > **Formats:** SPDX JSON, CycloneDX JSON
-> **Signing:** Ed25519 (SDK), Sigstore (Python packages), ESRP (.NET packages)
+> **Signing:** Ed25519 (SDK), Sigstore/provenance attestations for packages, and registry-native release verification.
 
 ---
 
@@ -390,13 +390,13 @@ jobs:
 
 ### §5.2 .NET Package Signing
 
-For .NET packages, the toolkit supports ESRP-based signing:
+For .NET packages, use the foundation-approved signing and verification process:
 
 ```yaml
-# Sign NuGet packages (when ESRP is configured)
+# Verify NuGet packages after release
 - name: Sign NuGet package
   run: |
-    # ESRP signing (enterprise environments)
+    # Foundation release signing / verification
     # Authenticode sign the assembly
     # NuGet sign the package
     dotnet nuget verify dist/*.nupkg

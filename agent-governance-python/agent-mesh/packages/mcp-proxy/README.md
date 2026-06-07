@@ -1,7 +1,7 @@
 # 🛡️ AgentMesh MCP Proxy
 
 > [!IMPORTANT]
-> **Public Preview** — This npm package is a Microsoft-signed public preview release.
+> **Public Preview** — This npm package is a public preview release.
 > APIs may change before GA.
 
 > **Anthropic built the USB port. AgentMesh is the Firewall.**
