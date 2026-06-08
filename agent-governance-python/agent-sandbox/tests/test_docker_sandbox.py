@@ -413,6 +413,8 @@ def docker_provider():
         provider._evaluators = {}
         provider._session_configs = {}
         provider._exec_locks = {}
+        provider._ring_enforcers = {}  # (#2666)
+        provider._ring_breach_detectors = {}  # (#2666)
         provider._tool_proxy = None
         provider._network_proxy = None
         provider._state_manager = None

@@ -356,6 +356,8 @@ class DockerSandboxProvider(SandboxProvider):
         self._containers: dict[tuple[str, str], Any] = {}
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], SandboxConfig] = {}
+        self._ring_enforcers: dict[tuple[str, str], Any] = {}  # (#2666)
+        self._ring_breach_detectors: dict[tuple[str, str], Any] = {}  # (#2666)
         # Per-container exec lock — serialises ``run`` calls against the
         # same container so a timeout-on-exec-A cannot accidentally
         # disrupt exec-B running concurrently in the same container.
@@ -590,7 +592,36 @@ class DockerSandboxProvider(SandboxProvider):
                     f"Failed to initialize PolicyEvaluator: {exc}"
                 ) from exc
 
-        # 2. Create hardened container
+        # 2. Apply hypervisor ring constraints (#2666)
+        ring = getattr(cfg, 'ring', None)
+        if ring is not None:
+            try:
+                from hypervisor.rings.enforcer import RingEnforcer, ResourceType
+                from hypervisor.rings.breach_detector import RingBreachDetector
+                enforcer = RingEnforcer()
+                constraints = enforcer.get_constraints(ring)
+                # Override network and filesystem from ring constraints
+                cfg.network_enabled = constraints.network_allowed
+                if not constraints.filesystem_scope or constraints.filesystem_scope == 'none':
+                    cfg.read_only_fs = True
+                # Attach enforcer and breach detector to session state
+                self._ring_enforcers[(agent_id, session_id)] = enforcer
+                self._ring_breach_detectors[(agent_id, session_id)] = RingBreachDetector()
+                logger.info(
+                    'Ring %s applied for agent=%s session=%s '
+                    '(network=%s fs_scope=%s subprocess=%s)',
+                    ring, agent_id, session_id,
+                    constraints.network_allowed,
+                    constraints.filesystem_scope,
+                    constraints.subprocess_allowed,
+                )
+            except ImportError:
+                logger.warning(
+                    'agent-hypervisor not installed — ring enforcement skipped '
+                    'for agent=%s', agent_id
+                )
+
+        # 3. Create hardened container
         container = self._create_container(agent_id, session_id, cfg)
         with self._state_lock:
             self._containers[(agent_id, session_id)] = container
@@ -638,7 +669,30 @@ class DockerSandboxProvider(SandboxProvider):
                 )
 
         enforce_no_subprocess_execution(code)
-
+        # Ring subprocess gate (#2666)
+        ring_enforcer = self._ring_enforcers.get(key)
+        breach_detector = self._ring_breach_detectors.get(key)
+        cfg_ring = getattr(session_cfg, 'ring', None) if session_cfg else None
+        if ring_enforcer is not None and cfg_ring is not None:
+            try:
+                from hypervisor.rings.enforcer import ResourceType
+                from hypervisor.models import ExecutionRing
+                result_ring = ring_enforcer.check_resource(cfg_ring, ResourceType.SUBPROCESS)
+                if breach_detector is not None:
+                    breach_detector.record_call(
+                        agent_id, session_id, cfg_ring, ExecutionRing.RING_3_SANDBOX
+                    )
+                    if breach_detector.is_breaker_tripped(agent_id, session_id):
+                        raise PermissionError(
+                            f'Ring breach circuit-breaker tripped for agent {agent_id!r}'
+                        )
+                if not result_ring.allowed:
+                    raise PermissionError(
+                        f'Ring enforcement denied subprocess for agent {agent_id!r}: '
+                        + result_ring.reason
+                    )
+            except ImportError:
+                pass  # hypervisor not installed; ring gate already skipped at create_session
         # Run code with the session's configured timeout/env, not defaults.
         result = self.run(
             agent_id,
@@ -676,6 +730,8 @@ class DockerSandboxProvider(SandboxProvider):
             with self._state_lock:
                 self._evaluators.pop(key, None)
                 self._session_configs.pop(key, None)
+                self._ring_enforcers.pop(key, None)  # (#2666)
+                self._ring_breach_detectors.pop(key, None)  # (#2666)
             return
 
         stop_ok = False
@@ -711,6 +767,8 @@ class DockerSandboxProvider(SandboxProvider):
                 self._evaluators.pop(key, None)
                 self._session_configs.pop(key, None)
                 self._exec_locks.pop(key, None)
+                self._ring_enforcers.pop(key, None)  # (#2666)
+                self._ring_breach_detectors.pop(key, None)  # (#2666)
         else:
             # remove() failed: the container is still alive in Docker
             # somewhere. Keep the entry so a follow-up

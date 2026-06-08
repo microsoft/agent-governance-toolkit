@@ -291,6 +291,8 @@ class ACASandboxProvider(SandboxProvider):
         self._sandboxes: dict[tuple[str, str], Any] = {}
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], SandboxConfig] = {}
+        self._ring_enforcers: dict[tuple[str, str], Any] = {}  # (#2666)
+        self._ring_breach_detectors: dict[tuple[str, str], Any] = {}  # (#2666)
 
         self._available = False
         self._unavailable_reason: str | None = None
@@ -560,6 +562,36 @@ class ACASandboxProvider(SandboxProvider):
                     f"Failed to initialize PolicyEvaluator: {exc}"
                 ) from exc
 
+        # Apply hypervisor ring constraints (#2666)
+        ring = getattr(cfg, 'ring', None)
+        if ring is not None:
+            try:
+                from hypervisor.rings.enforcer import RingEnforcer, ResourceType
+                from hypervisor.rings.breach_detector import RingBreachDetector
+                _enforcer = RingEnforcer()
+                _constraints = _enforcer.get_constraints(ring)
+                # Ring 3 (sandbox): deny all network regardless of policy allowlist
+                if not _constraints.network_allowed:
+                    allow_hosts = []
+                    net_default = 'deny'
+                    cfg.network_enabled = False
+                # Store for execute_code gate
+                self._ring_enforcers[(agent_id, 'pending')] = _enforcer
+                self._ring_breach_detectors[(agent_id, 'pending')] = RingBreachDetector()
+                logger.info(
+                    'Ring %s applied for agent=%s '
+                    '(network=%s fs_scope=%s subprocess=%s)',
+                    ring, agent_id,
+                    _constraints.network_allowed,
+                    _constraints.filesystem_scope,
+                    _constraints.subprocess_allowed,
+                )
+            except ImportError:
+                logger.warning(
+                    'agent-hypervisor not installed — ring enforcement skipped '
+                    'for agent=%s', agent_id
+                )
+
         # Make sure the sandbox group exists (no-op unless requested).
         self._ensure_sandbox_group()
 
@@ -633,6 +665,11 @@ class ACASandboxProvider(SandboxProvider):
             self._session_configs[key] = cfg
             if evaluator is not None:
                 self._evaluators[key] = evaluator
+            # Move ring state from pending key to real session key (#2666)
+            _pending_key = (agent_id, 'pending')
+            if _pending_key in self._ring_enforcers:
+                self._ring_enforcers[key] = self._ring_enforcers.pop(_pending_key)
+                self._ring_breach_detectors[key] = self._ring_breach_detectors.pop(_pending_key)
 
         return SessionHandle(
             agent_id=agent_id,
@@ -674,10 +711,34 @@ class ACASandboxProvider(SandboxProvider):
 
         enforce_no_subprocess_execution(code)
 
-        # Run the code over the per-sandbox `exec` endpoint. We
-        # base64-encode the source so the body is opaque to the host
-        # shell and any code, including multi-line scripts and quotes,
-        # runs unmodified.
+        # Ring subprocess gate (#2666)
+        ring_enforcer = self._ring_enforcers.get(key)
+        breach_detector = self._ring_breach_detectors.get(key)
+        cfg_ring = getattr(session_cfg, 'ring', None)
+        if ring_enforcer is not None and cfg_ring is not None:
+            try:
+                from hypervisor.rings.enforcer import ResourceType
+                from hypervisor.models import ExecutionRing
+                result_ring = ring_enforcer.check_resource(cfg_ring, ResourceType.SUBPROCESS)
+                if breach_detector is not None:
+                    breach_detector.record_call(
+                        agent_id, session_id, cfg_ring, ExecutionRing.RING_3_SANDBOX
+                    )
+                    if breach_detector.is_breaker_tripped(agent_id, session_id):
+                        raise PermissionError(
+                            f'Ring breach circuit-breaker tripped for agent {agent_id!r}'
+                        )
+                if not result_ring.allowed:
+                    raise PermissionError(
+                        f'Ring enforcement denied subprocess for agent {agent_id!r}: '
+                        + result_ring.reason
+                    )
+            except ImportError:
+                pass  # hypervisor not installed; ring gate already skipped at create_session
+
+        # Run the code over the data-plane exec endpoint.  We base64-encode
+        # the source so the body is opaque to the host shell and any code,
+        # including multi-line scripts and quotes, runs unmodified.
         encoded = base64.b64encode(code.encode("utf-8")).decode("ascii")
         command = f"echo {encoded} | base64 -d | python3"
 
@@ -735,6 +796,8 @@ class ACASandboxProvider(SandboxProvider):
             sb_client = self._sandboxes.pop(key, None)
             self._evaluators.pop(key, None)
             self._session_configs.pop(key, None)
+            self._ring_enforcers.pop(key, None)  # (#2666)
+            self._ring_breach_detectors.pop(key, None)  # (#2666)
 
         if sb_client is None:
             return
