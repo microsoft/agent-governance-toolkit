@@ -773,3 +773,133 @@ class TestPackageReexports:
         assert agent_sandbox.HyperlightConfig is not None
         assert agent_sandbox.SnapshotHandle is not None
         assert "HyperLightSandboxProvider" in agent_sandbox.__all__
+
+
+# =========================================================================
+# 11. Ring enforcement
+# =========================================================================
+
+
+class _FakeConstraints:
+    def __init__(self, *, network_allowed: bool, subprocess_allowed: bool) -> None:
+        self.network_allowed = network_allowed
+        self.subprocess_allowed = subprocess_allowed
+
+
+class _FakeRingCheckResult:
+    def __init__(self, *, allowed: bool, reason: str = "") -> None:
+        self.allowed = allowed
+        self.reason = reason
+
+
+class _FakeRingEnforcer:
+    def check_resource(self, ring: Any, resource_type: Any) -> _FakeRingCheckResult:
+        if getattr(ring, "value", None) == 3:
+            return _FakeRingCheckResult(
+                allowed=False, reason="ring 3 disallows subprocess"
+            )
+        return _FakeRingCheckResult(allowed=True)
+
+
+def _install_fake_hypervisor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Any, Any]:
+    """Stub hypervisor.models and hypervisor.rings.enforcer in sys.modules.
+
+    Returns (ring_2, ring_3) objects that can be used as SandboxConfig.ring.
+    """
+    ring_2 = SimpleNamespace(value=2, name="RING_2_STANDARD")
+    ring_3 = SimpleNamespace(value=3, name="RING_3_SANDBOX")
+
+    constraints = {
+        ring_2: _FakeConstraints(network_allowed=True, subprocess_allowed=True),
+        ring_3: _FakeConstraints(network_allowed=False, subprocess_allowed=False),
+    }
+
+    models_mod = types.ModuleType("hypervisor.models")
+    models_mod.ExecutionRing = SimpleNamespace(  # type: ignore[attr-defined]
+        RING_2_STANDARD=ring_2,
+        RING_3_SANDBOX=ring_3,
+    )
+
+    enforcer_mod = types.ModuleType("hypervisor.rings.enforcer")
+    enforcer_mod.RING_CONSTRAINTS = constraints  # type: ignore[attr-defined]
+    enforcer_mod.RingEnforcer = _FakeRingEnforcer  # type: ignore[attr-defined]
+    enforcer_mod.ResourceType = SimpleNamespace(  # type: ignore[attr-defined]
+        SUBPROCESS="subprocess",
+    )
+
+    monkeypatch.setitem(sys.modules, "hypervisor", types.ModuleType("hypervisor"))
+    monkeypatch.setitem(
+        sys.modules, "hypervisor.rings", types.ModuleType("hypervisor.rings")
+    )
+    monkeypatch.setitem(sys.modules, "hypervisor.models", models_mod)
+    monkeypatch.setitem(sys.modules, "hypervisor.rings.enforcer", enforcer_mod)
+
+    return ring_2, ring_3
+
+
+class TestRingEnforcement:
+    """Ring-level constraint enforcement in HyperLightSandboxProvider."""
+
+    def test_ring3_clears_network_allowlist(self, fake_sdk, monkeypatch):
+        """RING_3 with a non-empty network_allowlist gets all domains cleared."""
+        _ring2, ring3 = _install_fake_hypervisor(monkeypatch)
+        from agent_sandbox.hyperlight_provider import HyperLightSandboxProvider
+
+        provider = HyperLightSandboxProvider()
+        policy = _make_policy(
+            network_allowlist=["api.example.com", "cdn.example.com"]
+        )
+        cfg = SandboxConfig(ring=ring3)
+        handle = provider.create_session("agent-r3", policy=policy, config=cfg)
+
+        sandbox = _FakeSandbox.instances[-1]
+        assert sandbox.allowed_domains == [], (
+            "RING_3 must clear the network allowlist; "
+            f"got {sandbox.allowed_domains}"
+        )
+
+    def test_ring2_preserves_network_allowlist(self, fake_sdk, monkeypatch):
+        """RING_2 leaves the network_allowlist intact."""
+        ring2, _ring3 = _install_fake_hypervisor(monkeypatch)
+        from agent_sandbox.hyperlight_provider import HyperLightSandboxProvider
+
+        provider = HyperLightSandboxProvider()
+        policy = _make_policy(network_allowlist=["api.example.com"])
+        cfg = SandboxConfig(ring=ring2)
+        handle = provider.create_session("agent-r2", policy=policy, config=cfg)
+
+        sandbox = _FakeSandbox.instances[-1]
+        assert "api.example.com" in sandbox.allowed_domains, (
+            "RING_2 must preserve the network allowlist; "
+            f"got {sandbox.allowed_domains}"
+        )
+
+    def test_ring3_execute_raises_permission_error(self, fake_sdk, monkeypatch):
+        """execute_code on a RING_3 session raises PermissionError."""
+        _ring2, ring3 = _install_fake_hypervisor(monkeypatch)
+        from agent_sandbox.hyperlight_provider import HyperLightSandboxProvider
+
+        provider = HyperLightSandboxProvider()
+        cfg = SandboxConfig(ring=ring3)
+        handle = provider.create_session("agent-r3-exec", config=cfg)
+
+        with pytest.raises(PermissionError, match="subprocess"):
+            provider.execute_code(
+                handle.agent_id, handle.session_id, "print('hello')"
+            )
+
+    def test_no_ring_no_enforcement(self, fake_sdk, monkeypatch):
+        """SandboxConfig with ring=None skips enforcement entirely."""
+        _ring2, ring3 = _install_fake_hypervisor(monkeypatch)
+        from agent_sandbox.hyperlight_provider import HyperLightSandboxProvider
+
+        provider = HyperLightSandboxProvider()
+        policy = _make_policy(network_allowlist=["api.example.com"])
+        cfg = SandboxConfig(ring=None)
+        handle = provider.create_session("agent-no-ring", policy=policy, config=cfg)
+
+        sandbox = _FakeSandbox.instances[-1]
+        # No ring enforcement → allowlist preserved as-is
+        assert "api.example.com" in sandbox.allowed_domains

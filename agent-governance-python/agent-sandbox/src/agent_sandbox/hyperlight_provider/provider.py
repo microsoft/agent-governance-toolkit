@@ -407,7 +407,7 @@ class HyperLightSandboxProvider(SandboxProvider):
                         base_cfg.ring.value,
                         agent_id,
                     )
-            net_allow = []
+                net_allow = []
 
         # Resolve tool callables. Names listed in the allowlist that the
         # provider does not know about fail closed at session creation

@@ -32,6 +32,16 @@ pip install "agt-sandbox[hyperlight]"
 pip install "agt-sandbox[azure,policy]"
 ```
 
+> **Ring enforcement note:** `agt-sandbox[full]` does not include the
+> `[hypervisor]` extra. To enable `SandboxConfig.ring`-based enforcement
+> (hypervisor ring constraints applied at session creation and
+> `execute_code` time), install with:
+> ```bash
+> pip install "agt-sandbox[full,hypervisor]"
+> ```
+> Without this extra, `SandboxConfig.ring` is accepted but the ring
+> enforcement code path is never entered.
+
 The Azure data-plane SDK ships as an early-access wheel — pin the URL:
 
 ```bash
