@@ -20,12 +20,24 @@ Default behaviour is warn-only (``::warning::`` annotations, exit 0). Pass
 Network: queries are limited to the Scorecard API plus the three fixed
 registry hosts (registry.npmjs.org, pypi.org, crates.io). Every resolved
 repository URL is validated against a strict ``https://github.com/<owner>/<repo>``
-regex before being embedded into the Scorecard API URL.
+regex before being embedded into the Scorecard API URL. HTTP redirects are
+NOT followed (defense-in-depth against a compromised registry redirecting
+the runner at an internal endpoint).
+
+Trust model: this check runs from the PR's own checkout under a
+``pull_request`` trigger with ``contents: read`` and no secrets. A malicious
+PR can no-op this script — the check is therefore advisory, and reviewers
+must inspect changes to this file and its workflow before approving.
+
+Privacy: every newly added dep name is queried against the public registry.
+For private repos, use ``--skip-pattern`` to exclude internal scopes (e.g.
+``--skip-pattern '^@myorg/'``) and avoid leaking internal package names.
 
 Usage:
     python scripts/check_dependency_scorecard.py \
         --base-ref origin/main --head-ref HEAD \
-        [--min-score 5.0] [--max-deps 50] [--strict]
+        [--min-score 5.0] [--max-deps 50] [--strict] \
+        [--skip-pattern '^@internal/']
 """
 
 from __future__ import annotations
@@ -163,13 +175,18 @@ def _read_blob(
 
 
 def parse_npm_direct_deps(text: str) -> set[str]:
-    """Direct dep names from a package.json (deps + devDeps)."""
+    """Direct dep names from a package.json.
+
+    Includes ``dependencies``, ``devDependencies``, and ``optionalDependencies``
+    — all three trigger install-time code execution via npm lifecycle scripts.
+    ``peerDependencies`` is intentionally excluded (not installed by npm).
+    """
     try:
         data = json.loads(text)
     except (json.JSONDecodeError, ValueError):
         return set()
     out: set[str] = set()
-    for section in ("dependencies", "devDependencies"):
+    for section in ("dependencies", "devDependencies", "optionalDependencies"):
         block = data.get(section) or {}
         if not isinstance(block, dict):
             continue
@@ -180,7 +197,14 @@ def parse_npm_direct_deps(text: str) -> set[str]:
 
 
 def parse_pyproject_direct_deps(text: str) -> set[str]:
-    """Direct dep names from a pyproject.toml (project + optional-deps)."""
+    """Direct dep names from a pyproject.toml.
+
+    Includes:
+      * ``[build-system].requires`` — executed by pip in a PEP 517 build env
+      * ``[project].dependencies`` and ``[project.optional-dependencies]``
+      * ``[dependency-groups]`` (PEP 735)
+      * ``[tool.poetry.dependencies]`` and ``[tool.poetry.group.*.dependencies]``
+    """
     if tomllib is None:  # pragma: no cover
         return set()
     try:
@@ -188,20 +212,55 @@ def parse_pyproject_direct_deps(text: str) -> set[str]:
     except (tomllib.TOMLDecodeError, ValueError):
         return set()
     out: set[str] = set()
+
+    # [build-system].requires — runs at install time via pip's build backend.
+    build_system = data.get("build-system") or {}
+    if isinstance(build_system, dict):
+        for entry in build_system.get("requires") or []:
+            name = _pep508_name(entry)
+            if name:
+                out.add(name)
+
     project = data.get("project") or {}
-    if not isinstance(project, dict):
-        return set()
-    for entry in project.get("dependencies") or []:
-        name = _pep508_name(entry)
-        if name:
-            out.add(name)
-    optional = project.get("optional-dependencies") or {}
-    if isinstance(optional, dict):
-        for group in optional.values():
+    if isinstance(project, dict):
+        for entry in project.get("dependencies") or []:
+            name = _pep508_name(entry)
+            if name:
+                out.add(name)
+        optional = project.get("optional-dependencies") or {}
+        if isinstance(optional, dict):
+            for group in optional.values():
+                for entry in group or []:
+                    name = _pep508_name(entry)
+                    if name:
+                        out.add(name)
+
+    # PEP 735 dependency groups.
+    dep_groups = data.get("dependency-groups") or {}
+    if isinstance(dep_groups, dict):
+        for group in dep_groups.values():
             for entry in group or []:
+                # Entries can be strings or {include-group = "..."} mappings;
+                # ignore the latter — it just references another group.
                 name = _pep508_name(entry)
                 if name:
                     out.add(name)
+
+    # Poetry-style sections (kept for parity with how some org repos pin).
+    tool = data.get("tool") or {}
+    poetry = tool.get("poetry") if isinstance(tool, dict) else None
+    if isinstance(poetry, dict):
+        for name in (poetry.get("dependencies") or {}).keys():
+            if isinstance(name, str) and name != "python" and PYPI_NAME_RE.match(name):
+                out.add(name)
+        groups = poetry.get("group") or {}
+        if isinstance(groups, dict):
+            for grp in groups.values():
+                if not isinstance(grp, dict):
+                    continue
+                for name in (grp.get("dependencies") or {}).keys():
+                    if isinstance(name, str) and PYPI_NAME_RE.match(name):
+                        out.add(name)
     return out
 
 
@@ -218,7 +277,13 @@ def _pep508_name(entry: Any) -> str | None:
 
 
 def parse_cargo_direct_deps(text: str) -> set[str]:
-    """Direct dep names from a Cargo.toml ([dependencies] + [dev-dependencies])."""
+    """Direct dep names from a Cargo.toml.
+
+    Includes ``[dependencies]``, ``[dev-dependencies]``, and
+    ``[build-dependencies]`` (the latter drives ``build.rs``, which compiles
+    and runs at build time). Also walks ``[target.<cfg>.dependencies]`` and
+    ``[target.<cfg>.build-dependencies]`` for cfg-gated entries.
+    """
     if tomllib is None:  # pragma: no cover
         return set()
     try:
@@ -226,14 +291,23 @@ def parse_cargo_direct_deps(text: str) -> set[str]:
     except (tomllib.TOMLDecodeError, ValueError):
         return set()
     out: set[str] = set()
-    for section in ("dependencies", "dev-dependencies"):
-        block = data.get(section) or {}
+    _collect_cargo_section(data, out)
+    targets = data.get("target") or {}
+    if isinstance(targets, dict):
+        for cfg in targets.values():
+            if isinstance(cfg, dict):
+                _collect_cargo_section(cfg, out)
+    return out
+
+
+def _collect_cargo_section(table: dict[str, Any], out: set[str]) -> None:
+    for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+        block = table.get(section) or {}
         if not isinstance(block, dict):
             continue
         for name in block.keys():
             if isinstance(name, str) and CRATE_NAME_RE.match(name):
                 out.add(name)
-    return out
 
 
 _PARSERS: dict[str, tuple[str, Callable[[str], set[str]]]] = {
@@ -302,21 +376,36 @@ def _http_get_json(
 
 
 def _default_opener(url: str) -> tuple[int, bytes]:
-    """urllib-based opener with size cap and HTTPS-only enforcement."""
+    """urllib-based opener with HTTPS-only enforcement and NO redirect following.
+
+    The four hosts this script talks to (registry.npmjs.org, pypi.org,
+    crates.io, api.securityscorecards.dev) do not require redirects for the
+    endpoints we use. Following redirects would let a compromise of any of
+    those hosts turn into a runner-side SSRF that bypasses the up-front
+    HTTPS / host check.
+    """
     parsed = urlparse(url)
     if parsed.scheme != "https":
         raise ValueError(f"refusing non-HTTPS URL: {url!r}")
     req = urllib.request.Request(
         url, headers={"Accept": "application/json", "User-Agent": "agt-scorecard-check/1"}
     )
+    opener = urllib.request.build_opener(_NoRedirectHandler())
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310 - HTTPS gated
+        with opener.open(req, timeout=15) as resp:  # noqa: S310 - HTTPS gated, no redirects
             body = resp.read(MAX_RESPONSE_BYTES + 1)
             if len(body) > MAX_RESPONSE_BYTES:
                 raise ValueError(f"response exceeded {MAX_RESPONSE_BYTES} bytes")
             return resp.status, body
     except urllib.error.HTTPError as e:
         return e.code, b""
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject every redirect; return the 3xx response as-is so callers see it."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401
+        return None
 
 
 def resolve_repo_url(
@@ -454,11 +543,23 @@ def score_deps(
     deps: Iterable[NewDep],
     min_score: float,
     opener: Callable[[str], tuple[int, bytes]] = _default_opener,
+    skip_patterns: Iterable[re.Pattern[str]] | None = None,
 ) -> list[ScoreResult]:
-    """Resolve and score every dep; never raises on per-dep network errors."""
+    """Resolve and score every dep; never raises on per-dep network errors.
+
+    Names matching any pattern in ``skip_patterns`` are recorded with
+    ``status="skipped"`` and never trigger a registry call — used to avoid
+    leaking internal package names to public registries.
+    """
+    patterns = list(skip_patterns or [])
     results: list[ScoreResult] = []
     for dep in deps:
         result = ScoreResult(dep=dep)
+        if any(p.search(dep.name) for p in patterns):
+            result.status = "skipped"
+            result.message = "matched --skip-pattern; not queried against public registry"
+            results.append(result)
+            continue
         try:
             repo_url = resolve_repo_url(dep, opener=opener)
         except Exception as exc:  # noqa: BLE001 - network/parse robustness
@@ -577,6 +678,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict", action="store_true",
         help="Exit non-zero if any new dep falls below the threshold.",
     )
+    p.add_argument(
+        "--skip-pattern", action="append", default=[], metavar="REGEX",
+        help=(
+            "Regex of package names to exclude from registry lookup. May be "
+            "given multiple times. Use to avoid leaking internal scoped "
+            "names (e.g. --skip-pattern '^@myorg/') to public registries."
+        ),
+    )
     return p
 
 
@@ -587,6 +696,11 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_USAGE
     if args.max_deps < 1:
         print("::error::--max-deps must be >= 1", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        skip_patterns = [re.compile(pat) for pat in args.skip_pattern]
+    except re.error as exc:
+        print(f"::error::invalid --skip-pattern regex: {exc}", file=sys.stderr)
         return EXIT_USAGE
     try:
         deps = compute_new_deps(args.base_ref, args.head_ref)
@@ -600,7 +714,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_OVERFLOW
-    results = score_deps(deps, args.min_score)
+    results = score_deps(deps, args.min_score, skip_patterns=skip_patterns)
     print(format_report(results, args.min_score))
     emit_annotations(results)
     if args.strict and any(r.status == "below" for r in results):

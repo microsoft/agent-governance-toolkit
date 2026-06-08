@@ -78,7 +78,13 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=50 origin "${BASE_REF}"
+          # Defense-in-depth: GitHub disallows branch names starting with '-'
+          # today, but pin the contract here so a future policy change cannot
+          # turn this into a `git fetch --upload-pack=...` style injection.
+          if ! [[ "$BASE_REF" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "$BASE_REF" == -* ]]; then
+            echo "::error::refusing unsafe BASE_REF: $BASE_REF"; exit 1
+          fi
+          git fetch --no-tags --depth=50 origin -- "$BASE_REF"
           python scripts/check_dependency_scorecard.py \
             --base-ref "origin/${BASE_REF}" \
             --head-ref "${HEAD_SHA}" \

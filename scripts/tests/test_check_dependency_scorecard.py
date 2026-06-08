@@ -528,7 +528,7 @@ def test_main_strict_exits_1_on_low_score(monkeypatch):
     dep = cds.NewDep("npm", "bad", "package.json")
     monkeypatch.setattr(cds, "compute_new_deps", lambda *a, **k: [dep])
 
-    def fake_score(deps, min_score, opener=None):
+    def fake_score(deps, min_score, opener=None, skip_patterns=None):
         return [
             cds.ScoreResult(
                 dep=dep, repo_url="https://github.com/o/bad",
@@ -546,7 +546,7 @@ def test_main_default_is_warn_only(monkeypatch):
     monkeypatch.setattr(cds, "compute_new_deps", lambda *a, **k: [dep])
     monkeypatch.setattr(
         cds, "score_deps",
-        lambda deps, min_score, opener=None: [
+        lambda deps, min_score, opener=None, skip_patterns=None: [
             cds.ScoreResult(dep=dep, status="below", score=1.0, message="low")
         ],
     )
@@ -584,7 +584,7 @@ def test_min_score_override_changes_threshold(monkeypatch):
     monkeypatch.setattr(cds, "compute_new_deps", lambda *a, **k: [dep])
     captured: dict[str, float] = {}
 
-    def fake_score(deps, min_score, opener=None):
+    def fake_score(deps, min_score, opener=None, skip_patterns=None):
         captured["min_score"] = min_score
         return [cds.ScoreResult(dep=dep, status="above", score=7.0, message="ok")]
 
@@ -592,3 +592,101 @@ def test_min_score_override_changes_threshold(monkeypatch):
     rc = cds.main(["--min-score", "7.5"])
     assert rc == cds.EXIT_OK
     assert captured["min_score"] == 7.5
+
+
+# ---------- Post-redteam coverage --------------------------------------------
+
+
+def test_npm_includes_optional_dependencies():
+    text = json.dumps(
+        {
+            "dependencies": {"a": "1"},
+            "devDependencies": {"b": "1"},
+            "optionalDependencies": {"c": "1"},
+            "peerDependencies": {"d": "1"},  # excluded by design
+        }
+    )
+    assert cds.parse_npm_direct_deps(text) == {"a", "b", "c"}
+
+
+def test_pyproject_includes_build_system_requires():
+    text = (
+        '[build-system]\n'
+        'requires = ["setuptools>=68", "wheel"]\n'
+        '[project]\nname = "x"\ndependencies = ["requests"]\n'
+    )
+    parsed = cds.parse_pyproject_direct_deps(text)
+    assert {"setuptools", "wheel", "requests"} <= parsed
+
+
+def test_pyproject_includes_pep735_dependency_groups():
+    text = (
+        '[project]\nname = "x"\n'
+        '[dependency-groups]\n'
+        'dev = ["pytest", "ruff"]\n'
+        'docs = ["mkdocs"]\n'
+    )
+    assert cds.parse_pyproject_direct_deps(text) == {"pytest", "ruff", "mkdocs"}
+
+
+def test_pyproject_includes_poetry_sections():
+    text = (
+        '[tool.poetry]\nname = "x"\n'
+        '[tool.poetry.dependencies]\n'
+        'python = "^3.11"\n'
+        'httpx = "^0.27"\n'
+        '[tool.poetry.group.dev.dependencies]\n'
+        'pytest = "^8.0"\n'
+    )
+    parsed = cds.parse_pyproject_direct_deps(text)
+    assert "httpx" in parsed
+    assert "pytest" in parsed
+    assert "python" not in parsed  # the language marker, not a package
+
+
+def test_cargo_includes_build_dependencies_and_target_tables():
+    text = (
+        '[dependencies]\nserde = "1"\n'
+        '[build-dependencies]\ncc = "1"\n'
+        '[target."cfg(unix)".dependencies]\nlibc = "0.2"\n'
+        '[target."cfg(windows)".build-dependencies]\nwinres = "0.1"\n'
+    )
+    parsed = cds.parse_cargo_direct_deps(text)
+    assert parsed == {"serde", "cc", "libc", "winres"}
+
+
+def test_no_redirect_handler_rejects_all_redirects():
+    handler = cds._NoRedirectHandler()
+    # urllib's contract: returning None tells urlopen NOT to follow the redirect.
+    assert handler.redirect_request(None, None, 302, "Found", {}, "https://evil/") is None
+    assert handler.redirect_request(None, None, 301, "Moved", {}, "https://x/") is None
+
+
+def test_skip_pattern_short_circuits_before_network():
+    http = FakeHttp({})  # any registry call would 404; we want NO call at all
+    dep = cds.NewDep("npm", "@internal/secret", "package.json")
+    pattern = [__import__("re").compile(r"^@internal/")]
+    results = cds.score_deps([dep], min_score=5.0, opener=http, skip_patterns=pattern)
+    assert results[0].status == "skipped"
+    assert "--skip-pattern" in results[0].message
+    assert http.calls == []  # never queried public registry
+
+
+def test_skip_pattern_does_not_match_unrelated_names():
+    http = _opener_for(
+        registry_payloads={
+            "https://registry.npmjs.org/public-pkg": {
+                "repository": {"url": "https://github.com/o/public-pkg"}
+            }
+        },
+        scorecards={"o/public-pkg": (200, {"score": 8.0})},
+    )
+    dep = cds.NewDep("npm", "public-pkg", "package.json")
+    pattern = [__import__("re").compile(r"^@internal/")]
+    results = cds.score_deps([dep], min_score=5.0, opener=http, skip_patterns=pattern)
+    assert results[0].status == "above"
+
+
+def test_main_rejects_invalid_skip_pattern_regex():
+    rc = cds.main(["--skip-pattern", "[unclosed"])
+    assert rc == cds.EXIT_USAGE
