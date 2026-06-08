@@ -25,8 +25,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-# Hard cap on rendered "added" entries to prevent DoS via a flood of new deps.
+# Hard caps to prevent DoS via a flood of new/changed deps. `added` is the
+# primary attack surface (transitive creep on a fork PR) but `removed` and
+# `bumped` are also bounded so a degenerate diff cannot bust GitHub's 65 KB
+# comment cap or run the renderer for minutes.
 DEFAULT_MAX_ADDED = 500
+DEFAULT_MAX_REMOVED = 500
+DEFAULT_MAX_BUMPED = 500
 
 # Hidden marker used by the workflow to find & update the existing PR comment.
 COMMENT_MARKER = "<!-- sbom-diff-bot -->"
@@ -71,9 +76,11 @@ class Package:
 def _sanitize_cell(value: str) -> str:
     """Make a string safe to embed inside a markdown table cell.
 
-    Hostile package names could otherwise inject pipes, backticks, HTML, or
-    control characters into the rendered PR comment (log-injection style).
-    Strip CR/LF/control chars, escape pipes and backticks, and cap length.
+    Hostile package names could otherwise inject pipes, backticks, HTML,
+    control characters, or @-mentions / #-references into the rendered PR
+    comment (log-injection / notification-spam style). Strip CR/LF/control
+    chars, escape pipes and backticks, HTML-encode angle brackets, neutralise
+    GitHub auto-link triggers (@ and #), and cap length.
     """
     if value is None:
         return "(empty)"
@@ -87,6 +94,11 @@ def _sanitize_cell(value: str) -> str:
     cleaned = cleaned.replace("\\", "\\\\").replace("|", "\\|").replace("`", "\\`")
     # Strip HTML tag openers so a name like `<script>` cannot break out.
     cleaned = cleaned.replace("<", "&lt;").replace(">", "&gt;")
+    # Defuse GitHub auto-links: bot comments would otherwise notify any
+    # @user/@org or link to #1234 if a hostile package name embeds them.
+    # NOTE: replace `#` BEFORE `@`. Replacing `@` first emits `&#64;`, whose
+    # `#` would then be clobbered by the subsequent `#` -> `&#35;` pass.
+    cleaned = cleaned.replace("#", "&#35;").replace("@", "&#64;")
     # Length cap protects the comment from giant single fields.
     if len(cleaned) > 200:
         cleaned = cleaned[:197] + "..."
@@ -184,6 +196,8 @@ class DiffResult:
     removed: list[Package]
     bumped: list[tuple[Package, Package]]  # (old, new) sharing ecosystem+name
     truncated_added: int = 0  # entries dropped due to max_added cap
+    truncated_removed: int = 0
+    truncated_bumped: int = 0
 
     @property
     def is_empty(self) -> bool:
@@ -194,10 +208,12 @@ def diff_sboms(
     base: set[Package],
     head: set[Package],
     max_added: int = DEFAULT_MAX_ADDED,
+    max_removed: int = DEFAULT_MAX_REMOVED,
+    max_bumped: int = DEFAULT_MAX_BUMPED,
 ) -> DiffResult:
     """Compute the added / removed / bumped diff between two package sets."""
-    if max_added < 0:
-        raise ValueError("max_added must be non-negative")
+    if max_added < 0 or max_removed < 0 or max_bumped < 0:
+        raise ValueError("caps must be non-negative")
     base_idx = _index_by_key(base)
     head_idx = _index_by_key(head)
 
@@ -228,12 +244,21 @@ def diff_sboms(
     removed.sort(key=lambda p: (p.ecosystem, p.name, p.version))
     bumped.sort(key=lambda pair: (pair[0].ecosystem, pair[0].name))
 
-    truncated = 0
-    if len(added) > max_added:
-        truncated = len(added) - max_added
-        added = added[:max_added]
+    truncated_added = max(0, len(added) - max_added)
+    truncated_removed = max(0, len(removed) - max_removed)
+    truncated_bumped = max(0, len(bumped) - max_bumped)
+    added = added[:max_added]
+    removed = removed[:max_removed]
+    bumped = bumped[:max_bumped]
 
-    return DiffResult(added=added, removed=removed, bumped=bumped, truncated_added=truncated)
+    return DiffResult(
+        added=added,
+        removed=removed,
+        bumped=bumped,
+        truncated_added=truncated_added,
+        truncated_removed=truncated_removed,
+        truncated_bumped=truncated_bumped,
+    )
 
 
 def _group_by_ecosystem(pkgs: Iterable[Package]) -> dict[str, list[Package]]:
@@ -298,6 +323,12 @@ def render_markdown(diff: DiffResult, base_ref: str, head_ref: str) -> str:
             for p in pkgs:
                 lines.append(f"| {_sanitize_cell(p.name)} | {_sanitize_cell(p.version)} |")
             lines.append("")
+        if diff.truncated_removed:
+            lines.append(
+                f"> ⚠️ Truncated {diff.truncated_removed} additional 'removed' entries "
+                f"(cap = {len(diff.removed)}). Inspect the workflow artifact for the full list."
+            )
+            lines.append("")
 
     if diff.bumped:
         lines.append("### 🔄 Bumped")
@@ -317,12 +348,33 @@ def render_markdown(diff: DiffResult, base_ref: str, head_ref: str) -> str:
                     f"| {_sanitize_cell(new.version)} |"
                 )
             lines.append("")
+        if diff.truncated_bumped:
+            lines.append(
+                f"> ⚠️ Truncated {diff.truncated_bumped} additional 'bumped' entries "
+                f"(cap = {len(diff.bumped)}). Inspect the workflow artifact for the full list."
+            )
+            lines.append("")
 
     lines.append("")
     return "\n".join(lines)
 
 
-def _load_sbom(path: Path) -> dict:
+# Hard ceiling on the on-disk SBOM size, in bytes, before we even attempt to
+# parse JSON. The trusted workflow downloads this artifact from an untrusted
+# producer; oversized blobs must fail fast rather than balloon Python memory.
+# 64 MiB is well above any realistic SBOM for this repo.
+DEFAULT_MAX_SBOM_BYTES = 64 * 1024 * 1024
+
+
+def _load_sbom(path: Path, max_bytes: int = DEFAULT_MAX_SBOM_BYTES) -> dict:
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise ValueError(f"Failed to stat SBOM at {path}: {exc}") from exc
+    if size > max_bytes:
+        raise ValueError(
+            f"SBOM at {path} is {size} bytes, exceeds cap of {max_bytes} bytes"
+        )
     try:
         with path.open("r", encoding="utf-8") as fh:
             data = json.load(fh)
@@ -340,13 +392,22 @@ def run(
     base_ref: str,
     head_ref: str,
     max_added: int = DEFAULT_MAX_ADDED,
+    max_removed: int = DEFAULT_MAX_REMOVED,
+    max_bumped: int = DEFAULT_MAX_BUMPED,
+    max_sbom_bytes: int = DEFAULT_MAX_SBOM_BYTES,
 ) -> DiffResult:
     """End-to-end: load both SBOMs, diff, write markdown to output_path."""
-    base_sbom = _load_sbom(base_path)
-    head_sbom = _load_sbom(head_path)
+    base_sbom = _load_sbom(base_path, max_bytes=max_sbom_bytes)
+    head_sbom = _load_sbom(head_path, max_bytes=max_sbom_bytes)
     base_pkgs = _extract_packages(base_sbom)
     head_pkgs = _extract_packages(head_sbom)
-    diff = diff_sboms(base_pkgs, head_pkgs, max_added=max_added)
+    diff = diff_sboms(
+        base_pkgs,
+        head_pkgs,
+        max_added=max_added,
+        max_removed=max_removed,
+        max_bumped=max_bumped,
+    )
     markdown = render_markdown(diff, base_ref=base_ref, head_ref=head_ref)
     output_path.write_text(markdown, encoding="utf-8")
     return diff
@@ -365,6 +426,24 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_MAX_ADDED,
         help=f"Cap on rendered 'added' entries (default: {DEFAULT_MAX_ADDED}).",
     )
+    p.add_argument(
+        "--max-removed",
+        type=int,
+        default=DEFAULT_MAX_REMOVED,
+        help=f"Cap on rendered 'removed' entries (default: {DEFAULT_MAX_REMOVED}).",
+    )
+    p.add_argument(
+        "--max-bumped",
+        type=int,
+        default=DEFAULT_MAX_BUMPED,
+        help=f"Cap on rendered 'bumped' entries (default: {DEFAULT_MAX_BUMPED}).",
+    )
+    p.add_argument(
+        "--max-sbom-bytes",
+        type=int,
+        default=DEFAULT_MAX_SBOM_BYTES,
+        help=f"Reject SBOMs larger than this (default: {DEFAULT_MAX_SBOM_BYTES} bytes).",
+    )
     return p.parse_args(argv)
 
 
@@ -378,6 +457,9 @@ def main(argv: list[str] | None = None) -> int:
             base_ref=args.base_ref,
             head_ref=args.head_ref,
             max_added=args.max_added,
+            max_removed=args.max_removed,
+            max_bumped=args.max_bumped,
+            max_sbom_bytes=args.max_sbom_bytes,
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -385,8 +467,10 @@ def main(argv: list[str] | None = None) -> int:
     summary = (
         f"sbom-diff: +{len(diff.added)} added "
         f"(truncated {diff.truncated_added}), "
-        f"-{len(diff.removed)} removed, "
-        f"~{len(diff.bumped)} bumped"
+        f"-{len(diff.removed)} removed "
+        f"(truncated {diff.truncated_removed}), "
+        f"~{len(diff.bumped)} bumped "
+        f"(truncated {diff.truncated_bumped})"
     )
     print(summary)
     return 0

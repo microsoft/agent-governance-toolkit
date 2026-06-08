@@ -17,6 +17,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from diff_sbom import (  # noqa: E402
     COMMENT_MARKER,
     DEFAULT_MAX_ADDED,
+    DEFAULT_MAX_BUMPED,
+    DEFAULT_MAX_REMOVED,
+    DEFAULT_MAX_SBOM_BYTES,
     Package,
     _extract_packages,
     _parse_purl,
@@ -116,6 +119,18 @@ def test_sanitize_caps_length():
 def test_sanitize_handles_empty():
     assert _sanitize_cell("") == "(empty)"
     assert _sanitize_cell(None) == "(empty)"  # type: ignore[arg-type]
+
+
+def test_sanitize_neutralizes_github_mentions():
+    # Hostile package name embedding @user / @org/team / #1234 must NOT survive
+    # as something that GitHub will render as a notification-spam link in the
+    # bot comment.
+    out = _sanitize_cell("@octocat please review #1 cc @org/team")
+    assert "@octocat" not in out
+    assert "@org/team" not in out
+    assert "#1" not in out
+    assert "&#64;" in out  # encoded @
+    assert "&#35;" in out  # encoded #
 
 
 # ----- _extract_packages ------------------------------------------------------
@@ -233,6 +248,25 @@ def test_diff_truncation_cap_zero():
 def test_diff_rejects_negative_cap():
     with pytest.raises(ValueError):
         diff_sboms(set(), set(), max_added=-1)
+    with pytest.raises(ValueError):
+        diff_sboms(set(), set(), max_removed=-1)
+    with pytest.raises(ValueError):
+        diff_sboms(set(), set(), max_bumped=-1)
+
+
+def test_diff_truncation_cap_removed():
+    base = {Package("npm", f"dep-{i:04d}", "1.0.0") for i in range(600)}
+    diff = diff_sboms(base, set(), max_removed=500)
+    assert len(diff.removed) == 500
+    assert diff.truncated_removed == 100
+
+
+def test_diff_truncation_cap_bumped():
+    base = {Package("npm", f"dep-{i:04d}", "1.0.0") for i in range(600)}
+    head = {Package("npm", f"dep-{i:04d}", "2.0.0") for i in range(600)}
+    diff = diff_sboms(base, head, max_bumped=500)
+    assert len(diff.bumped) == 500
+    assert diff.truncated_bumped == 100
 
 
 def test_diff_distinct_ecosystems_are_separate():
@@ -300,6 +334,21 @@ def test_render_shows_truncation_notice():
     assert "Truncated 40" in out
 
 
+def test_render_shows_truncation_notice_for_removed_and_bumped():
+    base = {Package("npm", f"old-{i:04d}", "1.0.0") for i in range(50)}
+    head = {Package("npm", f"new-{i:04d}", "1.0.0") for i in range(0)}
+    # 50 removed, cap to 10
+    diff = diff_sboms(base, head, max_removed=10)
+    out = render_markdown(diff, base_ref="main", head_ref="pr")
+    assert "Truncated 40 additional 'removed' entries" in out
+
+    base2 = {Package("npm", f"dep-{i:04d}", "1.0.0") for i in range(50)}
+    head2 = {Package("npm", f"dep-{i:04d}", "2.0.0") for i in range(50)}
+    diff2 = diff_sboms(base2, head2, max_bumped=10)
+    out2 = render_markdown(diff2, base_ref="main", head_ref="pr")
+    assert "Truncated 40 additional 'bumped' entries" in out2
+
+
 def test_render_bumped_section_has_from_to():
     base = {Package("npm", "foo", "1.0.0")}
     head = {Package("npm", "foo", "2.0.0")}
@@ -346,6 +395,29 @@ def test_run_rejects_non_object_root(tmp_path: Path):
         run(base_file, head_file, tmp_path / "out.md", base_ref="m", head_ref="p")
 
 
+def test_run_rejects_oversized_sbom(tmp_path: Path):
+    base_file = tmp_path / "base.json"
+    head_file = tmp_path / "head.json"
+    # Both files valid JSON; base is large enough to exceed a 1 KiB cap.
+    base_file.write_text(
+        json.dumps({"name": "x", "packages": [], "padding": "P" * 2048}),
+        encoding="utf-8",
+    )
+    head_file.write_text(json.dumps(_sbom([])), encoding="utf-8")
+    with pytest.raises(ValueError, match="exceeds cap"):
+        run(
+            base_file,
+            head_file,
+            tmp_path / "out.md",
+            base_ref="m",
+            head_ref="p",
+            max_sbom_bytes=1024,
+        )
+
+
 def test_default_cap_value():
     # Sanity check the documented default doesn't drift.
     assert DEFAULT_MAX_ADDED == 500
+    assert DEFAULT_MAX_REMOVED == 500
+    assert DEFAULT_MAX_BUMPED == 500
+    assert DEFAULT_MAX_SBOM_BYTES == 64 * 1024 * 1024

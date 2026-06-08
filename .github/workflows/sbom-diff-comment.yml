@@ -28,6 +28,13 @@ on:
 permissions:
   contents: read
 
+# Serialise comment runs per triggering PR head SHA. If a newer PR push
+# kicks off another `sbom-diff` run, we cancel the in-flight comment job so
+# it cannot overwrite the newer result with a stale comment.
+concurrency:
+  group: sbom-diff-comment-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
 jobs:
   comment:
     name: Post SBOM diff comment
@@ -85,19 +92,51 @@ jobs:
         id: resolve
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          # We deliberately do NOT trust anything inside `artifact/` for PR
-          # identity. The workflow_run payload's head_sha is authoritative —
-          # we look up which open PR(s) it belongs to via the GitHub API and
-          # take that PR's number, head ref, and base ref.
+          # PR identity MUST be derived from trusted GitHub state, not from
+          # anything inside `artifact/`. Two-step resolution:
+          #
+          #   1. Prefer `workflow_run.pull_requests` (populated for same-repo
+          #      PRs and includes the exact PR that triggered the run).
+          #   2. Fall back to `listPullRequestsAssociatedWithCommit` for fork
+          #      PRs where step 1 is empty.
+          #
+          # In BOTH cases we re-fetch the PR and require that its CURRENT
+          # head SHA still matches the workflow_run's head SHA. This blocks
+          # the stale-comment race where commit A's slow trusted run could
+          # otherwise overwrite the comment for the newer commit B.
           script: |
             const headSha = context.payload.workflow_run.head_sha;
             const { owner, repo } = context.repo;
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner, repo, commit_sha: headSha,
+            const wrPRs = context.payload.workflow_run.pull_requests || [];
+            let candidate = null;
+            if (wrPRs.length > 0) {
+              candidate = wrPRs[0];
+            } else {
+              const { data: assoc } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner, repo, commit_sha: headSha,
+              });
+              candidate = assoc.find(p => p.state === 'open') || null;
+            }
+            if (!candidate) {
+              core.warning(`No PR found for commit ${headSha}; nothing to comment on.`);
+              core.setOutput('found', 'false');
+              return;
+            }
+            // Re-fetch authoritative PR state and validate it's still on the
+            // SHA that triggered us. Closed PRs or moved heads => skip.
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo, pull_number: candidate.number,
             });
-            const pr = prs.find(p => p.state === 'open');
-            if (!pr) {
-              core.warning(`No open PR found for commit ${headSha}; nothing to comment on.`);
+            if (pr.state !== 'open') {
+              core.warning(`PR #${pr.number} is ${pr.state}; skipping.`);
+              core.setOutput('found', 'false');
+              return;
+            }
+            if (pr.head.sha !== headSha) {
+              core.warning(
+                `PR #${pr.number} head is now ${pr.head.sha}, but this run was ` +
+                `for ${headSha}; skipping to avoid stale comment.`
+              );
               core.setOutput('found', 'false');
               return;
             }
