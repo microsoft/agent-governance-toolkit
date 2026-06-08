@@ -1,0 +1,21 @@
+namespace AGT {
+	entity Agent = {
+		role: String
+	};
+	entity Resource = {};
+	action "ReadData" appliesTo {
+	  principal: [Agent],
+	  resource: [Resource],
+	  context: {}
+	};
+	action "Read" appliesTo {
+	  principal: [Agent],
+	  resource: [Resource],
+	  context: {}
+	};
+	action "Write" appliesTo {
+	  principal: [Agent],
+	  resource: [Resource],
+	  context: {}
+	};
+}
