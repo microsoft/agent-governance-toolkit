@@ -483,15 +483,10 @@ def _canonicalize_github_url(raw: str) -> str | None:
     # Strip git+ prefix and .git suffix; common on npm metadata.
     if candidate.startswith("git+"):
         candidate = candidate[4:]
-    # ssh form: git@github.com:owner/repo(.git)
+    # ssh form: git@github.com:owner/repo(.git) — parse via anchored regex.
     m = re.match(r"^git@github\.com:([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?$", candidate)
     if m:
         candidate = f"https://github.com/{m.group(1)}/{m.group(2)}"
-    # git:// or http:// → upgrade to https for matching only.
-    if candidate.startswith("git://github.com/"):
-        candidate = "https://github.com/" + candidate[len("git://github.com/"):]
-    if candidate.startswith("http://github.com/"):
-        candidate = "https://github.com/" + candidate[len("http://github.com/"):]
     if candidate.endswith(".git"):
         candidate = candidate[:-4]
 
@@ -499,10 +494,15 @@ def _canonicalize_github_url(raw: str) -> str | None:
         parsed = urlparse(candidate)
     except ValueError:
         return None
-    if parsed.scheme != "https" or parsed.netloc != "github.com":
+    # Accept the three schemes we know how to normalize; everything else out.
+    # Validation happens on parsed components — no substring matching on the
+    # raw URL (codeql py/incomplete-url-substring-sanitization).
+    if parsed.scheme not in ("https", "http", "git"):
         return None
-    # Reject any URL with extra path segments or traversal markers.
-    # github.com/<owner>/<repo>(/) is the ONLY accepted shape.
+    # netloc must be EXACTLY 'github.com' — rejects userinfo (user@host),
+    # ports (host:port), and any host-spoofing (github.com.evil.com).
+    if parsed.netloc != "github.com":
+        return None
     if ".." in parsed.path or "//" in parsed.path:
         return None
     parts = [p for p in parsed.path.split("/") if p]
@@ -511,6 +511,7 @@ def _canonicalize_github_url(raw: str) -> str | None:
     owner, repo = parts
     if owner in (".", "..") or repo in (".", ".."):
         return None
+    # Reconstruct from validated components — never echo raw input back.
     canonical = f"https://github.com/{owner}/{repo}"
     if not GITHUB_REPO_RE.match(canonical):
         return None
