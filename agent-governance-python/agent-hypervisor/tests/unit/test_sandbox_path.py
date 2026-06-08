@@ -12,15 +12,13 @@ calling ``shutil.which`` with that directory as the sole PATH.  This
 approach is portable (no Docker daemon required) and deterministic
 (independent of the host filesystem).
 
-To run a full end-to-end smoke test against the built container image::
+To run a full end-to-end smoke test against the built container image,
+use the ``python3`` exec form.  The image ships no shell (``/bin/sh``
+and ``/usr/bin/sh`` are removed during the build), so a ``sh -c`` wrapper
+would fail with "executable file not found"::
 
     docker build -f docker/Dockerfile.sandbox -t hypervisor-sandbox .
-    docker run --rm hypervisor-sandbox sh -c '
-        for cmd in curl wget nc bash perl ruby gcc; do
-            command -v "$cmd" && exit 1 || true
-        done
-        echo "All denied binaries absent — OK"
-    '
+    docker run --rm hypervisor-sandbox python3 -c "import shutil; assert all(shutil.which(c) is None for c in ['curl', 'wget', 'nc', 'bash', 'perl', 'ruby', 'gcc']); print('All denied binaries absent: OK')"
 
 Wired into the Ring-3 sandbox provider tests via the shared
 ``hypervisor.sandbox`` module imported in ``test_ring_enforcement.py``.
@@ -54,7 +52,7 @@ def simulated_sandbox_bin(tmp_path: Path) -> str:
     Each stub is a minimal shell script that is marked executable.  On
     Windows the stub is created with a ``.cmd`` extension so that
     ``shutil.which`` can locate it via PATHEXT; on Linux/macOS the
-    script has no extension.  The directory contains *only* those stubs —
+    script has no extension.  The directory contains *only* those stubs;
     no denied commands are present.
 
     Note: the sandbox image is Linux-only; Windows support here is for
@@ -94,7 +92,7 @@ def test_minimal_sandbox_path_is_curated_directory() -> None:
     forbidden_prefixes = ("/usr/bin", "/bin", "/sbin", "/usr/sbin", "/usr/local/bin")
     assert not MINIMAL_SANDBOX_PATH.startswith(forbidden_prefixes), (
         f"MINIMAL_SANDBOX_PATH ({MINIMAL_SANDBOX_PATH!r}) must not use a "
-        "standard system bin directory — use a curated directory instead."
+        "standard system bin directory; use a curated directory instead."
     )
 
 
@@ -192,7 +190,7 @@ def test_extra_binary_outside_allowed_is_not_resolvable(tmp_path: Path) -> None:
 
 def test_dockerfile_removes_denied_binaries_at_filesystem_level() -> None:
     """The Dockerfile must physically remove (``rm -f``) representative denied
-    binaries — network fetch tools and shells — rather than only dropping them
+    binaries (network fetch tools and shells) rather than only dropping them
     from PATH.
 
     A binary that is merely PATH-pinned could still be invoked by absolute
