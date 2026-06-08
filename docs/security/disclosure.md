@@ -1,32 +1,45 @@
 ---
 title: Reporting a Security Vulnerability
-last_reviewed: 2026-06-05
-owner: security-responders
+last_reviewed: 2026-05-22
+owner: agt-maintainers
 ---
 
 # Reporting a Security Vulnerability
 
 If you believe you have found a security vulnerability in Agent Governance
-Toolkit, **do not file a public GitHub issue**.
+Toolkit, **do not file a public GitHub issue**. The canonical reporting process
+is documented in the repository root file [SECURITY.md](../../SECURITY.md),
+which follows the Microsoft Security Response Center (MSRC) flow required for
+all Microsoft-owned open-source projects.
 
-Use the repository's GitHub Security tab to file a private vulnerability report.
-The canonical security policy lives in [SECURITY.md](../../SECURITY.md) so that
-GitHub can surface it in the repository security UI.
+In short:
 
-## What to include
-
-- Affected component or package
-- Affected version or commit
-- Reproduction steps
-- Expected and actual behavior
-- Potential impact
-- Suggested fix or mitigation, if known
+1. Report the vulnerability privately to MSRC at
+   [https://msrc.microsoft.com/create-report](https://msrc.microsoft.com/create-report).
+2. If you cannot use the portal, email
+   [secure@microsoft.com](mailto:secure@microsoft.com), preferably with a
+   PGP-encrypted message using the
+   [MSRC public PGP key](https://aka.ms/msrcpgpkey).
+3. Include the information requested by the
+   [reporting template](../../SECURITY.md#security-contact) so MSRC
+   can triage the report quickly.
 
 ## What to expect
 
-Security responders listed in [OWNERS.md](../../OWNERS.md) triage private reports.
-The project targets coordinated disclosure within 90 days for confirmed
-vulnerabilities, with faster handling for actively exploited issues.
+| Stage | Typical timeline |
+|-------|------------------|
+| Acknowledgement of receipt | Within 24 hours |
+| Initial assessment | Within 5 business days |
+| Mitigation and coordinated disclosure | Per MSRC policy and CVSS severity |
 
-AGT is proposed for AAIF hosting in `aaif/project-proposals#19`; as transfer
-finalizes, security response will align with LF/AAIF project policy.
+## Preferred languages
+
+English is preferred for all communications.
+
+## Policy
+
+Microsoft follows the principle of
+[Coordinated Vulnerability Disclosure](https://aka.ms/opensource/security/cvd).
+The full text of AGT's security policy lives in
+[SECURITY.md](../../SECURITY.md) at the repository root so that GitHub picks it
+up for the repository's Security tab.

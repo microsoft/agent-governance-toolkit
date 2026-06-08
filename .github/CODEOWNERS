@@ -1,37 +1,24 @@
-# CODEOWNERS — Default reviewers for Agent Governance Toolkit
+# CODEOWNERS — Default reviewers for microsoft/agent-governance-toolkit
 # See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 #
 # POLICY: Every PR from a non-member MUST be approved by a CODEOWNER.
 # No bypass. No AI-only approval. Human maintainer review required.
-# Role definitions live in OWNERS.md.
+# See: docs/CONTRIBUTING.md and .github/workflows/require-maintainer-approval.yml
 
 # Default owners for everything in the repo
-* @imran-siddique @jackbatzner @eltoncarr-ms @Knapp-Kevin @miyannishar @prashansapkota
-*.md                         @imran-siddique @jackbatzner @eltoncarr-ms @Knapp-Kevin @miyannishar @prashansapkota
+* @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar
 
 # Security-sensitive paths — require maintainer review, no exceptions
-/.github/                    @imran-siddique @jackbatzner @eltoncarr-ms
-/.github/workflows/publish*  @imran-siddique @jackbatzner @eltoncarr-ms
-/OWNERS.md                   @imran-siddique @jackbatzner @eltoncarr-ms @Knapp-Kevin @miyannishar @prashansapkota
+/.github/                    @imran-siddique @MohammadHaroonAbuomar
 
 # Infrastructure & container security — require maintainer review
-/scripts/                    @imran-siddique @eltoncarr-ms @prashansapkota
-**/Dockerfile                @imran-siddique @eltoncarr-ms @prashansapkota
-**/docker-compose*           @imran-siddique @eltoncarr-ms @prashansapkota
-/.dockerignore               @imran-siddique @eltoncarr-ms @prashansapkota
-/.clusterfuzzlite/           @imran-siddique @eltoncarr-ms @Knapp-Kevin
+/scripts/                    @imran-siddique @MohammadHaroonAbuomar
+**/Dockerfile                @imran-siddique @MohammadHaroonAbuomar
+**/docker-compose*           @imran-siddique @MohammadHaroonAbuomar
+/.dockerignore               @imran-siddique @MohammadHaroonAbuomar
+/.clusterfuzzlite/           @imran-siddique @MohammadHaroonAbuomar
 
 # Documentation
-/docs/                       @imran-siddique @jackbatzner @miyannishar
-/site/                       @imran-siddique @jackbatzner @miyannishar
-/docs/specs/                 @imran-siddique @Knapp-Kevin
-/docs/adr/                   @imran-siddique @Knapp-Kevin
-
-# Major implementation areas
-/policy-engine/              @imran-siddique @Knapp-Kevin
-/agent-governance-python/    @imran-siddique @jackbatzner @miyannishar
-/agent-governance-dotnet/    @eltoncarr-ms @jackbatzner
-/agent-governance-typescript/ @jackbatzner @miyannishar
-/agent-governance-rust/      @Knapp-Kevin @imran-siddique
-/agent-governance-golang/    @prashansapkota @imran-siddique
-/examples/                   @miyannishar @prashansapkota @Knapp-Kevin
+/docs/                       @imran-siddique @MohammadHaroonAbuomar
+/site/                       @imran-siddique @MohammadHaroonAbuomar
+*.md                         @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar

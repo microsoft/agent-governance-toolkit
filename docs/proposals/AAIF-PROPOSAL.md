@@ -1,169 +1,173 @@
 # AAIF Technical Project Proposal
 
-## Agent Governance Toolkit - Runtime Governance for Agentic AI
+## Agent Governance Toolkit — Runtime Governance for Agentic AI
 
-**Proposed by:** Microsoft (`microsoft/agent-governance-toolkit`)
-**Requested stage:** AAIF Growth review
+**Proposed by:** Microsoft (microsoft/agent-governance-toolkit)
+**Requested Level:** Member Project
 **License:** MIT
-**Primary contact:** Agent Governance Toolkit Team (`agentgovtoolkit@microsoft.com`)
-**Proposal state:** Submitted as `aaif/project-proposals#19`; the public issue is open, labeled `Growth`, `Paperwork-in-review`, and `contribution-agreement/unsigned`.
-
-AGT is proposed for AAIF hosting. Do not describe the project as donated until Technical Committee approval, Governing Board approval, governance finalization, and contribution agreement execution are complete.
+**Primary Contact:** Agent Governance Toolkit Team (agentgovtoolkit@microsoft.com)
+**Status:** 🟢 Ready for submission -- Public Preview shipped (v3.7.0). 5 SDK languages. 19 framework integrations. Microsoft-signed releases via ESRP.
 
 ---
 
-## 1. Project summary
+## 1. Project Summary
 
-Agent Governance Toolkit (AGT) is an open-source, multi-language runtime governance toolkit for agentic AI systems. It provides policy evaluation, identity and trust primitives, audit and observability patterns, MCP governance components, release provenance, and SDKs/integrations that help agent frameworks enforce organizational and safety policy before actions execute.
+The **Agent Governance Toolkit** is an open-source runtime governance framework for autonomous AI agents. It provides deterministic policy enforcement, zero-trust identity, execution sandboxing, and reliability engineering — the security infrastructure layer that agentic AI systems need for safe production deployment.
 
-AGT is framework-neutral: Microsoft integrations remain supported, but the canonical project scope is not tied to Microsoft Agent Framework, Microsoft security intake, Azure DevOps ESRP, or Microsoft-owned release infrastructure.
+Unlike prompt-level guardrails that filter inputs/outputs, this toolkit operates at the **kernel level** — intercepting every agent action and enforcing policy before execution. Agents cannot bypass governance because it is external, mandatory, and sits between the agent and its tools.
 
-## 2. Problem statement
+## 2. Problem Statement
 
-Agent frameworks can call tools, delegate tasks, spawn sub-agents, and take externally visible actions, but many production deployments still lack a consistent runtime control plane:
+AI agent frameworks (Microsoft Agent Framework, LangChain, CrewAI, Google ADK, OpenAI Agents SDK) enable agents to call tools, spawn sub-agents, and take real-world actions. However, none provide a comprehensive **runtime security model**:
 
-- policy decisions are often embedded in agent prompts or framework callbacks instead of an auditable policy path;
-- tool and MCP server access is difficult to govern consistently across frameworks;
-- agent identity, delegation, trust, and audit records are fragmented;
-- reliability controls such as SLOs, error budgets, circuit breakers, and replay are rarely designed for non-deterministic agent workflows;
-- package and deployment artifacts need provenance that foundation maintainers can operate without vendor-specific release systems.
+- **No policy enforcement** — Agents can call any tool with any arguments
+- **No identity verification** — Agents cannot prove who they are to each other
+- **No execution isolation** — A compromised agent can access everything
+- **No reliability engineering** — No SLOs, error budgets, or chaos testing for agents
 
-AGT addresses those gaps by supplying reusable governance components and release practices that can be embedded by runtimes, gateways, CLIs, SDKs, and framework adapters.
+The OWASP Agentic Top 10 codifies these risks. The Agent Governance Toolkit addresses 10 of 10.
 
-## 3. Repository scope
+## 3. Architecture
 
-AGT is a whole-repository donation candidate, not a core-only extraction. The repository includes:
-
-| Area | Path | Purpose |
-|---|---|---|
-| Python governance packages | `agent-governance-python/` | Agent OS, AgentMesh, compliance CLI, SRE, runtime, discovery, marketplace, integrations, and consolidated Python packages. |
-| Agent Control Specification | `policy-engine/` | Policy engine, ACS SDKs, generator, schemas, specs, and conformance assets. |
-| TypeScript SDK and tools | `agent-governance-typescript/`, `agent-governance-*cli/` | SDK, CLI governance integrations, and developer-tool packages. |
-| .NET SDK | `agent-governance-dotnet/` | `Microsoft.AgentGovernance*` compatibility packages and .NET integration surfaces. |
-| Rust SDK | `agent-governance-rust/` | `agentmesh` and `agentmesh-mcp` crates plus Rust governance APIs. |
-| Go SDK | `agent-governance-golang/` | Go module for AGT integrations. |
-| Docs, examples, demos | `docs/`, `examples/` | Architecture, package docs, security docs, tutorials, worked examples, and dashboards. |
-| Release and security automation | `.github/workflows/` | CI, release, SBOM, provenance, docs, and security gates. |
-
-## 4. Architecture
-
-AGT is organized as a layered governance stack. Individual deployments can adopt one layer or use the full toolkit.
-
-```text
-Agent / Framework / MCP Client
-        |
-        v
-Governance integration
-  - SDK middleware
-  - MCP proxy or server wrapper
-  - CLI/tooling adapter
-        |
-        v
-Core governance services
-  - policy evaluation
-  - identity and trust
-  - audit and receipt generation
-  - SLO, error-budget, and incident signals
-        |
-        v
-Protected tools, services, agents, and registries
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Agent Governance Toolkit                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌───────────────────┐      ┌───────────────────────────┐     │
+│   │   Agent OS Kernel │◄────►│     AgentMesh             │     │
+│   │                   │      │                           │     │
+│   │  Policy Engine    │      │  Zero-Trust Identity      │     │
+│   │  Capability Model │      │  Ed25519 / SPIFFE Certs   │     │
+│   │  Audit Logging    │      │  Trust Scoring (0-1000)   │     │
+│   │  Syscall Layer    │      │  A2A + MCP Protocol Bridge│     │
+│   └────────┬──────────┘      └─────────────┬─────────────┘     │
+│            │                               │                   │
+│            ▼                               ▼                   │
+│   ┌───────────────────┐      ┌───────────────────────────┐     │
+│   │ Agent Runtime     │      │     Agent SRE             │     │
+│   │                   │      │                           │     │
+│   │  Execution Rings  │      │  SLO Engine + Error Budget│     │
+│   │  Resource Limits  │      │  Replay & Chaos Testing   │     │
+│   │  Kill Switch      │      │  Circuit Breakers         │     │
+│   └───────────────────┘      └───────────────────────────┘     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-The current implementation includes:
+## 4. Packages
 
-- **Agent OS / policy evaluation:** deterministic action checks, policy templates, MCP governance paths, and audit patterns;
-- **AgentMesh:** agent identity, trust scoring, protocol bridges, registry patterns, and MCP/A2A/IATP integration points;
-- **Agent SRE:** SLOs, error budgets, cost guards, circuit breakers, progressive delivery, replay, and incident workflows;
-- **Agent Runtime / sandboxing:** runtime supervision and isolation surfaces where integrated;
-- **ACS:** policy schema, generator, SDKs, and conformance assets;
-- **SDKs and integrations:** Python, TypeScript, .NET, Rust, Go, and framework/tool adapters.
+| Package | Description | Tests |
+|---------|------------|-------|
+| **Agent OS** | Core governance kernel — policy engine, capability model, audit logging, syscall interception, MCP gateway | 700+ |
+| **AgentMesh** | Inter-agent trust — Ed25519 DID identity, SPIFFE/SVID credentials, trust scoring (0-1000), A2A/MCP/IATP protocol bridges | 1,600+ |
+| **Agent Runtime** | Execution isolation — 4-tier privilege rings, saga orchestration, kill switch, Shapley-value fault attribution | 326 |
+| **Agent SRE** | Reliability engineering — SLO engine, error budgets, chaos testing, progressive delivery, anomaly detection | 1,071+ |
+| **Agent Governance** | Unified installer, compliance documentation, OWASP mapping | 200+ |
 
-Security claims are scoped to calls routed through AGT integration points. Direct access outside the configured governance path still requires operator controls such as gateway, network, process, container, or sandbox policy.
+**Total: 3,900+ tests across 5 packages.**
 
-## 5. Package identity and release posture
+## 5. OWASP Agentic Top 10 Coverage
 
-The package identity source of truth is [`docs/package-migration.md`](../package-migration.md). The current repository is in a transition period: some package identities are already neutral, while others are Microsoft-origin compatibility names that must be transferred, aliased, or replaced through the AAIF/LF process.
+| Risk | ID | Coverage | Component |
+|------|----|----------|-----------|
+| Agent Hijacking | ASI-01 | ✅ Covered | Policy Engine — blocked patterns, content safety |
+| Tool Misuse | ASI-02 | ✅ Covered | Capability Sandbox — tool allow/deny, rate limits |
+| Insecure Identity | ASI-03 | ✅ Covered | AgentMesh — DID identity, IATP, SPIFFE certs |
+| Supply Chain | ASI-04 | ⚠️ Partial | Agent-SBOM planned |
+| Insecure Output | ASI-05 | ✅ Covered | Runtime — execution rings, output validation |
+| Memory & Context Poisoning | ASI-06 | ✅ Covered | VFS + CMVK (content-addressable memory) |
+| Insufficient Monitoring | ASI-07 | ✅ Covered | Agent SRE — SLOs, OTel export, anomaly detection |
+| Error Handling | ASI-08 | ✅ Covered | Circuit breakers, saga compensation, error budgets |
+| HITL Bypass | ASI-09 | ✅ Covered | Approval workflows, human-in-the-loop gates |
+| Uncontrolled Autonomy | ASI-10 | ✅ Covered | Kill switch, resource limits, goal drift detection |
 
-| Ecosystem | Current status |
-|---|---|
-| PyPI | Canonical `agent-governance-toolkit-*`, ACS, and policy packages are in the GitHub release matrix. Some legacy `agentmesh_*` package metadata remains as compatibility and is tracked in the migration map. |
-| npm | Current packages publish from `@microsoft/*` package manifests; `docs/package-migration.md` records target `@aaif/*` identities after foundation namespace setup. |
-| NuGet | Current packages are `Microsoft.AgentGovernance*`; neutral package IDs are documented as target identities before registry migration. |
-| crates.io | Rust crates are listed as canonical surfaces but need crates.io ownership transfer and release wiring. |
-| Go | Current module path is `github.com/microsoft/agent-governance-toolkit/agent-governance-golang`; a foundation module path is deferred until repository transfer. |
-| OCI | Container workflow uses owner-derived GHCR paths; `ghcr.io/microsoft/*` is compatibility-only if retained. |
+## 6. Framework Integrations
 
-Canonical releases are moving to GitHub Actions. Azure DevOps ESRP is not a canonical AGT release path. See [`docs/RELEASE.md`](../RELEASE.md) and [`docs/PUBLISHING.md`](../PUBLISHING.md).
+| Framework | Integration Type | Status |
+|-----------|-----------------|--------|
+| **Microsoft Agent Framework** | Native middleware (3 classes + MAFKernel) | ✅ Shipped, 18 tests |
+| **LangChain** | Callback handler + trust-verified tools | ✅ Shipped |
+| **CrewAI** | Trust-aware task delegation | ✅ Shipped |
+| **Google ADK** | GovernancePlugin (BasePlugin) | 📋 Proposed ([#4543](https://github.com/google/adk-python/issues/4543)) |
+| **OpenAI Agents SDK** | Published `agentmesh-openai-agents-trust` on PyPI | ✅ Shipped |
+| **Mastra** | `@agentmesh/mastra` npm package | ✅ Shipped, 19 tests |
+| **MCP** | MCP Kernel Server (stdio + HTTP) | ✅ Shipped, on npm + Glama |
+| **A2A Protocol** | A2A trust provider | ✅ Shipped |
 
-## 6. Governance
+## 7. Community Traction
 
-AGT uses public repository governance documents during AAIF contribution finalization:
+| Metric | Value |
+|--------|-------|
+| GitHub Stars | 82+ (across repos) |
+| GitHub Forks | 30+ |
+| 14-day Clones | 9,400+ |
+| PyPI Packages | 5 published |
+| npm Packages | 2 published |
+| External Contributors | 4+ |
+| Framework Integrations | 8 (shipped or proposed) |
 
-- [Governance](../../GOVERNANCE.md): maintainer roles, decision making, succession, conflicts, and release authority;
-- [Owners](../../OWNERS.md): operational authority for core, area, release, security, and spec roles;
-- [Maintainers](../../MAINTAINERS.md): current human maintainer roster;
-- [CODEOWNERS](../../.github/CODEOWNERS): per-area review routing, including non-Microsoft maintainers;
-- [Contributing](../../CONTRIBUTING.md): DCO sign-off, AI-assisted contribution rules, attribution, and transitional CLA guidance;
-- [Security policy](../../SECURITY.md): GitHub private vulnerability reporting, threat model, severity definitions, and intended-behavior boundaries;
-- [Technical charter](../../CHARTER.md): foundation-transition charter language;
-- [Trademarks](../../TRADEMARKS.md): Microsoft-origin marks pending LF/AAIF transfer or rebranding.
+### External Adoptions and Submissions
 
-The current maintainer roster has one project lead and five core maintainers, including three non-Microsoft maintainers. AAIF acceptance should still verify that non-Microsoft maintainers have actual repository permissions and a record of exercised review/merge authority, not only listed roles.
+- **Merged** into awesome-copilot (21.6K ⭐) — 3 PRs accepted
+- **Proposed** to OWASP Agentic Security Initiative (proposal #2)
+- **Proposed** to CoSAI WS4 Secure Design for Agentic Systems ([#42](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/issues/42))
+- **Proposed** to LF AI & Data ([lfai/proposing-projects #102](https://github.com/lfai/proposing-projects/pull/102))
+- **Integrated** with OpenLit observability ([openlit/openlit #1037](https://github.com/openlit/openlit/pull/1037))
 
-## 7. Adoption and community evidence
+## 8. Alignment with AAIF Mission
 
-Current public adoption evidence is tracked in [`docs/ADOPTERS.md`](../ADOPTERS.md).
+The Agent Governance Toolkit is **MCP-native** and directly addresses the safety and governance layer that the agentic AI ecosystem needs:
 
-The production table currently includes Microsoft internal use and Dayos. Additional organizations are listed as evaluation, pilot, or research users. If AAIF requires two independent non-donor production deployments before completing Growth acceptance, the project should either collect permission to cite another production adopter or present that as an explicit Growth-plan item rather than implying the evidence is already complete.
+1. **Complements MCP** — MCP defines how agents communicate with tools; we ensure agents operate within policy boundaries when using those tools
+2. **Complements AGENTS.md** — AGENTS.md describes agent capabilities; our capability model enforces what agents are actually allowed to do at runtime
+3. **Framework-neutral** — Works with Microsoft, Google, OpenAI, and open-source agent frameworks
+4. **Enterprise-grade** — Designed for production deployment with SLOs, audit trails, and compliance mapping
 
-Community signals include external contributors, framework proposals/integrations, docs and package consumers, and public issues/PRs, but the proposal should not treat proposals or pilots as equivalent to verified production deployments.
+### Differentiation
 
-## 8. Alignment with AAIF
+The toolkit is unique in providing **external, runtime, mandatory** governance:
+- **Not prompt-level** — Operates at the kernel level, not input/output filtering
+- **Not agent-self-governance** — External enforcement agents cannot bypass
+- **Not static analysis** — Runtime checks that catch goal drift, privilege escalation, and policy violations as they happen
 
-AGT aligns with AAIF by addressing runtime governance, security, identity, observability, and reliability for agentic systems:
+## 9. Project Governance
 
-1. **MCP complement:** MCP defines tool and server interaction patterns; AGT supplies policy, identity, audit, and governance controls around MCP usage.
-2. **AGENTS.md complement:** AGENTS.md describes agent instructions and capabilities; AGT helps enforce runtime authorization and policy around actual tool actions.
-3. **agentgateway complement:** gateways can route and mediate traffic; AGT supplies policy decisions, trust signals, and audit/provenance components that can integrate with gateway paths.
-4. **Framework neutrality:** AGT supports Microsoft-origin integrations and open-source framework integrations without making any single vendor the canonical control plane.
-5. **Security and reliability focus:** AGT combines policy enforcement, provenance, SBOMs, SLOs, incident signals, and conformance-oriented specs.
+- **License:** MIT
+- **Code of Conduct:** Contributor Covenant v2.1 ([CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md))
+- **Contributing Guide:** [CONTRIBUTING.md](../../CONTRIBUTING.md) with CLA + DCO sign-off
+- **Governance:** [GOVERNANCE.md](../../GOVERNANCE.md) with decision-making matrix, succession planning, dispute resolution
+- **Technical Charter:** [CHARTER.md](../../CHARTER.md) covering TSC structure, IP policy, and foundation transition
+- **Security:** [SECURITY.md](../../SECURITY.md) with vulnerability reporting and threat model
+- **Maintainers:** [MAINTAINERS.md](../../MAINTAINERS.md) with 5 core maintainers (3 non-Microsoft)
+- **CODEOWNERS:** [.github/CODEOWNERS](../../.github/CODEOWNERS) with per-SDK maintainer ownership
+- **Competition Law:** [ANTITRUST.md](../../ANTITRUST.md) with participant guidelines
+- **Trademarks:** [TRADEMARKS.md](../../TRADEMARKS.md) with usage guidelines
+- **CI/CD:** GitHub Actions, branch protection, automated testing, CodeQL, OpenSSF Scorecard
 
-## 9. Specification and conformance process
+## 10. Proposed Roadmap Under AAIF
 
-AGT includes normative and implementation guidance in `docs/specs/`, `docs/adr/`, and `policy-engine/`. The public process for spec and conformance changes is documented in [`docs/specs/PROCESS.md`](../specs/PROCESS.md).
+### Phase 1: Member Project Onboarding
+- Transfer repository or establish mirror under AAIF org
+- Complete ASI-04 (Supply Chain) coverage with Agent-SBOM
+- Formalize governance policy schema as an open specification
+- Publish integration guides for all major agent frameworks
 
-Changes that alter observable policy, trust, audit, receipt, protocol, SDK-conformance, or security behavior should include compatibility, security, and conformance impact. This is intended to make AGT useful not only as code, but as a foundation-governed specification and conformance surface.
+### Phase 2: Supported Project
+- Multi-language support maturity (Python + TypeScript + .NET + Rust + Go)
+- Formal verification of policy engine
+- Cross-framework governance policy portability standard
+- Reference implementations for AAIF member organizations
 
-## 10. Proposed Growth-stage roadmap
-
-### Phase 1: Contribution finalization
-
-- Complete AAIF TC/GB review and contribution-agreement execution.
-- Finalize the asset schedule for repository, trademarks, package accounts, docs site, registry credentials, and release environments.
-- Confirm LF/AAIF contribution process and replace transitional Microsoft CLA routing where required.
-- Verify actual maintainer permissions and release-manager authority across organizations.
-
-### Phase 2: Foundation-operable releases
-
-- Run dry-run package releases and review `release-manifest.json`.
-- Configure foundation-owned PyPI trusted publishers, npm namespace/token strategy, NuGet ownership, crates.io owners, GHCR namespace, and Go module migration plan.
-- Keep Microsoft-origin package names only as compatibility packages or documented aliases where needed.
-- Publish SBOMs, provenance, and verification guidance for each canonical release.
-
-### Phase 3: Growth execution
-
-- Convert additional pilot/evaluation users into permissioned production adoption evidence.
-- Finish release wiring for Rust, Go, and ACS secondary npm/NuGet/crate packages that are currently pack-only or manual.
-- Expand conformance tests for ACS, MCP governance, policy evaluation, and SDK behavior.
-- Mature spec/change governance toward Impact-stage expectations.
+### Phase 3: Managed Project
+- Industry-standard governance policy format (like OPA/Rego for agents)
+- Certification program for governance-compliant agent frameworks
+- Integration with cloud-native security tooling (Falco, OPA, SPIFFE)
 
 ## 11. References
 
 - **Repository:** [microsoft/agent-governance-toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- **AAIF proposal issue:** `aaif/project-proposals#19`
-- **Release process:** [`docs/RELEASE.md`](../RELEASE.md)
-- **Publishing model:** [`docs/PUBLISHING.md`](../PUBLISHING.md)
-- **Package migration map:** [`docs/package-migration.md`](../package-migration.md)
-- **Adopters:** [`docs/ADOPTERS.md`](../ADOPTERS.md)
-- **Security policy:** [`SECURITY.md`](../../SECURITY.md)
-- **Spec process:** [`docs/specs/PROCESS.md`](../specs/PROCESS.md)
+- **PyPI:** [ai-agent-governance](https://pypi.org/project/ai-agent-governance/)
+- **npm:** [agentos-mcp-server](https://www.npmjs.com/package/agentos-mcp-server)
+- **OWASP Compliance:** [OWASP-COMPLIANCE.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/compliance/owasp-agentic-top10-architecture.md)
+- **MAF Integration:** [microsoft/agent-framework #4440](https://github.com/microsoft/agent-framework/issues/4440)

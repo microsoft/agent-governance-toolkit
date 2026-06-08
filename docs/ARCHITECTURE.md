@@ -6,24 +6,6 @@ The Agent Governance Toolkit provides **deterministic application-layer intercep
 
 Each major component has a formal RFC 2119 specification with conformance tests. See [Specifications](specs/) for the full list.
 
-## Implementation status
-
-AGT is proposed for AAIF hosting in `aaif/project-proposals#19`. Architecture
-pages use these status labels:
-
-| Status | Meaning |
-|---|---|
-| Shipped | Released in a current package and covered by package-local validation or conformance tests. |
-| Experimental | Runnable but not guaranteed stable. |
-| Proposed | ADR/RFC/spec exists but implementation is not a shipped guarantee. |
-| Example | Demonstrates a pattern; not a supported product surface. |
-| Vendor integration | Requires a vendor product, account, or platform. |
-| Compatibility | Legacy package or integration retained temporarily for users. |
-
-Claims such as "every agent action" or "fail closed" apply only to actions routed
-through an AGT integration point. Deployments must combine AGT with network,
-sandbox, or platform controls when agents can bypass that integration point.
-
 ## Video Walkthrough Series
 
 Community video series covering the toolkit architecture:
@@ -101,8 +83,7 @@ Community video series covering the toolkit architecture:
 | Audit and Compliance | [AUDIT-COMPLIANCE-1.0](specs/AUDIT-COMPLIANCE-1.0.md) |
 | AgentMesh Wire Protocol | [AGENTMESH-WIRE-1.0](specs/AGENTMESH-WIRE-1.0.md) |
 
-Design rationale is documented in [Architecture Decision Records](adr/).
-Normative changes follow the [Specification Change Process](specs/PROCESS.md).
+Design rationale is documented in [25 Architecture Decision Records](adr/).
 
 ## Security Model & Boundaries
 

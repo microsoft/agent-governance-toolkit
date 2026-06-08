@@ -13,13 +13,7 @@ This document describes the governance model for the Agent Governance Toolkit pr
 
 ### Contributor
 
-Anyone who submits a pull request, files an issue, or participates in discussions. Contributors agree to the project's [Code of Conduct](CODE_OF_CONDUCT.md) and follow the contribution requirements in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-AGT is proposed for AAIF hosting in `aaif/project-proposals#19`. Until the
-contribution agreement is executed, the existing Microsoft CLA check may remain
-part of the contribution workflow. After transfer, the LF/AAIF contribution
-process supersedes the Microsoft CLA. DCO sign-off remains required unless the
-foundation process explicitly replaces it.
+Anyone who submits a pull request, files an issue, or participates in discussions. Contributors agree to the project's [Code of Conduct](CODE_OF_CONDUCT.md) and sign the [Contributor License Agreement](https://cla.opensource.microsoft.com).
 
 ### Reviewer
 
@@ -39,14 +33,9 @@ The project lead sets overall technical direction, resolves disputes when consen
 
 ## Current Maintainers
 
-See [MAINTAINERS.md](MAINTAINERS.md) for the current maintainer roster and
-[OWNERS.md](OWNERS.md) for operational authority, area ownership, release
-management, security response, and spec review responsibility.
+See [MAINTAINERS.md](MAINTAINERS.md) for the full list of current maintainers, their areas of ownership, and affiliation details.
 
-We are actively working to grow maintainer authority across organizations. If you
-are interested in becoming a maintainer, start by contributing and engaging with
-the project. Code ownership areas are defined in [CODEOWNERS](.github/CODEOWNERS)
-and explained in [OWNERS.md](OWNERS.md).
+We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Code ownership areas are defined in [CODEOWNERS](.github/CODEOWNERS).
 
 ## Decision-Making
 
@@ -101,11 +90,7 @@ the relevant GitHub Issue or PR.
 
 ## Releases
 
-Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can
-propose a release. Canonical releases are approved by release managers listed in
-[OWNERS.md](OWNERS.md) and executed through the public release process documented
-in [RELEASE.md](docs/RELEASE.md). Microsoft ESRP is not a canonical AGT release
-path.
+Releases follow [Semantic Versioning](https://semver.org/). Any maintainer can propose a release. The release process is documented in [RELEASE.md](docs/RELEASE.md) and automated via GitHub Actions with trusted publishing and SLSA build provenance.
 
 ## Project Charter
 
@@ -113,9 +98,7 @@ The project operates under the [Technical Charter](CHARTER.md), which defines th
 
 ## Code of Conduct
 
-All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
-During AAIF contribution finalization, the project is aligning its reporting path
-with LF/AAIF project policy.
+All participants are expected to follow the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). Violations can be reported to [opencode@microsoft.com](mailto:opencode@microsoft.com).
 
 ## Security
 

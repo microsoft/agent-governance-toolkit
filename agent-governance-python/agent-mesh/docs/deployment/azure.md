@@ -61,19 +61,19 @@ All AgentMesh container images are published to GitHub Container Registry (GHCR)
 
 | Component | Image | Port |
 |-----------|-------|------|
-| Trust Engine | `ghcr.io/aaif/agent-governance-toolkit/trust-engine` | 8443 |
-| Policy Server | `ghcr.io/aaif/agent-governance-toolkit/policy-server` | 8444 |
-| Audit Collector | `ghcr.io/aaif/agent-governance-toolkit/audit-collector` | 8445 |
-| API Gateway | `ghcr.io/aaif/agent-governance-toolkit/api-gateway` | 8446 |
-| Governance Sidecar | `ghcr.io/aaif/agent-governance-toolkit/governance-sidecar` | 8081 |
+| Trust Engine | `ghcr.io/microsoft/agent-governance-toolkit/trust-engine` | 8443 |
+| Policy Server | `ghcr.io/microsoft/agent-governance-toolkit/policy-server` | 8444 |
+| Audit Collector | `ghcr.io/microsoft/agent-governance-toolkit/audit-collector` | 8445 |
+| API Gateway | `ghcr.io/microsoft/agent-governance-toolkit/api-gateway` | 8446 |
+| Governance Sidecar | `ghcr.io/microsoft/agent-governance-toolkit/governance-sidecar` | 8081 |
 
 ```bash
 # Pull images (use specific version tags in production)
-docker pull ghcr.io/aaif/agent-governance-toolkit/trust-engine:latest
-docker pull ghcr.io/aaif/agent-governance-toolkit/governance-sidecar:latest
+docker pull ghcr.io/microsoft/agent-governance-toolkit/trust-engine:latest
+docker pull ghcr.io/microsoft/agent-governance-toolkit/governance-sidecar:latest
 ```
 
-> **Using your own ACR?** Mirror the images: `az acr import --name <your-acr> --source ghcr.io/aaif/agent-governance-toolkit/trust-engine:latest`
+> **Using your own ACR?** Mirror the images: `az acr import --name <your-acr> --source ghcr.io/microsoft/agent-governance-toolkit/trust-engine:latest`
 
 ---
 

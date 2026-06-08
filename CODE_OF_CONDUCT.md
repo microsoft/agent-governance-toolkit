@@ -49,12 +49,8 @@ public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported through the project governance contacts listed in [OWNERS.md](OWNERS.md).
-As AGT finalizes AAIF contribution, this reporting path will align with the
-[LF Projects Code of Conduct](https://lfprojects.org/policies/code-of-conduct/)
-and AAIF project policy. After AAIF acceptance, reports may also be routed
-through the AAIF conduct contact, [conduct@aaif.io](mailto:conduct@aaif.io), or
-the successor reporting path designated by LF/AAIF.
+reported to the project maintainers at
+[opencode@microsoft.com](mailto:opencode@microsoft.com).
 
 All complaints will be reviewed and investigated promptly and fairly. All
 community leaders are obligated to respect the privacy and security of the
@@ -105,5 +101,7 @@ This Code of Conduct is adapted from the
 available at
 <https://www.contributor-covenant.org/version/2/1/code_of_conduct.html>.
 
-After AAIF transfer, this project will follow the LF/AAIF-approved project Code
-of Conduct reporting process.
+For the Microsoft Open Source Code of Conduct, see
+<https://opensource.microsoft.com/codeofconduct/>.
+For the FAQ, see
+<https://opensource.microsoft.com/codeofconduct/faq/>.

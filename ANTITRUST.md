@@ -32,7 +32,7 @@ Project discussions should be limited to:
 
 If you believe a discussion or activity within this project may
 violate competition law, please raise the concern with the project
-maintainers listed in [OWNERS.md](OWNERS.md) or contact your own
+maintainers at <opencode@microsoft.com> or contact your own
 legal counsel.
 
 ## Foundation Transition

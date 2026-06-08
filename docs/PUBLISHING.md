@@ -13,7 +13,7 @@ a release path for this repository.
 
 | Authority | Current target |
 |---|---|
-| Release approval | AGT release managers listed in `OWNERS.md` |
+| Release approval | Maintainers and CODEOWNERS for release workflows |
 | Build and attest | `.github/workflows/publish.yml` and `.github/workflows/sbom.yml` |
 | Package registries | Registry-native foundation or project ownership |
 | Containers | Foundation or repository-owner GHCR namespace |

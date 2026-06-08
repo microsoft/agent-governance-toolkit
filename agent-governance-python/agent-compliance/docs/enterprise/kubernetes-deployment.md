@@ -58,7 +58,7 @@ Create a `values.yaml` for your deployment:
 # values.yaml — Agent Governance Helm Chart
 global:
   namespace: agent-governance
-  imageRegistry: ghcr.io/aaif/agent-governance-toolkit
+  imageRegistry: ghcr.io/microsoft/agent-governance-toolkit
   imagePullPolicy: IfNotPresent
 
 agentOS:

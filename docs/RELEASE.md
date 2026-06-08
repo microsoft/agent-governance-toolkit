@@ -13,7 +13,7 @@ from the same tag even when only a subset changed.
 
 ## Release authority
 
-Canonical releases are approved by release managers listed in `OWNERS.md`.
+Canonical releases are approved by maintainers with release-workflow ownership.
 Release approval is a project authority, not a Microsoft ESRP approval.
 
 ## Supported registries

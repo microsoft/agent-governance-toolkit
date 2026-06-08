@@ -7,7 +7,7 @@ help, stay informed, and participate.
 
 - **[GitHub Issues](https://github.com/microsoft/agent-governance-toolkit/issues)** -- Bug reports and feature requests
 - **[GitHub Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions)** -- Questions, ideas, and general conversation
-- **[Code of Conduct](../CODE_OF_CONDUCT.md)** -- expected behavior and reporting process
+- **[Code of Conduct](https://opensource.microsoft.com/codeofconduct/)** -- Microsoft Open Source Code of Conduct applies to all interactions
 
 ## Community Meetings
 
@@ -83,6 +83,7 @@ AGT maps to established security and compliance frameworks:
 
 ## Code of Conduct
 
-This project follows the repository [Code of Conduct](../CODE_OF_CONDUCT.md).
-During AAIF contribution finalization, reporting paths are being aligned with
-LF/AAIF project policy.
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact
+[opencode@microsoft.com](mailto:opencode@microsoft.com) with any questions.
+

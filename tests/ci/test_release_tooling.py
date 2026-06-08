@@ -141,24 +141,6 @@ def test_release_manifest_generator_covers_artifact_families(tmp_path: Path) -> 
     assert manifest["dry_run"] is True
 
 
-def test_codeowners_keeps_specific_docs_owners_after_general_docs_rule() -> None:
-    lines = (REPO_ROOT / ".github" / "CODEOWNERS").read_text(encoding="utf-8").splitlines()
-    docs_idx = next(i for i, line in enumerate(lines) if line.startswith("/docs/ "))
-    specs_idx = next(i for i, line in enumerate(lines) if line.startswith("/docs/specs/"))
-    adr_idx = next(i for i, line in enumerate(lines) if line.startswith("/docs/adr/"))
-    assert docs_idx < specs_idx < adr_idx
-
-
-def test_codeowners_sensitive_paths_match_owner_roles() -> None:
-    text = (REPO_ROOT / ".github" / "CODEOWNERS").read_text(encoding="utf-8")
-    assert (
-        "/.github/workflows/publish*  @imran-siddique @jackbatzner @eltoncarr-ms"
-        in text
-    )
-    assert "/docs/specs/                 @imran-siddique @Knapp-Kevin" in text
-    assert "/docs/adr/                   @imran-siddique @Knapp-Kevin" in text
-
-
 def test_pypi_upload_artifact_copy_allows_wheel_only(tmp_path: Path) -> None:
     dist = tmp_path / "dist"
     upload = tmp_path / "pypi-upload"

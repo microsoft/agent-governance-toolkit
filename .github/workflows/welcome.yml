@@ -61,7 +61,7 @@ jobs:
                 ].join('\n')
               : [
                   'Welcome to the Agent Governance Toolkit! Thanks for your first pull request.',
-                  'Please ensure tests pass, code follows style (ruff check), and your commits include the required DCO sign-off.',
+                  'Please ensure tests pass, code follows style (ruff check), and you have signed the [CLA](https://cla.opensource.microsoft.com/).',
                   'See our [Contributing Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md).',
                 ].join('\n');
 

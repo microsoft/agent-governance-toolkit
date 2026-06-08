@@ -1,0 +1,57 @@
+# Shows a policy signal when a PR is awaiting named-maintainer approval.
+# AI-only approvals do NOT count. Bot approvals do NOT count.
+# Branch protection rules enforce the merge-blocking code-owner review requirement.
+#
+# Context: PRs #357 and #362 were auto-merged without maintainer review,
+# reintroducing shell=True (CWE-78) that was previously fixed.
+
+name: "Policy: Awaiting maintainer review"
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
+jobs:
+  check-approval:
+    name: "Policy: Awaiting maintainer review"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read    # github-script calls pulls.listReviews on the PR
+    if: >-
+      github.event.pull_request.author_association != 'MEMBER' &&
+      github.event.pull_request.author_association != 'OWNER'
+    steps:
+      - name: Check for named-maintainer review
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const MAINTAINERS = ['imran-siddique', 'microsoft-github-policy-service'];
+
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            const maintainerApproval = reviews.data.find(
+              (r) =>
+                r.state === 'APPROVED' &&
+                MAINTAINERS.includes(r.user.login) &&
+                r.user.type === 'User'  // Exclude bot approvals
+            );
+
+            if (!maintainerApproval) {
+              core.setFailed(
+                `Policy: this PR is awaiting a named-maintainer review.\n` +
+                `This is a policy gate, not a CI failure — the PR is mergeable once a named maintainer (see CODEOWNERS or .github/MAINTAINERS) approves.\n` +
+                `For more details, see docs/policies/maintainer-review-gate.md.`
+              );
+            } else {
+              core.info(`✅ Maintainer @${maintainerApproval.user.login} approved this PR.`);
+            }

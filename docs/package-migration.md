@@ -69,7 +69,7 @@ updating this file.
 
 | Canonical image family | Current image family | Source | Migration action |
 |---|---|---|---|
-| `ghcr.io/aaif/agent-governance-toolkit/<component>` | `ghcr.io/microsoft/agentmesh/<component>` | `.github/workflows/publish-containers.yml` | Publish canonical images under foundation owner; keep old paths only as temporary compatibility aliases if needed. |
+| `ghcr.io/microsoft/agent-governance-toolkit/<component>` | `ghcr.io/microsoft/agentmesh/<component>` | `.github/workflows/publish-containers.yml` | Publish canonical images under foundation owner; keep old paths only as temporary compatibility aliases if needed. |
 
 Components:
 

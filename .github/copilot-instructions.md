@@ -29,7 +29,7 @@ Multi-language monorepo for runtime governance of AI agents. Core is Python, wit
 | .NET | `agent-governance-dotnet/` | `Microsoft.AgentGovernance` |
 | Go | `agent-governance-golang/` | (standalone top-level) |
 
-**Other top-level directories:** `docs/` (MkDocs site), `examples/` (runnable integrations), `benchmarks/`, `fuzz/` (ClusterFuzzLite), `notebooks/`.
+**Other top-level directories:** `docs/` (MkDocs site), `examples/` (runnable integrations), `demo/` (live dashboards), `pipelines/` (ESRP release automation), `benchmarks/`, `fuzz/` (ClusterFuzzLite), `notebooks/`.
 
 Each subdirectory with an `AGENTS.md` has area-specific commands and boundaries: read it before changing code there.
 
@@ -168,7 +168,7 @@ When external contributors open issues or PRs proposing integration with their o
 - **Verify claims**: If the PR cites benchmarks, adoption numbers, or production deployments, spot-check them. Unverifiable claims are a red flag.
 - **Scope proportionality**: A small or unknown project requesting a large integration surface (new package, new dependency, new CI pipeline) is disproportionate. Suggest they contribute as an example or community link instead.
 - **Dependency risk**: Adding a dependency on an obscure package creates supply chain risk. Prefer vendored examples or optional integrations that don't add to the core dependency tree.
-- **IP / patent / NDA red flags**: If a contributor mentions patents, NDAs, licensing arrangements, or "the full scope goes beyond what we've discussed," **stop technical engagement immediately**. AGT is MIT-licensed. Contributions must follow the active project contribution process and DCO requirements. No side agreements, no patent-encumbered code, no NDA-gated architectures.
+- **IP / patent / NDA red flags**: If a contributor mentions patents, NDAs, licensing arrangements, or "the full scope goes beyond what we've discussed," **stop technical engagement immediately**. AGT is MIT-licensed. All contributions must be made under MIT via the standard CLA. No side agreements, no patent-encumbered code, no NDA-gated architectures.
 - **Spam/scam PR filter**: Close immediately with a polite note if the PR/issue is:
   - Marketing content disguised as a contribution (e.g., adding the contributor's company to COMMUNITY.md or README.md as a "Related Project" when there's no genuine technical integration)
   - From an account with <5 repos, <5 followers, created <3 months ago that submits promotional content to core docs
@@ -249,7 +249,7 @@ Before approving or merging ANY PR, verify ALL of the following:
 3. **New Python modules** — verify `__init__.py` exists in any new package directory
 4. **Dependencies declared** — any new `import` must have the package in `pyproject.toml` dependencies (not just transitive)
 5. **No hardcoded secrets** — no API keys, tokens, passwords, connection strings in code or docs
-6. **No plaintext release secrets** — registry tokens, signing credentials, and tenant-specific values go in secrets, not YAML
+6. **No plaintext config in pipelines** — ESRP Client IDs, Key Vault names, cert names go in secrets, not YAML
 7. **Verify PR has actual changes** — check `additions > 0` before merging (empty PRs have happened)
 8. **MIT license headers** — every new source file (`.py`, `.ts`, `.js`, `.rs`, `.go`, `.cs`, `.sh`) must have the license header. This is the #1 most common review finding.
 
@@ -365,8 +365,8 @@ CI workflows use path filters so only relevant checks run per PR:
 
 ## Publishing
 
-- PyPI/npm/NuGet/crates.io publishing goes through GitHub Actions release workflows, not ESRP/ADO pipelines.
-- Do not add Microsoft tenant, Key Vault, certificate, or ESRP configuration to canonical release workflows.
+- PyPI/npm/NuGet/crates.io publishing goes through ESRP Release (ADO pipelines), NOT GitHub Actions
+- All ESRP config values must be in pipeline secrets, never plaintext in YAML
 - Package names must NOT start with `microsoft` or `windows` (reserved by Python team)
 - npm packages use `@microsoft` scope only
 
