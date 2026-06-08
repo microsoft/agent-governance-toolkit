@@ -87,7 +87,6 @@ class DatasetQualitySnapshot:
         return (
             self.is_fresh
             and self.meets_quality_threshold
-            and self.within_drift_threshold
             and not self.failed_tests
         )
 

@@ -27,7 +27,7 @@ Request
   │       ├─ NO  → Block (policy violation)
   │       └─ YES → proceed to Layer 2
   │
-Layer 2: Data Quality Registry
+  └─ Layer 2: Data Quality Registry
     └─ Is the target dataset trustworthy right now?
         ├─ Freshness Check
         ├─ Quality Check
