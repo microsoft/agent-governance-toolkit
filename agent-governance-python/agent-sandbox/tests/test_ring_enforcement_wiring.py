@@ -23,7 +23,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agent_sandbox.sandbox_provider import (
-    ExecutionStatus,
     SandboxConfig,
     SessionStatus,
 )
