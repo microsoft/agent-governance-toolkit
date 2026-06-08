@@ -76,15 +76,21 @@ class TestCrewAILogging:
         )
 
     def test_kickoff_logs_policy_violation(self, caplog):
-        """Policy violations during kickoff should be logged at WARNING."""
-        policy = GovernancePolicy(max_tool_calls=0)
+        """Policy violations during kickoff should be logged at WARNING.
+
+        v5: ``max_tool_calls=0`` is a v4 sentinel that the AGT manifest
+        bridge skips (zero threshold is omitted from the budgets map).
+        Use a ``blocked_patterns`` policy that fires the AGT ``input``
+        intervention point instead.
+        """
+        policy = GovernancePolicy(blocked_patterns=["forbidden"])
         kernel = CrewAIKernel(policy=policy)
         crew = self._make_mock_crew(name="blocked-crew")
         governed = kernel.wrap(crew)
 
         with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
             with pytest.raises(Exception):
-                governed.kickoff()
+                governed.kickoff(inputs={"task": "do something forbidden"})
 
         assert any(
             "blocked by policy" in record.message and "blocked-crew" in record.message

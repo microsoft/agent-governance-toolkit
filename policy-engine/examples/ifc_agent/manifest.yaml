@@ -1,0 +1,33 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: "ifc-agent"
+policies:
+  ifc_policy:
+    type: rego
+    bundle: ./policy
+    data_paths:
+      # Point at the specific upstream IFC library file rather than
+      # the whole policy/lib/ directory, because policy/lib/ ships
+      # *_test.rego sibling files that get loaded by OPA's data
+      # loader when the directory is passed in.
+      - ../../policy/lib/ifc.rego
+    query: data.agent_control_specification.ifc_agent.verdict
+intervention_points:
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: ifc_policy
+      query: data.agent_control_specification.ifc_agent.pre_tool_call_verdict
+tools:
+  public_egress:
+    type: Tool
+    id: public_egress
+    clearance: public
+    security_labels: [external]
+  trusted_archive:
+    type: Tool
+    id: trusted_archive
+    clearance: confidential
+    security_labels: [controlled]

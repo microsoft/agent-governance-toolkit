@@ -1,0 +1,12 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: default
+  namespace: acs-agents
+  labels:
+    app.kubernetes.io/part-of: acs-sidecar-reference
+spec:
+  host: "*.acs-agents.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL

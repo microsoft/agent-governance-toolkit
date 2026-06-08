@@ -518,7 +518,7 @@ class TestLlamaIndexKernel:
         assert result == "answer"
 
     def test_query_blocked_pattern(self):
-        from agent_os.integrations.langchain_adapter import PolicyViolationError
+        from agent_os.exceptions import PolicyViolationError
         p = GovernancePolicy(blocked_patterns=["secret"])
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -539,7 +539,7 @@ class TestLlamaIndexKernel:
         assert result == "hello back"
 
     def test_chat_blocked_pattern(self):
-        from agent_os.integrations.langchain_adapter import PolicyViolationError
+        from agent_os.exceptions import PolicyViolationError
         p = GovernancePolicy(blocked_patterns=["password"])
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -593,7 +593,7 @@ class TestLlamaIndexKernel:
         assert ctx.call_count == 3
 
     def test_max_calls_exceeded(self):
-        from agent_os.integrations.langchain_adapter import PolicyViolationError
+        from agent_os.exceptions import PolicyViolationError
         p = GovernancePolicy(max_tool_calls=2)
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -607,7 +607,7 @@ class TestLlamaIndexKernel:
             governed.query("q3")
 
     def test_signal_sigstop(self):
-        from agent_os.integrations.langchain_adapter import PolicyViolationError
+        from agent_os.exceptions import PolicyViolationError
         k = LlamaIndexKernel()
         engine = MagicMock()
         engine.name = "stoppable"
@@ -756,7 +756,7 @@ class TestLlamaIndexAsync:
 
     @pytest.mark.asyncio
     async def test_aquery_blocked(self):
-        from agent_os.integrations.langchain_adapter import PolicyViolationError
+        from agent_os.exceptions import PolicyViolationError
         p = GovernancePolicy(blocked_patterns=["secret"])
         k = LlamaIndexKernel(policy=p)
         engine = MagicMock()
@@ -779,7 +779,7 @@ class TestLlamaIndexAsync:
 
     @pytest.mark.asyncio
     async def test_aquery_stopped(self):
-        from agent_os.integrations.langchain_adapter import PolicyViolationError
+        from agent_os.exceptions import PolicyViolationError
         k = LlamaIndexKernel()
         engine = MagicMock()
         engine.name = "stopped-async"

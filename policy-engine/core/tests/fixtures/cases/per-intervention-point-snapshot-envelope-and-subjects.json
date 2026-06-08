@@ -1,0 +1,334 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "per_intervention_point_snapshot_envelope",
+    "policy_target_extraction"
+  ],
+  "description": "Each closed intervention_point extracts its portable policy_target from the canonical snapshot envelope.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "actor": {
+              "id": "u-1",
+              "type": "User"
+            },
+            "input": {
+              "channel": "api",
+              "text": "hello"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "channel": "api",
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "input-envelope",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "actor": {
+          "id": "u-1",
+          "type": "User"
+        },
+        "input": {
+          "channel": "api",
+          "text": "hello"
+        }
+      },
+      "intervention_point": "input"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "model_request": {
+              "messages": [
+                {
+                  "content": "hello",
+                  "role": "user"
+                }
+              ],
+              "params": {
+                "temperature": 0
+              },
+              "tools": [
+                {
+                  "name": "search"
+                }
+              ]
+            }
+          },
+          "intervention_point": "pre_model_call",
+          "policy_target": {
+            "kind": "model_request",
+            "path": "$snap.model_request",
+            "value": {
+              "messages": [
+                {
+                  "content": "hello",
+                  "role": "user"
+                }
+              ],
+              "params": {
+                "temperature": 0
+              },
+              "tools": [
+                {
+                  "name": "search"
+                }
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "pre-model-envelope",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "model_request": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "params": {
+            "temperature": 0
+          },
+          "tools": [
+            {
+              "name": "search"
+            }
+          ]
+        }
+      },
+      "intervention_point": "pre_model_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "model_response": {
+              "content": "I can help.",
+              "tool_calls": []
+            }
+          },
+          "intervention_point": "post_model_call",
+          "policy_target": {
+            "kind": "model_response",
+            "path": "$snap.model_response",
+            "value": {
+              "content": "I can help.",
+              "tool_calls": []
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "post-model-envelope",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "model_response": {
+          "content": "I can help.",
+          "tool_calls": []
+        }
+      },
+      "intervention_point": "post_model_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "tool_call": {
+              "args": {
+                "limit": 5,
+                "query": "alice"
+              },
+              "id": "call-1",
+              "name": "search"
+            }
+          },
+          "intervention_point": "pre_tool_call",
+          "policy_target": {
+            "kind": "tool_args",
+            "path": "$snap.tool_call.args",
+            "value": {
+              "limit": 5,
+              "query": "alice"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "pre-tool-envelope",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "tool_call": {
+          "args": {
+            "limit": 5,
+            "query": "alice"
+          },
+          "id": "call-1",
+          "name": "search"
+        }
+      },
+      "intervention_point": "pre_tool_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "tool_call": {
+              "id": "call-1",
+              "name": "search"
+            },
+            "tool_result": {
+              "rows": [
+                {
+                  "id": "c-1"
+                }
+              ]
+            }
+          },
+          "intervention_point": "post_tool_call",
+          "policy_target": {
+            "kind": "tool_result",
+            "path": "$snap.tool_result",
+            "value": {
+              "rows": [
+                {
+                  "id": "c-1"
+                }
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "post-tool-envelope",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "tool_call": {
+          "id": "call-1",
+          "name": "search"
+        },
+        "tool_result": {
+          "rows": [
+            {
+              "id": "c-1"
+            }
+          ]
+        }
+      },
+      "intervention_point": "post_tool_call"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "citations": [],
+              "content": "Done."
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "citations": [],
+              "content": "Done."
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "final-output-envelope",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "output": {
+          "citations": [],
+          "content": "Done."
+        }
+      },
+      "intervention_point": "output"
+    }
+  ],
+  "id": "per-intervention-point-snapshot-envelope-and-policy_targets",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\nmetadata:\n  name: fixture-valid-all-intervention-points\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n  pre_model_call:\n    policy_target_kind: model_request\n    policy:\n      id: test_policy\n    policy_target: $snap.model_request\n  post_model_call:\n    policy_target_kind: model_response\n    policy:\n      id: test_policy\n    policy_target: $snap.model_response\n  pre_tool_call:\n    policy_target_kind: tool_args\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_call.args\n  post_tool_call:\n    policy_target_kind: tool_result\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_result\n  output:\n    policy_target_kind: assistant_output\n    policy:\n      id: test_policy\n    policy_target: $snap.output\n",
+  "schema_version": 1
+}

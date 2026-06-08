@@ -1,0 +1,30 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-08-intervention-points.case-06",
+  "spec_section": "8",
+  "title": "output dispatches and normalizes escalate",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  output:\n    policy:\n      id: p\n    policy_target: $snap.output\n",
+  "intervention_point": "output",
+  "snapshot": {
+    "output": {
+      "text": "needs approval"
+    }
+  },
+  "policy_response": {
+    "decision": "escalate",
+    "reason": "human_review"
+  },
+  "expected": {
+    "decision": "escalate",
+    "reason": "human_review",
+    "action_identity": "present"
+  }
+}

@@ -48,6 +48,14 @@ must not be used. See [ESRP Onboarding](https://aka.ms/esrp-onboarding).
 | Agent Governance Toolkit | `agent-governance-toolkit` | `agent-compliance` |
 | Agent Lightning | `agentmesh-lightning` | `agent-lightning` |
 
+### ACS PyPI Packages
+
+| Package | PyPI Name | Directory |
+|---------|-----------|-----------|
+| Agent Control Specification Python SDK | `agent-control-specification` | `policy-engine/sdk/python` |
+| AGT Policies | `agt-policies` | `agent-governance-python/agt-policies` |
+| Agent Control Specification Generator CLI | `acs-generator` | `policy-engine/generator` |
+
 ### Building Packages
 
 ```bash
@@ -116,6 +124,22 @@ See the full list of Microsoft-controlled scopes: `@microsoft`, `@azure`,
 | Agent OS Copilot Extension | `@microsoft/agent-os-copilot-extension` | `agent-governance-python/agent-os/extensions/copilot` |
 | AgentOS MCP Server | `@microsoft/agentos-mcp-server` | `agent-governance-python/agent-os/extensions/mcp-server` |
 
+### ACS npm Packages
+
+| Package | npm Name | Directory |
+|---------|----------|-----------|
+| Agent Control Specification Node SDK | `agent-control-specification` | `policy-engine/sdk/node` |
+| ACS Node native binding | `agent-control-specification-linux-x64-gnu` | `policy-engine/sdk/node/npm/agent-control-specification-linux-x64-gnu` |
+| ACS Node native binding | `agent-control-specification-linux-arm64-gnu` | `policy-engine/sdk/node/npm/agent-control-specification-linux-arm64-gnu` |
+| ACS Node native binding | `agent-control-specification-darwin-x64` | `policy-engine/sdk/node/npm/agent-control-specification-darwin-x64` |
+| ACS Node native binding | `agent-control-specification-darwin-arm64` | `policy-engine/sdk/node/npm/agent-control-specification-darwin-arm64` |
+| ACS Node native binding | `agent-control-specification-win32-x64-msvc` | `policy-engine/sdk/node/npm/agent-control-specification-win32-x64-msvc` |
+| ACS bundled OPA binary | `agent-control-specification-opa-linux-x64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-linux-x64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-linux-arm64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-linux-arm64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-darwin-x64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-darwin-x64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-darwin-arm64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-darwin-arm64` |
+| ACS bundled OPA binary | `agent-control-specification-opa-win32-x64` | `policy-engine/sdk/node/npm/agent-control-specification-opa-win32-x64` |
+
 The VS Code and Cursor extensions are published via their respective marketplaces,
 not npm.
 
@@ -155,6 +179,16 @@ Publishing uses the ADO pipeline (`.github/pipelines/esrp-publish.yml` with targ
 |---------|------------|-----------|
 | Agent Governance .NET SDK | `Microsoft.AgentGovernance` | `agent-governance-dotnet` |
 
+### ACS NuGet Packages
+
+| Package | NuGet Name | Directory |
+|---------|------------|-----------|
+| Agent Control Specification .NET SDK | `AgentControlSpecification` | `policy-engine/sdk/dotnet/src/AgentControlSpecification` |
+| Agent Control Specification Microsoft.Extensions.AI adapter | `AgentControlSpecification.AI` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AI` |
+| Agent Control Specification Microsoft Agent Framework adapter | `AgentControlSpecification.AgentFramework` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AgentFramework` |
+| Agent Control Specification AutoGen adapter | `AgentControlSpecification.AutoGen` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.AutoGen` |
+| Agent Control Specification Semantic Kernel adapter | `AgentControlSpecification.SemanticKernel` | `policy-engine/sdk/dotnet/src/AgentControlSpecification.SemanticKernel` |
+
 ---
 
 ## Rust Crate (crates.io)
@@ -179,6 +213,13 @@ All crates are published under the official
 |---------|------------|-----------|
 | AgentMesh Rust SDK | `agentmesh` | `agent-governance-rust/agentmesh` |
 | AgentMesh MCP Rust SDK | `agentmesh-mcp` | `agent-governance-rust/agentmesh-mcp` |
+
+### ACS Rust Crates
+
+| Package | Crate Name | Directory |
+|---------|------------|-----------|
+| Agent Control Specification Core | `agent_control_specification_core` | `policy-engine/core` |
+| Agent Control Specification Rust SDK | `agent_control_specification` | `policy-engine/sdk/rust` |
 
 ### Prerequisites
 

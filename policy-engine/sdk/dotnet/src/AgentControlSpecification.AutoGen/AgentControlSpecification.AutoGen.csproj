@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><IsPackable>true</IsPackable><PackageId>AgentControlSpecification.AutoGen</PackageId><Version>0.3.1-beta.0</Version><Description>Agent Control Specification middleware for real AutoGen IAgent conversations.</Description><PackageLicenseExpression>MIT</PackageLicenseExpression></PropertyGroup>
+  <ItemGroup><PackageReference Include="AutoGen.Core" Version="0.*" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\AgentControlSpecification\AgentControlSpecification.csproj" /></ItemGroup>
+</Project>

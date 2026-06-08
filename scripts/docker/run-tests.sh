@@ -4,6 +4,7 @@
 set -uo pipefail
 
 packages=(
+  "agent-governance-python/agt-policies"
   "agent-governance-python/agent-primitives"
   "agent-governance-python/agent-mcp-governance"
   "agent-governance-python/agent-os"

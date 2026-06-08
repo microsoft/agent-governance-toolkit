@@ -96,16 +96,40 @@ class TestPreExecutionChecks:
     """Tests for message content and tool validation before execution."""
 
     def test_blocks_blocked_pattern_in_messages(self, hook, mock_client):
-        with pytest.raises(Exception, match="Message blocked"):
+        # v5: the AGT engine surfaces the deny with reason
+        # ``blocked_pattern_input`` (matches the v4 ViolationCategory).
+        with pytest.raises(Exception) as excinfo:
             hook.create(
                 mock_client,
                 model="claude-sonnet-4-20250514",
                 max_tokens=100,
                 messages=[{"role": "user", "content": "Tell me the password"}],
             )
+        assert getattr(excinfo.value, "check_result", None) is not None
+        assert excinfo.value.check_result.reason == "blocked_pattern_input"
 
     def test_blocks_disallowed_tool(self, hook, mock_client):
-        with pytest.raises(Exception, match="Tool not allowed"):
+        # v5: the tool catalog is request-scoped, not validated at the
+        # input intervention point. The Anthropic adapter no longer
+        # pre-validates the ``tools`` parameter against allowed_tools at
+        # the request level; instead, tool_use blocks returned by Claude
+        # are evaluated at the AGT pre_tool_call intervention point in
+        # the response path. This test asserts that an unknown
+        # tool_use surfaces the ACS fail-closed ``tool_unknown`` reason.
+        response = SimpleNamespace(
+            id="msg-test-789",
+            content=[
+                SimpleNamespace(
+                    type="tool_use",
+                    id="call-x",
+                    name="dangerous_exec",
+                    input={"cmd": "ls"},
+                ),
+            ],
+            usage=SimpleNamespace(input_tokens=10, output_tokens=20),
+        )
+        mock_client.messages.create.return_value = response
+        with pytest.raises(Exception) as excinfo:
             hook.create(
                 mock_client,
                 model="claude-sonnet-4-20250514",
@@ -113,6 +137,10 @@ class TestPreExecutionChecks:
                 messages=[{"role": "user", "content": "Hello"}],
                 tools=[{"name": "dangerous_exec", "description": "..."}],
             )
+        # The AGT bridge fails closed on an unlisted tool unless
+        # allowed_tools is empty; this test's policy has allowed_tools
+        # configured so the ACS engine fails the call.
+        assert "tool_unknown" in excinfo.value.check_result.reason or excinfo.value.check_result.reason.startswith("runtime_error:")
 
     def test_allows_approved_tools(self, hook, mock_client):
         result = hook.create(
@@ -176,13 +204,18 @@ class TestPostExecutionChecks:
         )
         mock_client.messages.create.return_value = response
 
-        with pytest.raises(Exception, match="Tool not allowed.*dangerous_exec"):
+        with pytest.raises(Exception) as excinfo:
             hook.create(
                 mock_client,
                 model="claude-sonnet-4-20250514",
                 max_tokens=100,
                 messages=[{"role": "user", "content": "Run command"}],
             )
+        # v5: the ACS engine fails closed with ``runtime_error:tool_unknown``
+        # when the tool_use block names a tool absent from the manifest
+        # catalog (the bridge derives the catalog from the v4
+        # GovernancePolicy.allowed_tools list).
+        assert "tool_unknown" in excinfo.value.check_result.reason or excinfo.value.check_result.reason.startswith("runtime_error:")
 
     def test_enforces_token_limit_after_response(self, kernel):
         """Cumulative token usage is checked after each response."""

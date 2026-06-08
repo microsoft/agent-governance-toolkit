@@ -1,0 +1,55 @@
+# Rust
+/target
+**/target/
+**/*.rs.bk
+examples/**/target/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-int/
+.venv-agentdojo/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+# npm pack output
+*.tgz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+coverage/
+
+# .NET
+**/[Bb]in/[Dd]ebug/
+**/[Bb]in/[Rr]elease/
+**/[Oo]bj/
+TestResults/
+*.user
+*.suo
+.vs/
+# Native libraries staged into the source tree by the cargo-build MSBuild targets
+sdk/dotnet/**/runtimes/
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Python setuptools build output
+generator/build/
+.env
+.env.*
+
+# Copilot CLI project-state scratch file and temp dirs
+.copilot
+.copilot-tmp/

@@ -1,0 +1,12 @@
+agent_control_specification_version: "0.3.1-beta"
+extends:
+  - base.yaml
+policies:
+  shared_policy:
+    type: custom
+    adapter: different_adapter
+intervention_points:
+  output:
+    policy_target: "$snap.output"
+    policy:
+      id: shared_policy

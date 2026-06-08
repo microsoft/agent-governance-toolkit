@@ -1,0 +1,118 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acs-policy-bundle
+  namespace: acs-agents
+  labels:
+    app.kubernetes.io/name: acs-mediated-app
+    app.kubernetes.io/component: policy
+    app.kubernetes.io/part-of: acs-sidecar-reference
+data:
+  manifest.yaml: |
+    agent_control_specification_version: "0.3.1-beta"
+    metadata:
+      name: "acs-istio-sidecar-reference"
+      version: "0.1.0"
+    extends: []
+    policies:
+      acs_reference_rego:
+        type: rego
+        bundle: /policy
+    intervention_points:
+      input:
+        policy_target: "$.input"
+        policy:
+          id: acs_reference_rego
+          query: data.agent_control_specification.acs_sidecar_reference.input_verdict
+      pre_model_call:
+        policy_target: "$.model_request"
+        policy:
+          id: acs_reference_rego
+          query: data.agent_control_specification.acs_sidecar_reference.pre_model_call_verdict
+      post_model_call:
+        policy_target: "$.model_response"
+        policy:
+          id: acs_reference_rego
+          query: data.agent_control_specification.acs_sidecar_reference.post_model_call_verdict
+      pre_tool_call:
+        policy_target: "$.tool_call.args"
+        policy:
+          id: acs_reference_rego
+          query: data.agent_control_specification.acs_sidecar_reference.pre_tool_call_verdict
+      post_tool_call:
+        policy_target: "$.tool_result"
+        policy:
+          id: acs_reference_rego
+          query: data.agent_control_specification.acs_sidecar_reference.post_tool_call_verdict
+      output:
+        policy_target: "$.output"
+        policy:
+          id: acs_reference_rego
+          query: data.agent_control_specification.acs_sidecar_reference.output_verdict
+    tools:
+      search_knowledge:
+        type: Tool
+        id: search_knowledge
+        clearance: [public, internal]
+        security_labels: [retrieval]
+      send_email:
+        type: Tool
+        id: send_email
+        clearance: [internal]
+        security_labels: [external_communication]
+      transfer_funds:
+        type: Tool
+        id: transfer_funds
+        clearance: [confidential, payments]
+        security_labels: [payment_instruction]
+  acs_sidecar_reference.rego: |
+    package agent_control_specification.acs_sidecar_reference
+
+    import rego.v1
+
+    default input_verdict := {"decision": "allow"}
+    default pre_model_call_verdict := {"decision": "allow"}
+    default post_model_call_verdict := {"decision": "allow"}
+    default pre_tool_call_verdict := {"decision": "allow"}
+    default post_tool_call_verdict := {"decision": "allow"}
+    default output_verdict := {"decision": "allow"}
+
+    input_verdict := deny("prompt_injection_marker", "Input contained an instruction override marker.") if {
+      target_text := lower(sprintf("%v", [input.policy_target]))
+      contains(target_text, "ignore previous instructions")
+    }
+
+    pre_model_call_verdict := deny("untrusted_system_message", "Model request attempted to place untrusted text in a system role.") if {
+      message := input.policy_target.messages[_]
+      lower(object.get(message, "role", "")) == "system"
+      content := lower(sprintf("%v", [object.get(message, "content", "")]))
+      contains(content, "from user upload")
+    }
+
+    post_model_call_verdict := deny("unsafe_tool_plan", "Model response proposed an unsafe payment action.") if {
+      response_text := lower(sprintf("%v", [input.policy_target]))
+      contains(response_text, "transfer_funds")
+      contains(response_text, "without approval")
+    }
+
+    pre_tool_call_verdict := deny("payment_limit_exceeded", "Payment tool arguments exceeded the reference limit.") if {
+      input.tool.id == "transfer_funds"
+      amount := to_number(object.get(input.policy_target, "amount", 0))
+      amount > 1000
+    }
+
+    post_tool_call_verdict := deny("tool_output_injection", "Tool output contained an instruction override marker.") if {
+      result_text := lower(sprintf("%v", [input.policy_target]))
+      contains(result_text, "ignore all policy")
+    }
+
+    output_verdict := deny("secret_disclosure", "Final output attempted to disclose a secret marker.") if {
+      output_text := lower(sprintf("%v", [input.policy_target]))
+      contains(output_text, "secret_")
+    }
+
+    deny(reason, message) := {
+      "decision": "deny",
+      "reason": reason,
+      "message": message,
+    }

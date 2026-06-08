@@ -1,0 +1,19 @@
+[package]
+name = "agent_control_specification_rig"
+version = "0.3.1-beta.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+description = "Rig tool guard backed by Agent Control Specification intervention points"
+
+[lib]
+doctest = false
+
+[dependencies]
+agent_control_specification = { version = "0.3.1-beta.0", path = "../../sdk/rust" }
+rig-core = "0.35"
+serde_json = "1"
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }

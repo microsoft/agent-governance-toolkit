@@ -62,6 +62,12 @@ import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
+from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger(__name__)
@@ -115,8 +121,13 @@ class PolicyConfig:
     max_budget: float | None = None
 
 
-class PolicyViolationError(Exception):
-    """Raised when a governance policy is violated."""
+class PolicyViolationError(_CanonicalPolicyViolationError):
+    """Raised when a governance policy is violated.
+
+    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
+    canonical ``from_check_result`` constructor is available. The legacy
+    constructor signature is preserved so existing callers keep working.
+    """
 
     def __init__(self, policy_name: str, description: str, severity: str = "high"):
         self.policy_name = policy_name
@@ -198,6 +209,9 @@ class GoogleADKKernel(BaseIntegration):
         require_human_approval: bool = False,
         sensitive_tools: list[str] | None = None,
         max_budget: float | None = None,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
         if policy is not None:
             self._adk_config = policy
@@ -214,13 +228,40 @@ class GoogleADKKernel(BaseIntegration):
                 max_budget=max_budget,
             )
 
-        # Initialize BaseIntegration with a GovernancePolicy mapped from PolicyConfig
+        # Initialize BaseIntegration with a GovernancePolicy mapped from PolicyConfig.
+        # When ``sensitive_tools`` is configured the local kernel
+        # restricts approval to that list. The v5 GovernancePolicy has
+        # no equivalent ``sensitive_tools`` field, so we suppress
+        # ``require_human_approval`` on the bridge policy in that case
+        # to avoid the AGT runtime escalating every non-sensitive tool
+        # call as well. The local approval workflow continues to fire
+        # for sensitive tools exactly as before.
+        #
+        # AGT-DELTA D5 / AGT-M3 round-2 BLOCK B: when a sensitive_tools
+        # filter is configured the bridge MUST NOT escalate non-sensitive
+        # tool calls. The previous round-1 wiring set
+        # ``bridge_require_approval`` whenever an ``approval_resolver``
+        # was present, which caused EVERY tool call (sensitive or not)
+        # to route through the resolver. The kernel now keeps two
+        # bridges: a default ``_bridge`` with ``require_human_approval=False``
+        # used for non-sensitive tools, and a lazily-built
+        # ``_approval_bridge()`` with ``require_human_approval=True`` used
+        # only when ``_needs_approval(tool_name)`` matches. The sensitive
+        # filter, not the resolver presence, decides which bridge runs.
+        # When no sensitive_tools filter is configured and
+        # ``require_human_approval=True`` ALL tools are sensitive, so the
+        # bridge policy keeps ``require_human_approval=True`` directly to
+        # avoid building two identical runtimes.
+        sensitive_filter_active = bool(self._adk_config.sensitive_tools)
+        bridge_require_approval = (
+            self._adk_config.require_human_approval and not sensitive_filter_active
+        )
         governance_policy = GovernancePolicy(
             max_tool_calls=self._adk_config.max_tool_calls,
             timeout_seconds=self._adk_config.timeout_seconds,
             allowed_tools=list(self._adk_config.allowed_tools),
             blocked_patterns=list(self._adk_config.blocked_patterns),
-            require_human_approval=self._adk_config.require_human_approval,
+            require_human_approval=bridge_require_approval,
             log_all_calls=self._adk_config.log_all_calls,
         )
         super().__init__(policy=governance_policy, evaluator=evaluator)
@@ -256,6 +297,125 @@ class GoogleADKKernel(BaseIntegration):
 
         # Execution contexts (keyed by invocation_id)
         self._contexts: dict[str, ADKExecutionContext] = {}
+
+        # AGT 5.0 ACS bridge wiring. The bridge translates self.policy
+        # (the GovernancePolicy derived above from PolicyConfig) into an
+        # AGT manifest and stands up an :class:`AgtRuntime`. The shared
+        # adapter-level ExecutionContext is used for callback-driven
+        # evaluations that do not have a per-run ADKExecutionContext yet.
+        #
+        # AGT-M3 round-2 BLOCK B: when ``sensitive_tools`` is configured
+        # ``self.policy`` carries ``require_human_approval=False`` so the
+        # default ``_bridge`` covers the non-sensitive path without
+        # escalating. ``_approval_bridge_instance`` is a sibling bridge
+        # with ``require_human_approval=True`` built lazily the first
+        # time a sensitive tool actually fires. Both bridges share the
+        # injected ``_runtime`` / ``_runtime_factory`` so scenario tests
+        # do not need to construct two scripted runtimes.
+        self._approval_resolver = approval_resolver
+        self._runtime_injected = _runtime
+        self._runtime_factory_injected = _runtime_factory
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
+        self._approval_bridge_instance: AdapterRuntimeBridge | None = None
+        self._adapter_ctx = ExecutionContext(
+            agent_id="google-adk-kernel",
+            session_id=f"adk-{int(time.time())}-{id(self)}",
+            policy=self.policy,
+        )
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def _approval_bridge(self) -> AdapterRuntimeBridge:
+        """Return the sibling bridge that escalates every tool call.
+
+        AGT-M3 round-2 BLOCK B. Used by :meth:`before_tool_callback`
+        when the kernel has a non-empty ``sensitive_tools`` filter and
+        the current tool name matches it. The sibling bridge wraps the
+        same v4 GovernancePolicy as :attr:`bridge` except that
+        ``require_human_approval=True`` so the AGT
+        ``approval.escalate_if_approver_required`` rule fires and the
+        runtime drives the wired ``approval_resolver``. Built lazily on
+        the first sensitive-tool dispatch and cached; an unsynchronised
+        race on first access is harmless because
+        :func:`get_runtime_bridge` is idempotent given equal policies.
+        Returns the default :attr:`bridge` unchanged when
+        ``require_human_approval`` is false on the kernel config (the
+        sensitive path is unreachable in that case).
+        """
+        if not self._adk_config.require_human_approval:
+            return self._bridge
+        cached = self._approval_bridge_instance
+        if cached is not None:
+            return cached
+        from dataclasses import replace
+
+        approval_policy = replace(self.policy, require_human_approval=True)
+        bridge = get_runtime_bridge(
+            approval_policy,
+            approval_resolver=self._approval_resolver,
+            runtime=self._runtime_injected,
+            runtime_factory=self._runtime_factory_injected,
+        )
+        self._approval_bridge_instance = bridge
+        return bridge
+
+    def evaluate_input(
+        self, ctx: ExecutionContext | None, input_data: Any
+    ) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation.
+
+        Falls back to the shared adapter-level :class:`ExecutionContext`
+        when ``ctx`` is ``None`` (the ADK callbacks generally do not
+        have a per-run :class:`ADKExecutionContext` at the time the
+        callback fires).
+        """
+        body: Any
+        if isinstance(input_data, (str, dict)):
+            body = input_data
+        elif hasattr(input_data, "content"):
+            body = str(getattr(input_data, "content"))
+        else:
+            body = str(input_data)
+        return self._bridge.evaluate_input(ctx or self._adapter_ctx, body=body)
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: ExecutionContext | None,
+        *,
+        tool_name: str,
+        args: dict[str, Any],
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for an ADK tool invocation."""
+        return self._bridge.evaluate_pre_tool_call(
+            ctx or self._adapter_ctx,
+            tool_name=tool_name,
+            args=args,
+            call_id=call_id,
+        )
+
+    def evaluate_output(
+        self, ctx: ExecutionContext | None, content: Any
+    ) -> BridgeResult:
+        """AGT ``output`` intervention point evaluation for an ADK result."""
+        body: Any
+        if isinstance(content, (str, dict)):
+            body = content
+        elif hasattr(content, "content"):
+            body = str(getattr(content, "content"))
+        else:
+            body = str(content)
+        return self._bridge.evaluate_output(
+            ctx or self._adapter_ctx, content=body
+        )
 
     # ------------------------------------------------------------------
     # BaseIntegration abstract methods
@@ -485,8 +645,26 @@ class GoogleADKKernel(BaseIntegration):
                         error = self._raise_violation("content_filter", reason)
                         return {"error": str(error)}
 
-        # Human approval check
-        if self._needs_approval(tool_name):
+        # Human approval check (legacy v4 workflow preserved verbatim so
+        # the existing pending_approvals / approve / deny surface keeps
+        # the same shape that callers expect).
+        #
+        # AGT-DELTA D5 / AGT-M3 round-2 BLOCK B: route approval through
+        # the bridge ONLY for tools that the local sensitive-tools
+        # filter marks as needing approval AND when an
+        # ``approval_resolver`` is wired. Non-sensitive tools continue
+        # to use the default :attr:`_bridge` whose
+        # ``require_human_approval`` is false, so the
+        # ``approval.escalate_if_approver_required`` rule never fires
+        # for them. Previously ``defer_approval_to_bridge`` was set
+        # whenever a resolver was present, which made the bridge
+        # escalate every tool call and bypassed ``_needs_approval``
+        # entirely.
+        sensitive_for_this_call = self._needs_approval(tool_name)
+        defer_approval_to_bridge = (
+            sensitive_for_this_call and self._approval_resolver is not None
+        )
+        if not defer_approval_to_bridge and sensitive_for_this_call:
             call_id = f"{agent_name}:{tool_name}:{self._tool_call_count}"
             if call_id not in self._approved_calls:
                 self._pending_approvals[call_id] = {
@@ -504,8 +682,83 @@ class GoogleADKKernel(BaseIntegration):
                 )
                 return {"error": str(error), "call_id": call_id, "needs_approval": True}
 
-        # Track budget spend
+        # AGT 5.0 ACS bridge evaluation. Local checks already passed
+        # so the bridge sees the final tool_name and tool_args. transform
+        # verdicts rewrite the in-place tool_args dict (mutates the
+        # ToolContext) before the ADK runtime invokes the tool;
+        # deny verdicts surface as a v4-shaped error dict.
+        #
+        # AGT-M3 round-2 BLOCK B: sensitive tools dispatch through the
+        # sibling ``_approval_bridge`` whose policy keeps
+        # ``require_human_approval=True`` so the AGT escalate path
+        # drives the wired ``approval_resolver``; every other tool
+        # stays on the default ``_bridge`` so the resolver is never
+        # called for it.
+        bridge_args = tool_args if isinstance(tool_args, dict) else {"value": tool_args}
+        effective_bridge = (
+            self._approval_bridge() if defer_approval_to_bridge else self._bridge
+        )
+        bridge_result = effective_bridge.evaluate_pre_tool_call(
+            self._adapter_ctx,
+            tool_name=tool_name,
+            args=bridge_args,
+            call_id=f"call-{self._tool_call_count}",
+        )
+        # AGT-DELTA D1.4: propagate the bisected input_identity /
+        # enforced_identity from the bridge evaluation into the kernel
+        # audit log so resolver-driven approvals are auditable.
+        audit_entry = getattr(bridge_result.evaluation, "audit_entry", None) or {}
+        identity_audit = {
+            key: audit_entry[key]
+            for key in ("input_identity", "enforced_identity")
+            if key in audit_entry
+        }
+        # Only emit the D1.4 identity-audit record on the resolver-driven
+        # approval path. Without a wired ``approval_resolver`` there is no
+        # bisected identity worth auditing, and emitting here would pollute
+        # the v4 audit sequence (e.g. the plain before/after tool+agent run).
+        if identity_audit and self._approval_resolver is not None:
+            self._record(
+                "agt_pre_tool_call",
+                agent_name,
+                {
+                    "tool": tool_name,
+                    "verdict": bridge_result.verdict,
+                    **identity_audit,
+                },
+            )
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, dict
+        ):
+            if isinstance(tool_args, dict):
+                tool_args.clear()
+                tool_args.update(bridge_result.transform.value)
+                if tool_context is not None and hasattr(tool_context, "tool_args"):
+                    try:
+                        tool_context.tool_args = tool_args
+                    except Exception:  # noqa: BLE001 — best-effort rewrite on opaque context
+                        pass
+        if not bridge_result.allowed:
+            error = self._raise_violation(
+                "agt_pre_tool_call_deny",
+                bridge_result.reason or "AGT runtime denied tool call",
+            )
+            return {"error": str(error)}
+
+        # Track budget spend. Increment the ExecutionContext counter so both
+        # the default `_bridge` and the sensitive-tools `_approval_bridge`
+        # observe the same running tool-call budget — each bridge's
+        # SnapshotBuilder mirrors `ctx.call_count` on every `builder_for`
+        # call so this single mutation propagates to both. We deliberately
+        # do NOT also call `record_post_execute(tool_calls=1)` because that
+        # would double-count (the mirror in `builder_for` already advances
+        # the builder by 1, then `record_tool_call` would add another 1,
+        # causing `max_tool_calls=N` policies to deny on call N rather
+        # than N+1). The smolagents adapter uses the same single-mutation
+        # pattern at `smolagents_adapter.py:734-738` for the same reason —
+        # this is the AGT-M3 round-4 Opus regression fix.
         self._budget_spent += cost
+        self._adapter_ctx.call_count += 1
 
         return None  # Allow execution
 
@@ -518,7 +771,8 @@ class GoogleADKKernel(BaseIntegration):
         """
         ADK after_tool_callback — called after each tool execution.
 
-        Inspects tool output for blocked patterns.
+        Inspects tool output for blocked patterns and routes through the
+        AGT 5.0 ACS bridge at the ``output`` intervention point.
 
         Returns:
             The (possibly modified) tool_result, or a dict with error if blocked.
@@ -528,7 +782,7 @@ class GoogleADKKernel(BaseIntegration):
 
         self._record("after_tool", agent_name, {"tool": tool_name, "result_type": type(tool_result).__name__})
 
-        # Check output content
+        # Check output content (legacy local pattern scan).
         if isinstance(tool_result, str):
             ok, reason = self._check_content(tool_result)
             if not ok:
@@ -542,6 +796,30 @@ class GoogleADKKernel(BaseIntegration):
                     if not ok:
                         error = self._raise_violation("output_filter", reason)
                         return {"error": str(error)}
+
+        # AGT 5.0 ACS bridge evaluation at the output intervention point.
+        # transform verdicts (AGT-DELTA D1.1) rewrite the tool result so
+        # downstream ADK consumers see the AGT-redacted text; deny
+        # verdicts surface as a v4-shaped error dict.
+        if tool_result is not None:
+            bridge_result = self._bridge.evaluate_output(
+                self._adapter_ctx, content=tool_result
+            )
+            if not bridge_result.allowed:
+                error = self._raise_violation(
+                    "agt_output_deny",
+                    bridge_result.reason or "AGT runtime denied tool output",
+                )
+                return {"error": str(error)}
+            if bridge_result.transform is not None:
+                if isinstance(tool_result, str) and isinstance(
+                    bridge_result.transform.value, str
+                ):
+                    tool_result = bridge_result.transform.value
+                elif isinstance(tool_result, dict) and isinstance(
+                    bridge_result.transform.value, dict
+                ):
+                    tool_result = bridge_result.transform.value
 
         return tool_result
 
@@ -571,6 +849,24 @@ class GoogleADKKernel(BaseIntegration):
             )
             return {"error": str(error)}
 
+        # AGT 5.0 ACS bridge evaluation at the input intervention point.
+        # The agent invocation is treated as user-input from the
+        # adapter's perspective so the bridge can enforce content
+        # filtering and approval gates on agent start. deny verdicts
+        # surface as a v4-shaped error dict; transform verdicts are
+        # ignored here because the agent invocation has no payload to
+        # rewrite at this hook point.
+        bridge_result = self._bridge.evaluate_input(
+            self._adapter_ctx,
+            body=f"agent:{agent_name}",
+        )
+        if not bridge_result.allowed:
+            error = self._raise_violation(
+                "agt_input_deny",
+                bridge_result.reason or "AGT runtime denied agent invocation",
+            )
+            return {"error": str(error)}
+
         return None
 
     def after_agent_callback(
@@ -582,7 +878,8 @@ class GoogleADKKernel(BaseIntegration):
         """
         ADK after_agent_callback — called after agent finishes.
 
-        Checks agent output for blocked content.
+        Checks agent output for blocked content and routes through the
+        AGT 5.0 ACS bridge at the ``output`` intervention point.
 
         Returns:
             The content (possibly modified), or a dict with error if blocked.
@@ -591,12 +888,31 @@ class GoogleADKKernel(BaseIntegration):
 
         self._record("after_agent", agent_name, {"has_content": content is not None})
 
-        # Check output content if it's a string
+        # Check output content if it's a string (legacy local pattern scan)
         if isinstance(content, str):
             ok, reason = self._check_content(content)
             if not ok:
                 error = self._raise_violation("output_filter", reason)
                 return {"error": str(error)}
+
+        # AGT 5.0 ACS bridge evaluation at the output intervention point.
+        # transform verdicts (AGT-DELTA D1.1) rewrite the content
+        # returned to the ADK runtime; deny verdicts surface as a
+        # v4-shaped error dict.
+        if content is not None:
+            bridge_result = self._bridge.evaluate_output(
+                self._adapter_ctx, content=content
+            )
+            if not bridge_result.allowed:
+                error = self._raise_violation(
+                    "agt_output_deny",
+                    bridge_result.reason or "AGT runtime denied agent output",
+                )
+                return {"error": str(error)}
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, str
+            ):
+                content = bridge_result.transform.value
 
         return content
 
@@ -648,6 +964,15 @@ class GoogleADKKernel(BaseIntegration):
         self._model_call_count = 0
         self._prompt_tokens = 0
         self._completion_tokens = 0
+        # Rotate the adapter-level execution context so the bridge
+        # builds a fresh :class:`SnapshotBuilder` for subsequent calls.
+        # Without this, the bridge would keep enforcing budgets against
+        # the cumulative counters from before reset.
+        self._adapter_ctx = ExecutionContext(
+            agent_id="google-adk-kernel",
+            session_id=f"adk-{int(time.time())}-{id(self)}-r",
+            policy=self.policy,
+        )
 
     def get_audit_log(self) -> list[AuditEvent]:
         """Return the full audit trail."""

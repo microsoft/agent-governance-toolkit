@@ -1,0 +1,54 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "workiq-collaboration-dlp"
+extends: []
+policies:
+  workiq_collaboration_dlp:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.workiq_collaboration_dlp.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    policy:
+      id: workiq_collaboration_dlp
+      query: data.agent_control_specification.workiq_collaboration_dlp.input_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      task_adherence:
+        from: "$policy_target"
+    policy:
+      id: workiq_collaboration_dlp
+      query: data.agent_control_specification.workiq_collaboration_dlp.pre_tool_call_verdict
+  post_tool_call:
+    policy_target: "$.tool_result"
+    policy_target_kind: tool_result
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: workiq_collaboration_dlp
+      query: data.agent_control_specification.workiq_collaboration_dlp.post_tool_call_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    policy:
+      id: workiq_collaboration_dlp
+      query: data.agent_control_specification.workiq_collaboration_dlp.output_verdict
+tools:
+  workiq_get_document: {}
+  workiq_search_documents: {}
+  workiq_list_sites: {}
+  outlook_read_message: {}
+  outlook_search_inbox: {}
+  outlook_send_email: {}
+  slack_post_message: {}
+  slack_list_channels: {}
+  teams_post_message: {}
+  teams_list_channels: {}
+  custom_webhook: {}
+annotators:
+  task_adherence:
+    type: llm
