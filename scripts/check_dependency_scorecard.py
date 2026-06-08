@@ -450,9 +450,9 @@ def _resolve_raw(
         urls = info.get("project_urls") or {}
         if isinstance(urls, dict):
             for key in ("Source", "Source Code", "Repository", "Homepage", "Home"):
-                cand = _stringify(urls.get(key))
-                if cand:
-                    return cand
+                candidate = _stringify(urls.get(key))
+                if candidate:
+                    return candidate
         return _stringify(info.get("home_page"))
     if dep.ecosystem == "cargo":
         if not CRATE_NAME_RE.match(dep.name):
