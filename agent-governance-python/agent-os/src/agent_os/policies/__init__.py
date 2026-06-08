@@ -22,8 +22,31 @@ from .backends import (
     ExternalPolicyBackend,
     OPABackend,
 )
+from .context_accumulation import (
+    ContextDecision,
+    ContextOutcome,
+    accumulate,
+    decide_next,
+    to_policy_action,
+)
+from .context_aggregation import (
+    AggregationResult,
+    AggregationRule,
+    AggregationRuleSet,
+    evaluate_aggregation,
+)
+from .context_audit import ContextEvent, context_event
+from .context_delegation import intersect_restrictions
+from .context_envelope import (
+    ContextEnvelope,
+    EnvelopeReference,
+    apply_restrictions,
+    envelope_reference,
+    fold,
+)
 from .decision import PolicyCheckResult, ViolationCategory
 from .evaluator import PolicyDecision, PolicyEvaluator
+from .obligations import Obligation, ObligationSet
 from .rate_limiting import RateLimitConfig, RateLimitExceeded, TokenBucket
 from .schema import (
     PolicyAction,
@@ -44,6 +67,9 @@ from .shared import (
 )
 
 __all__ = [
+    "AggregationResult",
+    "AggregationRule",
+    "AggregationRuleSet",
     "AsyncPolicyEvaluator",
     "BackendDecision",
     "CandidateDecision",
@@ -51,6 +77,22 @@ __all__ = [
     "ConcurrencyStats",
     "Condition",
     "ConflictResolutionStrategy",
+    "ContextDecision",
+    "ContextEnvelope",
+    "ContextEvent",
+    "ContextOutcome",
+    "EnvelopeReference",
+    "Obligation",
+    "ObligationSet",
+    "accumulate",
+    "apply_restrictions",
+    "context_event",
+    "decide_next",
+    "envelope_reference",
+    "evaluate_aggregation",
+    "fold",
+    "intersect_restrictions",
+    "to_policy_action",
     "ExternalPolicyBackend",
     "OPABackend",
     "PolicyAction",
