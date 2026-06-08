@@ -16,13 +16,12 @@ Fixture format:
 
 See schemas/fixture_schema.json for the full JSON Schema.
 
-Usage (programmatic):
-    from agent_compliance.policy_test 
-# Note: resolution_metadata.strategy is informational — logged for audit purposes,
-# not validated against any expected value. The engine logs the strategy used but
-# does not enforce it as a pass/fail criterion.
+Note: resolution_metadata.strategy is informational — logged for audit purposes,
+not validated against any expected value. The engine logs the strategy used but
+does not enforce it as a pass/fail criterion.
 
-import replay
+Usage (programmatic):
+    from agent_compliance.policy_test import replay
     results = replay("policies/", "fixtures/")
 
 Usage (CLI):
