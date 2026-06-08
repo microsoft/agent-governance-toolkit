@@ -275,7 +275,7 @@ class TestDockerRingEnforcement:
             ResourceType=SimpleNamespace(SUBPROCESS="subprocess"),
         )
         fake_breach_module = SimpleNamespace(
-            RingBreachDetector=lambda: _FakeBreachDetector(),
+            RingBreachDetector=_FakeBreachDetector,
         )
 
         with patch.dict(
