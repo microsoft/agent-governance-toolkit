@@ -489,7 +489,7 @@ class TestHyperlightRingEnforcement:
             ResourceType=SimpleNamespace(SUBPROCESS="subprocess"),
         )
         fake_breach_module = SimpleNamespace(
-            RingBreachDetector=lambda: _FakeBreachDetector(),
+            RingBreachDetector=_FakeBreachDetector,
         )
 
         # Build mock SDK
