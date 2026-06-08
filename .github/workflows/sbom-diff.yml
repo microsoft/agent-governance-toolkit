@@ -1,0 +1,177 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+name: SBOM Diff (PR)
+
+# Use `pull_request` (NOT `pull_request_target`) so this never executes with
+# the base-repo secret context against untrusted fork code. The downside is
+# that PRs from forks get a read-only GITHUB_TOKEN and cannot comment; in
+# that case the SBOM artifact is still uploaded for reviewer inspection.
+on:
+  pull_request:
+    paths:
+      - "**/package.json"
+      - "**/package-lock.json"
+      - "**/pnpm-lock.yaml"
+      - "**/yarn.lock"
+      - "**/pyproject.toml"
+      - "**/requirements*.txt"
+      - "**/poetry.lock"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "**/go.mod"
+      - "**/go.sum"
+      - "**/*.csproj"
+      - "**/packages.lock.json"
+      - "scripts/diff_sbom.py"
+      - ".github/workflows/sbom-diff.yml"
+
+# Least-privilege at the workflow level. The comment job opts in narrowly.
+permissions:
+  contents: read
+
+concurrency:
+  group: sbom-diff-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  diff:
+    name: Generate SBOM diff
+    runs-on: ubuntu-latest
+    # No write permissions for the SBOM generation job: it only produces an
+    # artifact. Comment posting is isolated in the `comment` job below.
+    permissions:
+      contents: read
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: head
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Check out PR base
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: base
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Generate base SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: base
+          format: spdx-json
+          output-file: ${{ github.workspace }}/base.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate head SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: head
+          format: spdx-json
+          output-file: ${{ github.workspace }}/head.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Diff SBOMs
+        # BASE_REF / HEAD_REF env vars avoid `${{ }}` expansion inside `run:`
+        # (script-injection class). The diff helper sanitises them before
+        # rendering, but env-passing is the first line of defence.
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          python head/scripts/diff_sbom.py \
+            --base "$GITHUB_WORKSPACE/base.spdx.json" \
+            --head "$GITHUB_WORKSPACE/head.spdx.json" \
+            --output "$GITHUB_WORKSPACE/sbom-diff.md" \
+            --base-ref "$BASE_REF" \
+            --head-ref "$HEAD_REF" \
+            --max-added 500
+
+      - name: Upload diff artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-diff
+          path: |
+            ${{ github.workspace }}/base.spdx.json
+            ${{ github.workspace }}/head.spdx.json
+            ${{ github.workspace }}/sbom-diff.md
+          retention-days: 14
+
+  comment:
+    name: Post diff comment
+    needs: diff
+    runs-on: ubuntu-latest
+    # ONLY this job gets pull-requests:write. On fork PRs the GITHUB_TOKEN is
+    # still downgraded to read by GitHub, in which case the script no-ops with
+    # a warning instead of failing the workflow.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download diff artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: sbom-diff
+          path: artifact
+
+      - name: Post or update PR comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const MARKER = '<!-- sbom-diff-bot -->';
+            const body = fs.readFileSync(
+              path.join('artifact', 'sbom-diff.md'),
+              'utf8'
+            );
+            // GitHub PR comment body cap is 65,536 characters. The diff helper
+            // already truncates "added" entries, but defence-in-depth: hard
+            // cut here too so a degenerate `removed` or `bumped` section
+            // cannot bust the API.
+            const MAX = 65000;
+            const safeBody = body.length > MAX
+              ? body.slice(0, MAX) + '\n\n> ⚠️ Comment truncated; see workflow artifact for the full diff.'
+              : body;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const existing = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const prior = existing.find(c =>
+              c.user && c.user.type === 'Bot' && c.body && c.body.startsWith(MARKER)
+            );
+
+            try {
+              if (prior) {
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: prior.id, body: safeBody
+                });
+                core.info(`Updated existing SBOM diff comment ${prior.id}`);
+              } else {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number, body: safeBody
+                });
+                core.info('Created new SBOM diff comment');
+              }
+            } catch (err) {
+              // Fork PRs have a read-only GITHUB_TOKEN; commenting will 403.
+              // Surface a warning but do not fail the workflow — the artifact
+              // is still available for reviewers.
+              core.warning(
+                `Could not post SBOM diff comment (likely a fork PR with read-only token): ${err.message}`
+              );
+            }
