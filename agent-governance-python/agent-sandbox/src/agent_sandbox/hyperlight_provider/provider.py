@@ -417,7 +417,6 @@ class HyperLightSandboxProvider(SandboxProvider):
                 if not _constraints.subprocess_allowed:
                     # No subprocess at ring 3 — also clear tool list
                     tools_to_register = {}
-                    tool_allow = []
                 # Store for execute_code gate
                 self._ring_enforcers[(agent_id, session_id)] = _enforcer
                 self._ring_breach_detectors[(agent_id, session_id)] = RingBreachDetector()
