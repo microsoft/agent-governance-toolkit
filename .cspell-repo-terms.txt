@@ -687,6 +687,7 @@ urlparse
 urlsafe
 urlunparse
 usemanagedidentity
+userinfo
 USERPROFILE
 usize
 utcfromtimestamp
