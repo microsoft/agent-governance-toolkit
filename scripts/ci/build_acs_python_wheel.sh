@@ -17,6 +17,8 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 docker run --rm \
+  -e "HOST_UID=$(id -u)" \
+  -e "HOST_GID=$(id -g)" \
   -e "RUSTUP_VERSION=$RUSTUP_VERSION" \
   -e "RUSTUP_SHA256=$RUSTUP_SHA256" \
   -e "RUST_TOOLCHAIN=$RUST_TOOLCHAIN" \
@@ -53,4 +55,5 @@ docker run --rm \
       --out /work/policy-engine/sdk/python/dist \
       --compatibility manylinux_2_28 \
       --manifest-path /work/policy-engine/sdk/python/Cargo.toml
+    chown -R "${HOST_UID}:${HOST_GID}" /work/policy-engine/sdk/python/dist
   '

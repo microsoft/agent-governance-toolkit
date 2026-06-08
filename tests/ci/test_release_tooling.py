@@ -177,7 +177,10 @@ def test_acs_python_wheel_helper_uses_pinned_manylinux_build() -> None:
     assert "manylinux_2_28_x86_64@sha256:" in text
     assert "https://static.rust-lang.org/rustup/archive/" in text
     assert "6aeece6993e902708983b209d04c0d1dbb14ebb405ddb87def578d41f920f56d" in text
+    assert '-e "HOST_UID=$(id -u)"' in text
+    assert '-e "HOST_GID=$(id -g)"' in text
     assert 'RUST_TOOLCHAIN="1.89.0"' in text
     assert '--default-toolchain "${RUST_TOOLCHAIN}"' in text
     assert "--require-hashes --no-deps" in text
     assert "--compatibility manylinux_2_28" in text
+    assert 'chown -R "${HOST_UID}:${HOST_GID}" /work/policy-engine/sdk/python/dist' in text
