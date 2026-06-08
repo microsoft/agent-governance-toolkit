@@ -9,7 +9,6 @@ instances with BatchSpanProcessor for gRPC, HTTP, and console export.
 from __future__ import annotations
 
 import logging
-import urllib.parse
 
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -19,22 +18,9 @@ from opentelemetry.sdk.trace.export import (
     SimpleSpanProcessor,
 )
 
+from agent_sre.tracing._tls_utils import is_local_endpoint as _is_local_endpoint
+
 _logger = logging.getLogger(__name__)
-
-_LOCAL_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
-
-
-def _is_local_endpoint(endpoint: str) -> bool:
-    """Return True if *endpoint* resolves to a loopback address."""
-    if not endpoint:
-        return False
-    if "://" not in endpoint:
-        endpoint = "grpc://" + endpoint
-    try:
-        hostname = urllib.parse.urlparse(endpoint).hostname or ""
-    except Exception:
-        return False
-    return hostname in _LOCAL_HOSTS
 
 
 def _build_resource(service_name: str = "agent-sre") -> Resource:

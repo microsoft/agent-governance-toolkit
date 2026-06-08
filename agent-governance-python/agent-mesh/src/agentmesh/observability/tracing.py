@@ -13,27 +13,12 @@ import inspect
 import logging
 import os
 import time
-import urllib.parse
+
+from agentmesh.observability._tls_utils import is_local_endpoint as _is_local_endpoint
 
 F = TypeVar("F", bound=Callable[..., Any])
 
 _logger = logging.getLogger(__name__)
-
-_LOCAL_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
-
-
-def _is_local_endpoint(endpoint: str) -> bool:
-    """Return True if *endpoint* resolves to a loopback address."""
-    if not endpoint:
-        return False
-    # Handle bare "host:port" without a scheme so urllib can parse it.
-    if "://" not in endpoint:
-        endpoint = "grpc://" + endpoint
-    try:
-        hostname = urllib.parse.urlparse(endpoint).hostname or ""
-    except Exception:
-        return False
-    return hostname in _LOCAL_HOSTS
 
 
 # Check if OpenTelemetry is available

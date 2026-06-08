@@ -22,24 +22,11 @@ import os
 import urllib.parse
 from typing import Optional
 
+from agentmesh.observability._tls_utils import is_local_endpoint as _is_local_endpoint
+
 logger = logging.getLogger(__name__)
 
 _bootstrapped = False
-
-_LOCAL_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
-
-
-def _is_local_endpoint(endpoint: str) -> bool:
-    """Return True if *endpoint* resolves to a loopback address."""
-    if not endpoint:
-        return False
-    if "://" not in endpoint:
-        endpoint = "grpc://" + endpoint
-    try:
-        hostname = urllib.parse.urlparse(endpoint).hostname or ""
-    except Exception:
-        return False
-    return hostname in _LOCAL_HOSTS
 
 
 def bootstrap_otel(

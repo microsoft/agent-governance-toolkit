@@ -244,13 +244,8 @@ class TestAttachTraceExporterTLSEnforcement:
 
         provider = MagicMock()
         with patch("agentmesh.telemetry.logger") as mock_logger:
-            with patch("agentmesh.telemetry._attach_trace_exporter.__wrapped__", create=True):
-                # Use try/except in case exporter not installed; only care about warning.
-                try:
-                    _attach_trace_exporter(provider, "http://localhost:4317", "grpc")
-                except ImportError:
-                    pass
-            mock_logger.warning.assert_called()
+            _attach_trace_exporter(provider, "http://localhost:4317", "grpc")
+        mock_logger.warning.assert_called_once()
 
     def test_https_remote_endpoint_does_not_raise(self):
         """https:// for a remote host must NOT raise (TLS is fine)."""
