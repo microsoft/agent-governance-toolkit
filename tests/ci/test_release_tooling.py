@@ -183,6 +183,11 @@ def test_container_workflow_uses_owner_derived_registry() -> None:
     text = CONTAINERS.read_text(encoding="utf-8")
     assert "ghcr.io/${{ github.repository_owner }}/agent-governance-toolkit" in text
     assert "ghcr.io/microsoft" not in text
+    assert "dry_run:" in text
+    assert 'default: "dry-run"' in text
+    assert "Build images without pushing tags or attestations to GHCR" in text
+    assert "push: ${{ github.event_name == 'release' || github.event.inputs.dry_run == 'false' }}" in text
+    assert "github.event_name == 'release' || github.event.inputs.dry_run == 'false'" in text
 
 
 def test_acs_python_wheel_helper_uses_pinned_manylinux_build() -> None:

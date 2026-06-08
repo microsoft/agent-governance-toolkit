@@ -33,13 +33,15 @@ Release approval is a project authority, not a Microsoft ESRP approval.
 2. Release manager confirms package map, manifests, and release matrix agree.
 3. Release manager runs `Publish Packages` with `dry_run: true` and reviews the
    uploaded `release-manifest.json`.
-4. Release manager creates a signed release tag.
-5. `.github/workflows/publish.yml` builds, tests, packages, attests, and
+4. Release manager runs `Publish Container Images` with `dry_run: true` when
+   container artifacts are in scope.
+5. Release manager creates a signed release tag.
+6. `.github/workflows/publish.yml` builds, tests, packages, attests, and
    publishes language packages.
-6. `.github/workflows/publish-containers.yml` builds, attests, and publishes
+7. `.github/workflows/publish-containers.yml` builds, attests, and publishes
    container images.
-7. `.github/workflows/sbom.yml` produces release SBOMs and provenance.
-8. Release manager verifies artifacts and publishes release notes.
+8. `.github/workflows/sbom.yml` produces release SBOMs and provenance.
+9. Release manager verifies artifacts and publishes release notes.
 
 ## Supply-chain requirements
 

@@ -739,3 +739,5 @@ miyannishar
 Dayos
 prashansapkota
 syft
+Buildx
+buildx

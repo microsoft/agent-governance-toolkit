@@ -50,8 +50,11 @@ public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported through the project governance contacts listed in [OWNERS.md](OWNERS.md).
-As AGT finalizes AAIF contribution, this reporting path will align with LF/AAIF
-project policy.
+As AGT finalizes AAIF contribution, this reporting path will align with the
+[LF Projects Code of Conduct](https://lfprojects.org/policies/code-of-conduct/)
+and AAIF project policy. After AAIF acceptance, reports may also be routed
+through the AAIF conduct contact, [conduct@aaif.io](mailto:conduct@aaif.io), or
+the successor reporting path designated by LF/AAIF.
 
 All complaints will be reviewed and investigated promptly and fairly. All
 community leaders are obligated to respect the privacy and security of the

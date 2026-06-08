@@ -34,6 +34,10 @@ The manifest records every expected artifact family, source path, release
 automation status, requested package, release tag, and dry-run state. Review it
 before publishing to confirm no package family is silently missing.
 
+Use `workflow_dispatch` on `Publish Container Images` with `dry_run: true` to
+build container images without pushing GHCR tags or attestations. Only release
+events or explicit `dry_run: false` manual dispatches publish container images.
+
 ## Package identity
 
 The package identity source of truth is
@@ -122,6 +126,9 @@ Canonical images must use a foundation or repository-owner namespace, not
 
 The previous Microsoft image paths are compatibility paths only and must have a
 documented support window if they remain available.
+
+Manual container runs default to `dry_run: true` and tag `dry-run` so release
+rehearsals do not overwrite `latest` or versioned tags.
 
 ## SBOM and provenance
 
