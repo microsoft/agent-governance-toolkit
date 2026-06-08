@@ -1,0 +1,19 @@
+{
+  "id": "conflict-update-config",
+  "input": {
+    "action": "k8s_apply",
+    "agent_did": "did:web:ops-agent",
+    "context": {
+      "resource": "ConfigMap",
+      "namespace": "production",
+      "operation": "update"
+    }
+  },
+  "expected_verdict": "deny",
+  "expected_rule": "production-writes",
+  "resolution_metadata": {
+    "rule_id": "production-writes",
+    "strategy": "first-match"
+  },
+  "recorded_at": "2026-05-22T10:10:00Z"
+}
