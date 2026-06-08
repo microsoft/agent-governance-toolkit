@@ -747,3 +747,8 @@ nullglob
 pypa
 snupkg
 Hotfixes
+anchore
+octocat
+sboms
+Syft
+syft

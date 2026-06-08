@@ -79,7 +79,7 @@ def _sanitize_cell(value: str) -> str:
     Hostile package names could otherwise inject pipes, backticks, HTML,
     control characters, or @-mentions / #-references into the rendered PR
     comment (log-injection / notification-spam style). Strip CR/LF/control
-    chars, escape pipes and backticks, HTML-encode angle brackets, neutralise
+    chars, escape pipes and backticks, HTML-encode angle brackets, neutralize
     GitHub auto-link triggers (@ and #), and cap length.
     """
     if value is None:

