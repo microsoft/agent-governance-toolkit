@@ -68,6 +68,11 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          # Scorecard "Token-Permissions" / "Pinned-Dependencies" hardening:
+          # don't leave the repo's GITHUB_TOKEN authenticated in the
+          # worktree's git config after checkout. The job only needs
+          # read-only access to history (already covered by contents:read).
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -76,6 +81,12 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Org-level override hook: maintainers can extend the hard-coded
+          # skip list (in scripts/check_dependency_scorecard.py) without
+          # editing the script call. Format: whitespace-separated regexes.
+          # Useful for private scoped packages that 404 on public registries
+          # (e.g. ^@myorg/ for org-internal npm packages).
+          EXTRA_SKIP_PATTERNS: ${{ vars.SCORECARD_EXTRA_SKIP_PATTERNS }}
         run: |
           set -euo pipefail
           # Defense-in-depth: GitHub disallows branch names starting with '-'
@@ -85,9 +96,19 @@ jobs:
             echo "::error::refusing unsafe BASE_REF: $BASE_REF"; exit 1
           fi
           git fetch --no-tags --depth=50 origin -- "$BASE_REF"
+          # Build skip-pattern args from the optional org override. Each
+          # token becomes its own --skip-pattern so the script's own regex
+          # validation runs over each value individually.
+          extra_args=()
+          if [[ -n "${EXTRA_SKIP_PATTERNS:-}" ]]; then
+            for pat in $EXTRA_SKIP_PATTERNS; do
+              extra_args+=(--skip-pattern "$pat")
+            done
+          fi
           python scripts/check_dependency_scorecard.py \
             --base-ref "origin/${BASE_REF}" \
             --head-ref "${HEAD_SHA}" \
             --min-score 5.0 \
-            --max-deps 50
+            --max-deps 50 \
+            "${extra_args[@]}"
 
