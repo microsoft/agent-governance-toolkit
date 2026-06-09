@@ -11,8 +11,7 @@
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
-> **Public Preview** — The `agent-os-kernel` package on PyPI is a Microsoft-signed
-> public preview release. APIs may change before GA.
+> **Public Preview** — The `agent-os-kernel` package on PyPI is a public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent OS.
 
@@ -114,7 +113,7 @@
 
 ### 🛡️ OWASP Agentic Top 10 Coverage
 
-Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security risks](docs/owasp-agentic-top10-mapping.md):
+Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security risks](../compliance/owasp-asi-policy-mapping.md):
 
 | Risk | Coverage | Module |
 |------|----------|--------|
@@ -129,7 +128,7 @@ Agent OS + ecosystem covers **10 out of 10** [OWASP Agentic Application Security
 | ASI09 Human-Agent Trust | ✅ Full | Human approval workflows, audit logging |
 | ASI10 Rogue Agents | ✅ Full | Agent Runtime kill switch + ring isolation |
 
-> 📄 [Full OWASP mapping →](docs/owasp-agentic-top10-mapping.md)
+> 📄 [Full OWASP mapping →](../compliance/owasp-asi-policy-mapping.md)
 
 ### 🌐 The Agent Governance Ecosystem
 

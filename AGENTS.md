@@ -31,7 +31,7 @@ go there rather than into the repo root or an older shared SDK path.
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
 | Runnable examples | `examples/` | Self-contained integrations and worked examples |
 | Interactive demos | `examples/demos/` | Live demos, dashboards, real-service walkthroughs |
-| Release pipelines | `.github/pipelines/` | Azure DevOps ESRP publishing and release automation |
+| Release automation | `.github/workflows/` | GitHub Actions release, packaging, SBOM, provenance, and publishing automation |
 | GitHub automation | `.github/` | CI, PR automation, issue templates, CODEOWNERS |
 
 ## Routing Rules

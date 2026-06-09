@@ -30,7 +30,7 @@ spec:
 
     # AGT governance sidecar
     - name: governance-sidecar
-      image: ghcr.io/microsoft/agentmesh/governance-sidecar:0.3.0
+      image: ghcr.io/microsoft/agent-governance-toolkit/governance-sidecar:0.3.0
       ports:
         - containerPort: 8081
           name: governance

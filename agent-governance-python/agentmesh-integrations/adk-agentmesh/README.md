@@ -1,8 +1,7 @@
 # ADK AgentMesh — Governance for Google ADK Agents
 
 > [!IMPORTANT]
-> **Public Preview** — The `adk-agentmesh` package on PyPI is a Microsoft-signed
-> public preview release. APIs may change before GA.
+> **Public Preview** — The `adk-agentmesh` package on PyPI is a public preview release. APIs may change before GA.
 
 Policy enforcement, trust verification, and audit trails for
 [Google ADK](https://github.com/google/adk-python) agents — powered by the
