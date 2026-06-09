@@ -175,8 +175,50 @@ class GovernedQueryEngine:
                 )
         return response
 
-    # Expose underlying query engine attributes transparently
+    # ── Blocked governance-bypassing methods ──────────────────────────
+    #
+    # The governance pipeline (collection ACL, rate limiting, content
+    # scanning, audit) is currently synchronous, so we cannot
+    # transparently extend it to async paths.  Forwarding those calls
+    # to the underlying query engine would silently bypass every check.
+    # Callers that need async surfaces must extend the wrapper
+    # explicitly with their own governance plumbing.
+
+    _BYPASSED_METHODS = (
+        "aquery",
+        "aretrieve",
+        "astream",
+    )
+
+    async def aquery(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError(
+            "GovernedQueryEngine does not implement async query. "
+            "The governance pipeline (collection ACL, rate limiting, "
+            "content scanning, audit) is synchronous; calling "
+            "aquery would silently bypass it. Use .query(...) or "
+            "extend GovernedQueryEngine with an async-aware governor."
+        )
+
+    async def aretrieve(self, *args: Any, **kwargs: Any) -> List[Any]:
+        raise NotImplementedError(
+            "GovernedQueryEngine does not implement async retrieval. "
+            "Use .retrieve(...) or .query(...)."
+        )
+
+    async def astream(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError(
+            "GovernedQueryEngine does not implement async streaming. "
+            "Use .query(...) instead."
+        )
+
+    # Expose underlying query engine attributes transparently, except
+    # for governance-bypassing methods which are blocked above.
     def __getattr__(self, name: str) -> Any:
+        if name in type(self)._BYPASSED_METHODS:
+            raise AttributeError(
+                f"GovernedQueryEngine blocks {name!r} to prevent governance "
+                "bypass. Use .query(...) or .retrieve(...) instead."
+            )
         return getattr(self._query_engine, name)
 
 

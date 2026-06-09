@@ -278,7 +278,7 @@ the network-egress policy would later refuse the call. The hardened image makes
 the attempt itself fail with "command not found".
 
 ```bash
-# Build with the default allow-list (python3, cat, echo, ls).
+# Build with the default allow-list (python3, cat, echo, ls, sleep).
 docker build \
   -f agent-sandbox/docker/Dockerfile.sandbox \
   -t agt-sandbox/python-minimal-path:3.11 \
@@ -288,7 +288,7 @@ docker build \
 # actually needs. The full allow-list IS the new PATH; any binary not listed
 # here is unreachable.
 docker build \
-  --build-arg ALLOWED_BIN_NAMES="python3 cat echo ls grep sort uniq" \
+  --build-arg ALLOWED_BIN_NAMES="python3 cat echo ls sleep grep sort uniq" \
   -f agent-sandbox/docker/Dockerfile.sandbox \
   -t agt-sandbox/python-minimal-path:3.11 \
   agent-sandbox/docker
@@ -299,6 +299,17 @@ Wire the image into `DockerSandboxProvider` via the existing `image` argument:
 ```python
 provider = DockerSandboxProvider(image="agt-sandbox/python-minimal-path:3.11")
 ```
+
+For security-sensitive deployments, require the hardened image so the
+provider fails instead of silently falling back to `python:3.11-slim` when
+the local image is unavailable:
+
+```python
+provider = DockerSandboxProvider(require_hardened_image=True)
+```
+
+Build the image before creating the provider. `require_hardened_image=True`
+cannot be combined with a custom `image=`.
 
 To extend the allow-list permanently (rather than at `docker build` time),
 edit the `ARG ALLOWED_BIN_NAMES=` line in `Dockerfile.sandbox` and rebuild.

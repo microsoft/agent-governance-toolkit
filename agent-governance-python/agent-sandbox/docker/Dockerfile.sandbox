@@ -31,7 +31,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 # Build-time list of permitted binaries. Maintainers extending this image
 # should add entries here rather than relying on host-side PATH inheritance.
-ARG ALLOWED_BIN_NAMES="python3 cat echo ls"
+# `sleep` is required by DockerSandboxProvider's long-lived session command.
+ARG ALLOWED_BIN_NAMES="python3 cat echo ls sleep"
 
 # Stage 1: collect the allowed binaries into the pinned PATH directory.
 # Symlinks (not copies) preserve setuid behaviour from the base image where

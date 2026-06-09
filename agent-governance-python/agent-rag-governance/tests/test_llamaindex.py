@@ -402,3 +402,65 @@ def test_invalid_collection_name_none_allowed_by_default():
     # None is treated as a collection name — allowed when no restrictions set
     response = governed.query("query")
     assert len(response.source_nodes) == 1
+
+
+# ---------------------------------------------------------------------------
+# Governance bypass prevention tests
+# ---------------------------------------------------------------------------
+
+
+def test_aquery_blocked_by_explicit_method():
+    """Calling aquery should raise NotImplementedError, not bypass governance."""
+    engine = _FakeQueryEngine([])
+    governor = _make_governor(RAGPolicy())
+    governed = GovernedQueryEngine(engine, governor, collection="docs")
+    import asyncio
+
+    with pytest.raises(NotImplementedError, match="aquery"):
+        asyncio.run(governed.aquery("query"))
+
+
+def test_aretrieve_blocked_by_explicit_method():
+    """Calling aretrieve should raise NotImplementedError, not bypass governance."""
+    retriever = _FakeRetriever([_FakeNode("clean")])
+    governor = _make_governor(RAGPolicy(allowed_collections=["docs"]))
+    governed = GovernedQueryEngine(retriever, governor, collection="docs")
+    import asyncio
+
+    with pytest.raises(NotImplementedError, match="async retrieval"):
+        asyncio.run(governed.aretrieve("query"))
+
+
+def test_astream_blocked_by_explicit_method():
+    """Calling astream should raise NotImplementedError, not bypass governance."""
+    engine = _FakeQueryEngine([])
+    governor = _make_governor(RAGPolicy())
+    governed = GovernedQueryEngine(engine, governor, collection="docs")
+    import asyncio
+
+    with pytest.raises(NotImplementedError, match="async streaming"):
+        asyncio.run(governed.astream("query"))
+
+
+def test_bypass_methods_explicitly_defined():
+    """Bypass methods are explicitly defined (blocking) rather than forwarded."""
+    engine = _FakeQueryEngine([])
+    governor = _make_governor(RAGPolicy())
+    governed = GovernedQueryEngine(engine, governor, collection="docs")
+
+    for method_name in GovernedQueryEngine._BYPASSED_METHODS:
+        # Methods exist as explicit attributes (not forwarded via __getattr__)
+        method = getattr(type(governed), method_name, None)
+        assert method is not None, f"{method_name} should be explicitly defined"
+        # They are callable (async functions)
+        assert callable(method)
+
+
+def test_non_bypass_attributes_still_forwarded():
+    """Non-bypass attributes are still transparently forwarded to the engine."""
+    engine = _FakeQueryEngine([])
+    engine.custom_attr = "forwarded_value"  # type: ignore[attr-defined]
+    governor = _make_governor(RAGPolicy())
+    governed = GovernedQueryEngine(engine, governor, collection="docs")
+    # Custom attributes should still be forwarded via __getattr__
+    assert governed.custom_attr == "forwarded_value"
