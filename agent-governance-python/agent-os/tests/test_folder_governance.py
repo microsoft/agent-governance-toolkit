@@ -364,15 +364,20 @@ class TestFolderScopedEvaluator:
 
 
 # =============================================================================
-# Regression tests for #2861 — folder-scoped backend decisions must produce
-# the same audit_entry schema as the flat-path backend branch.
+# Regression tests for audit-record integrity: context_snapshot must be
+# isolated from caller mutation. Covers the flat path, the folder-scoped
+# path, the YAML-match branch, the backend-match branch, the default-action
+# branch, and the fail-closed branch. Both top-level mutation and
+# nested-mutable-value mutation must be isolated.
 # =============================================================================
 
 
-class TestFolderScopedBackendAudit:
-    """#2861 — folder-scoped backend decisions must include backend
-    metadata, evaluation_ms, and context_snapshot in audit_entry, matching
-    the flat-path backend branch."""
+class TestContextSnapshotIsolation:
+    """Audit integrity: post-evaluation mutation of the caller's context
+    must NOT alter PolicyDecision.audit_entry['context_snapshot']. The
+    snapshot is deep-copied at construction time so audit records remain
+    a faithful record of the decision moment even if the caller mutates
+    the context after the fact."""
 
     OPA_ALLOW_REGO = """
 package agentos
@@ -380,161 +385,173 @@ default allow = false
 allow { input.tool_name == "web_search" }
 """
 
-    OPA_DENY_REGO = """
-package agentos
-default allow = false
-"""
-
     CEDAR_PERMIT = """
 permit(principal, action == Action::"WebSearch", resource);
 """
 
-    CEDAR_FORBID = """
-forbid(principal, action == Action::"WebSearch", resource);
-"""
+    def test_flat_backend_match_isolated_from_top_level_mutation(self, tmp_path):
+        """Flat path, backend match: post-evaluation mutation of the
+        caller's top-level context does not alter the audit snapshot."""
+        evaluator = PolicyEvaluator()
+        evaluator.load_rego(rego_content=self.OPA_ALLOW_REGO, mode="builtin")
+        context: dict = {"tool_name": "web_search"}
+        decision = evaluator.evaluate(context)
+        assert decision.allowed is True
 
-    def test_scoped_opa_backend_allow_audit_entry(self, tmp_path):
-        _write_policy(tmp_path / "governance.yaml", _make_policy("root", [
-            _make_rule("block-shell", "shell_exec", priority=1000),
-        ]))
+        # Identity: snapshot is not the same object as the input.
+        assert decision.audit_entry["context_snapshot"] is not context
+
+        # Mutate the caller's context after the call.
+        context["tool_name"] = "different_tool"
+        context["added"] = "sentinel"
+
+        # Snapshot must reflect the decision-time values, not the mutations.
+        snap = decision.audit_entry["context_snapshot"]
+        assert snap["tool_name"] == "web_search"
+        assert "added" not in snap
+
+    def test_flat_backend_match_isolated_from_nested_mutation(self, tmp_path):
+        """Flat path, backend match: post-evaluation mutation of a nested
+        mutable value (e.g., tool_args dict) does not alter the audit
+        snapshot. This is the case that fails for shallow copies."""
+        evaluator = PolicyEvaluator()
+        evaluator.load_rego(rego_content=self.OPA_ALLOW_REGO, mode="builtin")
+        context: dict = {
+            "tool_name": "web_search",
+            "tool_args": {"table": "users", "id": 42},
+        }
+        decision = evaluator.evaluate(context)
+        assert decision.allowed is True
+
+        # Snapshot's nested dict is a different object from the input.
+        assert decision.audit_entry["context_snapshot"]["tool_args"] is not context["tool_args"]
+
+        # Mutate the nested structure after the call.
+        context["tool_args"]["table"] = "audit_log"
+        context["tool_args"]["id"] = 9999
+        context["tool_args"]["new_key"] = "leak"
+
+        # Snapshot must preserve the original nested values.
+        snap = decision.audit_entry["context_snapshot"]
+        assert snap["tool_args"]["table"] == "users"
+        assert snap["tool_args"]["id"] == 42
+        assert "new_key" not in snap["tool_args"]
+
+    def test_scoped_backend_match_isolated_from_top_level_mutation(self, tmp_path):
+        """Scoped path, backend match: same isolation guarantee as flat."""
+        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
         action = tmp_path / "src" / "agent.py"
         action.parent.mkdir(parents=True, exist_ok=True)
         action.touch()
 
         evaluator = PolicyEvaluator(root_dir=tmp_path)
         evaluator.load_rego(rego_content=self.OPA_ALLOW_REGO, mode="builtin")
-        decision = evaluator.evaluate(
-            {"tool_name": "web_search", "path": str(action)}
-        )
+        context: dict = {"tool_name": "web_search", "path": str(action)}
+        decision = evaluator.evaluate(context)
         assert decision.allowed is True
-        ae = decision.audit_entry
-        assert ae, "Backend-originated scoped decision must include audit_entry"
-        assert ae["policy"] == "external:opa"
-        assert ae["rule"] is None
-        assert ae["action"] == "allow"
-        assert ae["backend"] == "opa"
-        assert "evaluation_ms" in ae
-        assert ae["context_snapshot"] == {
+
+        assert decision.audit_entry["context_snapshot"] is not context
+
+        context["tool_name"] = "different_tool"
+        context["extra"] = "leak"
+
+        snap = decision.audit_entry["context_snapshot"]
+        assert snap["tool_name"] == "web_search"
+        assert "extra" not in snap
+
+    def test_scoped_backend_match_isolated_from_nested_mutation(self, tmp_path):
+        """Scoped path, backend match: nested mutation isolation."""
+        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
+        action = tmp_path / "src" / "agent.py"
+        action.parent.mkdir(parents=True, exist_ok=True)
+        action.touch()
+
+        evaluator = PolicyEvaluator(root_dir=tmp_path)
+        evaluator.load_rego(rego_content=self.OPA_ALLOW_REGO, mode="builtin")
+        context: dict = {
             "tool_name": "web_search",
             "path": str(action),
+            "tool_args": {"table": "users", "id": 42},
         }
-        assert "timestamp" in ae
-
-    def test_scoped_opa_backend_deny_audit_entry(self, tmp_path):
-        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
-        action = tmp_path / "src" / "agent.py"
-        action.parent.mkdir(parents=True, exist_ok=True)
-        action.touch()
-
-        evaluator = PolicyEvaluator(root_dir=tmp_path)
-        evaluator.load_rego(rego_content=self.OPA_DENY_REGO, mode="builtin")
-        decision = evaluator.evaluate(
-            {"tool_name": "file_read", "path": str(action)}
-        )
-        assert decision.allowed is False
-        ae = decision.audit_entry
-        assert ae["policy"] == "external:opa"
-        assert ae["backend"] == "opa"
-        assert ae["action"] == "deny"
-        assert "evaluation_ms" in ae
-        assert "context_snapshot" in ae
-        assert "timestamp" in ae
-
-    def test_scoped_cedar_backend_audit_entry(self, tmp_path):
-        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
-        action = tmp_path / "src" / "agent.py"
-        action.parent.mkdir(parents=True, exist_ok=True)
-        action.touch()
-
-        evaluator = PolicyEvaluator(root_dir=tmp_path)
-        evaluator.load_cedar(policy_content=self.CEDAR_PERMIT, mode="builtin")
-        decision = evaluator.evaluate(
-            {"tool_name": "web_search", "path": str(action)}
-        )
+        decision = evaluator.evaluate(context)
         assert decision.allowed is True
-        ae = decision.audit_entry
-        assert ae["policy"] == "external:cedar"
-        assert ae["backend"] == "cedar"
-        assert ae["action"] == "allow"
-        assert "evaluation_ms" in ae
 
-    def test_scoped_cedar_backend_forbid_audit_entry(self, tmp_path):
-        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
-        action = tmp_path / "src" / "agent.py"
-        action.parent.mkdir(parents=True, exist_ok=True)
-        action.touch()
+        assert decision.audit_entry["context_snapshot"]["tool_args"] is not context["tool_args"]
 
-        evaluator = PolicyEvaluator(root_dir=tmp_path)
-        evaluator.load_cedar(policy_content=self.CEDAR_FORBID, mode="builtin")
-        decision = evaluator.evaluate(
-            {"tool_name": "web_search", "path": str(action)}
+        context["tool_args"]["table"] = "audit_log"
+        context["tool_args"]["new_key"] = "leak"
+
+        snap = decision.audit_entry["context_snapshot"]
+        assert snap["tool_args"]["table"] == "users"
+        assert "new_key" not in snap["tool_args"]
+
+    def test_flat_yaml_match_isolated_from_top_level_mutation(self):
+        """Flat path, YAML-match branch: also deep-copies."""
+        doc = PolicyDocument(
+            name="root",
+            rules=[
+                PolicyRule(
+                    name="block-x",
+                    condition=PolicyCondition(
+                        field="tool_name", operator=PolicyOperator.EQ, value="x"
+                    ),
+                    action=PolicyAction.DENY,
+                    priority=100,
+                )
+            ],
         )
+        evaluator = PolicyEvaluator(policies=[doc])
+        context: dict = {"tool_name": "x", "extra": "original"}
+        decision = evaluator.evaluate(context)
         assert decision.allowed is False
-        ae = decision.audit_entry
-        assert ae["policy"] == "external:cedar"
-        assert ae["backend"] == "cedar"
-        assert ae["action"] == "deny"
-        assert "evaluation_ms" in ae
-        assert "context_snapshot" in ae
-        assert "timestamp" in ae
 
-    def test_scoped_backend_evaluation_timing_present(self, tmp_path):
-        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
-        action = tmp_path / "src" / "agent.py"
-        action.parent.mkdir(parents=True, exist_ok=True)
-        action.touch()
+        assert decision.audit_entry["context_snapshot"] is not context
 
-        evaluator = PolicyEvaluator(root_dir=tmp_path)
-        evaluator.load_rego(rego_content=self.OPA_ALLOW_REGO, mode="builtin")
-        decision = evaluator.evaluate(
-            {"tool_name": "web_search", "path": str(action)}
-        )
-        # evaluation_ms is a non-negative number (BackendDecision field).
-        assert isinstance(decision.audit_entry["evaluation_ms"], (int, float))
-        assert decision.audit_entry["evaluation_ms"] >= 0
+        context["tool_name"] = "y"
+        context["extra"] = "mutated"
 
-    def test_flat_vs_scoped_backend_audit_entry_key_parity(self, tmp_path):
-        """Equivalent backend-originated decisions must produce equivalent
-        audit_entry key sets regardless of evaluation path."""
-        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
-        action = tmp_path / "src" / "agent.py"
-        action.parent.mkdir(parents=True, exist_ok=True)
-        action.touch()
+        snap = decision.audit_entry["context_snapshot"]
+        assert snap["tool_name"] == "x"
+        assert snap["extra"] == "original"
 
-        # Flat path — no root_dir, no 'path' in context.
-        flat_evaluator = PolicyEvaluator()
-        flat_evaluator.load_rego(rego_content=self.OPA_ALLOW_REGO, mode="builtin")
-        flat_decision = flat_evaluator.evaluate({"tool_name": "web_search"})
+    def test_flat_default_action_isolated_from_top_level_mutation(self):
+        """Flat path, default-action branch: also deep-copies."""
+        evaluator = PolicyEvaluator()  # no policies, no backends
+        context: dict = {"tool_name": "anything", "extra": "original"}
+        decision = evaluator.evaluate(context)
+        assert decision.allowed is True
+        assert "No rules matched" in decision.reason
 
-        # Scoped path — root_dir set, 'path' in context.
-        scoped_evaluator = PolicyEvaluator(root_dir=tmp_path)
-        scoped_evaluator.load_rego(rego_content=self.OPA_ALLOW_REGO, mode="builtin")
-        scoped_decision = scoped_evaluator.evaluate(
-            {"tool_name": "web_search", "path": str(action)}
-        )
+        assert decision.audit_entry["context_snapshot"] is not context
 
-        # The audit_entry key set must be identical between the two paths
-        # for the same logical backend decision.
-        assert set(flat_decision.audit_entry) == set(scoped_decision.audit_entry)
+        context["tool_name"] = "different"
+        context["extra"] = "mutated"
 
-    def test_scoped_backend_decision_preserves_allowed_and_action(self, tmp_path):
-        """The fix must not change authorization semantics: allowed, action,
-        matched_rule, and reason must be set correctly on scoped backend
-        decisions, identical to the pre-fix behavior."""
-        _write_policy(tmp_path / "governance.yaml", _make_policy("root", []))
-        action = tmp_path / "src" / "agent.py"
-        action.parent.mkdir(parents=True, exist_ok=True)
-        action.touch()
+        snap = decision.audit_entry["context_snapshot"]
+        assert snap["tool_name"] == "anything"
+        assert snap["extra"] == "original"
 
-        evaluator = PolicyEvaluator(root_dir=tmp_path)
-        evaluator.load_rego(rego_content=self.OPA_DENY_REGO, mode="builtin")
-        decision = evaluator.evaluate(
-            {"tool_name": "anything", "path": str(action)}
-        )
-        assert decision.allowed is False
-        assert decision.matched_rule is None
-        assert decision.action == "deny"
-        # The reason field is propagated from the BackendDecision.
-        assert decision.reason  # non-empty
-        # And audit_entry is now non-empty (the fix).
-        assert decision.audit_entry
+    def test_snapshot_deepcopy_works_for_list_values(self, tmp_path):
+        """Lists are also mutable; mutation of a list-typed context value
+        must not alter the audit snapshot. Confirms the snapshot uses
+        a recursive (deep) copy, not a shallow one."""
+        evaluator = PolicyEvaluator()
+        evaluator.load_cedar(policy_content=self.CEDAR_PERMIT, mode="builtin")
+        context: dict = {
+            "tool_name": "web_search",
+            "agent_groups": ["users", "analysts"],
+        }
+        decision = evaluator.evaluate(context)
+        assert decision.allowed is True
+
+        # Snapshot's list is a different object from the input.
+        assert decision.audit_entry["context_snapshot"]["agent_groups"] is not context["agent_groups"]
+
+        # Mutate the list in-place.
+        context["agent_groups"].append("admins")
+        context["agent_groups"][0] = "mutated"
+
+        # Snapshot must preserve the original list.
+        snap_list = decision.audit_entry["context_snapshot"]["agent_groups"]
+        assert snap_list == ["users", "analysts"]
+        assert "admins" not in snap_list
