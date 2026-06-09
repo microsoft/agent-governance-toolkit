@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_sre"
-version = "4.0.0"
+version = "4.1.0"
 description = "Deprecated — use agent-governance-toolkit-cli instead. Reliability Engineering for AI Agent Systems"
 readme = "README.md"
 license = {text = "MIT"}

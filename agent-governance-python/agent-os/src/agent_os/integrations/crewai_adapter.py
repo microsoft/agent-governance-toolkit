@@ -235,6 +235,11 @@ class GovernanceHooks:
             # ─── 1. Tool allowlist check ───────────────────────
             if kernel.policy.allowed_tools:
                 if tool_name not in kernel.policy.allowed_tools:
+                    logger.info(
+                        "[%s] Policy DENY: tool '%s' not in allowed_tools",
+                        name, tool_name,
+                    )
+                    return False
             # Host-side defensive pattern scan on the tool name and the
             # serialised arguments. The AGT manifest bridge only emits a
             # pattern check against ``input.policy_target.value`` (a
@@ -341,6 +346,9 @@ class GovernanceHooks:
                 # Blocked-pattern check on output
                 matched = kernel.policy.matches_pattern(tool_result)
                 if matched:
+                    raise PolicyViolationError(
+                        f"Blocked pattern '{matched[0]}' in tool output"
+                    )
                 # AGT output intervention point evaluates the tool result
                 post_result = kernel.evaluate_output(ctx, tool_result)
                 if not post_result.allowed:
@@ -439,6 +447,12 @@ class GovernanceHooks:
 
                 allowed, reason = kernel.pre_execute(ctx, combined_input)
                 if not allowed:
+                    logger.info(
+                        "[%s] Policy DENY (pre_execute): %s",
+                        name,
+                        reason,
+                    )
+                    return False
                 pre_result = kernel.evaluate_input(ctx, combined_input)
                 if not pre_result.allowed:
                     logger.info(
@@ -520,6 +534,9 @@ class GovernanceHooks:
                 # Blocked-pattern check on LLM output
                 matched = kernel.policy.matches_pattern(response)
                 if matched:
+                    raise PolicyViolationError(
+                        f"Blocked pattern '{matched[0]}' in LLM output"
+                    )
                 # AGT output intervention point evaluates the LLM response
                 post_result = kernel.evaluate_output(ctx, response.strip())
                 if not post_result.allowed:

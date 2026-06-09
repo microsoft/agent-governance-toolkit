@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_primitives"
-version = "4.0.0"
+version = "4.1.0"
 description = "Deprecated — use agent-governance-toolkit-core instead. Shared primitive data models for Agent OS"
 readme = "README.md"
 license = {text = "MIT"}
