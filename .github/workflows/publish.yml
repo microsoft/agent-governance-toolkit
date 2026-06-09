@@ -146,6 +146,7 @@ jobs:
     needs: resolve-python-matrix
     if: needs.resolve-python-matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
+    environment: pypi
     permissions:
       contents: write
       id-token: write
