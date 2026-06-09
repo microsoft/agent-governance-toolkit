@@ -108,7 +108,7 @@ describe('AuditLogger', () => {
       tool: 'echo',
       decision: 'allow',
       arguments: {
-        publicField: 'github_pat_FAKE_FOR_TESTING_0000000000000000000000',
+        embeddedToken: 'github_pat_FAKE_FOR_TESTING_0000000000000000000000',
         openAiToken: fakeOpenAiToken,
         slackToken: 'xoxb-FAKE-FOR-TESTING-0000000000',
         nested: {
@@ -130,7 +130,7 @@ describe('AuditLogger', () => {
       .split('\n')
       .map((line) => JSON.parse(line) as { data: { arguments: Record<string, any> } });
 
-    expect(entry.data.arguments.publicField).toBe('[REDACTED]');
+    expect(entry.data.arguments.embeddedToken).toBe('[REDACTED]');
     expect(entry.data.arguments.openAiToken).toBe('[REDACTED]');
     expect(entry.data.arguments.slackToken).toBe('[REDACTED]');
     expect(entry.data.arguments.nested.note).toBe('[REDACTED]');
