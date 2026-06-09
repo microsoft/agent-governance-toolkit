@@ -32,7 +32,7 @@
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
 
 > [!IMPORTANT]
-> **Public Preview** -- production-quality, Microsoft-signed releases. May have breaking changes before GA.
+> **Public Preview** -- production-quality public preview releases. May have breaking changes before GA.
 
 Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents. One `pip install`, any framework.
 

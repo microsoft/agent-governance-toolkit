@@ -6,7 +6,7 @@
 # See: docs/CONTRIBUTING.md and .github/workflows/require-maintainer-approval.yml
 
 # Default owners for everything in the repo
-* @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar
+* @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar @imran-siddique
 
 # Security-sensitive paths — require maintainer review, no exceptions
 /.github/                    @imran-siddique @MohammadHaroonAbuomar

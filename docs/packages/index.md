@@ -1,46 +1,43 @@
 # Packages
 
-AGT provides 14 packages covering every layer of agent governance.
+AGT is a multi-language monorepo with Python packages, language SDKs, developer
+tool integrations, ACS packages, and container images. The authoritative package
+identity and migration table is [`../package-migration.md`](../package-migration.md).
 
-```
-+------------------+     +------------------+     +------------------+
-|    Agent OS      |     |   Agent Mesh     |     |  Agent Runtime   |
-|  Policy engine   |     |  Discovery &     |     |  Sandboxing &    |
-|  & lifecycle     |     |  trust mesh      |     |  privilege rings  |
-+------------------+     +------------------+     +------------------+
-        |                        |                        |
-+------------------+     +------------------+     +------------------+
-|   Agent SRE      |     | Agent Compliance |     | Agent Marketplace|
-|  Reliability &   |     |  Audit logging   |     |  Plugin trust    |
-|  monitoring      |     |  & frameworks    |     |  & governance    |
-+------------------+     +------------------+     +------------------+
-        |                        |                        |
-+------------------+     +------------------+     +------------------+
-| Agent Lightning  |     | Agent Hypervisor |     | Language + Tools |
-|  High-perf       |     |  HW isolation    |     |  .NET, TS, Rust  |
-|  orchestration   |     |  for workloads   |     |  Go, VS Code     |
-+------------------+     +------------------+     +------------------+
-```
+AGT is proposed for AAIF hosting in `aaif/project-proposals#19`. Microsoft-origin
+package names remain current compatibility names until registry ownership and
+foundation package identities are finalized.
 
-## Core Packages
+## Canonical package families
 
-| Package | Description | Install |
-|---------|------------|---------|
-| [Agent OS](agent-os.md) | Policy engine, agent lifecycle, governance gate | `pip install agent-os-kernel` |
-| [Agent Mesh](agent-mesh.md) | Agent discovery, routing, trust mesh | `pip install agentmesh-platform` |
-| [Agent Runtime](agent-runtime.md) | Execution sandboxing, four privilege rings | `pip install agentmesh-runtime` |
-| [Agent SRE](agent-sre.md) | Kill switch, SLO monitoring, chaos testing | `pip install agent-sre` |
-| [Agent Compliance](agent-compliance.md) | Audit logging, compliance frameworks | `pip install agent-governance-toolkit` |
-| [Agent Marketplace](agent-marketplace.md) | Plugin governance, marketplace trust | `pip install agentmesh-marketplace` |
-| [Agent Lightning](agent-lightning.md) | High-performance orchestration | `pip install agentmesh-lightning` |
-| [Agent Hypervisor](agent-hypervisor.md) | Hardware-level workload isolation | `pip install agent-hypervisor` |
-| [Agent Control Specification](agent-control-specification.md) | Stateless policy decision runtime for the AGT 5.0 policy layer | vendored in `policy-engine/` |
+| Family | Purpose | Source |
+|---|---|---|
+| Python meta-package | Full AGT install and extras | `agent-governance-python/agent-compliance` |
+| Python core | Policy engine, trust, audit, identity, runtime core | `agent-governance-python/agent-governance-toolkit-core` |
+| Python integrations | Framework adapters | `agent-governance-python/agent-governance-toolkit-integrations` |
+| Python CLI | Operator CLI, sandbox, SRE, MCP trust tooling | `agent-governance-python/agent-governance-toolkit-cli` |
+| Python protocols | Protocol governance surfaces | `agent-governance-python/agent-governance-toolkit-protocols` |
+| ACS | Stateless policy decision runtime and SDKs | `policy-engine/` |
+| TypeScript SDK | Agent governance SDK and developer tooling packages | `agent-governance-typescript/`, `agent-governance-*cli/` |
+| .NET SDK | .NET governance SDK and extensions | `agent-governance-dotnet/` |
+| Rust SDK | `agentmesh`, `agentmesh-mcp`, ACS Rust crates | `agent-governance-rust/`, `policy-engine/` |
+| Go SDK | Go governance SDK | `agent-governance-golang/` |
+| OCI images | Runtime/service containers | `.github/workflows/publish-containers.yml` |
 
-## Language Packages & Tooling
+## Status labels
 
-| Package | Language | Install |
-|---------|---------|---------|
-| [Antigravity CLI governance package](antigravity-cli-governance.md) | Antigravity CLI / Node.js | `npm install -g @microsoft/agent-governance-antigravity-cli && agt-antigravity install` |
-| [OpenCode CLI governance package](opencode-governance.md) | OpenCode CLI / Node.js | `npm install @microsoft/agent-governance-opencode` |
-| [.NET package](dotnet-sdk.md) | C# / .NET | `dotnet add package Microsoft.AgentGovernance` |
-| [VS Code Extension](agent-os-vscode.md) | VS Code | Install from marketplace |
+| Status | Meaning |
+|---|---|
+| Shipped | Released in a current package and covered by package-local validation. |
+| Compatibility | Existing Microsoft-origin or legacy package identity retained temporarily. |
+| Experimental | Runnable but not guaranteed stable. |
+| Proposed | ADR/RFC/spec exists but implementation is not a shipped guarantee. |
+| Vendor integration | Requires a vendor product, account, or platform. |
+
+Package pages should use these labels when a capability is not part of the
+canonical core release.
+
+## Migration
+
+Use [`../package-migration.md`](../package-migration.md) before changing package
+names, install snippets, release workflow matrices, or registry metadata.
