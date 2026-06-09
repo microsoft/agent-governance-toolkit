@@ -919,7 +919,12 @@ jobs:
       - name: Install dependencies
         if: steps.gate.outputs.run == 'true'
         working-directory: ${{ matrix.path }}
-        run: npm ci --legacy-peer-deps --ignore-scripts  # Scorecard: uses lockfile via npm ci
+        run: |
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci --legacy-peer-deps --ignore-scripts  # Scorecard: uses lockfile via npm ci
+          else
+            npm install --legacy-peer-deps --ignore-scripts
+          fi
       - name: Check Claude Code marketplace version
         if: steps.gate.outputs.run == 'true' && matrix.name == 'agent-governance-claude-code'
         run: node scripts/sync-claude-marketplace-version.mjs --check

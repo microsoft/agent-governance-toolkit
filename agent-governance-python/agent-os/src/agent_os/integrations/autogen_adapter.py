@@ -44,7 +44,7 @@ Legacy usage (deprecated)::
 import functools
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from ._v5_runtime_bridge import (
@@ -56,6 +56,7 @@ from .base import (
     PII_PATTERNS,
     BaseIntegration,
     ExecutionContext,
+    GovernanceEventType,
     GovernancePolicy,
     PolicyViolationError,
 )
@@ -175,6 +176,29 @@ class GovernanceInterventionHandler:
         if _FUNCTION_CALL_AVAILABLE and isinstance(message, FunctionCall):
             tool_name = getattr(message, "name", "unknown")
             tool_args = getattr(message, "arguments", "")
+
+            trusted_skill_sources = kernel.trusted_sources_from_attrs(message)
+
+            emitted = kernel.emit_skill_audit_event(
+                GovernanceEventType.POLICY_CHECK,
+                agent_id=ctx.agent_id,
+                action="autogen.on_send.function_call",
+                trusted_sources=trusted_skill_sources,
+                default_origin="autogen",
+                context_before=tool_args,
+                tool_name=tool_name,
+            )
+            kernel._function_call_log.append({
+                "agent_id": ctx.agent_id,
+                "function_name": tool_name,
+                "args_summary": str(tool_args)[:200],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "skill_name": emitted.get("skill_name"),
+                "skill_origin": emitted.get("skill_origin"),
+                "provenance_source_trust": emitted.get("provenance_source_trust"),
+                "context_hash_before": emitted.get("context_hash_before"),
+                "context_hash_after": emitted.get("context_hash_after"),
+            })
 
             logger.debug(
                 "[%s] on_send: FunctionCall tool=%s", name, tool_name,

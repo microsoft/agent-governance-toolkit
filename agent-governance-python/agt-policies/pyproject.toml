@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agt-policies"
-version = "5.0.0a1"
+version = "5.0.0"
 description = "AGT 5.0 policy layer over the AGT-vendored ACS engine"
 readme = "README.md"
 license = {text = "MIT"}

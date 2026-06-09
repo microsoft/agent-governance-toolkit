@@ -296,6 +296,7 @@ class NexusClient:
                 task_hash=task_hash,
                 credits=credits,
                 timeout_seconds=timeout_seconds,
+                requester_signature=self._sign_escrow(provider_did, task_hash, credits),
             )
             return receipt.model_dump()
         
@@ -374,7 +375,13 @@ class NexusClient:
     ) -> dict:
         """Sign a DMZ data handling policy to receive access."""
         if self.local_mode:
-            signature = self._generate_signature({"transfer_id": transfer_id})
+            from .crypto import sign
+            if self._private_key_bytes is None:
+                raise ValueError(
+                    "private_key_bytes is required for signing. "
+                    "Pass it to NexusClient.__init__ or use nexus.crypto.generate_keypair()."
+                )
+            signature = sign(self._private_key_bytes, transfer_id.encode())
             signed = await self._local_dmz.sign_policy(
                 transfer_id, self.agent_did, signature
             )

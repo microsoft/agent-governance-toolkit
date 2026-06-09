@@ -1,5 +1,4 @@
 agent-os-kernel>=3.5.0
 cedarling_agentmesh>=3.5.0
 
-# Optional — enables in-process cedarling_python evaluation (fastest)
-# cedarling-python>=0.0.4
+cedarling-python>=0.0.4

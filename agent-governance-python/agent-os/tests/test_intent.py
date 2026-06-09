@@ -45,11 +45,7 @@ def manager(backend):
 
 def _run(coro):
     """Helper to run async in sync tests."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------

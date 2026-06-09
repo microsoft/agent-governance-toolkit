@@ -13,13 +13,14 @@ import copy
 import difflib
 import fnmatch
 import hashlib
+import json
 import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Protocol
 
 if TYPE_CHECKING:
     from agent_os.policies.decision import PolicyCheckResult
@@ -746,6 +747,45 @@ class ToolCallResult:
         return f"ToolCallResult(allowed={self.allowed!r}, reason={self.reason!r})"
 
 
+@dataclass(frozen=True)
+class SkillAuditMetadata:
+    """Normalized skill metadata attached to audit events.
+
+    Fields are additive and nullable so existing integrations can adopt this
+    progressively without breaking older payload consumers.
+    """
+
+    skill_name: str | None = None
+    skill_origin: str | None = None
+    provenance_source_trust: Literal["trusted"] | None = None
+    context_hash_before: str | None = None
+    context_hash_after: str | None = None
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "skill_name": self.skill_name,
+            "skill_origin": self.skill_origin,
+            "provenance_source_trust": self.provenance_source_trust,
+            "context_hash_before": self.context_hash_before,
+            "context_hash_after": self.context_hash_after,
+        }
+
+
+@dataclass(frozen=True)
+class TrustedSkillMetadataSource:
+    """Trusted framework-owned skill metadata source.
+
+    Adapters must construct this only from framework metadata surfaces,
+    never from user-controlled request payloads or tool arguments.
+
+    Future: extend with verifiable attestations/signatures when framework
+    runtimes expose portable trust claims. Tracked in #2907.
+    """
+
+    skill_name: str | None = None
+    skill_origin: str | None = None
+
+
 class ToolCallInterceptor(Protocol):
     """
     Abstract protocol for intercepting tool/function calls.
@@ -1265,6 +1305,196 @@ class BaseIntegration(ABC):
                     "Governance event listener error for %s: %s",
                     event_type, exc, exc_info=True,
                 )
+
+    @staticmethod
+    def hash_context(context: Any) -> str | None:
+        """Return a deterministic SHA-256 hash for canonically serializable context.
+
+        This is a lightweight, best-effort fingerprint for observability.
+        It is not a cryptographic provenance guarantee.
+        """
+        if context is None:
+            return None
+
+        try:
+            canonical = json.dumps(
+                context,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            )
+        except Exception:
+            logger.debug(
+                "Unable to canonicalize context for hashing (type=%s)",
+                type(context).__name__,
+                exc_info=True,
+            )
+            # Fail-safe: non-canonical payloads should not produce hashes.
+            return None
+
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def trusted_skill_metadata_source(
+        *,
+        skill_name: Any = None,
+        skill_origin: Any = None,
+    ) -> TrustedSkillMetadataSource | None:
+        """Create a trusted metadata source from explicit framework-owned values."""
+
+        def _pick_string(value: Any) -> str | None:
+            if isinstance(value, str):
+                normalized = value.strip()
+                return normalized or None
+            return None
+
+        parsed_name = _pick_string(skill_name)
+        parsed_origin = _pick_string(skill_origin)
+        if parsed_name is None and parsed_origin is None:
+            return None
+
+        return TrustedSkillMetadataSource(
+            skill_name=parsed_name,
+            skill_origin=parsed_origin,
+        )
+
+    @staticmethod
+    def trusted_skill_metadata_from_mapping(
+        metadata: Mapping[str, Any] | None,
+        *,
+        skill_name_key: str = "skill_name",
+        skill_origin_key: str = "skill_origin",
+    ) -> TrustedSkillMetadataSource | None:
+        """Build trusted metadata from an explicitly designated framework mapping.
+
+        Callers must pass only framework-owned metadata maps.
+        Arbitrary request/argument dictionaries are out of scope by design.
+        """
+        if not isinstance(metadata, Mapping):
+            return None
+        return BaseIntegration.trusted_skill_metadata_source(
+            skill_name=metadata.get(skill_name_key),
+            skill_origin=metadata.get(skill_origin_key),
+        )
+
+    @staticmethod
+    def trusted_sources(
+        *sources: TrustedSkillMetadataSource | None,
+    ) -> tuple[TrustedSkillMetadataSource, ...]:
+        """Return only non-null trusted metadata sources."""
+        return tuple(source for source in sources if source is not None)
+
+    @staticmethod
+    def trusted_sources_from_attrs(
+        *objs: Any,
+    ) -> tuple[TrustedSkillMetadataSource, ...]:
+        """Extract trusted metadata sources from objects exposing skill attrs."""
+        return BaseIntegration.trusted_sources(
+            *(
+                BaseIntegration.trusted_skill_metadata_source(
+                    skill_name=getattr(obj, "skill_name", None),
+                    skill_origin=getattr(obj, "skill_origin", None),
+                )
+                for obj in objs
+            )
+        )
+
+    @staticmethod
+    def extract_skill_metadata(
+        *,
+        trusted_sources: tuple[TrustedSkillMetadataSource, ...] = (),
+        sources: tuple[Any, ...] = (),
+        default_origin: str | None = None,
+    ) -> SkillAuditMetadata:
+        """Extract skill metadata from trusted framework-owned sources only.
+
+        Trust boundary: this method intentionally ignores user-controlled data.
+        """
+
+        skill_name: str | None = None
+        skill_origin: str | None = None
+
+        # Backward-compatible bridge: only explicitly trusted wrappers from
+        # legacy ``sources`` are accepted.
+        merged_trusted_sources = list(trusted_sources)
+        for source in sources:
+            if isinstance(source, TrustedSkillMetadataSource):
+                merged_trusted_sources.append(source)
+
+        for source in merged_trusted_sources:
+            if skill_name is None and source.skill_name is not None:
+                skill_name = source.skill_name
+            if skill_origin is None and source.skill_origin is not None:
+                skill_origin = source.skill_origin
+
+        if skill_name and not skill_origin and default_origin:
+            skill_origin = default_origin
+
+        provenance_source_trust: Literal["trusted"] | None = "trusted" if skill_name else None
+
+        return SkillAuditMetadata(
+            skill_name=skill_name,
+            skill_origin=skill_origin,
+            provenance_source_trust=provenance_source_trust,
+        )
+
+    def build_skill_audit_fields(
+        self,
+        *,
+        trusted_sources: tuple[TrustedSkillMetadataSource, ...] = (),
+        sources: tuple[Any, ...] = (),
+        default_origin: str | None = None,
+        context_before: Any | None = None,
+        context_after: Any | None = None,
+    ) -> dict[str, str | None]:
+        """Build normalized skill-audit fields for adapter audit payloads."""
+        metadata = self.extract_skill_metadata(
+            trusted_sources=trusted_sources,
+            sources=sources,
+            default_origin=default_origin,
+        )
+        return SkillAuditMetadata(
+            skill_name=metadata.skill_name,
+            skill_origin=metadata.skill_origin,
+            provenance_source_trust=metadata.provenance_source_trust,
+            context_hash_before=self.hash_context(context_before),
+            context_hash_after=self.hash_context(context_after),
+        ).to_dict()
+
+    def emit_skill_audit_event(
+        self,
+        event_type: GovernanceEventType,
+        *,
+        agent_id: str,
+        action: str,
+        trusted_sources: tuple[TrustedSkillMetadataSource, ...] = (),
+        sources: tuple[Any, ...] = (),
+        default_origin: str | None = None,
+        context_before: Any | None = None,
+        context_after: Any | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """Emit a centralized skill-aware governance audit payload.
+
+        Emission happens in governance middleware/hooks (outside skill loading
+        or execution internals) so malformed skills cannot suppress audit
+        generation.
+        """
+        payload: dict[str, Any] = {
+            "agent_id": agent_id,
+            "action": action,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **self.build_skill_audit_fields(
+                trusted_sources=trusted_sources,
+                sources=sources,
+                default_origin=default_origin,
+                context_before=context_before,
+                context_after=context_after,
+            ),
+            **extra,
+        }
+        self.emit(event_type, payload)
+        return payload
 
     def pre_execute_check(self, ctx: ExecutionContext, input_data: Any) -> PolicyCheckResult:
         """Run pre-execution policy checks and return a structured result.
