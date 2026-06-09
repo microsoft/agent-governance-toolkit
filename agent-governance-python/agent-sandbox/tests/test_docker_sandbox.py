@@ -2364,18 +2364,41 @@ class TestDefaultImageSelection:
         p = DockerSandboxProvider()
         assert p._image == DockerSandboxProvider.HARDENED_IMAGE_TAG
 
-    def test_falls_back_to_legacy_when_hardened_not_built(self, monkeypatch):
+    def test_falls_back_to_legacy_when_hardened_not_built(self, caplog):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider
 
-        monkeypatch.setattr(DockerSandboxProvider, "_select_default_image",
-                            classmethod(lambda cls: DockerSandboxProvider._LEGACY_DEFAULT_IMAGE))
-        p = DockerSandboxProvider()
-        assert p._image == "python:3.11-slim"
+        docker_module = MagicMock()
+        docker_module.from_env.return_value.images.get.side_effect = Exception(
+            "image not found"
+        )
 
-    def test_explicit_image_overrides_default(self):
+        with patch.dict("sys.modules", {"docker": docker_module}):
+            with caplog.at_level(
+                "WARNING",
+                logger="agent_sandbox.docker_provider.provider",
+            ):
+                selected = DockerSandboxProvider._select_default_image()
+
+        assert selected == "python:3.11-slim"
+        assert "Minimal-PATH command restrictions are not active" in caplog.text
+        assert "require_hardened_image=True" in caplog.text
+
+    def test_explicit_image_overrides_default_without_fallback_warning(self, caplog):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider
-        p = DockerSandboxProvider(image="my-custom:tag")
+
+        with patch.object(
+            DockerSandboxProvider,
+            "_select_default_image",
+        ) as select_default:
+            with caplog.at_level(
+                "WARNING",
+                logger="agent_sandbox.docker_provider.provider",
+            ):
+                p = DockerSandboxProvider(image="my-custom:tag")
+
         assert p._image == "my-custom:tag"
+        select_default.assert_not_called()
+        assert "Minimal-PATH command restrictions are not active" not in caplog.text
 
     def test_require_hardened_image_selects_hardened_image(self, monkeypatch):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider
