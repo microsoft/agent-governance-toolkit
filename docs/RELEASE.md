@@ -1,84 +1,72 @@
-# Release Process
+# Release process
 
-This document describes how the Agent Governance Toolkit ships releases across its multi-language SDK ecosystem.
+This document describes the canonical AGT release process. AGT is proposed for
+AAIF hosting in `aaif/project-proposals#19`; until TC approval, Governing Board
+approval, governance finalization, and contribution agreement execution are
+complete, do not describe AGT as donated.
 
 ## Versioning
 
-All packages follow [Semantic Versioning 2.0.0](https://semver.org/):
+AGT uses Semantic Versioning for published packages. The repository is a
+multi-language monorepo, so a release may publish several ecosystem artifacts
+from the same tag even when only a subset changed.
 
-- **MAJOR**: Breaking API changes (removed public classes, changed method signatures, incompatible config format changes)
-- **MINOR**: New features, new packages, new CLI commands (backward-compatible)
-- **PATCH**: Bug fixes, documentation corrections, dependency updates (backward-compatible)
+## Release authority
 
-Each SDK package is versioned independently. There is no monorepo-wide version number.
+Canonical releases are approved by maintainers with release-workflow ownership.
+Release approval is a project authority, not a Microsoft ESRP approval.
 
-## Release Cadence
+## Supported registries
 
-- **Regular releases**: As needed, typically 1-2 times per month
-- **Security patches**: Released within 48 hours of confirmed vulnerability
-- **Dependabot updates**: Merged continuously and included in the next release
+| Ecosystem | Registry | Canonical identity source |
+|---|---|---|
+| Python | PyPI | `docs/package-migration.md` |
+| npm | npmjs.com | `docs/package-migration.md` |
+| .NET | NuGet.org | `docs/package-migration.md` |
+| Rust | crates.io | `docs/package-migration.md` |
+| Go | Go module proxy | `docs/package-migration.md` |
+| Containers | GHCR / OCI registry | `docs/package-migration.md` |
 
-## Supported Registries
+## Release workflow
 
-| Ecosystem | Registry | Packages |
-|-----------|----------|----------|
-| Python | [PyPI](https://pypi.org/) | agent-os, agent-mesh, agent-compliance, agent-sre, agent-hypervisor, agent-runtime, agent-lightning, framework integrations (40+ packages) |
-| TypeScript | [npm](https://www.npmjs.com/) | @agent-governance/\* |
-| .NET | [NuGet](https://www.nuget.org/) | AgentGovernance.\* |
-| Rust | [crates.io](https://crates.io/) | agent-governance-\* |
-| Go | Go modules | github.com/microsoft/agent-governance-toolkit/agent-governance-go/\* |
-| Containers | [GitHub Container Registry](https://ghcr.io) | trust-engine, policy-server, audit-collector, api-gateway, registry, relay, governance-sidecar |
+1. Release manager confirms relevant CI is green.
+2. Release manager confirms package map, manifests, and release matrix agree.
+3. Release manager runs `Publish Packages` with `dry_run: true` and reviews the
+   uploaded `release-manifest.json`.
+4. Release manager runs `Publish Container Images` with `dry_run: true` when
+   container artifacts are in scope.
+5. Release manager creates a signed release tag.
+6. `.github/workflows/publish.yml` builds, tests, packages, attests, and
+   publishes language packages.
+7. `.github/workflows/publish-containers.yml` builds, attests, and publishes
+   container images.
+8. `.github/workflows/sbom.yml` produces release SBOMs and provenance.
+9. Release manager verifies artifacts and publishes release notes.
 
-## How to Create a Release
+## Supply-chain requirements
 
-### 1. Pre-release Checklist
+Every canonical release must preserve:
 
-- [ ] All CI checks pass on `main` (CI, CodeQL, Secret Scanning, Scorecard)
-- [ ] CHANGELOG.md is updated with notable changes
-- [ ] No open security advisories or critical bugs
-- [ ] Version numbers bumped in affected package manifests (`pyproject.toml`, `package.json`, `*.csproj`, `Cargo.toml`)
+- pinned GitHub Actions;
+- least-privilege workflow permissions;
+- dependency review on PRs;
+- CodeQL and Scorecard coverage;
+- SBOM generation;
+- provenance attestations;
+- explicit package and container verification guidance.
 
-### 2. Create a GitHub Release
+## Hotfixes
 
-1. Go to [Releases](https://github.com/microsoft/agent-governance-toolkit/releases)
-2. Click "Draft a new release"
-3. Create a new tag following the pattern `v<MAJOR>.<MINOR>.<PATCH>` (e.g., `v0.8.0`)
-4. Use the auto-generated release notes as a starting point, then edit for clarity
-5. Mark as pre-release if appropriate (e.g., `v0.8.0-rc.1`)
-6. Publish the release
+For critical bugs or security issues:
 
-### 3. Automated Publishing
+1. Create a hotfix branch from the affected release tag.
+2. Apply the minimal fix with tests.
+3. Run relevant package validation.
+4. Cut a patch release.
+5. Cherry-pick the fix back to `main` if needed.
 
-Publishing is triggered automatically when a GitHub Release is published:
+## Deprecated release paths
 
-- **Python packages**: The `publish.yml` workflow builds wheels with provenance attestation, then publishes to PyPI
-- **Container images**: The `publish-containers.yml` workflow builds and pushes multi-arch images to GHCR
-- **.NET packages**: Built and published to NuGet via the CI pipeline
-- **npm packages**: Built and published to npm via the CI pipeline
-
-The `workflow_dispatch` trigger on `publish.yml` also allows publishing individual packages on demand.
-
-### 4. Post-release
-
-- Verify packages appear on their respective registries
-- Verify container images are pullable: `docker pull ghcr.io/microsoft/agent-governance-toolkit/<component>:<tag>`
-- Monitor for any regression reports in the first 24 hours
-
-## Hotfix Process
-
-For critical bugs or security issues in a released version:
-
-1. Create a branch from the release tag: `git checkout -b hotfix/v0.8.1 v0.8.0`
-2. Apply the minimal fix with tests
-3. Follow the standard release process with a PATCH version bump
-4. Cherry-pick the fix back to `main` if not already there
-
-## Supply Chain Security
-
-Every release includes:
-
-- **SBOM generation**: Software Bill of Materials for all packages (`sbom.yml`)
-- **Provenance attestation**: Build provenance via GitHub Attestations (Sigstore-based)
-- **Dependency review**: Automated review of dependency changes on every PR
-- **Secret scanning**: Pre-commit and CI scanning for leaked credentials
-- **OpenSSF Scorecard**: Weekly scoring with SARIF upload to GitHub Security tab
+Azure DevOps ESRP is not a canonical AGT release path. Do not reintroduce ESRP,
+Microsoft tenant IDs, Microsoft Key Vault, or Microsoft signing certificates into
+canonical AGT release workflows.
