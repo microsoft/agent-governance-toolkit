@@ -79,7 +79,7 @@ dev = [
     "fakeredis>=2.36.0,<3.0",
     "prometheus-client>=0.19.0,<1.0",
     "websockets>=12.0,<17.0",
-    "fastapi>=0.115.0,<1.0",
+    "fastapi>=0.136.3,<1.0",
     "httpx>=0.27.0,<1.0",
     "opentelemetry-api>=1.42.1,<2.0",
     "opentelemetry-sdk>=1.42.1,<2.0",
@@ -92,7 +92,7 @@ redis = [
     "redis>=4.0,<8.0",
 ]
 server = [
-    "fastapi>=0.115.0,<1.0",
+    "fastapi>=0.136.3,<1.0",
     "uvicorn[standard]>=0.27.0,<1.0",
     # Phase 6.c — Entra-signed JWT verification at the relay's
     # connect-frame seam. `crypto` extra brings cryptography (already
@@ -128,7 +128,7 @@ agent-os = [
     "agent-governance-toolkit-core[nexus,iatp]>=4.0.0,<5.0",
 ]
 all = [
-    "fastapi>=0.115.0,<1.0",
+    "fastapi>=0.136.3,<1.0",
     "uvicorn[standard]>=0.27.0,<1.0",
     "redis[asyncio]>=5.0.0,<8.0",
     "sqlalchemy[asyncio]>=2.0.0,<3.0",
