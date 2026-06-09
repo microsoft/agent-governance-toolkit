@@ -415,7 +415,7 @@ class DockerSandboxProvider(SandboxProvider):
 
         Tries to query the local Docker daemon for ``HARDENED_IMAGE_TAG``.
         Any failure (no Docker, image not built, permission denied) falls
-        back silently to ``python:3.11-slim`` so existing setups keep
+        back to ``python:3.11-slim`` with a warning so existing setups keep
         working unless ``require_hardened_image`` is true.
         """
         try:
@@ -435,6 +435,13 @@ class DockerSandboxProvider(SandboxProvider):
                     "agent-sandbox/docker/Dockerfile.sandbox before creating "
                     "the provider."
                 ) from exc
+            logger.warning(
+                "Hardened sandbox image '%s' is unavailable; falling back to "
+                "'%s'. Minimal-PATH command restrictions are not active. "
+                "Set require_hardened_image=True to fail closed.",
+                cls.HARDENED_IMAGE_TAG,
+                cls._LEGACY_DEFAULT_IMAGE,
+            )
             return cls._LEGACY_DEFAULT_IMAGE
 
     def _detect_runtime(self) -> IsolationRuntime:
