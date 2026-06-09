@@ -1,20 +1,22 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Cedarling + AGT policy evaluation example.
+"""No-JWT (unsigned) authorization for agents with Cedarling + AGT.
 
-Demonstrates how ``CedarlingBackend`` plugs into AGT's ``PolicyEvaluator`` as an
-external policy backend - without modifying AGT core. Authorization decisions
-are made in-process by the Cedarling engine against the bundled local policy
-store in ``./policy-store``.
+For internal services, background jobs, and test harnesses there is often no
+token to present. In unsigned mode the principal's identity and attributes come
+straight from the request dict: ``agent_id`` becomes the principal and
+``principal_attributes`` (e.g. ``{"role": "admin"}``) populate its entity
+attributes. Cedarling then evaluates Cedar policies against those attributes —
+a role-based access control setup.
+
+Authorization decisions are made in-process by the Cedarling engine against the
+bundled local policy store in ``./policy-stores/unsigned``.
 
 Run:
     pip install -r requirements.txt
-    python example.py
+    python unsigned_example.py
 
-The example uses *unsigned* auth: the principal's identity and attributes come
-straight from the request dict (no JWTs required), which makes it the simplest
-path to a working, copy-pasteable demo. See the README for the multi-issuer
-(JWT) variant.
+For the JWT / trusted-issuer path, see multi_issuer_example.py.
 """
 
 from __future__ import annotations
@@ -34,20 +36,20 @@ except ImportError:
     )
 
 # ---------------------------------------------------------------------------
-# Configure the backend
+# Configure the backend (unsigned authorization)
 # ---------------------------------------------------------------------------
 #
 # Cedarling evaluates policies in-process. Point it at the local policy store
 # directory shipped next to this script (metadata.json + schema + policies).
 # CEDARLING_POLICY_STORE_LOCAL_FN accepts a directory or a packaged JSON file.
 
-POLICY_STORE = str(Path(__file__).resolve().parent / "policy-store")
+POLICY_STORE = str(Path(__file__).resolve().parent / "policy-stores" / "unsigned")
 
 backend = CedarlingBackend(
     application_name="cedarling-governed-example",
-    # The Cedar schema in policy-store/ declares its entities under the "AGT"
-    # namespace, so the backend prefixes principal/resource/action accordingly
-    # (e.g. AGT::Agent, AGT::Action::"ReadData").
+    # The Cedar schema in policy-stores/unsigned/ declares its entities under
+    # the "AGT" namespace, so the backend prefixes principal/resource/action
+    # accordingly (e.g. AGT::Agent, AGT::Action::"ReadData").
     namespace="AGT",
     auth_type="unsigned",
     bootstrap_config={
@@ -74,7 +76,7 @@ evaluator.add_backend(backend)
 #   resource             -> resource id         (AGT::Resource)
 #   principal_attributes -> principal entity attributes (unsigned auth only)
 #
-# Policies in policy-store/:
+# Policies in policy-stores/unsigned/:
 #   allow-read   : permit Read/ReadData when principal.role == "admin"
 #   forbid-write : forbid Write when principal.role == "auditor"
 # Anything not permitted is denied by default.
