@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_hypervisor"
-version = "4.0.0"
+version = "4.1.0"
 description = "Deprecated — use agent-governance-toolkit-core instead. Agent Hypervisor: Runtime supervisor for multi-agent Shared Sessions"
 readme = "README.md"
 license = {text = "MIT"}
