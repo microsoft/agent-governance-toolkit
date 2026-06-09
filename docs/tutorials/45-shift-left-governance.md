@@ -480,7 +480,7 @@ but here is how they fit into the shift-left lifecycle:
 | Gate | Tool | What It Produces |
 |------|------|-----------------|
 | SBOM generation | Anchore/Syft | SPDX and CycloneDX software bills of materials |
-| Artifact signing | Sigstore (Python), ESRP (.NET) | Cryptographic proof of publisher identity |
+| Artifact signing | Sigstore/provenance attestations and registry-native verification | Cryptographic proof of publisher identity |
 | Build provenance | `actions/attest-build-provenance` | SLSA provenance attestation |
 | SBOM attestation | `actions/attest-sbom` | Binds SBOM to the specific release artifact |
 | OpenSSF Scorecard | `ossf/scorecard-action` | Automated security posture scoring |
@@ -500,7 +500,7 @@ pre-commit hooks           Governance             Main CI                  SBOM
 │  -manifest               │  checklist           │  Rust, Go, Python)     │
 ├─ evaluate-plugin         │                      ├─ test (all SDKs)       Signing
 │  -policy                 Dependency review      ├─ governance-verify     ├─ Sigstore
-├─ agt-validate            ├─ CVE check           ├─ policy-validation     ├─ ESRP
+├─ agt-validate            ├─ CVE check           ├─ policy-validation     ├─ provenance
 ├─ agt-doctor (pre-push)   ├─ licence check       ├─ CodeQL / SAST        │
 ├─ detect-secrets          │                      ├─ BinSkim (.NET)       Provenance
 ├─ no-stubs                Secret scanning        ├─ dependency-scan       ├─ SLSA

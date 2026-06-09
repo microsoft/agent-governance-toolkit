@@ -17,10 +17,12 @@ aexit
 agentchat
 AGENTDOJO
 agentframework
+agentgateway
 AgentGovernance
 AgentMesh
 AgentOS
 agentshield
+agentsmd
 agentveil
 agnostically
 AGTS
@@ -71,6 +73,7 @@ backrefs
 baprs
 baseexception
 baselined
+Batzner
 behaviour
 behavioural
 bindgen
@@ -79,6 +82,7 @@ bluebubbles
 bmod
 BOTO
 Bradner
+Buildx
 bursty
 bypassable
 bytearray
@@ -115,6 +119,8 @@ clippy
 cmdshell
 cmpl
 CMVK
+CODEOWN
+CODEOWNER
 CODEOWNERS
 codepoint
 cognitiveservices
@@ -151,6 +157,7 @@ DataQualityEvidence
 dataset_id
 dateutil
 davidequarracino
+Dayos
 dbt
 dearmor
 Dedup
@@ -187,6 +194,7 @@ eastus
 egresspolicy
 EigenTrust
 elif
+eltoncarr
 embedders
 emnapi
 endswith
@@ -227,6 +235,7 @@ fnmatch
 folderlocation
 formedness
 Fprintf
+FREG
 fria
 fromisoformat
 fromkeys
@@ -270,6 +279,7 @@ hexdigit
 hitl
 HMAC
 HMACSHA
+Hotfixes
 htek
 HTTPMCP
 httponly
@@ -302,6 +312,7 @@ issubclass
 issubset
 iterdir
 itertools
+jackbatzner
 javaagent
 joinpath
 jsonable
@@ -381,6 +392,8 @@ millicores
 millis
 mistralai
 mitapache
+Miya
+miyannishar
 mkdocs
 mockall
 modelcontextprotocol
@@ -392,8 +405,11 @@ monkeypatched
 monkeypatching
 mpatches
 mpsc
+MSGHCR
 MSHV
+MSINT
 msinternal
+MSPKG
 MSRC
 msvc
 mTLS
@@ -407,6 +423,7 @@ mynamespace
 myorg
 mypod
 mypy
+Mytholog
 nacl
 nameof
 namespacing
@@ -423,6 +440,7 @@ neutralising
 newpartner
 newurl
 NFKC
+Nishar
 NNNN
 nonconformant
 nonimport
@@ -438,6 +456,7 @@ nostr
 nother
 npmjs
 nuint
+nullglob
 numpy
 octo
 OLLAMA
@@ -451,6 +470,8 @@ openshell
 ORAS
 ospo
 OSSF
+overclaiming
+overclaims
 oxycodone
 parameterise
 paramref
@@ -480,6 +501,8 @@ popen
 popitem
 popleft
 Portkey
+Prashan
+prashansapkota
 prependpath
 pretool
 Printf
@@ -496,6 +519,7 @@ pyjwt
 pymethods
 pymodule
 pyobject
+pypa
 pypdf
 pypistats
 pyproject
@@ -563,6 +587,7 @@ sandboxing
 sandboxprovider
 Sanitise
 sanitised
+Sapkota
 sarif
 scak
 scikit
@@ -584,6 +609,7 @@ setitem
 setuid
 setuptools
 setvariable
+shopt
 shortone
 shutil
 siddique
@@ -601,6 +627,7 @@ SLSA
 slugification
 smol
 Smolagents
+snupkg
 spacy
 spellcheck
 spellchecking
@@ -630,6 +657,7 @@ subresources
 summarise
 SVID
 sybil
+syft
 synthesised
 syscall
 syscalls
@@ -710,6 +738,7 @@ workflow
 workflows
 workiq
 workstream
+workstreams
 writerow
 x86
 XACML
