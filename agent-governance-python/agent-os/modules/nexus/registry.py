@@ -117,7 +117,7 @@ class AgentRegistry:
         if not verify(manifest.identity.verification_key, manifest_hash.encode(), signature):
             raise InvalidSignatureError(agent_did, "registration signature verification failed")
 
-        # Set registration timestamp
+=======
         manifest.registered_at = datetime.now(timezone.utc)
         manifest.last_seen = datetime.now(timezone.utc)
         
@@ -208,7 +208,7 @@ class AgentRegistry:
         if not verify(stored.identity.verification_key, agent_did.encode(), signature):
             raise InvalidSignatureError(agent_did, "deregistration signature verification failed")
 
-        del self._manifests[agent_did]
+=======
         del self._manifest_hashes[agent_did]
         del self._did_to_owner[agent_did]
         
