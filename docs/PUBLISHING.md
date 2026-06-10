@@ -6,8 +6,9 @@ AAIF hosting in `aaif/project-proposals#19`; do not describe the project as
 donated until TC approval, Governing Board approval, governance finalization, and
 the contribution agreement are complete.
 
-Canonical AGT releases are published from GitHub Actions. Azure DevOps ESRP is not
-a release path for this repository.
+Canonical AGT release artifacts are built and attested from GitHub Actions.
+Registry publication temporarily uses Azure DevOps ESRP while PyPI trusted
+publisher configuration and npm/NuGet GitHub credentials are completed.
 
 ## Release authority
 
@@ -15,13 +16,13 @@ a release path for this repository.
 |---|---|
 | Release approval | Maintainers and CODEOWNERS for release workflows |
 | Build and attest | `.github/workflows/publish.yml` and `.github/workflows/sbom.yml` |
-| Package registries | Registry-native foundation or project ownership |
+| Package registries | Temporary ESRP ADO pipeline; registry-native GitHub publishing after credentials are ready |
 | Containers | Foundation or repository-owner GHCR namespace |
 | Security advisories | GitHub Security Advisories for the canonical repository |
 
-Release managers must be able to build, attest, and publish canonical artifacts
-without Microsoft tenant secrets, Microsoft Key Vault, ESRP service connections,
-or Microsoft certificate infrastructure.
+Release managers must be able to build, attest, and inspect canonical artifacts
+from GitHub Actions. Registry publication remains temporarily bound to Microsoft
+ESRP/ADO publishing authority until registry-native GitHub credentials are ready.
 
 ## Dry-run releases and release manifest
 
@@ -53,40 +54,45 @@ Do not add a package to a release matrix without adding it to the package map.
 
 ## PyPI
 
-Python packages are built by `.github/workflows/publish.yml` and published through
-registry-native PyPI publishing from the canonical release workflow.
+Python packages are built and attested by `.github/workflows/publish.yml`.
+Temporary registry publication uses `.github/pipelines/esrp-publish.yml`.
 
 Required release behavior:
 
 - build wheels for each published package;
 - use hash-pinned release build tools from `.github/release-tools/`;
 - attest build provenance;
-- publish from the GitHub release workflow;
+- publish through ESRP until PyPI trusted publishers are configured for all
+  package names;
 - preserve legacy package names only through explicit stubs or documented
   deprecation.
 
 ## npm
 
-npm packages are packed and published by `.github/workflows/publish.yml`.
+npm packages are packed and attested by `.github/workflows/publish.yml`.
+Temporary registry publication uses `.github/pipelines/esrp-publish.yml`.
 
 Required release behavior:
 
 - install with `npm ci --ignore-scripts`;
 - run package build checks before packing;
-- publish tarballs with provenance where supported;
+- publish tarballs through ESRP until GitHub has an npm token or trusted
+  publishing configuration;
 - treat `@microsoft/*` package names as compatibility names, not the long-term
   foundation identity;
 - document package renames in `docs/package-migration.md`.
 
 ## NuGet
 
-NuGet packages are built, packed, attested, and published from GitHub Actions.
+NuGet packages are built, packed, and attested from GitHub Actions. Temporary
+registry publication uses `.github/pipelines/esrp-publish.yml`.
 `Microsoft.AgentGovernance*` package IDs are compatibility names for the
 Microsoft-origin package family. Foundation-owned canonical package IDs must be
 recorded in `docs/package-migration.md` before registry migration.
 
-NuGet release signing must use the foundation-approved signing process selected
-for canonical releases. Do not add ESRP signing steps back to this repository.
+NuGet release signing uses ESRP while Microsoft-origin package IDs remain under
+Microsoft registry authority. Do not add plaintext signing or registry secrets to
+GitHub workflow YAML.
 
 ## Rust crates
 
@@ -144,10 +150,11 @@ Every release should include:
 1. Confirm `main` is green for relevant CI.
 2. Confirm package map and release matrix agree.
 3. Run a dry-run release and inspect `release-manifest.json`.
-4. Confirm no canonical release workflow references ESRP, ADO, Microsoft tenant
-   IDs, Microsoft Key Vault, or Microsoft signing certificates.
+4. Run the ESRP ADO pipeline for package registry publication until registry
+   credentials are configured for GitHub.
 5. Confirm SBOM and provenance workflows are enabled.
 6. Create a signed release tag.
-7. Publish package and container artifacts from GitHub Actions.
+7. Publish container artifacts from GitHub Actions and package artifacts through
+   the ESRP ADO pipeline.
 8. Verify artifacts are available from canonical registries.
 9. Post any compatibility/deprecation notices for legacy package names.
