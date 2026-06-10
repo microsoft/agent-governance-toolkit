@@ -883,9 +883,9 @@ def file_sha256(path: Path) -> str:
 
 def display_path(path: Path) -> str:
     try:
-        return str(path.resolve().relative_to(REPO))
+        return path.resolve().relative_to(REPO).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -908,7 +908,7 @@ def write_manifest(
         "created_round": ROUND,
         "profile": profile,
         "seed": SEED,
-        "generator": str(Path(__file__).relative_to(REPO)),
+        "generator": Path(__file__).relative_to(REPO).as_posix(),
         "generator_sha256": file_sha256(Path(__file__)),
         "output": display_path(corpus_path),
         "output_sha256": file_sha256(corpus_path),

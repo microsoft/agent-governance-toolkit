@@ -88,7 +88,7 @@
     "tau_policy": "fit on validation only, freeze before final test"
   },
   "generator": "benchmarks/prompt-injection/harness/generate-corpus.py",
-  "generator_sha256": "ca6ee84662364cc63a763a9e69e6833c5b2b4ad7d342b51c5aa09f6c1d90b21b",
+  "generator_sha256": "8994c6109234980dc3dec1a1f7bd1368685dec11c71476dead58cf47b73b55ff",
   "leakage_check": {
     "family_count": 80,
     "family_split_leaks": [],
