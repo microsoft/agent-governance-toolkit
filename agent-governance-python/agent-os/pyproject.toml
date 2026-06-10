@@ -91,7 +91,7 @@ langgraph = [
 nexus = [
     "agent-os-kernel[iatp]",
     "pyyaml>=6.0.0,<7.0",
-    "structlog>=24.1.0,<26.0",
+    "structlog>=24.1.0,<27.0",
     "aiohttp>=3.13.4,<4.0",
 ]
 
@@ -120,7 +120,7 @@ dev = [
     "uvicorn>=0.27.0,<1.0",
     "anyio>=4.12.1,<5.0",
     "aiohttp>=3.13.4,<4.0",
-    "structlog>=24.1.0,<26.0",
+    "structlog>=24.1.0,<27.0",
     "redis>=4.0.0,<8.0",
     "cryptography>=48.0.0,<49.0",
     "eval_type_backport>=0.2.0; python_version < '3.10'",
