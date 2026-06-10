@@ -610,10 +610,13 @@ jobs:
       - name: BinSkim — binary security analysis
         working-directory: agent-governance-dotnet
         run: |
-          dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.* 2>/dev/null || true
+          # No error-swallowing: a missing tool, crash, or real finding must
+          # fail this step. Only the SARIF upload below is allowed to soft-fail
+          # (GitHub Advanced Security availability is the sole concern there).
+          dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.*
           BinSkim analyze "src/AgentGovernance/bin/Release/net8.0/*.dll" \
             --output binskim-results.sarif \
-            --verbose 2>/dev/null || echo "BinSkim completed with warnings"
+            --verbose
       - name: Upload BinSkim SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
@@ -697,13 +700,15 @@ jobs:
           "
       - name: Smoke test — import ${{ matrix.import-module }}
         run: python -c "import ${{ matrix.import-module }}"
-        continue-on-error: true
       - name: Run tests
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
             pytest tests/ -q --tb=short
           else
+            # The smoke-import step above already ran and must have succeeded
+            # to reach here (it no longer swallows failures), so this branch is
+            # only printed when the import actually passed.
             echo "No tests/ directory — smoke import passed"
           fi
 
