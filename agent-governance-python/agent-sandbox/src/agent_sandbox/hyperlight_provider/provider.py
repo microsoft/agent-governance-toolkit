@@ -555,7 +555,8 @@ class HyperLightSandboxProvider(SandboxProvider):
                         + result_ring.reason
                     )
             except ImportError:
-                pass  # hypervisor not installed; ring gate already skipped at create_session
+                # hypervisor not installed; ring gate already skipped at create_session
+                pass
 
         execution_id = uuid.uuid4().hex[:8]
         timeout_s = (cfg.max_execution_time_ms / 1000.0) if cfg else 60.0

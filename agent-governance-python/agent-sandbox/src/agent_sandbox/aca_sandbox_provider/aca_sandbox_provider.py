@@ -734,7 +734,8 @@ class ACASandboxProvider(SandboxProvider):
                         + result_ring.reason
                     )
             except ImportError:
-                pass  # hypervisor not installed; ring gate already skipped at create_session
+                # hypervisor not installed; ring gate already skipped at create_session
+                pass
 
         # Run the code over the data-plane exec endpoint.  We base64-encode
         # the source so the body is opaque to the host shell and any code,

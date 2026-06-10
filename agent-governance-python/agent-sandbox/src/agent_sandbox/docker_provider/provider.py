@@ -692,7 +692,8 @@ class DockerSandboxProvider(SandboxProvider):
                         + result_ring.reason
                     )
             except ImportError:
-                pass  # hypervisor not installed; ring gate already skipped at create_session
+                # hypervisor not installed; ring gate already skipped at create_session
+                pass
         # Run code with the session's configured timeout/env, not defaults.
         result = self.run(
             agent_id,
