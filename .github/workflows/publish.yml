@@ -50,9 +50,9 @@ jobs:
           retention-days: 30
 
   # -------------------------------------------------------------------
-  # Build, attest, and publish Python packages from GitHub Actions.
-  # Canonical AAIF releases must be operable by foundation maintainers
-  # without Microsoft ESRP, ADO, tenant, or certificate infrastructure.
+  # Build and attest Python packages from GitHub Actions.
+  # Temporary registry publication uses the restored ESRP ADO pipeline until
+  # PyPI trusted publishers and registry tokens are configured for GitHub.
   # -------------------------------------------------------------------
   resolve-python-matrix:
     if: >-
@@ -211,7 +211,7 @@ jobs:
           subject-path: ${{ matrix.path }}/dist/*
 
       - name: Prepare PyPI upload artifacts
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
         working-directory: ${{ matrix.path }}
         run: |
           rm -rf pypi-upload
@@ -232,16 +232,16 @@ jobs:
           retention-days: 30
 
       - name: Publish to PyPI
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
         with:
           packages-dir: ${{ matrix.path }}/pypi-upload/
           skip-existing: true
 
   # -------------------------------------------------------------------
-  # Build npm packages, pack .tgz, attest provenance, and publish.
-  # Foundation-owned npm packages should configure npm trusted publishing
-  # or a repository environment token; Microsoft ESRP is not a release path.
+  # Build npm packages, pack .tgz, and attest provenance.
+  # Temporary registry publication uses the restored ESRP ADO pipeline until
+  # npm publishing credentials are configured for GitHub.
   # -------------------------------------------------------------------
   resolve-npm-matrix:
     needs: resolve-python-matrix
@@ -343,7 +343,7 @@ jobs:
           retention-days: 30
 
       - name: Publish to npm
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
         working-directory: ${{ matrix.path }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -422,7 +422,7 @@ jobs:
         continue-on-error: true
 
       - name: Publish to NuGet
-        if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'
         working-directory: agent-governance-dotnet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

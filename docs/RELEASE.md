@@ -14,7 +14,8 @@ from the same tag even when only a subset changed.
 ## Release authority
 
 Canonical releases are approved by maintainers with release-workflow ownership.
-Release approval is a project authority, not a Microsoft ESRP approval.
+Package registry publication temporarily uses Microsoft ESRP while registry-native
+GitHub publishing credentials are configured.
 
 ## Supported registries
 
@@ -36,12 +37,14 @@ Release approval is a project authority, not a Microsoft ESRP approval.
 4. Release manager runs `Publish Container Images` with `dry_run: true` when
    container artifacts are in scope.
 5. Release manager creates a signed release tag.
-6. `.github/workflows/publish.yml` builds, tests, packages, attests, and
-   publishes language packages.
-7. `.github/workflows/publish-containers.yml` builds, attests, and publishes
+6. `.github/workflows/publish.yml` builds, tests, packages, attests, and uploads
+   language package artifacts.
+7. `.github/pipelines/esrp-publish.yml` publishes package artifacts to PyPI, npm,
+   and NuGet while registry-native GitHub credentials are pending.
+8. `.github/workflows/publish-containers.yml` builds, attests, and publishes
    container images.
-8. `.github/workflows/sbom.yml` produces release SBOMs and provenance.
-9. Release manager verifies artifacts and publishes release notes.
+9. `.github/workflows/sbom.yml` produces release SBOMs and provenance.
+10. Release manager verifies artifacts and publishes release notes.
 
 ## Supply-chain requirements
 
@@ -65,8 +68,9 @@ For critical bugs or security issues:
 4. Cut a patch release.
 5. Cherry-pick the fix back to `main` if needed.
 
-## Deprecated release paths
+## Temporary release paths
 
-Azure DevOps ESRP is not a canonical AGT release path. Do not reintroduce ESRP,
-Microsoft tenant IDs, Microsoft Key Vault, or Microsoft signing certificates into
-canonical AGT release workflows.
+Azure DevOps ESRP is the temporary package registry publication path for
+Microsoft-origin package identities. Keep ESRP configuration in ADO secrets and
+pipeline variables; do not put Microsoft tenant IDs, Key Vault names,
+certificates, or registry tokens in GitHub workflow YAML.
