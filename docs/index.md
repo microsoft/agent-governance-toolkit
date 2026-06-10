@@ -177,6 +177,11 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 <span class="agt-card-body"><span class="agt-card-title">Agent Hypervisor</span>
 <span class="agt-card-desc">Execution audit, delta engine, commitment anchoring</span></span>
 </a>
+<a class="agt-card" data-pkg="acs" href="packages/agent-control-specification/">
+<img class="agt-card-icon" src="assets/icons/agent-os.svg" alt="Agent Control Specification">
+<span class="agt-card-body"><span class="agt-card-title">Agent Control Specification</span>
+<span class="agt-card-desc">Stateless policy decisions for agent security</span></span>
+</a>
 </div>
 </div>
 
@@ -225,6 +230,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | Specification | Tests |
 |---|---|
 | [Agent OS Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) | 68 |
+| [Agent Control Specification](packages/agent-control-specification.md) | -- |
 | [AgentMesh Identity and Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | 135 |
 | [Agent Hypervisor Execution Control](specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | 80 |
 | [AgentMesh Trust and Coordination](specs/AGENTMESH-TRUST-COORDINATION-1.0.md) | 62 |

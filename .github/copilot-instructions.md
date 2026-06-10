@@ -239,10 +239,13 @@ Before approving or merging ANY PR, verify ALL of the following:
 2. **Attribution & prior art** — check if the PR implements patterns similar to known open-source projects. If it does, verify proper attribution exists in the PR description and code. Check whether the PR arrived shortly after a community member proposed similar work in an issue — if so, verify the contributor isn't submitting an uncredited derivative. **PRs without proper attribution will not be merged.**
 3. **Dependency confusion scan** — check every `pip install`, `npm install`, `cargo add` command in docs/code for unregistered package names. The registered names are:
    - **PyPI:** `agent-os-kernel`, `agentmesh-platform`, `agent-hypervisor`, `agentmesh-runtime`, `agent-sre`, `agent-governance-toolkit`, `agentmesh-lightning`, `agentmesh-marketplace`, `agt-sandbox`
+   - **PyPI (ACS):** `agent-control-specification`, `agt-policies`, `acs-generator`
    - **PyPI (local-only, not published):** `agent-governance-dotnet`, `agentmesh-integrations`, `agent-primitives`, `emk`
    - **PyPI (common deps):** `streamlit`, `plotly`, `pandas`, `networkx`, `aioredis`, `pypdf`, `spacy`, `slack-sdk`, `docker`, `langchain-openai`
    - **npm:** `@microsoft/agent-os-kernel`
+   - **npm (ACS):** `agent-control-specification`, `agent-control-specification-linux-x64-gnu`, `agent-control-specification-linux-arm64-gnu`, `agent-control-specification-darwin-x64`, `agent-control-specification-darwin-arm64`, `agent-control-specification-win32-x64-msvc`, `agent-control-specification-opa-linux-x64`, `agent-control-specification-opa-linux-arm64`, `agent-control-specification-opa-darwin-x64`, `agent-control-specification-opa-darwin-arm64`, `agent-control-specification-opa-win32-x64`
    - **crates.io:** `agentmesh`
+   - **crates.io (ACS):** `agent_control_specification_core`, `agent_control_specification`
 3. **New Python modules** — verify `__init__.py` exists in any new package directory
 4. **Dependencies declared** — any new `import` must have the package in `pyproject.toml` dependencies (not just transitive)
 5. **No hardcoded secrets** — no API keys, tokens, passwords, connection strings in code or docs

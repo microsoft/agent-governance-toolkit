@@ -32,7 +32,8 @@ RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
     && python -m pip install --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
     && rm -rf /var/lib/apt/lists/* \
     # OPA CLI — required by OPAEvaluator local mode (opa eval subprocess)
-    && curl -fsSL -o /usr/local/bin/opa \
+    && curl --proto '=https' --tlsv1.2 -fSLo /usr/local/bin/opa \
+        --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
         https://openpolicyagent.org/downloads/v1.4.2/opa_linux_amd64_static \
     && echo "2c0ccdbbe0b8e2a5d12d9c42d92f1f34f494ffb32d1f3c4ddc36101be637d66f  /usr/local/bin/opa" \
         | sha256sum -c - \
@@ -75,6 +76,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         -e "agent-governance-python/agent-governance-toolkit-cli" \
         -e "agent-governance-python/agent-governance-toolkit-protocols" \
     && python -m pip install \
+        "pydantic>=2.5.0,<3.0" \
+        "pyyaml>=6.0,<7.0" \
+    && python -m pip install --no-deps \
+        -e "agent-governance-python/agt-policies" \
+    && python -m pip install \
         "cedarpy>=4.0.0,<5.0" \
         -e "agent-governance-python/agent-primitives[dev]" \
         -e "agent-governance-python/agent-mcp-governance[dev]" \
@@ -88,6 +94,23 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         -e "agent-governance-python/agent-lightning[agent-os,dev]" \
     && python -m pip install \
         -r agent-governance-python/agent-hypervisor/examples/dashboard/requirements.txt
+
+# Stage 4: build and install the native Agent Control Specification Python SDK
+# (`agent_control_specification`). agt-policies' v5 runtime bridge hard-requires
+# this compiled binding — without it every adapter that routes a check through
+# the bridge raises at runtime. Mirrors the `test (agent-os)` CI matrix job,
+# which builds the same wheel via maturin. The C toolchain (gcc, build-essential)
+# is already provided by the base stage; only Rust + maturin are added here.
+# Scorecard: rustup installer is fetched over pinned TLS; the toolchain channel
+# is pinned to `stable` and the SDK is built from the in-repo source checkout.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cargo/registry \
+    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+        | sh -s -- -y --profile minimal --default-toolchain stable \
+    && . "$HOME/.cargo/env" \
+    && python -m pip install maturin==1.8.7 \
+    && python -m pip install --no-build-isolation ./policy-engine/sdk/python \
+    && python -c "import agent_control_specification; print('agent_control_specification OK')"
 
 # Run as non-root for the developer workflow. The compose `dev` and
 # `dashboard` services bind-mount the repo at /workspace; running the

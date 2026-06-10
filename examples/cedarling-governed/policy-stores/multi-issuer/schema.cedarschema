@@ -1,0 +1,39 @@
+namespace AGT {
+  type Url = {"host": String, "path": String, "protocol": String};
+  entity Agent = {};
+  entity Resource = {
+    device?: String,
+  };
+  entity Access_Token = {
+    sub?: String,
+    iss?: Janssen::TrustedIssuer,
+    role?: String,
+  } tags Set<String>;
+  entity Workload = {};
+  entity User = {};
+  action "ReadData" appliesTo {
+    principal: [Workload, User],
+    resource: [Resource],
+    context: Context
+  };
+  action "Read" appliesTo {
+    principal: [Workload, User],
+    resource: [Resource],
+    context: Context
+  };
+  action "Write" appliesTo {
+    principal: [Workload, User],
+    resource: [Resource],
+    context: Context
+  };
+}
+namespace Janssen {
+  entity TrustedIssuer = {"issuer_entity_id": AGT::Url};
+}
+type Context = {
+  device?: String,
+  tokens: {
+    janssen_access_token?: AGT::Access_Token,
+    total_token_count: Long
+  }
+};

@@ -54,7 +54,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Optional
 
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
+from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
 
 logger = logging.getLogger("agent_os.openai_agents")
 
@@ -226,7 +226,14 @@ class OpenAIAgentsKernel(BaseIntegration):
     # ── Event Recording ───────────────────────────────────────────
 
     def _record_event(
-        self, event_type: str, data: dict[str, Any]
+        self,
+        event_type: str,
+        data: dict[str, Any],
+        *,
+        trusted_sources: tuple[Any, ...] = (),
+        default_origin: str | None = None,
+        context_before: Any | None = None,
+        context_after: Any | None = None,
     ) -> None:
         """Append a timestamped audit event to the internal log.
 
@@ -237,7 +244,15 @@ class OpenAIAgentsKernel(BaseIntegration):
         self._audit_events.append({
             "type": event_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "data": data,
+            "data": {
+                **data,
+                **self.build_skill_audit_fields(
+                    trusted_sources=trusted_sources,
+                    default_origin=default_origin,
+                    context_before=context_before,
+                    context_after=context_after,
+                ),
+            },
         })
 
     # ── Context Management ────────────────────────────────────────
@@ -715,9 +730,28 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
                     f"Agent '{agent_name}' blocked by governance: {reason}"
                 )
 
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(agent),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(agent, "metadata", None)
+            ),
+        )
+
+        self._kernel.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=agent_name,
+            action="openai.on_agent_start",
+            trusted_sources=trusted_skill_sources,
+            default_origin="openai_agents",
+            context_before=input_text,
+        )
+
         self._kernel._record_event(
             "agent_start",
             {"agent": agent_name, "input_length": len(input_text)},
+            trusted_sources=trusted_skill_sources,
+            default_origin="openai_agents",
+            context_before=input_text,
         )
         logger.debug("on_agent_start: %s (input_len=%d)", agent_name, len(input_text))
 
@@ -740,6 +774,12 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         """
         agent_name = self._extract_agent_name(agent)
         ctx = self._kernel._get_or_create_context(agent_name)
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(agent),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(agent, "metadata", None)
+            ),
+        )
 
         # Post-check output
         output_str = str(output) if output else ""
@@ -757,6 +797,9 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
                 "output_length": len(output_str),
                 "success": True,
             },
+            trusted_sources=trusted_skill_sources,
+            default_origin="openai_agents",
+            context_after=output_str,
         )
         logger.debug("on_agent_end: %s", agent_name)
 
@@ -813,6 +856,23 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         tool_args = {}
         if hasattr(tool, "args"):
             tool_args = dict(tool.args) if tool.args else {}
+
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(tool),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(tool, "metadata", None)
+            ),
+        )
+
+        self._kernel.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=agent_name,
+            action="openai.on_tool_start",
+            trusted_sources=trusted_skill_sources,
+            default_origin="openai_agents",
+            context_before=tool_args,
+            tool_name=tool_name,
+        )
         allowed, reason = self._kernel.pre_execute(
             ctx,
             {"tool_name": tool_name, "tool_args": tool_args},
@@ -836,6 +896,9 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         self._kernel._record_event(
             "tool_start",
             {"agent": agent_name, "tool": tool_name},
+            trusted_sources=trusted_skill_sources,
+            default_origin="openai_agents",
+            context_before=tool_args,
         )
         logger.debug("on_tool_start: %s.%s", agent_name, tool_name)
 
@@ -860,6 +923,12 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         """
         agent_name = self._extract_agent_name(agent)
         tool_name = getattr(tool, "name", "") or getattr(tool, "__name__", str(tool))
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(tool),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(tool, "metadata", None)
+            ),
+        )
 
         # Content filter on output
         result_str = str(result) if result else ""
@@ -879,6 +948,9 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
                 "tool": tool_name,
                 "result_length": len(result_str),
             },
+            trusted_sources=trusted_skill_sources,
+            default_origin="openai_agents",
+            context_after=result_str,
         )
         logger.debug("on_tool_end: %s.%s", agent_name, tool_name)
 
@@ -920,6 +992,8 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         self._kernel._record_event(
             "handoff",
             {"from": from_name, "to": to_name},
+            trusted_sources=(),
+            default_origin="openai_agents",
         )
         logger.info("on_handoff: %s -> %s", from_name, to_name)
 

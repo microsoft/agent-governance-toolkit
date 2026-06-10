@@ -12,8 +12,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-governance-python/agent-sre/)
 
 > [!IMPORTANT]
-> **Public Preview** — The `agent-sre` package on PyPI is a Microsoft-signed
-> public preview release. APIs may change before GA.
+> **Public Preview** — The `agent-sre` package on PyPI is a public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent SRE.
 
@@ -67,7 +66,7 @@ Reliability layer across **170K+ combined GitHub stars** of integrated projects 
 
 ### 🛡️ OWASP Agentic Security Coverage
 
-Agent SRE directly addresses **[OWASP Agentic Security Initiative](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md)** risk **ASI08 — Cascading Agent Failures**:
+Agent SRE directly addresses **[OWASP Agentic Security Initiative](../compliance/owasp-asi-policy-mapping.md)** risk **ASI08 — Cascading Agent Failures**:
 
 | OWASP Risk | Agent SRE Coverage |
 |---|---|
@@ -76,7 +75,7 @@ Agent SRE directly addresses **[OWASP Agentic Security Initiative](https://githu
 | **ASI09: Lack of Observability** | 7 SLI types, OpenTelemetry export, 11 observability platform integrations |
 | **ASI10: Inadequate Testing** | Chaos engineering with 9 fault templates, progressive delivery with shadow & canary |
 
-> See full [OWASP Agentic Top 10 mapping →](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/owasp-agentic-top10-mapping.md)
+> See full [OWASP Agentic Top 10 mapping →](../compliance/owasp-asi-policy-mapping.md)
 
 ---
 

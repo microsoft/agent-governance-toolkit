@@ -1,0 +1,222 @@
+[
+  {
+    "name": "default_allows_with_empty_resource_and_clean_context",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "tool_call": {"name": "search", "args": {}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.defaults.allow"],
+    "num_errors": 0
+  },
+  {
+    "name": "budget_tool_calls_exceeded_denies_over_baseline_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 50, "token_count": 0}},
+        "tool_call": {"name": "search", "args": {}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"max_tool_calls": 10}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["budget_tool_calls_exceeded"],
+    "num_errors": 0
+  },
+  {
+    "name": "content_hash_mismatch_denies_over_baseline_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"search\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "tool_call": {"name": "search", "args": {}, "content_hash": "sha256:zzz"},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "search"}, "attrs": {"content_hash": "sha256:abc"}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["tool_content_hash_mismatch"],
+    "num_errors": 0
+  },
+  {
+    "name": "egress_denies_over_baseline_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"http_get\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "tool_call": {"name": "http_get", "args": {"host": "attacker.example.org"}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "http_get"}, "attrs": {"security_labels": ["api.example.com"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["egress_destination_not_allowed"],
+    "num_errors": 0
+  },
+  {
+    "name": "pattern_denies_over_baseline_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "input": {"body": "alice@example.com"},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["pii_email_pattern_in_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "confidence_denies_over_baseline_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "response": {"content": "answer"},
+        "annotations": {"confidence": {"score": 20}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"min_confidence": 50, "clearance_dominated_labels": ["public", "internal", "confidential", "secret"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["confidence_below_threshold"],
+    "num_errors": 0
+  },
+  {
+    "name": "ifc_input_denies_over_baseline_permit",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"input\"",
+      "resource": "PolicyTarget::\"user_input\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "input": {"body": "hi", "ifc": {"source_labels": ["secret"]}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "user_input"}, "attrs": {"clearance_dominated_labels": ["public", "internal"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["ifc_clearance_violation_input"],
+    "num_errors": 0
+  },
+  {
+    "name": "approval_required_permits_with_escalate_advice_alongside_baseline",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"wire_transfer\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "tool_call": {"name": "wire_transfer", "args": {}},
+        "annotations": {}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "wire_transfer"}, "attrs": {"approvers": ["alice", "bob"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.approval.approver_required", "agt.defaults.allow"],
+    "num_errors": 0
+  },
+  {
+    "name": "redact_permits_with_transform_advice_alongside_baseline",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "response": {"content": "answer"},
+        "annotations": {"pii_detected": true}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.defaults.allow", "agt.redact.pii"],
+    "num_errors": 0
+  },
+  {
+    "name": "drift_permits_with_warn_advice_alongside_baseline",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "response": {"content": "answer"},
+        "annotations": {"drift_score": 80}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"drift_threshold": 50}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "allow",
+    "reason": ["agt.defaults.allow", "agt.drift.warn"],
+    "num_errors": 0
+  },
+  {
+    "name": "explicit_deny_beats_concurrent_permit_advice",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"output\"",
+      "resource": "PolicyTarget::\"assistant_output\"",
+      "context": {
+        "envelope": {"agent": {"id": "a"}, "budgets": {"tool_call_count": 0, "token_count": 0}},
+        "response": {"content": "alice@example.com"},
+        "annotations": {"pii_detected": true, "confidence": {"score": 10}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "PolicyTarget", "id": "assistant_output"}, "attrs": {"min_confidence": 50}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["confidence_below_threshold", "pii_email_pattern_in_output"],
+    "num_errors": 0
+  }
+]

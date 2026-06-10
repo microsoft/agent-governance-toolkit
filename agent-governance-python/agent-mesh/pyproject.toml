@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentmesh_platform"
-version = "4.0.0"
+version = "4.1.0"
 description = "Deprecated — use agent-governance-toolkit-core instead. The Secure Nervous System for Cloud-Native Agent Ecosystems"
 readme = "README.md"
 license = {text = "MIT"}
@@ -50,12 +50,12 @@ dependencies = [
     # Original deps kept for backward compat
     "pydantic[email]>=2.5.0,<3.0",
     "cryptography>=46.0.7,<49.0",
-    "pynacl>=1.5.0,<2.0",
+    "pynacl>=1.6.2,<2.0",
     "httpx>=0.27.0,<1.0",
     "aiohttp>=3.13.4,<4.0",
     "pyyaml>=6.0,<7.0",
     "structlog>=24.1.0,<26.0",
-    "click>=8.1.0,<9.0",
+    "click>=8.4.1,<9.0",
     "rich>=13.0.0,<16.0",
     "python-dateutil>=2.8.0,<3.0",
 ]
@@ -72,17 +72,17 @@ dev = [
     "pytest>=7.4.0,<10.0",
     "pytest-asyncio>=0.23.0,<2.0",
     "pytest-cov>=4.1.0,<8.0",
-    "hypothesis>=6.100.0,<7.0",
-    "black>=26.3.1,<27.0",
+    "hypothesis>=6.155.2,<7.0",
+    "black>=26.5.1,<27.0",
     "ruff>=0.1.0,<1.0",
     "mypy>=1.8.0,<3.0",
-    "fakeredis>=2.21.0,<3.0",
+    "fakeredis>=2.36.0,<3.0",
     "prometheus-client>=0.19.0,<1.0",
     "websockets>=12.0,<17.0",
-    "fastapi>=0.115.0,<1.0",
+    "fastapi>=0.136.3,<1.0",
     "httpx>=0.27.0,<1.0",
-    "opentelemetry-api>=1.20.0,<2.0",
-    "opentelemetry-sdk>=1.20.0,<2.0",
+    "opentelemetry-api>=1.42.1,<2.0",
+    "opentelemetry-sdk>=1.42.1,<2.0",
     "PyJWT[crypto]>=2.8.0,<3.0",
     # Ring tests exercise the hypervisor; mirror the optional extra so
     # `pip install agent-mesh[dev]` brings everything needed for tests.
@@ -92,7 +92,7 @@ redis = [
     "redis>=4.0,<8.0",
 ]
 server = [
-    "fastapi>=0.115.0,<1.0",
+    "fastapi>=0.136.3,<1.0",
     "uvicorn[standard]>=0.27.0,<1.0",
     # Phase 6.c — Entra-signed JWT verification at the relay's
     # connect-frame seam. `crypto` extra brings cryptography (already
@@ -105,9 +105,9 @@ storage = [
     "asyncpg>=0.29.0,<1.0",
 ]
 observability = [
-    "opentelemetry-api>=1.20.0,<2.0",
-    "opentelemetry-sdk>=1.20.0,<2.0",
-    "opentelemetry-instrumentation-fastapi>=0.41b0,<1.0",
+    "opentelemetry-api>=1.42.1,<2.0",
+    "opentelemetry-sdk>=1.42.1,<2.0",
+    "opentelemetry-instrumentation-fastapi>=0.63b1,<1.0",
     "opentelemetry-exporter-otlp>=1.20.0,<2.0",
     "prometheus-client>=0.19.0,<1.0",
 ]
@@ -128,14 +128,14 @@ agent-os = [
     "agent-governance-toolkit-core[nexus,iatp]>=4.0.0,<5.0",
 ]
 all = [
-    "fastapi>=0.115.0,<1.0",
+    "fastapi>=0.136.3,<1.0",
     "uvicorn[standard]>=0.27.0,<1.0",
     "redis[asyncio]>=5.0.0,<8.0",
     "sqlalchemy[asyncio]>=2.0.0,<3.0",
     "asyncpg>=0.29.0,<1.0",
-    "opentelemetry-api>=1.20.0,<2.0",
-    "opentelemetry-sdk>=1.20.0,<2.0",
-    "opentelemetry-instrumentation-fastapi>=0.41b0,<1.0",
+    "opentelemetry-api>=1.42.1,<2.0",
+    "opentelemetry-sdk>=1.42.1,<2.0",
+    "opentelemetry-instrumentation-fastapi>=0.63b1,<1.0",
     "opentelemetry-exporter-otlp>=1.20.0,<2.0",
     "prometheus-client>=0.19.0,<1.0",
 ]

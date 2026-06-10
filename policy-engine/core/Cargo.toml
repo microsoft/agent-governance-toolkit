@@ -1,0 +1,61 @@
+[package]
+name = "agent_control_specification_core"
+version = "0.3.1-beta.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Stateless Rust core for Agent Control Specification"
+license = "MIT"
+readme = "../README.md"
+keywords = ["agents", "policy", "security", "runtime"]
+categories = ["config"]
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[features]
+# AGT M2.S5 D7 runtime split. The default surface is the historical core plus
+# the bundled OPA Rego dispatcher and the bundled Cedar dispatcher. Hosts that
+# do not want either heavyweight backend can disable default features and
+# opt back in to whichever engines they need.
+#
+# * `opa` gates `pub mod opa`, the `Opa*` re-exports, and the OPA arm of the
+#   `default_policy_dispatcher`. The OPA dispatcher only shells out to the
+#   `opa` CLI and therefore carries no Rust build deps; the gate exists so
+#   callers that never use Rego do not see the Rego dispatcher surface.
+# * `cedar` gates the new `CedarBuiltinDispatcher` powered by the upstream
+#   `cedar-policy` crate. The manifest grammar, `PolicyConfig::Cedar`, the
+#   `CedarPolicyDispatcher` trait, the request mapping, the advice
+#   translator, and the always-compiled `CedarTestDispatcher` stay available
+#   under no-default-features per AGT D3.
+default = ["opa", "cedar"]
+opa = []
+cedar = ["dep:cedar-policy"]
+# Bundled reference dispatchers used to provide zero-config defaults through
+# the FFI builder. OFF by default. Manifest HTTPS extends support is part of
+# file based construction and is independent of this feature.
+default-dispatchers = []
+aacs = ["default-dispatchers"]
+openai_moderation = ["default-dispatchers"]
+perspective = ["default-dispatchers"]
+llama_guard = ["default-dispatchers"]
+lakera_guard = ["default-dispatchers"]
+auto = ["default-dispatchers"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+base64 = "0.22"
+url = "2"
+ureq = { version = "2", features = ["json"] }
+cedar-policy = { version = "4", optional = true }
+
+[dev-dependencies]
+jsonschema = { version = "0.17", default-features = false }
+criterion = { version = "0.7.0", features = ["html_reports"] }
+
+[[bench]]
+name = "evaluation"
+harness = false

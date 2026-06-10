@@ -5,8 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 
 > [!IMPORTANT]
-> **Public Preview** — This npm package is a Microsoft-signed public preview release.
-> APIs may change before GA.
+> **Public Preview** — This npm package is a public preview release. APIs may change before GA.
 
 TypeScript SDK for [AgentMesh](../README.md) — a governance-first framework for multi-agent systems.
 

@@ -1,0 +1,54 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: acs-agentdojo-benchmark
+  version: "0.1.0"
+policies:
+  agentdojo_policy:
+    type: custom
+    adapter: python_harness
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy_target: "$.input"
+    annotations:
+      prompt_classifier:
+        from: "$policy_target.text"
+    policy:
+      id: agentdojo_policy
+  pre_tool_call:
+    policy_target_kind: tool_args
+    policy_target: "$.tool_call.args"
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      tool_args_classifier:
+        from: "$policy_target"
+    policy:
+      id: agentdojo_policy
+  post_tool_call:
+    policy_target_kind: tool_result
+    policy_target: "$.tool_result"
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      tool_result_classifier:
+        from: "$policy_target"
+    policy:
+      id: agentdojo_policy
+annotators:
+  prompt_classifier:
+    type: classifier
+  tool_args_classifier:
+    type: classifier
+  tool_result_classifier:
+    type: classifier
+tools:
+  get_balance: {}
+  get_iban: {}
+  get_most_recent_transactions: {}
+  get_scheduled_transactions: {}
+  get_user_info: {}
+  read_file: {}
+  schedule_transaction: {}
+  send_money: {}
+  update_password: {}
+  update_scheduled_transaction: {}
+  update_user_info: {}

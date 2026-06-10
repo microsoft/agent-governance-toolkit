@@ -1,0 +1,180 @@
+{
+  "$id": "https://agent-control-specification.test/wire/result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Control Specification intervention point result envelope (AGT D1/D2)",
+  "description": "JSON result envelope returned by native wire bindings after evaluating one intervention point. AGT D1 carries an embedded transform-shaped verdict (no upstream effects[] array); AGT D1.4 surfaces input_identity and enforced_identity alongside the backwards-compatible action_identity alias. Unlike the policy-output verdict, the embedded verdict MAY carry reserved runtime_error: reasons for fail-closed runtime failures.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict"
+  ],
+  "properties": {
+    "verdict": {
+      "$ref": "#/$defs/result_verdict"
+    },
+    "transformed_policy_target": true,
+    "transformed_policy_target_applied": {
+      "type": "boolean",
+      "description": "True when the returned transformed policy target has been applied for the evaluated mode and verdict. The native runtime sets it from transformed_policy_target.is_some()."
+    },
+    "policy_input": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://agent-control-specification.test/wire/policy-input.schema.json"
+        }
+      ]
+    },
+    "action_identity": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "AGT D1.4: backwards-compatible alias for enforced_identity."
+    },
+    "input_identity": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "AGT D1.4: identity of the policy target as supplied to the intervention point."
+    },
+    "enforced_identity": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "AGT D1.4: identity of the policy target after any transform was applied for the evaluated mode."
+    }
+  },
+  "$defs": {
+    "result_verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision"
+      ],
+      "description": "Verdict embedded in a result envelope. Matches the AGT D1/D2 policy-output verdict but, because it also represents fail-closed runtime failures, the reason MAY use the reserved runtime_error: prefix.",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny",
+            "warn",
+            "escalate",
+            "transform"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Policy or runtime reason. Result envelopes MAY carry reserved runtime_error: reasons for fail-closed runtime failures."
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transform": {
+          "$ref": "#/$defs/transform",
+          "description": "AGT D1.1: present only when decision == transform."
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence",
+          "description": "AGT D2: optional opaque evidence object carried by high-assurance dispatchers."
+        },
+        "result_labels": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "description": "AGT D1.1: transform body is REQUIRED iff decision == transform.",
+          "if": {
+            "properties": {
+              "decision": {
+                "const": "transform"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "transform"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "transform"
+              ]
+            },
+            "description": "Transform body is FORBIDDEN on non-transform decisions."
+          }
+        },
+        {
+          "description": "AGT D1: the legacy effects[] member on the verdict is REJECTED.",
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "effects"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "value"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^\\$policy_target(\\.|\\[|$)",
+          "description": "Path rooted at $policy_target. Other roots fail closed with runtime_error:transform_target_forbidden."
+        },
+        "value": true
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artefact": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Content address or URI of an offline-verifiable proof. SHOULD be sha256:<lowercase-hex> or a URI."
+        },
+        "verification_pointers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Map of short identifiers to URIs an auditor MAY consult."
+        }
+      }
+    }
+  }
+}

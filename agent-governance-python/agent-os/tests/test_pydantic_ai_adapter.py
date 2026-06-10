@@ -122,7 +122,9 @@ class TestPolicyEnforcement:
         kernel = PydanticAIKernel(policy=policy)
         kernel.wrap(agent)
 
-        with pytest.raises(PolicyViolationError, match="not in allowed list"):
+        # v5 AGT engine returns runtime_error:tool_unknown when the tool
+        # is absent from the manifest catalog.
+        with pytest.raises(PolicyViolationError, match="tool_unknown"):
             tool.function(command="ls")
 
     def test_empty_allowlist_permits_all(self):
@@ -179,7 +181,9 @@ class TestToolCallInterception:
         governed = kernel.wrap(agent)
         result = kernel.intercept_tool_call(governed.context, "shell", {"cmd": "ls"})
         assert result.allowed is False
-        assert "not in allowed list" in result.reason
+        # v5 AGT engine surfaces ``runtime_error:tool_unknown`` for
+        # tools missing from the manifest catalog.
+        assert "tool_unknown" in result.reason
 
 
 # =============================================================================
@@ -196,7 +200,10 @@ class TestBlockedPatterns:
         kernel = PydanticAIKernel(policy=policy)
         kernel.wrap(agent)
 
-        with pytest.raises(PolicyViolationError, match="Blocked pattern"):
+        # Host-side blocked_patterns guard surfaces ``blocked_pattern:<p>``
+        # because the AGT manifest bridge only pattern-matches the input
+        # intervention point, not tool arguments.
+        with pytest.raises(PolicyViolationError, match="blocked_pattern"):
             tool.function(query="show me the password")
 
     def test_no_match_passes(self):
@@ -279,7 +286,8 @@ class TestCallBudget:
         tool.function(query="one")
         tool.function(query="two")
 
-        with pytest.raises(PolicyViolationError, match="Max tool calls exceeded"):
+        # v5 host-side budget guard surfaces ``budget_tool_calls_exceeded``.
+        with pytest.raises(PolicyViolationError, match="budget_tool_calls_exceeded"):
             tool.function(query="three")
 
     def test_budget_not_exceeded(self):
@@ -467,5 +475,6 @@ class TestMultipleToolsGovernance:
         t2.function(p="2")
         t1.function(q="3")
 
-        with pytest.raises(PolicyViolationError, match="Max tool calls exceeded"):
+        # v5 host-side budget guard surfaces ``budget_tool_calls_exceeded``.
+        with pytest.raises(PolicyViolationError, match="budget_tool_calls_exceeded"):
             t2.function(p="4")

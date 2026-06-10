@@ -66,7 +66,9 @@ class DatasetQualitySnapshot:
     quality_threshold: float          # Minimum acceptable score
     failed_tests: list[str]           # Names of failed validation tests
     validation_status: str            # "pass" | "warn" | "fail"
-
+    drift_score: float                # 0.0 - 1.0
+    drift_threshold: float            # Maximum acceptable drift
+    
     @property
     def is_fresh(self) -> bool:
         age_hours = (datetime.now() - self.freshness_at).total_seconds() / 3600
@@ -77,8 +79,17 @@ class DatasetQualitySnapshot:
         return self.quality_score >= self.quality_threshold
 
     @property
+    def within_drift_threshold(self) -> bool:
+        return self.drift_score <= self.drift_threshold
+
+    @property
     def is_trustworthy(self) -> bool:
-        return self.is_fresh and self.meets_quality_threshold and not self.failed_tests
+        return (
+            self.is_fresh
+            and self.meets_quality_threshold
+            and self.within_drift_threshold
+            and not self.failed_tests
+        )
 
 
 class DataQualityRegistry:
@@ -240,6 +251,26 @@ async def governed_query(
         ))
         return {"decision": "blocked", "layer": "data_quality", "reason": reason}
 
+    if not snapshot.within_drift_threshold:
+        reason = (
+            f"Drift score {snapshot.drift_score} exceeds threshold "
+            f"{snapshot.drift_threshold}"
+        )
+        audit_log.record(AuditEntry(
+            timestamp=timestamp,
+            agent_id=agent_id,
+            action=action,
+            dataset_id=dataset_id,
+            layer="data_quality",
+            decision="blocked",
+            reason=reason,
+        ))
+        return {
+            "decision": "blocked",
+            "layer": "data_quality",
+            "reason": reason,
+        }
+
     if snapshot.failed_tests:
         reason = f"Failed validation tests: {', '.join(snapshot.failed_tests)}"
         audit_log.record(AuditEntry(
@@ -324,6 +355,8 @@ async def main():
         quality_threshold=0.85,
         failed_tests=["not_null_user_id", "accepted_values_event_type"],
         validation_status="fail",
+        drift_score=0.12,
+        drift_threshold=0.25,
     ))
 
     # revenue_metrics: FRESH and PASSING — should be allowed
@@ -336,6 +369,22 @@ async def main():
         quality_threshold=0.85,
         failed_tests=[],
         validation_status="pass",
+        drift_score=0.08,
+        drift_threshold=0.25,
+    ))
+    
+    # customer_behavior: FRESH and HIGH QUALITY but DRIFTING — should be blocked
+    registry.register(DatasetQualitySnapshot(
+        dataset_id="customer_behavior",
+        owner_did="did:web:marketing.example.com",
+        freshness_at=datetime.now() - timedelta(hours=1),
+        freshness_threshold_hours=6.0,
+        quality_score=0.96,
+        quality_threshold=0.85,
+        failed_tests=[],
+        validation_status="pass",
+        drift_score=0.41,
+        drift_threshold=0.25,
     ))
 
     audit_log = AuditLog()
@@ -377,14 +426,26 @@ async def main():
     print(f"  Final decision: {result['decision'].upper()} ({result['layer']})")
 
     # ------------------------------------------------------------------
+    # Scenario 4: Authorized agent, high drift → blocked at Layer 2
+    # ------------------------------------------------------------------
+    print("\n--- Scenario 4: Authorized agent, high drift dataset ---")
+    result = await governed_query(
+        kernel, policy_engine, registry, audit_log,
+        agent_id="analyst-agent-01",
+        action="database_query",
+        dataset_id="customer_behavior",
+    )
+    print(f"  Final decision: {result['decision'].upper()} ({result['layer']})")
+
+    # ------------------------------------------------------------------
     # Audit log
     # ------------------------------------------------------------------
     audit_log.summary()
 
     print("\n" + "=" * 60)
     print("Key insight: Scenario 1 shows why authorization alone is not enough.")
-    print("The agent was permitted. The data was not trustworthy.")
-    print("Without Layer 2, the agent queries broken data with a clean audit trail.")
+    print("The agent was permitted. The data was stale, invalid, or drifted.")
+    print("Authorization alone does not guarantee trustworthy inputs.")
     print("=" * 60)
 
 

@@ -1,0 +1,34 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-09-tool-projection.case-02",
+  "spec_section": "9",
+  "title": "tool projection does not require a tool call id",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "optional",
+    "node": "optional",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  pre_tool_call:\n    tool_name_from: $snap.tool_call.name\n    policy:\n      id: p\n    policy_target: $snap.tool_call.args\ntools:\n  search:\n    type: Tool\n    clearance: internal\n",
+  "intervention_point": "pre_tool_call",
+  "snapshot": {
+    "tool_call": {
+      "name": "search",
+      "args": {
+        "q": "policy"
+      }
+    }
+  },
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "allow",
+    "tool_name": "search",
+    "policy_target": {
+      "q": "policy"
+    }
+  }
+}

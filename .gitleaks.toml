@@ -1,13 +1,29 @@
-# Gitleaks configuration — path-based allowlists for test fixtures and
-# credential redaction code that intentionally contains fake secrets and
-# regex patterns matching secret formats.
+# Gitleaks configuration for the AGT monorepo.
+#
+# Extends the upstream gitleaks default ruleset and adds path-based allowlists
+# for test fixtures and credential-redaction code that intentionally contain
+# fake secrets, plus a narrowly scoped allowlist for the vendored Agent Control
+# Specification (ACS) subtree under policy-engine/, whose example apps and SDK
+# test fixtures intentionally embed deterministic, non-functional placeholder
+# credentials (e.g. "ghp_secret123", "finalSecret42") to exercise
+# secret-redaction and tool-gating behavior. These are not real secrets and
+# never authenticate against any service.
 #
 # Prefer path-based rules here over .gitleaksignore fingerprints, which
 # break on squash merges (new commit SHA = new fingerprint needed).
+title = "AGT gitleaks config"
+
+[extend]
+useDefault = true
 
 [allowlist]
-  description = "Global allowlist for test fixtures and redaction patterns"
+  description = "Allowlist for test fixtures, redaction patterns, and vendored ACS placeholder tokens"
   paths = [
+    # Vendored ACS example apps and SDK/test fixtures use deliberately fake placeholder tokens
+    '''policy-engine/examples/.*''',
+    '''policy-engine/sdk/node/test/.*''',
+    '''policy-engine/.*/(test|tests|fixtures)/.*''',
+
     # Credential redaction test fixtures (fake keys used to test redaction)
     '''agent-governance-python/agent-discovery/tests/test_process_redaction\.py''',
     '''agent-governance-python/agent-os/tests/test_credential_redactor\.py''',
@@ -21,4 +37,8 @@
 
     # Security scanner tests (intentional fake credentials)
     '''agent-governance-python/agent-compliance/tests/test_security_scanner\.py''',
+  ]
+  regexes = [
+    '''ghp_secret123''',
+    '''finalSecret42''',
   ]

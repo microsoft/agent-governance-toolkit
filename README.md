@@ -22,7 +22,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Discord](https://dcbadge.limes.pink/api/server/RcK9fHf8?style=flat)](https://discord.gg/RcK9fHf8)
+[![Discord](https://dcbadge.limes.pink/api/server/vBg9SNN8?style=flat)](https://discord.gg/vBg9SNN8)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -32,7 +32,7 @@
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
 
 > [!IMPORTANT]
-> **Public Preview** -- production-quality, Microsoft-signed releases. May have breaking changes before GA.
+> **Public Preview** -- production-quality public preview releases. May have breaking changes before GA.
 
 Policy enforcement, identity, sandboxing, and SRE for autonomous AI agents. One `pip install`, any framework.
 
@@ -229,6 +229,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | Package | Description |
 |---------|-------------|
 | [**Agent OS**](agent-governance-python/agent-os/) | Policy engine, agent lifecycle, governance gate |
+| [**Agent Control Specification**](policy-engine/) ([README](policy-engine/README.md)) | Stateless, deterministic, fail-closed policy decision runtime (Rust core) backing the AGT policy layer |
 | [**Agent Mesh**](agent-governance-python/agent-mesh/) | Agent discovery, routing, and trust mesh |
 | [**Agent Runtime**](agent-governance-python/agent-runtime/) | Execution sandboxing with four privilege rings |
 | [**Agent SRE**](agent-governance-python/agent-sre/) | Kill switch, SLO monitoring, chaos testing |
@@ -338,6 +339,7 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | Specification | Scope | Tests |
 |---|---|---|
 | [Agent OS Policy Engine](docs/specs/AGENT-OS-POLICY-ENGINE-1.0.md) | Policy evaluation, rule merging, fail-closed semantics | 68 |
+| [Agent Control Specification](policy-engine/spec/SPECIFICATION.md) | Stateless intervention-point policy runtime, verdicts, transform, fail-closed | -- |
 | [AgentMesh Identity and Trust](docs/specs/AGENTMESH-IDENTITY-TRUST-1.0.md) | Credentials, trust scoring, delegation chains | 135 |
 | [Agent Hypervisor Execution Control](docs/specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) | Privilege rings, saga orchestration, kill switch | 80 |
 | [AgentMesh Trust and Coordination](docs/specs/AGENTMESH-TRUST-COORDINATION-1.0.md) | Peer trust negotiation, mesh-wide policy | 62 |
@@ -397,7 +399,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 ## Contributing
 
-[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/RcK9fHf8) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/vBg9SNN8) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 **Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md).
 

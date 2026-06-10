@@ -1,0 +1,12 @@
+{
+  "name": "TestIssuer",
+  "description": "Test issuer for AGT multi-issuer tests",
+  "configuration_endpoint": "https://test.jans.org/.well-known/openid-configuration",
+  "token_metadata": {
+    "access_token": {
+      "trusted": true,
+      "entity_type_name": "AGT::Access_Token",
+      "token_id": "jti"
+    }
+  }
+}

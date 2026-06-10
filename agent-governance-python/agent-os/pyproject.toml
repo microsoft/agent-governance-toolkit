@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_os_kernel"
-version = "4.0.0"
+version = "4.1.0"
 description = "Deprecated — use agent-governance-toolkit-core instead. A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
 readme = "README.md"
 license = {text = "MIT"}
@@ -46,7 +46,7 @@ classifiers = [
 dependencies = [
     "agent-governance-toolkit-core>=4.0.0,<5.0",
     "pydantic>=2.4.0,<3.0",
-    "rich>=13.0.0,<16.0",
+    "rich>=15.0.0,<16.0",
 ]
 
 [project.urls]
@@ -65,19 +65,19 @@ iatp = [
     "fastapi>=0.115.0,<1.0",
     "uvicorn>=0.27.0,<1.0",
     "httpx>=0.27.0,<1.0",
-    "cryptography>=46.0.7,<49.0",
-    "pynacl>=1.5.0,<2.0",
+    "cryptography>=48.0.0,<49.0",
+    "pynacl>=1.6.2,<2.0",
 ]
 
 amb = [
-    "anyio>=3.0.0,<5.0",
-    "aiofiles>=23.0.0,<26.0",
+    "anyio>=4.12.1,<5.0",
+    "aiofiles>=25.1.0,<26.0",
 ]
 
 observability = [
-    "prometheus-client>=0.17.0,<1.0",
+    "prometheus-client>=0.25.0,<1.0",
     "opentelemetry-api>=1.20.0,<2.0",
-    "opentelemetry-sdk>=1.20.0,<2.0",
+    "opentelemetry-sdk>=1.41.1,<2.0",
 ]
 
 mcp = [
@@ -91,7 +91,7 @@ langgraph = [
 nexus = [
     "agent-os-kernel[iatp]",
     "pyyaml>=6.0.0,<7.0",
-    "structlog>=24.1.0,<26.0",
+    "structlog>=24.1.0,<27.0",
     "aiohttp>=3.13.4,<4.0",
 ]
 
@@ -105,24 +105,24 @@ hypervisor = [
 
 # Development (includes all optional deps for full testing)
 dev = [
-    "pytest>=7.0.0,<9.0",
+    "pytest>=8.4.2,<9.0",
     "pytest-asyncio>=0.21.0,<2.0",
     "pytest-cov>=4.0.0,<8.0",
-    "mypy>=1.0.0,<2.0",
-    "ruff>=0.1.0,<1.0",
+    "mypy>=1.19.1,<2.0",
+    "ruff>=0.15.15,<1.0",
     "import-linter>=2.0,<3.0",
     "pyyaml>=6.0.0,<7.0",
     "typer>=0.9.0,<1.0",
-    "rich>=13.0.0,<16.0",
+    "rich>=15.0.0,<16.0",
     "numpy>=1.20.0,<3.0",
     "httpx>=0.27.0,<1.0",
     "fastapi>=0.115.0,<1.0",
     "uvicorn>=0.27.0,<1.0",
-    "anyio>=3.0.0,<5.0",
+    "anyio>=4.12.1,<5.0",
     "aiohttp>=3.13.4,<4.0",
-    "structlog>=24.1.0,<26.0",
+    "structlog>=24.1.0,<27.0",
     "redis>=4.0.0,<8.0",
-    "cryptography>=46.0.7,<49.0",
+    "cryptography>=48.0.0,<49.0",
     "eval_type_backport>=0.2.0; python_version < '3.10'",
 ]
 

@@ -33,7 +33,7 @@
     "directory": "agent-governance-antigravity-cli"
   },
   "dependencies": {
-    "@microsoft/agent-governance-sdk": "3.7.0"
+    "@microsoft/agent-governance-sdk": "4.0.0"
   },
   "engines": {
     "node": ">=20.19.0"

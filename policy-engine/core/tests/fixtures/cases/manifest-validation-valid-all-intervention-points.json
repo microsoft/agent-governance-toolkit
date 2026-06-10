@@ -1,0 +1,21 @@
+{
+  "case_kind": "manifest",
+  "covers": [
+    "manifest_validation"
+  ],
+  "description": "A minimal manifest using every closed intervention_point validates successfully.",
+  "expect_valid": true,
+  "expected_intervention_point_names": [
+    "agent_startup",
+    "input",
+    "pre_model_call",
+    "post_model_call",
+    "pre_tool_call",
+    "post_tool_call",
+    "output",
+    "agent_shutdown"
+  ],
+  "id": "manifest-validation-valid-all-intervention-points",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\nmetadata:\n  name: fixture-valid-all-intervention-points\nextends: []\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  agent_startup:\n    policy_target_kind: agent_metadata\n    policy:\n      id: test_policy\n    policy_target: $snap.agent\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n  pre_model_call:\n    policy_target_kind: model_request\n    policy:\n      id: test_policy\n    policy_target: $snap.model_request\n  post_model_call:\n    policy_target_kind: model_response\n    policy:\n      id: test_policy\n    policy_target: $snap.model_response\n  pre_tool_call:\n    policy_target_kind: tool_args\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_call.args\n  post_tool_call:\n    policy_target_kind: tool_result\n    policy:\n      id: test_policy\n    policy_target: $snap.tool_result\n  output:\n    policy_target_kind: assistant_output\n    policy:\n      id: test_policy\n    policy_target: $snap.output\n  agent_shutdown:\n    policy_target_kind: agent_metadata\n    policy:\n      id: test_policy\n    policy_target: $snap.agent\n",
+  "schema_version": 1
+}

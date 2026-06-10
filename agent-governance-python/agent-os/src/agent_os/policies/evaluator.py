@@ -13,11 +13,14 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
 from .schema import PolicyAction, PolicyDocument, PolicyOperator, PolicyRule
+
+if TYPE_CHECKING:
+    from .dynamic_context import DynamicContext
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,14 @@ class PolicyDecision(BaseModel):
     action: str = "allow"
     reason: str = "No rules matched; default action applied"
     audit_entry: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Structured adaptation hints from dynamic-context rules. "
+            "Keys: backoff_seconds (int), blocked_tools (list[str]), "
+            "retry_after (int)."
+        ),
+    )
 
 
 class PolicyEvaluator:
@@ -127,10 +138,21 @@ class PolicyEvaluator:
         self.add_backend(backend)
         return backend
 
-    def evaluate(self, context: dict[str, Any]) -> PolicyDecision:
+    def evaluate(
+        self,
+        context: dict[str, Any],
+        dynamic_context: DynamicContext | None = None,
+    ) -> PolicyDecision:
         """Evaluate all loaded policy rules against the given context.
 
-        If ``root_dir`` is set and context contains a ``path`` key,
+        Args:
+            context: Action-level properties (tool_name, token_count, etc.)
+            dynamic_context: Optional runtime context (time, cost, quota,
+                system).  When supplied, its fields are merged into the
+                evaluation dict under context.time.*, context.cost.*
+                etc.  Existing callers that omit this argument are unaffected.
+
+        If root_dir is set and context contains a path key,
         folder-scoped policy discovery is used — governance.yaml files
         are loaded from the action path up to root and merged
         hierarchically. Otherwise, the flat policy list is evaluated.
@@ -141,6 +163,10 @@ class PolicyEvaluator:
         matches, the default action from the first policy (or global allow)
         is used.
         """
+        # Merge dynamic context into the evaluation dict (additive only)
+        if dynamic_context is not None:
+            context = {**context, **dynamic_context.to_flat_dict()}
+
         # Folder-scoped evaluation path
         if self.root_dir and "path" in context:
             return self._evaluate_scoped(context)

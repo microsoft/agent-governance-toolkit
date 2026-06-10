@@ -1,0 +1,12 @@
+{
+  "case_kind": "manifest",
+  "covers": [
+    "unknown_intervention_point_rejection"
+  ],
+  "description": "Removed or unknown intervention points are rejected at manifest load time.",
+  "expect_valid": false,
+  "expected_error_reason": "runtime_error:manifest_invalid",
+  "id": "manifest-reject-unknown-intervention-point",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  state:\n    policy:\n      id: test_policy\n    policy_target: $snap.state\n",
+  "schema_version": 1
+}

@@ -66,6 +66,7 @@ The essentials to get your first governed agent running in minutes.
 |----------|----------------------|
 | [2-Line Quickstart](36-govern-quickstart.md) | Add governance to any agent in 2 lines of code |
 | [Policy Engine Basics](01-policy-engine.md) | Write and evaluate your first policy rules |
+| [Agent Control Specification](55-agent-control-specification.md) | Build a direct ACS policy enforcement point with allow, transform, and deny verdicts |
 | [Framework Integrations](03-framework-integrations.md) | Connect AGT to LangChain, CrewAI, OpenAI, etc. |
 | [Progressive Governance](progressive-governance.md) | Start simple, add layers incrementally |
 
@@ -114,6 +115,7 @@ Writing, composing, and enforcing governance policies.
 
 | Tutorial | What you'll learn |
 |----------|-------------------|
+| [Agent Control Specification](55-agent-control-specification.md) | Direct ACS manifests, snapshots, verdicts, and host enforcement |
 | [OPA / Rego / Cedar](08-opa-rego-cedar-policies.md) | Policy engines comparison and integration |
 | [Policy Composition](35-policy-composition.md) | Enterprise governance layers, policy merging |
 | [Approval Workflows](38-approval-workflows.md) | Human-in-the-loop approval gates |

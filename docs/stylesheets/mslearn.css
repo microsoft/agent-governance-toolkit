@@ -250,19 +250,11 @@ body,
   z-index: 3;
 }
 
-/* The search container lives inside .md-header alongside the sticky tabs
-   row (.md-tabs, z-index: 3). Material gives .md-search only z-index: 1, so
-   within the shared header stacking context the tabs paint OVER the open
-   search results dropdown. At desktop widths (where the tabs row is shown)
-   lift the search above the tabs so its results overlay correctly. Scoped
-   to the desktop breakpoint to avoid disturbing the mobile full-screen
-   search overlay, which relies on Material's own absolute positioning. */
-@media screen and (min-width: 76.25em) {
-  .md-search {
-    position: relative;
-    z-index: 6;
-  }
-}
+/* NOTE: lifting the search above the sticky tabs row (.md-tabs, z-index: 3)
+   is handled on the more specific `.md-header__inner > .md-search` rule in
+   the desktop header-layout block below. A plain `.md-search` rule here
+   (specificity 0,1,0) would be overridden by that centered-search selector
+   (0,2,0), so the z-index lift must live alongside it. */
 
 [data-md-color-scheme="slate"] .md-header {
   background-color: var(--md-default-bg-color);
@@ -450,7 +442,11 @@ body,
     transform: translate(-50%, -50%);
     width: min(380px, 36%);
     margin: 0 !important;
-    z-index: 1;
+    /* Lift above the sticky tabs row (.md-tabs, z-index: 3) so the open
+       results dropdown overlays the secondary nav instead of being painted
+       behind it. Set here (not on a plain `.md-search`) because this
+       selector is more specific and would otherwise win at z-index: 1. */
+    z-index: 6;
   }
   /* Reserve room on each side so the left/right clusters never collide
      with the centered search input. `margin-left: auto` on the first
@@ -2050,13 +2046,25 @@ label.md-nav__link > .md-nav__icon::after {
   outline: none;
 }
 
-/* Backdrop dim when search is open */
+/* No backdrop dim. The search dropdown floats over the page without
+   darkening it. The overlay element is kept (transparent) so that clicking
+   anywhere outside the dropdown still closes the search. */
 .md-search__overlay {
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: transparent;
 }
 
 [data-md-toggle="search"]:checked ~ .md-header .md-search__overlay {
   opacity: 1;
+}
+
+/* Don't show the empty results dropdown until the user actually types.
+   Material renders the .md-search__output box (with its "Initializing
+   search" / "Type to start searching" status text) as soon as the field is
+   focused, which reads as a stray empty overlay. While the input still
+   shows its placeholder (i.e. no query), collapse the output box so
+   clicking search just reveals the field. */
+.md-search__inner:has(.md-search__input:placeholder-shown) .md-search__output {
+  display: none;
 }
 
 /* Widen the dropdown panel */
@@ -2081,7 +2089,34 @@ label.md-nav__link > .md-nav__icon::after {
     background-color: var(--md-default-bg-color);
     margin-top: 0.375rem;
     overflow: hidden;
-    max-height: calc(100vh - 6rem);
+    max-height: calc(100vh - 4.5rem);
+    /* The input stays compact (min(380px, 36%)), but the results panel
+       expands to a comfortable reading width and is centered under the
+       input. Decoupling the panel width from the input width keeps titles,
+       teasers, and code snippets from clipping on the right edge without
+       reflowing the header. min(560px, 92vw) caps it on narrow viewports. */
+    width: min(560px, 92vw);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* Let the inner scroll area use the full height of the dropdown so the
+     last result isn't clipped mid-row. The scrollwrap is the actual
+     scroller; Material caps it with a shorter default max-height, so we
+     override it (!important) to fill the panel up to the viewport.
+
+     Width: Material hard-codes a FIXED width on the scrollwrap
+     (.md-search__scrollwrap { width: 23.4rem } at >=60em, 34.4rem at
+     >=76.25em). Since we resize the .md-search__output panel above, that
+     fixed inner width no longer matches the panel — leaving blank right
+     padding when it's narrower than the panel, or clipping result text
+     when it's wider. Force it to 100% so the scroll area always fills the
+     panel and the panel width (min(560px, 92vw)) is the single source of
+     truth. */
+  .md-search__scrollwrap {
+    width: 100% !important;
+    max-height: calc(100vh - 4.5rem) !important;
+    overflow-y: auto;
   }
 
   [data-md-color-scheme="slate"] .md-search__output {
@@ -2123,12 +2158,14 @@ label.md-nav__link > .md-nav__icon::after {
   font-weight: 600;
   font-size: 0.875rem;
   color: var(--mslearn-text);
+  overflow-wrap: anywhere;
 }
 
 .md-search-result__teaser {
   font-size: 0.8125rem;
   color: var(--mslearn-text-muted);
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* Highlight matches in brand purple */
@@ -2493,4 +2530,26 @@ label.md-nav__link > .md-nav__icon::after {
 .mermaid .cluster-label .nodeLabel {
   font-size: 16px !important;
   font-weight: 700;
+}
+
+/* Partner logos: white container so dark-text logos stay legible in dark mode */
+.md-typeset .partner-cards img {
+  display: inline-block;
+  background: #ffffff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+/* Partner quote cards: subtle, theme-aware hover (overrides Material's harsh
+   accent-colored border, which looks off in dark mode) */
+.md-typeset .grid.cards.partner-cards > ul > li {
+  border-radius: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.md-typeset .grid.cards.partner-cards > ul > li:hover {
+  border-color: var(--md-primary-fg-color);
+  box-shadow: 0 4px 14px rgba(100, 63, 178, 0.35);
+  transform: translateY(-2px);
 }

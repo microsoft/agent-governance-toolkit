@@ -1,0 +1,53 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "reserved_runtime_error_reasons"
+  ],
+  "description": "Policy-supplied reasons may not use the reserved runtime_error:* namespace.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "input": {
+              "text": "hello"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:policy_output_invalid"
+        }
+      },
+      "mode": "enforce",
+      "name": "policy-reason-uses-reserved-prefix",
+      "policy_response": {
+        "ok": {
+          "decision": "allow",
+          "reason": "runtime_error:path_missing"
+        }
+      },
+      "snapshot": {
+        "input": {
+          "text": "hello"
+        }
+      },
+      "intervention_point": "input"
+    }
+  ],
+  "id": "reserved-runtime-error-reasons",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n",
+  "schema_version": 1
+}

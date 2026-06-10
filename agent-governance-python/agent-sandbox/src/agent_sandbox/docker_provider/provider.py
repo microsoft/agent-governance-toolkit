@@ -307,6 +307,9 @@ class DockerSandboxProvider(SandboxProvider):
         Base Docker image. When ``None`` (default), the provider auto-
         selects the hardened ``HARDENED_IMAGE_TAG`` if it is locally
         available, and falls back to ``_LEGACY_DEFAULT_IMAGE`` otherwise.
+    require_hardened_image:
+        When ``True``, require the local hardened image and fail instead of
+        falling back to the legacy image. Cannot be combined with ``image``.
     docker_url:
         Docker daemon URL (default: auto-detect via env).
     runtime:
@@ -330,8 +333,20 @@ class DockerSandboxProvider(SandboxProvider):
         docker_url: str | None = None,
         runtime: IsolationRuntime = IsolationRuntime.AUTO,
         tools: dict[str, Callable[..., Any]] | None = None,
+        require_hardened_image: bool = False,
     ) -> None:
-        self._image = image if image is not None else self._select_default_image()
+        if image is not None and require_hardened_image:
+            raise ValueError(
+                "image and require_hardened_image cannot be used together; "
+                "omit image to require the built-in hardened image"
+            )
+        if require_hardened_image:
+            self._image = self._select_default_image(
+                require_hardened_image=True,
+                docker_url=docker_url,
+            )
+        else:
+            self._image = image if image is not None else self._select_default_image()
         self._tools: dict[str, Callable[..., Any]] = tools or {}
         self._requested_runtime = runtime
 
@@ -390,21 +405,43 @@ class DockerSandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
 
     @classmethod
-    def _select_default_image(cls) -> str:
+    def _select_default_image(
+        cls,
+        *,
+        require_hardened_image: bool = False,
+        docker_url: str | None = None,
+    ) -> str:
         """Pick the hardened image if it's available locally, else legacy.
 
         Tries to query the local Docker daemon for ``HARDENED_IMAGE_TAG``.
         Any failure (no Docker, image not built, permission denied) falls
-        back silently to ``python:3.11-slim`` so existing setups keep
-        working. Callers who want to force one or the other should pass
-        ``image=...`` explicitly.
+        back to ``python:3.11-slim`` with a warning so existing setups keep
+        working unless ``require_hardened_image`` is true.
         """
         try:
             import docker  # type: ignore[import-untyped]
-            client = docker.from_env()
+            client = (
+                docker.DockerClient(base_url=docker_url)
+                if docker_url
+                else docker.from_env()
+            )
             client.images.get(cls.HARDENED_IMAGE_TAG)
             return cls.HARDENED_IMAGE_TAG
-        except Exception:
+        except Exception as exc:
+            if require_hardened_image:
+                raise RuntimeError(
+                    f"Hardened sandbox image '{cls.HARDENED_IMAGE_TAG}' is "
+                    "required but is not available locally. Build it from "
+                    "agent-sandbox/docker/Dockerfile.sandbox before creating "
+                    "the provider."
+                ) from exc
+            logger.warning(
+                "Hardened sandbox image '%s' is unavailable; falling back to "
+                "'%s'. Minimal-PATH command restrictions are not active. "
+                "Set require_hardened_image=True to fail closed.",
+                cls.HARDENED_IMAGE_TAG,
+                cls._LEGACY_DEFAULT_IMAGE,
+            )
             return cls._LEGACY_DEFAULT_IMAGE
 
     def _detect_runtime(self) -> IsolationRuntime:

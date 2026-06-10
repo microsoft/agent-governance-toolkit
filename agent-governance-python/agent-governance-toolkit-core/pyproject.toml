@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-governance-toolkit-core"
-version = "4.0.0"
+version = "4.1.0"
 description = "Core runtime, kernel, and trust layer for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}
@@ -46,7 +46,7 @@ dependencies = [
     "pynacl>=1.5.0,<2.0",
     "httpx>=0.27.0,<1.0",
     "aiohttp>=3.13.4,<4.0",
-    "structlog>=24.1.0,<26.0",
+    "structlog>=24.1.0,<27.0",
     "click>=8.1.0,<9.0",
     "python-dateutil>=2.8.0,<3.0",
     "jsonschema>=4.0.0,<5.0",

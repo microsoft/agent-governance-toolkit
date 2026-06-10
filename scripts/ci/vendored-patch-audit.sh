@@ -24,15 +24,15 @@ CHANGED_FILES=$(git diff --name-only "$BASE_REF"...HEAD)
 LOCK_TOUCHED=false
 
 for pattern in "${LOCK_PATTERNS[@]}"; do
-  if echo "$CHANGED_FILES" | grep -qE "(^|/)$pattern$"; then
+  if grep -qE "(^|/)$pattern$" <<< "$CHANGED_FILES"; then
     LOCK_TOUCHED=true
-    MATCHED=$(echo "$CHANGED_FILES" | grep -E "(^|/)$pattern$")
+    MATCHED=$(grep -E "(^|/)$pattern$" <<< "$CHANGED_FILES")
     echo "⚡ Lockfile changed: $MATCHED"
   fi
 done
 
 # Also check vendored content
-if echo "$CHANGED_FILES" | grep -q "^vendor/"; then
+if grep -q "^vendor/" <<< "$CHANGED_FILES"; then
   LOCK_TOUCHED=true
   echo "⚡ Vendored content changed"
 fi
@@ -43,7 +43,7 @@ if [ "$LOCK_TOUCHED" = false ]; then
 fi
 
 # Check for an audit doc
-AUDIT_DOC=$(echo "$CHANGED_FILES" | grep -E '^docs/dependency-audits/[0-9]{4}-[0-9]{2}-[0-9]{2}-.+\.md$' || true)
+AUDIT_DOC=$(grep -E '^docs/dependency-audits/[0-9]{4}-[0-9]{2}-[0-9]{2}-.+\.md$' <<< "$CHANGED_FILES" || true)
 
 if [ -z "$AUDIT_DOC" ]; then
   echo "❌ vendored-patch-audit: lockfiles changed but no dependency audit doc found."

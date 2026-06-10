@@ -13,13 +13,14 @@ import copy
 import difflib
 import fnmatch
 import hashlib
+import json
 import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Protocol
 
 if TYPE_CHECKING:
     from agent_os.policies.decision import PolicyCheckResult
@@ -210,6 +211,27 @@ class GovernancePolicy:
     # Version tracking
     version: str = "1.0.0"
 
+    # Optional runtime module wiring sections (issue #2477)
+    prompt_injection: dict[str, Any] = field(default_factory=dict)
+    token_budget: dict[str, Any] = field(default_factory=dict)
+    rate_limiter: dict[str, Any] = field(default_factory=dict)
+    bounded_semaphore: dict[str, Any] = field(default_factory=dict)
+    scope_guard: dict[str, Any] = field(default_factory=dict)
+    supply_chain: dict[str, Any] = field(default_factory=dict)
+    mcp_security: dict[str, Any] = field(default_factory=dict)
+
+    @staticmethod
+    def _freeze_mapping(value: Any) -> Any:
+        """Recursively convert nested mappings/lists to hashable tuples."""
+        if isinstance(value, dict):
+            return tuple(
+                (k, GovernancePolicy._freeze_mapping(v))
+                for k, v in sorted(value.items(), key=lambda item: item[0])
+            )
+        if isinstance(value, list):
+            return tuple(GovernancePolicy._freeze_mapping(v) for v in value)
+        return value
+
     def __repr__(self) -> str:
         return (
             f"GovernancePolicy(max_tokens={self.max_tokens!r}, "
@@ -234,6 +256,13 @@ class GovernancePolicy:
                 self.max_concurrent,
                 self.backpressure_threshold,
                 self.version,
+                self._freeze_mapping(self.prompt_injection),
+                self._freeze_mapping(self.token_budget),
+                self._freeze_mapping(self.rate_limiter),
+                self._freeze_mapping(self.bounded_semaphore),
+                self._freeze_mapping(self.scope_guard),
+                self._freeze_mapping(self.supply_chain),
+                self._freeze_mapping(self.mcp_security),
             )
         )
 
@@ -292,6 +321,22 @@ class GovernancePolicy:
             raise ValueError(
                 f"version must be a non-empty string, got {self.version!r}"
             )
+
+        # Validate optional module sections.
+        for field_name in (
+            "prompt_injection",
+            "token_budget",
+            "rate_limiter",
+            "bounded_semaphore",
+            "scope_guard",
+            "supply_chain",
+            "mcp_security",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, dict):
+                raise ValueError(
+                    f"{field_name} must be a dict, got {type(value).__name__}"
+                )
 
         self._compiled_patterns: list[tuple[str, PatternType, re.Pattern | None]] = []
         for i, pattern in enumerate(self.blocked_patterns):
@@ -398,6 +443,13 @@ class GovernancePolicy:
             "max_concurrent": self.max_concurrent,
             "backpressure_threshold": self.backpressure_threshold,
             "version": self.version,
+            "prompt_injection": self.prompt_injection,
+            "token_budget": self.token_budget,
+            "rate_limiter": self.rate_limiter,
+            "bounded_semaphore": self.bounded_semaphore,
+            "scope_guard": self.scope_guard,
+            "supply_chain": self.supply_chain,
+            "mcp_security": self.mcp_security,
         }
 
     @classmethod
@@ -432,7 +484,8 @@ class GovernancePolicy:
             "blocked_patterns", "require_human_approval", "timeout_seconds",
             "confidence_threshold", "drift_threshold", "log_all_calls",
             "checkpoint_frequency", "max_concurrent", "backpressure_threshold",
-            "version",
+            "version", "prompt_injection", "token_budget", "rate_limiter",
+            "bounded_semaphore", "scope_guard", "supply_chain", "mcp_security",
         }
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
@@ -471,6 +524,13 @@ class GovernancePolicy:
             "max_concurrent": self.max_concurrent,
             "backpressure_threshold": self.backpressure_threshold,
             "version": self.version,
+            "prompt_injection": self.prompt_injection,
+            "token_budget": self.token_budget,
+            "rate_limiter": self.rate_limiter,
+            "bounded_semaphore": self.bounded_semaphore,
+            "scope_guard": self.scope_guard,
+            "supply_chain": self.supply_chain,
+            "mcp_security": self.mcp_security,
         }
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
 
@@ -505,6 +565,8 @@ class GovernancePolicy:
             "require_human_approval", "timeout_seconds", "confidence_threshold",
             "drift_threshold", "log_all_calls", "checkpoint_frequency",
             "max_concurrent", "backpressure_threshold", "version",
+            "prompt_injection", "token_budget", "rate_limiter",
+            "bounded_semaphore", "scope_guard", "supply_chain", "mcp_security",
         }
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
@@ -532,6 +594,8 @@ class GovernancePolicy:
             "require_human_approval", "timeout_seconds", "confidence_threshold",
             "drift_threshold", "log_all_calls", "checkpoint_frequency",
             "max_concurrent", "backpressure_threshold", "version",
+            "prompt_injection", "token_budget", "rate_limiter",
+            "bounded_semaphore", "scope_guard", "supply_chain", "mcp_security",
         ]
         for f in fields:
             v_self = getattr(self, f)
@@ -681,6 +745,45 @@ class ToolCallResult:
 
     def __repr__(self) -> str:
         return f"ToolCallResult(allowed={self.allowed!r}, reason={self.reason!r})"
+
+
+@dataclass(frozen=True)
+class SkillAuditMetadata:
+    """Normalized skill metadata attached to audit events.
+
+    Fields are additive and nullable so existing integrations can adopt this
+    progressively without breaking older payload consumers.
+    """
+
+    skill_name: str | None = None
+    skill_origin: str | None = None
+    provenance_source_trust: Literal["trusted"] | None = None
+    context_hash_before: str | None = None
+    context_hash_after: str | None = None
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "skill_name": self.skill_name,
+            "skill_origin": self.skill_origin,
+            "provenance_source_trust": self.provenance_source_trust,
+            "context_hash_before": self.context_hash_before,
+            "context_hash_after": self.context_hash_after,
+        }
+
+
+@dataclass(frozen=True)
+class TrustedSkillMetadataSource:
+    """Trusted framework-owned skill metadata source.
+
+    Adapters must construct this only from framework metadata surfaces,
+    never from user-controlled request payloads or tool arguments.
+
+    Future: extend with verifiable attestations/signatures when framework
+    runtimes expose portable trust claims. Tracked in #2907.
+    """
+
+    skill_name: str | None = None
+    skill_origin: str | None = None
 
 
 class ToolCallInterceptor(Protocol):
@@ -933,6 +1036,121 @@ class BaseIntegration(ABC):
         self.contexts: dict[str, ExecutionContext] = {}
         self._signal_handlers: dict[str, Callable[..., Any]] = {}
         self._event_listeners: dict[GovernanceEventType, list[Callable[..., Any]]] = {}
+        self._semaphore_held_sessions: set[str] = set()
+        self._init_runtime_modules()
+
+    @staticmethod
+    def _is_module_enabled(config: dict[str, Any]) -> bool:
+        """Return whether a runtime module section is enabled."""
+        return bool(config.get("enabled"))
+
+    @staticmethod
+    def _extract_text_payload(input_data: Any) -> str:
+        """Extract a best-effort textual payload for input scanners."""
+        if isinstance(input_data, str):
+            return input_data
+        if isinstance(input_data, dict):
+            for key in ("input", "input_text", "content", "message", "prompt"):
+                value = input_data.get(key)
+                if isinstance(value, str) and value:
+                    return value
+        return str(input_data)
+
+    @staticmethod
+    def _extract_token_usage(input_data: Any) -> tuple[int, int]:
+        """Extract ``(prompt_tokens, completion_tokens)`` from common payload shapes."""
+        if isinstance(input_data, dict):
+            prompt = int(input_data.get("prompt_tokens", input_data.get("token_count", 0)) or 0)
+            completion = int(input_data.get("completion_tokens", 0) or 0)
+            total = int(input_data.get("total_tokens", 0) or 0)
+            if total > 0 and prompt == 0 and completion == 0:
+                prompt = total
+            return prompt, completion
+        return 0, 0
+
+    def _init_runtime_modules(self) -> None:
+        """Initialize optional runtime modules declared on the policy."""
+        self._prompt_injection_detector: Any | None = None
+        self._token_budget_tracker: Any | None = None
+        self._rate_limiter: Any | None = None
+        self._bounded_semaphore: BoundedSemaphore | None = None
+        self._scope_guard: Any | None = None
+        self._supply_chain_guard: Any | None = None
+        self._mcp_security_scanner: Any | None = None
+
+        if self._is_module_enabled(self.policy.prompt_injection):
+            from agent_os.prompt_injection import DetectionConfig, PromptInjectionDetector
+
+            config = DetectionConfig(
+                sensitivity=str(self.policy.prompt_injection.get("sensitivity", "balanced")),
+                blocklist=list(self.policy.prompt_injection.get("blocklist", [])),
+                allowlist=list(self.policy.prompt_injection.get("allowlist", [])),
+            )
+            self._prompt_injection_detector = PromptInjectionDetector(config=config)
+
+        if self._is_module_enabled(self.policy.token_budget):
+            from .token_budget import TokenBudgetTracker
+
+            warning_threshold = float(self.policy.token_budget.get("warning_threshold", 0.8))
+            self._token_budget_tracker = TokenBudgetTracker(
+                policy=self.policy,
+                warning_threshold=warning_threshold,
+            )
+
+        if self._is_module_enabled(self.policy.rate_limiter):
+            from .rate_limiter import RateLimiter
+
+            self._rate_limiter = RateLimiter(
+                max_calls=int(self.policy.rate_limiter.get("max_calls", self.policy.max_tool_calls)),
+                time_window=float(self.policy.rate_limiter.get("time_window", 60.0)),
+                per_agent=bool(self.policy.rate_limiter.get("per_agent", True)),
+            )
+
+        if self._is_module_enabled(self.policy.bounded_semaphore):
+            self._bounded_semaphore = BoundedSemaphore(
+                max_concurrent=int(
+                    self.policy.bounded_semaphore.get("max_concurrent", self.policy.max_concurrent)
+                ),
+                backpressure_threshold=int(
+                    self.policy.bounded_semaphore.get(
+                        "backpressure_threshold",
+                        self.policy.backpressure_threshold,
+                    )
+                ),
+            )
+
+        if self._is_module_enabled(self.policy.scope_guard):
+            from .scope_guard import ScopeGuard
+
+            self._scope_guard = ScopeGuard()
+
+        if self._is_module_enabled(self.policy.supply_chain):
+            try:
+                from agent_compliance.supply_chain import SupplyChainConfig, SupplyChainGuard
+            except ImportError:
+                logger.warning(
+                    "supply_chain.enabled=true but agent_compliance is unavailable; module disabled"
+                )
+            else:
+                self._supply_chain_guard = SupplyChainGuard(
+                    SupplyChainConfig(
+                        freshness_days=int(self.policy.supply_chain.get("freshness_days", 7)),
+                        allow_ranges=bool(self.policy.supply_chain.get("allow_ranges", False)),
+                    )
+                )
+
+        if self._is_module_enabled(self.policy.mcp_security):
+            from agent_os.mcp_security import MCPSecurityConfig, MCPSecurityScanner
+
+            self._mcp_security_scanner = MCPSecurityScanner(config=MCPSecurityConfig())
+
+    def _release_semaphore_if_held(self, ctx: ExecutionContext) -> None:
+        """Release a bounded-semaphore slot if this context currently holds one."""
+        if self._bounded_semaphore is None:
+            return
+        if ctx.session_id in self._semaphore_held_sessions:
+            self._bounded_semaphore.release()
+            self._semaphore_held_sessions.remove(ctx.session_id)
 
     # ------------------------------------------------------------------
     # Cedar / PolicyEvaluator integration
@@ -1088,6 +1306,196 @@ class BaseIntegration(ABC):
                     event_type, exc, exc_info=True,
                 )
 
+    @staticmethod
+    def hash_context(context: Any) -> str | None:
+        """Return a deterministic SHA-256 hash for canonically serializable context.
+
+        This is a lightweight, best-effort fingerprint for observability.
+        It is not a cryptographic provenance guarantee.
+        """
+        if context is None:
+            return None
+
+        try:
+            canonical = json.dumps(
+                context,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            )
+        except Exception:
+            logger.debug(
+                "Unable to canonicalize context for hashing (type=%s)",
+                type(context).__name__,
+                exc_info=True,
+            )
+            # Fail-safe: non-canonical payloads should not produce hashes.
+            return None
+
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def trusted_skill_metadata_source(
+        *,
+        skill_name: Any = None,
+        skill_origin: Any = None,
+    ) -> TrustedSkillMetadataSource | None:
+        """Create a trusted metadata source from explicit framework-owned values."""
+
+        def _pick_string(value: Any) -> str | None:
+            if isinstance(value, str):
+                normalized = value.strip()
+                return normalized or None
+            return None
+
+        parsed_name = _pick_string(skill_name)
+        parsed_origin = _pick_string(skill_origin)
+        if parsed_name is None and parsed_origin is None:
+            return None
+
+        return TrustedSkillMetadataSource(
+            skill_name=parsed_name,
+            skill_origin=parsed_origin,
+        )
+
+    @staticmethod
+    def trusted_skill_metadata_from_mapping(
+        metadata: Mapping[str, Any] | None,
+        *,
+        skill_name_key: str = "skill_name",
+        skill_origin_key: str = "skill_origin",
+    ) -> TrustedSkillMetadataSource | None:
+        """Build trusted metadata from an explicitly designated framework mapping.
+
+        Callers must pass only framework-owned metadata maps.
+        Arbitrary request/argument dictionaries are out of scope by design.
+        """
+        if not isinstance(metadata, Mapping):
+            return None
+        return BaseIntegration.trusted_skill_metadata_source(
+            skill_name=metadata.get(skill_name_key),
+            skill_origin=metadata.get(skill_origin_key),
+        )
+
+    @staticmethod
+    def trusted_sources(
+        *sources: TrustedSkillMetadataSource | None,
+    ) -> tuple[TrustedSkillMetadataSource, ...]:
+        """Return only non-null trusted metadata sources."""
+        return tuple(source for source in sources if source is not None)
+
+    @staticmethod
+    def trusted_sources_from_attrs(
+        *objs: Any,
+    ) -> tuple[TrustedSkillMetadataSource, ...]:
+        """Extract trusted metadata sources from objects exposing skill attrs."""
+        return BaseIntegration.trusted_sources(
+            *(
+                BaseIntegration.trusted_skill_metadata_source(
+                    skill_name=getattr(obj, "skill_name", None),
+                    skill_origin=getattr(obj, "skill_origin", None),
+                )
+                for obj in objs
+            )
+        )
+
+    @staticmethod
+    def extract_skill_metadata(
+        *,
+        trusted_sources: tuple[TrustedSkillMetadataSource, ...] = (),
+        sources: tuple[Any, ...] = (),
+        default_origin: str | None = None,
+    ) -> SkillAuditMetadata:
+        """Extract skill metadata from trusted framework-owned sources only.
+
+        Trust boundary: this method intentionally ignores user-controlled data.
+        """
+
+        skill_name: str | None = None
+        skill_origin: str | None = None
+
+        # Backward-compatible bridge: only explicitly trusted wrappers from
+        # legacy ``sources`` are accepted.
+        merged_trusted_sources = list(trusted_sources)
+        for source in sources:
+            if isinstance(source, TrustedSkillMetadataSource):
+                merged_trusted_sources.append(source)
+
+        for source in merged_trusted_sources:
+            if skill_name is None and source.skill_name is not None:
+                skill_name = source.skill_name
+            if skill_origin is None and source.skill_origin is not None:
+                skill_origin = source.skill_origin
+
+        if skill_name and not skill_origin and default_origin:
+            skill_origin = default_origin
+
+        provenance_source_trust: Literal["trusted"] | None = "trusted" if skill_name else None
+
+        return SkillAuditMetadata(
+            skill_name=skill_name,
+            skill_origin=skill_origin,
+            provenance_source_trust=provenance_source_trust,
+        )
+
+    def build_skill_audit_fields(
+        self,
+        *,
+        trusted_sources: tuple[TrustedSkillMetadataSource, ...] = (),
+        sources: tuple[Any, ...] = (),
+        default_origin: str | None = None,
+        context_before: Any | None = None,
+        context_after: Any | None = None,
+    ) -> dict[str, str | None]:
+        """Build normalized skill-audit fields for adapter audit payloads."""
+        metadata = self.extract_skill_metadata(
+            trusted_sources=trusted_sources,
+            sources=sources,
+            default_origin=default_origin,
+        )
+        return SkillAuditMetadata(
+            skill_name=metadata.skill_name,
+            skill_origin=metadata.skill_origin,
+            provenance_source_trust=metadata.provenance_source_trust,
+            context_hash_before=self.hash_context(context_before),
+            context_hash_after=self.hash_context(context_after),
+        ).to_dict()
+
+    def emit_skill_audit_event(
+        self,
+        event_type: GovernanceEventType,
+        *,
+        agent_id: str,
+        action: str,
+        trusted_sources: tuple[TrustedSkillMetadataSource, ...] = (),
+        sources: tuple[Any, ...] = (),
+        default_origin: str | None = None,
+        context_before: Any | None = None,
+        context_after: Any | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """Emit a centralized skill-aware governance audit payload.
+
+        Emission happens in governance middleware/hooks (outside skill loading
+        or execution internals) so malformed skills cannot suppress audit
+        generation.
+        """
+        payload: dict[str, Any] = {
+            "agent_id": agent_id,
+            "action": action,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **self.build_skill_audit_fields(
+                trusted_sources=trusted_sources,
+                sources=sources,
+                default_origin=default_origin,
+                context_before=context_before,
+                context_after=context_after,
+            ),
+            **extra,
+        }
+        self.emit(event_type, payload)
+        return payload
+
     def pre_execute_check(self, ctx: ExecutionContext, input_data: Any) -> PolicyCheckResult:
         """Run pre-execution policy checks and return a structured result.
 
@@ -1142,6 +1550,7 @@ class BaseIntegration(ABC):
 
         # Check call count
         if ctx.call_count >= self.policy.max_tool_calls:
+            self._release_semaphore_if_held(ctx)
             result = deny_max_tool_calls(self.policy.max_tool_calls, ctx.call_count)
             self.emit(
                 GovernanceEventType.POLICY_VIOLATION,
@@ -1152,6 +1561,7 @@ class BaseIntegration(ABC):
         # Check timeout
         elapsed = (datetime.now() - ctx.start_time).total_seconds()
         if elapsed > self.policy.timeout_seconds:
+            self._release_semaphore_if_held(ctx)
             result = deny_timeout(self.policy.timeout_seconds, elapsed)
             self.emit(
                 GovernanceEventType.POLICY_VIOLATION,
@@ -1163,6 +1573,7 @@ class BaseIntegration(ABC):
         input_str = str(input_data)
         matched = self.policy.matches_pattern(input_str)
         if matched:
+            self._release_semaphore_if_held(ctx)
             result = deny_blocked_pattern_input(matched[0], input_str)
             self.emit(
                 GovernanceEventType.TOOL_CALL_BLOCKED,
@@ -1172,6 +1583,7 @@ class BaseIntegration(ABC):
 
         # Check human approval requirement
         if self.policy.require_human_approval:
+            self._release_semaphore_if_held(ctx)
             result = deny_human_approval()
             self.emit(
                 GovernanceEventType.POLICY_VIOLATION,
@@ -1183,12 +1595,144 @@ class BaseIntegration(ABC):
         if self.policy.confidence_threshold > 0.0:
             confidence = getattr(input_data, "confidence", None)
             if isinstance(confidence, (int, float)) and confidence < self.policy.confidence_threshold:
+                self._release_semaphore_if_held(ctx)
                 result = deny_confidence_threshold(self.policy.confidence_threshold, confidence)
                 self.emit(
                     GovernanceEventType.POLICY_VIOLATION,
                     {**event_base, "reason": result.reason},
                 )
                 return result
+
+        if self._rate_limiter is not None and not self._rate_limiter.allow(ctx.agent_id):
+            self._release_semaphore_if_held(ctx)
+            result = deny_policy_error("Rate limit exceeded")
+            self.emit(
+                GovernanceEventType.POLICY_VIOLATION,
+                {**event_base, "reason": result.reason},
+            )
+            return result
+
+        if self._prompt_injection_detector is not None:
+            text_payload = self._extract_text_payload(input_data)
+            detection = self._prompt_injection_detector.detect(
+                text_payload,
+                source=f"integration:{ctx.agent_id}",
+            )
+            if detection.is_injection:
+                self._release_semaphore_if_held(ctx)
+                result = deny_policy_error(
+                    f"Prompt injection detected ({detection.threat_level.value}): "
+                    f"{detection.explanation}"
+                )
+                self.emit(
+                    GovernanceEventType.TOOL_CALL_BLOCKED,
+                    {
+                        **event_base,
+                        "reason": result.reason,
+                        "source": "prompt_injection",
+                    },
+                )
+                return result
+
+        if self._token_budget_tracker is not None:
+            prompt_tokens, completion_tokens = self._extract_token_usage(input_data)
+            if prompt_tokens > 0 or completion_tokens > 0:
+                budget_status = self._token_budget_tracker.record_usage(
+                    ctx.agent_id, prompt_tokens, completion_tokens
+                )
+                if budget_status.is_exceeded:
+                    self._release_semaphore_if_held(ctx)
+                    result = deny_policy_error(
+                        f"Token budget exceeded ({budget_status.used}/{budget_status.limit})"
+                    )
+                    self.emit(
+                        GovernanceEventType.POLICY_VIOLATION,
+                        {**event_base, "reason": result.reason, "source": "token_budget"},
+                    )
+                    return result
+
+        if self._scope_guard is not None and isinstance(input_data, dict):
+            from .scope_guard import ScopeConfig
+
+            changed_files = input_data.get("changed_files")
+            insertions = input_data.get("insertions")
+            deletions = input_data.get("deletions")
+            if (
+                isinstance(changed_files, list)
+                and isinstance(insertions, int)
+                and isinstance(deletions, int)
+            ):
+                cfg = ScopeConfig(
+                    max_files=int(self.policy.scope_guard.get("max_files", 10)),
+                    max_lines=int(self.policy.scope_guard.get("max_lines", 500)),
+                    mode=str(self.policy.scope_guard.get("mode", "on")),
+                    drift_detection=bool(self.policy.scope_guard.get("drift_detection", True)),
+                )
+                scope_eval = self._scope_guard.evaluate(
+                    agent_id=ctx.agent_id,
+                    config=cfg,
+                    changed_files=changed_files,
+                    insertions=insertions,
+                    deletions=deletions,
+                    drift_indicators=input_data.get("drift_indicators"),
+                )
+                if scope_eval.decision != "PASS":
+                    self._release_semaphore_if_held(ctx)
+                    result = deny_policy_error(
+                        f"Scope guard {scope_eval.decision}: {scope_eval.reason}"
+                    )
+                    self.emit(
+                        GovernanceEventType.POLICY_VIOLATION,
+                        {**event_base, "reason": result.reason, "source": "scope_guard"},
+                    )
+                    return result
+
+        if self._supply_chain_guard is not None and isinstance(input_data, dict):
+            scan_path = input_data.get("supply_chain_path")
+            if isinstance(scan_path, str) and scan_path:
+                findings = self._supply_chain_guard.scan_directory(scan_path)
+                blocking = [f for f in findings if f.severity in {"critical", "high"}]
+                if blocking:
+                    self._release_semaphore_if_held(ctx)
+                    result = deny_policy_error(
+                        f"Supply chain guard blocked: {blocking[0].message}"
+                    )
+                    self.emit(
+                        GovernanceEventType.POLICY_VIOLATION,
+                        {**event_base, "reason": result.reason, "source": "supply_chain"},
+                    )
+                    return result
+
+        if self._mcp_security_scanner is not None and isinstance(input_data, dict):
+            tool = input_data.get("mcp_tool")
+            if isinstance(tool, dict):
+                threats = self._mcp_security_scanner.scan_tool(
+                    tool_name=str(tool.get("name", "unknown")),
+                    description=str(tool.get("description", "")),
+                    schema=tool.get("inputSchema"),
+                    server_name=str(input_data.get("mcp_server_name", "unknown")),
+                )
+                if threats:
+                    self._release_semaphore_if_held(ctx)
+                    result = deny_policy_error(
+                        f"MCP security scanner blocked tool: {threats[0].message}"
+                    )
+                    self.emit(
+                        GovernanceEventType.TOOL_CALL_BLOCKED,
+                        {**event_base, "reason": result.reason, "source": "mcp_security"},
+                    )
+                    return result
+
+        if self._bounded_semaphore is not None:
+            acquired, reason = self._bounded_semaphore.try_acquire()
+            if not acquired:
+                result = deny_policy_error(reason or "Concurrency guard denied request")
+                self.emit(
+                    GovernanceEventType.POLICY_VIOLATION,
+                    {**event_base, "reason": result.reason, "source": "bounded_semaphore"},
+                )
+                return result
+            self._semaphore_held_sessions.add(ctx.session_id)
 
         return PolicyCheckResult()
 
@@ -1218,6 +1762,12 @@ class BaseIntegration(ABC):
         from agent_os.policies.decision import PolicyCheckResult
 
         ctx.call_count += 1
+        self._release_semaphore_if_held(ctx)
+
+        if self._token_budget_tracker is not None:
+            prompt_tokens, completion_tokens = self._extract_token_usage(output_data)
+            if prompt_tokens > 0 or completion_tokens > 0:
+                self._token_budget_tracker.record_usage(ctx.agent_id, prompt_tokens, completion_tokens)
 
         # Drift detection: compare output against baseline
         if self.policy.drift_threshold > 0.0:

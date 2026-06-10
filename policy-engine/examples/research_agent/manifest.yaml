@@ -1,0 +1,72 @@
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: web_research_agent_guardrails
+extends: []
+policies:
+  web_research_agent_guardrails:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.web_research_agent_guardrails.verdict
+intervention_points:
+  input:
+    policy_target: $.input
+    policy_target_kind: user_input
+    annotations:
+      input_risk:
+        from: $policy_target
+    policy:
+      id: web_research_agent_guardrails
+      query: data.agent_control_specification.web_research_agent_guardrails.input_verdict
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    policy_target_kind: tool_args
+    annotations:
+      url_scope:
+        from: $policy_target
+    policy:
+      id: web_research_agent_guardrails
+      query: data.agent_control_specification.web_research_agent_guardrails.pre_tool_call_verdict
+    tool_name_from: $.tool_call.name
+  post_tool_call:
+    policy_target: $.tool_result
+    policy_target_kind: tool_result
+    annotations:
+      content_size:
+        from: $policy_target
+      secret_scan:
+        from: $policy_target
+    policy:
+      id: web_research_agent_guardrails
+      query: data.agent_control_specification.web_research_agent_guardrails.post_tool_call_verdict
+    tool_name_from: $.tool_call.name
+  output:
+    policy_target: $.output
+    policy_target_kind: assistant_output
+    annotations:
+      content_size:
+        from: $policy_target
+      secret_scan:
+        from: $policy_target
+    policy:
+      id: web_research_agent_guardrails
+      query: data.agent_control_specification.web_research_agent_guardrails.output_verdict
+tools:
+  http_fetch:
+    type: Tool
+    id: http_fetch
+    clearance: [public_web]
+    security_labels: [web_content]
+  post_webhook:
+    type: Tool
+    id: post_webhook
+    clearance: [external_network]
+    security_labels: [egress]
+annotators:
+  input_risk:
+    type: classifier
+  url_scope:
+    type: classifier
+  content_size:
+    type: classifier
+  secret_scan:
+    type: classifier
