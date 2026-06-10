@@ -26,7 +26,7 @@ dependencies = [
     "structlog>=24.1.0,<25.0",
     "aiohttp>=3.13.4,<4.0",
     "cryptography>=42.0.0,<44.0",
-    "agentmesh-trust-protocol>=0.4.0,<1.0",
+    "agentmesh-trust-protocol>=4,<5",
 ]
 
 [project.urls]

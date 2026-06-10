@@ -707,6 +707,22 @@ jobs:
             echo "No tests/ directory — smoke import passed"
           fi
 
+  # ── Repo-wide version sync (always runs — fails fast on drift) ───────
+  # Confirms every package manifest matches the canonical ./VERSION. The
+  # ecosystems (Python / npm / Rust / .NET / Claude plugin) previously drifted
+  # independently; this gate keeps them reconciled. Intentionally independent
+  # manifests (policy-engine ACS SDKs, agt-policies) are exempt inside the
+  # script itself.
+  version-sync-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Check version drift
+        run: python3 scripts/sync-version.py --check
+
   # ── Dependency confusion scan (always runs — security gate) ──────────
   dep-confusion-scan:
     runs-on: ubuntu-latest
@@ -1071,6 +1087,7 @@ jobs:
         security,
         test-dotnet,
         test-integrations,
+        version-sync-check,
         dep-confusion-scan,
         notebook-pip-audit,
         workflow-security,

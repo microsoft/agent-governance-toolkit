@@ -3,7 +3,7 @@ members = ["agentmesh", "agentmesh-mcp"]
 resolver = "2"
 
 [workspace.package]
-version = "4.0.0"
+version = "4.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/microsoft/agent-governance-toolkit"
