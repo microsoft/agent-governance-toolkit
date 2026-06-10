@@ -260,8 +260,11 @@ class PolicyEvaluator:
                         },
                     )
 
-            # No rule matched — apply defaults
-            default_action = PolicyAction.ALLOW
+            # No rule matched, apply defaults.
+            # Fail closed when no policies are loaded so Python matches the TS
+            # and .NET SDKs (default-deny). To opt back into permissive
+            # behavior, load a policy with defaults.action: allow.
+            default_action = PolicyAction.DENY
             if self.policies:
                 default_action = self.policies[0].defaults.action
             allowed = default_action in (PolicyAction.ALLOW, PolicyAction.AUDIT)
