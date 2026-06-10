@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -971,6 +972,7 @@ class BoundedSemaphore:
         self._active = 0
         self._total_acquired = 0
         self._total_rejected = 0
+        self._lock = threading.Lock()
 
     def try_acquire(self) -> tuple[bool, str | None]:
         """
@@ -978,17 +980,19 @@ class BoundedSemaphore:
 
         Returns (acquired, reason).
         """
-        if self._active >= self.max_concurrent:
-            self._total_rejected += 1
-            return False, f"Max concurrency reached ({self.max_concurrent})"
-        self._active += 1
-        self._total_acquired += 1
-        return True, None
+        with self._lock:
+            if self._active >= self.max_concurrent:
+                self._total_rejected += 1
+                return False, f"Max concurrency reached ({self.max_concurrent})"
+            self._active += 1
+            self._total_acquired += 1
+            return True, None
 
     def release(self) -> None:
         """Release a slot."""
-        if self._active > 0:
-            self._active -= 1
+        with self._lock:
+            if self._active > 0:
+                self._active -= 1
 
     @property
     def is_under_pressure(self) -> bool:
@@ -1965,10 +1969,18 @@ class AsyncGovernedWrapper:
             if not pre_result.allowed:
                 raise PolicyViolationError(pre_result.reason or "Policy check failed")
 
-            # Execute the wrapped callable
-            result = await self._fn(*args, **kwargs)
+            # Execute the wrapped callable. Wrap in try/finally so that a
+            # bounded-semaphore slot acquired during pre_execute_check is always
+            # released even when the wrapped callable raises. Without this the
+            # slot leaks permanently and repeated failures exhaust max_concurrent,
+            # deadlocking the integration into denying every subsequent request.
+            try:
+                result = await self._fn(*args, **kwargs)
+            except BaseException:
+                self._integration._release_semaphore_if_held(self._ctx)
+                raise
 
-            # Post-execution validation
+            # Post-execution validation (this also releases the semaphore slot).
             post_result = await self._integration.async_post_execute_check(self._ctx, result)
             if not post_result.allowed:
                 raise PolicyViolationError(post_result.reason or "Post-execution validation failed")
