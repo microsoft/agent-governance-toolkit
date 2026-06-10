@@ -175,29 +175,55 @@ class PolicyEvaluator:
         return self._evaluate_flat(context)
 
     def _evaluate_scoped(self, context: dict[str, Any]) -> PolicyDecision:
-        """Evaluate using folder-level policy discovery and merge."""
+        """Evaluate using folder-level policy discovery and merge.
+
+        The discovery, parse, and merge phase is wrapped in a fail-closed
+        try/except (matching ``_evaluate_flat``) so that a malformed
+        governance.yaml anywhere in the folder chain yields a deny decision
+        rather than raising out of ``evaluate()``.
+        """
         from .discovery import discover_policies, filter_by_scope
         from .merge import merge_policies
 
-        action_path = Path(context["path"])
-        chain_paths = discover_policies(action_path, self.root_dir)
+        try:
+            action_path = Path(context["path"])
+            chain_paths = discover_policies(action_path, self.root_dir)
 
-        if not chain_paths:
-            # No governance files found — fall back to loaded policies
-            return self._evaluate_flat(context)
+            if not chain_paths:
+                # No governance files found, fall back to loaded policies
+                return self._evaluate_flat(context)
 
-        docs = [PolicyDocument.from_yaml(p) for p in chain_paths]
+            docs = [PolicyDocument.from_yaml(p) for p in chain_paths]
 
-        # Filter by scope
-        filtered = []
-        for doc, path in zip(docs, chain_paths):
-            if filter_by_scope(path, doc.scope, action_path, self.root_dir):
-                filtered.append(doc)
+            # Filter by scope
+            filtered = []
+            for doc, path in zip(docs, chain_paths):
+                if filter_by_scope(path, doc.scope, action_path, self.root_dir):
+                    filtered.append(doc)
 
-        if not filtered:
-            return self._evaluate_flat(context)
+            if not filtered:
+                return self._evaluate_flat(context)
 
-        merged_rules = merge_policies(filtered)
+            merged_rules = merge_policies(filtered)
+        except Exception:
+            logger.error(
+                "Scoped policy discovery error, denying access (fail closed)",
+                exc_info=True,
+            )
+            return PolicyDecision(
+                allowed=False,
+                action="deny",
+                reason="Policy evaluation error, access denied (fail closed)",
+                audit_entry={
+                    "policy": None,
+                    "rule": None,
+                    "action": "deny",
+                    "context_snapshot": context,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "error": True,
+                },
+            )
+
         return self._evaluate_rules(merged_rules, filtered, context)
 
     def _evaluate_flat(self, context: dict[str, Any]) -> PolicyDecision:

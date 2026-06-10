@@ -1549,9 +1549,9 @@ class BaseIntegration(ABC):
                 return result
 
         # Check call count
-        if ctx.call_count >= self.policy.max_tool_calls:
+        if ctx.call_count >= ctx.policy.max_tool_calls:
             self._release_semaphore_if_held(ctx)
-            result = deny_max_tool_calls(self.policy.max_tool_calls, ctx.call_count)
+            result = deny_max_tool_calls(ctx.policy.max_tool_calls, ctx.call_count)
             self.emit(
                 GovernanceEventType.POLICY_VIOLATION,
                 {**event_base, "reason": result.reason},
@@ -1560,9 +1560,9 @@ class BaseIntegration(ABC):
 
         # Check timeout
         elapsed = (datetime.now() - ctx.start_time).total_seconds()
-        if elapsed > self.policy.timeout_seconds:
+        if elapsed > ctx.policy.timeout_seconds:
             self._release_semaphore_if_held(ctx)
-            result = deny_timeout(self.policy.timeout_seconds, elapsed)
+            result = deny_timeout(ctx.policy.timeout_seconds, elapsed)
             self.emit(
                 GovernanceEventType.POLICY_VIOLATION,
                 {**event_base, "reason": result.reason},
@@ -1571,7 +1571,7 @@ class BaseIntegration(ABC):
 
         # Check blocked patterns
         input_str = str(input_data)
-        matched = self.policy.matches_pattern(input_str)
+        matched = ctx.policy.matches_pattern(input_str)
         if matched:
             self._release_semaphore_if_held(ctx)
             result = deny_blocked_pattern_input(matched[0], input_str)
@@ -1582,7 +1582,7 @@ class BaseIntegration(ABC):
             return result
 
         # Check human approval requirement
-        if self.policy.require_human_approval:
+        if ctx.policy.require_human_approval:
             self._release_semaphore_if_held(ctx)
             result = deny_human_approval()
             self.emit(
@@ -1592,11 +1592,11 @@ class BaseIntegration(ABC):
             return result
 
         # Check confidence threshold
-        if self.policy.confidence_threshold > 0.0:
+        if ctx.policy.confidence_threshold > 0.0:
             confidence = getattr(input_data, "confidence", None)
-            if isinstance(confidence, (int, float)) and confidence < self.policy.confidence_threshold:
+            if isinstance(confidence, (int, float)) and confidence < ctx.policy.confidence_threshold:
                 self._release_semaphore_if_held(ctx)
-                result = deny_confidence_threshold(self.policy.confidence_threshold, confidence)
+                result = deny_confidence_threshold(ctx.policy.confidence_threshold, confidence)
                 self.emit(
                     GovernanceEventType.POLICY_VIOLATION,
                     {**event_base, "reason": result.reason},
@@ -1770,14 +1770,14 @@ class BaseIntegration(ABC):
                 self._token_budget_tracker.record_usage(ctx.agent_id, prompt_tokens, completion_tokens)
 
         # Drift detection: compare output against baseline
-        if self.policy.drift_threshold > 0.0:
+        if ctx.policy.drift_threshold > 0.0:
             drift_result = self.compute_drift(ctx, output_data)
             if drift_result is not None:
                 ctx._drift_scores.append(drift_result.score)
                 if drift_result.exceeded:
                     reason = (
                         f"Drift score {drift_result.score:.2f} exceeds threshold "
-                        f"{self.policy.drift_threshold:.2f}"
+                        f"{ctx.policy.drift_threshold:.2f}"
                     )
                     logger.warning(
                         "Drift detected agent=%s score=%.4f threshold=%.2f",
@@ -1803,7 +1803,7 @@ class BaseIntegration(ABC):
                     )
 
         # Checkpoint if needed
-        if ctx.call_count % self.policy.checkpoint_frequency == 0:
+        if ctx.call_count % ctx.policy.checkpoint_frequency == 0:
             checkpoint_id = f"checkpoint-{ctx.call_count}"
             ctx.checkpoints.append(checkpoint_id)
             self.emit(GovernanceEventType.CHECKPOINT_CREATED, {
