@@ -544,7 +544,7 @@ def mutations(text: str) -> list[Rendered]:
     return [
         Rendered(text, "plain"),
         Rendered(text.translate(LEET_MAP), "leet_spacing"),
-        Rendered(spaced(text), "leet_spacing"),
+        Rendered(spaced(text), "letter_spaced"),
         Rendered(rot13(text), "rot13"),
         Rendered(urllib.parse.quote(text), "encoding"),
         Rendered("".join(f"&#{ord(ch)};" for ch in text), "encoding"),
@@ -932,20 +932,24 @@ def write_manifest(
             "tau_policy": "fit on validation only, freeze before final test",
             "production_claim": "prohibited until real/realistic benign FP validation",
         },
-        "required_eval_arms": [
+        "implemented_eval_arms": [
             "rules_only",
+        ],
+        "planned_eval_arms": [
             "gate_alone",
             "embeddings_only",
             "gate_plus_embeddings",
         ],
-        "required_metrics": [
-            "ROC-AUC",
-            "PR-AUC",
+        "implemented_metrics": [
             "Wilson CI",
-            "bootstrap CI",
             "FP per 1k benign",
             "base-rate precision 100:1",
             "base-rate precision 1000:1",
+        ],
+        "planned_metrics": [
+            "ROC-AUC",
+            "PR-AUC",
+            "bootstrap CI",
             "unsafe_action_success",
             "critical_allow",
             "leak_allow",

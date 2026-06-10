@@ -274,18 +274,18 @@
       "benign_fp_rate": 0.0
     },
     "leet_spacing": {
-      "attacks": 16,
+      "attacks": 8,
       "attacks_caught": 0,
       "attack_recall": 0.0,
-      "benign": 2,
+      "benign": 1,
       "benign_flagged": 0,
       "benign_fp_rate": 0.0
     },
     "letter_spaced": {
-      "attacks": 5,
+      "attacks": 13,
       "attacks_caught": 0,
       "attack_recall": 0.0,
-      "benign": 5,
+      "benign": 6,
       "benign_flagged": 0,
       "benign_fp_rate": 0.0
     },

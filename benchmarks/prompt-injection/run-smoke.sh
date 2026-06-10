@@ -9,6 +9,8 @@ CORPUS="benchmarks/prompt-injection/corpus/injection-smoke.jsonl"
 MANIFEST="benchmarks/prompt-injection/corpus/manifest-smoke.json"
 CHECK_SUMMARY="benchmarks/prompt-injection/corpus/check-smoke-summary.json"
 PER_ROW="${TMPDIR:-/tmp}/agt-prompt-injection-rules-baseline-smoke.jsonl"
+CHECK_OUT="${TMPDIR:-/tmp}/agt-prompt-injection-check-smoke.out"
+RULES_OUT="${TMPDIR:-/tmp}/agt-prompt-injection-rules-baseline.out"
 RULES_SUMMARY="benchmarks/prompt-injection/artifacts/rules-baseline-smoke-summary.json"
 RULES_METRICS="benchmarks/prompt-injection/artifacts/rules-baseline-smoke-metrics.json"
 RUST_MANIFEST="benchmarks/prompt-injection/harness/agt-rules-baseline/Cargo.toml"
@@ -32,8 +34,8 @@ python3 benchmarks/prompt-injection/harness/check-corpus.py \
   "$CORPUS" \
   --manifest "$MANIFEST" \
   --summary-json "$CHECK_SUMMARY" \
-  >/tmp/agt-prompt-injection-check-smoke.out
-tail -n 1 /tmp/agt-prompt-injection-check-smoke.out
+  >"$CHECK_OUT"
+tail -n 1 "$CHECK_OUT"
 
 echo "[prompt-injection-fixture] compile Rust AGT scorer"
 cargo check --manifest-path "$RUST_MANIFEST"
@@ -43,7 +45,7 @@ cargo run --manifest-path "$RUST_MANIFEST" -- \
   "$CORPUS" \
   --per-row "$PER_ROW" \
   --summary "$RULES_SUMMARY" \
-  >/tmp/agt-prompt-injection-rules-baseline.out
+  >"$RULES_OUT"
 
 echo "[prompt-injection-fixture] rebuild Wilson/base-rate metrics"
 python3 benchmarks/prompt-injection/harness/summarize-baseline.py \

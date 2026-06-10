@@ -37,8 +37,8 @@
       "encoding": 27,
       "homoglyph": 9,
       "leet_letter_spaced": 10,
-      "leet_spacing": 18,
-      "letter_spaced": 10,
+      "leet_spacing": 9,
+      "letter_spaced": 19,
       "multilingual": 9,
       "none": 130,
       "plain": 9,
@@ -88,11 +88,20 @@
     "tau_policy": "fit on validation only, freeze before final test"
   },
   "generator": "benchmarks/prompt-injection/harness/generate-corpus.py",
-  "generator_sha256": "8994c6109234980dc3dec1a1f7bd1368685dec11c71476dead58cf47b73b55ff",
+  "generator_sha256": "bd4777d61e008c93d3d5ac1017b8ab96cb578c67d9060c4f965967de0fab70fc",
+  "implemented_eval_arms": [
+    "rules_only"
+  ],
+  "implemented_metrics": [
+    "Wilson CI",
+    "FP per 1k benign",
+    "base-rate precision 100:1",
+    "base-rate precision 1000:1"
+  ],
   "leakage_check": {
     "family_count": 80,
     "family_split_leaks": [],
-    "group_count": 175,
+    "group_count": 184,
     "group_split_leaks": [],
     "passed": true
   },
@@ -107,26 +116,21 @@
     "passed": true
   },
   "output": "benchmarks/prompt-injection/corpus/injection-smoke.jsonl",
-  "output_sha256": "238636ed671f1909f0610ef62b4bb438f801670cdadfd681ab8d9a7397b8bbc1",
-  "profile": "smoke",
-  "required_eval_arms": [
-    "rules_only",
+  "output_sha256": "f26c216eaf8ad3e623b32a696f6686f69a092e153ec2eae1acb9d8c59f21eca5",
+  "planned_eval_arms": [
     "gate_alone",
     "embeddings_only",
     "gate_plus_embeddings"
   ],
-  "required_metrics": [
+  "planned_metrics": [
     "ROC-AUC",
     "PR-AUC",
-    "Wilson CI",
     "bootstrap CI",
-    "FP per 1k benign",
-    "base-rate precision 100:1",
-    "base-rate precision 1000:1",
     "unsafe_action_success",
     "critical_allow",
     "leak_allow"
   ],
+  "profile": "smoke",
   "row_count": 280,
   "seed": 1337,
   "split_label_coverage_check": {

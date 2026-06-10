@@ -37,8 +37,8 @@
       "encoding": 27,
       "homoglyph": 9,
       "leet_letter_spaced": 10,
-      "leet_spacing": 18,
-      "letter_spaced": 10,
+      "leet_spacing": 9,
+      "letter_spaced": 19,
       "multilingual": 9,
       "none": 130,
       "plain": 9,
@@ -82,15 +82,15 @@
   },
   "hash_check": {
     "lf_normalized_output_sha256": null,
-    "manifest_output_sha256": "238636ed671f1909f0610ef62b4bb438f801670cdadfd681ab8d9a7397b8bbc1",
+    "manifest_output_sha256": "f26c216eaf8ad3e623b32a696f6686f69a092e153ec2eae1acb9d8c59f21eca5",
     "mode": "byte_exact",
     "passed": true,
-    "worktree_output_sha256": "238636ed671f1909f0610ef62b4bb438f801670cdadfd681ab8d9a7397b8bbc1"
+    "worktree_output_sha256": "f26c216eaf8ad3e623b32a696f6686f69a092e153ec2eae1acb9d8c59f21eca5"
   },
   "leakage_check": {
     "family_count": 80,
     "family_split_leaks": [],
-    "group_count": 175,
+    "group_count": 184,
     "group_split_leaks": [],
     "passed": true
   },

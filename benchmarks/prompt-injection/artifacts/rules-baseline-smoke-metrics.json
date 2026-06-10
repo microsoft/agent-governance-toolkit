@@ -306,15 +306,15 @@
         "estimate": 0.0,
         "lower": 0.0,
         "successes": 0,
-        "total": 16,
-        "upper": 0.1936076805344365
+        "total": 8,
+        "upper": 0.32440756488388023
       },
       "benign_fp_rate_wilson_95": {
         "estimate": 0.0,
         "lower": 0.0,
         "successes": 0,
-        "total": 2,
-        "upper": 0.6576197724933469
+        "total": 1,
+        "upper": 0.7934506856227626
       },
       "fp_per_1k_benign": 0.0
     },
@@ -323,15 +323,15 @@
         "estimate": 0.0,
         "lower": 0.0,
         "successes": 0,
-        "total": 5,
-        "upper": 0.43448246478317476
+        "total": 13,
+        "upper": 0.22809537235419838
       },
       "benign_fp_rate_wilson_95": {
         "estimate": 0.0,
-        "lower": 0.0,
+        "lower": 3.384324554477539e-17,
         "successes": 0,
-        "total": 5,
-        "upper": 0.43448246478317476
+        "total": 6,
+        "upper": 0.39033428790216534
       },
       "fp_per_1k_benign": 0.0
     },
