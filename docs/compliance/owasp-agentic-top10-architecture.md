@@ -231,7 +231,7 @@ rate, failure rate, privilege escalation attempts) and quarantines agents that
 exceed thresholds.
 
 **Evidence:**
-- `agent-governance-python/agent-os/src/agent_os/services/behavior_monitor.py`
+- `agent-governance-python/agent-mesh/src/agentmesh/services/behavior_monitor.py`
 - `agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts` — rule `no-behavior-monitoring`
 
 **Coverage:** ✅ Full
@@ -299,7 +299,7 @@ outside its certified operating envelope.
 | ASI01 — Agent Goal Hijack | Manipulated instructions redirect a robot toward an unintended location or cause an agent to arm equipment. | Policy checks and approval gates can reject out-of-scope or high-impact commands before execution. See `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py`. | Independently enforce safe states, workspace boundaries, and command validity even when the planner is compromised. |
 | ASI02 — Tool Misuse and Exploitation | A legitimate actuator tool is called with unsafe speed, force, route, payload, or repetition. | Tool allow-lists, parameter checks, call budgets, and human approval can constrain the software invocation. See `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py`. | Enforce velocity, force, geographic boundaries, proximity, and other physical limits at the actuator gateway or safety controller, not only in AGT policy. |
 | ASI03 — Identity and Privilege Abuse | A spoofed agent, operator, or device obtains authority to move equipment or override a safety mode. | AgentMesh challenge-response verifies agent identity, registry state, trust score, and capabilities. See `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py`. | Bind software identity to authenticated device identity and hardware state; re-check authorization at command execution time. |
-| ASI04 — Agentic Supply Chain Vulnerabilities | Compromised firmware, robotics middleware, drivers, models, or tool descriptions alter physical behavior. | AGT release workflows generate and attest software SBOMs; policy can pin permitted tools. See `.github/workflows/sbom.yml`. | Verify firmware and controller provenance, use secure boot and signed updates, and include non-AGT robotics components in the deployment SBOM. |
+| ASI04 — Agentic Supply Chain Vulnerabilities | Compromised firmware, robotics middleware, drivers, models, or tool descriptions alter physical behavior. | AGT's own release pipeline generates and attests software SBOMs; policy can pin permitted tools. See `.github/workflows/sbom.yml`. This does not generate an SBOM for the governed physical system. | Verify firmware and controller provenance, use secure boot and signed updates, and include non-AGT robotics components in the deployment SBOM. |
 | ASI05 — Unexpected Code Execution | Agent-generated code escapes into an edge host or controller that has direct access to a hardware bus. | AGT sandboxes and execution isolation reduce the software blast radius. See `agent-governance-python/agent-sandbox/`. | Prevent sandboxes from directly commanding safety-critical buses; place a separately assured command validator between software and hardware. |
 | ASI06 — Memory and Context Poisoning | Forged, stale, replayed, or corrupted sensor context leads the agent to select an unsafe action. | `MemoryGuard` detects tampering and dangerous memory writes; the physical-attestation example hashes sensor readings and policy decisions. See `agent-governance-python/agent-os/src/agent_os/memory_guard.py` and `examples/physical-attestation-governed/`. | Authenticate sensor origin, enforce freshness and replay protection, cross-check redundant sensors, and reject implausible physical state. |
 | ASI07 — Insecure Inter-Agent Communication | Spoofed or replayed fleet messages coordinate unsafe movement or delegation. | AgentMesh verifies peer identity, trust, and declared capabilities before handoff. See `agent-governance-python/agent-mesh/src/agentmesh/trust/handshake.py`. | Secure the robotics transport itself, bind messages to current missions and timestamps, and define safe behavior during network partitions. |
@@ -336,7 +336,9 @@ enforcement.
   an auditor can distinguish "governance allowed" from "physical controller
   executed."
 - Test safe behavior for stale sensors, network partitions, compromised agents,
-  delayed approvals, and unavailable governance services.
+  and delayed approvals.
+- Test governance-service unavailability: a stalled policy evaluation must
+  trigger a safe stop, never a permitted actuator command.
 
 ---
 
