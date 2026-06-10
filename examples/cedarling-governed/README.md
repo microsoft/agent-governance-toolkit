@@ -1,16 +1,19 @@
 # Cedarling Governed Agent
 
-Authorization for autonomous agents with [Cedarling](https://docs.jans.io/stable/cedarling),
-plugged into AGT's `PolicyEvaluator` as an external policy backend (no changes
-to AGT core). Cedarling evaluates Cedar policies **in-process** against a local
-policy store.
+This example demonstrates how you can perform authorization for autonomous agents with [Cedarling](https://docs.jans.io/stable/cedarling),
+plugged into AGT's `PolicyEvaluator` as an external policy backend. This does not introduce any changes
+to the AGT core.
 
-Two examples, one per authorization mode:
+Cedarling evaluates Cedar policies **in-process** against a local [Cedar policy](https://cedarpolicy.com/) store.
 
-| Example | Mode | Identity comes from | Demonstrates |
-|---------|------|---------------------|--------------|
-| [`unsigned_example.py`](unsigned_example.py) | `unsigned` | the request dict (`agent_id` + `principal_attributes`) | role-based access control |
-| [`multi_issuer_example.py`](multi_issuer_example.py) | `multi-issuer` | verified JWTs from trusted issuers | capability-based authorization |
+This document offers two runnable examples. 
+
+| Demonstrates | Identity comes from | Cedarling mode | Example |
+|--------------|---------------------|------|---------|
+| Role-based access control | Authorization request data | `unsigned` | [`unsigned_example.py`](unsigned_example.py) |
+| Capability-based authorization | Verified JWTs from trusted issuers | `multi-issuer` | [`multi_issuer_example.py`](multi_issuer_example.py) |
+
+## Installation and usage
 
 ```bash
 pip install -r requirements.txt
@@ -21,15 +24,22 @@ python multi_issuer_example.py
 `cedarling-python` (pulled in by `requirements.txt`) evaluates the policies
 in-process against the bundled stores in [`policy-stores/`](policy-stores).
 
----
+## Role-based access control (Unsigned authorization)
 
-## Unsigned authorization (role-based)
+[`unsigned_example.py`](unsigned_example.py) implements typical RBAC authorization. This uses Cedarling's [unsigned mode of authorization](https://docs.jans.io/head/cedarling/reference/cedarling-authz/#unsigned-authorization-authorize_unsigned). In this case, the principal entity and it's attributes are provided by the application itself when it sends the request for authorization. 
 
-For internal services, background jobs, and test harnesses there is often no
-token. In unsigned mode the principal's identity and attributes come straight
-from the request dict — `agent_id` becomes the principal, `principal_attributes`
-(e.g. `{"role": "admin"}`) populate its entity attributes — and policies check
-those attributes.
+In our example, the request supplied data 
+
+- `agent_id` becomes the principal
+- `principal_attributes`(e.g. `{"role": "admin"}`) populate its entity attributes 
+
+[Policies used in this example](policy-stores/unsigned) are built to check the above attributes.
+These policies effectively does the following:
+
+```
+allow-read   : permit Read/ReadData when principal.role == "admin"
+forbid-write : forbid Write        when principal.role == "auditor"
+```
 
 Expected output of `unsigned_example.py`:
 
@@ -43,16 +53,6 @@ Expected output of `unsigned_example.py`:
 [DENY ] agent-auditor (role=auditor) → write on db
          reason : Cedarling: denied (unsigned)
 ```
-
-The full decision spread: an explicit `permit`, two default denials, and an
-explicit `forbid`. Policies in [`policy-stores/unsigned/`](policy-stores/unsigned):
-
-```
-allow-read   : permit Read/ReadData when principal.role == "admin"
-forbid-write : forbid Write        when principal.role == "auditor"
-```
-
----
 
 ## Multi-issuer authorization (capability-based)
 
