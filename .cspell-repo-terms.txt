@@ -759,3 +759,4 @@ subpkg
 unvalidated
 userinfo
 winres
+worktree
