@@ -158,7 +158,7 @@ class AgtGroup(click.Group):
 @click.option("--quiet", "-q", is_flag=True, default=False, help="Suppress non-essential output.")
 @click.option("--no-color", is_flag=True, default=False, help="Disable colored output.")
 @click.version_option(
-    version=_get_package_version("agent_governance_toolkit") or "unknown",
+    version=_get_package_version("agent-governance-toolkit-compliance") or "unknown",
     prog_name="agt",
 )
 @click.pass_context
@@ -394,7 +394,7 @@ def lint_policy(ctx_obj: AgtContext, path: str, strict: bool) -> None:
 
 
 _AGT_PACKAGES = [
-    ("agent_governance_toolkit", "Agent Governance Toolkit", "Meta-package & compliance CLI"),
+    ("agent-governance-toolkit-compliance", "Agent Governance Toolkit", "Meta-package & compliance CLI"),
     ("agent_os_kernel", "Agent OS Kernel", "Policy engine & framework integrations"),
     ("agentmesh_platform", "AgentMesh Platform", "Zero-trust identity & trust scoring"),
     ("agentmesh_runtime", "AgentMesh Runtime", "Execution supervisor & privilege rings"),
