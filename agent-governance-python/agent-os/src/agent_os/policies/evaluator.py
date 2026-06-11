@@ -9,6 +9,7 @@ returning a PolicyDecision with matched rule, action, and audit information.
 
 from __future__ import annotations
 
+import copy
 import logging
 import re
 from datetime import datetime, timezone
@@ -249,7 +250,7 @@ class PolicyEvaluator:
                             "policy": doc.name,
                             "rule": rule.name,
                             "action": rule.action.value,
-                            "context_snapshot": context,
+                            "context_snapshot": copy.deepcopy(context),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
@@ -269,7 +270,7 @@ class PolicyEvaluator:
                             "action": result.action,
                             "backend": backend.name,
                             "evaluation_ms": result.evaluation_ms,
-                            "context_snapshot": context,
+                            "context_snapshot": copy.deepcopy(context),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                             # High-assurance backends may carry offline-
                             # verifiable evidence; propagate when present.
@@ -302,7 +303,7 @@ class PolicyEvaluator:
                     "policy": self.policies[0].name if self.policies else None,
                     "rule": None,
                     "action": default_action.value,
-                    "context_snapshot": context,
+                    "context_snapshot": copy.deepcopy(context),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
@@ -319,7 +320,7 @@ class PolicyEvaluator:
                     "policy": None,
                     "rule": None,
                     "action": "deny",
-                    "context_snapshot": context,
+                    "context_snapshot": copy.deepcopy(context),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "error": True,
                 },
@@ -346,7 +347,7 @@ class PolicyEvaluator:
                             "rule": rule.name,
                             "action": rule.action.value,
                             "policy_chain": [d.name for d in docs],
-                            "context_snapshot": context,
+                            "context_snapshot": copy.deepcopy(context),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
@@ -360,6 +361,15 @@ class PolicyEvaluator:
                         matched_rule=None,
                         action=result.action,
                         reason=result.reason,
+                        audit_entry={
+                            "policy": f"external:{backend.name}",
+                            "rule": None,
+                            "action": result.action,
+                            "backend": backend.name,
+                            "evaluation_ms": result.evaluation_ms,
+                            "context_snapshot": copy.deepcopy(context),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        },
                     )
 
             # Defaults from most specific policy
@@ -372,7 +382,7 @@ class PolicyEvaluator:
                 audit_entry={
                     "policy": "folder-scoped",
                     "policy_chain": [d.name for d in docs],
-                    "context_snapshot": context,
+                    "context_snapshot": copy.deepcopy(context),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
