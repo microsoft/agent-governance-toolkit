@@ -596,8 +596,8 @@ class DockerSandboxProvider(SandboxProvider):
         ring = getattr(cfg, 'ring', None)
         if ring is not None:
             try:
-                from hypervisor.rings.enforcer import RingEnforcer, ResourceType
                 from hypervisor.rings.breach_detector import RingBreachDetector
+                from hypervisor.rings.enforcer import RingEnforcer
                 enforcer = RingEnforcer()
                 constraints = enforcer.get_constraints(ring)
                 # Override network and filesystem from ring constraints
@@ -675,8 +675,8 @@ class DockerSandboxProvider(SandboxProvider):
         cfg_ring = getattr(session_cfg, 'ring', None) if session_cfg else None
         if ring_enforcer is not None and cfg_ring is not None:
             try:
-                from hypervisor.rings.enforcer import ResourceType
                 from hypervisor.models import ExecutionRing
+                from hypervisor.rings.enforcer import ResourceType
                 result_ring = ring_enforcer.check_resource(cfg_ring, ResourceType.SUBPROCESS)
                 if breach_detector is not None:
                     breach_detector.record_call(

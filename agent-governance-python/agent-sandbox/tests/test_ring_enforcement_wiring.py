@@ -27,7 +27,6 @@ from agent_sandbox.sandbox_provider import (
     SessionStatus,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers — fake hypervisor models so tests run without agent-hypervisor
 # ---------------------------------------------------------------------------
@@ -522,7 +521,6 @@ class TestHyperlightRingEnforcement:
                 pass
 
         # Mock HyperlightConfig.from_sandbox_config
-        from agent_sandbox.hyperlight_provider.provider import HyperlightConfig
 
         with patch(
             "agent_sandbox.hyperlight_provider.provider._SandboxWorker",

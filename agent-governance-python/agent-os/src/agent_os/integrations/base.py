@@ -1195,6 +1195,9 @@ class BaseIntegration(ABC):
 
             self._mcp_security_scanner = MCPSecurityScanner(config=MCPSecurityConfig())
 
+        self._detection_modules: list[Any] = []
+        self._register_detection_modules()
+
     def _release_semaphore_if_held(self, ctx: ExecutionContext) -> None:
         """Release a bounded-semaphore slot if this context currently holds one."""
         if self._bounded_semaphore is None:
@@ -1202,9 +1205,6 @@ class BaseIntegration(ABC):
         if ctx.session_id in self._semaphore_held_sessions:
             self._bounded_semaphore.release()
             self._semaphore_held_sessions.remove(ctx.session_id)
-
-        self._detection_modules: list[Any] = []
-        self._register_detection_modules()
 
     # ------------------------------------------------------------------
     # Detection module auto-registration  (#2477)
@@ -1771,17 +1771,6 @@ class BaseIntegration(ABC):
 
         self.emit(GovernanceEventType.POLICY_CHECK, {**event_base, "phase": "pre_execute"})
 
-        # ── Detection module gate (runs before Cedar) (#2477) ──────
-        det_allowed, det_reason = self._run_detection_modules(ctx, input_data)
-        if not det_allowed:
-            from agent_os.policies.decision_factory import deny_policy_error
-            result = deny_policy_error(det_reason)
-            self.emit(
-                GovernanceEventType.TOOL_CALL_BLOCKED,
-                {**event_base, "reason": det_reason, "source": "detection_module"},
-            )
-            return result
-
         # ── Cedar / PolicyEvaluator gate (runs first) ──────────────
         if self._evaluator is not None:
             # Extract tool identity from input_data when available so
@@ -1810,7 +1799,17 @@ class BaseIntegration(ABC):
                 )
                 return result
 
-        # Check call count
+        # Check call count.
+        #
+        # The legacy ``max_tool_calls`` budget runs *before* the detection
+        # module gate below.  The auto-wired ``rate_limiter`` detection
+        # module governs the same dimension (its bucket size defaults to
+        # ``max_tool_calls``), so without this ordering the rate limiter
+        # would intercept the over-budget call first and report
+        # "Rate limit exceeded" instead of the canonical "Max tool calls"
+        # reason that callers and tests depend on.  Running the legacy
+        # check first preserves the documented public reason while keeping
+        # the rate limiter active for time-window based throttling.
         if ctx.call_count >= ctx.policy.max_tool_calls:
             self._release_semaphore_if_held(ctx)
             result = deny_max_tool_calls(ctx.policy.max_tool_calls, ctx.call_count)
@@ -1984,6 +1983,26 @@ class BaseIntegration(ABC):
                         {**event_base, "reason": result.reason, "source": "mcp_security"},
                     )
                     return result
+
+        # ── Detection module gate (#2477) ──────────────────────────
+        #
+        # Runs as a backstop *after* the legacy budget and the explicitly
+        # configured runtime modules above.  The auto-wired detection
+        # modules (prompt_injection, token_budget, rate_limiter,
+        # mcp_security_scanner, ...) cover the same dimensions as those
+        # legacy checks, so running them last ensures that when a caller
+        # opts a legacy module in via the policy, that module's specific
+        # reason wins.  Detection modules still catch any dimension not
+        # already governed by an enabled legacy module.
+        det_allowed, det_reason = self._run_detection_modules(ctx, input_data)
+        if not det_allowed:
+            self._release_semaphore_if_held(ctx)
+            result = deny_policy_error(det_reason)
+            self.emit(
+                GovernanceEventType.TOOL_CALL_BLOCKED,
+                {**event_base, "reason": det_reason, "source": "detection_module"},
+            )
+            return result
 
         if self._bounded_semaphore is not None:
             acquired, reason = self._bounded_semaphore.try_acquire()
@@ -2247,4 +2266,4 @@ class AsyncGovernedWrapper:
 
 
 # Backward compatibility: import from the centralized exception hierarchy
-from agent_os.exceptions import PolicyViolationError as PolicyViolationError  # noqa: F401
+from agent_os.exceptions import PolicyViolationError as PolicyViolationError  # noqa: E402, F401

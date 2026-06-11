@@ -21,6 +21,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agent_sandbox.code_scanner import SandboxCodeViolation
+from agent_sandbox.docker_provider.provider import (
+    _BLOCKED_ENV_VARS,
+    DockerSandboxProvider,
+    _is_protected_path,
+    _sanitize_env_vars,
+    _validate_mount_path,
+    _validate_resource_name,
+    docker_config_from_policy,
+)
+from agent_sandbox.docker_provider.state import SandboxCheckpoint
+from agent_sandbox.isolation_runtime import IsolationRuntime
 from agent_sandbox.sandbox_provider import (
     ExecutionHandle,
     ExecutionStatus,
@@ -30,18 +41,6 @@ from agent_sandbox.sandbox_provider import (
     SessionHandle,
     SessionStatus,
 )
-from agent_sandbox.isolation_runtime import IsolationRuntime
-from agent_sandbox.docker_provider.provider import (
-    DockerSandboxProvider,
-    _BLOCKED_ENV_VARS,
-    _is_protected_path,
-    _sanitize_env_vars,
-    _validate_mount_path,
-    _validate_resource_name,
-    docker_config_from_policy,
-)
-from agent_sandbox.docker_provider.state import SandboxCheckpoint
-
 
 # =========================================================================
 # Section 1: Data types & enums
@@ -462,10 +461,10 @@ class TestDockerCreateSession:
     def test_with_policy_stores_evaluator(self, docker_provider):
         try:
             from agent_os.policies.schema import (
+                PolicyAction,
+                PolicyCondition,
                 PolicyDocument,
                 PolicyRule,
-                PolicyCondition,
-                PolicyAction,
             )
         except ImportError:
             pytest.skip("agent-os-kernel not installed")
@@ -541,8 +540,10 @@ class TestDockerExecuteCode:
     def test_policy_deny(self, docker_provider):
         try:
             from agent_os.policies.schema import (
-                PolicyDocument, PolicyRule,
-                PolicyCondition, PolicyAction,
+                PolicyAction,
+                PolicyCondition,
+                PolicyDocument,
+                PolicyRule,
             )
         except ImportError:
             pytest.skip("agent-os-kernel not installed")
@@ -569,8 +570,10 @@ class TestDockerExecuteCode:
     def test_policy_allow(self, docker_provider):
         try:
             from agent_os.policies.schema import (
-                PolicyDocument, PolicyRule,
-                PolicyCondition, PolicyAction,
+                PolicyAction,
+                PolicyCondition,
+                PolicyDocument,
+                PolicyRule,
             )
         except ImportError:
             pytest.skip("agent-os-kernel not installed")
@@ -1335,16 +1338,7 @@ class TestEdgeCases:
         """Verify top-level package exports work."""
         from agent_sandbox import (
             DockerSandboxProvider,
-            ExecutionHandle,
-            ExecutionStatus,
-            IsolationRuntime,
-            SandboxCheckpoint,
-            SandboxConfig,
             SandboxProvider,
-            SandboxResult,
-            SandboxStateManager,
-            SessionHandle,
-            SessionStatus,
         )
 
         assert SandboxProvider is not None
@@ -1536,8 +1530,8 @@ class TestStreamCappedConsumer:
 
     def test_stream_over_cap(self):
         from agent_sandbox.docker_provider.provider import (
-            _consume_stream_capped,
             _OUTPUT_TRUNCATED_MARKER,
+            _consume_stream_capped,
         )
         stream = iter([(b"a" * 100, b"b" * 100), (b"a" * 100, b"b" * 100)])
         stdout, stderr, truncated = _consume_stream_capped(stream, 50)
@@ -1565,8 +1559,8 @@ class TestStreamCappedConsumer:
 
     def test_cap_output_bytes_over_limit(self):
         from agent_sandbox.docker_provider.provider import (
-            _cap_output_bytes,
             _OUTPUT_TRUNCATED_MARKER,
+            _cap_output_bytes,
         )
         stdout, stderr, truncated = _cap_output_bytes(
             (b"x" * 2000, b"y" * 2000), 1000,

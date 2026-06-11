@@ -487,7 +487,7 @@ class NexusClient:
                 "Pass it to NexusClient.__init__ or use nexus.crypto.generate_keypair()."
             )
         return sign(self._private_key_bytes, escrow_message(self.agent_did, provider_did, task_hash, credits))
-=======
+
     # ==================== Context Manager ====================
     
     async def __aenter__(self):

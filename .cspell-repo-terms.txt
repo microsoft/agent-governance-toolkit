@@ -87,6 +87,7 @@ CODEOWNERS
 codepoint
 CommonMark
 comspec
+concurren
 confirmer
 confusables
 connectedservicename
@@ -112,6 +113,7 @@ dataset_id
 dateutil
 davidequarracino
 dbt
+dcfg
 dearmor
 deasync
 Dedup
@@ -224,6 +226,7 @@ inheritdoc
 inspectable
 IPFS
 iproof
+ircuit
 isfinite
 isinstance
 isoformat

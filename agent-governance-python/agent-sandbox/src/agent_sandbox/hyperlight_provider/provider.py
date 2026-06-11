@@ -405,8 +405,8 @@ class HyperLightSandboxProvider(SandboxProvider):
         ring = getattr(base_cfg, 'ring', None)
         if ring is not None:
             try:
-                from hypervisor.rings.enforcer import RingEnforcer, ResourceType
                 from hypervisor.rings.breach_detector import RingBreachDetector
+                from hypervisor.rings.enforcer import RingEnforcer
                 _enforcer = RingEnforcer()
                 _constraints = _enforcer.get_constraints(ring)
                 # Ring 3 (sandbox): strip network allowlist and tool access
@@ -538,8 +538,8 @@ class HyperLightSandboxProvider(SandboxProvider):
         cfg_ring = getattr(cfg, 'ring', None) if cfg else None
         if ring_enforcer is not None and cfg_ring is not None:
             try:
-                from hypervisor.rings.enforcer import ResourceType
                 from hypervisor.models import ExecutionRing
+                from hypervisor.rings.enforcer import ResourceType
                 result_ring = ring_enforcer.check_resource(cfg_ring, ResourceType.SUBPROCESS)
                 if breach_detector is not None:
                     breach_detector.record_call(
