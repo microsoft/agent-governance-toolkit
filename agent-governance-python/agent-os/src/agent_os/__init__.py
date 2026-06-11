@@ -6,3 +6,6 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
+
+# Keep in sync with the ``version`` field in pyproject.toml.
+__version__ = "4.1.0"
