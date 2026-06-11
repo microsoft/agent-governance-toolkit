@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
+dependencies = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
