@@ -14,7 +14,7 @@ agentmesh-mcp = { path = "agentmesh-mcp", version = "4.0.0" }
 aes-gcm = "=0.10.3"
 assert_cmd = "=2.2.2"
 base64 = "=0.22.1"
-cedar-policy = "=4.11.0"
+cedar-policy = "=4.11.1"
 clap = { version = "=4.6.1", features = ["derive"] }
 predicates = "=3.1.4"
 ed25519-dalek = { version = "=2.2.0", features = ["rand_core"] }

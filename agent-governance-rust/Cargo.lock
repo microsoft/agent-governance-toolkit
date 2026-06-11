@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "agentmesh"
-version = "4.0.0"
+version = "4.1.0"
 dependencies = [
  "aes-gcm",
  "agentmesh-mcp",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "agentmesh-mcp"
-version = "4.0.0"
+version = "4.1.0"
 dependencies = [
  "base64",
  "hmac",
@@ -292,9 +292,9 @@ dependencies = [
 
 [[package]]
 name = "cedar-policy"
-version = "4.11.0"
+version = "4.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "674ca6ef6e44a1e29e6c07f6b2ab7e6913938d6049204d48e7849703d02443ce"
+checksum = "716a5103f447735b4cef15df847dc2a7ed8752e8a95febab5a6bfe1812054e43"
 dependencies = [
  "cedar-policy-core",
  "cedar-policy-formatter",
@@ -312,9 +312,9 @@ dependencies = [
 
 [[package]]
 name = "cedar-policy-core"
-version = "4.11.0"
+version = "4.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3df781c108240c3b3778c586c6a1b234355f1a2f9d35e08630b63b2590c59dbb"
+checksum = "7935861e764efcba26f73ac4d9d284e30b2b4a9a95d3c961e908e3ed7889e391"
 dependencies = [
  "chrono",
  "educe",
@@ -340,9 +340,9 @@ dependencies = [
 
 [[package]]
 name = "cedar-policy-formatter"
-version = "4.11.0"
+version = "4.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e293607563253e249d19cf4d36ac05821955170a63cf6d65deb4db60138b192e"
+checksum = "5ca436a4803977e69b12a8e0e7f5d7c648e578b59fa0f2ed3bbe3c0054b9e036"
 dependencies = [
  "cedar-policy-core",
  "itertools",
