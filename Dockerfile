@@ -34,7 +34,7 @@ RUN for i in 1 2 3; do apt-get update && break || sleep 5; done \
     # OPA CLI — required by OPAEvaluator local mode (opa eval subprocess)
     && curl --proto '=https' --tlsv1.2 -fSLo /usr/local/bin/opa \
         --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
-        https://openpolicyagent.org/downloads/v1.4.2/opa_linux_amd64_static \
+        https://github.com/open-policy-agent/opa/releases/download/v1.4.2/opa_linux_amd64_static \
     && echo "2c0ccdbbe0b8e2a5d12d9c42d92f1f34f494ffb32d1f3c4ddc36101be637d66f  /usr/local/bin/opa" \
         | sha256sum -c - \
     && chmod 755 /usr/local/bin/opa

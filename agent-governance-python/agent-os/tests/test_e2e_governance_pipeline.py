@@ -33,6 +33,7 @@ agent_sre = pytest.importorskip("agent_sre", reason="agent_sre not installed")
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,
+    PolicyDefaults,
     PolicyDocument,
     PolicyOperator,
     PolicyRule,
@@ -892,7 +893,15 @@ class TestPipelineErrorHandling:
     @pytest.mark.asyncio
     async def test_middleware_with_empty_messages(self, tmp_path):
         """Policy middleware handles context with no messages."""
-        evaluator = PolicyEvaluator()
+        # The engine now fails closed by default (issue #2926), so load a
+        # permissive policy to assert the middleware tolerates empty input
+        # without terminating.
+        evaluator = PolicyEvaluator(policies=[
+            PolicyDocument(
+                name="permissive",
+                defaults=PolicyDefaults(action=PolicyAction.ALLOW),
+            )
+        ])
         policy_mw = GovernancePolicyMiddleware(evaluator=evaluator)
 
         ctx = MockAgentContext(agent_name="test", messages=[])

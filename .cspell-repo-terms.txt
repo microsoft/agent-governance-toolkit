@@ -683,6 +683,7 @@ sprintf
 subparser
 summarise
 synthesised
+tamperable
 tamperedhash
 testserver
 tsfn
@@ -712,3 +713,15 @@ mitapache
 dctx
 isoweekday
 zoneinfo
+Authenticode
+Signtool
+signtool
+nupkgs
+LASTEXITCODE
+covermode
+coverprofile
+shopt
+nullglob
+pypa
+snupkg
+Hotfixes

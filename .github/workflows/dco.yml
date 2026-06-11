@@ -18,14 +18,23 @@ jobs:
 
       - name: Check DCO sign-off on commits
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           MISSING=()
 
-          for SHA in $(git rev-list "$BASE_SHA".."$HEAD_SHA"); do
-            # Skip merge commits (commits with more than one parent)
-            PARENT_COUNT=$(git cat-file -p "$SHA" | grep -c '^parent ')
+          # Compute the range from the merge base of the base branch and the PR
+          # head, not from the stale base.sha recorded when the PR was opened.
+          # After main advances and the branch is rebased, base.sha would sweep
+          # in already-merged main commits the PR author does not own.
+          git fetch origin "$BASE_REF"
+          MERGE_BASE=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
+
+          for SHA in $(git rev-list "$MERGE_BASE".."$HEAD_SHA"); do
+            # Skip merge commits (commits with more than one parent). Count the
+            # parents via %P so commit-message lines starting with "parent"
+            # cannot misclassify a normal commit as a merge.
+            PARENT_COUNT=$(git show -s --format=%P "$SHA" | wc -w)
             if [ "$PARENT_COUNT" -gt 1 ]; then
               continue
             fi

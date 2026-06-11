@@ -1,6 +1,42 @@
 version: 2
 updates:
+  # Shared Python dev tooling (mypy, pytest, structlog, ruff) across every
+  # Python package directory. The docker-compose-test image installs all of
+  # these packages with their [dev] extras into a single pip environment, so
+  # bumping one package's dev-tool floor past another package's cap makes the
+  # resolver unsolvable (see issue #2930). Grouping the dev-tool bumps across
+  # directories lands them as one PR, keeping the shared environment solvable.
+  - package-ecosystem: "pip"
+    directories:
+      - "/agent-governance-python/agent-os"
+      - "/agent-governance-python/agent-mesh"
+      - "/agent-governance-python/agent-hypervisor"
+      - "/agent-governance-python/agent-sre"
+      - "/agent-governance-python/agent-compliance"
+      - "/agent-governance-python/agent-discovery"
+      - "/agent-governance-python/agent-lightning"
+      - "/agent-governance-python/agent-marketplace"
+      - "/agent-governance-python/agent-mcp-governance"
+      - "/agent-governance-python/agent-primitives"
+      - "/agent-governance-python/agent-rag-governance"
+      - "/agent-governance-python/agent-runtime"
+      - "/agent-governance-python/agent-sandbox"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      python-dev-tooling:
+        patterns:
+          - "mypy"
+          - "pytest*"
+          - "structlog"
+          - "ruff"
+
   # Python packages — one entry per package under agent-governance-python/.
+  # (Non dev-tooling deps still update per directory; the dev-tooling matches
+  # above are grouped via the shared entry.)
   - package-ecosystem: "pip"
     directory: "/agent-governance-python/agent-os"
     schedule:

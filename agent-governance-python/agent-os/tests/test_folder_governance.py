@@ -358,6 +358,26 @@ class TestFolderScopedEvaluator:
             PolicyRule(name="r1", condition=PolicyCondition(field="tool_name", operator=PolicyOperator.EQ, value="x"), action=PolicyAction.DENY, priority=100),
         ])
         evaluator = PolicyEvaluator(policies=[doc], root_dir=tmp_path)
-        # No 'path' in context — falls back to flat
+        # No 'path' in context, falls back to flat
         result = evaluator.evaluate({"tool_name": "x"})
         assert not result.allowed
+
+    def test_malformed_governance_yaml_fails_closed(self, tmp_path):
+        """A malformed governance.yaml in the scoped chain must yield a deny
+        decision (fail closed) rather than raising out of evaluate()."""
+        # Write an invalid YAML document that cannot be parsed into a policy.
+        bad = tmp_path / "services" / "billing" / "governance.yaml"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_text("name: broken\nrules: [this is : not : valid : yaml\n")
+
+        action = tmp_path / "services" / "billing" / "agent.py"
+        action.touch()
+
+        evaluator = PolicyEvaluator(root_dir=tmp_path)
+
+        # Must not raise; must return a fail-closed deny decision.
+        result = evaluator.evaluate({"tool_name": "web_search", "path": str(action)})
+        assert isinstance(result, PolicyDecision)
+        assert result.allowed is False
+        assert result.action == "deny"
+        assert result.audit_entry.get("error") is True

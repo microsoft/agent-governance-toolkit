@@ -54,7 +54,7 @@ dependencies = [
     "pydantic>=2.5.3,<3.0",
     "httpx>=0.27.0,<1.0",
     "python-dateutil>=2.8.2,<3.0",
-    "agentmesh-primitives>=0.1.0,<1.0",
+    "agentmesh-primitives>=4,<5",
     "click>=8.0.0,<9.0",
 ]
 

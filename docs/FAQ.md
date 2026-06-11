@@ -483,6 +483,8 @@ Key controls:
 | **Install** | `pip install agent-hypervisor` | `pip install agentmesh-runtime` |
 | **Import** | `from hypervisor import Hypervisor` | `from hypervisor import Hypervisor` (same) |
 
+> Note: most users should install the consolidated distribution with `pip install agent-governance-toolkit[full]`, which pulls in the hypervisor/runtime subsystem. The individual package names above are documented only to explain the PyPI naming.
+
 ### What the Hypervisor / Runtime Provides
 
 | Feature | Description |
