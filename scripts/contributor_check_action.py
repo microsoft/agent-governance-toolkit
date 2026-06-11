@@ -86,7 +86,7 @@ def _aggregate_risk(*levels: str) -> str:
     """
     if not levels:
         return "LOW"
-    # Unrecognised labels are treated as UNKNOWN (uncertain), never LOW.
+    # Unrecognized labels are treated as UNKNOWN (uncertain), never LOW.
     max_val = max(RISK_ORDER.get(r, RISK_ORDER["UNKNOWN"]) for r in levels)
     for label, val in RISK_ORDER.items():
         if val == max_val:

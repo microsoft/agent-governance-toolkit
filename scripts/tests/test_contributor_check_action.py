@@ -46,7 +46,7 @@ def test_medium_dominates_low():
     assert _aggregate_risk("LOW", "MEDIUM", "LOW") == "MEDIUM"
 
 
-def test_unrecognised_label_treated_as_unknown_not_low():
+def test_unrecognized_label_treated_as_unknown_not_low():
     # Defensive: an unexpected/garbage risk string fails closed, not open.
     assert _aggregate_risk("LOW", "BOGUS") == "UNKNOWN"
 
