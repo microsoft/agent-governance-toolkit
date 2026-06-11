@@ -5,25 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "openshell-agentmesh"
 version = "4.1.0"
-description = "Public Preview - OpenShell + AgentMesh governance skill"
-readme = "README.md"
+description = "Deprecated. Previously published as openshell-agentmesh. Install agent-governance-toolkit-integrations[openshell] instead."
 license = {text = "MIT"}
 requires-python = ">=3.10"
-authors = [{ name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }]
-dependencies = ["pyyaml>=6.0,<7.0"]
-
-[project.optional-dependencies]
-agentmesh = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
-dev = ["pytest>=7.0"]
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
+]
+dependencies = ["agent-governance-toolkit-integrations[openshell]>=4.0.0,<5.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+"Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["openshell_agentmesh"]
-
-[project.scripts]
-openshell-governance = "openshell_agentmesh.cli:main"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]

@@ -3,44 +3,123 @@ name: Supply Chain Check
 on:
   pull_request:
     paths:
+      # Manifest formats that declare runtime/build dependencies.
       - '**/package.json'
       - '**/package-lock.json'
+      - '**/npm-shrinkwrap.json'
       - '**/Cargo.toml'
       - '**/Cargo.lock'
       - '**/pyproject.toml'
       - '**/requirements*.txt'
+      - 'requirements*.txt'
+      - '**/setup.py'
+      - '**/setup.cfg'
+      - '**/Pipfile'
+      - '**/Pipfile.lock'
+      - '**/poetry.lock'
+      - '**/uv.lock'
+      - '**/*.csproj'
+      - '**/packages.config'
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/build.rs'
+      # If the scanner code itself changes, the trip-wire job must run.
+      - 'scripts/check_release_age.py'
+      - 'scripts/check_install_scripts.py'
+      - 'scripts/check_build_hooks.py'
+      - 'scripts/_supply_chain_common.py'
+      - 'scripts/tests/test_check_release_age.py'
+      - 'scripts/tests/test_check_install_scripts.py'
+      - 'scripts/tests/test_check_build_hooks.py'
+      - 'scripts/tests/test_supply_chain_common.py'
+      - '.github/workflows/supply-chain-check.yml'
 
 permissions:
   contents: read
 
 jobs:
-  check-version-pinning:
+  # ------------------------------------------------------------------
+  # Trip-wire: refuse to let a PR modify its own gates AND its
+  # dependencies in the same change. A PR that wants to update the
+  # scanner code MUST do so in a separate scoped PR; the dep-changing
+  # PR then rebases on top.
+  # ------------------------------------------------------------------
+  scanner-trip-wire:
+    name: Scanner trip-wire
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse co-modification of scanner code and dependencies
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          SCANNER_HITS="$(printf '%s\n' "$CHANGED" \
+            | grep -E '^(scripts/(check_release_age|check_install_scripts|check_build_hooks|_supply_chain_common)\.py|scripts/tests/test_(check_release_age|check_install_scripts|check_build_hooks|supply_chain_common)\.py|\.github/workflows/supply-chain-check\.yml)$' \
+            || true)"
+          DEP_HITS="$(printf '%s\n' "$CHANGED" \
+            | grep -E '(^|/)(package\.json|package-lock\.json|npm-shrinkwrap\.json|Cargo\.toml|Cargo\.lock|pyproject\.toml|requirements[^/]*\.txt|setup\.py|setup\.cfg|Pipfile|Pipfile\.lock|poetry\.lock|uv\.lock|.*\.csproj|packages\.config|go\.mod|go\.sum|build\.rs)$' \
+            || true)"
+          if [ -n "$SCANNER_HITS" ] && [ -n "$DEP_HITS" ]; then
+            echo "::error::This PR modifies BOTH supply-chain scanner code AND dependency manifests."
+            echo "::error::Split into two PRs: land scanner updates first, then rebase the dep-changing PR on top."
+            echo "Scanner files touched:"
+            echo "$SCANNER_HITS" | sed 's/^/  - /'
+            echo "Dependency files touched:"
+            echo "$DEP_HITS" | sed 's/^/  - /'
+            exit 1
+          fi
+          echo "OK: no scanner/dependency co-modification detected."
+
+  # ------------------------------------------------------------------
+  # Version-pinning gate (legacy in-line check, structural rewrite).
+  # ------------------------------------------------------------------
+  check-version-pinning:
+    name: Version-pinning gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: scanner-trip-wire
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
       - name: Check for unpinned npm versions
         run: |
-          echo "Checking for ^ or ~ version ranges in package.json files..."
+          set -euo pipefail
+          # We feed the file list to python via stdin and use sys.argv to
+          # avoid any shell interpolation of paths into a python-c string
+          # (that was the M1 path-injection finding).
           VIOLATIONS=0
           while IFS= read -r f; do
-            # Exclude engines block (VS Code extensions require ^ ranges for engine compat)
-            if python3 -c "
+            if ! python3 - "$f" <<'PY' 2>/dev/null
           import json, sys
-          data = json.load(open('$f'))
-          for section in ('dependencies', 'devDependencies', 'peerDependencies'):
-              for pkg, ver in data.get(section, {}).items():
-                  if any(ver.startswith(c) for c in ('^', '~')):
-                      print(f'    \"{pkg}\": \"{ver}\"')
+          path = sys.argv[1]
+          try:
+              with open(path, encoding="utf-8") as fh:
+                  data = json.load(fh)
+          except Exception:
+              sys.exit(0)
+          for section in ("dependencies", "devDependencies", "peerDependencies"):
+              for pkg, ver in (data.get(section) or {}).items():
+                  if not isinstance(ver, str):
+                      continue
+                  if ver.startswith("^") or ver.startswith("~"):
+                      print(f'    "{pkg}": "{ver}"')
                       sys.exit(1)
-          " 2>/dev/null; then
-              :
-            else
-              if [ $? -eq 1 ]; then
-                echo "VIOLATION: $f has unpinned version ranges"
-                VIOLATIONS=$((VIOLATIONS + 1))
-              fi
+          PY
+            then
+              echo "VIOLATION: $f has unpinned version ranges"
+              VIOLATIONS=$((VIOLATIONS + 1))
             fi
-          done < <(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*')
+          done < <(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*' 2>/dev/null || true)
           if [ "$VIOLATIONS" -gt 0 ]; then
             echo ""
             echo "Found $VIOLATIONS package.json files with ^ or ~ version ranges."
@@ -51,18 +130,86 @@ jobs:
 
       - name: Check lockfile presence
         run: |
-          echo "Checking for lockfiles..."
+          set -euo pipefail
           while IFS= read -r f; do
             DIR=$(dirname "$f")
             if [ ! -f "$DIR/package-lock.json" ] && [ ! -f "$DIR/pnpm-lock.yaml" ] && [ ! -f "$DIR/yarn.lock" ]; then
-              # Only flag if there are actual dependencies (not just name+version)
               if grep -q '"dependencies"' "$f" 2>/dev/null; then
                 echo "WARNING: $DIR has dependencies but no lockfile"
               fi
             fi
-          done < <(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*')
+          done < <(find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*' 2>/dev/null || true)
           echo "Lockfile check complete"
 
+  # ------------------------------------------------------------------
+  # G1: 7-day release-age cooling-off.
+  # ------------------------------------------------------------------
+  release-age:
+    name: 7-day cooling-off check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: scanner-trip-wire
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Check newly-pinned versions against 7-day rule
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 scripts/check_release_age.py --base "origin/${BASE_REF}" --min-age-days 7
+
+  # ------------------------------------------------------------------
+  # G2: npm install-script flagger (strict — blocks merge by default).
+  # ------------------------------------------------------------------
+  install-scripts:
+    name: npm install-script audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: scanner-trip-wire
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Audit added npm deps for install scripts
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 scripts/check_install_scripts.py --base "origin/${BASE_REF}" --strict
+
+  # ------------------------------------------------------------------
+  # G3 (H5): build-hook (setup.py / build.rs) addition flagger.
+  # ------------------------------------------------------------------
+  build-hooks:
+    name: Build-hook audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: scanner-trip-wire
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Flag setup.py and build.rs additions
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 scripts/check_build_hooks.py --base "origin/${BASE_REF}" --strict
+
+  # ------------------------------------------------------------------
+  # Lockfile integrity: verify lockfile hashes match upstream registries.
+  # ------------------------------------------------------------------
   lockfile-integrity:
     name: Verify lockfile hashes match upstream registries
     runs-on: ubuntu-latest

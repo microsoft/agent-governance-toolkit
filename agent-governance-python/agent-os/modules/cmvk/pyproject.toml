@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agentmesh_drift"
+name = "agent-governance-toolkit-drift"
 version = "4.1.0"
 description = "Mathematical drift detection library for calculating drift/hallucination scores between outputs"
 readme = "README.md"
