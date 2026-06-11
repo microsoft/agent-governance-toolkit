@@ -74,9 +74,7 @@ class GovernedMCPServer:
         
         # Initialize audit log
         print("\n📝 Initializing audit log...")
-        self.audit_log = AuditLog(
-            agent_id=self.identity.did,
-        )
+        self.audit_log = AuditLog()
         
         # Initialize reward engine (trust scoring)
         print("\n⭐ Initializing reward engine...")
@@ -115,7 +113,11 @@ class GovernedMCPServer:
             )
             
             if not policy_result["allowed"]:
-                raise PermissionError(f"Policy violation: {policy_result['reason']}")
+                self._block_policy_violation(
+                    action="filesystem_read",
+                    params=params,
+                    reason=policy_result["reason"],
+                )
             
             # Simulate file read (in production, actually read file)
             content = f"[Simulated content of {path}]"
@@ -140,7 +142,11 @@ class GovernedMCPServer:
             )
             
             if not policy_result["allowed"]:
-                raise PermissionError(f"Policy violation: {policy_result['reason']}")
+                self._block_policy_violation(
+                    action="database_query",
+                    params=params,
+                    reason=policy_result["reason"],
+                )
             
             # Simulate database query
             results = [
@@ -172,7 +178,11 @@ class GovernedMCPServer:
             )
             
             if not policy_result["allowed"]:
-                raise PermissionError(f"Policy violation: {policy_result['reason']}")
+                self._block_policy_violation(
+                    action="api_call",
+                    params=params,
+                    reason=policy_result["reason"],
+                )
             
             # Simulate API call
             response = {
@@ -226,6 +236,12 @@ class GovernedMCPServer:
                 }
         
         return {"allowed": True, "reason": None}
+
+    def _block_policy_violation(self, action: str, params: Dict[str, Any], reason: str) -> None:
+        """Record and score a denied tool call before returning an error to the caller."""
+        self._audit_log_event(action, params, "denied", reason=reason)
+        self._update_trust_score(action, success=False, reason=reason)
+        raise PermissionError(f"Policy violation: {reason}")
     
     def _sanitize_output(self, data: Any) -> Any:
         """Sanitize output to remove sensitive data."""
@@ -247,24 +263,51 @@ class GovernedMCPServer:
         
         return data
     
-    def _audit_log_event(self, action: str, params: Dict[str, Any], result: str):
+    def _audit_log_event(
+        self,
+        action: str,
+        params: Dict[str, Any],
+        result: str,
+        reason: str | None = None,
+    ):
         """Log event to audit trail."""
-        entry = {
+        entry = self.audit_log.log(
+            event_type="tool_invocation",
+            agent_did=str(self.identity.did),
+            action=action,
+            data={
+                "params": params,
+                "trust_score": self.trust_score,
+                "reason": reason,
+            },
+            outcome=result,
+        )
+        display_entry = {
             "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
-            "agent": self.identity.did,
+            "agent": str(self.identity.did),
             "action": action,
             "params": params,
             "result": result,
-            "trust_score": self.trust_score
+            "reason": reason,
+            "trust_score": self.trust_score,
+            "entry_hash": entry.entry_hash[:16],
         }
         
-        # In production, use AuditLog.log()
-        print(f"\n📋 Audit: {action} - {result} (trust score: {self.trust_score})")
+        print(
+            f"\n📋 Audit: {display_entry['action']} - {display_entry['result']} "
+            f"(trust score: {display_entry['trust_score']}, "
+            f"hash: {display_entry['entry_hash']}...)"
+        )
+        if reason:
+            print(f"   Reason: {reason}")
     
-    def _update_trust_score(self, action: str, success: bool):
+    def _update_trust_score(self, action: str, success: bool, reason: str | None = None):
         """Update trust score based on action."""
-        # Simulated reward engine
-        # In production, use RewardEngine.update_score()
+        self.reward_engine.record_policy_compliance(
+            agent_did=str(self.identity.did),
+            compliant=success,
+            policy_name=action,
+        )
         
         if success:
             # Small increase for successful actions
@@ -276,6 +319,10 @@ class GovernedMCPServer:
         # If trust score drops too low, revoke credentials
         if self.trust_score < 500:
             print(f"\n⚠️  WARNING: Trust score dropped to {self.trust_score}. Credentials may be revoked.")
+
+        outcome = "success" if success else "policy violation"
+        detail = f": {reason}" if reason else ""
+        print(f"⭐ Trust score update after {action} {outcome}{detail}: {self.trust_score}/1000")
     
     async def run(self):
         """Run the MCP server."""

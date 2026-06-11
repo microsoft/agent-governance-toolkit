@@ -13,12 +13,14 @@ import hashlib
 import json
 import asyncio
 
+from .crypto import manifest_hash_for_signing, verify
 from .schemas.manifest import AgentManifest, AgentIdentity
 from .reputation import ReputationEngine, TrustScore, ReputationHistory
 from .exceptions import (
     AgentAlreadyRegisteredError,
     AgentNotFoundError,
     InvalidManifestError,
+    InvalidSignatureError,
     IATPUnverifiedPeerException,
     IATPInsufficientTrustException,
 )
@@ -106,16 +108,18 @@ class AgentRegistry:
         validation_errors = self._validate_manifest(manifest)
         if validation_errors:
             raise InvalidManifestError(agent_did, validation_errors)
-        
-        # TODO: Verify signature against verification key
-        # For now, trust the signature
-        
+
+        # Compute manifest hash before setting timestamps (timestamps are excluded
+        # from the hash, so this is stable and matches what the caller signed).
+        manifest_hash = manifest_hash_for_signing(manifest)
+
+        # Verify the agent owns the private key matching its verification_key.
+        if not verify(manifest.identity.verification_key, manifest_hash.encode(), signature):
+            raise InvalidSignatureError(agent_did, "registration signature verification failed")
+
         # Set registration timestamp
         manifest.registered_at = datetime.now(timezone.utc)
         manifest.last_seen = datetime.now(timezone.utc)
-        
-        # Calculate manifest hash
-        manifest_hash = self._compute_manifest_hash(manifest)
         
         # Initialize reputation
         history = ReputationHistory(
@@ -162,7 +166,11 @@ class AgentRegistry:
         # Validate ownership (DID must match)
         if manifest.identity.did != agent_did:
             raise InvalidManifestError(agent_did, ["DID mismatch"])
-        
+
+        manifest_hash = manifest_hash_for_signing(manifest)
+        if not verify(manifest.identity.verification_key, manifest_hash.encode(), signature):
+            raise InvalidSignatureError(agent_did, "update signature verification failed")
+
         # Preserve registration time
         manifest.registered_at = self._manifests[agent_did].registered_at
         manifest.last_seen = datetime.now(timezone.utc)
@@ -196,8 +204,10 @@ class AgentRegistry:
         if agent_did not in self._manifests:
             raise AgentNotFoundError(agent_did)
         
-        # TODO: Verify signature
-        
+        stored = self._manifests[agent_did]
+        if not verify(stored.identity.verification_key, agent_did.encode(), signature):
+            raise InvalidSignatureError(agent_did, "deregistration signature verification failed")
+
         del self._manifests[agent_did]
         del self._manifest_hashes[agent_did]
         del self._did_to_owner[agent_did]

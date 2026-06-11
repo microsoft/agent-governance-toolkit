@@ -363,7 +363,7 @@ Alice                              Bob
 | [Tutorial 02 — Trust & Identity](02-trust-and-identity.md) | Ed25519 credentials, DIDs, trust scoring |
 | [Tutorial 07 — MCP Security Gateway](07-mcp-security-gateway.md) | Tool call governance |
 | [Tutorial 16 — Protocol Bridges](16-protocol-bridges.md) | A2A, MCP, IATP communication |
-| [Tutorial 31 — MCP Governance End-to-End](31-mcp-governance-end-to-end.md) | MCP message signing |
+| [Tutorial 31 - Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Agent identity federation |
 | [Signal X3DH Specification](https://signal.org/docs/specifications/x3dh/) | X3DH reference (CC0) |
 | [Signal Double Ratchet Specification](https://signal.org/docs/specifications/doubleratchet/) | Double Ratchet reference (CC0) |
 

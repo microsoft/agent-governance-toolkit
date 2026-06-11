@@ -1,0 +1,121 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+# syntax=docker/dockerfile:1.7
+
+# Hardened sandbox base image for Ring-3 (Sandbox) agent execution.
+#
+# Security model
+# ──────────────
+# 1. PATH is pinned to /usr/local/sandbox/bin, a curated directory that
+#    contains only the binaries listed under "Intentionally present" below.
+#    Any tool not symlinked there is unreachable via PATH.
+# 2. Commonly abused network and interpreter binaries are removed from
+#    their original filesystem locations so they cannot be reached even
+#    by absolute path.  This is defence-in-depth on top of PATH pinning.
+# 3. The workload user (uid 1001, no shell) cannot escalate privileges via
+#    setuid/setgid binaries: every such bit is cleared (chmod a-s) in the
+#    final hardening layer.
+# 4. Shells (bash, sh, dash, zsh, ksh, fish) are removed from the filesystem
+#    in that same final layer, not merely dropped from PATH, so they cannot
+#    be reached even by absolute path.  This keeps the image consistent with
+#    the DENIED_COMMANDS denylist in src/hypervisor/sandbox/__init__.py.
+#
+# Intentionally present binaries and rationale
+# ────────────────────────────────────────────
+#   python3   — required interpreter for sandbox workloads
+#   python    — python3 alias for compatibility
+#
+# Out of scope: seccomp profiles, AppArmor / SELinux (tracked in #2662).
+#
+# Extending the allowed-binary list
+# ──────────────────────────────────
+# See docs/sandbox-image.md for step-by-step instructions.
+
+FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634 AS sandbox
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# ── Step 1: Remove denied binaries from all filesystem locations ──────
+# These are the primary vectors for denylist bypass.  rm -f is used so
+# the RUN layer succeeds even when a binary is absent from this image
+# variant (e.g. wget is not in python:slim, but we guard it anyway).
+RUN rm -f \
+    # Network fetch tools
+    /usr/bin/curl \
+    /usr/bin/wget \
+    /usr/bin/ftp \
+    /usr/bin/telnet \
+    # Raw socket / proxy tools
+    /usr/bin/nc \
+    /usr/bin/nc.openbsd \
+    /usr/bin/nc.traditional \
+    /bin/nc \
+    /usr/bin/ncat \
+    /usr/bin/netcat \
+    /usr/bin/socat \
+    /usr/bin/nmap \
+    /usr/bin/tcpdump \
+    # Alternative interpreters
+    /usr/bin/perl \
+    /usr/bin/perl5 \
+    /usr/bin/ruby \
+    /usr/bin/python2 \
+    /usr/bin/python2.7 \
+    # Compiler toolchain
+    /usr/bin/gcc \
+    /usr/bin/g++ \
+    /usr/bin/make \
+    /usr/bin/cc \
+    && true
+
+# ── Step 2: Create the curated sandbox bin directory ─────────────────
+# Only binaries explicitly symlinked here are reachable via PATH.
+RUN mkdir -p /usr/local/sandbox/bin \
+    && ln -s "$(command -v python3)" /usr/local/sandbox/bin/python3 \
+    && ln -s /usr/local/sandbox/bin/python3 /usr/local/sandbox/bin/python
+
+# ── Step 3: Pin PATH to the curated directory ─────────────────────────
+# No system bin directories (/usr/bin, /bin) are on the sandbox PATH.
+# Sandboxed code that calls subprocess.run(["curl", ...]) will receive
+# FileNotFoundError; absolute-path invocations (/usr/bin/curl) are also
+# blocked because the binary has been removed in Step 1.
+ENV PATH=/usr/local/sandbox/bin
+
+WORKDIR /workspace
+
+# ── Step 4: Non-root user with no login shell ─────────────────────────
+# /bin/false prevents interactive shell access; uid 1001 avoids
+# collision with the dev user (uid 1000) used in the development image.
+RUN useradd --create-home --shell /bin/false --uid 1001 sandbox \
+    && chown -R sandbox:sandbox /workspace
+
+# ── Step 5: Final hardening — strip privilege bits and remove shells ──
+# This runs last on purpose: earlier RUN layers rely on the bash SHELL, so
+# the shells can only be deleted once no further build steps need them.  The
+# shell executing this layer keeps running after its own binary is unlinked
+# (the inode stays live until the process exits), so removing bash here is
+# safe.  After this layer only USER and an exec-form CMD remain, neither of
+# which needs a shell.
+#
+#   * chmod a-s on every setuid/setgid file removes the privilege-escalation
+#     surface (su, mount, ping, ...) that a sandboxed workload must never use.
+#   * rm -f on the shells makes the image match DENIED_COMMANDS: a shell that
+#     was only dropped from PATH could still be spawned by absolute path.
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} + 2>/dev/null || true \
+    && rm -f \
+        /bin/bash /usr/bin/bash \
+        /bin/sh /usr/bin/sh \
+        /bin/dash /usr/bin/dash \
+        /bin/zsh /usr/bin/zsh \
+        /bin/ksh /usr/bin/ksh \
+        /usr/bin/fish \
+    && true
+
+USER sandbox
+
+CMD ["python3"]

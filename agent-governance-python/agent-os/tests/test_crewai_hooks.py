@@ -65,6 +65,7 @@ from agent_os.integrations.crewai_adapter import (
     GovernancePolicy,
     PolicyViolationError,
 )
+from agent_os.integrations.base import GovernanceEventType
 
 
 # ── Fixtures ──────────────────────────────────────────────────────
@@ -285,6 +286,47 @@ class TestBeforeToolCall:
         ctx = _make_tool_context(tool_name="anything")
         result = hook_fn(ctx)
         assert result is None
+
+    def test_emits_skill_aware_payload(self):
+        """before_tool_call emits centralized skill-aware payload with nullable defaults."""
+        kernel = CrewAIKernel(GovernancePolicy())
+        events = []
+        kernel.on(GovernanceEventType.POLICY_CHECK, events.append)
+        kernel.as_hooks()
+        hook_fn = _registered_hooks["before_tool_call"][0]
+        ctx = _make_tool_context(tool_name="search")
+        setattr(ctx, "skill_name", "research_skill")
+
+        result = hook_fn(ctx)
+
+        assert result is None
+        assert events
+        payload = next(event for event in events if "skill_name" in event)
+        assert payload["skill_name"] == "research_skill"
+        assert payload["skill_origin"] == "crewai"
+        assert payload["provenance_source_trust"] == "trusted"
+        assert payload["context_hash_before"] is not None
+        assert "context_hash_after" in payload
+
+    def test_spoofed_tool_input_metadata_is_ignored(self):
+        """Skill provenance is not derived from tool_input payload fields."""
+        kernel = CrewAIKernel(GovernancePolicy())
+        events = []
+        kernel.on(GovernanceEventType.POLICY_CHECK, events.append)
+        kernel.as_hooks()
+        hook_fn = _registered_hooks["before_tool_call"][0]
+        ctx = _make_tool_context(
+            tool_name="search",
+            tool_input={"skill_name": "spoofed", "skill_origin": "attacker"},
+        )
+
+        result = hook_fn(ctx)
+
+        assert result is None
+        payload = next(event for event in events if "skill_name" in event)
+        assert payload["skill_name"] is None
+        assert payload["skill_origin"] is None
+        assert payload["provenance_source_trust"] is None
 
 
 # ═══════════════════════════════════════════════════════════════════

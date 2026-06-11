@@ -37,6 +37,12 @@ useDefault = true
 
     # Security scanner tests (intentional fake credentials)
     '''agent-governance-python/agent-compliance/tests/test_security_scanner\.py''',
+
+    # Policy template test fixtures (deterministic fake credentials for policy evaluation)
+    '''examples/policy-templates/fixtures/.*''',
+
+    # AgentMesh integration test suites (fake tokens, JWTs in test data)
+    '''agent-governance-python/agentmesh-integrations/.*/tests/.*''',
   ]
   regexes = [
     '''ghp_secret123''',

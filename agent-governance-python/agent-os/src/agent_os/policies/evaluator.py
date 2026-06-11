@@ -13,11 +13,14 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
 from .schema import PolicyAction, PolicyDocument, PolicyOperator, PolicyRule
+
+if TYPE_CHECKING:
+    from .dynamic_context import DynamicContext
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,14 @@ class PolicyDecision(BaseModel):
     action: str = "allow"
     reason: str = "No rules matched; default action applied"
     audit_entry: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Structured adaptation hints from dynamic-context rules. "
+            "Keys: backoff_seconds (int), blocked_tools (list[str]), "
+            "retry_after (int)."
+        ),
+    )
 
 
 class PolicyEvaluator:
@@ -127,10 +138,21 @@ class PolicyEvaluator:
         self.add_backend(backend)
         return backend
 
-    def evaluate(self, context: dict[str, Any]) -> PolicyDecision:
+    def evaluate(
+        self,
+        context: dict[str, Any],
+        dynamic_context: DynamicContext | None = None,
+    ) -> PolicyDecision:
         """Evaluate all loaded policy rules against the given context.
 
-        If ``root_dir`` is set and context contains a ``path`` key,
+        Args:
+            context: Action-level properties (tool_name, token_count, etc.)
+            dynamic_context: Optional runtime context (time, cost, quota,
+                system).  When supplied, its fields are merged into the
+                evaluation dict under context.time.*, context.cost.*
+                etc.  Existing callers that omit this argument are unaffected.
+
+        If root_dir is set and context contains a path key,
         folder-scoped policy discovery is used — governance.yaml files
         are loaded from the action path up to root and merged
         hierarchically. Otherwise, the flat policy list is evaluated.
@@ -141,6 +163,10 @@ class PolicyEvaluator:
         matches, the default action from the first policy (or global allow)
         is used.
         """
+        # Merge dynamic context into the evaluation dict (additive only)
+        if dynamic_context is not None:
+            context = {**context, **dynamic_context.to_flat_dict()}
+
         # Folder-scoped evaluation path
         if self.root_dir and "path" in context:
             return self._evaluate_scoped(context)
@@ -149,29 +175,55 @@ class PolicyEvaluator:
         return self._evaluate_flat(context)
 
     def _evaluate_scoped(self, context: dict[str, Any]) -> PolicyDecision:
-        """Evaluate using folder-level policy discovery and merge."""
+        """Evaluate using folder-level policy discovery and merge.
+
+        The discovery, parse, and merge phase is wrapped in a fail-closed
+        try/except (matching ``_evaluate_flat``) so that a malformed
+        governance.yaml anywhere in the folder chain yields a deny decision
+        rather than raising out of ``evaluate()``.
+        """
         from .discovery import discover_policies, filter_by_scope
         from .merge import merge_policies
 
-        action_path = Path(context["path"])
-        chain_paths = discover_policies(action_path, self.root_dir)
+        try:
+            action_path = Path(context["path"])
+            chain_paths = discover_policies(action_path, self.root_dir)
 
-        if not chain_paths:
-            # No governance files found — fall back to loaded policies
-            return self._evaluate_flat(context)
+            if not chain_paths:
+                # No governance files found, fall back to loaded policies
+                return self._evaluate_flat(context)
 
-        docs = [PolicyDocument.from_yaml(p) for p in chain_paths]
+            docs = [PolicyDocument.from_yaml(p) for p in chain_paths]
 
-        # Filter by scope
-        filtered = []
-        for doc, path in zip(docs, chain_paths):
-            if filter_by_scope(path, doc.scope, action_path, self.root_dir):
-                filtered.append(doc)
+            # Filter by scope
+            filtered = []
+            for doc, path in zip(docs, chain_paths):
+                if filter_by_scope(path, doc.scope, action_path, self.root_dir):
+                    filtered.append(doc)
 
-        if not filtered:
-            return self._evaluate_flat(context)
+            if not filtered:
+                return self._evaluate_flat(context)
 
-        merged_rules = merge_policies(filtered)
+            merged_rules = merge_policies(filtered)
+        except Exception:
+            logger.error(
+                "Scoped policy discovery error, denying access (fail closed)",
+                exc_info=True,
+            )
+            return PolicyDecision(
+                allowed=False,
+                action="deny",
+                reason="Policy evaluation error, access denied (fail closed)",
+                audit_entry={
+                    "policy": None,
+                    "rule": None,
+                    "action": "deny",
+                    "context_snapshot": context,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "error": True,
+                },
+            )
+
         return self._evaluate_rules(merged_rules, filtered, context)
 
     def _evaluate_flat(self, context: dict[str, Any]) -> PolicyDecision:
@@ -234,8 +286,11 @@ class PolicyEvaluator:
                         },
                     )
 
-            # No rule matched — apply defaults
-            default_action = PolicyAction.ALLOW
+            # No rule matched, apply defaults.
+            # Fail closed when no policies are loaded so Python matches the TS
+            # and .NET SDKs (default-deny). To opt back into permissive
+            # behavior, load a policy with defaults.action: allow.
+            default_action = PolicyAction.DENY
             if self.policies:
                 default_action = self.policies[0].defaults.action
             allowed = default_action in (PolicyAction.ALLOW, PolicyAction.AUDIT)

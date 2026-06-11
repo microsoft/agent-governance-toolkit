@@ -27,16 +27,10 @@ graph LR
 pip install agent-governance-toolkit[full]
 ```
 
-または、個別のパッケージをインストールします。
+`[full]` エクストラには、すべてのコンポーネントが含まれます。
 
 ```bash
-pip install agent-os-kernel        # Policy enforcement + framework integrations
-pip install agentmesh-platform     # Zero-trust identity + trust cards
-pip install agent-governance-toolkit    # OWASP ASI verification + integrity CLI
-pip install agent-sre              # SLOs, error budgets, chaos testing
-pip install agentmesh-runtime       # Execution supervisor + privilege rings
-pip install agentmesh-marketplace      # Plugin lifecycle management
-pip install agentmesh-lightning        # RL training governance
+pip install agent-governance-toolkit[full]  # ポリシー適用、ゼロトラスト ID、OWASP ASI 検証、SRE、マーケットプレイス、RL ガバナンス
 ```
 
 ### TypeScript / Node.js

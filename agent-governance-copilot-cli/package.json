@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agent-governance-copilot-cli",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Public Preview — Copilot CLI governance installer for Agent Governance Toolkit developer protection policies",
   "type": "module",
   "bin": {
