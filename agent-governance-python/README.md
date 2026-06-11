@@ -39,6 +39,6 @@ It is not for applications or dashboards, demos or examples, monorepo-only produ
 
 `agent-compliance/`, `agent-discovery/`, `agent-hypervisor/`, `agent-lightning/`, `agent-marketplace/`, `agent-mcp-governance/`, `agent-mesh/`, `agent-os/`, `agent-primitives/`, `agent-rag-governance/`, `agent-runtime/`, `agent-sandbox/`, `agent-sre/`, `agentmesh-integrations/`
 
-## Package Consolidation
+## Package Consolidation (v4.0.0 — Complete)
 
-We are working to reduce the number of separately published packages from 45 down to 5 top-level distributions. This is tracked in [issue #2482](https://github.com/microsoft/agent-governance-toolkit/issues/2482). The consolidation plan, audit data, and migration guide are in `docs/package-consolidation/`. Existing package names will remain installable via stub packages throughout the transition so nothing breaks for current users.
+As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions: `agent-governance-toolkit-core`, `agent-governance-toolkit-runtime`, `agent-governance-toolkit-sre`, `agent-governance-toolkit-cli`, and the `agent-governance-toolkit[full]` meta-package. See [issue #2482](https://github.com/microsoft/agent-governance-toolkit/issues/2482) for details. The consolidation plan, audit data, and migration guide are in `docs/package-consolidation/`. Previous package names remain installable as stub packages that redirect to the consolidated distributions.

@@ -2,8 +2,8 @@
 
 This scenario now follows the real MAF Python agent pattern and real AGT adapter
 middleware. The Python example preserves the refund-fraud and escalation story
-from the tutorial while using `agent_framework.Agent` and
-`agent_os.integrations.maf_adapter`.
+from the tutorial while driving the walkthrough through real `Agent.run(...)`
+calls and `agent_os.integrations.maf_adapter`.
 
 ## Governance story
 
@@ -26,7 +26,8 @@ Optional live model backends:
 - `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT` or `AZURE_OPENAI_BASE_URL`
 
 If you do not set credentials, the example still runs the real governance
-middleware walkthrough without a live model call.
+walkthrough without a live model call by using a deterministic scripted MAF
+client.
 
 ## Files
 

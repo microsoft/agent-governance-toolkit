@@ -1,0 +1,33 @@
+{
+  "annotations": {
+    "shutdown_context": {
+      "reason_seen": "completed"
+    }
+  },
+  "snapshot": {
+    "agent": {
+      "id": "agent-007",
+      "version": "1.0.0"
+    },
+    "metadata": {
+      "deployment": "prod"
+    },
+    "reason": "completed"
+  },
+  "intervention_point": "agent_shutdown",
+  "policy_target": {
+    "kind": "agent_metadata",
+    "path": "$",
+    "value": {
+      "agent": {
+        "id": "agent-007",
+        "version": "1.0.0"
+      },
+      "metadata": {
+        "deployment": "prod"
+      },
+      "reason": "completed"
+    }
+  },
+  "tool": null
+}

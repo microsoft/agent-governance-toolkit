@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "source": [
+    "core/src/limits.rs Limits::default"
+  ],
+  "defaults": {
+    "max_snapshot_bytes": 1048576,
+    "max_policy_input_depth": 64,
+    "max_annotators_per_point": 16,
+    "max_annotator_output_bytes": 262144,
+    "max_policy_output_bytes": 262144,
+    "max_extends_depth": 16,
+    "max_merged_manifest_bytes": 1048576,
+    "max_manifest_url_bytes": 1048576,
+    "manifest_url_timeout_ms": 30000,
+    "max_manifest_url_redirects": 5
+  }
+}

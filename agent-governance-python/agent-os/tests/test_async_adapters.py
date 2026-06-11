@@ -204,6 +204,71 @@ async def test_concurrent_call_count_integrity():
 
 
 # =============================================================================
+# Tests: bounded-semaphore slot is released when the wrapped callable raises
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_semaphore_slot_released_on_wrapped_callable_failure():
+    """A wrapped callable that raises must not leak its bounded-semaphore slot.
+
+    Regression test for issue #2928: without a try/finally around the wrapped
+    call the acquired slot leaked on failure, so repeated failures exhausted
+    max_concurrent and the integration deadlocked into denying everything. Here
+    the callable raises more times than max_concurrent, then a successful call
+    must still be admitted.
+    """
+    max_concurrent = 2
+    policy = GovernancePolicy(
+        bounded_semaphore={"enabled": True, "max_concurrent": max_concurrent},
+    )
+    integration = DummyIntegration(policy=policy)
+
+    calls = {"n": 0}
+
+    async def flaky_fn() -> str:
+        calls["n"] += 1
+        if calls["n"] <= max_concurrent + 3:
+            raise RuntimeError("boom")
+        return "ok"
+
+    wrapper = AsyncGovernedWrapper(integration, flaky_fn, agent_id="flaky-agent")
+
+    # Fail more times than max_concurrent. Each failure must release its slot.
+    for _ in range(max_concurrent + 3):
+        with pytest.raises(RuntimeError, match="boom"):
+            await wrapper()
+
+    # The semaphore must not be exhausted by the leaked slots.
+    assert integration._bounded_semaphore is not None
+    assert integration._bounded_semaphore.active == 0
+
+    # A subsequent successful call must still be admitted (no PolicyViolationError).
+    result = await wrapper()
+    assert result == "ok"
+    assert integration._bounded_semaphore.active == 0
+
+
+def test_bounded_semaphore_counter_is_lock_guarded():
+    """BoundedSemaphore should guard its counters with a threading.Lock."""
+    from agent_os.integrations.base import BoundedSemaphore
+
+    sem = BoundedSemaphore(max_concurrent=1)
+    acquired, _ = sem.try_acquire()
+    assert acquired is True
+    assert sem.active == 1
+    # Second acquire is rejected while the slot is held.
+    acquired, reason = sem.try_acquire()
+    assert acquired is False
+    assert reason is not None
+    sem.release()
+    assert sem.active == 0
+    # Releasing below zero is a no-op.
+    sem.release()
+    assert sem.active == 0
+
+
+# =============================================================================
 # Tests: sync methods still work unchanged (backward compatibility)
 # =============================================================================
 

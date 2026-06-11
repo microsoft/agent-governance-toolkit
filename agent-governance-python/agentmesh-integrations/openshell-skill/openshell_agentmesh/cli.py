@@ -22,6 +22,7 @@ def main(argv=None):
     cp.add_argument("--action", required=True, help="Action string to evaluate (e.g. shell:python)")
     cp.add_argument("--context", default="{}", help="JSON object with evaluation context")
     cp.add_argument("--policy-dir", required=True, help="Path to directory containing policy YAML files")
+    cp.add_argument("--audit-path", help="Optional JSONL audit log path")
 
     ts = sub.add_parser("trust-score", help="Query the trust score for an agent DID")
     ts.add_argument("--agent-did", required=True, help="Agent DID to look up")
@@ -38,7 +39,7 @@ def main(argv=None):
         except json.JSONDecodeError as exc:
             print(json.dumps({"error": f"Invalid --context JSON: {exc}"}), file=sys.stderr)
             return 2
-        skill = GovernanceSkill(policy_dir=policy_path)
+        skill = GovernanceSkill(policy_dir=policy_path, audit_path=Path(args.audit_path) if args.audit_path else None)
         d = skill.check_policy(args.action, ctx)
         print(json.dumps({"allowed": d.allowed, "action": d.action, "reason": d.reason, "policy_name": d.policy_name}))
         return 0 if d.allowed else 1

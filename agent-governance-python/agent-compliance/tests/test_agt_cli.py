@@ -189,7 +189,7 @@ class TestDoctorCommand:
         result = runner.invoke(cli, ["doctor"])
 
         assert result.exit_code == 0
-        assert "agent_governance_toolkit" in result.output
+        assert "agent-governance-toolkit-compliance" in result.output
 
     def test_doctor_json_schema(self, runner: CliRunner):
         result = runner.invoke(cli, ["--json", "doctor"])
@@ -214,7 +214,9 @@ class TestDoctorCommand:
     def test_doctor_detects_installed_toolkit(self, runner: CliRunner):
         result = runner.invoke(cli, ["--json", "doctor"])
         data = json.loads(result.output)
-        toolkit_pkg = next(p for p in data["packages"] if p["package"] == "agent_governance_toolkit")
+        toolkit_pkg = next(
+            p for p in data["packages"] if p["package"] == "agent-governance-toolkit-compliance"
+        )
 
         assert toolkit_pkg["installed"] is True
         assert toolkit_pkg["version"] is not None
@@ -237,7 +239,7 @@ class TestDoctorCommand:
         result = runner.invoke(cli, ["--no-color", "doctor"])
 
         assert result.exit_code == 0
-        assert "agent_governance_toolkit" in result.output
+        assert "agent-governance-toolkit-compliance" in result.output
 
 
 class TestPluginDiscovery:
@@ -452,7 +454,7 @@ class TestVersionHelper:
         assert "." in ver
 
     def test_returns_version_for_toolkit(self):
-        ver = _get_package_version("agent_governance_toolkit")
+        ver = _get_package_version("agent-governance-toolkit-compliance")
 
         assert ver is not None
 
@@ -545,7 +547,6 @@ class TestVerifyCommand:
         assert "OWASP" in result.output
         assert "--badge" in result.output
         assert "--evidence" in result.output
-        assert "--strict" in result.output
 
     def test_verify_runs(self, runner: CliRunner):
         result = runner.invoke(cli, ["verify"])
@@ -592,11 +593,11 @@ class TestVerifyCommand:
         ) as mocked:
             result = runner.invoke(
                 cli,
-                ["verify", "--evidence", str(evidence_path), "--strict"],
+                ["verify", "--evidence", str(evidence_path)],
             )
 
         assert result.exit_code == 0
-        mocked.assert_called_once_with(evidence_path=str(evidence_path), strict=True)
+        mocked.assert_called_once_with(evidence_path=str(evidence_path))
 
     def test_verify_evidence_json_mode(self, runner: CliRunner, tmp_path: Path):
         evidence_path = tmp_path / "agt-evidence.json"

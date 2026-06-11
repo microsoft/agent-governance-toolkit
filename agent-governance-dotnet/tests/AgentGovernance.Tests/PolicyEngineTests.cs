@@ -29,13 +29,16 @@ rules:
 ";
 
     [Fact]
-    public void Evaluate_NoPoliciesLoaded_AllowsByDefault()
+    public void Evaluate_NoPoliciesLoaded_DeniesByDefault()
     {
+        // Fail closed when no policies are loaded so the .NET, Python, and TS
+        // SDKs agree on default-deny (issue #2926). Opt back into permissive
+        // behavior by loading a policy with default_action: allow.
         var engine = new PolicyEngine();
         var decision = engine.Evaluate("did:mesh:test", new Dictionary<string, object>());
 
-        Assert.True(decision.Allowed);
-        Assert.Equal("allow", decision.Action);
+        Assert.False(decision.Allowed);
+        Assert.Equal("deny", decision.Action);
         Assert.Null(decision.PolicyName);
     }
 
@@ -95,6 +98,32 @@ rules:
         Assert.False(decision.Allowed);
         Assert.Equal("deny", decision.Action);
         Assert.Null(decision.MatchedRule);
+    }
+
+    [Fact]
+    public void Evaluate_LogRuleMatches_ReturnsAllowedWithLog()
+    {
+        // log is advisory and still allows, matching the Python and TS SDKs
+        // (issue #2926).
+        var yaml = @"
+apiVersion: governance.toolkit/v1
+name: log-policy
+default_action: deny
+rules:
+  - name: log-read
+    condition: ""tool_name == 'read'""
+    action: log
+    priority: 10
+";
+        var engine = new PolicyEngine();
+        engine.LoadYaml(yaml);
+
+        var decision = engine.Evaluate("did:mesh:test",
+            new Dictionary<string, object> { ["tool_name"] = "read" });
+
+        Assert.True(decision.Allowed);
+        Assert.Equal("log", decision.Action);
+        Assert.Equal("log-read", decision.MatchedRule);
     }
 
     [Fact]

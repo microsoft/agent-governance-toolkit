@@ -1,0 +1,44 @@
+# Wire-protocol-aware policy rules (Rust SDK)
+#
+# Mirrors examples/policy-templates/wire-protocol-rules.yaml from the Python
+# SDK. Load with PolicyEngine::load_from_yaml(yaml_str).
+version: "1"
+agent: "did:example:agent1"
+policies:
+  # ── SQL ─────────────────────────────────────────────────────────────────
+  - name: deny-destructive-sql
+    type: capability
+    denied_actions: ["*"]
+    conditions:
+      sql.verb: [DROP, TRUNCATE, DELETE]
+
+  - name: deny-schema-changes
+    type: capability
+    denied_actions: ["*"]
+    conditions:
+      sql.verb: [ALTER, GRANT, REVOKE]
+
+  - name: deny-writes-to-protected
+    type: capability
+    denied_actions: ["*"]
+    conditions:
+      sql.target: protected
+
+  # ── Kubernetes ──────────────────────────────────────────────────────────
+  - name: deny-k8s-production-namespace
+    type: capability
+    denied_actions: ["*"]
+    conditions:
+      k8s.namespace: production
+
+  - name: deny-k8s-exec
+    type: capability
+    denied_actions: ["*"]
+    conditions:
+      k8s.subresource: exec
+
+  - name: deny-k8s-deletecollection
+    type: capability
+    denied_actions: ["*"]
+    conditions:
+      k8s.verb: deletecollection

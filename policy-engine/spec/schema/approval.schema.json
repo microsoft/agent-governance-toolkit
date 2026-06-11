@@ -1,0 +1,62 @@
+{
+  "$id": "https://agent-control-specification.test/approval.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AGT manifest approval section",
+  "description": "AGT D5 top-level approval section that configures the host approval path consulted by escalate verdicts. The engine validates this shape but treats it as opaque host configuration per SPECIFICATION.md §24.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "default_resolver": {
+      "description": "Name of the resolver consulted by default. When absent the host approval path defaults to deny per D5. When present and resolvers is non-empty this MUST match a key under resolvers.",
+      "type": "string",
+      "minLength": 1
+    },
+    "timeout_seconds": {
+      "description": "Maximum wait in seconds before on_timeout triggers. MUST be greater than zero when present.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "on_timeout": {
+      "description": "Behaviour applied when timeout_seconds elapses without a decision.",
+      "type": "string",
+      "enum": [
+        "deny",
+        "allow",
+        "suspend"
+      ]
+    },
+    "fatigue_threshold": {
+      "description": "Soft cap on approvals per agent within fatigue_window_seconds. MUST be greater than zero when present.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "fatigue_window_seconds": {
+      "description": "Window in seconds across which the fatigue counter accumulates. MUST be greater than zero when present.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "resolvers": {
+      "description": "Named resolver configurations. Keys are resolver names referenced by default_resolver; values carry an opaque host-defined config plus a discriminating type field.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/resolver"
+      }
+    }
+  },
+  "$defs": {
+    "resolver": {
+      "description": "A single approval resolver. The engine preserves additional keys verbatim so host SDKs can consume custom resolver configuration without loss.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

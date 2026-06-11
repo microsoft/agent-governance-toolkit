@@ -2,7 +2,7 @@
 
 This scenario uses the real Microsoft Agent Framework Python agent model with
 AGT governance middleware. It keeps the healthcare tutorial storyline while
-replacing the old illustrative plumbing with `agent_framework` and the AGT
+driving the walkthrough through real `Agent.run(...)` calls with the AGT
 `maf_adapter`.
 
 ## Governance story
@@ -25,8 +25,8 @@ Optional live model backends:
 - `OPENAI_API_KEY`
 - `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT` or `AZURE_OPENAI_BASE_URL`
 
-Without credentials, the example still runs the real AGT middleware objects and
-prints the same governance story locally.
+Without credentials, the example still runs the same governance story locally
+through the real MAF agent/tool loop by using a deterministic scripted client.
 
 ## Files
 

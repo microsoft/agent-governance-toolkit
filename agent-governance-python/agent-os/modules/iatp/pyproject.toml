@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0,<62.0", "wheel"]
+requires = ["setuptools>=78.1.1,<83.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-governance-toolkit-trust-protocol"
-version = "3.7.0"
+version = "4.1.0"
 description = "Inter-Agent Trust Protocol (IATP) - The Envoy for AI Agents. A sidecar architecture with typed IPC pipes for preventing cascading hallucinations in autonomous agent networks."
 readme = "README.md"
 license = {text = "MIT"}
@@ -54,7 +54,7 @@ dependencies = [
     "pydantic>=2.5.3,<3.0",
     "httpx>=0.27.0,<1.0",
     "python-dateutil>=2.8.2,<3.0",
-    "agentmesh-primitives>=0.1.0,<1.0",
+    "agentmesh-primitives>=4,<5",
     "click>=8.0.0,<9.0",
 ]
 

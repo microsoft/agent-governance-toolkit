@@ -158,7 +158,7 @@ agent-governance verify --badge
 | 完整 API 参考（Python） | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
 | TypeScript 包文档 | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
 | .NET 包文档 | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
-| OWASP 覆盖图 | [docs/OWASP-COMPLIANCE.md](../OWASP-COMPLIANCE.md) |
+| OWASP 覆盖图 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
 | 贡献指南 | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
 
 ---

@@ -47,7 +47,7 @@ The Agent Governance Toolkit provides runtime governance infrastructure that add
 
 | Control | Feature | Location | Coverage |
 |---------|---------|----------|----------|
-| CC1.1 Commitment to integrity | STRIDE-oriented threat model | `docs/THREAT_MODEL.md` | ⚠️ Partial — documents threats, no control ownership |
+| CC1.1 Commitment to integrity | STRIDE-oriented threat model | `docs/security/threat-model.md` | ⚠️ Partial — documents threats, no control ownership |
 | CC1.4 Accountability | RBAC with 4 roles (READER, WRITER, ADMIN, AUDITOR) | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py:16-30` | ⚠️ Partial — role-to-permission mapping, no personnel tracking |
 
 #### CC5: Control Activities
@@ -181,7 +181,7 @@ These numbers are relevant to A1.1 (system capacity) and demonstrate that the go
 | Fault injection | 428,253 | 0.001 ms | 0.007 ms |
 | Concurrent throughput (1,000 agents) | 47,085 | — | — |
 
-> Source: [`BENCHMARKS.md`](../../BENCHMARKS.md). Measured with `time.perf_counter()`, 10,000 iterations, on a development workstation.
+> Source: [`BENCHMARKS.md`](../BENCHMARKS.md). Measured with `time.perf_counter()`, 10,000 iterations, on a development workstation.
 
 ```python
 # A1.2 in action: SLO with Error Budget
@@ -430,7 +430,7 @@ All file paths referenced in this document, organized by package:
 | File | Evidence For |
 |------|-------------|
 | `BENCHMARKS.md` | A1.1 — Performance benchmarks |
-| `docs/THREAT_MODEL.md` | CC1.1 — STRIDE threat model |
+| `docs/security/threat-model.md` | CC1.1 — STRIDE threat model |
 | `.github/workflows/dependency-review.yml` | CC8.1 — CI security scanning |
 | `.github/workflows/codeql.yml` | CC8.1 — CodeQL analysis |
 | `.github/workflows/scorecard.yml` | CC8.1 — OpenSSF Scorecard |
@@ -490,7 +490,7 @@ All gaps consolidated and rated by severity for remediation prioritization.
 
 | Framework | Document | Overlap with SOC 2 |
 |-----------|----------|-------------------|
-| [OWASP Agentic Top 10 (2026)](../OWASP-COMPLIANCE.md) | `docs/OWASP-COMPLIANCE.md` | CC6.8 (malicious software), CC7.3 (vulnerability management), CC9.1 (risk mitigation) |
+| [OWASP Agentic Top 10 (2026)](../../docs/compliance/owasp-agentic-top10-architecture.md) | `../../docs/compliance/owasp-agentic-top10-architecture.md` | CC6.8 (malicious software), CC7.3 (vulnerability management), CC9.1 (risk mitigation) |
 | [OWASP LLM Top 10 (2025)](owasp-llm-top10-mapping.md) | `docs/compliance/owasp-llm-top10-mapping.md` | CC6.8 (LLM01, LLM07), C1.1 (LLM06), PI1.3 (LLM02, LLM09) |
 | [EU AI Act (2024/1689)](eu-ai-act-checklist.md) | `docs/compliance/eu-ai-act-checklist.md` | CC7.1 (Art. 12 logging), CC7.4 (Art. 14 human oversight), PI1.5 (Art. 12 record-keeping) |
 | [NIST AI RMF](nist-ai-rmf-alignment.md) | `docs/compliance/nist-ai-rmf-alignment.md` | CC9.1 (Govern/Map functions), A1.2 (Measure function) |
@@ -501,6 +501,6 @@ All gaps consolidated and rated by severity for remediation prioritization.
 
 *Last updated: April 2026 · Toolkit version: v2.3.0*
 
-**[⬅ Back to README](../../README.md)** · **[OWASP Agentic Mapping](../OWASP-COMPLIANCE.md)** · **[EU AI Act Checklist](eu-ai-act-checklist.md)**
+**[⬅ Back to README](../../README.md)** · **[OWASP Agentic Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)** · **[EU AI Act Checklist](eu-ai-act-checklist.md)**
 
 </div>

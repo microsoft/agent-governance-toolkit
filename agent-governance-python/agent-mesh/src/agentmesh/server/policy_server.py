@@ -121,7 +121,16 @@ class TrustEvaluateResponse(BaseModel):
 
 @app.post("/api/v1/policy/evaluate", tags=["policy"], response_model=EvaluateResponse)
 async def evaluate_policy(req: EvaluateRequest) -> EvaluateResponse:
-    """Evaluate governance policies against an agent action."""
+    """Evaluate governance policies against an agent action.
+
+    SECURITY (known gap): accepts ``agent_did`` from the request body
+    without authenticating the caller. The policy-server is a separate
+    service without direct access to the identity registry, so binding
+    ``agent_did`` to a signed caller identity requires cross-service
+    auth plumbing. Treat decisions returned here as advisory unless the
+    deployment authenticates callers at the gateway. Same class of
+    issue as ``audit_collector.log_entry``.
+    """
     ctx = {
         "action": req.action,
         "resource": req.resource,

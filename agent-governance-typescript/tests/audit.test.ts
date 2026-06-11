@@ -66,6 +66,17 @@ describe('AuditLogger', () => {
 
       expect(tampered.verify()).toBe(false);
     });
+
+    it('returns false (does not throw) when a hash length differs', () => {
+      logger.log({ agentId: 'a', action: 'x', decision: 'allow' });
+
+      const entries = (logger as any).entries as Array<{ hash: string }>;
+      // A truncated hash has a different byte length than the recomputed one.
+      entries[0].hash = 'deadbeef';
+
+      expect(() => logger.verify()).not.toThrow();
+      expect(logger.verify()).toBe(false);
+    });
   });
 
   describe('getEntries()', () => {
@@ -98,6 +109,15 @@ describe('AuditLogger', () => {
 
       const future = new Date(Date.now() + 60_000);
       expect(logger.getEntries({ since: future })).toHaveLength(0);
+    });
+
+    it('returns defensive copies that cannot mutate the internal log', () => {
+      const entries = logger.getEntries();
+      entries[0].action = 'MUTATED';
+
+      // The internal log and its chain integrity must be unaffected.
+      expect(logger.getEntries()[0].action).not.toBe('MUTATED');
+      expect(logger.verify()).toBe(true);
     });
   });
 

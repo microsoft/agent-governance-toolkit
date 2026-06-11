@@ -199,7 +199,7 @@ remains useful when you want an explicit global CLI limit.
 
 The detailed evidence lives in
 [`docs/compliance/owasp-llm-top10-mapping.md`](../../compliance/owasp-llm-top10-mapping.md)
-and [`docs/OWASP-COMPLIANCE.md`](../../OWASP-COMPLIANCE.md). For MCP governance,
+and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../../docs/compliance/owasp-agentic-top10-architecture.md). For MCP governance,
 the practical alignment looks like this:
 
 | OWASP risk | How proxy policies help |
@@ -264,7 +264,7 @@ Use `mcp-trust-server` alongside that when you want trust operations over MCP.
 
 1. Read [`enterprise.yaml`](../../../agent-governance-python/agent-mesh/packages/mcp-proxy/policies/enterprise.yaml).
 2. Review [`docs/compliance/owasp-llm-top10-mapping.md`](../../compliance/owasp-llm-top10-mapping.md)
-   and [`docs/OWASP-COMPLIANCE.md`](../../OWASP-COMPLIANCE.md).
+   and [`../../../docs/compliance/owasp-agentic-top10-architecture.md`](../../../docs/compliance/owasp-agentic-top10-architecture.md).
 3. Start with `standard`, then move to `strict` or custom rules.
 
 ---

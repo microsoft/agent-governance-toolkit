@@ -21,4 +21,8 @@
 #         from GHA env: variables (e.g. CHANGED, PKG) that shellcheck cannot
 #         see are set by the workflow runner.
 
-disable=SC2129,SC2001,SC2317,SC2050,SC2016,SC2153
+# SC2193: "The arguments to this comparison can never be equal" — false
+#         positive from GHA expression placeholders (__GHA_EXPR__) in
+#         pattern-matching comparisons like [[ "${{ matrix.package }}" == foo-* ]].
+
+disable=SC2129,SC2001,SC2317,SC2050,SC2016,SC2153,SC2193

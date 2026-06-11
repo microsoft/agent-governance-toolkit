@@ -1,0 +1,103 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "policy_input_canonicalization"
+  ],
+  "description": "Prepared policy invocations carry a byte-stable canonical JSON policy input.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "input": {
+              "a": {
+                "c": 3,
+                "d": 4
+              },
+              "b": 2
+            },
+            "metadata": {
+              "a": false,
+              "z": true
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "a": {
+                "c": 3,
+                "d": 4
+              },
+              "b": 2
+            }
+          },
+          "tool": null
+        },
+        "policy_invocation": {
+          "canonical_input": "{\"annotations\":{},\"intervention_point\":\"input\",\"policy_target\":{\"kind\":\"user_input\",\"path\":\"$snap.input\",\"value\":{\"a\":{\"c\":3,\"d\":4},\"b\":2}},\"snapshot\":{\"input\":{\"a\":{\"c\":3,\"d\":4},\"b\":2},\"metadata\":{\"a\":false,\"z\":true}},\"tool\":null}",
+          "input": {
+            "annotations": {},
+            "snapshot": {
+              "input": {
+                "a": {
+                  "c": 3,
+                  "d": 4
+                },
+                "b": 2
+              },
+              "metadata": {
+                "a": false,
+                "z": true
+              }
+            },
+            "intervention_point": "input",
+            "policy_target": {
+              "kind": "user_input",
+              "path": "$snap.input",
+              "value": {
+                "a": {
+                  "c": 3,
+                  "d": 4
+                },
+                "b": 2
+              }
+            },
+            "tool": null
+          },
+          "type": "test"
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "canonicalizes-test-policy-input",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "input": {
+          "a": {
+            "c": 3,
+            "d": 4
+          },
+          "b": 2
+        },
+        "metadata": {
+          "a": false,
+          "z": true
+        }
+      },
+      "intervention_point": "input"
+    }
+  ],
+  "id": "policy-input-canonicalization",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n",
+  "schema_version": 1
+}

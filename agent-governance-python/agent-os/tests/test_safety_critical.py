@@ -14,16 +14,16 @@ Run with: python -m pytest tests/test_safety_critical.py -v
 import pytest
 
 from agent_os.integrations.base import (
-    GovernancePolicy,
+    BoundedSemaphore,
+    CompositeInterceptor,
     ExecutionContext,
+    GovernancePolicy,
+    PolicyInterceptor,
     ToolCallRequest,
     ToolCallResult,
-    PolicyInterceptor,
-    CompositeInterceptor,
-    BoundedSemaphore,
 )
-from agent_os.stateless import StatelessKernel, ExecutionContext as StatelessContext
-
+from agent_os.stateless import ExecutionContext as StatelessContext
+from agent_os.stateless import StatelessKernel
 
 # =============================================================================
 # ToolCallRequest / ToolCallResult data structures
@@ -317,13 +317,20 @@ class TestBoundedSemaphore:
 
 class TestPolicyEdgeCases:
     @pytest.mark.asyncio
-    async def test_empty_policies_list_allows(self):
+    async def test_empty_policies_list_denies_protected_actions(self):
+        """Empty policy list must NOT allow `requires_approval` actions.
+
+        Regression: an empty policies list previously allowed any action
+        because the policy loop had nothing to deny. file_write is a
+        ``requires_approval`` action; with no policies (and no caller-
+        side approval injection), the kernel must fail closed.
+        """
         kernel = StatelessKernel()
         ctx = StatelessContext(agent_id="a1", policies=[])
         result = await kernel.execute(
             action="file_write", params={"path": "/tmp/x"}, context=ctx
         )
-        assert result.success is True
+        assert result.success is False
 
     @pytest.mark.asyncio
     async def test_unknown_policy_name_gracefully_ignored(self):
@@ -371,7 +378,7 @@ class TestPolicyEdgeCases:
         assert "requires approval" in result.error.lower()
 
     @pytest.mark.asyncio
-    async def test_approval_workflow_passes_with_approved_true(self):
+    async def test_approval_workflow_denies_caller_supplied_approved_true(self):
         kernel = StatelessKernel()
         ctx = StatelessContext(agent_id="a1", policies=["strict"])
         result = await kernel.execute(
@@ -379,7 +386,9 @@ class TestPolicyEdgeCases:
             params={"to": "user@example.com", "approved": True},
             context=ctx,
         )
-        assert result.success is True
+        assert result.success is False
+        assert result.signal == "SIGKILL"
+        assert "caller-supplied approval flags are ignored" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_error_message_contains_suggestion_blocked_action(self):
@@ -411,4 +420,4 @@ class TestPolicyEdgeCases:
             action="code_execution", params={"code": "print(1)"}, context=ctx
         )
         assert result.success is False
-        assert "approved=True" in result.error or "authorization" in result.error.lower()
+        assert "trusted" in result.error.lower() or "authorization" in result.error.lower()

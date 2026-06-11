@@ -11,8 +11,12 @@
     }
   ],
   "words": [
+    "Andriushchenko",
+    "Chao",
     "GitHub",
     "Markdown",
+    "Neur",
+    "unsourced",
     "README",
     "TypeScript",
     "JavaScript",
@@ -44,7 +48,15 @@
     "scipy",
     "croniter",
     "nbconvert",
-    "PYTHONUTF"
+    "PYTHONUTF",
+    "simplefilter",
+    "issubclass",
+    "mslearn",
+    "linenums",
+    "pymdownx",
+    "pygments",
+    "javascripts",
+    "tabindex"
   ],
   "ignorePaths": [
     "**/node_modules/**",

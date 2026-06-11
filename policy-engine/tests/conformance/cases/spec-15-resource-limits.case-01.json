@@ -1,0 +1,30 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-15-resource-limits.case-01",
+  "spec_section": "15",
+  "title": "snapshot size limit fails closed",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "skip",
+    "node": "skip",
+    "dotnet": "skip"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
+  "intervention_point": "input",
+  "snapshot": {
+    "input": "abcdefghijklmnopqrstuvwxyz"
+  },
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "deny",
+    "reason": "runtime_error:resource_limit_exceeded",
+    "transformed_policy_target": null
+  },
+  "limits": {
+    "max_snapshot_bytes": 16
+  }
+}

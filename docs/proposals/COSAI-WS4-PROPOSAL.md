@@ -101,7 +101,7 @@ sandbox.check("execute_shell")  # Not granted → blocked
 
 ## Reference Material
 
-- [OWASP Agentic Top 10 Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/master/docs/OWASP-COMPLIANCE.md)
+- [OWASP Agentic Top 10 Compliance Mapping](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/compliance/owasp-agentic-top10-architecture.md)
 - [Agent OS](https://github.com/microsoft/agent-governance-toolkit) — reference implementation
 - [Agent Mesh](https://github.com/microsoft/agent-governance-toolkit) — inter-agent trust layer
 - [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) — execution isolation

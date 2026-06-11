@@ -47,7 +47,7 @@ See [docs/compliance/csa-atf-mapping.md](compliance/csa-atf-mapping.md) for the 
 - [CSA Agentic Trust Framework](https://github.com/massivescale-ai/agentic-trust-framework)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
 - [Full ATF Compliance Mapping](compliance/csa-atf-mapping.md)
-- [OWASP Compliance Mapping](OWASP-COMPLIANCE.md)
+- [OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)
 
 ## Progress
 

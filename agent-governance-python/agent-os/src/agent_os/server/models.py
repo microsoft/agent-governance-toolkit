@@ -20,9 +20,11 @@ class ExecuteRequest(BaseModel):
     agent_id: str | None = Field(
         default=None,
         description=(
-            "Deprecated caller-asserted agent identifier. When execute authentication "
-            "is enabled, omit this field or set it to the same agent bound to the "
-            "bearer token."
+            "Optional caller-asserted agent identifier. If provided, it must match "
+            "the agent identity bound to the bearer token (authenticated mode) or "
+            "the server-controlled local identity (unsafe local execute mode). "
+            "Mismatched values are rejected. Omit the field to defer to the "
+            "server-derived identity."
         ),
     )
     policies: list[str] = Field(default_factory=list, description="Policy names to enforce")

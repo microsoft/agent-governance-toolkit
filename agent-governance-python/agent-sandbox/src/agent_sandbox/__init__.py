@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """Agent Sandbox — execution isolation for AI agents.
 
 Provides ``SandboxProvider``, the abstract base class for all sandbox
@@ -17,6 +18,15 @@ backends, plus three built-in implementations:
   egress allowlist enforcement.
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agt-sandbox is deprecated. Use agent-governance-toolkit-cli instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 from importlib.metadata import PackageNotFoundError, version
 
 from agent_sandbox.sandbox_provider import (

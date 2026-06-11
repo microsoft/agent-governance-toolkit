@@ -32,6 +32,11 @@ except ModuleNotFoundError:  # pragma: no cover - Python <3.11 fallback
 
 # Known registered PyPI package names for this project
 REGISTERED_PACKAGES = {
+    # Consolidated packages (v4.0.0+)
+    "agent-governance-toolkit-core", "agent_governance_toolkit_core",
+    "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
+    "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
+    "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
     # Core packages (on PyPI) — both hyphen and underscore variants
     "agent-os-kernel", "agent_os_kernel",
     "agentmesh-platform", "agentmesh_platform",
@@ -39,11 +44,18 @@ REGISTERED_PACKAGES = {
     "agentmesh-runtime", "agentmesh_runtime",
     "agent-sre", "agent_sre",
     "agent-governance-toolkit", "agent_governance_toolkit",
+    "agent-governance-toolkit-core", "agent_governance_toolkit_core",
+    "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
+    "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
+    "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
     "agentmesh-lightning", "agentmesh_lightning",
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
     "agentmesh-discovery", "agentmesh_discovery",
     "agt-sandbox", "agt_sandbox",
+    "agt-policies", "agt_policies",
+    "agent-control-specification", "agent_control_specification",
+    "acs-generator", "acs_generator",
     # Common dependencies
     "pydantic", "pyyaml", "cryptography", "pynacl", "httpx", "aiohttp",
     "fastapi", "uvicorn", "requests", "packaging", "structlog", "click", "rich", "numpy", "scipy",
@@ -56,6 +68,9 @@ REGISTERED_PACKAGES = {
     "google-adk", "safety", "jupyter", "vitest", "tsup", "typescript",
     "requests",
     "twine",
+    # PyJWT — required by agent-mesh/identity/entra_verifier.py for
+    # Entra-signed JWT verification (PR #2659). Real package, on PyPI.
+    "pyjwt", "PyJWT",
     # Dashboard / visualization (used in examples)
     "streamlit", "plotly", "pandas", "networkx", "matplotlib", "pyvis",
     # Async / caching (used in examples)
@@ -109,6 +124,9 @@ REGISTERED_PACKAGES = {
     "agent-framework-openai", "agent_framework_openai",
     # Azure Functions Python worker (used in foundry-ai-gateway-pdp example)
     "azure-functions", "azure_functions",
+    # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
+    "azure-identity", "azure_identity",
+    "azure-core", "azure_core",
     # SpendGuard SDK (real PyPI package, used in examples)
     "spendguard-sdk", "spendguard_sdk",
     # Cedarling Python bindings (real PyPI package, optional dep)
@@ -120,12 +138,20 @@ REGISTERED_PACKAGES = {
     # instead of path references. See dependency confusion attack vector.
     "agent-primitives", "agent-mcp-governance", "agent_mcp_governance", "emk",
     "agentmesh-primitives", "agentmesh_primitives",
+    # Vendored ACS policy-engine SDK/generator deps (all real PyPI packages)
+    "litellm", "semantic-kernel", "semantic_kernel",
+    "autogen-agentchat", "autogen_agentchat",
+    "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
+    "agentdojo",
     # With extras (base name is what matters)
 }
 
 # Local-only packages that should NEVER appear with version pins in
 # requirements.txt (they must use path references like -e ../primitives)
-LOCAL_ONLY_PACKAGES = {"agent-primitives", "emk"}
+LOCAL_ONLY_PACKAGES = {
+    "agent-primitives",
+    "emk",
+}
 
 # Known npm packages for this project
 REGISTERED_NPM_PACKAGES = {
@@ -134,8 +160,21 @@ REGISTERED_NPM_PACKAGES = {
     "@microsoft/agentmesh-mastra", "@microsoft/agentmesh-copilot-governance",
     "@microsoft/agent-governance-sdk", "@microsoft/agent-governance-copilot-cli",
     "@microsoft/agent-governance-claude-code",
+    "@microsoft/agent-governance-opencode",
+    "@microsoft/agent-governance-antigravity-cli",
     "@microsoft/agent-os-copilot-extension", "@microsoft/agentos-mcp-server",
     "@microsoft/agent-os-vscode",
+    "agent-control-specification",
+    "agent-control-specification-linux-x64-gnu",
+    "agent-control-specification-linux-arm64-gnu",
+    "agent-control-specification-darwin-x64",
+    "agent-control-specification-darwin-arm64",
+    "agent-control-specification-win32-x64-msvc",
+    "agent-control-specification-opa-linux-x64",
+    "agent-control-specification-opa-linux-arm64",
+    "agent-control-specification-opa-darwin-x64",
+    "agent-control-specification-opa-darwin-arm64",
+    "agent-control-specification-opa-win32-x64",
     # Common deps
     "typescript", "tsup", "vitest", "express", "zod", "@mastra/core",
     "@modelcontextprotocol/sdk", "ws", "commander", "chalk",
@@ -163,6 +202,9 @@ REGISTERED_NPM_PACKAGES = {
     # npm deps from agent-os-vscode
     "@types/glob", "@types/mocha", "@vscode/test-electron",
     "autoprefixer", "glob", "mocha", "postcss", "tailwindcss",
+    # Vendored ACS policy-engine node SDK deps (all real npm packages)
+    "@langchain/core", "langchain", "@openai/agents",
+    "@napi-rs/cli",
 }
 
 # Known Cargo crate names
@@ -172,6 +214,12 @@ REGISTERED_CARGO_PACKAGES = {
     "agentmesh-mcp", "base64", "cedar-policy", "clap", "hmac",
     "opentelemetry", "regex", "regorus",
     "assert_cmd", "predicates",
+    # Vendored ACS policy-engine crate deps (all real crates.io crates)
+    "url", "ureq", "jsonschema", "criterion", "tokio", "rmcp",
+    "async-openai", "rig-core", "napi", "napi-derive", "napi-build",
+    "pyo3", "pyo3-build-config",
+    # Vendored ACS workspace crates (internal, path-referenced)
+    "agent_control_specification", "agent_control_specification_core",
 }
 
 # Patterns that are always safe (not package names)
@@ -200,11 +248,11 @@ def extract_package_names(install_args: str) -> list[str]:
             continue
         # Skip flags
         if token.startswith("-") or token in SAFE_PATTERNS:
-            # -r/--requirement take a filename as the next argument
-            if token in ("-r", "--requirement", "-c", "--constraint"):
+            # -e/--editable and -r/--requirement take a path as the next argument.
+            if token in ("-e", "--editable", "-r", "--requirement", "-c", "--constraint"):
                 skip_next = True
             continue
-        if token.startswith((".", "/", "\\", "http", "git+")):
+        if token.startswith((".", "/", "\\", "http", "git+")) or "/" in token or "\\" in token:
             continue
         # Skip tokens that look like code, not package names
         if any(c in token for c in ('(', ')', '=', '"', "'", ":", "[", "]")):
@@ -238,13 +286,15 @@ def check_file(filepath: str) -> list[str]:
 
     for match in PIP_INSTALL_RE.finditer(content):
         line_num = content[:match.start()].count("\n") + 1
+        line_start = content.rfind("\n", 0, match.start()) + 1
+        before_pip = content[line_start:match.start()]
+        if re.search(r'\bprint\s*\(', before_pip):
+            continue
         # For shell scripts, filter out matches that are inside a comment
         # or an echo/printf invocation. Only the current shell command
         # segment (split on ;, &&, ||, |) is examined so that
         # `echo done; pip install foo` is still flagged.
         if is_shell:
-            line_start = content.rfind("\n", 0, match.start()) + 1
-            before_pip = content[line_start:match.start()]
             # Take the last command segment on this line.
             segment = re.split(r';|&&|\|\||(?<!\|)\|(?!\|)', before_pip)[-1]
             if "#" in segment:
@@ -472,7 +522,7 @@ def check_package_json(filepath: str) -> list[str]:
         return findings
 
     registered_lower = {p.lower() for p in REGISTERED_NPM_PACKAGES}
-    for section in ("dependencies", "devDependencies", "peerDependencies"):
+    for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
         for pkg in data.get(section, {}):
             if pkg.lower() not in registered_lower:
                 findings.append(

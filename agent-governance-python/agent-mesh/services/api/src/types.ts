@@ -77,6 +77,13 @@ export interface HandshakeResponse {
   trust_score: number;
   capabilities_granted: string[];
   signature: string;
+  // Server-supplied components of the signed envelope so callers can
+  // verify ``signature`` against ``${signing_domain}\n${agent_did}\n${server_nonce}\n${server_timestamp}\n${challenge_digest}``.
+  signing_domain: string;
+  agent_did: string;
+  server_nonce: string;
+  server_timestamp: string;
+  challenge_digest: string;
 }
 
 export interface ScoreResponse {

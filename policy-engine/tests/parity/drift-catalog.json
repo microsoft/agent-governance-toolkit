@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "rust-sdk-prebuilt-runtime",
+      "sdk": "rust",
+      "category": "construction",
+      "status": "intended",
+      "description": "The Rust SDK host surface accepts or wraps a pre-built core Runtime while other SDKs construct the native runtime through FFI bindings.",
+      "parity_scope": "Runtime decisions, effects, resource limits, and reserved error reasons remain canonical.",
+      "allowed_difference": "Perf telemetry and dispatchers may be selected before SDK wrapper construction rather than through an FFI constructor parameter."
+    },
+    {
+      "id": "node-camelcase-facade",
+      "sdk": "node",
+      "category": "naming",
+      "status": "intended",
+      "description": "The Node facade exposes JavaScript camelCase result properties and enum members while native JSON remains snake_case.",
+      "parity_scope": "Wire values for decisions, intervention points, enforcement modes, error reasons, and effects remain canonical.",
+      "allowed_difference": "Facade property names such as transformedPolicyTarget and policyInput differ from native transformed_policy_target and policy_input."
+    },
+    {
+      "id": "python-snakecase-facade",
+      "sdk": "python",
+      "category": "naming",
+      "status": "intended",
+      "description": "The Python facade uses Pythonic snake_case dataclass properties and enum members over the native runtime JSON.",
+      "parity_scope": "Wire values for decisions, intervention points, enforcement modes, error reasons, and effects remain canonical.",
+      "allowed_difference": "Enum member names are uppercase while enum values are canonical lower case strings."
+    },
+    {
+      "id": "dotnet-pascalcase-facade",
+      "sdk": "dotnet",
+      "category": "naming",
+      "status": "intended",
+      "description": "The .NET facade uses PascalCase types and properties while preserving canonical JSON values at the runtime boundary.",
+      "parity_scope": "Wire values for decisions, intervention points, enforcement modes, error reasons, and effects remain canonical.",
+      "allowed_difference": "Public CLR member names follow .NET naming conventions."
+    },
+    {
+      "id": "perf-telemetry-exporter-ownership",
+      "sdk": "cross-sdk",
+      "category": "telemetry",
+      "status": "intended",
+      "description": "Core owns event construction but hosts and integrations own exporter plumbing and provider naming.",
+      "parity_scope": "Redaction, low cardinality event content, and perf telemetry levels remain canonical.",
+      "allowed_difference": "Exporter resource attributes and provider labels may differ by host integration."
+    },
+    {
+      "id": "native-extension-availability",
+      "sdk": "cross-sdk",
+      "category": "test-harness",
+      "status": "intended",
+      "description": "Python and Node parity tests require their native extension build products while Rust core tests run directly.",
+      "parity_scope": "When the native extension is present, evaluated decisions and reasons must match the shared fixtures.",
+      "allowed_difference": "Language test harnesses may skip native runtime checks when the extension is not built by that harness."
+    }
+  ]
+}

@@ -5,7 +5,7 @@ Get from zero to governed AI agents in under 5 minutes.
 ## Install
 
 ```bash
-pip install agent-governance-toolkit
+pip install agent-governance-toolkit[full]
 ```
 
 !!! info "Other languages"

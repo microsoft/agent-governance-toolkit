@@ -27,16 +27,10 @@ graph LR
 pip install agent-governance-toolkit[full]
 ```
 
-または、個別のパッケージをインストールします。
+`[full]` エクストラには、すべてのコンポーネントが含まれます。
 
 ```bash
-pip install agent-os-kernel        # Policy enforcement + framework integrations
-pip install agentmesh-platform     # Zero-trust identity + trust cards
-pip install agent-governance-toolkit    # OWASP ASI verification + integrity CLI
-pip install agent-sre              # SLOs, error budgets, chaos testing
-pip install agentmesh-runtime       # Execution supervisor + privilege rings
-pip install agentmesh-marketplace      # Plugin lifecycle management
-pip install agentmesh-lightning        # RL training governance
+pip install agent-governance-toolkit[full]  # ポリシー適用、ゼロトラスト ID、OWASP ASI 検証、SRE、マーケットプレイス、RL ガバナンス
 ```
 
 ### TypeScript / Node.js
@@ -221,12 +215,12 @@ agent-governance integrity --manifest integrity.json
 
 | 内容 | リンク |
 |------|--------|
-| 完全なAPIリファレンス (Python) | [agent-governance-python/agent-os/README.md](agent-governance-python/agent-os/README.md) |
+| 完全なAPIリファレンス (Python) | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
 | TypeScript パッケージ ドキュメント | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
-| .NET パッケージ ドキュメント | [agent-governance-dotnet/README.md](agent-governance-dotnet/README.md) |
-| OWASP カバレッジマップ | [docs/OWASP-COMPLIANCE.md](docs/OWASP-COMPLIANCE.md) |
-| フレームワーク統合 | [agent-governance-python/agent-os/src/agent_os/integrations/](agent-governance-python/agent-os/src/agent_os/integrations/) |
-| サンプルアプリケーション | [agent-governance-python/agent-os/examples/](agent-governance-python/agent-os/examples/) |
+| .NET パッケージ ドキュメント | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
+| OWASP カバレッジマップ | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
+| フレームワーク統合 | [agent-governance-python/agent-os/src/agent_os/integrations/](../../agent-governance-python/agent-os/src/agent_os/integrations/) |
+| サンプルアプリケーション | [agent-governance-python/agent-os/examples/](../../agent-governance-python/agent-os/examples/) |
 | コントリビュートガイド | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
 | 変更履歴 | [CHANGELOG.md](../../CHANGELOG.md) |
 

@@ -9,7 +9,7 @@ Agent-OS is a **governance-first kernel for AI agents** — a Python framework p
 - **Layer 1 (Primitives):** Core identity (CMVK), credentials (CaaS), execution memory (EMK)
 - **Layer 2 (Infrastructure):** Inter-agent trust protocol (IATP), agent message bus (AMB), agent trust registry (ATR)
 - **Layer 3 (Framework):** Control plane, observability, nexus orchestration
-- **Layer 4 (Intelligence):** Semantic context awareness (SCAK), mute-agent, MCP kernel server
+- **Layer 4 (Intelligence):** MCP kernel server
 
 ## Build & Test Commands
 

@@ -20,6 +20,8 @@ Each ADR captures:
 - [ADR 0007: External JWKS federation for cross-org identity](0007-external-jwks-federation-for-cross-org-identity.md)
 - [ADR 0008: Cross-org policy federation](0008-cross-org-policy-federation.md)
 - [ADR 0009: RFC 9334 (RATS) architecture alignment](0009-rfc-9334-rats-architecture-alignment.md)
+- [ADR 0027: Adopt a dual-stack migration for MCP `2026-07-28`](0027-adopt-dual-stack-migration-for-mcp-2026-07-28.md)
+- [ADR 0028: AGT Studio, a single unified UI for governance](0028-agt-studio-unified-ui.md)
 
 ## Template
 

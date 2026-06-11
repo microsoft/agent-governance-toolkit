@@ -1,0 +1,31 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "openai-moderation"
+extends: []
+policies:
+  openai_moderation:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.openai_moderation.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    annotations:
+      openai_mod:
+        from: "$policy_target.text"
+    policy:
+      id: openai_moderation
+      query: data.agent_control_specification.openai_moderation.input_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    annotations:
+      openai_mod:
+        from: "$policy_target.text"
+    policy:
+      id: openai_moderation
+      query: data.agent_control_specification.openai_moderation.output_verdict
+annotators:
+  openai_mod:
+    type: classifier

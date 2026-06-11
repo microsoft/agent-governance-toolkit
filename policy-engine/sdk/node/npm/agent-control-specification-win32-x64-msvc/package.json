@@ -1,0 +1,13 @@
+{
+  "name": "agent-control-specification-win32-x64-msvc",
+  "version": "0.3.1-beta.0",
+  "description": "Native Agent Control Specification Node.js binding for Windows x64 MSVC.",
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "main": "agent-control-specification.win32-x64-msvc.node",
+  "files": ["agent-control-specification.win32-x64-msvc.node"],
+  "scripts": {
+    "prepack": "node ../../scripts/verify-package-file.mjs agent-control-specification.win32-x64-msvc.node"
+  }
+}

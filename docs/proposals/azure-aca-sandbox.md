@@ -169,7 +169,7 @@ to `create_session`:
 > wrapper is required. Older code that wrapped policies via
 > `types.SimpleNamespace(...)` still works (the provider keeps reading
 > via `getattr`), but new code should declare the fields directly in
-> YAML. See [`examples/quickstart/azure_sandbox_step5_test.py`](../../examples/quickstart/azure_sandbox_step5_test.py)
+> YAML. See [`examples/quickstart/aca_sandbox_test.py`](../../examples/quickstart/aca_sandbox_test.py)
 > for a runnable end-to-end example.
 
 A typical policy looks like this — every field below is part of the
@@ -552,10 +552,10 @@ The agent's policy uses the native `PolicyDocument` schema. Every field —
 rules, sandbox resource caps, network allowlist, and `network_default` —
 lives in YAML; no `SimpleNamespace` wrapper is needed. A complete,
 runnable version of this exact pattern lives at
-[`examples/quickstart/azure_sandbox_step5_test.py`](../../examples/quickstart/azure_sandbox_step5_test.py).
+[`examples/quickstart/aca_sandbox_test.py`](../../examples/quickstart/aca_sandbox_test.py).
 
 ```yaml
-# policies/research_agent.yaml
+# policies/aca_research_agent.yaml
 name: research-agent
 version: "2"
 
@@ -644,7 +644,7 @@ provider:
 ```python
 from agent_os.policies import PolicyDocument
 
-policy = PolicyDocument.from_yaml("policies/research_agent.yaml")
+policy = PolicyDocument.from_yaml("policies/aca_research_agent.yaml")
 # policy.network_allowlist, policy.defaults.max_cpu, etc. are all
 # populated from the YAML and consumed natively by ACASandboxProvider.
 ```
@@ -652,7 +652,7 @@ policy = PolicyDocument.from_yaml("policies/research_agent.yaml")
 ### 5.2 — The agent
 
 ```python
-# research_agent.py
+# aca_research_agent.py
 """
 Governed research agent that runs LLM-generated analysis code in an
 Azure Container Apps sandbox under an AGT policy.
@@ -666,7 +666,7 @@ The agent never trusts the LLM. Every step it generates is:
      sandbox id, and the egress decisions Azure made for the step.
 
 Run with:
-    AZURE_SUBSCRIPTION_ID=...   az login   python research_agent.py ticket.json
+    AZURE_SUBSCRIPTION_ID=...   az login   python aca_research_agent.py ticket.json
 """
 from __future__ import annotations
 
@@ -761,14 +761,13 @@ class ResearchAgent:
     def __init__(
         self,
         provider: ACASandboxProvider,
-        policy: Any,                    # SimpleNamespace wrapper around PolicyDocument
+        policy: PolicyDocument,
         agent_id: str,
     ) -> None:
         self._provider = provider
         self._policy = policy
         self._agent_id = agent_id
         self._handle = None
-        self._sandbox_group = provider._sandbox_group  # needed for egress audit
 
     async def __aenter__(self) -> "ResearchAgent":
         self._handle = await self._provider.create_session_async(
@@ -832,23 +831,38 @@ class ResearchAgent:
 
         result = exec_handle.result
 
-        # 2. Pull the Azure egress audit trail for this step. The data-plane
-        #    SDK is sync today, so we hop to a worker thread to avoid blocking
-        #    the event loop.
-        egress = []
-        try:
-            decisions = await asyncio.to_thread(
-                self._provider._data_client.get_egress_decisions,
-                sid, self._sandbox_group,
-            )
-            egress = decisions.get("decisions", [])[-25:]  # last 25 decisions
-        except Exception:  # noqa: BLE001
-            LOG.debug("egress decision audit unavailable", exc_info=True)
+        # 2. Best-effort pull of the Azure egress audit trail. Newer SDK
+        #    builds expose ``SandboxClient.get_egress_decisions``; the
+        #    0.1.0b1 preview does not. We probe via getattr and fall
+        #    back to scanning combined stdout/stderr for the proxy's
+        #    HTTP 403 marker, which is sufficient to classify the step.
+        egress: list[dict[str, Any]] = []
+        sb_cache = getattr(self._provider, "_sandboxes", {})
+        sandbox_client = sb_cache.get((self._agent_id, sid))
+        get_decisions = getattr(sandbox_client, "get_egress_decisions", None)
+        if callable(get_decisions):
+            try:
+                decisions = await asyncio.to_thread(get_decisions)
+                if isinstance(decisions, dict):
+                    egress = (decisions.get("decisions") or [])[-25:]
+            except Exception:  # noqa: BLE001
+                LOG.debug("egress decision audit unavailable", exc_info=True)
+
+        combined = (result.stdout or "") + (result.stderr or "")
+        egress_denied_in_audit = any(
+            (d.get("action") or "").lower() == "deny" for d in egress
+        )
+        # The egress proxy returns HTTP 403; snippets that catch the
+        # urllib error also print an "egress-blocked" marker.
+        egress_denied_in_output = (
+            "egress-blocked" in combined
+            or "HTTP Error 403" in combined
+        )
 
         if getattr(result, "killed", False):
             decision = "timeout"
             reason = getattr(result, "kill_reason", "exceeded timeout_seconds")
-        elif any(d.get("action") == "Deny" for d in egress):
+        elif egress_denied_in_audit or egress_denied_in_output:
             decision = "blocked-at-egress"
             reason = "Azure egress proxy denied at least one host"
         elif result.success:
@@ -877,13 +891,15 @@ class ResearchAgent:
 async def main(ticket_path: str) -> int:
     ticket = Ticket(**json.loads(open(ticket_path, encoding="utf-8").read()))
     # All sandbox fields are native to PolicyDocument — load and pass.
-    policy = PolicyDocument.from_yaml("policies/research_agent.yaml")
+    policy = PolicyDocument.from_yaml("policies/aca_research_agent.yaml")
 
     provider = ACASandboxProvider(
         resource_group=os.environ["AZURE_RG"],
         sandbox_group=os.environ.get("AZURE_SANDBOX_GROUP", "agents"),
+        region=os.environ.get("AZURE_REGION", "westus2"),
+        subscription_id=os.environ.get("AZURE_SUBSCRIPTION_ID"),
         # Default "ubuntu" image has no python3; use a Python sandbox
-        # image so execute_code's `… | python3` invocation works.
+        # image so execute_code's `... | python3` invocation works.
         disk=os.environ.get("AZURE_SANDBOX_DISK", "python-3.13"),
         ensure_group_location=os.environ.get("AZURE_REGION", "westus2"),
     )

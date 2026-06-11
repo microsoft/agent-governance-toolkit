@@ -1,0 +1,18 @@
+[package]
+name = "agent_control_specification_openai"
+version = "0.3.1-beta.0"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+description = "async-openai chat tool-call guard backed by Agent Control Specification intervention points"
+
+[lib]
+doctest = false
+
+[dependencies]
+agent_control_specification = { version = "0.3.1-beta.0", path = "../../sdk/rust" }
+async-openai = { version = "0.34", features = ["chat-completion-types"] }
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }

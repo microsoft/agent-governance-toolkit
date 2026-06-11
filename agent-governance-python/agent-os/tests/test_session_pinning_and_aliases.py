@@ -62,12 +62,12 @@ class TestSessionPolicyPinning:
         ctx.policy.require_human_approval = True
         assert integration.policy.require_human_approval is False
 
-    def test_pre_execute_uses_integration_policy_not_context(self):
-        """pre_execute currently reads self.policy — this documents the behavior.
+    def test_pre_execute_uses_pinned_context_policy(self):
+        """pre_execute reads ctx.policy so mid-session mutations do not leak in.
 
-        The session pinning fix ensures create_context() snapshots policy,
-        but pre_execute still reads the live integration policy. A follow-up
-        should refactor pre_execute to use ctx.policy for full isolation.
+        create_context() snapshots the policy, and pre_execute enforces that
+        snapshot. Tightening the live integration policy after the context is
+        created must not change enforcement for the existing context.
         """
         policy = GovernancePolicy(name="permissive", max_tool_calls=100)
         integration = _StubIntegration(policy=policy)
@@ -76,11 +76,40 @@ class TestSessionPolicyPinning:
         # Tighten the live policy AFTER context creation
         integration.policy.max_tool_calls = 0
 
-        # pre_execute reads self.policy (the live one), so this should BLOCK
+        # pre_execute reads ctx.policy (the pinned snapshot), so this is ALLOWED
         allowed, reason = integration.pre_execute(ctx, "test input")
-        assert allowed is False
-        # But the context's pinned policy still has the original value
+        assert allowed is True
+        # The context's pinned policy still has the original value
         assert ctx.policy.max_tool_calls == 100
+
+    def test_mid_session_mutation_does_not_change_enforcement(self):
+        """A mid-session policy mutation must not affect an existing context.
+
+        Covers pre-execute checks that previously read self.policy:
+        max_tool_calls and human approval. A context created before the
+        mutation keeps the permissive snapshot, while a context created
+        after the mutation picks up the tightened live policy.
+        """
+        policy = GovernancePolicy(
+            name="permissive",
+            max_tool_calls=100,
+            require_human_approval=False,
+        )
+        integration = _StubIntegration(policy=policy)
+        ctx = integration.create_context("agent-1")
+
+        # Mutate the live policy to be maximally restrictive AFTER context creation
+        integration.policy.require_human_approval = True
+        integration.policy.max_tool_calls = 0
+
+        # Enforcement still uses the pinned snapshot, so the call is allowed
+        allowed, reason = integration.pre_execute(ctx, "test input")
+        assert allowed is True
+
+        # A brand new context picks up the tightened live policy and is blocked
+        ctx2 = integration.create_context("agent-2")
+        allowed2, _ = integration.pre_execute(ctx2, "anything")
+        assert allowed2 is False
 
 
 # ── Tool Alias Registry Tests ───────────────────────────────

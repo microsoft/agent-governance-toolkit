@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "reasons": [
+    {
+      "reason": "runtime_error:manifest_invalid",
+      "producer": "core-runtime",
+      "cause": "The manifest failed validation or bound an undefined policy."
+    },
+    {
+      "reason": "runtime_error:intervention_point_unknown",
+      "producer": "core-runtime",
+      "cause": "The request named an intervention point the manifest does not configure."
+    },
+    {
+      "reason": "runtime_error:path_missing",
+      "producer": "core-runtime",
+      "cause": "A required path did not resolve."
+    },
+    {
+      "reason": "runtime_error:path_type_mismatch",
+      "producer": "core-runtime",
+      "cause": "A path segment met an incompatible JSON type."
+    },
+    {
+      "reason": "runtime_error:tool_unknown",
+      "producer": "core-runtime",
+      "cause": "The projected tool name is absent from the catalog."
+    },
+    {
+      "reason": "runtime_error:annotation_failed",
+      "producer": "core-runtime",
+      "cause": "An annotator dispatch failed."
+    },
+    {
+      "reason": "runtime_error:annotation_timeout",
+      "producer": "core-runtime",
+      "cause": "An annotator dispatch timed out."
+    },
+    {
+      "reason": "runtime_error:policy_invocation_failed",
+      "producer": "core-runtime",
+      "cause": "Policy preparation or dispatch failed."
+    },
+    {
+      "reason": "runtime_error:policy_output_invalid",
+      "producer": "core-runtime",
+      "cause": "The dispatcher output could not be normalized."
+    },
+    {
+      "reason": "runtime_error:effect_invalid",
+      "producer": "core-runtime",
+      "cause": "An effect was malformed or did not apply to its target."
+    },
+    {
+      "reason": "runtime_error:effect_target_forbidden",
+      "producer": "core-runtime",
+      "cause": "An effect path pointed outside $policy_target."
+    },
+    {
+      "reason": "runtime_error:resource_limit_exceeded",
+      "producer": "core-runtime",
+      "cause": "Evaluation or manifest loading exceeded a configured resource limit."
+    },
+    {
+      "reason": "runtime_error:approval_action_mismatch",
+      "producer": "core-runtime",
+      "cause": "An approved action identity did not match the current action identity."
+    },
+    {
+      "reason": "runtime_error:approval_resolver_failed",
+      "producer": "sdk-approval",
+      "cause": "An SDK approval resolver raised, returned an unrecognized result, or otherwise failed closed."
+    },
+    {
+      "reason": "runtime_error:streaming_unsupported",
+      "producer": "sdk-streaming",
+      "cause": "An SDK streaming helper could not assemble a complete response snapshot for evaluation and failed closed."
+    },
+    {
+      "reason": "runtime_error:adapter_unsupported",
+      "producer": "sdk-adapter",
+      "cause": "An SDK adapter detected an unmediated framework method or unsupported call shape and failed closed instead of invoking upstream code."
+    },
+    {
+      "reason": "runtime_error:request_invalid",
+      "producer": "sdk-wire",
+      "cause": "A JSON wire binding received a malformed intervention request envelope and failed closed before policy input construction."
+    }
+  ]
+}

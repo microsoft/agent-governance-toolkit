@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-control-specification.dev/schemas/drift-catalog.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sdk",
+          "category",
+          "status",
+          "description",
+          "parity_scope",
+          "allowed_difference"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "sdk": {
+            "type": "string",
+            "enum": [
+              "rust",
+              "python",
+              "node",
+              "dotnet",
+              "cross-sdk"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "construction",
+              "naming",
+              "telemetry",
+              "test-harness"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "intended"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "parity_scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allowed_difference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expires_when": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -6,8 +6,12 @@ Ensures PRs contain properly filled governance attestations with exactly one che
 
 ## Quick Start
 
+> **Breaking change (vNEXT):** `toolkit-version` is now **required**. Pin to an exact published release (e.g. `3.7.0`); wildcards, floating refs, post-releases (`.post1`), dev-releases (`.dev0`), and local-version identifiers (`+local`) are rejected. See [Accepted version syntax](#accepted-version-syntax) below. Consumers should pin this action to the major-tag they were already using (e.g. `@v3`) and bump `toolkit-version` as new releases ship.
+
 ```yaml
 - uses: microsoft/agent-governance-toolkit/action/governance-attestation@v2
+  with:
+    toolkit-version: "3.7.0"
 ```
 
 This validates the current PR's description against the standard 7-section governance attestation.
@@ -50,7 +54,7 @@ This validates the current PR's description against the standard 7-section gover
 | `required-sections` | YAML list of section titles (one per line) | No | Standard 7 sections |
 | `min-body-length` | Minimum PR body length | No | `40` |
 | `python-version` | Python version to use | No | `3.12` |
-| `toolkit-version` | Toolkit version to install | No | (latest) |
+| `toolkit-version` | Exact toolkit version to install (e.g. `3.7.0`) | **Yes** | |
 
 ## Outputs
 
@@ -220,3 +224,15 @@ Use `continue-on-error` to treat failures as warnings:
 ## License
 
 MIT License - see [LICENSE](../../LICENSE) for details.
+
+## Accepted version syntax
+
+The `toolkit-version` input is validated against this regex before installation:
+
+```regex
+^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$
+```
+
+Accepted: `3.7.0`, `3.7.0a1`, `3.7.0b2`, `3.7.0rc1`.
+
+Rejected (and why): `3.7.0.post1` / `3.7.0.dev0` (transient pre/post artifacts), `3.7.0+local` (PEP 440 local-version identifiers can override registry resolution under some pip resolvers), `3.7.*` / `>=3.7` (floating), `3.7.0; python_version > '3'` (environment markers), URL/VCS references, and anything else outside the regex above.

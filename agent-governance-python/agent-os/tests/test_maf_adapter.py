@@ -79,8 +79,24 @@ def _make_function_context(
 class TestGovernancePolicyMiddleware:
     @pytest.fixture
     def allow_evaluator(self) -> PolicyEvaluator:
-        """An evaluator with no loaded policies → allows everything."""
-        return PolicyEvaluator()
+        """An evaluator that allows everything.
+
+        The engine now fails closed by default (issue #2926), so an empty
+        evaluator denies. Load a permissive policy with an explicit allow
+        default to express "allow everything".
+        """
+        from agent_os.policies import (
+            PolicyAction,
+            PolicyDefaults,
+            PolicyDocument,
+        )
+
+        return PolicyEvaluator(policies=[
+            PolicyDocument(
+                name="permissive",
+                defaults=PolicyDefaults(action=PolicyAction.ALLOW),
+            )
+        ])
 
     @pytest.fixture
     def deny_evaluator(self, monkeypatch) -> PolicyEvaluator:

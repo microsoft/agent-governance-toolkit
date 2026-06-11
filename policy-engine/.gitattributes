@@ -1,0 +1,29 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sln text eol=crlf
+*.sh text eol=lf
+
+Cargo.lock text eol=lf linguist-generated=true
+**/package-lock.json text eol=lf linguist-generated=true
+**/dist/** linguist-generated=true
+**/target/** linguist-generated=true
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.nupkg binary
+*.whl binary
+*.dll binary
+*.dylib binary
+*.so binary
+*.node binary
+*.wasm binary

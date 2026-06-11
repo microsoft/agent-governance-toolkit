@@ -5,6 +5,11 @@
 # use case before deploying to production. Microsoft does not guarantee
 # that these rules are comprehensive or sufficient for your security
 # requirements.
+#
+# This in-process sandbox is a defense-in-depth layer, NOT a true security
+# boundary. For untrusted code, run in a separate OS process with seccomp /
+# AppArmor / landlock / Job-Objects, a container, a microVM (Firecracker /
+# gVisor), or a WASM runtime.
 
 version: "1.0"
 name: sandbox-safety
@@ -17,16 +22,61 @@ disclaimer: >
   customized for your specific security requirements.
 
 sandbox:
+  # Top-level module names blocked at import time AND shadowed in
+  # sys.modules during execute_sandboxed() so that previously-cached
+  # references (e.g. sys.modules['os']) cannot be reached either.
   blocked_modules:
-    - subprocess      # shell command execution
-    - os              # filesystem and process operations
-    - shutil          # high-level file operations (copy, move, delete)
-    - socket          # raw network access
-    - ctypes          # foreign function interface / memory access
-    - importlib       # dynamic module loading (bypass vector)
+    # --- Process / shell execution ----------------------------------
+    - subprocess         # shell command execution
+    - os                 # filesystem and process operations
+    - shutil             # high-level file operations (copy, move, delete)
+    - posix              # POSIX backend for os
+    - nt                 # NT backend for os (Windows)
+    - _posixsubprocess   # low-level subprocess backend
+    - pty                # pseudo-terminal control
+    - fcntl              # file/IO control
+    - signal             # process signals
+    # --- Networking -------------------------------------------------
+    - socket             # raw network access
+    # --- Native code / FFI ------------------------------------------
+    - ctypes             # foreign function interface / memory access
+    # --- Dynamic code loading ---------------------------------------
+    - importlib          # dynamic module loading (bypass vector)
+    - code               # interactive interpreter / arbitrary exec
+    - codeop             # compile-and-exec helpers
+    - pickle             # deserialisation RCE
+    - marshal            # deserialisation RCE
+    # --- Introspection / sandbox-escape vectors ---------------------
+    - sys                # sys.modules cache traversal
+    - builtins           # direct __builtins__ access
+    - gc                 # live-object graph walks
+    - inspect            # frame / closure introspection
+    # --- Concurrency wrappers around subprocess/os ------------------
+    - multiprocessing    # spawns subprocesses, wraps os
+    - threading          # GIL-aware host-thread access
+    - _thread            # low-level thread API
+    - asyncio            # event loop / subprocess primitives
 
+  # Built-in names replaced with raising stubs inside the restricted
+  # globals returned by ExecutionSandbox.create_restricted_globals().
   blocked_builtins:
-    - exec            # execute arbitrary code strings
-    - eval            # evaluate arbitrary expressions
-    - compile         # compile code objects
-    - __import__      # dynamic import function
+    # --- Arbitrary code execution -----------------------------------
+    - exec               # execute arbitrary code strings
+    - eval               # evaluate arbitrary expressions
+    - compile            # compile code objects
+    - __import__         # dynamic import function
+    # --- Filesystem & I/O -------------------------------------------
+    - open               # arbitrary file open
+    - input              # blocking stdin read
+    - memoryview         # buffer protocol access
+    # --- Debugger / REPL --------------------------------------------
+    - breakpoint         # drops into pdb
+    - help               # interactive help (subprocess on some platforms)
+    # --- Introspection / sandbox-escape -----------------------------
+    - globals            # exposes module globals
+    - locals             # exposes calling frame locals
+    - vars               # exposes any object's __dict__
+    - getattr            # dynamic attribute access (dunder bypass)
+    - setattr            # dynamic attribute mutation
+    - delattr            # dynamic attribute deletion
+

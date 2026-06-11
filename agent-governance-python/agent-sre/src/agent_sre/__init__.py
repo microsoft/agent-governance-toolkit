@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
+# ruff: noqa: E402 — deprecation warning must fire before re-exports
 """Agent SRE — Reliability Engineering for AI Agent Systems.
 
 agent-sre brings Site Reliability Engineering practices to AI agents.
@@ -35,6 +36,15 @@ Quick start::
 See https://github.com/microsoft/agent-governance-toolkit for full documentation.
 """
 
+
+import warnings as _warnings
+_warnings.warn(
+    "agent-sre is deprecated. Use agent-governance-toolkit-cli instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _warnings
 from agent_sre.slo.indicators import SLI, SLIRegistry, SLIValue
 from agent_sre.slo.objectives import SLO, ErrorBudget
 

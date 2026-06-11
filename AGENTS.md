@@ -31,7 +31,7 @@ go there rather than into the repo root or an older shared SDK path.
 | Docs site | `docs/` | Reference docs, tutorials, architecture, package pages |
 | Runnable examples | `examples/` | Self-contained integrations and worked examples |
 | Interactive demos | `examples/demos/` | Live demos, dashboards, real-service walkthroughs |
-| Release pipelines | `.github/pipelines/` | Azure DevOps ESRP publishing and release automation |
+| Release automation | `.github/workflows/` | GitHub Actions release, packaging, SBOM, provenance, and publishing automation |
 | GitHub automation | `.github/` | CI, PR automation, issue templates, CODEOWNERS |
 
 ## Routing Rules
@@ -104,9 +104,27 @@ When bumping the monorepo version (e.g. `3.2.0` → `3.2.1`):
 - After bumping, verify with: `Select-String -Path package-lock.json -Pattern '"<new-version>"'`
   and confirm only the SDK's own entries appear, not transitive deps.
 
+## PR Hygiene
+
+Before opening a PR:
+
+- fix the PR title so it is semantic and consistently formatted
+- ensure commits satisfy DCO/signoff requirements
+- run the relevant docs link checks for changed docs
+- treat expected 403-prone external links as markdown-link-check exceptions, not flaky failures
+- fix spell-check issues on changed lines before requesting review
+
 ## Validation
 
 - Run the narrowest existing tests for the paths you touched.
 - For bug fixes, prefer a regression test that would fail without the change.
 - For docs-only changes, make sure links, commands, and file paths are still correct.
 - For SDK changes, verify language-specific build and test commands in the scoped instructions.
+
+## PR Hygiene
+
+- Before opening a PR, proactively check the expected repository gates instead of waiting for CI feedback.
+- Use a semantic PR title in lowercase conventional-commit style such as `docs: ...`, `fix: ...`, or `feat: ...`.
+- Ensure commits are DCO-compliant by including a signoff (`git commit -s`).
+- For docs PRs, run `python scripts/docs/check_links.py` and `python scripts/docs/check_frontmatter.py` locally first.
+- Avoid markdown links to external sites that return `403` to automated link checkers. When an external source must be cited but the host blocks bots, prefer plain-text or code-formatted URLs in docs and put clickable links in the PR description instead.

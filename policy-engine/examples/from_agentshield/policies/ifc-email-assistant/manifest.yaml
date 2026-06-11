@@ -1,0 +1,25 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "ifc-email-assistant"
+extends: []
+policies:
+  ifc_email_assistant:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.ifc_email_assistant.verdict
+intervention_points:
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: ifc_email_assistant
+      query: data.agent_control_specification.ifc_email_assistant.pre_tool_call_verdict
+tools:
+  read_inbox: {}
+  read_invoice: {}
+  read_medical_record: {}
+  select_internal_recipient: {}
+  select_confidential_recipient: {}
+  select_restricted_recipient: {}
+  send_email: {}

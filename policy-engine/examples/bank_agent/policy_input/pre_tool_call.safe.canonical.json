@@ -1,0 +1,73 @@
+{
+  "annotations": {
+    "tool_args_classifier": {
+      "amount_risk": "none",
+      "labels": [
+        "customer_profile"
+      ],
+      "risk_score": 0.1
+    }
+  },
+  "intervention_point": "pre_tool_call",
+  "snapshot": {
+    "actor": {
+      "id": "customer-123",
+      "risk_tier": "standard",
+      "roles": [
+        "customer"
+      ]
+    },
+    "agent": {
+      "capabilities": [
+        "balance_lookup",
+        "wire_transfer"
+      ],
+      "id": "bank-agent-instance-001",
+      "mode": "production",
+      "name": "bank-agent",
+      "version": "1.0.0-demo"
+    },
+    "session": {
+      "created_at": "2025-02-03T10:15:00Z",
+      "id": "session-bank-001"
+    },
+    "tool_call": {
+      "args": {
+        "account_id": "CHK-00112233",
+        "data_labels": [
+          "customer_profile"
+        ],
+        "fields": [
+          "available_balance"
+        ]
+      },
+      "id": "call-lookup-001",
+      "name": "lookup_account"
+    }
+  },
+  "policy_target": {
+    "kind": "tool_args",
+    "path": "$.tool_call.args",
+    "value": {
+      "account_id": "CHK-00112233",
+      "data_labels": [
+        "customer_profile"
+      ],
+      "fields": [
+        "available_balance"
+      ]
+    }
+  },
+  "tool": {
+    "clearance": [
+      "banking",
+      "customer_data"
+    ],
+    "id": "lookup_account",
+    "name": "lookup_account",
+    "security_labels": [
+      "customer_profile"
+    ],
+    "type": "Tool"
+  }
+}

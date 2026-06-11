@@ -11,8 +11,9 @@ In data-heavy workflows, there is a second question that matters equally:
 > Is the **data** this agent is about to use actually trustworthy right now?
 
 An agent can be fully authorized to query a dataset. But if that dataset
-failed freshness checks, validation tests, or ownership requirements
-earlier that day, authorization alone is not enough.
+failed freshness checks, validation tests, ownership requirements, or
+has drifted significantly from its expected statistical behavior,
+authorization alone is not enough.
 
 ## The Pattern
 
@@ -27,9 +28,12 @@ Request
   │       └─ YES → proceed to Layer 2
   │
   └─ Layer 2: Data Quality Registry
-      └─ Is the target dataset trustworthy right now?
-          ├─ NO  → Block (data quality violation)
-          └─ YES → Allow + write to unified audit log
+    └─ Is the target dataset trustworthy right now?
+        ├─ Freshness Check
+        ├─ Quality Check
+        ├─ Drift Check
+        ├─ Any failure → Block
+        └─ All pass → Allow + write to unified audit log
 ```
 
 The request is blocked if **either** layer fails.
@@ -48,6 +52,15 @@ Reason:
   - Dataset stale by 14h (threshold: 6h)
   - Quality score: 0.72 (below 0.85 minimum)
   - Failed tests: not_null_user_id, accepted_values_event_type
+
+Another dataset may be fresh and high quality but still be blocked:
+
+Dataset: customer_behavior
+
+Reason:
+  - Drift score: 0.41
+  - Drift threshold: 0.25
+  - Statistical behavior differs from expected baseline
 ```
 
 Without Layer 2, the agent queries broken data with a clean audit trail.
@@ -66,9 +79,12 @@ that travels as a `data-quality` scheme in the CTEF v0.3.2
 ```
 
 Where the snapshot contains:
-- `freshness_at` — last successful validation timestamp
-- `validation_status` — pass | warn | fail
-- `dataset_owner_did` — DID of the dataset owner
+- freshness_at — last successful validation timestamp
+- validation_status — pass | warn | fail
+- dataset_owner_did — DID of the dataset owner
+- quality_score — current quality assessment
+- drift_score — statistical drift measurement relative to baseline
+- drift_threshold — maximum acceptable drift before governance blocks access
 
 This means:
 - AGT evaluates the **typed fields** at policy decision time
@@ -122,6 +138,13 @@ Agent 'analyst-agent-01' requesting 'database_query' on dataset 'revenue_metrics
 Agent 'report-agent-02' requesting 'database_query' on dataset 'revenue_metrics'
   [AGT_POLICY] ✗ BLOCKED — Role report-agent-02 cannot use tool database_query
   Final decision: BLOCKED (agt_policy)
+```
+```
+--- Scenario 4: Authorized agent, high drift dataset ---
+Agent 'analyst-agent-01' requesting 'database_query' on dataset 'customer_behavior'
+  [AGT_POLICY] ✓ ALLOWED — Agent authorized for action
+  [DATA_QUALITY] ✗ BLOCKED — Drift score 0.41 exceeds threshold 0.25
+  Final decision: BLOCKED (data_quality)
 ```
 
 ## The Data Quality Registry

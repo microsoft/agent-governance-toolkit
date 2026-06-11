@@ -36,7 +36,7 @@ Community-written content about agent governance, security, and the toolkit.
 | [Decentralized Identity in Multi-Agent Systems — From Theory to Production](https://dev.to/moltycel/decentralized-identity-in-multi-agent-systems-from-theory-to-production-1oe3) | [@MoltyCel](https://github.com/MoltyCel) | Dev.to |
 | [Scaling AI Agents from 10 to 10,000 — Governance Lessons from the Trenches](https://dev.to/zhangzeyu/scaling-ai-agents-from-10-to-10000-governance-lessons-from-the-trenches-31pd) | [@lawcontinue](https://github.com/lawcontinue) | Dev.to |
 | [OWASP Agentic Top 10 — What Every AI Developer Should Know in 2026](https://dev.to/zhangzeyu/owasp-agentic-top-10-what-every-ai-developer-should-know-in-2026-55hi) | [@lawcontinue](https://github.com/lawcontinue) | Dev.to |
-| [EU AI Act for AI Agent Developers: A Practical Compliance Checklist](https://eu-ai-act.ai-mvp.com/2026/04/10/eu-ai-act-compliance-checklist-for-ai-agent-developers/) | [@carloshvp](https://github.com/carloshvp) | ai-mvp.com |
+| [EU AI Act for AI Agent Developers: A Practical Compliance Checklist](https://governance.ai-mvp.com/2026/04/10/eu-ai-act-compliance-checklist-for-ai-agent-developers/) | [@carloshvp](https://github.com/carloshvp) | ai-mvp.com |
 | [MCP Security: Why Your AI Agents Need a Firewall for Tool Calls](https://dev.to/aymenhmaidi/mcp-security-why-your-ai-agents-tool-calls-need-a-firewall-3h48) | [@aymenhmaidiwastaken](https://github.com/aymenhmaidiwastaken) | Dev.to |
 
 ---
@@ -59,8 +59,8 @@ We welcome contributions of all kinds — code, documentation, bug reports, and 
 
 | Article | Author | Topic |
 |---------|--------|-------|
-| [From Chatbot to Autonomous Agent: A Governance Maturity Model](agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
-| [Comparing Agent Governance Approaches](agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
+| [From Chatbot to Autonomous Agent: A Governance Maturity Model](../agent-governance-python/agent-mesh/docs/blog/governance-maturity-model.md) | @lawcontinue | Governance maturity framework for AI agent deployments |
+| [Comparing Agent Governance Approaches](../agent-governance-python/agent-mesh/docs/blog/comparing-governance-approaches.md) | @copilot | Comparative review of prompt guardrails, platform restrictions, policy-as-code, and regulatory compliance |
 
 ## Standards Alignment
 
@@ -68,7 +68,7 @@ AGT maps to established security and compliance frameworks:
 
 | Standard | Coverage |
 |----------|----------|
-| [OWASP Agentic Top 10](docs/OWASP-COMPLIANCE.md) | 10/10 risks covered |
+| [OWASP Agentic Top 10](../docs/compliance/owasp-agentic-top10-architecture.md) | All ASI risk categories covered |
 | [NIST AI RMF](https://www.nist.gov/artificial-intelligence) | Govern, Map, Measure, Manage functions |
 | [EU AI Act](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | High-risk system compliance controls |
 | [OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085) | 100% passing |

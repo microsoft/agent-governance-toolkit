@@ -1,0 +1,112 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: "bank-agent"
+extends: []
+policies:
+  bank_agent_rego:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.bank_agent_rego.verdict
+intervention_points:
+  agent_startup:
+    policy_target: "$.agent"
+    policy_target_kind: agent_metadata
+    annotations:
+      startup_classifier:
+        from: "$.agent.name"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.agent_startup_verdict
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    annotations:
+      prompt_classifier:
+        from: "$.input.text"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.input_verdict
+  pre_model_call:
+    policy_target: "$.model_request"
+    policy_target_kind: model_request
+    annotations:
+      model_request_classifier:
+        from: "$policy_target.messages"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.pre_model_call_verdict
+  post_model_call:
+    policy_target: "$.model_response"
+    policy_target_kind: model_response
+    annotations:
+      model_response_classifier:
+        from: "$policy_target.message.content"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.post_model_call_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      tool_args_classifier:
+        from: "$policy_target"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.pre_tool_call_verdict
+  post_tool_call:
+    policy_target: "$.tool_result"
+    policy_target_kind: tool_result
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      tool_result_classifier:
+        from: "$policy_target"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.post_tool_call_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    annotations:
+      output_classifier:
+        from: "$policy_target.text"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.output_verdict
+  agent_shutdown:
+    policy_target: "$.summary"
+    policy_target_kind: shutdown_summary
+    annotations:
+      shutdown_classifier:
+        from: "$policy_target"
+    policy:
+      id: bank_agent_rego
+      query: data.agent_control_specification.bank_agent_rego.agent_shutdown_verdict
+tools:
+  lookup_account:
+    type: Tool
+    id: lookup_account
+    clearance: [banking, customer_data]
+    security_labels: [customer_profile]
+  wire_transfer:
+    type: Tool
+    id: wire_transfer
+    clearance: [banking, payments]
+    security_labels: [payment_instruction]
+annotators:
+  startup_classifier:
+    type: classifier
+  prompt_classifier:
+    type: classifier
+  model_request_classifier:
+    type: classifier
+  model_response_classifier:
+    type: classifier
+  tool_args_classifier:
+    type: classifier
+  tool_result_classifier:
+    type: classifier
+  output_classifier:
+    type: classifier
+  shutdown_classifier:
+    type: classifier
