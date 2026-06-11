@@ -162,7 +162,6 @@ nav:
     - Agent Discovery: tutorials/29-agent-discovery.md
     - Agent Lifecycle: tutorials/30-agent-lifecycle.md
     - Entra Agent ID Bridge: tutorials/31-entra-agent-id-bridge.md
-    - Chaos Testing Agents: tutorials/32-chaos-testing-agents.md
     - E2E Encrypted Messaging: tutorials/32-e2e-encrypted-messaging.md
     - Offline Verifiable Receipts: tutorials/33-offline-verifiable-receipts.md
     - MAF Integration: tutorials/34-maf-integration.md

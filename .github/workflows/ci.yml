@@ -610,10 +610,13 @@ jobs:
       - name: BinSkim — binary security analysis
         working-directory: agent-governance-dotnet
         run: |
-          dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.* 2>/dev/null || true
+          # No error-swallowing: a missing tool, crash, or real finding must
+          # fail this step. Only the SARIF upload below is allowed to soft-fail
+          # (GitHub Advanced Security availability is the sole concern there).
+          dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.*
           BinSkim analyze "src/AgentGovernance/bin/Release/net8.0/*.dll" \
             --output binskim-results.sarif \
-            --verbose 2>/dev/null || echo "BinSkim completed with warnings"
+            --verbose
       - name: Upload BinSkim SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
@@ -697,15 +700,33 @@ jobs:
           "
       - name: Smoke test — import ${{ matrix.import-module }}
         run: python -c "import ${{ matrix.import-module }}"
-        continue-on-error: true
       - name: Run tests
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
           if [ -d tests ]; then
             pytest tests/ -q --tb=short
           else
+            # The smoke-import step above already ran and must have succeeded
+            # to reach here (it no longer swallows failures), so this branch is
+            # only printed when the import actually passed.
             echo "No tests/ directory — smoke import passed"
           fi
+
+  # ── Repo-wide version sync (always runs — fails fast on drift) ───────
+  # Confirms every package manifest matches the canonical ./VERSION. The
+  # ecosystems (Python / npm / Rust / .NET / Claude plugin) previously drifted
+  # independently; this gate keeps them reconciled. Intentionally independent
+  # manifests (policy-engine ACS SDKs, agt-policies) are exempt inside the
+  # script itself.
+  version-sync-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Check version drift
+        run: python3 scripts/sync-version.py --check
 
   # ── Dependency confusion scan (always runs — security gate) ──────────
   dep-confusion-scan:
@@ -1071,6 +1092,7 @@ jobs:
         security,
         test-dotnet,
         test-integrations,
+        version-sync-check,
         dep-confusion-scan,
         notebook-pip-audit,
         workflow-security,

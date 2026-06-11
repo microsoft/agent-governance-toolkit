@@ -516,10 +516,15 @@ default allow = true
         assert "evaluation_ms" in decision.audit_entry
 
     def test_default_action_when_no_backends(self):
-        """Default action applies when no policies or backends match."""
+        """Default action applies when no policies or backends match.
+
+        The engine now fails closed by default (issue #2926): with no policies
+        loaded the decision is deny.
+        """
         evaluator = PolicyEvaluator()
         decision = evaluator.evaluate({"tool_name": "anything"})
-        assert decision.allowed is True
+        assert decision.allowed is False
+        assert decision.action == "deny"
         assert "default" in decision.reason.lower()
 
     def test_load_rego_returns_backend(self):

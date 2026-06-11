@@ -48,7 +48,7 @@ github = [
     "httpx>=0.27.0,<1.0",
 ]
 agentmesh = [
-    "agentmesh_platform>=3.0.0,<4.0",
+    "agentmesh_platform>=4,<5",
 ]
 all = [
     "agentmesh-discovery[github,agentmesh]",

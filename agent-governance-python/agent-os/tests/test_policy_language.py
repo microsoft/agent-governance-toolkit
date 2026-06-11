@@ -223,6 +223,9 @@ class TestEvaluator:
                         action=PolicyAction.DENY,
                     ),
                 ],
+                # Explicit allow default so a non-match is distinguishable from a
+                # deny-match now that the default is deny (issue #2926).
+                defaults=PolicyDefaults(action=PolicyAction.ALLOW),
             )
             evaluator = PolicyEvaluator(policies=[doc])
             decision = evaluator.evaluate({"f": ctx_val})
@@ -250,6 +253,9 @@ class TestEvaluator:
                     action=PolicyAction.DENY,
                 ),
             ],
+            # Explicit allow default isolates the not_in match check from the
+            # default-deny behavior (issue #2926).
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
         )
         decision = PolicyEvaluator(policies=[doc]).evaluate({"tool_name": "read_file"})
         assert decision.allowed
@@ -288,6 +294,8 @@ class TestEvaluator:
                     action=PolicyAction.DENY,
                 ),
             ],
+            # Explicit allow default (issue #2926): a non-match must allow here.
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
         )
         ne_doc = PolicyDocument(
             name="not-in-vs-ne",
@@ -302,6 +310,7 @@ class TestEvaluator:
                     action=PolicyAction.DENY,
                 ),
             ],
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
         )
 
         not_in_decision = PolicyEvaluator(policies=[not_in_doc]).evaluate({"tool_name": value})
@@ -324,6 +333,9 @@ class TestEvaluator:
                     action=PolicyAction.DENY,
                 ),
             ],
+            # Explicit allow default (issue #2926): a missing field is no match,
+            # which must allow here rather than fall through to default-deny.
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
         )
         decision = PolicyEvaluator(policies=[doc]).evaluate({})
         assert decision.allowed

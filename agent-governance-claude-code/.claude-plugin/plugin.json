@@ -1,7 +1,7 @@
 {
   "name": "agt-governance",
   "description": "AGT governance hooks and MCP tools for Claude Code sessions",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "author": {
     "name": "Microsoft Corporation",
     "email": "agentgovtoolkit@microsoft.com"

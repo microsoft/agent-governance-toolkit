@@ -205,18 +205,18 @@ rules:
     // -----------------------------------------------------------------
 
     [Fact]
-    public void EvaluateToolCall_NoPolicies_AllowsByDefault()
+    public void EvaluateToolCall_NoPolicies_DeniesByDefault()
     {
         using var kernel = new GovernanceKernel();
 
-        // PolicyEngine returns AllowDefault when no policies are loaded.
+        // PolicyEngine returns DenyDefault when no policies are loaded (fail closed).
         var result = kernel.EvaluateToolCall("did:agentmesh:test", "read");
 
         Assert.NotNull(result);
         Assert.NotNull(result.PolicyDecision);
-        Assert.True(result.Allowed);
-        Assert.True(result.PolicyDecision!.Allowed);
-        Assert.Equal("allow", result.PolicyDecision.Action);
+        Assert.False(result.Allowed);
+        Assert.False(result.PolicyDecision!.Allowed);
+        Assert.Equal("deny", result.PolicyDecision.Action);
         Assert.Null(result.PolicyDecision.MatchedRule);
     }
 
