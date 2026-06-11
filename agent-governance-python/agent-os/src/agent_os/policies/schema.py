@@ -148,7 +148,7 @@ class PolicyDocument(BaseModel):
             raise ImportError("pyyaml is required: pip install pyyaml") from exc
 
         path = Path(path)
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return cls.model_validate(data)
 
@@ -167,7 +167,7 @@ class PolicyDocument(BaseModel):
     def from_json(cls, path: str | Path) -> PolicyDocument:
         """Load a PolicyDocument from a JSON file."""
         path = Path(path)
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return cls.model_validate(data)
 

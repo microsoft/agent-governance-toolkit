@@ -1,0 +1,46 @@
+[
+  {
+    "id": "pg-staging-read-001",
+    "_comment": "SELECT queries are modelled as read_document actions; saas-allow-read-operations permits them.",
+    "input": {
+      "agent_did": "did:web:agent-42",
+      "action": "read_document",
+      "context": {
+        "statement": "SELECT name FROM users WHERE id = 42",
+        "endpoint": "pg-staging"
+      }
+    },
+    "expected_verdict": "allow",
+    "expected_rule": "saas-allow-read-operations",
+    "recorded_at": "2026-05-22T10:00:00Z"
+  },
+  {
+    "id": "pg-staging-shell-blocked-001",
+    "_comment": "Shell execution (e.g. wrapping psql) is denied by asi02.",
+    "input": {
+      "agent_did": "did:web:agent-42",
+      "action": "exec_shell",
+      "context": {
+        "statement": "DROP TABLE users",
+        "endpoint": "pg-staging"
+      }
+    },
+    "expected_verdict": "deny",
+    "expected_rule": "asi02-block-shell-execution",
+    "recorded_at": "2026-05-22T10:01:00Z"
+  },
+  {
+    "id": "pg-staging-credential-leak-001",
+    "_comment": "Responses containing API keys are caught by asi03.",
+    "input": {
+      "agent_did": "did:web:agent-42",
+      "output": "api_key: sk-abc123xyz",
+      "context": {
+        "endpoint": "pg-staging"
+      }
+    },
+    "expected_verdict": "deny",
+    "expected_rule": "asi03-block-credentials-in-output",
+    "recorded_at": "2026-05-22T10:02:00Z"
+  }
+]
