@@ -31,6 +31,7 @@ def _temporal_evaluator(dynamic_condition: DynamicCondition) -> PolicyEvaluator:
                 action=PolicyAction.DENY,
             )
         ],
+        defaults=PolicyDefaults(action=PolicyAction.ALLOW),
     )
     return PolicyEvaluator(policies=[doc])
 
