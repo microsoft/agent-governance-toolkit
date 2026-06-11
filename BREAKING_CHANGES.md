@@ -5,6 +5,56 @@ entries appear first.
 
 ---
 
+## Policy engines: default-deny and consistent warn/log semantics
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agent_os.policies`)
+- `agent-governance-typescript` (`src/policy.ts`)
+- `agent-governance-dotnet` (`AgentGovernance.Policy`)
+
+**What changed:**
+
+The three SDKs previously disagreed on authorization outcomes for the same
+policy input. This release standardizes all three on fail-closed semantics:
+
+1. **Default action is now deny.** When `defaults.action` is omitted, or when
+   no policies are loaded at all, the decision is now `deny` in every SDK.
+   - Python: `PolicyDefaults.action` now defaults to `PolicyAction.DENY`, and
+     the evaluator returns `deny` when no policies are loaded (previously both
+     were `allow`, fail-open).
+   - .NET: the zero-policy path now returns `PolicyDecision.DenyDefault`
+     (previously `AllowDefault`).
+   - TypeScript already defaulted to `deny`; no change.
+
+2. **`warn` and `log` rules are advisory and still allow the request.** In
+   TypeScript a matched `warn` or `log` rule now produces `allowed: true`,
+   matching the existing .NET and Python behavior (previously TS denied them).
+
+**Why:**
+
+For a governance toolkit, an omitted default or an empty policy set producing
+`allow` in one language and `deny` in another is a trust-boundary
+inconsistency, not just a style difference. Fail-closed is the safe default.
+
+**How to migrate:**
+
+If you relied on the previous fail-open behavior (an empty or default policy
+allowing requests), opt back in explicitly by setting the default action to
+allow in your policy document:
+
+```yaml
+defaults:
+  action: allow
+```
+
+No migration is required for consumers who already define explicit rules and
+a default action.
+
+---
+
 ## Composite actions: `toolkit-version` is now **required**
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)

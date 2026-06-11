@@ -484,7 +484,14 @@ def _canonicalize_github_url(raw: str) -> str | None:
     if candidate.startswith("git+"):
         candidate = candidate[4:]
     # ssh form: git@github.com:owner/repo(.git) — parse via anchored regex.
-    m = re.match(r"^git@github\.com:([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?$", candidate)
+    # Owner char class matches GITHUB_REPO_RE's _GH_OWNER (alnum + dash);
+    # GitHub also permits underscore/dot in some legacy org names so we
+    # accept the same character set as repo (._-) and let GITHUB_REPO_RE
+    # do the final canonical-shape validation downstream.
+    m = re.match(
+        r"^git@github\.com:([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+?)(?:\.git)?$",
+        candidate,
+    )
     if m:
         candidate = f"https://github.com/{m.group(1)}/{m.group(2)}"
     if candidate.endswith(".git"):

@@ -1,24 +1,8 @@
-"""
-openai-agents-agentmesh: Trust layer for OpenAI Agents SDK.
-
-Components:
-- TrustedFunctionGuard: Trust-gated function/tool calling
-- HandoffVerifier: Trust verification for agent-to-agent handoffs
-- AgentTrustContext: Trust metadata propagation
-"""
-
-from openai_agents_agentmesh.trust import (
-    AgentTrustContext,
-    HandoffResult,
-    HandoffVerifier,
-    FunctionCallResult,
-    TrustedFunctionGuard,
+import warnings
+warnings.warn(
+    "openai-agents-agentmesh is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[openai-agents] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
 )
-
-__all__ = [
-    "AgentTrustContext",
-    "HandoffResult",
-    "HandoffVerifier",
-    "FunctionCallResult",
-    "TrustedFunctionGuard",
-]

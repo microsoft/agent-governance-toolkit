@@ -29,7 +29,11 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 MARKER = "<!-- agt-contributor-check -->"
-RISK_ORDER = {"LOW": 1, "MEDIUM": 2, "HIGH": 3, "UNKNOWN": 0}
+# Fail-closed ordering: UNKNOWN ("could not be determined") must outrank LOW so
+# a check that errored (e.g. GitHub API rate-limiting) cannot silently score a
+# contributor as the lowest risk. We rank it just below HIGH so an uncertain
+# result is treated as elevated/suspicious rather than clean. See issue #2950.
+RISK_ORDER = {"LOW": 1, "MEDIUM": 2, "UNKNOWN": 3, "HIGH": 4}
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -73,12 +77,21 @@ def _run_check(script: str, args: list[str], out_path: str) -> str:
 
 
 def _aggregate_risk(*levels: str) -> str:
-    """Return the highest risk level from a set of check results."""
-    max_val = max(RISK_ORDER.get(r, 0) for r in levels)
+    """Return the highest risk level from a set of check results.
+
+    Fail-closed: an UNKNOWN result (a check that could not be determined,
+    e.g. an errored or rate-limited probe) outranks LOW/MEDIUM and surfaces
+    as its own UNKNOWN aggregate rather than being silently scored LOW. See
+    issue #2950.
+    """
+    if not levels:
+        return "LOW"
+    # Unrecognized labels are treated as UNKNOWN (uncertain), never LOW.
+    max_val = max(RISK_ORDER.get(r, RISK_ORDER["UNKNOWN"]) for r in levels)
     for label, val in RISK_ORDER.items():
-        if val == max_val and label != "UNKNOWN":
+        if val == max_val:
             return label
-    return "LOW"
+    return "UNKNOWN"
 
 
 def _set_output(name: str, value: str) -> None:
@@ -103,7 +116,13 @@ def _write_summary(text: str) -> None:
 def _build_comment(username: str, overall: str, profile_risk: str,
                    cred_risk: str, cluster_risk: str) -> str:
     """Build a concise comment body with risk levels only."""
-    icon = "\U0001f534" if overall == "HIGH" else "\U0001f7e1"
+    # red=HIGH, white question=UNKNOWN (could not check), yellow=otherwise.
+    if overall == "HIGH":
+        icon = "\U0001f534"
+    elif overall == "UNKNOWN":
+        icon = "❔"
+    else:
+        icon = "\U0001f7e1"
 
     lines = [
         MARKER,
@@ -160,7 +179,8 @@ def _post_comment(token: str, owner: str, repo: str, number: int,
 def _apply_label(token: str, owner: str, repo: str, number: int,
                  risk: str) -> None:
     """Ensure the correct needs-review label is applied."""
-    color = "D93F0B" if risk == "HIGH" else "FFA500"
+    # red=HIGH, grey=UNKNOWN (could not check), orange=otherwise.
+    color = {"HIGH": "D93F0B", "UNKNOWN": "BFBFBF"}.get(risk, "FFA500")
     try:
         _api(token, "POST", f"/repos/{owner}/{repo}/labels", {
             "name": f"needs-review:{risk}",
@@ -170,7 +190,7 @@ def _apply_label(token: str, owner: str, repo: str, number: int,
     except HTTPError:
         pass
 
-    for level in ("LOW", "MEDIUM", "HIGH"):
+    for level in ("LOW", "MEDIUM", "HIGH", "UNKNOWN"):
         if level != risk:
             try:
                 req = Request(

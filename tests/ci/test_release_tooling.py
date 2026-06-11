@@ -1,12 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-"""Regression tests for release tooling hardening.
-
-The canonical AGT release path is GitHub Actions. Azure DevOps ESRP, Microsoft
-tenant IDs, Key Vault variables, and Microsoft signing certificates must not be
-required to publish canonical artifacts.
-"""
+"""Regression tests for release tooling hardening."""
 
 from __future__ import annotations
 
@@ -17,6 +12,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PUBLISH = REPO_ROOT / ".github" / "workflows" / "publish.yml"
 CONTAINERS = REPO_ROOT / ".github" / "workflows" / "publish-containers.yml"
+ESRP_PIPELINE = REPO_ROOT / ".github" / "pipelines" / "esrp-publish.yml"
 LOCKFILE = REPO_ROOT / ".github" / "release-tools" / "release-tools.txt"
 SRC = REPO_ROOT / ".github" / "release-tools" / "release-tools.in"
 ACS_PYTHON_WHEEL_HELPER = REPO_ROOT / "scripts" / "ci" / "build_acs_python_wheel.sh"
@@ -54,7 +50,15 @@ def test_publish_workflow_uses_hashed_release_tools() -> None:
     assert ".github/release-tools/release-tools.txt" in text
 
 
-def test_publish_workflow_has_no_esrp_release_path() -> None:
+def test_esrp_pipeline_is_restored_as_temporary_registry_publish_path() -> None:
+    text = ESRP_PIPELINE.read_text(encoding="utf-8")
+    assert "EsrpRelease@11" in text
+    assert "dryRun" in text
+    assert ".github/release-tools/release-tools.txt" in text
+    assert ".github/pipelines/release-tools" not in text
+
+
+def test_publish_workflow_has_no_embedded_esrp_credentials_or_tasks() -> None:
     text = PUBLISH.read_text(encoding="utf-8")
     forbidden = [
         "EsrpRelease",
@@ -63,7 +67,6 @@ def test_publish_workflow_has_no_esrp_release_path() -> None:
         "ESRP_CERT_IDENTIFIER",
         "MICROSOFT_TENANT_ID",
         "ESRPRELPACMAN",
-        ".github/pipelines/esrp-publish.yml",
         "CertificateFingerprint",
     ]
     for marker in forbidden:
@@ -97,10 +100,10 @@ def test_pypi_prepare_and_publish_conditions_match() -> None:
     prepare = prepare[: prepare.index("- name: Upload build artifacts")]
     publish = text[text.index("- name: Publish to PyPI") :]
     publish = publish[: publish.index("uses: pypa/gh-action-pypi-publish")]
-    condition = "if: github.event_name == 'release' || github.event.inputs.dry_run == 'false'"
+    condition = "if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'"
     assert condition in prepare
     assert condition in publish
-    assert "github.event.inputs.dry_run == 'false'" in text
+    assert "github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'" in text
 
 
 def test_release_manifest_generator_covers_artifact_families(tmp_path: Path) -> None:

@@ -210,6 +210,32 @@ def test_canonicalize_accepts_known_github_forms(raw, expected):
 
 
 @pytest.mark.parametrize(
+    "raw,expected",
+    [
+        # SSH owner regex must accept the same chars as GITHUB_REPO_RE so
+        # that a git@ URL doesn't silently drop where an https URL would
+        # canonicalize. Repo segment continues to accept dot/dash/underscore.
+        (
+            "git@github.com:my-org/my.repo.git",
+            "https://github.com/my-org/my.repo",
+        ),
+        (
+            "git@github.com:my-org/my_repo",
+            "https://github.com/my-org/my_repo",
+        ),
+        (
+            "git@github.com:org123/repo-name.git",
+            "https://github.com/org123/repo-name",
+        ),
+    ],
+)
+def test_canonicalize_ssh_owner_regex_matches_github_repo_re(raw, expected):
+    """Regression for review feedback: SSH owner regex must not be narrower
+    than the canonical GITHUB_REPO_RE."""
+    assert cds._canonicalize_github_url(raw) == expected
+
+
+@pytest.mark.parametrize(
     "raw",
     [
         "https://gitlab.com/foo/bar",
@@ -510,6 +536,52 @@ def test_emit_annotations_notices_for_untracked():
     with redirect_stdout(buf):
         cds.emit_annotations([r])
     assert "::notice" in buf.getvalue()
+
+
+def test_emit_annotations_notices_for_no_repo():
+    """Cover the no-repo branch: dep with no discoverable GitHub URL."""
+    r = cds.ScoreResult(
+        dep=cds.NewDep("npm", "private-pkg", "package.json"),
+        status="no-repo",
+        message="no GitHub source URL",
+    )
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        cds.emit_annotations([r])
+    out = buf.getvalue()
+    assert "::notice" in out
+    assert "private-pkg" in out
+    assert "no discoverable GitHub source URL" in out
+
+
+def test_emit_annotations_notices_on_error():
+    """Cover the error branch: registry/Scorecard call failed transiently."""
+    r = cds.ScoreResult(
+        dep=cds.NewDep("cargo", "flaky-crate", "Cargo.toml"),
+        status="error",
+        message="HTTP 502 from crates.io",
+    )
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        cds.emit_annotations([r])
+    out = buf.getvalue()
+    assert "::notice" in out
+    assert "flaky-crate" in out
+    assert "HTTP 502" in out
+
+
+def test_emit_annotations_silent_on_pass():
+    """Passing scores must not emit any annotation (warn-only by default)."""
+    r = cds.ScoreResult(
+        dep=cds.NewDep("npm", "good-pkg", "package.json"),
+        status="pass",
+        score=8.5,
+        repo_url="https://github.com/good/pkg",
+    )
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        cds.emit_annotations([r])
+    assert buf.getvalue() == ""
 
 
 # ---------- main / CLI -------------------------------------------------------

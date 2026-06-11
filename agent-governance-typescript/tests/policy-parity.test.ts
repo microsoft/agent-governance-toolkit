@@ -389,6 +389,54 @@ rules:
     });
   });
 
+  // ── Cross-language conformance (issue #2926) ──
+
+  describe('cross-language conformance', () => {
+    it('denies when no policies are loaded (default-deny)', () => {
+      const engine = new PolicyEngine();
+      const result = engine.evaluatePolicy('did:test', {});
+      expect(result.allowed).toBe(false);
+      expect(result.action).toBe('deny');
+    });
+
+    it('denies an unmatched request under a default-deny policy', () => {
+      const engine = new PolicyEngine();
+      engine.loadPolicy({
+        name: 'p',
+        agents: ['*'],
+        rules: [{ name: 'r1', condition: "role == 'admin'", ruleAction: 'allow' }],
+        default_action: 'deny',
+      });
+      expect(engine.evaluatePolicy('did:test', { role: 'viewer' }).allowed).toBe(false);
+    });
+
+    it('allows a matched warn rule (advisory)', () => {
+      const engine = new PolicyEngine();
+      engine.loadPolicy({
+        name: 'p',
+        agents: ['*'],
+        rules: [{ name: 'r1', ruleAction: 'warn' }],
+        default_action: 'deny',
+      });
+      const result = engine.evaluatePolicy('did:test', {});
+      expect(result.action).toBe('warn');
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows a matched log rule (advisory)', () => {
+      const engine = new PolicyEngine();
+      engine.loadPolicy({
+        name: 'p',
+        agents: ['*'],
+        rules: [{ name: 'r1', ruleAction: 'log' }],
+        default_action: 'deny',
+      });
+      const result = engine.evaluatePolicy('did:test', {});
+      expect(result.action).toBe('log');
+      expect(result.allowed).toBe(true);
+    });
+  });
+
   // ── Rate limiting ──
 
   describe('rate limiting', () => {
@@ -529,3 +577,4 @@ rules:
     expect(r3.matchedRule).toBe('admin-bypass');
   });
 });
+

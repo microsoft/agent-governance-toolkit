@@ -9,13 +9,8 @@ to AGT's `ExternalPolicyBackend` contract without modifying AGT core.
 ## Installation
 
 ```bash
-# AGT integration adapter (required)
 pip install cedarling_agentmesh
-
-# Cedarling Python bindings (optional — fastest evaluation)
 pip install cedarling-python
-
-# Or point the backend at an existing Cedarling HTTP service — no extra package.
 ```
 
 ## Architecture
@@ -29,13 +24,43 @@ PolicyEvaluator (agent-os-kernel)
     ▼
 CedarlingBackend          ← this package
     │
-    ├── cedarling_python  (in-process, optional)
-    └── HTTP service      (optional)
+    └── cedarling_python  (in-process, required)
 ```
 
 `agent-os-kernel` never imports this package. The integration is one-way.
 
-## Quick Start
+## Parameters
+
+### `CedarlingBackend.__init__`
+
+| Param | Default | Description |
+|-------|---------|-------------|
+| `bootstrap_config` | `None` | Dict passed to `cedarling_python.BootstrapConfig` |
+| `application_name` | `"agent-governance-toolkit"` | Sets `CEDARLING_APPLICATION_NAME` in bootstrap |
+| `namespace` | `None` | Cedar namespace prepended to entity types (e.g. `"AGT"` → `AGT::Agent`) |
+| `auth_type` | `"unsigned"` | `"unsigned"` - no JWT tokens; `"multi-issuer"` - JWT tokens from one or more issuers |
+| `principal_entity_type` | `"Agent"` | Cedar entity type for the principal |
+| `resource_entity_type` | `"Resource"` | Cedar entity type for the resource |
+| `action_namespace` | `"Action"` | Cedar namespace for actions (e.g. `"Action::\"ReadData\""`) |
+| `cedarling_instance` | `None` | Pre-created `Cedarling` engine instance. If omitted, one is created from `bootstrap_config` |
+
+### `evaluate(request)` request keys
+
+| Key | Type | Purpose |
+|-----|------|---------|
+| `agent_id` | `str` | Principal entity ID (default: `"anonymous"`) |
+| `tool_name` | `str` | Snake-case tool name, converted to PascalCase action (default: `"unknown"`) |
+| `resource` | `str` | Resource entity ID (default: `""`) |
+| `principal_attributes` | `dict` | **(unsigned only)** Attributes for the principal entity (e.g. `{"role": "admin"}`) |
+| `tokens` | `dict[str, str]` | **(multi-issuer)** Mapping `entity_type_name` → JWT (e.g. `{"AGT::Access_Token": "<jwt>"}`) |
+| any other key | any | Passed through to Cedar `context` (also spread into resource entity attributes) |
+
+## Auth types
+
+### Unsigned
+
+Principal identity comes from `agent_id` plus optional `principal_attributes`.
+Suitable for internal services, background jobs, or test harnesses.
 
 ```python
 from agent_os.policies import PolicyEvaluator
@@ -44,52 +69,72 @@ from cedarling_agentmesh import CedarlingBackend
 evaluator = PolicyEvaluator()
 evaluator.add_backend(
     CedarlingBackend(
+        namespace="AGT",
+        auth_type="unsigned",
         bootstrap_config={
-            "application_name": "my-agent",
-            "policy_store_uri": "https://example.com/cedarling/policies",
-        }
+            "CEDARLING_POLICY_STORE_LOCAL_FN": "/path/to/policy-store",
+        },
     )
 )
 
-decision = evaluator.evaluate({"tool_name": "read_data", "agent_id": "agent-1"})
+decision = evaluator.evaluate({
+    "tool_name": "read_data",
+    "agent_id": "agent-42",
+    "resource": "doc-1",
+    "principal_attributes": {"role": "admin"},
+})
 print(decision.allowed)   # True / False
 ```
 
-HTTP service mode and JWT token forwarding:
+The policy store schema defines the principal entity with attributes:
 
-```python
-# HTTP service (no cedarling_python required)
-evaluator.add_backend(
-    CedarlingBackend(
-        cedarling_url="http://cedarling.internal:8080",
-        mode="http",
-    )
-)
-
-# OIDC/JWT-aware evaluation
-evaluator.add_backend(
-    CedarlingBackend(
-        bootstrap_config={"application_name": "my-agent", "policy_store_uri": "..."},
-        tokens={"access_token": "<your-oidc-jwt>"},
-    )
-)
+```
+namespace AGT {
+    entity Agent = { role: __cedar::String };
+    ...
+}
 ```
 
-## Evaluation Modes
+Policies can then check `principal.role == "admin"`.
 
-| Mode | Behaviour |
-|------|-----------|
-| `"auto"` (default) | Python bindings → HTTP (if `cedarling_url` set) → safe denial |
-| `"python"` | Requires `cedarling-python` |
-| `"http"` | Requires `cedarling_url`; no Python extras needed |
+### Multi-issuer
 
-## Context Mapping
+Principal identity comes from JWT tokens. Each token is mapped to a Cedar
+entity type via the `tokens` dict key (format: `"Namespace::EntityType"`).
 
-| AGT context key | Cedarling field |
+```python
+evaluator.add_backend(
+    CedarlingBackend(
+        namespace="Jans",
+        auth_type="multi-issuer",
+        bootstrap_config={
+            "CEDARLING_POLICY_STORE_LOCAL_FN": "/path/to/multi-issuer-store",
+        },
+    )
+)
+
+decision = evaluator.evaluate({
+    "tool_name": "update",
+    "resource": "issue-456",
+    "tokens": {
+        "Jans::Access_Token": "<your-jwt>",
+        "Jans::Id_Token": "<your-jwt>",
+    },
+})
+print(decision.allowed)   # True / False
+```
+
+The mapping string must match an `entity_type_name` declared in the policy
+store's `trusted_issuers` → `token_metadata` section.
+
+## Request-to-Cedar Mapping
+
+| AGT request key | Cedarling field |
 |-----------------|-----------------|
 | `agent_id` | `principal` entity id |
-| `tool_name` | `action` (PascalCase, e.g. `"ReadData"`) |
+| `tool_name` | `action` (Snake-case tool name, converted to PascalCase action (e.g. "read_data" -> "ReadData")) |
 | `resource` | `resource` entity id |
-| all other keys | Cedar `context` attributes |
+| `principal_attributes` | principal entity payload attributes (unsigned only) |
+| all other keys | Cedar `context` attributes + resource entity payload |
 
 `request_id` and `diagnostics` from Cedarling are available in `BackendDecision.raw_result`.

@@ -37,6 +37,7 @@ from agent_os.integrations.base import (
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,
+    PolicyDefaults,
     PolicyDocument,
     PolicyOperator,
     PolicyRule,
@@ -568,10 +569,13 @@ class TestAsyncPolicyEvaluator:
 
     def _make_evaluator(self, rules):
         from agent_os.policies.evaluator import PolicyEvaluator
+        # Explicit allow default so non-matching contexts fall through to allow,
+        # isolating these tests from the engine-wide default-deny (issue #2926).
         doc = PolicyDocument(
             version="1.0",
             name="async-test-policy",
             rules=rules,
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
         )
         return PolicyEvaluator(policies=[doc])
 

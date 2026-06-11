@@ -12,7 +12,6 @@ a0bfee741304548463c85252302720958772a192:docs/tutorials/32-e2e-encrypted-messagi
 de392848c0fbfd2566789a8ddee41b35c8cdf798:packages/agentmesh-integrations/sb-runtime-skill/sb_runtime_agentmesh/receipts.py:generic-api-key:92
 3130880d08313227c792a6a3b5837dee0938e1c0:packages/agentmesh-integrations/agentmesh-avp/tests/test_provider.py:generic-api-key:13
 46b56f5d1af93ce62cd14b6fa67679af4d99bc80:examples/atr-community-rules/test_atr_policy.py:generic-api-key:82
-7be9ff1699cb333c3ab721c79e1cc5569aa34a4c:examples/policy-templates/fixtures/general-saas-fixtures.json:generic-api-key:82
 8144506882383949be2e09bb08b6a633e6a31827:packages/agent-os/tests/test_credential_redactor.py:generic-api-key:18
 970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh-mcp/src/mcp/response.rs:generic-api-key:326
 970dd88379d464a660a80a3b99996e581b046e93:packages/agent-mesh/sdks/rust/agentmesh-mcp/src/mcp/redactor.rs:generic-api-key:188
@@ -67,7 +66,6 @@ f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-python/agent-os/tests/
 f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-python/agent-os/tests/test_security_skills.py:generic-api-key:271
 f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-python/agent-sre/src/agent_sre/signing.py:generic-api-key:92
 f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-python/agent-sre/tests/unit/test_capture.py:generic-api-key:62
-f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-python/agentmesh-integrations/agentmesh-avp/tests/test_provider.py:generic-api-key:13
 f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-python/agentmesh-integrations/langgraph-trust/langgraph_trust/identity.py:generic-api-key:30
 f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-rust/agentmesh-mcp/src/mcp/response.rs:generic-api-key:340
 f80fd4b5e3184f6f37a59aebeb824f5f5095dff7:agent-governance-typescript/agent-os-vscode/package.json:generic-api-key:231

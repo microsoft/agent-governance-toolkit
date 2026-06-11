@@ -10,13 +10,15 @@
 
 import type { AuditConfig, AuditEntry, GovernanceResult, TrustVerification } from "./types";
 
-let previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
-const entries: AuditEntry[] = [];
-let entryCounter = 0;
+const GENESIS_HASH = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /**
  * Creates an audit middleware that records all tool executions
  * with tamper-evident hash chains.
+ *
+ * Each call to auditMiddleware() owns an independent chain: its entries,
+ * previousHash, and counter are private to the returned instance, so
+ * clear() and maxEntries on one instance never affect another.
  *
  * @example
  * ```ts
@@ -39,11 +41,86 @@ let entryCounter = 0;
 export function auditMiddleware(config: AuditConfig = {}) {
   const maxEntries = config.maxEntries ?? 10_000;
 
+  // Per-instance state. Living in this closure means every auditMiddleware()
+  // call gets its own isolated chain.
+  let previousHash = GENESIS_HASH;
+  const entries: AuditEntry[] = [];
+  let entryCounter = 0;
+
+  // Serializes record() so the read-compute-write of previousHash is atomic.
+  // Each append chains off the prior one, so two concurrent record() calls can
+  // never both read the same previousHash.
+  let tail: Promise<unknown> = Promise.resolve();
+
+  /** Build the canonical payload that an entry's hash covers. */
+  function hashPayload(entry: Pick<AuditEntry, "id" | "timestamp" | "toolId" | "agentId" | "action" | "previousHash">): string {
+    return JSON.stringify({
+      id: entry.id,
+      timestamp: entry.timestamp,
+      toolId: entry.toolId,
+      agentId: entry.agentId,
+      action: entry.action,
+      previousHash: entry.previousHash,
+    });
+  }
+
+  async function append(params: {
+    toolId: string;
+    agentId: string;
+    action: "invoke" | "complete" | "deny" | "error";
+    input?: unknown;
+    output?: unknown;
+    duration_ms?: number;
+    governance?: GovernanceResult;
+    trust?: TrustVerification;
+  }): Promise<AuditEntry> {
+    const id = `audit-${++entryCounter}-${Date.now()}`;
+    const timestamp = Date.now();
+    const prev = previousHash;
+
+    const hash = await computeHash(
+      hashPayload({ id, timestamp, toolId: params.toolId, agentId: params.agentId, action: params.action, previousHash: prev }),
+    );
+
+    const entry: AuditEntry = {
+      id,
+      timestamp,
+      toolId: params.toolId,
+      agentId: params.agentId,
+      action: params.action,
+      input: config.captureData ? params.input : undefined,
+      output: config.captureData ? params.output : undefined,
+      duration_ms: params.duration_ms,
+      governance: params.governance,
+      trust: params.trust,
+      hash,
+      previousHash: prev,
+    };
+
+    previousHash = hash;
+    entries.push(entry);
+
+    // Trim old entries
+    while (entries.length > maxEntries) {
+      entries.shift();
+    }
+
+    // Send to custom sink
+    if (config.sink) {
+      await config.sink(entry);
+    }
+
+    return entry;
+  }
+
   return {
     /**
      * Record an audit entry with hash chain integrity.
+     *
+     * Appends are serialized: the read-compute-write of previousHash is atomic
+     * across concurrent calls, so the chain stays consistent under concurrency.
      */
-    async record(params: {
+    record(params: {
       toolId: string;
       agentId: string;
       action: "invoke" | "complete" | "deny" | "error";
@@ -53,66 +130,50 @@ export function auditMiddleware(config: AuditConfig = {}) {
       governance?: GovernanceResult;
       trust?: TrustVerification;
     }): Promise<AuditEntry> {
-      const id = `audit-${++entryCounter}-${Date.now()}`;
-      const timestamp = Date.now();
-
-      const hashPayload = JSON.stringify({
-        id,
-        timestamp,
-        toolId: params.toolId,
-        agentId: params.agentId,
-        action: params.action,
-        previousHash,
-      });
-
-      const hash = await computeHash(hashPayload);
-
-      const entry: AuditEntry = {
-        id,
-        timestamp,
-        toolId: params.toolId,
-        agentId: params.agentId,
-        action: params.action,
-        input: config.captureData ? params.input : undefined,
-        output: config.captureData ? params.output : undefined,
-        duration_ms: params.duration_ms,
-        governance: params.governance,
-        trust: params.trust,
-        hash,
-        previousHash,
-      };
-
-      previousHash = hash;
-      entries.push(entry);
-
-      // Trim old entries
-      while (entries.length > maxEntries) {
-        entries.shift();
-      }
-
-      // Send to custom sink
-      if (config.sink) {
-        await config.sink(entry);
-      }
-
-      return entry;
+      // Chain this append onto the previous one. We swallow prior rejections
+      // for sequencing purposes only; the caller still sees its own result.
+      const result = tail.then(
+        () => append(params),
+        () => append(params),
+      );
+      tail = result;
+      return result;
     },
 
     /**
      * Get all audit entries (most recent first).
      */
     getEntries(limit?: number): AuditEntry[] {
-      const result = [...entries].reverse();
+      const result = [...entries].reverse().map((e) => ({ ...e }));
       return limit ? result.slice(0, limit) : result;
     },
 
     /**
      * Verify the integrity of the audit chain.
+     *
+     * Checks both the previousHash linkage between adjacent entries and that
+     * each entry's stored hash still matches a hash recomputed from its fields,
+     * so tampering with any covered field is detected.
+     *
      * Returns true if no entries have been tampered with.
      */
     async verifyChain(): Promise<{ valid: boolean; brokenAt?: number }> {
-      for (let i = 1; i < entries.length; i++) {
-        if (entries[i].previousHash !== entries[i - 1].hash) {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+
+        // Linkage check. We anchor on each entry's own recorded previousHash
+        // for i === 0 because maxEntries trimming may have removed the
+        // genesis-anchored head, so the surviving head can legitimately carry
+        // an earlier entry's hash.
+        if (i > 0 && entry.previousHash !== entries[i - 1].hash) {
+          return { valid: false, brokenAt: i };
+        }
+
+        // Recompute the hash from the entry's fields so any tampering with a
+        // covered field (toolId, agentId, action, id, timestamp, previousHash)
+        // is detected even when the linkage still appears intact.
+        const expectedHash = await computeHash(hashPayload(entry));
+        if (entry.hash !== expectedHash) {
           return { valid: false, brokenAt: i };
         }
       }
@@ -127,12 +188,13 @@ export function auditMiddleware(config: AuditConfig = {}) {
     },
 
     /**
-     * Clear all entries (for testing).
+     * Clear all entries (for testing). Only affects this instance.
      */
     clear() {
       entries.length = 0;
       entryCounter = 0;
-      previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
+      previousHash = GENESIS_HASH;
+      tail = Promise.resolve();
     },
   };
 }

@@ -3,8 +3,8 @@ requires = ["setuptools>=78.1.1,<83.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentmesh_context"
-version = "4.0.0"
+name = "agent-governance-toolkit-context"
+version = "4.1.0"
 description = "A pure, logic-only library for routing context, handling RAG fallacies, and managing context windows. Layer 1 Primitive - no agent dependencies."
 readme = "README.md"
 requires-python = ">=3.8"

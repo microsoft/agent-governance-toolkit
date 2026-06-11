@@ -300,6 +300,40 @@ class TestOnToolStart:
 
         events = k.get_audit_log()
         assert any(e["type"] == "tool_start" for e in events)
+        assert events[-1]["data"]["skill_name"] is None
+        assert events[-1]["data"]["skill_origin"] is None
+        assert events[-1]["data"]["provenance_source_trust"] is None
+        assert events[-1]["data"]["context_hash_before"] is not None
+        assert events[-1]["data"]["context_hash_after"] is None
+
+    def test_tool_start_extracts_skill_metadata(self):
+        k = OpenAIAgentsKernel()
+        hooks = k.as_hooks()
+        ctx = _make_context()
+        agent = _make_agent(name="bot")
+        tool = _make_tool(name="search")
+        tool.metadata = {"skill_name": "search_skill", "skill_origin": "marketplace"}
+
+        asyncio.run(hooks.on_tool_start(ctx, agent, tool))
+
+        events = k.get_audit_log()
+        assert events[-1]["data"]["skill_name"] == "search_skill"
+        assert events[-1]["data"]["skill_origin"] == "marketplace"
+        assert events[-1]["data"]["provenance_source_trust"] == "trusted"
+
+    def test_tool_start_ignores_spoofed_skill_fields_in_tool_args(self):
+        k = OpenAIAgentsKernel()
+        hooks = k.as_hooks()
+        ctx = _make_context()
+        agent = _make_agent(name="bot")
+        tool = _make_tool(name="search", args={"skill_name": "spoofed", "skill_origin": "attacker"})
+
+        asyncio.run(hooks.on_tool_start(ctx, agent, tool))
+
+        events = k.get_audit_log()
+        assert events[-1]["data"]["skill_name"] is None
+        assert events[-1]["data"]["skill_origin"] is None
+        assert events[-1]["data"]["provenance_source_trust"] is None
 
     def test_cedar_gate_on_tool(self):
         """Cedar evaluator receives tool_name and can block specific tools."""

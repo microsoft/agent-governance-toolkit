@@ -4,35 +4,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flowise_agentmesh"
-version = "4.0.0"
-description = "AgentMesh governance nodes for Flowise — policy enforcement, trust gating, audit logging, and rate limiting for visual AI flows"
-readme = "README.md"
+version = "4.1.0"
+description = "Deprecated. Previously published as flowise-agentmesh. Install agent-governance-toolkit-integrations[flowise] instead."
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    { name = "Microsoft Corporation" },
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-keywords = ["flowise", "agentmesh", "governance", "trust", "audit", "rate-limiting", "agents"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Libraries",
-]
-dependencies = [
-    "pyyaml>=6.0,<7.0",
-]
+dependencies = ["agent-governance-toolkit-integrations[flowise]>=4.0.0,<5.0"]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0,<8.0",
-    "pytest-asyncio>=0.21,<1.0",
-    "ruff>=0.1.0,<1.0",
-]
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+"Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/flowise_agentmesh"]

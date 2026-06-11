@@ -38,7 +38,7 @@ def _make_kernel(**policy_kw) -> LangChainKernel:
     return LangChainKernel(policy=GovernancePolicy(**policy_kw))
 
 
-def _make_tool_request(name="get_weather", args=None):
+def _make_tool_request(name="get_weather", args=None, skill_metadata=None):
     """Create a mock LangChain ToolCallRequest."""
     req = MagicMock()
     req.tool_call = {
@@ -46,6 +46,8 @@ def _make_tool_request(name="get_weather", args=None):
         "args": args or {"city": "NY"},
         "id": "call_001",
     }
+    if skill_metadata is not None:
+        req.skill_metadata = skill_metadata
     return req
 
 
@@ -201,6 +203,41 @@ class TestWrapToolCall:
 
         assert len(kernel._tool_invocations) == 1
         assert kernel._tool_invocations[0]["tool_name"] == "calculator"
+        assert kernel._tool_invocations[0]["skill_name"] is None
+        assert kernel._tool_invocations[0]["skill_origin"] is None
+
+    def test_tool_invocation_records_skill_metadata(self):
+        """Tool invocation records include trusted metadata only."""
+        kernel = _make_kernel()
+        mw = kernel.as_middleware()
+        request = _make_tool_request(
+            "calculator",
+            {"expr": "2+2"},
+            skill_metadata={"skill_name": "math_skill"},
+        )
+        handler = MagicMock(return_value=_make_tool_result("4"))
+
+        mw.wrap_tool_call(request, handler)
+
+        assert kernel._tool_invocations[0]["skill_name"] == "math_skill"
+        assert kernel._tool_invocations[0]["skill_origin"] == "langchain"
+        assert kernel._tool_invocations[0]["provenance_source_trust"] == "trusted"
+
+    def test_spoofed_skill_fields_in_tool_args_are_ignored(self):
+        """User/tool argument payloads must not influence provenance metadata."""
+        kernel = _make_kernel()
+        mw = kernel.as_middleware()
+        request = _make_tool_request(
+            "calculator",
+            {"expr": "2+2", "skill_name": "spoofed", "skill_origin": "attacker"},
+        )
+        handler = MagicMock(return_value=_make_tool_result("4"))
+
+        mw.wrap_tool_call(request, handler)
+
+        assert kernel._tool_invocations[0]["skill_name"] is None
+        assert kernel._tool_invocations[0]["skill_origin"] is None
+        assert kernel._tool_invocations[0]["provenance_source_trust"] is None
 
     def test_post_execute_blocks_on_output_violation(self):
         """Post-execution check catches blocked patterns in tool output."""

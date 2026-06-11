@@ -1,3 +1,9 @@
+---
+title: EU AI Act Compliance Checklist
+last_reviewed: 2026-06-10
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # EU AI Act (Regulation 2024/1689) -- Compliance Checklist
@@ -6,8 +12,8 @@
 
 > **Regulation**: [Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng) -- Harmonised Rules on Artificial Intelligence
 > **Applicability**: Phased -- Art. 5 (prohibited practices) and Art. 4 (AI literacy) from 2 February 2025; GPAI obligations from 2 August 2025; **high-risk system obligations from 2 August 2026**
-> **Prepared**: 2026-04-03
-> **Methodology**: 4-wave multi-agent investigation -- parallel discovery, adversarial conformity testing, citation validation, and strategic review. All code citations verified against source at commit `35a7cd0`.
+> **Prepared**: 2026-04-03; **Last reviewed**: 2026-06-10
+> **Methodology**: 4-wave multi-agent investigation -- parallel discovery, adversarial conformity testing, citation validation, and strategic review. Article 11 was revalidated against the shipped Annex IV exporter and evidence pipeline.
 
 ---
 
@@ -147,17 +153,19 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 | Compliance reports | `agent-governance-python/agent-mesh/src/agentmesh/governance/compliance.py:121-168` | `ComplianceReport` model with framework, period, controls, scores, violations |
 | Policy documents | `agent-governance-python/agent-os/src/agent_os/policies/schema.py:70-115` | Serializable YAML/JSON `PolicyDocument` with version, name, rules, defaults |
 | Compliance engine | `agent-governance-python/agent-os/modules/control-plane/src/agent_control_plane/compliance.py:306-341` | Framework-scoped reports with requirement counts and pass rates |
+| Annex IV exporter | `agent-governance-python/agent-mesh/src/agentmesh/governance/annex_iv.py:35-514` | `TechnicalDocumentationExporter` assembles five structured sections from compliance reports, policies, audit entries, and SLO/SLI data; emits Markdown or JSON and marks deployer-required content |
+| Evidence pipeline | `agent-governance-python/agent-mesh/src/agentmesh/governance/evidence_pipeline.py:56-358` | Collects policy YAML, audit JSONL, compliance report JSON, and SLO/SLI JSON; emits an Annex IV Markdown draft, evidence-source manifest, and gap warnings |
 
 **Gaps**:
 
-- [ ] **No Annex IV assembly**: Art. 11 and Annex IV require comprehensive static documentation: system description, design specifications, development methodology, risk management details, applied standards, conformity declaration. The toolkit generates runtime compliance reports, not static conformity dossiers.
-- [ ] **No system description generation**: No mechanism to produce the intended-purpose description Art. 11(1)(a) requires.
-- [ ] **No development process documentation**: No enforcement or generation of design decision records.
-- [ ] **No performance metrics declaration**: SLIs track runtime metrics but do not produce the static documentation Art. 11 mandates.
+- [ ] **Partial Annex IV structure**: The exporter produces five consolidated sections. Annex IV contains nine top-level points; lifecycle changes, applied standards and technical specifications, the EU declaration of conformity, and the post-market monitoring system and plan are not represented as dedicated sections.
+- [ ] **Substantial provider authoring remains**: The exporter can accept an intended-purpose description and insert policy, audit, compliance, and SLO evidence, but it cannot derive system architecture, development methodology, dataset documentation, human-oversight assessment, complete risk register, or signed validation reports. The implementation labels these gaps `DEPLOYER ACTION REQUIRED`, although the provider is responsible for the Article 11 technical documentation.
+- [ ] **No completion gate**: Missing material is marked with `DEPLOYER ACTION REQUIRED` placeholders and evidence warnings, but export is not blocked when placeholders remain unresolved.
+- [ ] **Metrics are evidence, not declarations**: SLO/SLI data can populate performance sections, but the provider must still document why the selected metrics are appropriate and provide the dated, signed test reports required by Annex IV.
 
-**Extension point**: A `TechnicalDocumentationExporter` could aggregate `ComplianceReport`, `PolicyDocument`, audit logs, and SLO reports into Annex IV structure, with placeholder sections for deployer-provided content (system description, development methodology).
+**Current capability**: `TechnicalDocumentationExporter` and `EvidencePipeline` provide a useful first draft and evidence inventory. They reduce manual assembly work but do not establish conformity or replace provider-authored technical documentation.
 
-**Recommendation**: Build an Annex IV template exporter that structures existing governance artifacts into the required format.
+**Recommendation**: Extend the exporter to cover all nine Annex IV points explicitly, add a validation mode that fails on unresolved required content, and retain human review for provider-authored descriptions and signed evidence.
 
 ---
 
@@ -377,7 +385,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 | Art. 6(3) | Exemptions and profiling override | Gap | N/A | Not implemented |
 | Art. 9(1) | Continuous risk management lifecycle | Partial | `rogue_detector.py:276-401`, `compliance.py:252-304` | Detection exists; lifecycle orchestration absent |
 | Art. 10 | Data governance (training data) | Gap | N/A | Out of scope |
-| Art. 11 | Technical documentation (Annex IV) | Partial | `compliance.py:121-168`, `schema.py:70-115` | Runtime reports; no conformity dossier |
+| Art. 11 | Technical documentation (Annex IV) | Partial | `annex_iv.py:35-514`, `evidence_pipeline.py:56-358` | Structured draft and evidence inventory shipped; incomplete coverage and provider-authored content remain |
 | Art. 12(1) | Automatic event logging | Partial | `audit.py:23-512`, `audit_logger.py:19-136`, `flight_recorder.py:33-79` | Multiple layers, but 3 of 4 have integrity defects |
 | Art. 12(4) | 6-month log retention | Gap | `policy_schema.json:215-218` (default 90, min 1) | **Violates minimum** |
 | Art. 13(1) | Output interpretability | Partial | `audit.py:90-128` (CloudEvents), `schema.py:52-58` (rule messages) | Basic; no structured explainability |
@@ -411,7 +419,7 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 ### Medium Priority (Extension Points)
 
-5. **Technical documentation exporter** (Art. 11): Build an Annex IV template exporter aggregating existing governance artifacts.
+5. **Complete the technical documentation exporter** (Art. 11): Cover all nine Annex IV points, validate unresolved placeholders, and document the human approval step for provider-authored and signed evidence.
 
 6. **Transparency interceptor** (Art. 13, 50): Add `TransparencyInterceptor` to enforce disclosure policies at the interceptor chain level.
 
@@ -429,51 +437,54 @@ The toolkit governs agent runtime behavior (policy enforcement, trust scoring, e
 
 ## Article 11: Documentation Templates
 
-The following template maps the Annex IV technical documentation structure to toolkit-generated artifacts. Deployers should fill sections marked **[DEPLOYER]** with their own content. **Note**: The majority of Annex IV documentation requires manual authoring. The toolkit can auto-generate governance artifacts (policies, audit trails, SLO reports) but not system descriptions, design specifications, or development methodology records.
+`TechnicalDocumentationExporter` implements the following five-section template, while `EvidencePipeline` can collect policy YAML, audit JSONL, compliance reports, and SLO/SLI data to populate it. Providers must fill sections marked **[PROVIDER]** and review all generated content. The implementation currently labels its placeholders `DEPLOYER ACTION REQUIRED`. **Note**: The majority of Annex IV documentation still requires manual authoring. The current five sections consolidate parts of the nine-point legal structure and are a drafting aid, not a complete conformity dossier.
 
 ### Annex IV Section 1: General Description
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| System name and version | **[DEPLOYER]** | |
-| Intended purpose | **[DEPLOYER]** | |
-| Provider identity | **[DEPLOYER]** | |
-| Risk classification | `ComplianceEngine.assess_risk_category()` | Requires promotion from example code |
-| Applicable regulations | `ComplianceEngine.generate_report()` | Lists applicable frameworks |
+| System name, provider, and version | `TechnicalDocumentationExporter` constructor | Provider-supplied metadata |
+| Intended purpose | `system_description` | Provider-supplied; unresolved input produces a placeholder |
+| Compliance summary | `ComplianceReport` | Latest EU AI Act report contributes score and control counts |
+| Hardware/software interaction and deployment form | **[PROVIDER]** | Not derived by the exporter |
+| Instructions for use and user interface | **[PROVIDER]** | Not derived by the exporter |
 
 ### Annex IV Section 2: Design and Development
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| Development methodology | **[DEPLOYER]** | |
-| Design specifications | `PolicyDocument` (YAML/JSON export) | Governance rules and constraints |
-| System architecture | **[DEPLOYER]** | |
-| Applied standards | **[DEPLOYER]** | |
+| Development methodology | **[PROVIDER]** | |
+| Governance constraints | `Policy` objects | Exporter lists policy scope, rule count, and default action |
+| Design specifications | **[PROVIDER]** | Policies do not describe the complete system design |
+| System architecture | **[PROVIDER]** | |
+| Applied standards | **[PROVIDER]** | |
+| Dataset, validation, and testing documentation | **[PROVIDER]** | Requires provider records and signed test reports |
 
 ### Annex IV Section 3: Monitoring and Functioning
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| Governance policies | `PolicyDocument.to_yaml()` / `PolicyDocument.to_json()` | Exportable from `schema.py` |
-| Audit trail | `AuditLog` CloudEvents export | `audit.py:90-128` |
-| SLO compliance | `SLI` framework reports | `indicators.py` |
-| Incident history | `Signal` and `IncidentSeverity` logs | `detector.py` |
+| Audit trail summary | `AuditEntry` records | Exporter aggregates event types and outcomes |
+| Compliance findings | `ComplianceReport` | Includes scores, violations, and recommendations |
+| SLO/SLI metrics | SLO/SLI JSON | Evidence pipeline ingests configured metric data |
+| Capabilities, limitations, and human oversight | **[PROVIDER]** | Exporter leaves a required placeholder |
 
 ### Annex IV Section 4: Risk Management
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| Risk register | **[DEPLOYER]** | Toolkit provides `assess_risk_category()` but not a register |
-| Anomaly detections | `RogueAgentDetector` assessments | `rogue_detector.py:276-401` |
-| Mitigation measures | Policy rules + escalation configuration | Exportable |
+| Compliance risk findings | `ComplianceReport` violations | Exporter selects risk-related findings |
+| Mitigation measures | Deny and approval policy rules | Exporter lists protective rules |
+| Complete risk register and residual-risk analysis | **[PROVIDER]** | Not generated by the exporter |
 
 ### Annex IV Section 5: Accuracy and Robustness
 
 | Field | Source | Notes |
 |-------|--------|-------|
-| Accuracy metrics | `ToolCallAccuracy`, `TaskSuccessRate`, `HallucinationRate` SLIs | Runtime metrics, not static declarations |
-| Robustness testing | `ChaosExperiment` results | Framework only; deployer must implement injection |
-| Cybersecurity measures | Ed25519 identity, HMAC audit, MCP scanning | Exportable configurations |
+| Accuracy and performance metrics | SLO/SLI JSON | Exporter includes matching accuracy, error, success, hallucination, and latency metrics |
+| Security event summary | `AuditEntry` records | Counts denied and error outcomes |
+| Metric appropriateness and declared levels | **[PROVIDER]** | Runtime values do not explain why metrics are suitable |
+| Robustness, cybersecurity, and bias test reports | **[PROVIDER]** | Requires provider-authored, dated, and signed evidence |
 
 ---
 

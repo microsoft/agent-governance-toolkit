@@ -1,8 +1,8 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-"""AgentMesh Agent Veil Protocol Integration."""
-
-from agentmesh_avp.provider import AVPProvider
-
-__all__ = ["AVPProvider"]
-__version__ = "0.1.0"
+import warnings
+warnings.warn(
+    "avp-agentmesh is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[avp] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)

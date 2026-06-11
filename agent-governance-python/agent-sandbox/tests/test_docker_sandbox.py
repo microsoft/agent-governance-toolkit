@@ -1026,10 +1026,11 @@ class TestMinimalPathSandboxImage:
         )
         allowed = set(match.group(1).split())
         # Sandboxed code legitimately needs python and a few read-only
-        # utilities for introspection (cat, echo, ls). Everything else is
-        # opt-in via ALLOWED_BIN_NAMES at build time.
-        assert {"python3", "cat", "echo"} <= allowed, (
-            f"ALLOWED_BIN_NAMES must include python3/cat/echo: {allowed!r}"
+        # utilities for introspection (cat, echo, ls). The provider also
+        # starts long-lived sessions with `sleep infinity`, so sleep must
+        # remain resolvable from the pinned PATH.
+        assert {"python3", "cat", "echo", "sleep"} <= allowed, (
+            f"ALLOWED_BIN_NAMES must include python3/cat/echo/sleep: {allowed!r}"
         )
         # Network and infra CLIs must NOT be in the default allowed set.
         forbidden_in_allowlist = {
@@ -2349,7 +2350,8 @@ class TestHardeningAdditions:
 class TestDefaultImageSelection:
     """The DockerSandboxProvider prefers the hardened minimal-PATH image
     when it is locally available, and falls back to python:3.11-slim
-    otherwise so existing deployments keep working."""
+    otherwise so existing deployments keep working. Callers can opt into
+    fail-closed selection when command restrictions are required."""
 
     def test_prefers_hardened_image_when_available(self, monkeypatch):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider
@@ -2362,18 +2364,110 @@ class TestDefaultImageSelection:
         p = DockerSandboxProvider()
         assert p._image == DockerSandboxProvider.HARDENED_IMAGE_TAG
 
-    def test_falls_back_to_legacy_when_hardened_not_built(self, monkeypatch):
+    def test_falls_back_to_legacy_when_hardened_not_built(self, caplog):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider
 
-        monkeypatch.setattr(DockerSandboxProvider, "_select_default_image",
-                            classmethod(lambda cls: DockerSandboxProvider._LEGACY_DEFAULT_IMAGE))
-        p = DockerSandboxProvider()
-        assert p._image == "python:3.11-slim"
+        docker_module = MagicMock()
+        docker_module.from_env.return_value.images.get.side_effect = Exception(
+            "image not found"
+        )
 
-    def test_explicit_image_overrides_default(self):
+        with patch.dict("sys.modules", {"docker": docker_module}):
+            with caplog.at_level(
+                "WARNING",
+                logger="agent_sandbox.docker_provider.provider",
+            ):
+                selected = DockerSandboxProvider._select_default_image()
+
+        assert selected == "python:3.11-slim"
+        assert "Minimal-PATH command restrictions are not active" in caplog.text
+        assert "require_hardened_image=True" in caplog.text
+
+    def test_explicit_image_overrides_default_without_fallback_warning(self, caplog):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider
-        p = DockerSandboxProvider(image="my-custom:tag")
+
+        with patch.object(
+            DockerSandboxProvider,
+            "_select_default_image",
+        ) as select_default:
+            with caplog.at_level(
+                "WARNING",
+                logger="agent_sandbox.docker_provider.provider",
+            ):
+                p = DockerSandboxProvider(image="my-custom:tag")
+
         assert p._image == "my-custom:tag"
+        select_default.assert_not_called()
+        assert "Minimal-PATH command restrictions are not active" not in caplog.text
+
+    def test_require_hardened_image_selects_hardened_image(self, monkeypatch):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        selected_with = []
+
+        def fake_select(
+            cls,
+            *,
+            require_hardened_image=False,
+            docker_url=None,
+        ):
+            selected_with.append((require_hardened_image, docker_url))
+            return cls.HARDENED_IMAGE_TAG
+
+        monkeypatch.setattr(
+            DockerSandboxProvider,
+            "_select_default_image",
+            classmethod(fake_select),
+        )
+
+        p = DockerSandboxProvider(require_hardened_image=True)
+
+        assert p._image == DockerSandboxProvider.HARDENED_IMAGE_TAG
+        assert selected_with == [(True, None)]
+
+    def test_require_hardened_image_uses_configured_docker_url(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        docker_module = MagicMock()
+
+        with patch.dict("sys.modules", {"docker": docker_module}):
+            selected = DockerSandboxProvider._select_default_image(
+                require_hardened_image=True,
+                docker_url="tcp://docker.example:2376",
+            )
+
+        assert selected == DockerSandboxProvider.HARDENED_IMAGE_TAG
+        docker_module.DockerClient.assert_called_once_with(
+            base_url="tcp://docker.example:2376"
+        )
+        docker_module.from_env.assert_not_called()
+
+    def test_require_hardened_image_fails_when_unavailable(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        docker_module = MagicMock()
+        docker_module.from_env.return_value.images.get.side_effect = Exception(
+            "image not found"
+        )
+
+        with patch.dict("sys.modules", {"docker": docker_module}):
+            with pytest.raises(
+                RuntimeError,
+                match="required but is not available locally",
+            ):
+                DockerSandboxProvider(require_hardened_image=True)
+
+    def test_require_hardened_image_rejects_custom_image(self):
+        from agent_sandbox.docker_provider.provider import DockerSandboxProvider
+
+        with pytest.raises(
+            ValueError,
+            match="image and require_hardened_image cannot be used together",
+        ):
+            DockerSandboxProvider(
+                image="my-custom:tag",
+                require_hardened_image=True,
+            )
 
     def test_hardened_image_tag_documented(self):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider

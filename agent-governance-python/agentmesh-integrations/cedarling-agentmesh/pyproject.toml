@@ -4,50 +4,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cedarling_agentmesh"
-version = "4.0.0"
-description = "Public Preview. Cedarling policy backend for AGT — community integration package"
-readme = "README.md"
+version = "4.1.0"
+description = "Deprecated. Previously published as cedarling-agentmesh. Install agent-governance-toolkit-integrations[cedarling] instead."
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
-    { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-keywords = ["cedarling", "cedar", "agents", "policy", "authorization", "agentmesh", "governance"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
-dependencies = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
-]
-
-[project.optional-dependencies]
-python = ["cedarling-python>=0.0.4"]
-dev = [
-    "pytest>=7.0,<8.0",
-    "ruff>=0.1.0,<1.0",
-]
+dependencies = ["agent-governance-toolkit-integrations[cedarling]>=4.0.0,<5.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Repository = "https://github.com/microsoft/agent-governance-toolkit"
-Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+"Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["cedarling_agentmesh"]
-
-[tool.ruff]
-line-length = 100
-target-version = "py39"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "W"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]

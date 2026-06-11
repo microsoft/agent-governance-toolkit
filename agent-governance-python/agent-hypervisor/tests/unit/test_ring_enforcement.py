@@ -25,6 +25,7 @@ from hypervisor.rings.enforcer import (
     RingCheckResult,
     RingEnforcer,
 )
+from hypervisor.sandbox import DENIED_COMMANDS
 from hypervisor.session.isolation import (
     IsolationLevel,
     SessionIsolationManager,
@@ -428,6 +429,11 @@ class TestRingEnforcerResources:
         # Ring 0 has its own constraints
         c = enforcer.get_constraints(ExecutionRing.RING_0_ROOT)
         assert c.max_concurrent_tools == 32
+
+    def test_ring3_denylist_covers_network_tools(self):
+        """Ring-3 denylist must include all primary network exfiltration tools."""
+        required = {"curl", "wget", "nc"}
+        assert required.issubset(set(DENIED_COMMANDS))
 
 
 # ── Session Isolation Tests ──────────────────────────────────────────

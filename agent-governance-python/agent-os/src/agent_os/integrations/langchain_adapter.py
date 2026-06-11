@@ -71,16 +71,16 @@ import functools
 import logging
 import time
 import warnings
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+from .base import PII_PATTERNS, BaseIntegration, GovernanceEventType, GovernancePolicy
 from ._v5_runtime_bridge import (
     AdapterRuntimeBridge,
     BridgeResult,
     get_runtime_bridge,
 )
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import PII_PATTERNS, BaseIntegration, GovernancePolicy
 
 logger = logging.getLogger("agent_os.langchain")
 
@@ -320,14 +320,20 @@ class LangChainKernel(BaseIntegration):
             )
 
     def _record_tool_invocation(
-        self, tool_name: str, args: Any, kwargs: Any
+        self,
+        tool_name: str,
+        args: Any,
+        kwargs: Any,
+        *,
+        skill_fields: dict[str, str | None] | None = None,
     ) -> None:
         """Append a tool invocation record to the audit log."""
         record = {
             "tool_name": tool_name,
             "args": str(args),
             "kwargs": str(kwargs),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **(skill_fields or self.build_skill_audit_fields()),
         }
         self._tool_invocations.append(record)
         if self.policy.log_all_calls:
@@ -971,6 +977,28 @@ class GovernanceMiddleware(_MiddlewareBase):
             tool_args,
         )
 
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(request),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(request, "skill_metadata", None)
+            ),
+        )
+
+        skill_fields = self._kernel.build_skill_audit_fields(
+            trusted_sources=trusted_skill_sources,
+            default_origin="langchain",
+            context_before=tool_args,
+        )
+        self._kernel.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=self._ctx.agent_id,
+            action="langchain.wrap_tool_call",
+            trusted_sources=trusted_skill_sources,
+            default_origin="langchain",
+            context_before=tool_args,
+            tool_name=tool_name,
+        )
+
         # ─── 1. Tool allowlist / blocklist ────────────────────────
         self._kernel._check_tool_policy(
             tool_name, (tool_args,), {}, self._ctx
@@ -1009,7 +1037,12 @@ class GovernanceMiddleware(_MiddlewareBase):
         logger.info("[%s] Policy ALLOW on tool '%s'", self._name, tool_name)
 
         # ─── 3. Record invocation ─────────────────────────────────
-        self._kernel._record_tool_invocation(tool_name, (tool_args,), {})
+        self._kernel._record_tool_invocation(
+            tool_name,
+            (tool_args,),
+            {},
+            skill_fields=skill_fields,
+        )
 
         # ─── 4. Execute the tool ──────────────────────────────────
         try:
@@ -1102,6 +1135,23 @@ class GovernanceMiddleware(_MiddlewareBase):
             len(input_text),
         )
 
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(request),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(request, "skill_metadata", None)
+            ),
+        )
+
+        self._kernel.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=self._ctx.agent_id,
+            action="langchain.wrap_model_call",
+            trusted_sources=trusted_skill_sources,
+            default_origin="langchain",
+            context_before=input_text.strip() if input_text.strip() else None,
+        )
+
+        # ─── 1. Content filter on input ───────────────────────────
         # ─── 1. AGT input intervention point ──────────────────────
         if input_text.strip():
             pre_result = self._kernel.evaluate_input(
