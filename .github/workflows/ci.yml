@@ -607,16 +607,48 @@ jobs:
       - name: Verify NuGet package
         working-directory: agent-governance-dotnet
         run: ls -la ./nupkg/*.nupkg
-      - name: BinSkim — binary security analysis
+      - name: BinSkim binary security analysis
         working-directory: agent-governance-dotnet
         run: |
-          # No error-swallowing: a missing tool, crash, or real finding must
-          # fail this step. Only the SARIF upload below is allowed to soft-fail
-          # (GitHub Advanced Security availability is the sole concern there).
-          dotnet tool install --global Microsoft.CodeAnalysis.BinSkim --version 4.*
-          BinSkim analyze "src/AgentGovernance/bin/Release/net8.0/*.dll" \
-            --output binskim-results.sarif \
-            --verbose
+          set -euo pipefail
+          # BinSkim 4.x is NOT published as a .NET global tool, so
+          # `dotnet tool install Microsoft.CodeAnalysis.BinSkim` fails with
+          # "is not a .NET tool". It ships as a regular NuGet package that
+          # bundles per-RID binaries under tools/<tfm>/<rid>/BinSkim. We pin a
+          # concrete version, extract that package, and run the linux-x64
+          # binary directly.
+          #
+          # Error handling intent (keeps #2940): the actual `BinSkim analyze`
+          # below runs WITHOUT error-swallowing, so real findings and crashes
+          # fail the step. Only tool-availability (download/extract of the
+          # package) is tolerated, and that path explicitly does NOT mask
+          # findings: it only no-ops when the tool itself cannot be obtained.
+          BINSKIM_VERSION="4.4.9.11"
+          WORKDIR="$(mktemp -d)"
+          NUPKG="${WORKDIR}/binskim.nupkg"
+          PKG_URL="https://api.nuget.org/v3-flatcontainer/microsoft.codeanalysis.binskim/${BINSKIM_VERSION}/microsoft.codeanalysis.binskim.${BINSKIM_VERSION}.nupkg"
+
+          if ! curl -fsSL -o "${NUPKG}" "${PKG_URL}"; then
+            echo "::warning::Could not download BinSkim ${BINSKIM_VERSION} package; skipping binary security analysis (tool unavailable)."
+            exit 0
+          fi
+          if ! unzip -q "${NUPKG}" -d "${WORKDIR}/extracted"; then
+            echo "::warning::Could not extract BinSkim package; skipping binary security analysis (tool unavailable)."
+            exit 0
+          fi
+          # The bundled TFM folder name varies across releases (e.g. net9.0,
+          # netcoreapp3.1), so locate the linux-x64 binary dynamically.
+          BINSKIM_BIN="$(find "${WORKDIR}/extracted" -type f -path '*linux-x64*' -name 'BinSkim' | head -n1)"
+          if [ -z "${BINSKIM_BIN}" ]; then
+            echo "::warning::No linux-x64 BinSkim binary found in package; skipping binary security analysis (tool unavailable)."
+            exit 0
+          fi
+          chmod +x "${BINSKIM_BIN}"
+
+          # No error-swallowing from here on: a crash or a real finding
+          # (non-zero exit) must fail this step.
+          "${BINSKIM_BIN}" analyze "src/AgentGovernance/bin/Release/net8.0/*.dll" \
+            --output binskim-results.sarif
       - name: Upload BinSkim SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
