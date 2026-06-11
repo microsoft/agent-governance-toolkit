@@ -50,7 +50,10 @@ class _MinimalHttpClient:
             raise ValueError(f"Private/internal domains not allowed: {domain}")
 
         if self.allowed_domains:
-            if not any(domain.endswith(allowed) for allowed in self.allowed_domains):
+            if not any(
+                domain == allowed.lower() or domain.endswith("." + allowed.lower())
+                for allowed in self.allowed_domains
+            ):
                 raise ValueError(
                     f"Domain '{domain}' not in allowed list. "
                     f"Allowed: {', '.join(self.allowed_domains)}"
@@ -217,6 +220,38 @@ class TestAllowlist:
     def test_port_does_not_affect_domain_check(self, allowlist_client):
         url = "https://example.com:8443/secure"
         assert allowlist_client._validate_url(url) == url
+
+    # --- Substring-bypass regressions -------------------------------------
+
+    def test_lookalike_suffix_rejected(self, allowlist_client):
+        """Regression: 'example.com' allowlist must not admit 'evil-example.com'.
+
+        The previous `domain.endswith(allowed)` check would accept any
+        domain that happens to end with the allowed string, including
+        attacker-controlled lookalikes like `evil-example.com` or
+        `attacker.example.com.evil`.
+        """
+        with pytest.raises(ValueError, match="not in allowed list"):
+            allowlist_client._validate_url("https://evil-example.com/payload")
+
+    def test_lookalike_prefix_rejected(self, allowlist_client):
+        with pytest.raises(ValueError, match="not in allowed list"):
+            allowlist_client._validate_url("https://example.com.attacker.io/x")
+
+    def test_short_suffix_does_not_match_unrelated_tld(self):
+        """Allowlist 'er.com' must NOT match 'attacker.com'."""
+        client = _MinimalHttpClient(allowed_domains=["er.com"])
+        with pytest.raises(ValueError, match="not in allowed list"):
+            client._validate_url("https://attacker.com/x")
+        # And it SHOULD match the exact host:
+        assert client._validate_url("https://er.com/x") == "https://er.com/x"
+
+    def test_allowlist_match_is_case_insensitive(self):
+        client = _MinimalHttpClient(allowed_domains=["Example.COM"])
+        assert (
+            client._validate_url("https://api.example.com/x")
+            == "https://api.example.com/x"
+        )
 
 
 class TestEmptyHostname:

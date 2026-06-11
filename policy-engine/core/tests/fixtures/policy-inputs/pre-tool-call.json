@@ -1,0 +1,49 @@
+{
+  "annotations": {
+    "actor_context": {
+      "tier": "gold"
+    },
+    "tool_risk": {
+      "data_labels": [
+        "public"
+      ],
+      "risk": "low"
+    }
+  },
+  "snapshot": {
+    "action": "invokeTool",
+    "actor": {
+      "id": "user-123",
+      "type": "User"
+    },
+    "tool_call": {
+      "args": {
+        "limit": 5,
+        "query": "account policy"
+      },
+      "id": "tool-call-1",
+      "name": "search"
+    }
+  },
+  "intervention_point": "pre_tool_call",
+  "policy_target": {
+    "kind": "tool_args",
+    "path": "$snap.tool_call.args",
+    "value": {
+      "limit": 5,
+      "query": "account policy"
+    }
+  },
+  "tool": {
+    "clearance": [
+      "public",
+      "customer_profile"
+    ],
+    "id": "search",
+    "name": "search",
+    "security_labels": [
+      "customer_profile"
+    ],
+    "type": "Tool"
+  }
+}

@@ -112,5 +112,6 @@ For the scenario-driven tutorial, sample prompts, and expected outcomes, see:
 
 ## Release model
 
-GitHub Actions builds and tests the package in CI. Production npm publishing goes through the
-ESRP-backed Azure DevOps release pipeline alongside the other AGT npm packages.
+GitHub Actions builds, tests, packs, attests, and publishes the package through
+the canonical AGT release workflow. Microsoft-origin package names are tracked in
+the compatibility plan in [package migration](../package-migration.md).

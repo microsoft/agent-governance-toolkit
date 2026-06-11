@@ -1,0 +1,111 @@
+[
+  {
+    "name": "host_in_allowlist_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"http_get\"",
+      "context": {
+        "tool_call": {"name": "http_get", "args": {"host": "api.example.com"}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "http_get"}, "attrs": {"security_labels": ["api.example.com", "files.example.com"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "host_not_in_allowlist_denies",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"http_get\"",
+      "context": {
+        "tool_call": {"name": "http_get", "args": {"host": "attacker.example.org"}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "http_get"}, "attrs": {"security_labels": ["api.example.com"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["egress_destination_not_allowed"],
+    "num_errors": 0
+  },
+  {
+    "name": "domain_arg_denies_when_not_in_allowlist",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"http_get\"",
+      "context": {
+        "tool_call": {"name": "http_get", "args": {"domain": "attacker.example.org"}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "http_get"}, "attrs": {"security_labels": ["api.example.com"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["egress_destination_not_allowed_domain"],
+    "num_errors": 0
+  },
+  {
+    "name": "annotation_destination_denies_when_not_in_allowlist",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"http_get\"",
+      "context": {
+        "tool_call": {"name": "http_get", "args": {}},
+        "annotations": {"egress": {"destination": "attacker.example.org"}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "http_get"}, "attrs": {"security_labels": ["api.example.com"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": ["egress_destination_not_allowed_annotation"],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_destination_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"http_get\"",
+      "context": {
+        "tool_call": {"name": "http_get", "args": {}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "http_get"}, "attrs": {"security_labels": ["api.example.com"]}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  },
+  {
+    "name": "missing_security_labels_does_not_forbid",
+    "request": {
+      "principal": "Agent::\"a\"",
+      "action": "Action::\"pre_tool_call\"",
+      "resource": "Tool::\"http_get\"",
+      "context": {
+        "tool_call": {"name": "http_get", "args": {"host": "attacker.example.org"}}
+      }
+    },
+    "entities": [
+      {"uid": {"type": "Tool", "id": "http_get"}, "attrs": {}, "parents": []},
+      {"uid": {"type": "Agent", "id": "a"}, "attrs": {}, "parents": []}
+    ],
+    "decision": "deny",
+    "reason": [],
+    "num_errors": 0
+  }
+]

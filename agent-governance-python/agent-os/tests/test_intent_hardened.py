@@ -34,7 +34,7 @@ from agent_os.stateless import ExecutionContext, MemoryBackend, StatelessKernel
 # ---------------------------------------------------------------------------
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 @pytest.fixture

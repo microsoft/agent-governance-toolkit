@@ -2,9 +2,16 @@
 # Licensed under the MIT License.
 """Tests for OPA/Rego policy adapter and PolicyEngine integration."""
 
+import shutil
+
 import pytest
+
 from agentmesh.governance.opa import OPAEvaluator, OPADecision
 from agentmesh.governance.policy import PolicyEngine
+
+requires_opa = pytest.mark.skipif(
+    not shutil.which("opa"), reason="opa CLI not installed"
+)
 
 
 # ── Sample Rego policies ──────────────────────────────────────
@@ -64,6 +71,7 @@ allow {
 
 # ── OPAEvaluator: built-in evaluator tests ───────────────────
 
+@requires_opa
 class TestBuiltinEvaluator:
     """Test the built-in Rego parser (no OPA CLI needed)."""
 
@@ -176,6 +184,7 @@ class TestOPADecision:
 
 # ── PolicyEngine + Rego integration ──────────────────────────
 
+@requires_opa
 class TestPolicyEngineRegoIntegration:
     """Test that load_rego works alongside YAML policies."""
 
@@ -259,6 +268,7 @@ rules:
 
 # ── Edge cases ────────────────────────────────────────────────
 
+@requires_opa
 class TestEdgeCases:
     def test_empty_rego_content(self):
         evaluator = OPAEvaluator(mode="local", rego_content="")

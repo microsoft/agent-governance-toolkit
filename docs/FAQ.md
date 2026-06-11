@@ -5,7 +5,7 @@
 Technical Q&A for customers, partners, and evaluators of the Agent Governance
 Toolkit.
 
-> **See also:** [Quick Start](quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](OWASP-COMPLIANCE.md)
+> **See also:** [Quick Start](quickstart.md) · [Architecture](ARCHITECTURE.md) · [Known Limitations](LIMITATIONS.md) · [OWASP Compliance](../docs/compliance/owasp-agentic-top10-architecture.md)
 
 ---
 
@@ -482,6 +482,8 @@ Key controls:
 | **Tests** | 644+ tests | Import compatibility tests |
 | **Install** | `pip install agent-hypervisor` | `pip install agentmesh-runtime` |
 | **Import** | `from hypervisor import Hypervisor` | `from hypervisor import Hypervisor` (same) |
+
+> Note: most users should install the consolidated distribution with `pip install agent-governance-toolkit[full]`, which pulls in the hypervisor/runtime subsystem. The individual package names above are documented only to explain the PyPI naming.
 
 ### What the Hypervisor / Runtime Provides
 

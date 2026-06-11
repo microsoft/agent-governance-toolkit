@@ -28,8 +28,8 @@ try:
 except ImportError:
     _HAS_YAML = False
 
-# specs/ directory is at the repo root, not inside the package
-_SPECS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "specs"
+# specs/ YAML files live alongside this __init__.py inside the package
+_SPECS_DIR = Path(__file__).resolve().parent
 
 
 def _parse_value(val: str) -> Any:

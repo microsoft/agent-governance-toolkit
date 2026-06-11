@@ -2,9 +2,9 @@
 
 This scenario uses the real Microsoft Agent Framework Python agent pattern with
 AGT middleware from `agent_os.integrations.maf_adapter`. It preserves the
-deployment-safety story from the tutorial: production deploys, destructive ops,
-and secret access are blocked while build, test, and staging workflows remain
-available.
+deployment-safety story from the tutorial and runs it through real
+`Agent.run(...)` calls: production deploys, destructive ops, and secret access
+are blocked while build, test, and staging workflows remain available.
 
 ## Governance story
 
@@ -26,8 +26,8 @@ Optional live model backends:
 - `OPENAI_API_KEY`
 - `AZURE_OPENAI_API_KEY` with `AZURE_OPENAI_ENDPOINT` or `AZURE_OPENAI_BASE_URL`
 
-Without credentials, the example still runs the real governance middleware
-walkthrough locally.
+Without credentials, the example still runs the real governance walkthrough
+locally by using a deterministic scripted MAF client.
 
 ## Files
 

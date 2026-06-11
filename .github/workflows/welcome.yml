@@ -5,15 +5,19 @@ on:
     types: [opened]
   issues:
     types: [opened]
+# SECURITY: least-privileged default. Write scopes are granted per-job below.
 permissions:
-  issues: write
-  pull-requests: write
+  contents: read
 # SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 # This workflow reads contributor history via the GitHub API and posts a
 # welcome comment. No PR head code is checked out or executed.
 jobs:
   welcome:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
       # Implemented via actions/github-script rather than the historical
       # actions/first-interaction action — first-interaction has had no

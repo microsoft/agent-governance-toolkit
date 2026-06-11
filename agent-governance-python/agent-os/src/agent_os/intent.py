@@ -561,6 +561,26 @@ class IntentManager:
         """
         intent = await self._load(intent_id)
 
+        # Bind the intent to its declaring agent. Without this check,
+        # a malicious or compromised agent that learned another agent's
+        # intent_id could ride that intent's approval to execute
+        # high-risk actions on the victim's behalf.
+        if intent.agent_id and intent.agent_id != agent_id:
+            logger.warning(
+                "Intent agent_id mismatch: intent=%s declared_by=%s called_by=%s",
+                intent_id,
+                intent.agent_id,
+                agent_id,
+            )
+            return IntentCheckResult(
+                allowed=False,
+                was_planned=False,
+                reason=(
+                    f"Intent '{intent_id}' was declared by a different agent. "
+                    "Cross-agent intent reuse is not permitted."
+                ),
+            )
+
         # Check expiry.
         if intent.is_expired:
             self._transition(intent, IntentState.EXPIRED)
@@ -678,7 +698,9 @@ class IntentManager:
         """
         intent = await self._load(intent_id)
 
-        if intent.state not in (IntentState.EXECUTING, IntentState.APPROVED):
+        # Verification finalizes execution results and must only occur while
+        # actively executing to preserve the declare->approve->execute->verify lifecycle.
+        if intent.state != IntentState.EXECUTING:
             raise IntentStateError(
                 f"Cannot verify intent in state '{intent.state.value}'"
             )

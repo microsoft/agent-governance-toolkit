@@ -12,14 +12,13 @@
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 
 > [!IMPORTANT]
-> **Public Preview** — The `agent-governance-toolkit` package on PyPI is a Microsoft-signed
-> public preview release. APIs may change before GA.
+> **Public Preview** — The `agent-governance-toolkit` package on PyPI is a public preview release. APIs may change before GA.
 
 ```
 pip install agent-governance-toolkit[full]
 ```
 
-[Architecture](#architecture) • [Quick Start](#quick-start) • [Components](#components) • [Why Unified?](#why-a-unified-governance-stack) • [Ecosystem](#the-agent-governance-ecosystem) • [OWASP Compliance](docs/OWASP-COMPLIANCE.md) • [Traction](docs/TRACTION.md)
+[Architecture](#architecture) • [Quick Start](#quick-start) • [Components](#components) • [Why Unified?](#why-a-unified-governance-stack) • [Ecosystem](#the-agent-governance-ecosystem) • [OWASP Compliance](../../docs/compliance/owasp-agentic-top10-architecture.md) • [Traction](../../agent-governance-python/agent-compliance/docs/TRACTION.md)
 
 </div>
 
@@ -183,7 +182,7 @@ Each component works standalone, but they're designed to work together. The kern
 
 ## Examples
 
-See the [`examples/`](examples/) directory for runnable demos:
+See the [`examples/`](../../examples/) directory for runnable demos:
 
 ```bash
 # Quick start — boot the governance stack in 30 lines
@@ -238,7 +237,7 @@ The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for 
 | Human-Agent Trust Exploitation | ✅ | Agent OS — Approval Workflows |
 | Rogue Agents | ✅ | Agent Runtime — Kill Switch |
 
-**[→ Full OWASP compliance mapping with code examples](docs/OWASP-COMPLIANCE.md)**
+**[→ Full OWASP compliance mapping with code examples](../../docs/compliance/owasp-agentic-top10-architecture.md)**
 
 ---
 
@@ -246,7 +245,7 @@ The agent governance stack covers **10 of 10** risks from the [OWASP Top 10 for 
 
 The ecosystem is growing — **3,000+ views, 9,400+ clones, and 1,278 unique developers** in the last 14 days alone. Traffic from Medium, Reddit, LinkedIn, Google, and even ChatGPT.
 
-**[→ See full traction report](docs/TRACTION.md)**
+**[→ See full traction report](../../agent-governance-python/agent-compliance/docs/TRACTION.md)**
 
 ---
 
@@ -262,7 +261,7 @@ For component-specific contributions, see:
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](../../LICENSE) for details.
 
 ---
 

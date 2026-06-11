@@ -7,6 +7,7 @@ Tests for Nexus Escrow / Proof of Outcome
 import pytest
 from datetime import datetime
 
+from nexus.crypto import escrow_message, generate_keypair, sign
 from nexus.escrow import EscrowManager, ProofOfOutcome
 from nexus.schemas.escrow import EscrowRequest, EscrowStatus
 from nexus.exceptions import (
@@ -161,10 +162,13 @@ class TestProofOfOutcome:
     async def test_create_and_release(self):
         """Test the full escrow lifecycle."""
         poo = ProofOfOutcome()
-        
+
         # Add credits
         poo.escrow_manager.add_credits("did:nexus:requester", 1000)
-        
+
+        private_key_bytes, _ = generate_keypair()
+        sig = sign(private_key_bytes, escrow_message("did:nexus:requester", "did:nexus:provider", "task123", 50))
+
         # Create escrow
         receipt = await poo.create_escrow(
             requester_did="did:nexus:requester",
@@ -172,6 +176,7 @@ class TestProofOfOutcome:
             task_hash="task123",
             credits=50,
             require_scak=False,
+            requester_signature=sig,
         )
         
         # Activate
@@ -190,7 +195,10 @@ class TestProofOfOutcome:
         """Test SCAK validation."""
         poo = ProofOfOutcome()
         poo.escrow_manager.add_credits("did:nexus:requester", 1000)
-        
+
+        private_key_bytes, _ = generate_keypair()
+        sig = sign(private_key_bytes, escrow_message("did:nexus:requester", "did:nexus:provider", "task123", 50))
+
         receipt = await poo.create_escrow(
             requester_did="did:nexus:requester",
             provider_did="did:nexus:provider",
@@ -198,6 +206,7 @@ class TestProofOfOutcome:
             credits=50,
             require_scak=True,
             drift_threshold=0.15,
+            requester_signature=sig,
         )
         
         # Validate (without actual SCAK validator)

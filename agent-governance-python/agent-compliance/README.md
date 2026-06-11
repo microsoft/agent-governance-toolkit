@@ -12,8 +12,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agent-governance-toolkit)](https://pypi.org/project/agent-governance-toolkit/)
 
 > [!IMPORTANT]
-> **Public Preview** — The `agent-governance-toolkit` package on PyPI is a Microsoft-signed
-> public preview release. APIs may change before GA.
+> **Public Preview** — The `agent-governance-toolkit` package on PyPI is a public preview release. APIs may change before GA.
 
 ```
 pip install agent-governance-toolkit[full]

@@ -6,13 +6,28 @@ PydanticAI Integration for Agent-OS
 
 Provides kernel-level governance for PydanticAI agent workflows.
 
+Backend (AGT 5.0): every policy decision is routed through
+:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
+The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
+translated to an AGT manifest via
+:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
+time, an :class:`AgtRuntime` is memoised per policy, and a
+:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
+``ExecutionContext`` budgets between intervention points. The legacy
+``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
+keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
+outbound prompt or tool arguments before PydanticAI sees them;
+``escalate`` verdicts route through the configured approval resolver
+per AGT-DELTA D1.4.
+
 Features:
-- Policy enforcement for agent tool calls
-- Tool call interception via PydanticAI's tool system
+- Policy enforcement for agent tool calls via the AGT 5.0 ACS runtime
+- Tool call interception via PydanticAI's tool system or native
+  ``GovernanceCapability`` hook
 - Human approval workflows for sensitive operations
 - Call budget enforcement (max_tool_calls)
 - Audit logging for all tool executions
-- Blocked pattern detection in tool arguments
+- Transform-verdict rewriting of tool arguments and prompts
 - Graceful degradation when pydantic-ai is not installed
 
 Example:
@@ -39,19 +54,28 @@ import logging
 import time
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
 from .base import (
     BaseIntegration,
     ExecutionContext,
     GovernancePolicy,
-    PolicyInterceptor,
-    PolicyViolationError,
-    ToolCallRequest,
+    PolicyViolationError as _BasePolicyViolationError,
     ToolCallResult,
 )
 
 logger = logging.getLogger(__name__)
+
+# Re-export the canonical PolicyViolationError under the same import path
+# v4 callers used (`from agent_os.integrations.pydantic_ai_adapter
+# import PolicyViolationError`). The base module already aliases to the
+# canonical class, so this preserves identity.
+PolicyViolationError = _BasePolicyViolationError
 
 # Graceful import handling for pydantic-ai
 try:
@@ -89,14 +113,85 @@ class PydanticAIKernel(BaseIntegration):
         policy: GovernancePolicy | None = None,
         approval_callback: Callable[[str, dict[str, Any]], bool] | None = None,
         evaluator: Any = None,
+        *,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ) -> None:
+        """Initialise the PydanticAI governance kernel.
+
+        Args:
+            policy: Governance policy to enforce. When ``None`` the
+                default ``GovernancePolicy`` is used. The policy is
+                translated to an AGT manifest and an
+                :class:`agt.policies.runtime.AgtRuntime` is constructed
+                over it at init time.
+            approval_callback: Legacy v4 approval hook used by the
+                ``require_human_approval`` policy field. When set and
+                the policy requires approval, the callback gates the
+                tool call.
+            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
+                policy evaluation. Retained for backward compatibility;
+                the primary decision path now runs through the AGT 5.0
+                runtime.
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature
+                matches :data:`agt.policies.runtime.ApprovalCallback`.
+                When ``None`` an escalate verdict fails closed to
+                ``deny``.
+            _runtime: Test seam — inject a pre-built
+                :class:`AgtRuntime` so scenario tests can wire a
+                scripted policy dispatcher without OPA on PATH. Not
+                part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public
+                surface.
+        """
         super().__init__(policy, evaluator=evaluator)
         self._wrapped_agents: dict[int, Any] = {}
         self._audit_log: list[dict[str, Any]] = []
         self._approval_callback = approval_callback
+        self._approval_resolver = approval_resolver
         self._start_time: float = time.monotonic()
         self._last_error: str | None = None
+        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
+            self.policy,
+            approval_resolver=approval_resolver,
+            runtime=_runtime,
+            runtime_factory=_runtime_factory,
+        )
         logger.debug("PydanticAIKernel initialized with policy=%s", policy)
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+        return self._bridge
+
+    def evaluate_input(
+        self, ctx: ExecutionContext, input_data: Any
+    ) -> BridgeResult:
+        """Public access to the AGT ``input`` intervention point evaluation."""
+        body: Any
+        if isinstance(input_data, (str, dict)):
+            body = input_data
+        elif hasattr(input_data, "content"):
+            body = str(getattr(input_data, "content"))
+        else:
+            body = str(input_data)
+        return self._bridge.evaluate_input(ctx, body=body)
+
+    def evaluate_pre_tool_call(
+        self,
+        ctx: ExecutionContext,
+        *,
+        tool_name: str,
+        args: dict[str, Any],
+        call_id: str = "call-1",
+    ) -> BridgeResult:
+        """AGT ``pre_tool_call`` evaluation for a PydanticAI tool invocation."""
+        return self._bridge.evaluate_pre_tool_call(
+            ctx, tool_name=tool_name, args=args, call_id=call_id
+        )
 
     @property
     def audit_log(self) -> list[dict[str, Any]]:
@@ -204,24 +299,16 @@ class PydanticAIKernel(BaseIntegration):
 
             async def run(self_inner, prompt: str, **kwargs) -> Any:
                 """Governed async run."""
-                allowed, reason = kernel.pre_execute(ctx, prompt)
-                if not allowed:
-                    kernel._last_error = reason
-                    kernel._record_audit(
-                        "run_blocked",
-                        reason=reason or "",
-                        agent_id=agent_id,
-                    )
-                    raise PolicyViolationError(reason or "Pre-execution check failed")
+                effective_prompt = self_inner._evaluate_prompt(prompt)
 
                 kernel._record_audit(
                     "run_start",
                     agent_id=agent_id,
-                    reason=f"prompt_length={len(prompt)}",
+                    reason=f"prompt_length={len(effective_prompt)}",
                 )
 
                 try:
-                    result = await self_inner._original.run(prompt, **kwargs)
+                    result = await self_inner._original.run(effective_prompt, **kwargs)
                     kernel._record_audit("run_complete", agent_id=agent_id)
                     return result
                 except PolicyViolationError:
@@ -238,24 +325,16 @@ class PydanticAIKernel(BaseIntegration):
 
             def run_sync(self_inner, prompt: str, **kwargs) -> Any:
                 """Governed sync run."""
-                allowed, reason = kernel.pre_execute(ctx, prompt)
-                if not allowed:
-                    kernel._last_error = reason
-                    kernel._record_audit(
-                        "run_blocked",
-                        reason=reason or "",
-                        agent_id=agent_id,
-                    )
-                    raise PolicyViolationError(reason or "Pre-execution check failed")
+                effective_prompt = self_inner._evaluate_prompt(prompt)
 
                 kernel._record_audit(
                     "run_start",
                     agent_id=agent_id,
-                    reason=f"prompt_length={len(prompt)}",
+                    reason=f"prompt_length={len(effective_prompt)}",
                 )
 
                 try:
-                    result = self_inner._original.run_sync(prompt, **kwargs)
+                    result = self_inner._original.run_sync(effective_prompt, **kwargs)
                     kernel._record_audit("run_complete", agent_id=agent_id)
                     return result
                 except PolicyViolationError:
@@ -269,6 +348,25 @@ class PydanticAIKernel(BaseIntegration):
                         allowed=False,
                     )
                     raise
+
+            def _evaluate_prompt(self_inner, prompt: str) -> str:
+                """Run the AGT ``input`` intervention point and honour the verdict."""
+                bridge_result = kernel.evaluate_input(ctx, prompt)
+                if not bridge_result.allowed:
+                    kernel._last_error = bridge_result.reason
+                    kernel._record_audit(
+                        "run_blocked",
+                        reason=bridge_result.reason or "",
+                        agent_id=agent_id,
+                    )
+                    raise PolicyViolationError.from_check_result(
+                        bridge_result.check_result
+                    )
+                if bridge_result.transform is not None and isinstance(
+                    bridge_result.transform.value, str
+                ):
+                    return bridge_result.transform.value
+                return prompt
 
             @property
             def original(self_inner) -> Any:
@@ -297,39 +395,121 @@ class PydanticAIKernel(BaseIntegration):
         tool_name: str,
         arguments: dict[str, Any],
     ) -> ToolCallResult:
-        """
-        Evaluate a tool call against the governance policy.
+        """Evaluate a tool call against the governance policy.
 
-        Returns a ToolCallResult indicating whether the call is allowed.
+        Routes the evaluation through the AGT 5.0 ACS engine at the
+        ``pre_tool_call`` intervention point. Returns a
+        :class:`ToolCallResult` shaped like the v4 contract so existing
+        v4 callers continue to work:
+
+        - ``allow`` -> ``allowed=True`` and the tool runs.
+        - ``deny`` -> ``allowed=False`` with the canonical reason.
+        - ``transform`` -> ``allowed=True`` plus the rewritten
+          ``modified_arguments`` payload from AGT-DELTA D1.1.
+        - ``escalate`` -> the bridge has already routed through the
+          approval resolver, so the verdict surfaces as allow (resolver
+          approved) or deny (resolver refused / not wired).
+
+        The legacy ``require_human_approval`` approval-callback short
+        circuit runs first so the v4 callback contract still works
+        before the engine evaluates the call.
+
+        A host-side ``blocked_patterns`` scan on the serialised
+        arguments runs alongside the engine because the AGT manifest
+        bridge only pattern-matches string policy targets and the v4
+        contract matched tool arguments via ``policy.matches_pattern``.
         """
-        # Handle human approval callback before the interceptor
-        if self.policy.require_human_approval:
-            if self._approval_callback:
-                approved = self._approval_callback(tool_name, arguments)
-                if not approved:
-                    return ToolCallResult(
-                        allowed=False,
-                        reason=f"Human approval denied for tool '{tool_name}'",
-                    )
-                # Approved — skip the interceptor's require_human_approval check
-                # by using a policy copy without the flag
-                from dataclasses import replace
-                policy_for_interceptor = replace(self.policy, require_human_approval=False)
-            else:
+        # Host-side blocked_patterns guard on tool arguments. Mirrors
+        # the v4 PolicyInterceptor.blocked_patterns branch; the AGT
+        # manifest bridge does not bind pre_tool_call for the
+        # blocked_patterns policy field.
+        args_str = str(arguments)
+        matched = self.policy.matches_pattern(args_str)
+        if matched:
+            pattern = matched[0]
+            return ToolCallResult(
+                allowed=False,
+                reason=f"blocked_pattern:{pattern}",
+            )
+
+        # Handle legacy v4 human approval callback before the AGT engine
+        # evaluates the call. The v4 ``require_human_approval`` field
+        # has a callback-based path that pre-dates AGT-DELTA D1.4 and is
+        # still part of the public contract.
+        #
+        # AGT-DELTA D5: when an ``approval_resolver`` is wired, defer
+        # the whole approval decision to the AGT runtime. The bridge's
+        # ``evaluate_pre_tool_call`` returns escalate, the AgtRuntime
+        # consults the resolver, and the verdict resolves to allow with
+        # a bisected enforced_identity (D1.4). The legacy callback path
+        # is preserved only for v4-only kernels (no resolver wired).
+        if (
+            self.policy.require_human_approval
+            and self._approval_resolver is None
+        ):
+            if self._approval_callback is None:
                 return ToolCallResult(
                     allowed=False,
                     reason=f"Tool '{tool_name}' requires human approval",
                 )
+            approved = self._approval_callback(tool_name, arguments)
+            if not approved:
+                return ToolCallResult(
+                    allowed=False,
+                    reason=f"Human approval denied for tool '{tool_name}'",
+                )
+            effective_bridge = self._approved_bridge()
         else:
-            policy_for_interceptor = self.policy
+            effective_bridge = self._bridge
 
-        interceptor = PolicyInterceptor(policy_for_interceptor, ctx)
-        request = ToolCallRequest(
+        bridge_result = effective_bridge.evaluate_pre_tool_call(
+            ctx,
             tool_name=tool_name,
-            arguments=arguments,
-            agent_id=ctx.agent_id,
+            args=arguments,
+            call_id=f"call-{ctx.call_count + 1}",
         )
-        return interceptor.intercept(request)
+
+        effective_args = arguments
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, dict
+        ):
+            effective_args = bridge_result.transform.value
+
+        if not bridge_result.allowed:
+            return ToolCallResult(
+                allowed=False,
+                reason=bridge_result.reason
+                or f"Tool '{tool_name}' blocked by policy",
+            )
+        return ToolCallResult(
+            allowed=True,
+            reason=bridge_result.reason or None,
+            modified_arguments=(
+                effective_args if effective_args is not arguments else None
+            ),
+        )
+
+    def _approved_bridge(self) -> AdapterRuntimeBridge:
+        """Return a sibling bridge with ``require_human_approval=False``.
+
+        Built lazily on first access. Used after the legacy v4
+        approval_callback has approved a tool call so the engine's
+        remaining policy checks (allowed_tools, blocked_patterns on
+        input, max_tool_calls, etc.) still fire without re-triggering
+        the AGT ``approval.escalate_if_approver_required`` rule.
+        """
+        cached = getattr(self, "_bridge_no_approval", None)
+        if cached is not None:
+            return cached
+        from dataclasses import replace
+
+        approved_policy = replace(self.policy, require_human_approval=False)
+        bridge = get_runtime_bridge(
+            approved_policy,
+            approval_resolver=self._approval_resolver,
+        )
+        self._bridge_no_approval = bridge
+        return bridge
 
     def get_stats(self) -> dict[str, Any]:
         """Get governance statistics."""
@@ -422,6 +602,18 @@ def _wrap_single_tool(
                 result.reason or f"Tool '{tool_name}' blocked by policy"
             )
 
+        # AGT-DELTA D1.1: if the engine rewrote the arguments via a
+        # transform verdict, swap them in for the downstream tool call
+        # so the host sees the redacted payload.
+        effective_kwargs = kwargs
+        effective_args = args
+        if result.modified_arguments is not None:
+            mod = dict(result.modified_arguments)
+            positional = mod.pop("_positional", None)
+            if positional is not None:
+                effective_args = tuple(positional)
+            effective_kwargs = mod
+
         ctx.call_count += 1
         kernel._record_audit(
             "tool_executed",
@@ -430,7 +622,7 @@ def _wrap_single_tool(
             arguments=call_args,
             agent_id=ctx.agent_id,
         )
-        return original_fn(*args, **kwargs)
+        return original_fn(*effective_args, **effective_kwargs)
 
     # Patch the tool entry
     if hasattr(tool_entry, "function"):
@@ -534,25 +726,40 @@ class GovernanceCapability:
     def before_run(self, prompt: str, **kwargs: Any) -> str:
         """Pre-run hook: scan prompt for governance violations.
 
+        Routes the prompt through the AGT 5.0 ACS engine at the
+        ``input`` intervention point. ``transform`` verdicts (AGT-DELTA
+        D1.1) rewrite the prompt before PydanticAI sees it;
+        ``escalate`` verdicts route through the configured approval
+        resolver per AGT-DELTA D1.4.
+
         Args:
             prompt: The user prompt to validate.
             **kwargs: Additional run context.
 
         Returns:
-            The prompt (unmodified).
+            The prompt, possibly rewritten by a transform verdict.
 
         Raises:
             PolicyViolationError: If the prompt violates policy.
         """
-        allowed, reason = self._kernel.pre_execute(self._ctx, prompt)
-        if not allowed:
+        bridge_result = self._kernel.evaluate_input(self._ctx, prompt)
+        if not bridge_result.allowed:
             self._audit.append({
                 "event": "run_blocked",
-                "reason": reason,
+                "reason": bridge_result.reason,
             })
-            raise PolicyViolationError(reason or "Pre-execution check failed")
-        self._audit.append({"event": "run_start", "prompt_length": len(prompt)})
-        return prompt
+            raise PolicyViolationError.from_check_result(
+                bridge_result.check_result
+            )
+        effective_prompt = prompt
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, str
+        ):
+            effective_prompt = bridge_result.transform.value
+        self._audit.append(
+            {"event": "run_start", "prompt_length": len(effective_prompt)}
+        )
+        return effective_prompt
 
     def after_run(self, result: Any, **kwargs: Any) -> Any:
         """Post-run hook: drift detection on result.
@@ -575,18 +782,27 @@ class GovernanceCapability:
     ) -> dict[str, Any]:
         """Pre-tool hook: validate tool call against governance policy.
 
+        Routes the call through the AGT 5.0 ACS engine at the
+        ``pre_tool_call`` intervention point via
+        :meth:`PydanticAIKernel.intercept_tool_call`. ``transform``
+        verdicts (AGT-DELTA D1.1) rewrite the outbound arguments;
+        ``escalate`` verdicts route through the configured approval
+        resolver per AGT-DELTA D1.4.
+
         Args:
             tool_name: Name of the tool being called.
             arguments: Tool call arguments.
             **kwargs: Additional context.
 
         Returns:
-            The arguments (unmodified).
+            The arguments, possibly rewritten by a transform verdict.
 
         Raises:
             PolicyViolationError: If the tool call violates policy.
         """
-        result = self._kernel.intercept_tool_call(self._ctx, tool_name, arguments)
+        result = self._kernel.intercept_tool_call(
+            self._ctx, tool_name, arguments
+        )
         if not result.allowed:
             self._audit.append({
                 "event": "tool_blocked",
@@ -597,6 +813,11 @@ class GovernanceCapability:
                 result.reason or f"Tool '{tool_name}' blocked by policy"
             )
 
+        effective_args = (
+            result.modified_arguments
+            if result.modified_arguments is not None
+            else arguments
+        )
         self._tool_call_count += 1
         self._ctx.call_count += 1
         self._audit.append({
@@ -604,7 +825,7 @@ class GovernanceCapability:
             "tool": tool_name,
             "call_number": self._tool_call_count,
         })
-        return arguments
+        return effective_args
 
     def after_tool_execute(
         self,

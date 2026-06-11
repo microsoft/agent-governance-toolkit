@@ -205,7 +205,7 @@ class GovernanceEventProcessor:
 
         self._sinks: list[GovernanceEventSink] = []
         self._sink_states: dict[int, _SinkState] = {}
-        self._queue: deque[GovernanceEvent] = deque(maxlen=self._max_queue_size)
+        self._queue: deque[GovernanceEvent] = deque()
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
         self._stopped = False
@@ -238,6 +238,7 @@ class GovernanceEventProcessor:
             if self._stopped:
                 return
             if len(self._queue) >= self._max_queue_size:
+                self._queue.popleft()
                 self._dropped_count += 1
             self._queue.append(event)
             self._condition.notify()

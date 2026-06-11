@@ -18,55 +18,55 @@ guides.
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------| 
-| – | [Retrofit Governance onto an Existing Agent](retrofit-governance.md) | Add policy enforcement to any existing agent in 3 steps | `agent-os-kernel` |
+| – | [Retrofit Governance onto an Existing Agent](retrofit-governance.md) | Add policy enforcement to any existing agent in 3 steps | `agent-governance-toolkit-core` |
 | – | [Progressive Governance — Start Simple, Add Layers](progressive-governance.md) | 5-level progressive complexity model; pick the level that matches your risk | All |
 
 ## Core Governance
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 01 | [Policy Engine](01-policy-engine.md) | YAML rules, operators, conflict resolution, middleware integration | `agent-os-kernel` |
-| 02 | [Trust & Identity](02-trust-and-identity.md) | Ed25519 credentials, DIDs, SPIFFE/SVID, trust scoring (0–1000) | `agentmesh-platform` |
-| 03 | [Framework Integrations](03-framework-integrations.md) | Govern LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK | `agent-os-kernel` |
-| 04 | [Audit & Compliance](04-audit-and-compliance.md) | Append-only audit logs, hash chains, OWASP ASI mapping | `agent-governance-toolkit` |
+| 01 | [Policy Engine](01-policy-engine.md) | YAML rules, operators, conflict resolution, middleware integration | `agent-governance-toolkit-core` |
+| 02 | [Trust & Identity](02-trust-and-identity.md) | Ed25519 credentials, DIDs, SPIFFE/SVID, trust scoring (0–1000) | `agent-governance-toolkit-core` |
+| 03 | [Framework Integrations](03-framework-integrations.md) | Govern LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK | `agent-governance-toolkit-core` |
+| 04 | [Audit & Compliance](04-audit-and-compliance.md) | Append-only audit logs, hash chains, OWASP ASI mapping | `agent-governance-toolkit-cli` |
 
 ## Policy & Security
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 07 | [MCP Security Gateway](07-mcp-security-gateway.md) | Tool poisoning detection, parameter sanitization, human-in-the-loop | `agent-os-kernel` |
-| 08 | [OPA/Rego & Cedar Policies](08-opa-rego-cedar-policies.md) | External policy backends, 3 evaluation modes, enterprise policies | `agent-os-kernel` |
-| 09 | [Prompt Injection Detection](09-prompt-injection-detection.md) | 7 attack types, MemoryGuard, ConversationGuardian, red-teaming | `agent-os-kernel` |
+| 07 | [MCP Security Gateway](07-mcp-security-gateway.md) | Tool poisoning detection, parameter sanitization, human-in-the-loop | `agent-governance-toolkit-core` |
+| 08 | [OPA/Rego & Cedar Policies](08-opa-rego-cedar-policies.md) | External policy backends, 3 evaluation modes, enterprise policies | `agent-governance-toolkit-core` |
+| 09 | [Prompt Injection Detection](09-prompt-injection-detection.md) | 7 attack types, MemoryGuard, ConversationGuardian, red-teaming | `agent-governance-toolkit-core` |
 
 ## Runtime & Execution
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 05 | [Agent Reliability (SRE)](05-agent-reliability.md) | SLOs, error budgets, circuit breakers, chaos testing | `agent-sre` |
-| 06 | [Execution Sandboxing](06-execution-sandboxing.md) | 4-tier privilege rings, resource limits, termination control | `agentmesh-runtime` |
-| 11 | [Saga Orchestration](11-saga-orchestration.md) | Multi-step transactions, DSL, fan-out, compensating actions | `agentmesh-runtime` |
-| 12 | [Liability & Attribution](12-liability-and-attribution.md) | Vouching, slashing, causal attribution, quarantine | `agentmesh-runtime` |
-| 14 | [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency termination, rate limiting, ring elevation | `agentmesh-runtime` |
-| 51 | [Cost Governance](51-cost-governance.md) | Tiered budgets, auto-throttle, kill switch, anomaly detection, cost optimization | `agent-sre` |
+| 05 | [Agent Reliability (SRE)](05-agent-reliability.md) | SLOs, error budgets, circuit breakers, chaos testing | `agent-governance-toolkit-sre` |
+| 06 | [Execution Sandboxing](06-execution-sandboxing.md) | 4-tier privilege rings, resource limits, termination control | `agent-governance-toolkit-runtime` |
+| 11 | [Saga Orchestration](11-saga-orchestration.md) | Multi-step transactions, DSL, fan-out, compensating actions | `agent-governance-toolkit-runtime` |
+| 12 | [Liability & Attribution](12-liability-and-attribution.md) | Vouching, slashing, causal attribution, quarantine | `agent-governance-toolkit-runtime` |
+| 14 | [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency termination, rate limiting, ring elevation | `agent-governance-toolkit-runtime` |
+| 51 | [Cost Governance](51-cost-governance.md) | Tiered budgets, auto-throttle, kill switch, anomaly detection, cost optimization | `agent-governance-toolkit-sre` |
 
 ## Trust & Networking
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 16 | [Protocol Bridges](16-protocol-bridges.md) | A2A, MCP proxy, IATP attestation, trust-gated communication | `agentmesh-platform` |
-| 17 | [Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) | Behavior monitoring, reward engine, trust policies, shadow mode | `agentmesh-platform` |
-| 31 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridge DID identity with Microsoft Entra Agent ID, Conditional Access, sponsor accountability | `agentmesh-platform` |
-| 32 | [E2E Encrypted Messaging](32-e2e-encrypted-messaging.md) | Signal protocol (X3DH + Double Ratchet), SecureChannel, trust-gated encryption | `agentmesh-platform` |
+| 16 | [Protocol Bridges](16-protocol-bridges.md) | A2A, MCP proxy, IATP attestation, trust-gated communication | `agent-governance-toolkit-core` |
+| 17 | [Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) | Behavior monitoring, reward engine, trust policies, shadow mode | `agent-governance-toolkit-core` |
+| 31 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridge DID identity with Microsoft Entra Agent ID, Conditional Access, sponsor accountability | `agent-governance-toolkit-core` |
+| 32 | [E2E Encrypted Messaging](32-e2e-encrypted-messaging.md) | Signal protocol (X3DH + Double Ratchet), SecureChannel, trust-gated encryption | `agent-governance-toolkit-core` |
 
 ## Ecosystem
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 10 | [Plugin Marketplace](10-plugin-marketplace.md) | Plugin signing, verification, CLI, supply-chain security | `agentmesh-marketplace` |
-| 13 | [Observability & Tracing](13-observability-and-tracing.md) | Causal traces, event bus, Prometheus, OpenTelemetry | `agentmesh-runtime` |
-| 15 | [RL Training Governance](15-rl-training-governance.md) | GovernedRunner, PolicyReward, Gym-compatible environments | `agentmesh-lightning` |
-| 18 | [Compliance Verification](18-compliance-verification.md) | Governance grading, regulatory frameworks, attestation | `agent-governance-toolkit` |
-| 50 | [Decision BOM](50-decision-bom.md) | Reconstruct full decision context from observability signals, completeness scoring, batch audit | `agentmesh-platform` |
+| 10 | [Plugin Marketplace](10-plugin-marketplace.md) | Plugin signing, verification, CLI, supply-chain security | `agent-governance-toolkit-core` |
+| 13 | [Observability & Tracing](13-observability-and-tracing.md) | Causal traces, event bus, Prometheus, OpenTelemetry | `agent-governance-toolkit-runtime` |
+| 15 | [RL Training Governance](15-rl-training-governance.md) | GovernedRunner, PolicyReward, Gym-compatible environments | `agent-governance-toolkit-core` |
+| 18 | [Compliance Verification](18-compliance-verification.md) | Governance grading, regulatory frameworks, attestation | `agent-governance-toolkit-cli` |
+| 50 | [Decision BOM](50-decision-bom.md) | Reconstruct full decision context from observability signals, completeness scoring, batch audit | `agent-governance-toolkit-core` |
 
 ## Multi-Language Packages
 
@@ -83,17 +83,17 @@ guides.
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
 | 23 | [Delegation Chains](23-delegation-chains.md) | Monotonic scope narrowing, multi-agent delegation, cascade revocation | `@microsoft/agent-governance-sdk` |
-| 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Per-session token limits, context scheduling, budget signals | `agent-os-kernel` |
-| 49 | [Multi-Agent Collective Policies](49-multi-agent-policies.md) | Aggregate constraints across agents: rate limits, concurrent caps, alert-only monitoring | `agentmesh-platform` |
+| 24 | [Cost & Token Budgets](24-cost-and-token-budgets.md) | Per-session token limits, context scheduling, budget signals | `agent-governance-toolkit-core` |
+| 49 | [Multi-Agent Collective Policies](49-multi-agent-policies.md) | Aggregate constraints across agents: rate limits, concurrent caps, alert-only monitoring | `agent-governance-toolkit-core` |
 
 ## Supply Chain Security
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 25 | [Security Hardening](25-security-hardening.md) | Gitleaks, Dependabot, CodeQL, fuzzing, Scorecard, branch protection | `agent-governance-toolkit` |
-| 26 | [SBOM & Signing](26-sbom-and-signing.md) | SPDX/CycloneDX SBOMs, Ed25519 artifact signing, attestation | `agent-compliance` |
-| 27 | [MCP Scan CLI](27-mcp-scan-cli.md) | MCP tool scanning, rug-pull detection, CI integration | `agent-os-kernel` |
-| 45 | [Shift-Left Governance](45-shift-left-governance.md) | Pre-commit hooks, GitHub Actions, CI gates, language-specific build-time enforcement | `agent-governance-toolkit` |
+| 25 | [Security Hardening](25-security-hardening.md) | Gitleaks, Dependabot, CodeQL, fuzzing, Scorecard, branch protection | `agent-governance-toolkit-cli` |
+| 26 | [SBOM & Signing](26-sbom-and-signing.md) | SPDX/CycloneDX SBOMs, Ed25519 artifact signing, attestation | `agent-governance-toolkit-cli` |
+| 27 | [MCP Scan CLI](27-mcp-scan-cli.md) | MCP tool scanning, rug-pull detection, CI integration | `agent-governance-toolkit-core` |
+| 45 | [Shift-Left Governance](45-shift-left-governance.md) | Pre-commit hooks, GitHub Actions, CI gates, language-specific build-time enforcement | `agent-governance-toolkit-cli` |
 
 ---
 
@@ -101,33 +101,33 @@ guides.
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 29 | [Agent Discovery](29-agent-discovery.md) | Shadow AI scanning, inventory dedup, reconciliation, risk scoring, CI/CD integration | `agent-discovery` |
-| 30 | [Agent Lifecycle Management](30-agent-lifecycle.md) | Provisioning, approval workflows, credential rotation, orphan detection, decommissioning | `agentmesh-platform` |
+| 29 | [Agent Discovery](29-agent-discovery.md) | Shadow AI scanning, inventory dedup, reconciliation, risk scoring, CI/CD integration | `agent-governance-toolkit-core` |
+| 30 | [Agent Lifecycle Management](30-agent-lifecycle.md) | Provisioning, approval workflows, credential rotation, orphan detection, decommissioning | `agent-governance-toolkit-core` |
 
 ## Enterprise Identity
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 31 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridge AGT DIDs with Microsoft Entra Agent ID / Agent365, AKS workload identity, roles & responsibilities | `agentmesh-platform` |
+| 31 | [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridge AGT DIDs with Microsoft Entra Agent ID / Agent365, AKS workload identity, roles & responsibilities | `agent-governance-toolkit-core` |
 
 ## Advanced Governance (v3.2+)
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 35 | [Policy Composition](35-policy-composition.md) | `extends` for 3-tier governance hierarchies (CISO → platform → app), additive-only merge, diamond dedup | `agentmesh-platform` |
-| 36 | [2-Line Governance with govern()](36-govern-quickstart.md) | The `govern()` wrapper — policy enforcement + audit in 2 lines of code | `agentmesh-platform` |
-| 37 | [Multi-Stage Policy Pipeline](37-multi-stage-pipeline.md) | 4-stage lifecycle: pre_input → pre_tool → post_tool → pre_output | `agentmesh-platform` |
-| 38 | [Approval Workflows](38-approval-workflows.md) | Human-in-the-loop gates with Callback, Webhook, and Console handlers | `agentmesh-platform` |
-| 39 | [DLP with Attribute Ratchets](39-dlp-attribute-ratchets.md) | Monotonic session state — sensitivity only goes up, never resets | `agentmesh-platform` |
-| 40 | [OTel Observability](40-otel-observability.md) | OpenTelemetry spans + metrics for policy, approval, and trust operations | `agentmesh-platform` |
-| 41 | [Advisory Defense-in-Depth](41-advisory-defense-in-depth.md) | Pattern, ML, and HTTP classifiers as non-deterministic defense layer | `agentmesh-platform` |
-| 48 | [Intent-Based Authorization](48-intent-based-authorization.md) | Declare/approve/execute/verify lifecycle, drift detection, child intent scope narrowing | `agent-os-kernel` |
+| 35 | [Policy Composition](35-policy-composition.md) | `extends` for 3-tier governance hierarchies (CISO → platform → app), additive-only merge, diamond dedup | `agent-governance-toolkit-core` |
+| 36 | [2-Line Governance with govern()](36-govern-quickstart.md) | The `govern()` wrapper — policy enforcement + audit in 2 lines of code | `agent-governance-toolkit-core` |
+| 37 | [Multi-Stage Policy Pipeline](37-multi-stage-pipeline.md) | 4-stage lifecycle: pre_input → pre_tool → post_tool → pre_output | `agent-governance-toolkit-core` |
+| 38 | [Approval Workflows](38-approval-workflows.md) | Human-in-the-loop gates with Callback, Webhook, and Console handlers | `agent-governance-toolkit-core` |
+| 39 | [DLP with Attribute Ratchets](39-dlp-attribute-ratchets.md) | Monotonic session state — sensitivity only goes up, never resets | `agent-governance-toolkit-core` |
+| 40 | [OTel Observability](40-otel-observability.md) | OpenTelemetry spans + metrics for policy, approval, and trust operations | `agent-governance-toolkit-core` |
+| 41 | [Advisory Defense-in-Depth](41-advisory-defense-in-depth.md) | Pattern, ML, and HTTP classifiers as non-deterministic defense layer | `agent-governance-toolkit-core` |
+| 48 | [Intent-Based Authorization](48-intent-based-authorization.md) | Declare/approve/execute/verify lifecycle, drift detection, child intent scope narrowing | `agent-governance-toolkit-core` |
 
 ## Extending the Toolkit
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 28 | [Building Custom Integrations](28-build-custom-integration.md) | Trust integrations, kernel adapters, publishing your own governance package | `agent-os-kernel` / standalone |
+| 28 | [Building Custom Integrations](28-build-custom-integration.md) | Trust integrations, kernel adapters, publishing your own governance package | `agent-governance-toolkit-core` / standalone |
 
 ## Policy-as-Code Deep Dive
 
@@ -227,8 +227,8 @@ go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang  # 
 
 ## More Resources
 
-- **[Quick Start](../../quickstart.md)** — Zero to governed agents in 5 minutes
+- **[Quick Start](../quickstart.md)** — Zero to governed agents in 5 minutes
 - **[Architecture](../ARCHITECTURE.md)** — System design and security model
-- **[OWASP Compliance](../OWASP-COMPLIANCE.md)** — ASI-01 through ASI-10 mapping
-- **[Benchmarks](../../BENCHMARKS.md)** — Performance data
+- **[OWASP Compliance](../../docs/compliance/owasp-agentic-top10-architecture.md)** — ASI-01 through ASI-10 mapping
+- **[Benchmarks](../BENCHMARKS.md)** — Performance data
 - **[Examples](../../examples/)** — One-file quickstarts for each framework

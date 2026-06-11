@@ -39,7 +39,7 @@ agent-governance-python/agentmesh-integrations/
 .github/
 docs/
 examples/
-.github/pipelines/
+.github/release-tools/
 research/
 node_modules/
 *.md

@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { governanceMiddleware } from "../src/governance";
 import { trustGate } from "../src/trust";
-import { auditMiddleware } from "../src/audit";
+import { auditMiddleware, type AuditEntry } from "../src/audit";
 import { createGovernedTool } from "../src/governed-tool";
 
 describe("governanceMiddleware", () => {
@@ -188,6 +188,85 @@ describe("auditMiddleware", () => {
 
     await withSink.record({ toolId: "t", agentId: "a", action: "invoke" });
     expect(sunk).toHaveLength(1);
+  });
+
+  it("produces a valid chain under concurrent record() calls", async () => {
+    const concurrent = auditMiddleware({ maxEntries: 100 });
+    concurrent.clear();
+
+    await Promise.all(
+      Array.from({ length: 25 }, (_, i) =>
+        concurrent.record({ toolId: `t${i}`, agentId: "a", action: "invoke" })
+      )
+    );
+
+    expect(concurrent.length).toBe(25);
+
+    // Every entry must link to the one before it, with no duplicate previousHash.
+    const entries = concurrent.getEntries().reverse(); // oldest first
+    const seenPrev = new Set<string>();
+    for (let i = 1; i < entries.length; i++) {
+      expect(entries[i].previousHash).toBe(entries[i - 1].hash);
+      expect(seenPrev.has(entries[i].previousHash)).toBe(false);
+      seenPrev.add(entries[i].previousHash);
+    }
+
+    const result = await concurrent.verifyChain();
+    expect(result.valid).toBe(true);
+  });
+
+  it("verifyChain detects field tampering on a stored entry", async () => {
+    // The sink receives the live entry object that is stored inside the chain,
+    // so mutating it here mutates the chain's own copy.
+    const stored: AuditEntry[] = [];
+    const tamperable = auditMiddleware({
+      maxEntries: 100,
+      sink: async (entry) => {
+        stored.push(entry);
+      },
+    });
+    tamperable.clear();
+
+    await tamperable.record({ toolId: "t1", agentId: "a", action: "invoke" });
+    await tamperable.record({ toolId: "t2", agentId: "a", action: "complete" });
+    await tamperable.record({ toolId: "t3", agentId: "a", action: "invoke" });
+
+    expect((await tamperable.verifyChain()).valid).toBe(true);
+
+    // Tamper a covered field without touching the hash. Linkage stays intact,
+    // but hash recomputation must catch the mismatch.
+    stored[1].toolId = "TAMPERED";
+
+    const result = await tamperable.verifyChain();
+    expect(result.valid).toBe(false);
+    expect(result.brokenAt).toBe(1);
+  });
+
+  it("two middleware instances keep independent chains", async () => {
+    const a = auditMiddleware({ maxEntries: 100 });
+    const b = auditMiddleware({ maxEntries: 100 });
+    a.clear();
+    b.clear();
+
+    await a.record({ toolId: "ta", agentId: "agent-a", action: "invoke" });
+    await a.record({ toolId: "ta2", agentId: "agent-a", action: "complete" });
+
+    await b.record({ toolId: "tb", agentId: "agent-b", action: "invoke" });
+
+    expect(a.length).toBe(2);
+    expect(b.length).toBe(1);
+
+    // clear() on one must not touch the other.
+    a.clear();
+    expect(a.length).toBe(0);
+    expect(b.length).toBe(1);
+    expect((await b.verifyChain()).valid).toBe(true);
+
+    // First entries of independent chains both anchor on genesis.
+    const bEntries = b.getEntries();
+    expect(bEntries[0].previousHash).toBe(
+      "0000000000000000000000000000000000000000000000000000000000000000"
+    );
   });
 });
 

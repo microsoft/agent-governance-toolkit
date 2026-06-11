@@ -1,0 +1,42 @@
+{
+  "name": "@microsoft/agent-governance-antigravity-cli",
+  "version": "4.1.0",
+  "description": "Public Preview — Antigravity CLI governance installer for Agent Governance Toolkit developer protection policies",
+  "type": "module",
+  "bin": {
+    "agt-antigravity": "./bin/agt-antigravity.mjs"
+  },
+  "files": [
+    "assets/",
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run check",
+    "check": "node --check ./bin/agt-antigravity.mjs && node --check ./lib/cli.mjs && node --check ./assets/extensions/agt-global-policy/hooks/before-agent.mjs && node --check ./assets/extensions/agt-global-policy/hooks/before-tool.mjs && node --check ./assets/extensions/agt-global-policy/hooks/after-tool.mjs && node --check ./assets/extensions/agt-global-policy/hooks/session-start.mjs && node --check ./assets/extensions/agt-global-policy/lib/hook-runtime.mjs && node --check ./assets/extensions/agt-global-policy/lib/policy.mjs && node --check ./assets/extensions/agt-global-policy/lib/poisoning.mjs && node --check ./assets/extensions/agt-global-policy/lib/sdk-loader.mjs && node --check ./assets/extensions/agt-global-policy/mcp/server.mjs && node --check ./test/policy-engine.test.mjs && node --check ./test/install.test.mjs && node --check ./test/hooks.test.mjs && node --check ./test/mcp-server.test.mjs",
+    "test": "node --test ./test/policy-engine.test.mjs ./test/install.test.mjs ./test/hooks.test.mjs ./test/mcp-server.test.mjs"
+  },
+  "keywords": [
+    "antigravity",
+    "cli",
+    "agent",
+    "governance",
+    "security",
+    "policy"
+  ],
+  "author": "Microsoft Corporation",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "agent-governance-antigravity-cli"
+  },
+  "dependencies": {
+    "@microsoft/agent-governance-sdk": "4.0.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-antigravity-cli"
+}

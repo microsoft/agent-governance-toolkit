@@ -80,9 +80,6 @@ Each middleware works independently. Use any combination based on your requireme
 ```bash
 # Install the governance toolkit with MAF support
 pip install agent-governance-toolkit[full]
-
-# Or install individual packages
-pip install agent-os-kernel agentmesh-platform agent-sre
 ```
 
 ---

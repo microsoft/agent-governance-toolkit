@@ -1,0 +1,172 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "verdict_normalization"
+  ],
+  "description": "Policy outputs normalize to the shared allow/deny/warn/escalate verdict model.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "input": {
+              "text": "hello"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "allow"
+        }
+      },
+      "mode": "enforce",
+      "name": "normalizes-allow",
+      "policy_response": {
+        "ok": {
+          "decision": "allow"
+        }
+      },
+      "snapshot": {
+        "input": {
+          "text": "hello"
+        }
+      },
+      "intervention_point": "input"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "input": {
+              "text": "hello"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "warn",
+          "message": "Proceeding with warning",
+          "reason": "needs_review"
+        }
+      },
+      "mode": "enforce",
+      "name": "normalizes-warn",
+      "policy_response": {
+        "ok": {
+          "decision": "warn",
+          "message": "Proceeding with warning",
+          "reason": "needs_review"
+        }
+      },
+      "snapshot": {
+        "input": {
+          "text": "hello"
+        }
+      },
+      "intervention_point": "input"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "input": {
+              "text": "hello"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "deny",
+          "reason": "blocked_by_policy"
+        }
+      },
+      "mode": "enforce",
+      "name": "normalizes-deny",
+      "policy_response": {
+        "ok": {
+          "decision": "deny",
+          "reason": "blocked_by_policy"
+        }
+      },
+      "snapshot": {
+        "input": {
+          "text": "hello"
+        }
+      },
+      "intervention_point": "input"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "input": {
+              "text": "hello"
+            }
+          },
+          "intervention_point": "input",
+          "policy_target": {
+            "kind": "user_input",
+            "path": "$snap.input",
+            "value": {
+              "text": "hello"
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "escalate",
+          "reason": "human_review"
+        }
+      },
+      "mode": "enforce",
+      "name": "normalizes-escalate",
+      "policy_response": {
+        "ok": {
+          "decision": "escalate",
+          "reason": "human_review"
+        }
+      },
+      "snapshot": {
+        "input": {
+          "text": "hello"
+        }
+      },
+      "intervention_point": "input"
+    }
+  ],
+  "id": "verdict-normalization",
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  input:\n    policy_target_kind: user_input\n    policy:\n      id: test_policy\n    policy_target: $snap.input\n",
+  "schema_version": 1
+}

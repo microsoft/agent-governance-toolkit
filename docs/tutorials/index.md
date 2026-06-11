@@ -66,6 +66,7 @@ The essentials to get your first governed agent running in minutes.
 |----------|----------------------|
 | [2-Line Quickstart](36-govern-quickstart.md) | Add governance to any agent in 2 lines of code |
 | [Policy Engine Basics](01-policy-engine.md) | Write and evaluate your first policy rules |
+| [Agent Control Specification](55-agent-control-specification.md) | Build a direct ACS policy enforcement point with allow, transform, and deny verdicts |
 | [Framework Integrations](03-framework-integrations.md) | Connect AGT to LangChain, CrewAI, OpenAI, etc. |
 | [Progressive Governance](progressive-governance.md) | Start simple, add layers incrementally |
 
@@ -114,6 +115,7 @@ Writing, composing, and enforcing governance policies.
 
 | Tutorial | What you'll learn |
 |----------|-------------------|
+| [Agent Control Specification](55-agent-control-specification.md) | Direct ACS manifests, snapshots, verdicts, and host enforcement |
 | [OPA / Rego / Cedar](08-opa-rego-cedar-policies.md) | Policy engines comparison and integration |
 | [Policy Composition](35-policy-composition.md) | Enterprise governance layers, policy merging |
 | [Approval Workflows](38-approval-workflows.md) | Human-in-the-loop approval gates |
@@ -139,52 +141,12 @@ A focused series on writing, testing, and versioning governance policies.
 
 ---
 
-## Observability & Operations
-
-Monitoring, alerting, and operational management of governed agents.
-
-| Tutorial | What you'll learn |
-|----------|-------------------|
-| [Observability & Tracing](13-observability-and-tracing.md) | Distributed tracing for agent systems |
-| [OpenTelemetry Integration](40-otel-observability.md) | OTel integration for governance events |
-| [Kill Switch & Rate Limiting](14-kill-switch-and-rate-limiting.md) | Emergency controls, throttling |
-| [Agent Discovery](29-agent-discovery.md) | Finding shadow AI in your organization |
-| [Agent Lifecycle](30-agent-lifecycle.md) | Birth-to-retirement management |
-| [Chaos Testing](52-chaos-testing-agents.md) | Chaos engineering for agent reliability |
-| [Agent Reliability](05-agent-reliability.md) | SLOs, monitoring, graceful degradation |
-
----
-
-## Advanced Topics
-
-Deep dives into specialized governance patterns.
-
-| Tutorial | What you'll learn |
-|----------|-------------------|
-| [Trust & Identity Deep Dive](02-trust-and-identity.md) | Agent identity, trust tiers, verification |
-| [Advanced Trust & Behavior](17-advanced-trust-and-behavior.md) | Behavioral analysis, reputation systems |
-| [Compliance Verification](18-compliance-verification.md) | Automated compliance checks |
-| [Saga Orchestration](11-saga-orchestration.md) | Multi-step workflows with rollback |
-| [Liability & Attribution](12-liability-and-attribution.md) | Decision tracing, blame assignment |
-| [Protocol Bridges](16-protocol-bridges.md) | Cross-protocol agent communication |
-| [Plugin Marketplace](10-plugin-marketplace.md) | Marketplace governance, trust scoring |
-| [RL Training Governance](15-rl-training-governance.md) | Governing reinforcement learning agents |
-| [Decision BOM](50-decision-bom.md) | Decision bill of materials, audit artifacts |
-| [Offline Verifiable Receipts](33-offline-verifiable-receipts.md) | Offline-verifiable decision receipts |
-| [Entra Agent ID Bridge](31-entra-agent-id-bridge.md) | Bridging AGT identity with Microsoft Entra |
-| [Contributor Governance](53-contributor-governance.md) | Contributor reputation, spam detection |
-
----
-
-## Language & Platform Guides
-
-SDK-specific guides for each supported language.
-
-| Tutorial | Language |
-|----------|----------|
-| [.NET SDK](19-dotnet-sdk.md) | C# / .NET |
-| [C# MCP Extension](42-csharp-mcp-extension.md) | C# (MCP servers) |
-| [TypeScript SDK](20-typescript-sdk.md) | TypeScript / Node.js |
-| [Rust Crate](21-rust-sdk.md) | Rust |
-| [Go Module](22-go-sdk.md) | Go |
-| [Build Custom Integration](28-build-custom-integration.md) | Any language |
+| # | Tutorial | What you'll learn |
+|---|---------|------------------|
+| 19 | [.NET package](19-dotnet-sdk.md) | Agent governance in C# / .NET |
+| 42 | [C# MCP extension](42-csharp-mcp-extension.md) | Govern MCP servers built with the official C# SDK |
+| 20 | [TypeScript package](20-typescript-sdk.md) | Agent governance in TypeScript |
+| 21 | [Rust crate](21-rust-sdk.md) | Agent governance in Rust |
+| 22 | [Go module](22-go-sdk.md) | Agent governance in Go |
+| 52 | [Antigravity CLI governance](52-antigravity-cli-governance.md) | Install governance policies for Antigravity CLI with hooks, commands, and MCP checks |
+| 54 | [OpenCode CLI governance](54-opencode-cli-governance.md) | In-process OpenCode plugin for AGT policy on prompts, tools, and tool-output secret redaction |

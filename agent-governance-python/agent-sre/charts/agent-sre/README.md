@@ -22,7 +22,7 @@ helm install agent-sre ./charts/agent-sre \
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Container image | `ghcr.io/microsoft/agent-sre` |
+| `image.repository` | Container image | `ghcr.io/microsoft/agent-governance-toolkit/agent-sre` |
 | `image.tag` | Image tag | `appVersion` |
 | `sloEngine.replicas` | SLO Engine replicas | `2` |
 | `chaosEngine.replicas` | Chaos Engine replicas | `1` |

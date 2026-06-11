@@ -1,8 +1,7 @@
 # 🛡️ AgentMesh MCP Proxy
 
 > [!IMPORTANT]
-> **Public Preview** — This npm package is a Microsoft-signed public preview release.
-> APIs may change before GA.
+> **Public Preview** — This npm package is a public preview release. APIs may change before GA.
 
 > **Anthropic built the USB port. AgentMesh is the Firewall.**
 
@@ -312,7 +311,6 @@ Apache 2.0 - See [LICENSE](../../LICENSE)
 
 - **AgentMesh**: https://github.com/microsoft/agent-governance-toolkit
 - **MCP Specification**: https://modelcontextprotocol.io
-- **MCP Security Discussion**: https://github.com/anthropics/anthropic-cookbook/discussions
 
 ---
 

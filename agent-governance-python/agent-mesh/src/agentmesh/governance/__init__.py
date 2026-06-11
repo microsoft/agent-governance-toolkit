@@ -7,6 +7,8 @@ Declarative policy engine with automated compliance mapping.
 Append-only audit logs with optional external sinks.
 """
 from .govern import govern, GovernedCallable, GovernanceConfig, GovernanceDenied
+from hypervisor.models import ExecutionRing
+from hypervisor.rings.enforcer import ResourceConstraints, ResourceType, RING_CONSTRAINTS, RingCheckResult
 from .approval import (
     ApprovalHandler,
     ApprovalRequest,
@@ -100,6 +102,11 @@ from .federation import (
     FileFederationStore,
     FederationEngine,
 )
+from .protocol_facets import (
+    FacetRegistry,
+    extract_protocol_facets,
+    default_registry,
+)
 
 __all__ = [
     # High-level wrapper (issue #1372)
@@ -107,6 +114,12 @@ __all__ = [
     "GovernedCallable",
     "GovernanceConfig",
     "GovernanceDenied",
+    # Ring enforcement (issue #2667)
+    "ExecutionRing",
+    "ResourceConstraints",
+    "ResourceType",
+    "RING_CONSTRAINTS",
+    "RingCheckResult",
     # Approval workflows (issue #1374)
     "ApprovalHandler",
     "ApprovalRequest",
@@ -206,5 +219,9 @@ __all__ = [
     "AgentRiskProfile",
     "ClassificationResult",
     "EUAIActRiskClassifier",
+    # Wire protocol facets (issue #2483)
+    "FacetRegistry",
+    "extract_protocol_facets",
+    "default_registry",
 ]
 

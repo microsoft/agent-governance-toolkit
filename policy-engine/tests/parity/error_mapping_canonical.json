@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "source": [
+    "core/src/error.rs RuntimeError::reason",
+    "spec/SPECIFICATION.md section 15"
+  ],
+  "runtime_errors": [
+    {
+      "variant": "ManifestInvalid",
+      "reason": "runtime_error:manifest_invalid"
+    },
+    {
+      "variant": "InterventionPointUnknown",
+      "reason": "runtime_error:intervention_point_unknown"
+    },
+    {
+      "variant": "PathMissing",
+      "reason": "runtime_error:path_missing"
+    },
+    {
+      "variant": "PathTypeMismatch",
+      "reason": "runtime_error:path_type_mismatch"
+    },
+    {
+      "variant": "ToolUnknown",
+      "reason": "runtime_error:tool_unknown"
+    },
+    {
+      "variant": "AnnotationFailed",
+      "reason": "runtime_error:annotation_failed"
+    },
+    {
+      "variant": "AnnotationTimeout",
+      "reason": "runtime_error:annotation_timeout"
+    },
+    {
+      "variant": "PolicyInvocationFailed",
+      "reason": "runtime_error:policy_invocation_failed"
+    },
+    {
+      "variant": "PolicyOutputInvalid",
+      "reason": "runtime_error:policy_output_invalid"
+    },
+    {
+      "variant": "ResourceLimitExceeded",
+      "reason": "runtime_error:resource_limit_exceeded"
+    },
+    {
+      "variant": "ApprovalActionMismatch",
+      "reason": "runtime_error:approval_action_mismatch"
+    },
+    {
+      "variant": "ResolutionPathTraversal",
+      "reason": "runtime_error:resolution_path_traversal"
+    },
+    {
+      "variant": "ResolutionCycle",
+      "reason": "runtime_error:resolution_cycle"
+    },
+    {
+      "variant": "ResolutionInvalidGovernance",
+      "reason": "runtime_error:resolution_invalid_governance"
+    },
+    {
+      "variant": "ResolutionMergeConflict",
+      "reason": "runtime_error:resolution_merge_conflict"
+    },
+    {
+      "variant": "TransformTargetForbidden",
+      "reason": "runtime_error:transform_target_forbidden"
+    },
+    {
+      "variant": "TransformInvalid",
+      "reason": "runtime_error:transform_invalid"
+    },
+    {
+      "variant": "ApprovalResolverMissing",
+      "reason": "runtime_error:approval_resolver_missing"
+    }
+  ]
+}

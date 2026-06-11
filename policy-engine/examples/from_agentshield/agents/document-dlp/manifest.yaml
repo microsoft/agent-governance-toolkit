@@ -1,0 +1,48 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "document-dlp"
+extends: []
+policies:
+  document_dlp:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.document_dlp.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    policy:
+      id: document_dlp
+      query: data.agent_control_specification.document_dlp.input_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      task_adherence:
+        annotator: task_adherence
+        from: "$.tool_call"
+    policy:
+      id: document_dlp
+      query: data.agent_control_specification.document_dlp.pre_tool_call_verdict
+  post_tool_call:
+    policy_target: "$.tool_result"
+    policy_target_kind: tool_result
+    policy:
+      id: document_dlp
+      query: data.agent_control_specification.document_dlp.post_tool_call_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    policy:
+      id: document_dlp
+      query: data.agent_control_specification.document_dlp.output_verdict
+annotators:
+  task_adherence:
+    type: llm
+tools:
+  datastore_lookup_documents: {}
+  datastore_fetch_document: {}
+  datastore_save_record: {}
+  datastore_send_email: {}
+  summarize_document: {}

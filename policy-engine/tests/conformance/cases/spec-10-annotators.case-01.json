@@ -1,0 +1,47 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-10-annotators.case-01",
+  "spec_section": "10",
+  "title": "annotator outputs are isolated under their configured names",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n    annotations:\n      beta:\n        from: $policy_target.text\n      alpha:\n        from: $policy_target.text\nannotators:\n  alpha:\n    type: classifier\n  beta:\n    type: classifier\n",
+  "intervention_point": "input",
+  "snapshot": {
+    "input": {
+      "text": "hello"
+    }
+  },
+  "annotator_outputs": {
+    "alpha": {
+      "label": "safe"
+    },
+    "beta": {
+      "score": 0.25
+    }
+  },
+  "policy_response": {
+    "decision": "allow"
+  },
+  "expected": {
+    "decision": "allow",
+    "annotations": {
+      "alpha": {
+        "label": "safe"
+      },
+      "beta": {
+        "score": 0.25
+      }
+    },
+    "annotator_order": [
+      "alpha",
+      "beta"
+    ]
+  }
+}

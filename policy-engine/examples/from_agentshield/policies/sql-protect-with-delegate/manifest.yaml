@@ -1,0 +1,36 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "sql-protect-with-delegate"
+extends: []
+policies:
+  sql_protect_delegate:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.sql_protect_delegate.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    policy:
+      id: sql_protect_delegate
+      query: data.agent_control_specification.sql_protect_delegate.input_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      sql_intent:
+        from: "$policy_target"
+    policy:
+      id: sql_protect_delegate
+      query: data.agent_control_specification.sql_protect_delegate.pre_tool_call_verdict
+tools:
+  mssql.list_tables: {}
+  mssql.describe_table: {}
+  mssql.read_data: {}
+  mssql.insert_data: {}
+  mssql.update_data: {}
+  mssql.execute_sql: {}
+annotators:
+  sql_intent:
+    type: classifier

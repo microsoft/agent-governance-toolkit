@@ -1,0 +1,103 @@
+<Project>
+  <PropertyGroup>
+    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libagent_control_specification_core.so</_AcsNativeLibName>
+    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libagent_control_specification_core.dylib</_AcsNativeLibName>
+    <_AcsNativeLibName Condition="$([MSBuild]::IsOSPlatform('Windows'))">agent_control_specification_core.dll</_AcsNativeLibName>
+
+    <_AcsHostRid Condition="$([MSBuild]::IsOSPlatform('Linux')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">linux-x64</_AcsHostRid>
+    <_AcsHostRid Condition="$([MSBuild]::IsOSPlatform('Linux')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">linux-arm64</_AcsHostRid>
+    <_AcsHostRid Condition="$([MSBuild]::IsOSPlatform('OSX')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">osx-x64</_AcsHostRid>
+    <_AcsHostRid Condition="$([MSBuild]::IsOSPlatform('OSX')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">osx-arm64</_AcsHostRid>
+    <_AcsHostRid Condition="$([MSBuild]::IsOSPlatform('Windows')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'X64'">win-x64</_AcsHostRid>
+
+    <_AcsRustCrateDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../../core'))</_AcsRustCrateDir>
+    <_AcsWorkspaceDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../..'))</_AcsWorkspaceDir>
+    <_AcsRustTargetDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../../target'))</_AcsRustTargetDir>
+    <_AcsCargoProfile Condition="'$(Configuration)' == 'Release'">release</_AcsCargoProfile>
+    <_AcsCargoProfile Condition="'$(_AcsCargoProfile)' == ''">debug</_AcsCargoProfile>
+    <_AcsCargoReleaseFlag Condition="'$(_AcsCargoProfile)' == 'release'">--release</_AcsCargoReleaseFlag>
+    <_AcsCargoManifestPath>$([System.IO.Path]::Combine('$(_AcsWorkspaceDir)', 'Cargo.toml'))</_AcsCargoManifestPath>
+    <_AcsRustOutputPath>$([System.IO.Path]::Combine('$(_AcsRustTargetDir)', '$(_AcsCargoProfile)', '$(_AcsNativeLibName)'))</_AcsRustOutputPath>
+    <_AcsStagedDir>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', 'runtimes', '$(_AcsHostRid)', 'native'))</_AcsStagedDir>
+    <_AcsStagedPath>$([System.IO.Path]::Combine('$(_AcsStagedDir)', '$(_AcsNativeLibName)'))</_AcsStagedPath>
+    <_AcsNativeBuildEnabled>true</_AcsNativeBuildEnabled>
+    <_AcsNativeBuildEnabled Condition="'$(AgentControlSpecificationSkipNativeBuild)' == 'true'">false</_AcsNativeBuildEnabled>
+    <_AcsNativeBuildEnabled Condition="'$(AGENT_CONTROL_SPECIFICATION_SKIP_NATIVE_BUILD)' == '1' OR '$(AGENT_CONTROL_SPECIFICATION_SKIP_NATIVE_BUILD)' == 'true'">false</_AcsNativeBuildEnabled>
+    <_AcsNativeBuildEnabled Condition="!Exists('$(_AcsCargoManifestPath)')">false</_AcsNativeBuildEnabled>
+    <_AcsNativeBuildEnabled Condition="'$(_AcsHostRid)' == ''">false</_AcsNativeBuildEnabled>
+  </PropertyGroup>
+
+  <Target Name="_AcsBuildNativeLibrary"
+          BeforeTargets="_AcsStageNativeContent"
+          Condition="'$(_AcsNativeBuildEnabled)' == 'true'">
+    <Message Importance="high"
+             Condition="!Exists('$(_AcsStagedPath)')"
+             Text="Building AgentControlSpecification native library ($(_AcsHostRid), $(_AcsCargoProfile))..." />
+    <Exec Command="cargo --version"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="_AcsCargoExitCode" />
+    </Exec>
+    <Error Condition="'$(_AcsCargoExitCode)' != '0'"
+           Text="AgentControlSpecification requires cargo to build the native library, or set AgentControlSpecificationSkipNativeBuild=true and provide $(_AcsStagedPath)." />
+    <Exec Command="cargo build $(_AcsCargoReleaseFlag) -p agent_control_specification_core --features default-dispatchers,aacs,openai_moderation,perspective,llama_guard,lakera_guard,auto --manifest-path &quot;$(_AcsCargoManifestPath)&quot;"
+          WorkingDirectory="$(_AcsWorkspaceDir)"
+          ConsoleToMSBuild="true" />
+    <Error Condition="!Exists('$(_AcsRustOutputPath)')"
+           Text="Cargo build succeeded but the expected native library was not found at $(_AcsRustOutputPath)." />
+    <MakeDir Directories="$(_AcsStagedDir)" />
+    <Copy SourceFiles="$(_AcsRustOutputPath)"
+          DestinationFiles="$(_AcsStagedPath)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="_AcsStageNativeContent"
+          BeforeTargets="AssignTargetPaths"
+          Condition="'$(_AcsHostRid)' != ''">
+    <ItemGroup Condition="Exists('$(_AcsStagedPath)')">
+      <None Include="$(_AcsStagedPath)"
+            Link="$(_AcsNativeLibName)"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="PreserveNewest"
+            Pack="false"
+            Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <PropertyGroup>
+    <_AcsPackStagePath>$([System.IO.Path]::Combine('$(MSBuildThisFileDirectory)', 'obj', 'acs-pack', 'runtimes', '$(_AcsHostRid)', 'native', '$(_AcsNativeLibName)'))</_AcsPackStagePath>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_AcsAddNativeLibraryToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="_AcsAddNativeLibraryToPackage"
+          DependsOnTargets="_AcsBuildNativeLibrary;_AcsVerifyPackageNativeAssets"
+          Condition="'$(_AcsHostRid)' != ''">
+    <Error Condition="!Exists('$(_AcsStagedPath)')"
+           Text="Cannot pack AgentControlSpecification because the native library was not staged at $(_AcsStagedPath). Build the native library first or set AgentControlSpecificationSkipNativeBuild=true with a prestaged library." />
+    <Copy SourceFiles="$(_AcsStagedPath)"
+          DestinationFiles="$(_AcsPackStagePath)"
+          SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <_AcsPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/**/*" />
+      <TfmSpecificPackageFile Include="@(_AcsPackageNativeAsset)">
+        <PackagePath>runtimes/%(_AcsPackageNativeAsset.RecursiveDir)%(_AcsPackageNativeAsset.Filename)%(_AcsPackageNativeAsset.Extension)</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_AcsVerifyPackageNativeAssets"
+          Condition="'$(AgentControlSpecificationAllowIncompleteNativePack)' != 'true'">
+    <ItemGroup>
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-x64/native/libagent_control_specification_core.so" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/linux-arm64/native/libagent_control_specification_core.so" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-x64/native/libagent_control_specification_core.dylib" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/osx-arm64/native/libagent_control_specification_core.dylib" />
+      <_AcsRequiredPackageNativeAsset Include="$(MSBuildThisFileDirectory)runtimes/win-x64/native/agent_control_specification_core.dll" />
+      <_AcsMissingPackageNativeAsset Include="@(_AcsRequiredPackageNativeAsset)" Condition="!Exists('%(Identity)')" />
+    </ItemGroup>
+    <Error Condition="'@(_AcsMissingPackageNativeAsset)' != ''"
+           Text="Cannot pack AgentControlSpecification because required native runtime assets are missing: @(_AcsMissingPackageNativeAsset, ', '). Run the release native asset jobs first, or set AgentControlSpecificationAllowIncompleteNativePack=true for a host-only development package." />
+  </Target>
+</Project>

@@ -63,7 +63,14 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, runtime_checkable
+
+from ._v5_runtime_bridge import (
+    AdapterRuntimeBridge,
+    BridgeResult,
+    get_runtime_bridge,
+)
+from .base import ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +332,10 @@ class AgentShieldKernel:
         agent_id_variable: str = "agt_agent_id",
         on_violation: Any | None = None,
         fail_closed: bool = True,
+        governance_policy: GovernancePolicy | None = None,
+        approval_resolver: Optional[Callable[..., Any]] = None,
+        _runtime: Optional[Any] = None,
+        _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
         """Initialize the Agent Shield kernel.
 
@@ -339,6 +350,30 @@ class AgentShieldKernel:
                 Signature: ``(verdict: ShieldVerdict) -> None``.
             fail_closed: If True, errors in Agent Shield evaluation
                 result in a block. If False, errors result in allow.
+            governance_policy: Optional v4
+                :class:`~agent_os.integrations.base.GovernancePolicy`
+                that layers AGT 5.0 ACS-backed policy evaluation on top
+                of the Agent Shield validation. When supplied, every
+                ``validate_*`` call also runs through the AGT
+                intervention point that matches the Shield stage
+                (``input`` for Stage 1, ``pre_tool_call`` for Stage 2,
+                ``output`` for Stage 5). The final ShieldVerdict is the
+                AND of the Agent Shield SDK and the AGT engine: a deny
+                from either side blocks the call; a transform verdict
+                from the AGT side (AGT-DELTA D1.1) rewrites the
+                verdict's ``modified_value``. When ``None`` (default),
+                AGT routing is not applied and the kernel behaves
+                exactly like a v4 Agent Shield adapter.
+            approval_resolver: Optional callable invoked when the AGT
+                engine returns an ``escalate`` verdict. Signature
+                matches :data:`agt.policies.runtime.ApprovalCallback`.
+                When ``None`` an escalate verdict fails closed to
+                ``deny``.
+            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
+                so scenario tests can wire a scripted policy dispatcher
+                without OPA on PATH. Not part of the public surface.
+            _runtime_factory: Test seam — override the runtime factory
+                used by the bridge cache. Not part of the public surface.
         """
         self._runtime = runtime
         self._trust_score_variable = trust_score_variable
@@ -351,6 +386,63 @@ class AgentShieldKernel:
         self._turn_active = False
         self._trust_score: int | None = None
         self._agent_id: str | None = None
+
+        # ── AGT 5.0 bridge (optional) ──────────────────────────────
+        # When the host supplies a v4 GovernancePolicy or a pre-built
+        # AgtRuntime, the adapter layers the AGT engine on top of the
+        # Agent Shield SDK so every Shield stage runs through the
+        # matching AGT intervention point. The Shield verdict and the
+        # AGT verdict are AND-merged (any deny wins).
+        self._governance_policy = governance_policy
+        self._approval_resolver = approval_resolver
+        self._bridge: AdapterRuntimeBridge | None
+        if governance_policy is not None or _runtime is not None:
+            self._bridge = get_runtime_bridge(
+                governance_policy or GovernancePolicy(),
+                approval_resolver=approval_resolver,
+                runtime=_runtime,
+                runtime_factory=_runtime_factory,
+            )
+        else:
+            self._bridge = None
+        self._contexts: dict[str, ExecutionContext] = {}
+
+    @property
+    def bridge(self) -> AdapterRuntimeBridge | None:
+        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel.
+
+        ``None`` when the kernel was constructed without a
+        ``governance_policy`` or injected runtime — in that case the
+        adapter does not layer AGT 5.0 evaluation on top of the
+        Agent Shield SDK.
+        """
+        return self._bridge
+
+    def _get_or_create_context(self) -> ExecutionContext:
+        """Return (and lazily create) the :class:`ExecutionContext` for the active session.
+
+        The bridge requires a v4 :class:`ExecutionContext` to derive
+        the per-session :class:`SnapshotBuilder`. Agent Shield
+        identifies the conversation via ``session_id``; the kernel
+        maintains one ``ExecutionContext`` per session id (falling back
+        to a default context when no session has been started yet).
+        """
+        key = self._session_id or "default"
+        ctx = self._contexts.get(key)
+        if ctx is None:
+            agent_id = self._agent_id or "agentshield-kernel"
+            # Sanitise the agent id to satisfy the
+            # ``ExecutionContext.agent_id`` regex (``^[a-zA-Z0-9_-]+$``).
+            safe_agent_id = "".join(
+                c if (c.isalnum() or c in "_-") else "_" for c in agent_id
+            ) or "agentshield-kernel"
+            ctx = ExecutionContext(
+                agent_id=safe_agent_id,
+                session_id=f"agentshield-{key}-{int(time.time())}",
+                policy=self._governance_policy or GovernancePolicy(),
+            )
+            self._contexts[key] = ctx
+        return ctx
 
     @classmethod
     def from_yaml(
@@ -519,6 +611,14 @@ class AgentShieldKernel:
         Stage 1 screens the raw user message for jailbreak attempts,
         prompt injection, and content moderation violations.
 
+        When the kernel is constructed with a ``governance_policy``,
+        the AGT 5.0 ``input`` intervention point also fires through
+        :class:`AdapterRuntimeBridge`. The Shield verdict and the AGT
+        verdict are AND-merged: a deny from either side blocks the
+        call. A transform verdict from the AGT side (AGT-DELTA D1.1)
+        sets ``modified_value`` on the returned verdict so the host
+        can substitute the redacted text before forwarding.
+
         Args:
             text: The raw user input to validate.
 
@@ -538,6 +638,14 @@ class AgentShieldKernel:
             verdict = self._error_verdict(
                 ValidationStage.INPUT, str(e), elapsed
             )
+
+        # ─── AGT input intervention point ──────────────────────────
+        if self._bridge is not None:
+            ctx = self._get_or_create_context()
+            bridge_result = self._bridge.evaluate_input(
+                ctx, body=text, source="user"
+            )
+            verdict = self._merge_bridge_verdict(verdict, bridge_result)
 
         self._record(verdict)
         return verdict
@@ -559,6 +667,14 @@ class AgentShieldKernel:
         Stage 3 (tool execution) validates the specific parameters,
         applies transforms (redact, append, prepend), and runs any
         LLM-judge validators.
+
+        When the kernel is constructed with a ``governance_policy``,
+        the AGT 5.0 ``pre_tool_call`` intervention point also fires
+        through :class:`AdapterRuntimeBridge`. The Shield verdict and
+        the AGT verdict are AND-merged on the returned
+        :class:`ToolCallVerdict`: a deny from either side blocks the
+        call. A transform verdict (AGT-DELTA D1.1) rewrites
+        ``parameters`` before they are returned to the host.
 
         Args:
             tool_name: Name of the tool being called.
@@ -616,6 +732,23 @@ class AgentShieldKernel:
 
         self._record(exec_verdict)
 
+        # ─── AGT pre_tool_call intervention point ──────────────────
+        if self._bridge is not None:
+            ctx = self._get_or_create_context()
+            bridge_result = self._bridge.evaluate_pre_tool_call(
+                ctx,
+                tool_name=tool_name,
+                args=params,
+            )
+            if bridge_result.transform is not None and isinstance(
+                bridge_result.transform.value, dict
+            ):
+                # Rewrite parameters per AGT-DELTA D1.1.
+                params = dict(bridge_result.transform.value)
+            # Fold the AGT verdict into the execution stage so the
+            # returned ToolCallVerdict reflects both layers.
+            exec_verdict = self._merge_bridge_verdict(exec_verdict, bridge_result)
+
         return ToolCallVerdict(
             allowed=state_verdict.allowed and exec_verdict.allowed,
             state_verdict=state_verdict,
@@ -672,6 +805,14 @@ class AgentShieldKernel:
         Stage 5 enforces output policies: PII redaction, compliance
         disclaimers, content policy enforcement.
 
+        When the kernel is constructed with a ``governance_policy``,
+        the AGT 5.0 ``output`` intervention point also fires through
+        :class:`AdapterRuntimeBridge`. The Shield verdict and the AGT
+        verdict are AND-merged: a deny from either side blocks the
+        call. A transform verdict (AGT-DELTA D1.1) overrides
+        ``modified_value`` on the returned verdict so the host can
+        substitute the redacted text before forwarding to the user.
+
         Args:
             text: The agent's response text to validate.
 
@@ -694,6 +835,12 @@ class AgentShieldKernel:
             verdict = self._error_verdict(
                 ValidationStage.OUTPUT, str(e), elapsed
             )
+
+        # ─── AGT output intervention point ─────────────────────────
+        if self._bridge is not None:
+            ctx = self._get_or_create_context()
+            bridge_result = self._bridge.evaluate_output(ctx, content=text)
+            verdict = self._merge_bridge_verdict(verdict, bridge_result)
 
         self._record(verdict)
         return verdict
@@ -800,6 +947,67 @@ class AgentShieldKernel:
         self._history.append(verdict)
         if not verdict.allowed and self._on_violation:
             self._on_violation(verdict)
+
+    def _merge_bridge_verdict(
+        self,
+        shield_verdict: ShieldVerdict,
+        bridge_result: BridgeResult,
+    ) -> ShieldVerdict:
+        """AND-merge an AGT :class:`BridgeResult` into a :class:`ShieldVerdict`.
+
+        Rules:
+
+        * A deny verdict from either layer wins. The merged verdict
+          carries the AGT reason / policy name (so callers can
+          distinguish AGT denials from Shield SDK denials via the
+          ``metadata["source"] == "agt_bridge"`` tag) and is raised
+          via :class:`PolicyViolationError.from_check_result(...)`.
+        * A transform verdict (AGT-DELTA D1.1) sets
+          ``modified_value`` on the verdict — preserving any Shield
+          ``modified_value`` only when the AGT verdict didn't fire a
+          transform.
+        * An allow verdict from the AGT layer leaves the Shield
+          verdict unchanged.
+
+        Args:
+            shield_verdict: The verdict produced by the Agent Shield
+                SDK (already recorded via :meth:`_translate_verdict`).
+            bridge_result: The AGT :class:`BridgeResult` returned by
+                :class:`AdapterRuntimeBridge`.
+
+        Returns:
+            A merged :class:`ShieldVerdict` that reflects both layers.
+        """
+        # Capture AGT transform output first — even when the Shield
+        # verdict already denied, the AGT engine may have produced a
+        # redaction the host wants to surface.
+        if bridge_result.transform is not None and isinstance(
+            bridge_result.transform.value, str
+        ):
+            shield_verdict.modified_value = bridge_result.transform.value
+
+        if bridge_result.allowed:
+            return shield_verdict
+
+        # AGT denied — override the Shield verdict.
+        merged = ShieldVerdict(
+            allowed=False,
+            stage=shield_verdict.stage,
+            action=ShieldAction.BLOCK,
+            reason=bridge_result.reason
+            or shield_verdict.reason
+            or "AGT engine denied",
+            policy_name=shield_verdict.policy_name,
+            modified_value=shield_verdict.modified_value,
+            variables=shield_verdict.variables,
+            elapsed_ms=shield_verdict.elapsed_ms,
+            metadata={
+                **shield_verdict.metadata,
+                "source": "agt_bridge",
+                "agt_verdict": bridge_result.verdict,
+            },
+        )
+        return merged
 
     # ------------------------------------------------------------------
     # Observability

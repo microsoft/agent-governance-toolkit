@@ -72,7 +72,9 @@ class PolicyDefaults(BaseModel):
     ignored by the rule engine itself.
     """
 
-    action: PolicyAction = PolicyAction.ALLOW
+    # Fail closed by default so Python matches the TS and .NET SDKs.
+    # To opt back into permissive behavior, set defaults.action: allow explicitly.
+    action: PolicyAction = PolicyAction.DENY
     max_tokens: int = 4096
     max_tool_calls: int = 10
     confidence_threshold: float = 0.8

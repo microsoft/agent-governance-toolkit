@@ -258,7 +258,7 @@ AGT maintains dedicated compliance mapping documents for seven major frameworks.
 
 | Framework | File | Status |
 |-----------|------|--------|
-| OWASP Agentic Top 10 | `docs/OWASP-COMPLIANCE.md` | 10/10 risks covered |
+| OWASP Agentic Top 10 | `docs/compliance/owasp-agentic-top10-architecture.md` | All ASI risk categories mapped |
 | EU AI Act | `docs/compliance/eu-ai-act-checklist.md` | 9/11 articles addressed |
 | SOC 2 Type II | `docs/compliance/soc2-mapping.md` | 4/5 criteria addressed |
 | ATF Conformance | `docs/compliance/atf-conformance-assessment.md` | 25/25 requirements (7 partial) |
@@ -354,8 +354,8 @@ terms (risk reduction, compliance cost savings, incident prevention value).
 
 | Component | File | Key Content |
 |-----------|------|-------------|
-| STRIDE threat model | `docs/THREAT_MODEL.md` | 4 trust boundaries, 6 attack surfaces, STRIDE analysis |
-| OWASP Agentic Top 10 | `docs/OWASP-COMPLIANCE.md` | 10/10 risks mapped with mitigations |
+| STRIDE threat model | `docs/security/threat-model.md` | 4 trust boundaries, 6 attack surfaces, STRIDE analysis |
+| OWASP Agentic Top 10 | `docs/compliance/owasp-agentic-top10-architecture.md` | All ASI risk categories mapped with mitigations |
 | Blast radius containment | `agent-governance-python/agent-hypervisor/src/hypervisor/models.py` | Ring isolation, Ring 0–3 |
 | Cascade detection | `agent-governance-python/agent-sre/src/agent_sre/cascade/circuit_breaker.py:223` | `CascadeDetector` |
 | Ring breach detection | `agent-governance-python/agent-hypervisor/rings/breach_detector.py` | Sliding-window anomaly detection |
@@ -719,12 +719,12 @@ requirements overlap with other frameworks.
 ### Related Documents
 
 - **ATF Conformance Assessment:** [`docs/compliance/atf-conformance-assessment.md`](atf-conformance-assessment.md)
-- **OWASP Agentic Top 10:** [`docs/OWASP-COMPLIANCE.md`](../OWASP-COMPLIANCE.md)
+- **OWASP Agentic Top 10:** [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md)
 - **OWASP LLM Top 10:** [`docs/compliance/owasp-llm-top10-mapping.md`](owasp-llm-top10-mapping.md)
 - **EU AI Act Checklist:** [`docs/compliance/eu-ai-act-checklist.md`](eu-ai-act-checklist.md)
 - **SOC 2 Mapping:** [`docs/compliance/soc2-mapping.md`](soc2-mapping.md)
 - **NIST RFI Response:** [`docs/compliance/nist-rfi-2026-00206.md`](nist-rfi-2026-00206.md)
-- **Threat Model (STRIDE):** [`docs/THREAT_MODEL.md`](../THREAT_MODEL.md)
+- **Threat Model (STRIDE):** [`docs/security/threat-model.md`](../security/threat-model.md)
 - **Architecture Overview:** [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md)
 
 ---

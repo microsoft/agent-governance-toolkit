@@ -5,11 +5,13 @@ on:
     types: [opened, synchronize, reopened]
 permissions:
   contents: read
-  pull-requests: write
 # SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   size-label:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # codelytv/pr-size-labeler applies size/* labels to the PR
     # SECURITY: pull_request_target — uses pr-size-labeler which only reads PR
     # metadata via API. No checkout of PR head code. Permissions minimal.
     steps:

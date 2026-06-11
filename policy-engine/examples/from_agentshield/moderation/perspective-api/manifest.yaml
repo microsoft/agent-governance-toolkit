@@ -1,0 +1,22 @@
+agent_control_specification_version: "0.3.0-alpha"
+metadata:
+  name: "perspective-api"
+extends: []
+policies:
+  perspective_api:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.perspective_api.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    annotations:
+      perspective:
+        from: "$policy_target.text"
+    policy:
+      id: perspective_api
+      query: data.agent_control_specification.perspective_api.input_verdict
+annotators:
+  perspective:
+    type: classifier

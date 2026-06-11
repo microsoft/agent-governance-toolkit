@@ -138,9 +138,16 @@ class HttpClientTool:
         if self._is_private_domain(domain):
             raise ValueError(f"Private/internal domains not allowed: {domain}")
         
-        # Check allowed domains (if whitelist set)
+        # Check allowed domains (if whitelist set). Use DNS-aware suffix
+        # matching: exact host or proper subdomain only. A naive
+        # `domain.endswith(allowed)` lets `evil-example.com` bypass an
+        # allowlist of `example.com`, and lets `attacker.com` match
+        # `er.com`. Both are SSRF/exfil vectors.
         if self.allowed_domains:
-            if not any(domain.endswith(allowed) for allowed in self.allowed_domains):
+            if not any(
+                domain == allowed.lower() or domain.endswith("." + allowed.lower())
+                for allowed in self.allowed_domains
+            ):
                 raise ValueError(
                     f"Domain '{domain}' not in allowed list. "
                     f"Allowed: {', '.join(self.allowed_domains)}"

@@ -1,0 +1,249 @@
+{
+  "case_kind": "runtime",
+  "covers": [
+    "policy_target_only_effect_validation_application"
+  ],
+  "description": "AGT D1 migration: the policy_target-only invariant is now enforced on the transform decision. Effects are removed from the verdict surface; the same property (only $policy_target may be rewritten; rewrites apply only in enforce mode; deny carries no rewrite) holds on the transform path.",
+  "evaluations": [
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": {
+          "content": "hello secret world",
+          "flag": true,
+          "items": [
+            1
+          ]
+        },
+        "verdict": {
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.flag",
+            "value": true
+          }
+        }
+      },
+      "mode": "enforce",
+      "name": "transform-enforce-applies-policy_target-rewrite",
+      "policy_response": {
+        "ok": {
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.flag",
+            "value": true
+          }
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.content",
+            "value": "changed"
+          }
+        }
+      },
+      "mode": "evaluate_only",
+      "name": "transform-evaluate-only-validates-without-applying",
+      "policy_response": {
+        "ok": {
+          "decision": "transform",
+          "reason": "sanitized",
+          "transform": {
+            "path": "$policy_target.content",
+            "value": "changed"
+          }
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "transformed_policy_target": null,
+        "verdict": {
+          "decision": "deny",
+          "reason": "blocked"
+        }
+      },
+      "mode": "enforce",
+      "name": "deny-enforce-carries-no-rewrite",
+      "policy_response": {
+        "ok": {
+          "decision": "deny",
+          "reason": "blocked"
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    },
+    {
+      "expected": {
+        "policy_input": {
+          "annotations": {},
+          "snapshot": {
+            "output": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "intervention_point": "output",
+          "policy_target": {
+            "kind": "assistant_output",
+            "path": "$snap.output",
+            "value": {
+              "content": "hello secret world",
+              "flag": false,
+              "items": [
+                1
+              ]
+            }
+          },
+          "tool": null
+        },
+        "policy_invoked": true,
+        "verdict": {
+          "decision": "deny",
+          "message": "Request blocked by Agent Control Specification.",
+          "reason": "runtime_error:transform_target_forbidden"
+        }
+      },
+      "mode": "enforce",
+      "name": "rejects-non-policy_target-transform-path",
+      "policy_response": {
+        "ok": {
+          "decision": "transform",
+          "transform": {
+            "path": "$snap.output.content",
+            "value": "blocked"
+          }
+        }
+      },
+      "snapshot": {
+        "output": {
+          "content": "hello secret world",
+          "flag": false,
+          "items": [
+            1
+          ]
+        }
+      },
+      "intervention_point": "output"
+    }
+  ],
+  "id": "policy_target-only-transform",
+  "manifest_yaml": "agent_control_specification_version: 0.3.0-alpha\npolicies:\n  test_policy:\n    type: test\nintervention_points:\n  output:\n    policy_target_kind: assistant_output\n    policy:\n      id: test_policy\n    policy_target: $snap.output\n",
+  "schema_version": 1
+}

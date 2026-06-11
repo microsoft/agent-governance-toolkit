@@ -1,0 +1,13 @@
+description = "Show the active AGT Antigravity governance status."
+
+prompt = """
+Call the MCP tool `mcp_agt_global_policy_agt_policy_status`.
+
+Return a concise status summary covering:
+1. Policy mode and source
+2. Prompt-defense grade and coverage
+3. Audit chain health
+4. Any configured policy or bundled-default errors
+
+Do not invent values. Use only the MCP tool output.
+"""

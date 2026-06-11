@@ -1,0 +1,50 @@
+{
+  "name": "@microsoft/agent-governance-opencode",
+  "version": "4.1.0",
+  "description": "Public Preview — OpenCode CLI governance plugin for Agent Governance Toolkit developer protection policies",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./policy": "./lib/policy.mjs",
+    "./mcp-server": "./server/agt-mcp.mjs"
+  },
+  "files": [
+    "bin/",
+    "config/",
+    "lib/",
+    "server/",
+    "src/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "npm run check",
+    "check": "node --check ./src/index.mjs && node --check ./lib/audit.mjs && node --check ./lib/poisoning.mjs && node --check ./lib/policy.mjs && node --check ./server/agt-mcp.mjs && node --test ./test/*.test.mjs",
+    "test": "node --test ./test/*.test.mjs"
+  },
+  "keywords": [
+    "opencode",
+    "agent",
+    "governance",
+    "security",
+    "policy",
+    "mcp"
+  ],
+  "author": {
+    "name": "Microsoft Corporation",
+    "email": "agentgovtoolkit@microsoft.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/agent-governance-toolkit.git",
+    "directory": "agent-governance-opencode"
+  },
+  "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-opencode",
+  "dependencies": {
+    "@microsoft/agent-governance-sdk": "3.7.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

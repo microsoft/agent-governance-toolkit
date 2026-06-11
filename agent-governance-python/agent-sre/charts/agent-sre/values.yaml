@@ -4,7 +4,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 image:
-  repository: ghcr.io/microsoft/agent-sre
+  repository: ghcr.io/microsoft/agent-governance-toolkit/agent-sre
   tag: ""  # Defaults to appVersion
   pullPolicy: IfNotPresent
 

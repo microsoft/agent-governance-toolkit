@@ -226,8 +226,8 @@ Adding AGT to an A365-governed agent adds minimal overhead:
 ## Further Reading
 
 - [AGT Architecture](ARCHITECTURE.md)
-- [Tutorial 34: Microsoft Agent Framework Integration](tutorials/34-microsoft-agents-integration.md)
-- [Tutorial 45: CI/CD Shift-Left Scanning](tutorials/45-cicd-governance.md)
+- [Tutorial 34: Microsoft Agent Framework Integration](tutorials/34-maf-integration.md)
+- [Tutorial 45: CI/CD Shift-Left Scanning](tutorials/45-shift-left-governance.md)
 - [Tutorial 47: Red-Team Testing](tutorials/47-red-team-testing.md)
-- [OWASP Agentic Top 10 Compliance](OWASP-COMPLIANCE.md)
+- [OWASP Agentic Top 10 Compliance](../docs/compliance/owasp-agentic-top10-architecture.md)
 - [Benchmarks](BENCHMARKS.md)

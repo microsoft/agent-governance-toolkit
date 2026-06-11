@@ -519,11 +519,40 @@ full environment to the child process. The child receives only:
 |----------|--------|
 | `PATH` | Inherited from parent |
 | `SYSTEMROOT` | Inherited from parent (Windows only) |
-| Server-specific `env` keys | From the MCP config `env` object |
+| Server-specific `env` keys except command-loading overrides | From the MCP config `env` object |
 
 This prevents accidental credential leakage (tokens, cloud keys, secrets in
-`$HOME/.bashrc`) to untrusted MCP servers. If a server needs additional
-environment variables, declare them explicitly in the config:
+`$HOME/.bashrc`) to untrusted MCP servers. Launch-policy validation in both live
+and `--static-only` modes also blocks config-provided environment overrides
+that hijack child execution:
+
+- **Loader / PATH hijack**: `PATH`, `PATHEXT`, `PYTHONPATH`, `PYTHONHOME`,
+  `NODE_OPTIONS`, `NODE_PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`
+- **Runtime startup hooks**: `DOTNET_STARTUP_HOOKS`, `JAVA_TOOL_OPTIONS`,
+  `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS`, `RUBYOPT`, `BASH_ENV`, `ENV`,
+  `PERL5OPT`, `PERL5LIB`
+- **User-config-file hijack** (child reads attacker-controlled rc files):
+  `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `XDG_CONFIG_HOME`,
+  `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `ZDOTDIR`, `PSMODULEPATH`, `COMSPEC`
+- **Tool-specific config/index redirects**: `UV_*`, `NPM_CONFIG_*`, `PIP_*`,
+  `POETRY_*`, `GEM_*`, `GIT_*`
+
+The launch resolver only honors **absolute, non-UNC** entries in the host
+`PATH`, so relative entries like `.` or `bin` cannot let a repo-local binary
+shadow the trusted host runtime. Config-provided server `cwd` values are also
+rejected in live mode (use `--allow-untrusted-cwd` to opt in when you trust the
+config source), because the child runtime loads config files like
+`./package.json` (`preinstall`), `./nuget.config`, and `./sitecustomize.py`
+relative to that directory.
+
+A bare allowlisted command name is required unless you opt in with
+`--allow-commands`. **The allowlist only gates which interpreter runs**; it does
+not validate args. For example, `python -c "..."`, `node -e "..."`, or
+`docker run -v /:/host evil` remain full code execution. Treat any MCP config
+from an untrusted source as untrusted in full.
+
+If a server needs additional environment variables, declare them explicitly in
+the config (excluding the categories above):
 
 ```json
 {

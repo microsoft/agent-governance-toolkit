@@ -11,16 +11,24 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
     branches: [main]
+  # Re-run the gate when a review is submitted or dismissed so an approval
+  # flips the check green immediately instead of waiting for a new push.
+  # github.event.pull_request.number is present for both pull_request_target
+  # and pull_request_review payloads, so PR resolution works for both events.
+  pull_request_review:
+    types: [submitted, dismissed]
 
 permissions:
   contents: read
-  pull-requests: read
 
 # SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
   check-approval:
     name: "Policy: Awaiting maintainer review"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read    # github-script calls pulls.listReviews on the PR
     if: >-
       github.event.pull_request.author_association != 'MEMBER' &&
       github.event.pull_request.author_association != 'OWNER'
@@ -29,7 +37,13 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const MAINTAINERS = ['imran-siddique', 'microsoft-github-policy-service'];
+            // NOTE: only human (type === 'User') maintainers count below, so a
+            // service account such as microsoft-github-policy-service can never
+            // satisfy this gate. Listing it here was dead code, and relaxing the
+            // type filter to admit a Bot would re-open the bot-approval bypass
+            // that this policy exists to prevent (see PRs #357 / #362). The
+            // safer fix is to keep the bot exclusion and list only humans.
+            const MAINTAINERS = ['imran-siddique'];
 
             const reviews = await github.rest.pulls.listReviews({
               owner: context.repo.owner,

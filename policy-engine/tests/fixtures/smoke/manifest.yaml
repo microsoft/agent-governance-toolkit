@@ -1,0 +1,72 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: "smoke-agent"
+extends: []
+policies:
+  smoke:
+    type: rego
+    bundle: ./policy
+    query: data.agent_control_specification.smoke.verdict
+intervention_points:
+  agent_startup:
+    policy_target: "$.agent"
+    policy_target_kind: agent_metadata
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.agent_startup_verdict
+  input:
+    policy_target: "$.input"
+    policy_target_kind: user_input
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.input_verdict
+  pre_model_call:
+    policy_target: "$.model_request"
+    policy_target_kind: model_request
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.pre_model_call_verdict
+  post_model_call:
+    policy_target: "$.model_response"
+    policy_target_kind: model_response
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.post_model_call_verdict
+  pre_tool_call:
+    policy_target: "$.tool_call.args"
+    policy_target_kind: tool_args
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.pre_tool_call_verdict
+  post_tool_call:
+    policy_target: "$.tool_result"
+    policy_target_kind: tool_result
+    tool_name_from: "$.tool_call.name"
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.post_tool_call_verdict
+  output:
+    policy_target: "$.output"
+    policy_target_kind: assistant_output
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.output_verdict
+  agent_shutdown:
+    policy_target: "$.summary"
+    policy_target_kind: shutdown_summary
+    policy:
+      id: smoke
+      query: data.agent_control_specification.smoke.agent_shutdown_verdict
+tools:
+  echo_tool:
+    type: Tool
+    id: echo_tool
+    clearance: [smoke]
+    security_labels: [benign]
+  danger_tool:
+    type: Tool
+    id: danger_tool
+    clearance: [smoke]
+    security_labels: [sensitive]
+annotators: {}

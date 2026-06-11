@@ -178,7 +178,9 @@ test("POST /api/handshake succeeds for registered agent", async (server) => {
     "POST",
     "/api/handshake",
     {
-      agent_did: agent.did,
+      // agent_did is intentionally NOT sent — the server binds the
+      // signing identity to the API key holder to prevent signing
+      // oracles. Any value here must be ignored.
       challenge: "test-challenge-nonce-123",
       capabilities_requested: ["read", "admin"],
     },
@@ -192,14 +194,30 @@ test("POST /api/handshake succeeds for registered agent", async (server) => {
   assert.ok(res.body.capabilities_granted.includes("read"));
   assert.ok(!res.body.capabilities_granted.includes("admin"));
   assert.ok(res.body.signature);
+  // Server-supplied envelope must echo back so caller can verify.
+  assert.strictEqual(res.body.signing_domain, "agentmesh-handshake-v1");
+  assert.strictEqual(res.body.agent_did, agent.did);
+  assert.ok(res.body.server_nonce);
+  assert.ok(res.body.server_timestamp);
+  assert.ok(res.body.challenge_digest);
 });
 
-test("POST /api/handshake returns 404 for unknown agent", async (server) => {
+test("POST /api/handshake binds signer to API key (signing oracle regression)", async (server) => {
+  // Two agents with two distinct API keys. Calling /handshake with
+  // agentA's API key MUST produce a signature for agentA's DID — the
+  // body's ``agent_did`` (set to agentB) must be ignored. Previously
+  // the route trusted the body, letting any key holder request
+  // signatures for any other agent (a signing oracle).
   const { registerAgent } = await import("../src/services/registry");
-  const agent = registerAgent({
-    name: "KeyHolder",
-    sponsor_email: "kh@example.com",
-    capabilities: [],
+  const agentA = registerAgent({
+    name: "Alice",
+    sponsor_email: "a@example.com",
+    capabilities: ["read"],
+  });
+  const agentB = registerAgent({
+    name: "Bob",
+    sponsor_email: "b@example.com",
+    capabilities: ["admin"],
   });
 
   const res = await request(
@@ -207,13 +225,101 @@ test("POST /api/handshake returns 404 for unknown agent", async (server) => {
     "POST",
     "/api/handshake",
     {
-      agent_did: "did:mesh:nonexistent",
-      challenge: "test",
-      capabilities_requested: [],
+      agent_did: agentB.did, // spoofed — must be ignored
+      challenge: "x",
+      capabilities_requested: ["read"],
     },
+    { "x-api-key": agentA.api_key },
+  );
+
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.agent_did, agentA.did);
+  assert.notStrictEqual(res.body.agent_did, agentB.did);
+});
+
+test("POST /api/handshake signs domain-separated envelope, not raw challenge", async (server) => {
+  // Verify the response signature is over the structured envelope and
+  // NOT over the raw client challenge. This prevents the endpoint from
+  // being used as a signing oracle for arbitrary messages.
+  const { registerAgent } = await import("../src/services/registry");
+  const { verify } = await import("../src/services/identity");
+  const agent = registerAgent({
+    name: "Verifier",
+    sponsor_email: "v@example.com",
+    capabilities: ["read"],
+  });
+
+  const challenge = "raw-attacker-supplied-bytes";
+  const res = await request(
+    server,
+    "POST",
+    "/api/handshake",
+    { challenge, capabilities_requested: ["read"] },
     { "x-api-key": agent.api_key },
   );
-  assert.strictEqual(res.status, 404);
+  assert.strictEqual(res.status, 200);
+
+  // Signature must NOT verify against the raw challenge.
+  assert.strictEqual(
+    verify(challenge, res.body.signature, agent.public_key),
+    false,
+    "signature must not be over the raw client challenge",
+  );
+
+  // Signature MUST verify against the reconstructed envelope.
+  const capabilitiesCanonical = [...res.body.capabilities_granted]
+    .map((c: unknown) => String(c))
+    .sort()
+    .join(",");
+  const envelope = [
+    res.body.signing_domain,
+    res.body.agent_did,
+    res.body.server_nonce,
+    res.body.server_timestamp,
+    res.body.challenge_digest,
+    capabilitiesCanonical,
+    String(res.body.trust_score),
+  ].join("\n");
+  assert.strictEqual(
+    verify(envelope, res.body.signature, agent.public_key),
+    true,
+    "signature must verify against the structured envelope",
+  );
+});
+
+test("POST /api/handshake signature does not verify if granted capabilities are tampered", async (server) => {
+  // Defends against a MITM rewriting capabilities_granted on the wire.
+  const { registerAgent } = await import("../src/services/registry");
+  const { verify } = await import("../src/services/identity");
+  const agent = registerAgent({
+    name: "CapVerifier",
+    sponsor_email: "cv@example.com",
+    capabilities: ["read"],
+  });
+
+  const res = await request(
+    server,
+    "POST",
+    "/api/handshake",
+    { challenge: "c", capabilities_requested: ["read"] },
+    { "x-api-key": agent.api_key },
+  );
+  assert.strictEqual(res.status, 200);
+
+  const tamperedEnvelope = [
+    res.body.signing_domain,
+    res.body.agent_did,
+    res.body.server_nonce,
+    res.body.server_timestamp,
+    res.body.challenge_digest,
+    "read,admin", // attacker adds 'admin'
+    String(res.body.trust_score),
+  ].join("\n");
+  assert.strictEqual(
+    verify(tamperedEnvelope, res.body.signature, agent.public_key),
+    false,
+    "tampered capability list must not verify under the issued signature",
+  );
 });
 
 test("GET /api/score/:agentDid returns trust breakdown", async (server) => {

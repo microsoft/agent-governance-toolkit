@@ -1,8 +1,7 @@
 # AgentOS MCP Server
 
 > [!IMPORTANT]
-> **Public Preview** — This npm package is a Microsoft-signed public preview release.
-> APIs may change before GA.
+> **Public Preview** — This npm package is a public preview release. APIs may change before GA.
 
 > **Build safe AI agents with natural language and 0% policy violations**
 

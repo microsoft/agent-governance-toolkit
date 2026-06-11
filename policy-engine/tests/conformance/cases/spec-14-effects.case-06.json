@@ -1,0 +1,43 @@
+{
+  "$schema": "../cases.schema.json",
+  "id": "spec-14-effects.case-06",
+  "spec_section": "14",
+  "title": "transform verdict applies replacement inside policy target",
+  "claimable": true,
+  "operation": "evaluate",
+  "sdk_support": {
+    "rust": "required",
+    "python": "required",
+    "node": "required",
+    "dotnet": "optional"
+  },
+  "manifest_yaml": "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: rego\n    query: data.acs.verdict\nintervention_points:\n  input:\n    policy:\n      id: p\n    policy_target: $snap.input\n",
+  "intervention_point": "input",
+  "snapshot": {
+    "input": {
+      "text": "send account 1234 to support",
+      "metadata": {
+        "channel": "chat"
+      }
+    }
+  },
+  "policy_response": {
+    "decision": "transform",
+    "reason": "pii_redaction",
+    "transform": {
+      "path": "$policy_target.text",
+      "value": "send account [REDACTED] to support"
+    }
+  },
+  "expected": {
+    "decision": "transform",
+    "reason": "pii_redaction",
+    "transformed_policy_target": {
+      "text": "send account [REDACTED] to support",
+      "metadata": {
+        "channel": "chat"
+      }
+    },
+    "action_identity": "present"
+  }
+}

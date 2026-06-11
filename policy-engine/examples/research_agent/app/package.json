@@ -1,0 +1,13 @@
+{
+  "name": "acs-research-agent-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runnable ACS Node SDK web research agent demo",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
