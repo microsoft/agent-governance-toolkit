@@ -249,7 +249,9 @@ class TestPreExecuteCedarGate:
         policy = GovernancePolicy(max_tool_calls=0)  # Will instantly deny
         integration = _ConcreteIntegration(policy=policy, evaluator=evaluator)
 
-        ctx = _make_ctx()
+        # Pin the configured policy into the context via create_context so the
+        # session enforces the policy that was active at context creation.
+        ctx = integration.create_context("test-agent")
         allowed, reason = integration.pre_execute(ctx, "test input")
         assert allowed is False
         assert "Max tool calls" in reason  # GovernancePolicy kicked in
@@ -588,13 +590,13 @@ class TestEndToEndCedarGovernance:
             blocked_patterns=["DROP TABLE"],
         )
         integration = _ConcreteIntegration(policy=policy)
-        ctx = _make_ctx()
+        ctx = integration.create_context("test-agent")
 
-        # Normal input — should pass
+        # Normal input -- should pass
         allowed, reason = integration.pre_execute(ctx, "SELECT * FROM users")
         assert allowed is True
 
-        # Blocked pattern — should fail via GovernancePolicy
+        # Blocked pattern -- should fail via GovernancePolicy
         allowed, reason = integration.pre_execute(ctx, "DROP TABLE users")
         assert allowed is False
         assert "Blocked pattern" in reason
@@ -702,7 +704,7 @@ class TestRealWorldGovernanceValue:
         )
         integration = _ConcreteIntegration(policy=policy, evaluator=evaluator)
 
-        ctx = _make_ctx()
+        ctx = integration.create_context("test-agent")
         ctx.call_count = 0
 
         # First call: both permit

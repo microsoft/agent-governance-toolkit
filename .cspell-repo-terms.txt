@@ -683,6 +683,7 @@ sprintf
 subparser
 summarise
 synthesised
+tamperable
 tamperedhash
 testserver
 tsfn

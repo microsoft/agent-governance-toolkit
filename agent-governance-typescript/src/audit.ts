@@ -81,7 +81,12 @@ export class AuditLogger {
       });
 
       const expectedHash = createHash('sha256').update(payload).digest('hex');
-      if (!timingSafeEqual(Buffer.from(entry.hash, 'utf8'), Buffer.from(expectedHash, 'utf8'))) return false;
+      const actual = Buffer.from(entry.hash, 'utf8');
+      const expected = Buffer.from(expectedHash, 'utf8');
+      // timingSafeEqual throws RangeError on length mismatch, so length-check
+      // first and treat a mismatch as a verification failure.
+      if (actual.length !== expected.length) return false;
+      if (!timingSafeEqual(actual, expected)) return false;
     }
     return true;
   }
@@ -105,7 +110,9 @@ export class AuditLogger {
       result = result.filter((e) => e.timestamp >= since);
     }
 
-    return result;
+    // Return defensive copies so callers cannot mutate the internal log and
+    // silently break chain integrity.
+    return result.map((e) => ({ ...e }));
   }
 
   /** Export the full log as a JSON string. */

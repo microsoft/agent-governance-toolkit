@@ -521,7 +521,9 @@ export class PolicyEngine {
         }
 
         return {
-          allowed: winner.action === 'allow',
+          // warn and log are advisory actions that still permit the request,
+          // matching the .NET and Python SDKs (parity fix).
+          allowed: ['allow', 'warn', 'log'].includes(winner.action),
           action: winner.action,
           matchedRule: winner.ruleName,
           policyName: winner.policyName,

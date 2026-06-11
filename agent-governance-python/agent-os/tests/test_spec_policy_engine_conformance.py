@@ -76,7 +76,24 @@ class TestConditionOperatorsSpec:
         assert not result.allowed
 
     def test_eq_no_match(self):
-        ev = self._make_evaluator("tool_name", "eq", "exec")
+        # With default-deny (issue #2926) an unmatched request is denied. Use an
+        # explicit allow default so this test isolates operator matching.
+        doc = PolicyDocument(
+            name="test",
+            rules=[
+                PolicyRule(
+                    name="r1",
+                    condition=PolicyCondition(
+                        field="tool_name",
+                        operator=PolicyOperator.EQ,
+                        value="exec",
+                    ),
+                    action=PolicyAction.DENY,
+                )
+            ],
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
+        )
+        ev = PolicyEvaluator(policies=[doc])
         result = ev.evaluate({"tool_name": "read"})
         assert result.allowed
 
@@ -125,6 +142,8 @@ class TestMissingFieldSpec:
     """Spec Section 5.2: Missing fields MUST evaluate to false."""
 
     def test_missing_field_does_not_match(self):
+        # Explicit allow default isolates the "missing field => no match" check
+        # from the default-deny behavior introduced in issue #2926.
         doc = PolicyDocument(
             name="test",
             rules=[
@@ -138,6 +157,7 @@ class TestMissingFieldSpec:
                     action=PolicyAction.DENY,
                 )
             ],
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
         )
         ev = PolicyEvaluator(policies=[doc])
         result = ev.evaluate({"tool_name": "exec"})
@@ -272,10 +292,32 @@ class TestDefaultActionSpec:
         result = ev.evaluate({"x": 999})
         assert not result.allowed
 
-    def test_no_policies_defaults_to_allow(self):
+    def test_no_policies_defaults_to_deny(self):
+        # Cross-language parity fix (issue #2926): with no policies loaded the
+        # engine fails closed, matching the TS and .NET SDKs. Opt back into
+        # permissive behavior with an explicit defaults.action: allow policy.
         ev = PolicyEvaluator()
         result = ev.evaluate({"x": 1})
-        assert result.allowed, "No loaded policies MUST default to allow (Section 7.3)"
+        assert not result.allowed, "No loaded policies MUST default to deny (fail closed)"
+        assert result.action == "deny"
+
+    def test_unmatched_request_defaults_to_deny(self):
+        # An omitted defaults.action now means deny, not allow.
+        doc = PolicyDocument(
+            name="test",
+            rules=[
+                PolicyRule(
+                    name="r1",
+                    condition=PolicyCondition(
+                        field="x", operator=PolicyOperator.EQ, value=1
+                    ),
+                    action=PolicyAction.ALLOW,
+                )
+            ],
+        )
+        ev = PolicyEvaluator(policies=[doc])
+        result = ev.evaluate({"x": 999})
+        assert not result.allowed, "Omitted default action MUST deny (fail closed)"
 
 
 # ===================================================================

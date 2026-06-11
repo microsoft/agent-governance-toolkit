@@ -283,11 +283,12 @@ rules:
     }
 
     [Fact]
-    public void Evaluate_NoPolicies_DefaultsToAllow()
+    public void Evaluate_NoPolicies_DefaultsToDeny()
     {
         var engine = new PolicyEngine();
         var decision = engine.Evaluate("did:agentmesh:a", new Dictionary<string, object>());
-        Assert.True(decision.Allowed);
+        Assert.False(decision.Allowed);
+        Assert.Equal("deny", decision.Action);
     }
 
     [Fact]

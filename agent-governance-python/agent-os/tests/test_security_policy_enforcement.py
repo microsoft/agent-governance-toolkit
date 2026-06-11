@@ -33,6 +33,7 @@ from agent_os.integrations.base import (
 from agent_os.policies.schema import (
     PolicyAction,
     PolicyCondition,
+    PolicyDefaults,
     PolicyDocument,
     PolicyOperator,
     PolicyRule,
@@ -276,10 +277,14 @@ class TestPolicyEvaluatorEnforcement:
     """Test declarative policy rule evaluation."""
 
     def _make_evaluator(self, rules):
+        # Use an explicit allow default so these rule-semantics tests isolate
+        # matching behavior from the engine-wide default-deny (issue #2926):
+        # a non-matching request should fall through to allow here.
         doc = PolicyDocument(
             version="1.0",
             name="test-policy",
             rules=rules,
+            defaults=PolicyDefaults(action=PolicyAction.ALLOW),
         )
         return PolicyEvaluator(policies=[doc])
 

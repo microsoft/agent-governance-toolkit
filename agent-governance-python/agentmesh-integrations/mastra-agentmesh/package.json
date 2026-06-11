@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agentmesh-mastra",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Public Preview — Governance, trust verification, and audit middleware for Mastra AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
