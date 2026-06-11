@@ -19,3 +19,51 @@ Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_os"]
+
+# ============================================================================
+# Ruff - Fast Python Linter & Formatter
+#
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agent_os source tree under src/ is still linted and tested in CI. These
+# dev-tooling sections were dropped during the package consolidation in #2794;
+# without per-file-ignores, ruff reports E402/F401 on previously-clean files
+# such as agent_os/integrations/__init__.py. Restoring them keeps CI green.
+# ============================================================================
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+src = ["src", "modules"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+"src/agent_os/integrations/*.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent_os"]
+
+# ============================================================================
+# Pytest
+# ============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests", "modules/*/tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "benchmark: performance benchmark tests",
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]
