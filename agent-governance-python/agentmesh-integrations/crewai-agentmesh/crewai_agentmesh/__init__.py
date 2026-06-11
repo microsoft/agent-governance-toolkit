@@ -6,3 +6,19 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
+
+from crewai_agentmesh.trust import (
+    AgentProfile,
+    CapabilityGate,
+    TrustedCrew,
+    TrustTracker,
+    TaskAssignment,
+)
+
+__all__ = [
+    "AgentProfile",
+    "CapabilityGate",
+    "TrustedCrew",
+    "TrustTracker",
+    "TaskAssignment",
+]

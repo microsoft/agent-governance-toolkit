@@ -6,3 +6,19 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
+
+from openai_agents_agentmesh.trust import (
+    AgentTrustContext,
+    HandoffResult,
+    HandoffVerifier,
+    FunctionCallResult,
+    TrustedFunctionGuard,
+)
+
+__all__ = [
+    "AgentTrustContext",
+    "HandoffResult",
+    "HandoffVerifier",
+    "FunctionCallResult",
+    "TrustedFunctionGuard",
+]
