@@ -778,4 +778,5 @@ realpath
 normpath
 posixpath
 pypy
+fastembed
 Hotfixes
