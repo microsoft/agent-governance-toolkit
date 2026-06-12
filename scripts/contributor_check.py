@@ -23,6 +23,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1225,6 +1226,11 @@ def _is_public_org_member(org: str, login: str) -> bool:
         return False
 
 
+# Seconds to wait between successive per-PR detail calls in the maintainer-merged
+# lookup, to stay under GitHub's secondary rate limit. Tests set this to 0.
+_MAINTAINER_LOOKUP_PACE_SECONDS = 0.5
+
+
 def _has_prior_target_contribution(username: str, target_repo: str | None) -> bool:
     """Return True if the user has >=2 merged PRs in the target repo each merged by
     a DISTINCT maintainer (a public member of the target org), other than the author.
@@ -1254,12 +1260,20 @@ def _count_maintainer_merged(
     user's PRs. Capped at ten candidates, early-exit once ``need`` distinct
     maintainers are seen. Fail-closed: an unconfirmed merger, a self-merge, or a
     non-member merger does not count.
+
+    Paces the per-PR detail calls by ``_MAINTAINER_LOOKUP_PACE_SECONDS`` to stay
+    under GitHub's secondary rate limit when a candidate has many merged PRs but
+    few distinct maintainer merges (the no-early-exit path).
     """
     maintainers: set[str] = set()
+    made_api_call = False
     for pr in prs[:10]:
         number = pr.get("number")
         if not number:
             continue
+        if made_api_call and _MAINTAINER_LOOKUP_PACE_SECONDS:
+            time.sleep(_MAINTAINER_LOOKUP_PACE_SECONDS)
+        made_api_call = True
         detail = _api(f"/repos/{target_repo}/pulls/{number}")
         merged_login = ((detail or {}).get("merged_by") or {}).get("login", "")
         if not merged_login or merged_login.lower() == username.lower():

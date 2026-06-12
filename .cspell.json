@@ -56,7 +56,11 @@
     "pymdownx",
     "pygments",
     "javascripts",
-    "tabindex"
+    "tabindex",
+    "dampenable",
+    "forgeable",
+    "unstarred",
+    "getcode"
   ],
   "ignorePaths": [
     "**/node_modules/**",

@@ -20,6 +20,9 @@ The router raises on any unexpected path, so a missing mock can never fall
 through to a live network call.
 """
 
+# Synthetic GitHub usernames/org logins used only as test fixtures below.
+# cspell:ignore myorg someoneelse freshorg selfmerge
+
 from __future__ import annotations
 
 import sys
@@ -27,9 +30,19 @@ import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from contributor_check import check_contributor
+
+
+@pytest.fixture(autouse=True)
+def _no_api_pacing(monkeypatch):
+    """Zero the maintainer-lookup API pacing so end-to-end tests do not sleep."""
+    monkeypatch.setattr(
+        "contributor_check._MAINTAINER_LOOKUP_PACE_SECONDS", 0, raising=False
+    )
 
 
 def _iso(days_ago: int) -> str:

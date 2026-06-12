@@ -3,6 +3,9 @@
 # Licensed under the MIT License.
 """Tests for contributor_check.py."""
 
+# Synthetic GitHub usernames/org logins used only as test fixtures below.
+# cspell:ignore myorg trustedorg randomorg freshclone
+
 from __future__ import annotations
 
 import json

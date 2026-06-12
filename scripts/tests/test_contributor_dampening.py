@@ -3,12 +3,15 @@
 # Licensed under the MIT License.
 """Tests for established-account dampening in contributor_check.py."""
 
+# Synthetic GitHub usernames/org logins used only as test fixtures below.
+# cspell:ignore someoneelse freshorg freerider bigorg realauthor sockpuppet orgbacked splitcloner maint
+
 from __future__ import annotations
 
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,6 +27,14 @@ from contributor_check import (
     _is_established,
     _org_owned_established,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_api_pacing(monkeypatch):
+    """Zero the maintainer-lookup API pacing so unit tests do not sleep."""
+    monkeypatch.setattr(
+        "contributor_check._MAINTAINER_LOOKUP_PACE_SECONDS", 0, raising=False
+    )
 
 
 def _make_user(age_days: int = 2000, followers: int = 200, public_repos: int = 50) -> dict:
@@ -313,6 +324,33 @@ class TestPriorTargetContribution:
 
     def test_false_without_target(self):
         assert _has_prior_target_contribution("dev", None) is False
+
+    def test_paces_between_pr_detail_calls(self):
+        """Per-PR detail calls are paced (sleep BETWEEN calls), but never before
+        the first call. Non-member mergers force the no-early-exit path so all
+        three PRs are looked up -> exactly two pacing sleeps."""
+        prs = self._prs(3)
+        sleep_mock = MagicMock()
+        with patch("contributor_check._search_issues", return_value=prs), \
+             patch("contributor_check._api", return_value={"merged_by": {"login": "x"}}), \
+             patch("contributor_check._is_public_org_member", return_value=False), \
+             patch("contributor_check._MAINTAINER_LOOKUP_PACE_SECONDS", 0.5), \
+             patch("contributor_check.time.sleep", sleep_mock):
+            assert _has_prior_target_contribution("dev", self.TARGET) is False
+        assert sleep_mock.call_count == 2
+        sleep_mock.assert_called_with(0.5)
+
+    def test_no_pacing_for_single_pr(self):
+        """A single PR lookup makes one API call and never paces."""
+        prs = self._prs(1)
+        sleep_mock = MagicMock()
+        with patch("contributor_check._search_issues", return_value=prs), \
+             patch("contributor_check._api", return_value={"merged_by": {"login": "x"}}), \
+             patch("contributor_check._is_public_org_member", return_value=False), \
+             patch("contributor_check._MAINTAINER_LOOKUP_PACE_SECONDS", 0.5), \
+             patch("contributor_check.time.sleep", sleep_mock):
+            assert _has_prior_target_contribution("dev", self.TARGET) is False
+        assert sleep_mock.call_count == 0
 
 
 class TestEstablishedCredibility:
