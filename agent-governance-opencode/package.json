@@ -42,8 +42,7 @@
   },
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-opencode",
   "dependencies": {
-    "@microsoft/agent-governance-sdk": "3.7.0",
-    "@opencode-ai/plugin": "1.17.1"
+    "@microsoft/agent-governance-sdk": "3.7.0"
   },
   "engines": {
     "node": ">=22.0.0"

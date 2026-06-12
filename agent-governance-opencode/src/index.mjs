@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { tool } from "@opencode-ai/plugin";
 import {
   checkArbitraryText,
   evaluateOpenCodePrompt,
@@ -150,9 +149,9 @@ export const AgtGovernance = async (ctx) => {
       agt_policy_check_text: {
         description:
           "Check text against AGT prompt, context-poisoning, and MCP-style threat detectors.",
-        args: {
-          text: tool.schema.string().describe("Text to inspect."),
-        },
+          args: {
+            text: { type: "string", description: "Text to inspect." },
+          },
         async execute(args) {
           const state = await getState();
           const text = typeof args?.text === "string" ? args.text : "";
