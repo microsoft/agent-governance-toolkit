@@ -146,7 +146,7 @@ REGISTERED_PACKAGES = {
     "cedarling-python", "cedarling_python",
     # Cedarling-AgentMesh integration (internal cross-package, local-only)
     "cedarling-agentmesh", "cedarling_agentmesh",
-    # FastEmbed (fast embedding generation library from Qdrant, real PyPI package)
+    # FastEmbed (fast embedding generation library, real PyPI package)
     "fastembed", "fast-embed",
     # Internal cross-package references (local-only, NOT on PyPI)
     # These are flagged as HIGH RISK if found in requirements.txt with version pins

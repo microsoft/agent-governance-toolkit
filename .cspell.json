@@ -60,7 +60,9 @@
     "dampenable",
     "forgeable",
     "unstarred",
-    "getcode"
+    "getcode",
+    "fastembed",
+    "FastEmbed"
   ],
   "ignorePaths": [
     "**/node_modules/**",
