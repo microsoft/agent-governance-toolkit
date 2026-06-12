@@ -70,6 +70,19 @@ The Python-measured gains therefore transfer: zero-FP detector recall
   the measured zero false-positives; without them the Rust port was briefly more
   aggressive on `compact_leet` — caught and fixed.
 
+## Python port (`agent_os.normalize`)
+
+The module is also shipped in the Python SDK, ported 1:1 from the Rust
+implementation (same transforms, same order, same guards, same closed transform
+vocabulary), stdlib-only.
+
+| Check | Command | Result |
+|---|---|---|
+| Unit tests | `python3 -m unittest tests.test_normalize -v` | **21 passed** (mirrors the Rust suite + immutability/decoder-off cases) |
+| Cross-SDK parity | both implementations over the regenerated 280-row smoke corpus + a 21-case obfuscation battery (300 rows) | **byte-identical normalized text AND identical transform tags on every row** |
+| Full agentmesh suite | `cargo test -p agentmesh --lib` | **371 passed, 0 failed** on current `main` |
+| Lint | `cargo clippy -p agentmesh --lib` | 0 warnings in `normalize.rs` (3 pre-existing elsewhere) |
+
 ## Caveats
 
 - All metrics derive from a **synthetic** research corpus — directional, not a
