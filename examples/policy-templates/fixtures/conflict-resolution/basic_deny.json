@@ -1,0 +1,13 @@
+{
+  "id": "basic-deny-drop-table",
+  "input": {
+    "action": "sql_execute",
+    "agent_did": "did:web:test-agent",
+    "context": {
+      "statement": "DROP TABLE users",
+      "endpoint": "pg-staging"
+    }
+  },
+  "expected_verdict": "deny",
+  "recorded_at": "2026-05-22T10:15:00Z"
+}
