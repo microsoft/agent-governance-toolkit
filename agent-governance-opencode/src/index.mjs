@@ -87,7 +87,9 @@ export const AgtGovernance = async (ctx) => {
         prompt,
         sessionId: event?.properties?.sessionID ?? event?.properties?.sessionId,
       });
+
       if (result.effect === "deny") {
+        // throwing here silently breaks the OpenCode session. Exception message is never displayed to the user, this is not the way to go...       
         throw new Error(result.reason || "AGT governance blocked the submitted prompt.");
       }
     },
