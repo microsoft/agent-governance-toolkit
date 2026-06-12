@@ -20,13 +20,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from agent_sandbox._hardening import (
+    BLOCKED_ENV_VARS as _BLOCKED_ENV_VARS,
+    is_protected_path as _is_protected_path,
+    sanitize_env_vars as _sanitize_env_vars,
+    validate_mount_path as _validate_mount_path,
+)
 from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.docker_provider.provider import (
-    _BLOCKED_ENV_VARS,
     DockerSandboxProvider,
-    _is_protected_path,
-    _sanitize_env_vars,
-    _validate_mount_path,
     _validate_resource_name,
     docker_config_from_policy,
 )

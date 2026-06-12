@@ -21,11 +21,6 @@ import uuid
 from typing import Any, Callable
 
 from agent_sandbox._hardening import (
-    BLOCKED_ENV_VARS as _BLOCKED_ENV_VARS,  # noqa: F401  re-exported for tests
-    PROTECTED_PATHS_UNIX as _PROTECTED_PATHS_UNIX,  # noqa: F401  re-exported for tests
-    PROTECTED_PATHS_WINDOWS as _PROTECTED_PATHS_WINDOWS,  # noqa: F401  re-exported for tests
-    PROTECTED_PATHS_WINDOWS_ROOT_ONLY as _PROTECTED_PATHS_WINDOWS_ROOT_ONLY,  # noqa: F401  re-exported for tests
-    is_protected_path as _is_protected_path,  # noqa: F401  re-exported for tests
     sanitize_env_vars as _sanitize_env_vars,
     validate_mount_path as _validate_mount_path,
 )
