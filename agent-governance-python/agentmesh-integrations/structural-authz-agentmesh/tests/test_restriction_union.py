@@ -32,7 +32,7 @@ def test_effective_restrictions_method_matches_pure_fn():
     chain = DelegationChain("did:authz:root", ["read"])
     parent = frozenset({"no_external_export"})
     child = frozenset({"no_memory_write"})
-    # The method computes the same grow-only union the pure intersect_restrictions does.
+    # The method computes the same grow-only union the pure merge_restrictions does.
     assert chain.effective_restrictions(parent, child) == (parent | child)
 
 

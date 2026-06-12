@@ -36,7 +36,7 @@ from .context_aggregation import (
     evaluate_aggregation,
 )
 from .context_audit import ContextEvent, context_event
-from .context_delegation import intersect_restrictions
+from .context_delegation import merge_restrictions
 from .context_envelope import (
     ContextEnvelope,
     EnvelopeReference,
@@ -91,7 +91,7 @@ __all__ = [
     "envelope_reference",
     "evaluate_aggregation",
     "fold",
-    "intersect_restrictions",
+    "merge_restrictions",
     "to_policy_action",
     "ExternalPolicyBackend",
     "OPABackend",

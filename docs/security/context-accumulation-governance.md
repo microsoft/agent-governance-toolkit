@@ -1,9 +1,14 @@
-# Security Audit: Context Accumulation Governance (v1)
+# Security Design Notes: Context Accumulation Governance (v1)
 
 **Date:** 2026-06-03
 **PR:** feat: govern accumulated context across delegated agent workflows
 **Scope:** `agent_os.policies.context_envelope`, `context_aggregation`, `context_accumulation`, `obligations`, `context_delegation`, `context_audit`; `structural_authz_agentmesh.trust.DelegationChain.effective_restrictions`
 **Author:** Knapp-Kevin
+
+> These are the author's own security design notes and threat model for the
+> change — a self-review, not an independent security audit. The "Test coverage"
+> column references tests that ship in this same PR. An independent review by a
+> second maintainer is welcome and has not yet taken place.
 
 ## What changed and why
 
@@ -15,7 +20,7 @@ New types and helpers:
 - `evaluate_aggregation` plus `AggregationRule`/`AggregationRuleSet`: organization-authored rules over label combinations, with a monotone backstop that escalates combinations no rule covers.
 - `accumulate`, `decide_next`, `to_policy_action` (`context_accumulation`): post-execution accumulation of an action's actual `result_labels`, then gating of the next action.
 - `Obligation`/`ObligationSet`: the obligations a `constrain` outcome carries forward.
-- `intersect_restrictions` (`context_delegation`) and the additive `DelegationChain.effective_restrictions`: grow-only restriction inheritance on delegation.
+- `merge_restrictions` (`context_delegation`) and the additive `DelegationChain.effective_restrictions`: grow-only restriction inheritance on delegation.
 - `context_event` plus `CONTEXT_*` kinds (`context_audit`): transition events, each classified at the envelope sensitivity.
 
 The change reuses the existing `DataClassification`/`DataLabel`/`ABACPolicy` types and the policy-engine `result_labels`, and adds no new dependencies.
@@ -70,7 +75,7 @@ The version chain is not assumed unbounded, and the accumulated chain is itself 
 
 ## Mitigations
 
-| Risk | Mitigation | Verified by |
+| Risk | Mitigation | Test coverage (this PR) |
 |------|-----------|-------------|
 | Constrain allows without an obligation channel | `to_policy_action` maps constrain to DENY absent a channel | `test_python_path_constrain_fails_closed` |
 | Empty obligation set grants allow via vacuous truth | Empty obligations do not satisfy the allow condition | `test_empty_obligation_constrain_fails_closed` |

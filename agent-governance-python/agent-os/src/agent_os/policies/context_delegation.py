@@ -16,7 +16,7 @@ from typing import Iterable
 from .context_envelope import ContextEnvelope
 
 
-def intersect_restrictions(
+def merge_restrictions(
     parent: ContextEnvelope,
     child_declared: Iterable[str],
 ) -> frozenset[str]:
