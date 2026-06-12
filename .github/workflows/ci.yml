@@ -701,6 +701,10 @@ jobs:
       - name: Install ${{ matrix.package }}
         working-directory: agent-governance-python/agentmesh-integrations/${{ matrix.package }}
         run: |
+          # Use local monorepo siblings so integration tests never drift against
+          # the latest published wheels.
+          pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-core"
+          pip install --no-cache-dir --no-deps -e "$GITHUB_WORKSPACE/agent-governance-python/agent-governance-toolkit-integrations"
           # All agentmesh-integrations packages declare a [dev] extra (audited
           # 2026-05). Deterministic install — no error-swallowing fallback.
           pip install --no-cache-dir -e ".[dev]"
