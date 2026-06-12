@@ -200,12 +200,27 @@ def test_backend_requires_experimental():
 # =========================================================================
 
 
+def _force_unix_paths(monkeypatch):
+    """Make protected-path checks evaluate Unix paths on any host OS.
+
+    ``is_protected_path`` only consults the Unix protected set when the
+    platform is not Windows, so on a Windows dev box ``/etc`` would not
+    be flagged. Force the Unix branch and an identity ``realpath`` so the
+    fail-closed mount checks are exercised deterministically everywhere.
+    """
+    import agent_sandbox._hardening as hardening
+
+    monkeypatch.setattr(hardening, "platform", SimpleNamespace(system=lambda: "Linux"))
+    monkeypatch.setattr(hardening.os.path, "realpath", lambda p: p)
+
+
 def _policy(**kw):
     """Build a duck-typed policy object for mxc_config_from_policy."""
     defaults = SimpleNamespace(
         timeout_seconds=kw.get("timeout_seconds"),
         max_memory_mb=kw.get("max_memory_mb"),
         max_cpu=kw.get("max_cpu"),
+        network_default=kw.get("network_default"),
     )
     mounts = None
     if "input_dir" in kw or "output_dir" in kw:
@@ -217,6 +232,7 @@ def _policy(**kw):
         defaults=defaults,
         sandbox_mounts=mounts,
         network_allowlist=kw.get("network_allowlist"),
+        tool_allowlist=kw.get("tool_allowlist"),
     )
 
 
@@ -513,3 +529,158 @@ class TestGuards:
         provider._sessions[key].evaluator = _DenyEvaluator()
         with pytest.raises(PermissionError, match="Policy denied"):
             provider.execute_code(handle.agent_id, handle.session_id, "print(1)")
+
+
+# =========================================================================
+# Fail-closed hardening (review gaps)
+# =========================================================================
+
+
+class TestFailClosedHardening:
+    def test_extra_config_cannot_flip_allow_outbound(self):
+        """extra_config must never weaken the modelled network egress."""
+        cfg = MxcConfig(
+            allow_outbound=False,
+            extra_config={"network": {"allowOutbound": True}},
+        )
+        doc = cfg.to_mxc_json("cmd")
+        assert doc["network"]["allowOutbound"] is False
+
+    def test_extra_config_cannot_widen_allowed_hosts(self):
+        cfg = MxcConfig(
+            allow_outbound=True,
+            allowed_hosts=["safe.example"],
+            extra_config={
+                "network": {"allowedHosts": ["evil.example", "*"]}
+            },
+        )
+        doc = cfg.to_mxc_json("cmd")
+        assert doc["network"]["allowedHosts"] == ["safe.example"]
+
+    def test_extra_config_cannot_swap_mounts_or_timeout(self):
+        cfg = MxcConfig(
+            readonly_paths=["/safe/ro"],
+            readwrite_paths=["/safe/rw"],
+            timeout_ms=1_000,
+            extra_config={
+                "filesystem": {
+                    "readonlyPaths": ["/etc"],
+                    "readwritePaths": ["/"],
+                },
+                "timeoutMs": 999_999,
+            },
+        )
+        doc = cfg.to_mxc_json("cmd")
+        assert doc["filesystem"]["readonlyPaths"] == ["/safe/ro"]
+        assert doc["filesystem"]["readwritePaths"] == ["/safe/rw"]
+        assert doc["timeoutMs"] == 1_000
+
+    def test_extra_config_unrelated_keys_preserved(self):
+        cfg = MxcConfig(extra_config={"ui": {"allowWindows": True}})
+        doc = cfg.to_mxc_json("cmd")
+        assert doc["ui"]["allowWindows"] is True
+
+    def test_guest_env_dangerous_vars_stripped(self):
+        cfg = MxcConfig(
+            env_vars={
+                "SAFE": "ok",
+                "LD_PRELOAD": "/tmp/evil.so",
+                "PYTHONSTARTUP": "/tmp/x.py",
+                "NODE_OPTIONS": "--require /tmp/x",
+            }
+        )
+        doc = cfg.to_mxc_json("cmd")
+        env = doc["process"]["environment"]
+        assert env == {"SAFE": "ok"}
+
+    def test_tool_allowlist_fails_closed(self, provider, fake_run):
+        policy = _policy(tool_allowlist=["read_doc"])
+        with pytest.raises(ValueError, match="tool allowlisting"):
+            provider.create_session("agent-1", policy=policy)
+
+    def test_empty_tool_allowlist_is_allowed(self, provider, fake_run):
+        policy = _policy(tool_allowlist=[])
+        handle = provider.create_session("agent-1", policy=policy)
+        assert handle.status == SessionStatus.READY
+
+    def test_protected_mount_path_rejected_input(self, monkeypatch):
+        _force_unix_paths(monkeypatch)
+        with pytest.raises(ValueError, match="protected system directory"):
+            MxcConfig.from_sandbox_config(
+                SandboxConfig(input_dir="/etc")
+            )
+
+    def test_protected_mount_path_rejected_output(self, monkeypatch):
+        _force_unix_paths(monkeypatch)
+        with pytest.raises(ValueError, match="protected system directory"):
+            MxcConfig.from_sandbox_config(
+                SandboxConfig(output_dir="/")
+            )
+
+    def test_protected_mount_path_rejected_from_policy(self, monkeypatch):
+        _force_unix_paths(monkeypatch)
+        with pytest.raises(ValueError, match="protected system directory"):
+            mxc_config_from_policy(_policy(input_dir="/usr"))
+
+    def test_outbound_without_hosts_rejected(self):
+        with pytest.raises(ValueError, match="without a host allowlist"):
+            MxcConfig(allow_outbound=True)
+
+    def test_outbound_unrestricted_requires_explicit_optin(self):
+        cfg = MxcConfig(allow_outbound=True, allow_unrestricted_egress=True)
+        doc = cfg.to_mxc_json("cmd")
+        assert doc["network"]["allowOutbound"] is True
+        assert "allowedHosts" not in doc["network"]
+
+    def test_network_default_allow_enables_unrestricted_egress(self):
+        cfg = mxc_config_from_policy(_policy(network_default="allow"))
+        assert cfg.allow_outbound is True
+        assert cfg.allow_unrestricted_egress is True
+        assert cfg.allowed_hosts == []
+
+    def test_network_default_deny_keeps_egress_off(self):
+        cfg = mxc_config_from_policy(_policy(network_default="deny"))
+        assert cfg.allow_outbound is False
+
+    def test_network_allowlist_takes_precedence_over_default(self):
+        cfg = mxc_config_from_policy(
+            _policy(network_default="allow", network_allowlist=["pypi.org"])
+        )
+        assert cfg.allow_outbound is True
+        assert cfg.allowed_hosts == ["pypi.org"]
+        # Restricted egress, not unrestricted.
+        assert cfg.allow_unrestricted_egress is False
+
+    def test_context_and_policy_env_do_not_leak_into_runner(
+        self, provider, fake_run
+    ):
+        """MXC_CONTEXT / guest env stay in the config doc, not the runner."""
+        handle = provider.create_session("agent-1")
+        # Seed a guest env var on the live session.
+        key = (handle.agent_id, handle.session_id)
+        provider._sessions[key].config.env_vars["GUEST_SECRET"] = "shh"
+        provider.execute_code(
+            handle.agent_id,
+            handle.session_id,
+            "print(1)",
+            context={"task": "demo"},
+        )
+        # The trusted runner's environment must not carry guest/context env.
+        assert "GUEST_SECRET" not in (fake_run.env or {})
+        assert "MXC_CONTEXT" not in (fake_run.env or {})
+        # ...but the guest config document does carry them.
+        guest_env = fake_run.config_doc["process"]["environment"]
+        assert guest_env.get("GUEST_SECRET") == "shh"
+        assert "MXC_CONTEXT" in guest_env
+
+    def test_execute_code_non_python_interpreter_fails_closed(
+        self, monkeypatch, fake_run
+    ):
+        monkeypatch.delenv("MXC_BINARY", raising=False)
+        p = MxcSandboxProvider(
+            binary_path=REAL_BINARY, backend="bubblewrap", interpreter="node"
+        )
+        handle = p.create_session("agent-1")
+        with pytest.raises(ValueError, match="only supports a Python"):
+            p.execute_code(handle.agent_id, handle.session_id, "print(1)")
+

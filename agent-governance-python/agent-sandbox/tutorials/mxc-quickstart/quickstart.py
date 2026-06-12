@@ -27,8 +27,9 @@ from agent_sandbox import MxcSandboxProvider, SandboxConfig
 from agent_sandbox.mxc_sandbox_provider import policy_yaml_to_mxc_json
 
 # A sandbox policy: read-only input mount, read-write output mount, a
-# fail-closed egress allowlist, and a timeout. ``tool_allowlist`` is
-# enforced host-side and intentionally never reaches the MXC JSON.
+# fail-closed egress allowlist, and a timeout. MXC has no tool concept, so a
+# ``tool_allowlist`` is intentionally omitted — a policy carrying one is
+# rejected at session creation (use Docker/Hyperlight for tool gating).
 POLICY_YAML = """
 version: "1.0"
 name: mxc-quickstart
@@ -38,8 +39,6 @@ defaults:
 network_allowlist:
   - pypi.org
   - "*.github.com"
-tool_allowlist:
-  - read_doc
 sandbox_mounts:
   input_dir: /data/user-input
   output_dir: /data/agent-output

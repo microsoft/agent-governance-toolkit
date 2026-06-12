@@ -129,22 +129,24 @@ _RUNNER_ENV_PASSTHROUGH: dict[str, tuple[str, ...]] = {
 }
 
 
-def _runner_env(extra: dict[str, str]) -> dict[str, str]:
-    """Build the environment for the MXC runner process.
+def _runner_env() -> dict[str, str]:
+    """Build the environment for the MXC *runner* process.
 
-    Forwards only the OS-essential variables the runner needs (per
-    platform allowlist) plus any caller-configured ``extra`` vars. The
-    parent's full environment is never inherited, so host secrets do not
-    leak into the launcher.
+    Forwards **only** the OS-essential variables the trusted runner
+    needs (per-platform allowlist). The parent's full environment is
+    never inherited and — critically — no guest/policy environment is
+    mixed in here: guest variables belong in the sandbox config's
+    ``process.environment`` (see :meth:`MxcConfig.to_mxc_json`), not in
+    the launcher's own process environment. Keeping them separate stops
+    caller context (``MXC_CONTEXT``) or policy env from leaking into the
+    trusted binary.
     """
     names = _RUNNER_ENV_PASSTHROUGH.get(platform.system(), ("PATH",))
-    env = {
+    return {
         name: os.environ[name]
         for name in names
         if name in os.environ
     }
-    env.update(extra)
-    return env
 
 
 def _validate_agent_id(value: str) -> None:
@@ -153,6 +155,31 @@ def _validate_agent_id(value: str) -> None:
             f"Invalid agent_id '{value}': must match "
             r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}"
         )
+
+
+# Interpreters the static code scanner can vet. ``execute_code`` writes the
+# submitted source to a ``.py`` script and scans it with
+# ``enforce_no_subprocess_execution`` (a Python-AST scanner) before running
+# ``<interpreter> <script>``. That scanner only understands Python, so any
+# other interpreter would execute unscanned code — ``execute_code`` fails
+# closed for those and steers callers to ``run()`` instead.
+_PYTHON_INTERPRETER_RE = re.compile(
+    r"^(?:py|python|pypy)\d*(?:\.\d+)?$", re.IGNORECASE
+)
+
+
+def _is_python_interpreter(interpreter: str) -> bool:
+    """Return ``True`` if *interpreter* names a Python interpreter."""
+    if not interpreter:
+        return False
+    try:
+        first = shlex.split(interpreter)[0]
+    except ValueError:
+        return False
+    name = Path(first).name
+    if name.lower().endswith(".exe"):
+        name = name[:-4]
+    return bool(_PYTHON_INTERPRETER_RE.match(name))
 
 
 def _truncate(text: str, max_bytes: int) -> str:
@@ -319,6 +346,22 @@ class MxcSandboxProvider(SandboxProvider):
 
         evaluator = None
         if policy is not None:
+            # MXC's native binary has no tool-registration channel, so a
+            # tool_allowlist cannot be enforced inside the sandbox.
+            # Silently dropping a security control is the wrong default
+            # (Hyperlight fails closed here), so refuse rather than run a
+            # session that ignores the policy's allowlist.
+            tool_allow = list(getattr(policy, "tool_allowlist", []) or [])
+            if tool_allow:
+                raise ValueError(
+                    "MXC does not support tool allowlisting — the native "
+                    "binary exposes no tool-registration channel, so a "
+                    "non-empty policy.tool_allowlist "
+                    f"({sorted(tool_allow)}) cannot be enforced. Refusing "
+                    "to create a session that would silently ignore it. "
+                    "Remove tool_allowlist from the policy or use a "
+                    "provider that supports tools (e.g. Hyperlight)."
+                )
             mxc_cfg = mxc_config_from_policy(policy, base=mxc_cfg)
             evaluator = self._build_evaluator(policy)
 
@@ -377,6 +420,20 @@ class MxcSandboxProvider(SandboxProvider):
             raise RuntimeError(
                 f"No active session for agent '{agent_id}' with "
                 f"session_id '{session_id}'. Call create_session() first."
+            )
+
+        # ``execute_code`` writes a Python script and statically scans it.
+        # The scanner only understands Python, so refuse to run any other
+        # interpreter here rather than execute unscanned code (use run()
+        # with an explicit command for non-Python languages).
+        if not _is_python_interpreter(session.interpreter):
+            raise ValueError(
+                "execute_code only supports a Python interpreter; the "
+                f"configured interpreter is '{session.interpreter}'. The "
+                "static code scanner is Python-AST based and cannot vet "
+                "non-Python code, so running it would give a false sense "
+                "of safety. Use run() with an explicit command for other "
+                "languages."
             )
 
         # Policy gate — runs entirely on the host before any sandbox is
@@ -598,6 +655,7 @@ class MxcSandboxProvider(SandboxProvider):
             readwrite_paths=list(cfg.readwrite_paths),
             allow_outbound=cfg.allow_outbound,
             allowed_hosts=list(cfg.allowed_hosts),
+            allow_unrestricted_egress=cfg.allow_unrestricted_egress,
             timeout_ms=cfg.timeout_ms,
             experimental=cfg.experimental,
             env_vars=new_env,
@@ -657,14 +715,15 @@ class MxcSandboxProvider(SandboxProvider):
         hard_timeout = cfg.timeout_ms / 1000.0 + _TEARDOWN_GRACE_SECONDS
         max_bytes = _OUTPUT_MAX_BYTES
 
-        # Build the runner's environment: an OS-essential allowlist plus
-        # the policy-configured vars. This is the environment of the
-        # trusted MXC binary itself (which needs e.g. LOCALAPPDATA on
-        # Windows for its state file), not the sandboxed guest — the
-        # guest's environment is governed separately by MXC. The parent's
-        # full environment is never inherited, so host secrets are not
-        # leaked into the launcher.
-        child_env = _runner_env(cfg.env_vars)
+        # Build the runner's environment: the OS-essential allowlist
+        # only. This is the environment of the trusted MXC binary itself
+        # (which needs e.g. LOCALAPPDATA on Windows for its state file),
+        # NOT the sandboxed guest. The guest's environment is governed
+        # separately and rendered into the config document's
+        # ``process.environment`` by ``to_mxc_json`` (and sanitised
+        # there). The parent's full environment is never inherited and
+        # guest/policy env never reaches the launcher.
+        child_env = _runner_env()
 
         start = time.monotonic()
         killed = False

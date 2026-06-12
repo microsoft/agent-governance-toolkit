@@ -108,12 +108,23 @@ defaults:
 network_allowlist:
   - pypi.org
   - "*.github.com"
-tool_allowlist:                # enforced HOST-side, not in MXC
-  - read_doc
 sandbox_mounts:
   input_dir: /data/user-pdf    # mounted read-only
   output_dir: /data/agent-out  # mounted read-write
 ```
+
+> **Tool allowlists are not supported by MXC.** The native binary has no
+> tool-registration channel, so MXC cannot enforce a `tool_allowlist`.
+> Rather than silently ignore the control, the provider **fails closed**:
+> passing a policy whose `tool_allowlist` is non-empty raises at
+> `create_session` / `run_once`. Use the Docker or Hyperlight backend when
+> you need tool gating.
+
+> **Egress is fail-closed.** Outbound networking stays off unless you opt in.
+> A non-empty `network_allowlist` enables egress restricted to those hosts;
+> to allow unrestricted egress you must set `defaults.network_default: allow`
+> explicitly. Enabling outbound with no host filter and no explicit opt-in is
+> rejected.
 
 ```python
 from agent_os.policies.schema import PolicyDocument
@@ -170,12 +181,14 @@ Notice what is — and is **not** — in that JSON:
 | Filesystem mounts | MXC (bubblewrap binds) | ✅ `filesystem.*` |
 | Egress allowlist | MXC (network policy) | ✅ `network.*` |
 | Timeout | MXC | ✅ `timeoutMs` |
-| **Tool allowlist** | **Host `PolicyEvaluator`** (before spawn) | ❌ — MXC has no tool concept |
+| **Tool allowlist** | **Unsupported** — rejected fail-closed at session creation | ❌ — MXC has no tool concept |
 | **CPU / memory** | Other backends (Docker/Hyperlight) | ❌ — not in `0.6.0-alpha` schema |
 
 `tool_allowlist`, CPU, and memory are intentionally omitted from the JSON so it
-never claims enforcement MXC does not provide. The tool gate runs **host-side**
-before MXC is ever invoked.
+never claims enforcement MXC does not provide. Because MXC cannot gate tools at
+all, a policy that carries a non-empty `tool_allowlist` is **rejected** at
+`create_session` / `run_once` rather than silently ignored — use Docker or
+Hyperlight when tool gating is required.
 
 ## Defense-in-depth recap
 
