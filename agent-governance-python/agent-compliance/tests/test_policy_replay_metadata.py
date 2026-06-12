@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import json
-import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -33,6 +32,7 @@ def _make_decision(action: str = "deny", allowed: bool = False, matched_rule: st
 def _write_fixture(tmp_path: Path, fixtures: list[dict], filename: str = "test.json") -> Path:
     """Write fixture(s) to a JSON file and return the path."""
     p = tmp_path / filename
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(fixtures if len(fixtures) > 1 else fixtures[0], indent=2))
     return p
 

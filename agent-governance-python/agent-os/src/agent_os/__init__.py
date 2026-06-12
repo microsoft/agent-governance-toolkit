@@ -1,4 +1,17 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+"""Agent OS - A Safety-First Kernel for Autonomous AI Agents.
+
+.. deprecated::
+    ``agent-os-kernel`` is deprecated and will be removed in a future
+    release. Use ``agent-governance-toolkit-core`` instead. See
+    https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md
+"""
+
+from __future__ import annotations
+
 import warnings
+
 warnings.warn(
     "agent-os-kernel is deprecated and will be removed in a future release. "
     "Use agent-governance-toolkit-core instead. "
@@ -9,3 +22,443 @@ warnings.warn(
 
 # Keep in sync with the ``version`` field in pyproject.toml.
 __version__ = "4.1.0"
+__author__ = "Microsoft Corporation"
+__license__ = "MIT"
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _check_optional(module_name: str) -> bool:
+    """Return True if *module_name* is importable."""
+    try:
+        __import__(module_name)
+        return True
+    except ImportError:
+        return False
+
+
+AVAILABLE_PACKAGES: dict[str, bool] = {
+    "control_plane": _check_optional("agent_control_plane"),
+    "primitives": _check_optional("agent_primitives"),
+    "cmvk": _check_optional("cmvk"),
+    "caas": _check_optional("caas"),
+    "emk": _check_optional("emk"),
+    "amb": _check_optional("amb_core"),
+    "atr": _check_optional("atr"),
+    "scak": _check_optional("agent_kernel"),
+    "mute_agent": _check_optional("mute_agent"),
+}
+
+
+def check_installation() -> None:
+    """Check which Agent OS packages are installed."""
+    logger.info("Agent OS Installation Status:")
+    logger.info("=" * 40)
+    for pkg, available in AVAILABLE_PACKAGES.items():
+        status = "Installed" if available else "Not installed"
+        logger.info(f"  {pkg:15} {status}")
+    logger.info("=" * 40)
+    logger.info("\nInstall missing packages with:")
+    logger.info("  pip install agent-os-kernel[full]")
+
+
+# ============================================================================
+# Control Plane (optional - requires agent_control_plane package)
+# ============================================================================
+
+try:
+    from agent_control_plane import (
+        AgentContext,
+        AgentControlPlane,
+        AgentKernelPanic,
+        AgentSignal,
+        AgentVFS,
+        ExecutionEngine,
+        ExecutionStatus,
+        FileMode,
+        FlightRecorder,
+        KernelSpace,
+        KernelState,
+        MemoryBackend,
+        PolicyEngine,
+        PolicyRule,
+        ProtectionRing,
+        SignalAwareAgent,
+        SignalDispatcher,
+        SyscallRequest,
+        SyscallResult,
+        SyscallType,
+        VFSBackend,
+        create_agent_vfs,
+        create_control_plane,
+        create_kernel,
+        kill_agent,
+        pause_agent,
+        policy_violation,
+        resume_agent,
+        user_space_execution,
+    )
+
+    _CONTROL_PLANE_AVAILABLE = True
+except ImportError:
+    _CONTROL_PLANE_AVAILABLE = False
+
+# ============================================================================
+# Core Governance Modules (always available)
+# ============================================================================
+
+# AGENTS.md Compatibility
+from agent_os.agents_compat import (
+    AgentConfig as AgentsConfig,
+)
+from agent_os.agents_compat import (
+    AgentSkill,
+    AgentsParser,
+    discover_agents,
+)
+
+# Base Agent Classes
+from agent_os.base_agent import (
+    AgentConfig,
+    AuditEntry,
+    BaseAgent,
+    PolicyDecision,
+    ToolUsingAgent,
+    TypedResult,
+)
+
+# Context Budget Scheduler
+from agent_os.context_budget import (
+    BudgetExceeded,
+    ContextPriority,
+    ContextScheduler,
+    ContextWindow,
+)
+
+# LlamaFirewall Integration
+try:
+    from agent_os.integrations.llamafirewall import (
+        FirewallMode,
+        FirewallResult,
+        FirewallVerdict,
+        LlamaFirewallAdapter,
+    )
+except ImportError:
+    pass
+
+# MCP Security - tool poisoning defense
+from agent_os.credential_redactor import CredentialMatch, CredentialPattern, CredentialRedactor
+from agent_os.credential_vault import (
+    DENY_REASON,
+    CredentialDecision,
+    CredentialError,
+    CredentialHandle,
+    CredentialInjector,
+    CredentialProfile,
+    CredentialRecord,
+    CredentialVault,
+    DenyReceipt,
+    EncryptionUnavailable,
+    InjectionContext,
+    InjectionResult,
+    PolicyOutcome,
+    VaultAuditEvent,
+    audit_digest,
+)
+from agent_os.mcp_message_signer import (
+    MCPMessageSigner,
+    MCPSignedEnvelope,
+    MCPVerificationResult,
+)
+from agent_os.mcp_protocols import (
+    InMemoryAuditSink,
+    InMemoryNonceStore,
+    InMemoryRateLimitStore,
+    InMemorySessionStore,
+    MCPAuditSink,
+    MCPNonceStore,
+    MCPRateLimitStore,
+    MCPSessionStore,
+)
+from agent_os.mcp_response_scanner import (
+    MCPResponseScanner,
+    MCPResponseScanResult,
+    MCPResponseThreat,
+)
+from agent_os.mcp_security import (
+    MCPSecurityScanner,
+    MCPSeverity,
+    MCPThreat,
+    MCPThreatType,
+    ScanResult,
+    ToolFingerprint,
+)
+from agent_os.mcp_session_auth import MCPSession, MCPSessionAuthenticator
+from agent_os.mcp_sliding_rate_limiter import MCPSlidingRateLimiter
+
+# Mute Agent Primitives - Face/Hands kernel-level decorators
+from agent_os.mute import (
+    ActionStatus,
+    ActionStep,
+    CapabilityViolation,
+    ExecutionPlan,
+    PipelineResult,
+    StepResult,
+    face_agent,
+    mute_agent,
+    pipe,
+)
+
+# Prompt Injection Detection
+from agent_os.prompt_injection import (
+    DetectionConfig,
+    DetectionResult,
+    InjectionType,
+    PromptInjectionDetector,
+    ThreatLevel,
+)
+
+# Semantic Policy Engine
+from agent_os.semantic_policy import (
+    IntentCategory,
+    IntentClassification,
+    PolicyDenied,
+    SemanticPolicyEngine,
+)
+
+# Stateless Kernel (MCP June 2026)
+from agent_os.stateless import (
+    ExecutionContext,
+    ExecutionRequest,
+    ExecutionResult,
+    StatelessKernel,
+    stateless_execute,
+)
+from agent_os.stateless import (
+    MemoryBackend as StatelessMemoryBackend,
+)
+
+# ============================================================================
+# Content Governance (v3.0.2+)
+# ============================================================================
+
+try:
+    from agent_os.content_governance import (
+        ContentDimension,
+        ContentQualityEvaluator,
+        ContentQualityReport,
+        QualityGate,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.execution_context_policy import (
+        ContextualPolicyEngine,
+        EnforcementLevel,
+    )
+    from agent_os.execution_context_policy import (
+        ExecutionContext as ContextualExecutionContext,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.github_enterprise import (
+        EnterpriseGovernanceManager,
+        GovernanceTier,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.shift_left_metrics import (
+        ShiftLeftTracker,
+        ViolationStage,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.audit_logger import GovernanceAuditLogger
+except ImportError:
+    pass
+
+try:
+    from agent_os.otel_audit_backend import OTelLogsBackend
+except ImportError:
+    pass
+
+# GovernanceEventSink SPI (v3.7+)
+from agent_os.event_sink import (
+    AuditBackendSinkAdapter,
+    GovernanceEvent,
+    GovernanceEventKind,
+    GovernanceEventProcessor,
+    GovernanceEventSink,
+    GovernanceEventSinkBase,
+    SinkExportResult,
+)
+
+# ============================================================================
+# Public API
+# ============================================================================
+
+__all__ = [
+    # Metadata
+    "__version__",
+    "__author__",
+    "AVAILABLE_PACKAGES",
+    "check_installation",
+    # Control Plane
+    "AgentControlPlane",
+    "create_control_plane",
+    "AgentSignal",
+    "SignalDispatcher",
+    "AgentKernelPanic",
+    "SignalAwareAgent",
+    "kill_agent",
+    "pause_agent",
+    "resume_agent",
+    "policy_violation",
+    "AgentVFS",
+    "VFSBackend",
+    "MemoryBackend",
+    "FileMode",
+    "create_agent_vfs",
+    "KernelSpace",
+    "AgentContext",
+    "ProtectionRing",
+    "SyscallType",
+    "SyscallRequest",
+    "SyscallResult",
+    "KernelState",
+    "user_space_execution",
+    "create_kernel",
+    "PolicyEngine",
+    "PolicyRule",
+    "FlightRecorder",
+    "ExecutionEngine",
+    "ExecutionStatus",
+    # Mute Agent Primitives
+    "face_agent",
+    "mute_agent",
+    "pipe",
+    "ActionStep",
+    "ActionStatus",
+    "ExecutionPlan",
+    "StepResult",
+    "PipelineResult",
+    "CapabilityViolation",
+    # Stateless API
+    "StatelessKernel",
+    "ExecutionContext",
+    "ExecutionRequest",
+    "ExecutionResult",
+    "StatelessMemoryBackend",
+    "stateless_execute",
+    # Base Agent Classes
+    "BaseAgent",
+    "ToolUsingAgent",
+    "AgentConfig",
+    "AuditEntry",
+    "PolicyDecision",
+    "TypedResult",
+    # AGENTS.md Compatibility
+    "AgentsParser",
+    "AgentsConfig",
+    "AgentSkill",
+    "discover_agents",
+    # Semantic Policy Engine
+    "SemanticPolicyEngine",
+    "IntentCategory",
+    "IntentClassification",
+    "PolicyDenied",
+    # Prompt Injection Detection
+    "PromptInjectionDetector",
+    "InjectionType",
+    "ThreatLevel",
+    "DetectionResult",
+    "DetectionConfig",
+    # MCP Security
+    "MCPSecurityScanner",
+    "MCPThreatType",
+    "MCPSeverity",
+    "MCPThreat",
+    "ToolFingerprint",
+    "ScanResult",
+    "CredentialRedactor",
+    "CredentialPattern",
+    "CredentialMatch",
+    # Credential Vault & Injection (issue #2481)
+    "CredentialVault",
+    "CredentialInjector",
+    "CredentialHandle",
+    "CredentialProfile",
+    "CredentialRecord",
+    "CredentialDecision",
+    "CredentialError",
+    "EncryptionUnavailable",
+    "VaultAuditEvent",
+    "DenyReceipt",
+    "InjectionContext",
+    "InjectionResult",
+    "PolicyOutcome",
+    "DENY_REASON",
+    "audit_digest",
+    "MCPSessionStore",
+    "MCPNonceStore",
+    "MCPRateLimitStore",
+    "MCPAuditSink",
+    "InMemorySessionStore",
+    "InMemoryNonceStore",
+    "InMemoryRateLimitStore",
+    "InMemoryAuditSink",
+    "MCPResponseScanner",
+    "MCPResponseScanResult",
+    "MCPResponseThreat",
+    "MCPSessionAuthenticator",
+    "MCPSession",
+    "MCPMessageSigner",
+    "MCPSignedEnvelope",
+    "MCPVerificationResult",
+    "MCPSlidingRateLimiter",
+    # LlamaFirewall Integration
+    "LlamaFirewallAdapter",
+    "FirewallMode",
+    "FirewallVerdict",
+    "FirewallResult",
+    # Context Budget Scheduler
+    "ContextScheduler",
+    "ContextWindow",
+    "ContextPriority",
+    "BudgetExceeded",
+    # Content Governance
+    "ContentQualityEvaluator",
+    "ContentDimension",
+    "QualityGate",
+    "ContentQualityReport",
+    # Execution Context Policy
+    "ContextualPolicyEngine",
+    "ExecutionContext",
+    "EnforcementLevel",
+    # GitHub Enterprise Integration
+    "EnterpriseGovernanceManager",
+    "GovernanceTier",
+    # Shift-Left Metrics
+    "ShiftLeftTracker",
+    "ViolationStage",
+    # Audit Logger + OTel Backend
+    "GovernanceAuditLogger",
+    "OTelLogsBackend",
+    # GovernanceEventSink SPI
+    "GovernanceEvent",
+    "GovernanceEventKind",
+    "GovernanceEventSink",
+    "GovernanceEventSinkBase",
+    "GovernanceEventProcessor",
+    "SinkExportResult",
+    "AuditBackendSinkAdapter",
+]
