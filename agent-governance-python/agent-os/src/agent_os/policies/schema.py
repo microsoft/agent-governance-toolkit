@@ -173,7 +173,9 @@ class PolicyDocument(BaseModel):
         try:
             import yaml
         except ImportError as exc:
-            raise ImportError("pyyaml is required: pip install pyyaml") from exc
+            raise ImportError(
+                "pyyaml is required: pip install pyyaml"
+            ) from exc
 
         path = Path(path)
         with open(path, encoding="utf-8") as f:
@@ -185,7 +187,9 @@ class PolicyDocument(BaseModel):
         try:
             import yaml
         except ImportError as exc:
-            raise ImportError("pyyaml is required: pip install pyyaml") from exc
+            raise ImportError(
+                "pyyaml is required: pip install pyyaml"
+            ) from exc
 
         path = Path(path)
         with open(path, "w") as f:

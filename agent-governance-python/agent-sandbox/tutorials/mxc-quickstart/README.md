@@ -16,9 +16,9 @@ OS-native [MXC](https://github.com/microsoft/mxc) sandbox using
 
 ## Prerequisites
 
-`agt-sandbox` installed (`pip install agt-sandbox`), and the MXC native binary
-on your machine. MXC ships **no Python package** — build the binary from source
-per the
+Install `agt-sandbox` (`pip install agt-sandbox`).
+You also need the MXC native binary on your machine. MXC ships **no Python
+package** — build the binary from source per the
 [MXC README](https://github.com/microsoft/mxc#building), then make it
 discoverable:
 
