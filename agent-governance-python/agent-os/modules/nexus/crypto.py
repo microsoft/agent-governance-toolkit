@@ -66,6 +66,13 @@ def verify(verification_key: str, message: bytes, signature: str) -> bool:
     Returns:
         True if the signature is valid, False otherwise.
     """
+    if not verification_key.startswith("ed25519:"):
+        _log.warning(
+            "verify: verification_key does not start with the expected 'ed25519:' prefix: %r",
+            verification_key,
+        )
+        return False
+
     try:
         key_bytes = base64.b64decode(verification_key[len("ed25519:"):])
         sig_bytes = base64.b64decode(signature)
