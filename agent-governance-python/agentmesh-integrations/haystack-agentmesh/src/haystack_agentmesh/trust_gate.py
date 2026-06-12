@@ -20,12 +20,6 @@ except ImportError:  # pragma: no cover
             return cls
 
         @staticmethod
-        def input_types(**kwargs):
-            def decorator(func):
-                return func
-            return decorator
-
-        @staticmethod
         def output_types(**kwargs):
             def decorator(func):
                 return func
@@ -105,7 +99,11 @@ class TrustGate:
 
     # ── Component interface ───────────────────────────────────────
 
-    @component.input_types(agent_id=str, min_score=Optional[float])
+    # Input types are inferred by haystack-ai from the typed `run` signature.
+    # A previous `@component.input_types(...)` decorator was invalid (the real
+    # API exposes `component.set_input_types(self, ...)` from __init__, and that
+    # requires a `**kwargs` run parameter, which these components don't use).
+    # See https://github.com/microsoft/agent-governance-toolkit/issues/2971
     @component.output_types(trusted=bool, score=float, action=str)
     def run(
         self,
