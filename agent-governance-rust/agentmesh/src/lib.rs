@@ -45,6 +45,7 @@ pub mod mcp {
 }
 pub mod policy;
 pub mod prompt_injection;
+pub mod prompt_injection_embedding;
 pub mod protocol_facets;
 pub(crate) mod regex_cache;
 pub mod reward_support;

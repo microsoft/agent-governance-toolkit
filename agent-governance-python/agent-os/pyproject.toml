@@ -55,6 +55,12 @@ dev = [
     "eval_type_backport>=0.2.0; python_version < '3.10'",
     "tzdata>=2024.1,<2027.0",
 ]
+# Optional local backend for the (default-off) embedding evidence signal in
+# `agent_os.prompt_injection_embedding`. Never required: the module is inert
+# unless explicitly enabled, and an embedder can be injected instead.
+embedding = [
+    "fastembed>=0.3.0,<1.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
