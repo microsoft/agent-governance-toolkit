@@ -13,9 +13,94 @@ authors = [
 ]
 dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
 
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agentmesh source tree under src/ (and tests/) is still exercised in CI via
+# `pip install -e ".[dev]"`. PR #2794 stripped [project.optional-dependencies]
+# entirely, which silently turned `.[dev]` into a no-op and left the test suite
+# unable to import fastapi/pydantic/cryptography/pynacl/pyyaml — every
+# `pytest tests/` run failed at COLLECTION (ModuleNotFoundError). The `dev` extra
+# below restores exactly the test/dev dependencies the suite needs to collect and
+# run. This does NOT change the published runtime dependency surface (the
+# [project] stub still ships only the -core redirect). Mirrors the agent-os fix
+# (#2969 + #2972).
+[project.optional-dependencies]
+# Test/dev dependencies required for `pytest tests/` to collect and run. The
+# entries beyond the pre-#2794 set (pydantic, cryptography, pynacl, pyyaml, rich,
+# click, python-dateutil) were previously satisfied by the package's runtime
+# `dependencies`, which the stub no longer carries; they are imported directly by
+# the test suite at collection time, so the dev bundle must list them.
+dev = [
+    "pytest>=7.4.0,<10.0",
+    "pytest-asyncio>=0.23.0,<2.0",
+    "pytest-cov>=4.1.0,<8.0",
+    "hypothesis>=6.155.2,<7.0",
+    "black>=26.5.1,<27.0",
+    "ruff>=0.1.0,<1.0",
+    "mypy>=1.8.0,<3.0",
+    "fakeredis>=2.36.0,<3.0",
+    "prometheus-client>=0.19.0,<1.0",
+    "websockets>=12.0,<17.0",
+    "fastapi>=0.136.3,<1.0",
+    "httpx>=0.27.0,<1.0",
+    "uvicorn[standard]>=0.27.0,<1.0",
+    "opentelemetry-api>=1.42.1,<2.0",
+    "opentelemetry-sdk>=1.42.1,<2.0",
+    "PyJWT[crypto]>=2.8.0,<3.0",
+    "pydantic[email]>=2.5.0,<3.0",
+    "cryptography>=46.0.7,<49.0",
+    "pynacl>=1.6.2,<2.0",
+    "pyyaml>=6.0,<7.0",
+    "rich>=13.0.0,<16.0",
+    "click>=8.4.1,<9.0",
+    "python-dateutil>=2.8.0,<3.0",
+    "structlog>=24.1.0,<27.0",
+    # Ring tests exercise the hypervisor; mirror the optional extra so
+    # `pip install agent-mesh[dev]` brings everything needed for tests.
+    "agent_hypervisor>=3.7.0,<5.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 "Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentmesh"]
+
+# ============================================================================
+# Ruff - Fast Python Linter & Formatter
+#
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agentmesh source tree under src/ is still linted in CI. These dev-tooling
+# sections were dropped during the package consolidation in #2794; restoring them
+# (with per-file-ignores for re-export __init__.py files) keeps CI green.
+# ============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]
+"tests/*" = ["F401", "E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agentmesh"]
+
+# ============================================================================
+# Pytest
+# ============================================================================
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "fuzz: fuzzing tests with malformed inputs",
+    "benchmark: crypto operation benchmarks",
+    "slow: long-running load tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]

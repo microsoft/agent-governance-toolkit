@@ -13,9 +13,76 @@ authors = [
 ]
 dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
 
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the hypervisor source tree under src/ (and tests/) is still exercised in CI via
+# `pip install -e ".[dev]"`. PR #2794 stripped [project.optional-dependencies]
+# entirely, which silently turned `.[dev]` into a no-op and left the test suite
+# unable to import fastapi/pydantic/jsonschema — every `pytest tests/` run failed
+# at COLLECTION (ModuleNotFoundError). The `dev` extra below restores exactly the
+# test/dev dependencies the suite needs to collect and run. This does NOT change
+# the published runtime dependency surface (the [project] stub still ships only
+# the -core redirect). Mirrors the agent-os fix (#2969 + #2972).
+[project.optional-dependencies]
+# Test/dev dependencies required for `pytest tests/` to collect and run.
+# pydantic was previously a runtime dependency and fastapi lived in the `api`
+# extra; both are imported directly by the test suite at collection time, so the
+# stub's dev bundle must list them.
+dev = [
+    "pytest>=8.0.0,<10.0",
+    "pytest-asyncio>=0.23.0,<2.0",
+    "pytest-cov>=4.0.0,<8.0",
+    "hypothesis>=6.155.1,<7.0",
+    "ruff>=0.4.0,<1.0",
+    "mypy>=1.8.0,<3.0",
+    "jsonschema>=4.26.0,<5.0",
+    "pydantic>=2.13.4,<3.0",
+    "fastapi>=0.136.3,<1.0",
+    "uvicorn>=0.49.0,<1.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 "Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hypervisor"]
+
+# ============================================================================
+# Ruff - Fast Python Linter & Formatter
+#
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the hypervisor source tree under src/ is still linted in CI. These dev-tooling
+# sections were dropped during the package consolidation in #2794; without the
+# per-file-ignores, ruff reports F401 on re-export __init__.py files such as
+# hypervisor/liability/__init__.py and hypervisor/session/__init__.py. Restoring
+# them keeps CI green.
+# ============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "C4", "UP"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E741",   # ambiguous variable name
+    "B904",   # raise-without-from-inside-except
+    "B017",   # assert-raises-exception
+    "UP042",  # str+Enum → StrEnum (needs py311+)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["F401"]
+
+# ============================================================================
+# Pytest
+# ============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]
