@@ -13,18 +13,16 @@ This document offers two runnable examples.
 | Role-based access control | Authorization request data | `unsigned` | [`unsigned_example.py`](unsigned_example.py) |
 | Capability-based authorization | Verified JWTs from trusted issuers | `multi-issuer` | [`multi_issuer_example.py`](multi_issuer_example.py) |
 
-## Installation and usage
+## Install requirements
 
 ```bash
 pip install -r requirements.txt
-python unsigned_example.py
-python multi_issuer_example.py
 ```
 
 `cedarling-python` (pulled in by `requirements.txt`) evaluates the policies
 in-process against the bundled stores in [`policy-stores/`](policy-stores).
 
-## Role-based access control (Unsigned authorization)
+## Role-based access control (Unsigned mode)
 
 [`unsigned_example.py`](unsigned_example.py) implements typical RBAC authorization. This uses Cedarling's [unsigned mode of authorization](https://docs.jans.io/head/cedarling/reference/cedarling-authz/#unsigned-authorization-authorize_unsigned). In this case, the principal entity and it's attributes are provided by the application itself when it sends the request for authorization. 
 
@@ -41,7 +39,13 @@ allow-read   : permit Read/ReadData when principal.role == "admin"
 forbid-write : forbid Write        when principal.role == "auditor"
 ```
 
-Expected output of `unsigned_example.py`:
+Use command below to run the example:
+
+```bash
+python unsigned_example.py
+```
+
+Expected output:
 
 ```
 [ALLOW] agent-analyst (role=admin) → read_data on reports
@@ -54,21 +58,40 @@ Expected output of `unsigned_example.py`:
          reason : Cedarling: denied (unsigned)
 ```
 
-## Multi-issuer authorization (capability-based)
+## Capability-based authorization (Multi-issuer mode)
 
-The differentiator: a capability is the combination of **verified JWT claims**
-and the **request context**, not a role the caller asserts about itself.
 
-In the example an operations agent manages infrastructure config. Whether it may
-*write* depends on two things together: a `role` claim carried by a verified
-access token, and the device posture passed as request context. An admin agent
-on a managed laptop may write; the *same admin token* presented from an insecure
-device (a personal mobile) may not — the capability is revoked by context.
-Reading is allowed from any device, and a non-admin token never writes.
-"Multi-issuer" because the store may trust several issuers; policies reason over
-the claims they vouch for plus the request context.
+This example demonstrates how you can implement [Capability-based](https://docs.jans.io/stable/cedarling/#proof-based-authorization-token-based-access-control-tbac) 
+or token-based access control.
 
-Expected output of `multi_issuer_example.py`:
+### Policies
+
+In this example use-case, Users from the operations team are requesting authorization to read/update the infrastructure configuration. They may use their secure corporate devices or personal insecure devices to authenticate and perform the action.
+
+[Policies](policy-stores/multi-issuer) are designed to consider a combination of user claims(role) and contextual data(device information) to `allow` or `deny` the authorization. This combination is called `Capability`. 
+
+| User role |      Device info | Action | Result |
+|-----------|------------------|--------|--------|
+| admin     | secure laptop    | write  | allow  |
+| admin     | personal mobile  | write  | deny   |
+| admin     | personal mobile  | read   | allow  |
+| operator  | secure laptop    | write  | deny   |
+
+### Tokens to carry the context
+
+Capability data is extracted from the access token using [TBAC](https://docs.jans.io/stable/cedarling/#proof-based-authorization-token-based-access-control-tbac) principles. Policies reason over the claims the issuers vouch for, plus the request context.
+ 
+This mode is called "Multi-issuer" because the policy store can be configured to trust tokens issued by several issuers. 
+
+### Run the example
+
+Use command below to run the example:
+
+```bash
+python multi_issuer_example.py
+```
+
+Expected output:
 
 ```
 [ALLOW] admin agent on managed laptop writes config → write on infra-config (device=laptop)
@@ -81,26 +104,21 @@ Expected output of `multi_issuer_example.py`:
          reason : Cedarling: denied (multi-issuer)
 ```
 
-The first two requests carry the *same admin token* and differ only in the
-device context — write follows the capability, so a weaker device drops it. The
-fourth request shows the role gate: an operator token never writes. Policies in
-[`policy-stores/multi-issuer/`](policy-stores/multi-issuer):
 
-```
-allow-admin-read  : permit Read/ReadData when token role == "admin"
-allow-admin-write : permit Write when token role == "admin" AND device != "mobile"
-```
-
-> The demo forges its own JWTs and runs with signature/status validation
-> disabled so the claims are readable and no IdP is needed. In production these
+> Note:
+> In absence of an IDP, this demo forges its own JWTs and runs with signature/status validation
+> disabled so the claims are readable. In production these
 > tokens come from your identity provider — keep both validations **on**.
 
 ### Adding more issuers
 
-The store trusts one issuer; "multi-issuer" means it can trust several. Drop
-another file in `policy-stores/multi-issuer/trusted-issuers/`, add its
-`<issuer>_access_token` field to the `Context` type in `schema.cedarschema`, and
-pass that token alongside the others in the per-request `tokens` dict:
+The store trusts one issuer; "multi-issuer" means it can trust several. 
+
+Follow the steps below to add additional issuers:
+
+- Drop another file in `policy-stores/multi-issuer/trusted-issuers/`
+- Add its `<issuer>_access_token` field to the `Context` type in `schema.cedarschema`
+- Pass that token alongside the others in the per-request `tokens` dictionary
 
 ```python
 decision = evaluator.evaluate({
@@ -114,12 +132,10 @@ decision = evaluator.evaluate({
 })
 ```
 
----
-
 ## What both examples show
 
-- `CedarlingBackend` registered with `PolicyEvaluator.add_backend()` — zero
-  modifications to `agent-os-kernel`.
+- `CedarlingBackend` registered with `PolicyEvaluator.add_backend()` without modifying
+  the `agent-os-kernel`
 - In-process Cedar evaluation against a real local policy store.
 - The aggregated `PolicyDecision` — `allowed`, `action`, `reason`, plus the
   deciding `backend` and `evaluation_ms` on its `audit_entry`. (The backend's
