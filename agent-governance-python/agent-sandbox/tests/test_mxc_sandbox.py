@@ -626,7 +626,7 @@ class TestFailClosedHardening:
         with pytest.raises(ValueError, match="without a host allowlist"):
             MxcConfig(allow_outbound=True)
 
-    def test_outbound_unrestricted_requires_explicit_optin(self):
+    def test_outbound_unrestricted_requires_explicit_opt_in(self):
         cfg = MxcConfig(allow_outbound=True, allow_unrestricted_egress=True)
         doc = cfg.to_mxc_json("cmd")
         assert doc["network"]["allowOutbound"] is True
