@@ -3,7 +3,8 @@
 Source: `docs/UPSTREAM-PR-PLAN.md` "PR 2: Optional Embedding Signal" + the
 default-posture spec. Builds on PR1 (#2924 fixture) and the methodology doc
 (this branch's parent `slo/pr2-methodology`). Target branch:
-`slo/pr2-embedding-signal`. Stack: Python (`agent_os`). Ported from the research
+`slo/pr2-embedding-signal`. Stack: Python (`agent_os`) + Rust (`agentmesh`) —
+the signal shipped in both SDKs with matching semantics. Ported from the research
 repo's kNN-margin detector (`AGT-Embeddings-Experiment`, fastembed + bge-small).
 
 ## Smallest user-visible outcome
@@ -27,8 +28,8 @@ existing AGT enforcement behavior.
 | Row | Value |
 |---|---|
 | One outcome | yes — opt-in evidence signal |
-| Changed files | 4 (module + test + pyproject extra + SLO evidence) |
-| Public surface | 1 new module (`agent_os.prompt_injection_embedding`); no change to existing detector |
+| Changed files | 10 as merged (#2974): Python module + test + pyproject extra, Rust module + `lib.rs` export, methodology/evaluation docs, SLO evidence + tickets |
+| Public surface | 2 new modules (`agent_os.prompt_injection_embedding`, `agentmesh::prompt_injection_embedding`); no change to existing detectors |
 | Migration | none |
 | New deps | `fastembed` as an **optional** extra only (never a hard dep) |
 | One PR | yes |

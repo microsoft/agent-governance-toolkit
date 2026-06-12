@@ -21,7 +21,9 @@ The fixture covers:
 
 The fixture does not introduce:
 
-- an embedding detector
+- an embedding detector (the optional, default-off embedding evidence signal
+  lives in the SDK — `agent_os.prompt_injection_embedding` /
+  `agentmesh::prompt_injection_embedding` — not in this fixture)
 - new blocking policy
 - production thresholds
 - policy-routing integration

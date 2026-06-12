@@ -68,6 +68,8 @@ class EmbeddingSignalConfig:
 
 
 def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
+    if len(a) != len(b):
+        raise ValueError(f"embedding dimension mismatch: {len(a)} != {len(b)}")
     dot = 0.0
     na = 0.0
     nb = 0.0
@@ -134,6 +136,8 @@ class EmbeddingSignal:
         if not self.config.enabled:
             return None
         if self._pos is None or self._neg is None:
+            # Deliberate Python-only convenience: rebuild lazily if `enabled` was
+            # flipped on after construction. Rust builds only in `new()`.
             self._build()
         assert self._pos is not None and self._neg is not None
         query = list(self._resolve_embedder()([text])[0])

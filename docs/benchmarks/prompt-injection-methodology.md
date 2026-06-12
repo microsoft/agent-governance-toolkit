@@ -32,12 +32,12 @@ profile:
   `indirect_injection`, `tool_abuse`, `tool_result_injection`,
   `output_exfiltration`, `memory_poisoning`, `data_boundary_abuse` — each defined
   by `ATTACK_TEMPLATES` with slot fillers `ACTIONS` / `TARGETS` / `TOOL_NAMES`.
-- **Bypass / mutation operators** (the obfuscation surface, `ALLOWED_BYPASS_CLASSES`,
-  14 classes incl. `none`/`plain`): `rot13`, `compact_alnum`, `compact_leet`,
-  `separator_spaced`, `chunked`, `homoglyph`, and `compact_pressure_mutations`,
-  plus `diacritics`, `letter_spaced`, `leet_spacing`, `leet_letter_spaced`,
-  `encoding`, `multilingual`. Each row records its `bypass_class`, so coverage and
-  per-class results are auditable.
+- **Bypass classes** (the obfuscation surface, `ALLOWED_BYPASS_CLASSES`,
+  14 classes): `none`, `plain`, `rot13`, `compact_plain`, `compact_leet`,
+  `chunked_leet`, `separator_spaced`, `letter_spaced`, `leet_spacing`,
+  `leet_letter_spaced`, `homoglyph`, `diacritics`, `encoding`, `multilingual`.
+  Each row records its `bypass_class`, so coverage and per-class results are
+  auditable.
 - **Provenance metadata per row:** `source_type`, `trust_level`, `attack_class`,
   `benign_subclass`, `family_id`, `group_id`, `split`, `bypass_class`. A
   fixed `TEXT_MARKER` (`PI1`) tags every synthetic row so fixture text can never
