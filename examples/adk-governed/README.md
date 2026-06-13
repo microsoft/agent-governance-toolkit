@@ -9,7 +9,7 @@ This example demonstrates governance enforcement for Google ADK agents using `Go
 A minimal introduction to:
 
 * Tool allowlists
-* Tool blocklists
+* Tool block lists
 * Dangerous content detection
 * Governance violations
 * Audit logging
