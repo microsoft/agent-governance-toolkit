@@ -421,3 +421,37 @@ def test_default_cap_value():
     assert DEFAULT_MAX_REMOVED == 500
     assert DEFAULT_MAX_BUMPED == 500
     assert DEFAULT_MAX_SBOM_BYTES == 64 * 1024 * 1024
+
+
+def test_diff_handles_multiple_versions_of_same_package():
+    """Lockfiles can pin two versions of one transitive dep (monorepo
+    workspaces, peer-dep duplication). The diff is keyed by (ecosystem, name)
+    and surfaces multi-version drift as a single 'bumped' entry rather than
+    fan-out add/remove rows; this keeps the PR comment readable while still
+    flagging that the dependency moved."""
+    base_doc = _sbom(
+        [
+            _pkg("lodash", "4.17.20"),
+            _pkg("lodash", "4.17.21"),
+        ]
+    )
+    head_doc = _sbom(
+        [
+            _pkg("lodash", "4.17.21"),
+            _pkg("lodash", "4.17.22"),
+        ]
+    )
+
+    base_pkgs = _extract_packages(base_doc)
+    head_pkgs = _extract_packages(head_doc)
+    result = diff_sboms(base_pkgs, head_pkgs)
+
+    # Name appears on both sides, so it never lands in added/removed.
+    assert not any(p.name == "lodash" for p in result.added)
+    assert not any(p.name == "lodash" for p in result.removed)
+    # Version drift surfaces as exactly one bumped entry for the name.
+    lodash_bumps = [pair for pair in result.bumped if pair[0].name == "lodash"]
+    assert len(lodash_bumps) == 1
+    old_pkg, new_pkg = lodash_bumps[0]
+    assert old_pkg.version == "4.17.20"
+    assert new_pkg.version == "4.17.22"

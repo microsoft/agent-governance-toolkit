@@ -172,7 +172,14 @@ def _extract_packages(sbom: dict) -> set[Package]:
             parsed_from_purl = True
             break
 
-        # Skip SBOM document self-references and the synthetic root package.
+        # Skip the synthetic "root" package that SPDX tools emit to represent
+        # the scanned repository itself. We only suppress when ALL of these hold:
+        #   1. No PURL was parsed (real dependencies always carry a PURL).
+        #   2. The SBOM document has a non-empty name.
+        #   3. The package name exactly equals the document name.
+        # This avoids accidentally hiding a legitimate dependency that happens
+        # to share a name with the document, while still filtering the noise
+        # that would otherwise show up as a phantom "added" entry on every PR.
         if not parsed_from_purl and document_name and name == document_name:
             continue
 

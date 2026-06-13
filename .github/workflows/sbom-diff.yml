@@ -45,6 +45,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # actions/checkout is pinned to the v6.0.3 commit SHA to match the
+      # repo-wide convention used by every other workflow on main (see
+      # `git grep "actions/checkout@" .github/workflows`). v6.0.3 is the
+      # current latest-stable release; downgrading to v4 here would diverge
+      # from the rest of the tree without a security or compatibility reason.
       - name: Check out PR head
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
