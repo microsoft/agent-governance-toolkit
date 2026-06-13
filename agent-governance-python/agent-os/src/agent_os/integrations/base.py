@@ -1819,8 +1819,17 @@ class BaseIntegration(ABC):
             )
             return result
 
-        # Check timeout
-        elapsed = (datetime.now(timezone.utc) - ctx.start_time).total_seconds()
+        # Check timeout.
+        # Normalize start_time to UTC-aware if it is naive (e.g. set by an external
+        # caller before the default factory was made tz-aware) so the subtraction
+        # never raises TypeError for mixed-awareness datetimes.
+        # astimezone() correctly interprets the naive datetime as local time and
+        # converts it to UTC, unlike replace() which would just label it UTC without
+        # adjusting the value.
+        start = ctx.start_time
+        if start.tzinfo is None:
+            start = start.astimezone(timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - start).total_seconds()
         if elapsed > ctx.policy.timeout_seconds:
             self._release_semaphore_if_held(ctx)
             result = deny_timeout(ctx.policy.timeout_seconds, elapsed)

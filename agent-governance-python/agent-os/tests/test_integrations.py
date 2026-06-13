@@ -729,6 +729,15 @@ class TestBaseIntegrationPreExecute:
         assert allowed is False
         assert "Timeout" in reason
 
+    def test_blocked_when_timeout_exceeded_naive_start_time(self):
+        """Timeout check must not raise TypeError when start_time is naive (defensive normalization)."""
+        k = self._kernel(timeout_seconds=10)
+        ctx = k.create_context("a1")
+        ctx.start_time = datetime.now() - timedelta(seconds=20)  # naive datetime
+        allowed, reason = k.pre_execute(ctx, "hello")
+        assert allowed is False
+        assert "Timeout" in reason
+
     def test_blocked_pattern_exact(self):
         k = self._kernel(blocked_patterns=["password"])
         ctx = k.create_context("a1")
