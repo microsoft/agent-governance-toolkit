@@ -275,11 +275,11 @@ stages:
                 # Hash-pinned lockfile. --require-hashes refuses any wheel/sdist
                 # whose SHA-256 is not in release-tools.txt; --no-deps stops
                 # pip from quietly resolving extra transitives the lockfile
-                # would not cover. See release-tools/release-tools.txt for the
+                # would not cover. See .github/release-tools/release-tools.txt for the
                 # regeneration command.
                 python -m pip install --no-cache-dir --disable-pip-version-check \
                   --require-hashes --no-deps \
-                  -r $(Build.SourcesDirectory)/.github/pipelines/release-tools/release-tools.txt
+                  -r $(Build.SourcesDirectory)/.github/release-tools/release-tools.txt
               displayName: 'Install build tools (hash-pinned)'
 
             - ${{ if eq(coalesce(pkg.rust, 'false'), 'true') }}:

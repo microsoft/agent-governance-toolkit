@@ -256,6 +256,39 @@ class TestOnSendToolCalls:
         result = _run(handler.on_send(fc))
         assert result is fc
 
+    def test_records_skill_aware_function_call_log(self):
+        """Native on_send should append skill-aware audit record for FunctionCall."""
+        handler = _make_handler()
+        fc = _FunctionCall(name="anything", arguments='{"query":"hello"}')
+        setattr(fc, "skill_name", "memory_skill")
+
+        result = _run(handler.on_send(fc))
+
+        assert result is fc
+        assert handler.kernel._function_call_log
+        record = handler.kernel._function_call_log[-1]
+        assert record["function_name"] == "anything"
+        assert record["skill_name"] == "memory_skill"
+        assert record["skill_origin"] == "autogen"
+        assert record["provenance_source_trust"] == "trusted"
+        assert record["context_hash_before"] is not None
+
+    def test_ignores_spoofed_skill_metadata_in_arguments(self):
+        """FunctionCall argument payloads must not drive provenance fields."""
+        handler = _make_handler()
+        fc = _FunctionCall(
+            name="anything",
+            arguments='{"skill_name":"spoofed","skill_origin":"attacker"}',
+        )
+
+        result = _run(handler.on_send(fc))
+
+        assert result is fc
+        record = handler.kernel._function_call_log[-1]
+        assert record["skill_name"] is None
+        assert record["skill_origin"] is None
+        assert record["provenance_source_trust"] is None
+
 
 # ═══════════════════════════════════════════════════════════════════
 # Test: on_send — content governance

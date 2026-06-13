@@ -1,8 +1,11 @@
-"""AgentMesh trust layer integration for LangChain.
-
-This package provides cryptographic identity verification and trust-gated
-tool execution for LangChain agents.
-"""
+import warnings
+warnings.warn(
+    "agentmesh-langchain is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[langchain] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from langchain_agentmesh.identity import VerificationIdentity, VerificationSignature, UserContext
 from langchain_agentmesh.trust import (
@@ -36,5 +39,3 @@ __all__ = [
     # Callbacks
     "TrustCallbackHandler",
 ]
-
-__version__ = "3.2.2"

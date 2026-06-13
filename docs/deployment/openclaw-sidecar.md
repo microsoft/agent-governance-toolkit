@@ -379,7 +379,7 @@ curl http://localhost:8081/api/v1/audit/injections?limit=10
 You can also run the sidecar directly with Python — no Docker required:
 
 ```bash
-pip install agent-os-kernel
+pip install agent-governance-toolkit[full]
 python -m agent_os.server --host 127.0.0.1 --port 8081
 ```
 

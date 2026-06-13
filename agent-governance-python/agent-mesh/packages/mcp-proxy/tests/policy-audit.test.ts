@@ -57,6 +57,10 @@ describe('evaluatePolicy', () => {
 });
 
 describe('AuditLogger', () => {
+  const fakeOpenAiToken = `sk-FAKEFORTESTING${'x'.repeat(20)}`;
+  const fakeAwsAccessKey = `AKIA${'A'.repeat(16)}`;
+  const fakeGoogleApiKey = `AIza${'A'.repeat(35)}`;
+
   it('includes mitigates in CloudEvents data only when present', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'mcp-proxy-audit-'));
     tempDirs.push(tempDir);
@@ -104,9 +108,12 @@ describe('AuditLogger', () => {
       tool: 'echo',
       decision: 'allow',
       arguments: {
-        publicField: 'github_pat_FAKE_FOR_TESTING_0000000000000000000000',
+        embeddedToken: 'github_pat_FAKE_FOR_TESTING_0000000000000000000000',
+        openAiToken: fakeOpenAiToken,
+        slackToken: 'xoxb-FAKE-FOR-TESTING-0000000000',
         nested: {
           note: '-----BEGIN DSA PRIVATE KEY-----\nZmFrZQ==\n-----END DSA PRIVATE KEY-----',
+          cloud: [fakeAwsAccessKey, fakeGoogleApiKey],
         },
       },
     });
@@ -123,8 +130,11 @@ describe('AuditLogger', () => {
       .split('\n')
       .map((line) => JSON.parse(line) as { data: { arguments: Record<string, any> } });
 
-    expect(entry.data.arguments.publicField).toBe('[REDACTED]');
+    expect(entry.data.arguments.embeddedToken).toBe('[REDACTED]');
+    expect(entry.data.arguments.openAiToken).toBe('[REDACTED]');
+    expect(entry.data.arguments.slackToken).toBe('[REDACTED]');
     expect(entry.data.arguments.nested.note).toBe('[REDACTED]');
+    expect(entry.data.arguments.nested.cloud).toEqual(['[REDACTED]', '[REDACTED]']);
   });
 
   it('redacts arguments in plain json audit format', async () => {

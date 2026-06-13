@@ -3,6 +3,9 @@
 # Licensed under the MIT License.
 """Tests for contributor_check.py."""
 
+# Synthetic GitHub usernames/org logins used only as test fixtures below.
+# cspell:ignore myorg trustedorg randomorg freshclone
+
 from __future__ import annotations
 
 import json
@@ -28,6 +31,9 @@ from contributor_check import (
     _check_batch_naming,
     _check_self_promotion,
     _fork_has_outgoing_pr,
+    _apply_allowlist,
+    _is_allowlisted,
+    _load_allowlist,
 )
 
 
@@ -667,3 +673,137 @@ class TestFalsePositiveRegression:
         ]
         signals = _check_self_promotion("dev", issues, user_repos)
         assert len(signals) == 0
+
+
+# ---------------------------------------------------------------------------
+# feature_overlap: established repo skip (Phase 2)
+# ---------------------------------------------------------------------------
+
+class TestFeatureOverlapEstablishedSkip:
+    def _repo(self, name, stars, days):
+        # Description spans 4 AGT feature buckets (mcp_security, policy_engine,
+        # identity_crypto, runtime_controls).
+        return {
+            "name": name,
+            "description": "mcp security policy engine ed25519 kill switch",
+            "topics": [],
+            "fork": False,
+            "created_at": (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "stargazers_count": stars,
+        }
+
+    def test_skips_established_repo(self):
+        """A mature, well-starred domain repo is expertise, not cloning."""
+        repo = self._repo("flagship", stars=60, days=400)
+
+        def fake_api(path, params=None):
+            if path == "/users/spec/repos":
+                return [repo]
+            return None  # readme fetch -> none
+
+        with patch("contributor_check._api", side_effect=fake_api):
+            signals = check_feature_overlap("spec", "microsoft/agent-governance-toolkit")
+        assert all(s.name != "feature_overlap" for s in signals)
+
+    def test_fires_on_thin_repo(self):
+        """A young, unstarred repo matching the same buckets still fires HIGH."""
+        repo = self._repo("freshclone", stars=0, days=5)
+
+        def fake_api(path, params=None):
+            if path == "/users/clone/repos":
+                return [repo]
+            return None
+
+        with patch("contributor_check._api", side_effect=fake_api):
+            signals = check_feature_overlap("clone", "microsoft/agent-governance-toolkit")
+        overlap = [s for s in signals if s.name == "feature_overlap"]
+        assert overlap and overlap[0].severity == "HIGH"
+
+
+# ---------------------------------------------------------------------------
+# Maintainer allowlist (Phase 3)
+# ---------------------------------------------------------------------------
+
+class TestAllowlist:
+    def test_load_reads_users_and_orgs(self, tmp_path):
+        p = tmp_path / "al.json"
+        p.write_text('{"users": ["Alice"], "orgs": ["MyOrg"]}', encoding="utf-8")
+        users, orgs = _load_allowlist(p)
+        assert users == {"alice"}
+        assert orgs == {"myorg"}
+
+    def test_load_missing_file_is_empty(self, tmp_path):
+        users, orgs = _load_allowlist(tmp_path / "nope.json")
+        assert users == set()
+        assert orgs == set()
+
+    def test_load_invalid_json_is_empty(self, tmp_path):
+        p = tmp_path / "bad.json"
+        p.write_text("{not json", encoding="utf-8")
+        assert _load_allowlist(p) == (set(), set())
+
+    def test_is_allowlisted_user(self):
+        assert _is_allowlisted("Alice", [], ({"alice"}, set())) is True
+
+    def test_is_allowlisted_org(self):
+        assert _is_allowlisted("bob", ["TrustedOrg"], (set(), {"trustedorg"})) is True
+
+    def test_not_allowlisted(self):
+        assert _is_allowlisted("mallory", ["randomorg"], ({"alice"}, {"trustedorg"})) is False
+
+    def test_shipped_allowlist_is_empty(self):
+        """The committed allowlist ships EMPTY -- no self-exemption."""
+        users, orgs = _load_allowlist()  # default path: scripts/contributor_check_allowlist.json
+        assert users == set()
+        assert orgs == set()
+
+
+class TestApplyAllowlist:
+    """The allowlist only SOFTENS (HIGH->MEDIUM); it never sets LOW and never
+    whitewashes a deliberate-abuse signal or a multi-repo split-clone."""
+
+    @staticmethod
+    def _report(*signals: Signal) -> ReputationReport:
+        report = ReputationReport(username="trusted")
+        for s in signals:
+            report.add(s)
+        report.compute_risk()
+        return report
+
+    def test_softens_high_to_medium(self):
+        # Two non-abuse HIGH signals -> HIGH; allowlist softens to MEDIUM.
+        report = self._report(
+            Signal(name="repo_velocity", severity="HIGH", detail=""),
+            Signal(name="new_account_burst", severity="HIGH", detail=""),
+        )
+        assert report.risk == "HIGH"
+        _apply_allowlist(report)
+        assert report.risk == "MEDIUM"
+        assert any(s.name == "allowlisted" for s in report.signals)
+
+    def test_never_sets_low(self):
+        # A single non-abuse HIGH signal is only MEDIUM; allowlist leaves it,
+        # never downgrading to LOW.
+        report = self._report(Signal(name="repo_velocity", severity="HIGH", detail=""))
+        assert report.risk == "MEDIUM"
+        _apply_allowlist(report)
+        assert report.risk == "MEDIUM"
+
+    def test_blocked_by_deliberate_abuse_signal(self):
+        report = self._report(
+            Signal(name="thin_credibility", severity="HIGH", detail=""),
+            Signal(name="repo_velocity", severity="HIGH", detail=""),
+        )
+        _apply_allowlist(report)
+        assert report.risk == "HIGH"
+        assert any(s.name == "allowlist_blocked" for s in report.signals)
+        assert not any(s.name == "allowlisted" for s in report.signals)
+
+    def test_blocked_by_split_clone(self):
+        report = self._report(
+            Signal(name="feature_overlap", severity="HIGH", detail=""),
+            Signal(name="feature_overlap", severity="HIGH", detail=""),
+        )
+        _apply_allowlist(report)
+        assert report.risk == "HIGH"
+        assert any(s.name == "allowlist_blocked" for s in report.signals)

@@ -17,8 +17,7 @@
 [![awesome-opentelemetry](https://img.shields.io/badge/awesome--opentelemetry-listed-orange)](https://github.com/magsther/awesome-opentelemetry/pull/24)
 
 > [!IMPORTANT]
-> **Public Preview** — The `agentmesh-platform` package on PyPI is a Microsoft-signed
-> public preview release. APIs may change before GA.
+> **Public Preview** — The `agentmesh-platform` package on PyPI is a public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover AgentMesh.
 
@@ -324,7 +323,7 @@ pip install -e .
 - [CrewAI Integration](./examples/integrations/crewai.md) - Multi-agent crew governance
 - [LangGraph](./src/agentmesh/integrations/langgraph/) - Trust checkpoints for graph workflows (built-in)
 - [OpenAI Swarm](./src/agentmesh/integrations/swarm/) - Trust-verified handoffs (built-in)
-- [Dify](https://github.com/microsoft/agent-governance-toolkit/tree/master/dify) - Trust middleware for Dify workflows
+- [Dify](../../agent-governance-python/agentmesh-integrations/dify/README.md) - Trust middleware for Dify workflows
 
 📚 **[Browse all examples →](./examples/)**
 
@@ -636,7 +635,7 @@ See our [full roadmap](docs/roadmap.md) for details.
 
 ### Integration Caveats (Dify)
 
-The [Dify integration](https://github.com/microsoft/agent-governance-toolkit/tree/master/dify) has these documented limitations:
+The [Dify integration](../../agent-governance-python/agentmesh-integrations/dify/README.md) has these documented limitations:
 - Request body signature verification (`X-Agent-Signature` header) is not yet verified by middleware
 - Trust score time decay is not yet implemented (scores don't decay over time)
 - Audit logs are in-memory only (not persistent across multi-worker deployments)

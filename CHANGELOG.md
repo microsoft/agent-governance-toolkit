@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **agent-os policy evaluator** - folder-scoped backend decisions now include `policy`, `backend`, `evaluation_ms`, `context_snapshot`, and `timestamp` fields in `audit_entry`, matching the flat evaluation path and eliminating the parity gap when an external backend (OPA / Cedar) returns a decision under folder-scoped evaluation (#2861).
+
 ## [4.0.0] - 2026-06-01
 
 ### Changed

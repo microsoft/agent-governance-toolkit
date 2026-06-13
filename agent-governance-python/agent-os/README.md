@@ -11,8 +11,7 @@
 [![Discussions](https://img.shields.io/github/discussions/microsoft/agent-governance-toolkit)](https://github.com/microsoft/agent-governance-toolkit/discussions)
 
 > [!IMPORTANT]
-> **Public Preview** — The `agent-os-kernel` package on PyPI is a Microsoft-signed
-> public preview release. APIs may change before GA.
+> **Public Preview** — The `agent-os-kernel` package on PyPI is a public preview release. APIs may change before GA.
 
 > ⭐ **If this project helps you, please star it!** It helps others discover Agent OS.
 

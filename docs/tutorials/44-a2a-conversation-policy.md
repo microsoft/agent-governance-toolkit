@@ -263,9 +263,9 @@ This tutorial addresses:
 
 ## Next Steps
 
-- [Tutorial 41 — Advisory Defense in Depth](41-advisory-defense-in-depth.md) for layered governance
-- [Conversation Guardian API reference](../reference/conversation-guardian.md) for advanced configuration
-- [A2A Adapter API reference](../reference/a2a-adapter.md) for full policy options
+- [Tutorial 41 - Advisory Defense in Depth](41-advisory-defense-in-depth.md) for layered governance
+- [Tutorial 16 - Protocol Bridges](16-protocol-bridges.md) for A2A adapter configuration and policy options
+- [Tutorial 09 - Prompt Injection Detection](09-prompt-injection-detection.md) for conversation guardian internals
 
 ---
 

@@ -1,27 +1,21 @@
 [build-system]
-requires = ["setuptools>=78.1.1,<83.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "nostr_wot_agentmesh"
-version = "4.0.0"
-description = "Nostr Web of Trust integration for AgentMesh trust engine"
-readme = "README.md"
+version = "4.1.0"
+description = "Deprecated. Previously published as nostr-wot-agentmesh. Install agent-governance-toolkit-integrations[nostr-wot] instead."
 license = {text = "MIT"}
 requires-python = ">=3.9"
-dependencies = [
-    "agentmesh>=0.1.0,<1.0",
-    "httpx>=0.27.0,<1.0",
+authors = [
+    {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0,<8.0",
-    "pytest-asyncio>=0.21,<1.0",
-    "respx>=0.20,<1.0",
-]
+dependencies = ["agent-governance-toolkit-integrations[nostr-wot]>=4.0.0,<5.0"]
 
 [project.urls]
-Homepage = "https://github.com/microsoft/agent-governance-toolkit/tree/main/nostr-wot"
-Repository = "https://github.com/microsoft/agent-governance-toolkit"
-Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+"Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentmesh_nostr_wot"]

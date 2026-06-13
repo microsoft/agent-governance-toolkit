@@ -13,8 +13,6 @@ up at session creation time when a ``PolicyDocument`` is passed.
 from __future__ import annotations
 
 import logging
-import os
-import platform
 import re
 import shutil
 import threading
@@ -22,6 +20,10 @@ import time
 import uuid
 from typing import Any, Callable
 
+from agent_sandbox._hardening import (
+    sanitize_env_vars as _sanitize_env_vars,
+    validate_mount_path as _validate_mount_path,
+)
 from agent_sandbox.code_scanner import enforce_no_subprocess_execution
 from agent_sandbox.docker_provider.state import SandboxCheckpoint, SandboxStateManager
 from agent_sandbox.isolation_runtime import IsolationRuntime
@@ -115,36 +117,6 @@ def _cap_output_bytes(
 
     return stdout, stderr, truncated
 
-# Protected system directories that must never be bind-mounted.
-_PROTECTED_PATHS_UNIX = frozenset(
-    {
-        "/", "/etc", "/proc", "/sys", "/usr", "/var",
-        "/boot", "/dev", "/sbin", "/bin", "/lib",
-    }
-)
-
-# Windows system directories that must never be bind-mounted.  Compared
-# case-insensitively against the realpath of the requested mount.
-_PROTECTED_PATHS_WINDOWS = frozenset(
-    p.lower()
-    for p in (
-        "C:\\Windows",
-        "C:\\Program Files",
-        "C:\\Program Files (x86)",
-        "C:\\ProgramData",
-        "C:\\System Volume Information",
-    )
-)
-
-# Paths blocked only when mounted at their exact root — not their
-# subdirectories. Mounting ``C:\Users`` exposes every user's profile
-# (documents, browser data, SSH keys); mounting a specific subdir like
-# ``C:\Users\agent\workspace`` is a legitimate per-user pattern and
-# remains allowed.
-_PROTECTED_PATHS_WINDOWS_ROOT_ONLY = frozenset(
-    p.lower() for p in ("C:\\Users",)
-)
-
 # Docker resource-name pattern (containers, image repos, tags).
 # Must start with [a-zA-Z0-9] and may include _.- afterwards, max 128 chars.
 _DOCKER_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
@@ -161,91 +133,6 @@ def _validate_resource_name(value: str, label: str) -> None:
         raise ValueError(
             f"Invalid {label} '{value}': must match "
             f"[a-zA-Z0-9][a-zA-Z0-9_.-]{{0,127}}"
-        )
-
-
-# Environment variables that could break container hardening.
-# Anything an interpreter/loader will source at startup belongs here:
-# each variable below redirects code execution before the sandbox's
-# entrypoint runs, defeating the cap_drop / no-new-privileges hardening.
-_BLOCKED_ENV_VARS = frozenset(
-    {
-        # glibc dynamic linker
-        "LD_PRELOAD",
-        "LD_LIBRARY_PATH",
-        "LD_AUDIT",
-        "LD_DEBUG",
-        "LD_PROFILE",
-        "LD_SHOW_AUXV",
-        "LD_DYNAMIC_WEAK",
-        # POSIX shell startup hooks (bash, dash, sh)
-        "BASH_ENV",
-        "ENV",
-        # Python
-        "PYTHONSTARTUP",
-        "PYTHONPATH",
-        "PYTHONHOME",
-        # Node.js
-        "NODE_OPTIONS",
-        # Ruby
-        "RUBYOPT",
-        # Perl
-        "PERL5LIB",
-        "PERL5OPT",
-        # Java
-        "JAVA_TOOL_OPTIONS",
-        "_JAVA_OPTIONS",
-    }
-)
-
-
-def _sanitize_env_vars(env_vars: dict[str, str]) -> dict[str, str]:
-    """Remove dangerous env vars that could escape sandbox hardening."""
-    blocked_found = [
-        k for k in env_vars if k.upper() in _BLOCKED_ENV_VARS
-    ]
-    if blocked_found:
-        logger.warning(
-            "Blocked dangerous environment variables: %s",
-            blocked_found,
-        )
-    return {
-        k: v
-        for k, v in env_vars.items()
-        if k.upper() not in _BLOCKED_ENV_VARS
-    }
-
-
-def _is_protected_path(path: str) -> bool:
-    """Check whether *path* is a system directory that must not be mounted."""
-    system = platform.system()
-
-    if system == "Windows":
-        normalised = os.path.normpath(os.path.realpath(path))
-        # Block drive roots like C:\, D:\
-        if len(normalised) <= 3 and normalised.endswith((":\\", ":")):
-            return True
-        # Block well-known Windows system directories (case-insensitive).
-        lowered = normalised.lower()
-        if lowered in _PROTECTED_PATHS_WINDOWS_ROOT_ONLY:
-            return True
-        for protected in _PROTECTED_PATHS_WINDOWS:
-            if lowered == protected or lowered.startswith(protected + "\\"):
-                return True
-        return False
-
-    # Unix-like: resolve symlinks then normalize
-    import posixpath
-
-    resolved = os.path.realpath(path)
-    normalised = posixpath.normpath(resolved)
-    return normalised in _PROTECTED_PATHS_UNIX
-
-
-def _validate_mount_path(path: str, label: str) -> None:
-    if _is_protected_path(path):
-        raise ValueError(
-            f"Cannot mount protected system directory '{path}' as {label}"
         )
 
 
@@ -307,6 +194,9 @@ class DockerSandboxProvider(SandboxProvider):
         Base Docker image. When ``None`` (default), the provider auto-
         selects the hardened ``HARDENED_IMAGE_TAG`` if it is locally
         available, and falls back to ``_LEGACY_DEFAULT_IMAGE`` otherwise.
+    require_hardened_image:
+        When ``True``, require the local hardened image and fail instead of
+        falling back to the legacy image. Cannot be combined with ``image``.
     docker_url:
         Docker daemon URL (default: auto-detect via env).
     runtime:
@@ -330,8 +220,20 @@ class DockerSandboxProvider(SandboxProvider):
         docker_url: str | None = None,
         runtime: IsolationRuntime = IsolationRuntime.AUTO,
         tools: dict[str, Callable[..., Any]] | None = None,
+        require_hardened_image: bool = False,
     ) -> None:
-        self._image = image if image is not None else self._select_default_image()
+        if image is not None and require_hardened_image:
+            raise ValueError(
+                "image and require_hardened_image cannot be used together; "
+                "omit image to require the built-in hardened image"
+            )
+        if require_hardened_image:
+            self._image = self._select_default_image(
+                require_hardened_image=True,
+                docker_url=docker_url,
+            )
+        else:
+            self._image = image if image is not None else self._select_default_image()
         self._tools: dict[str, Callable[..., Any]] = tools or {}
         self._requested_runtime = runtime
 
@@ -341,6 +243,8 @@ class DockerSandboxProvider(SandboxProvider):
         self._containers: dict[tuple[str, str], Any] = {}
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], SandboxConfig] = {}
+        self._ring_enforcers: dict[tuple[str, str], Any] = {}  # (#2666)
+        self._ring_breach_detectors: dict[tuple[str, str], Any] = {}  # (#2666)
         # Per-container exec lock — serialises ``run`` calls against the
         # same container so a timeout-on-exec-A cannot accidentally
         # disrupt exec-B running concurrently in the same container.
@@ -390,21 +294,43 @@ class DockerSandboxProvider(SandboxProvider):
     # ------------------------------------------------------------------
 
     @classmethod
-    def _select_default_image(cls) -> str:
+    def _select_default_image(
+        cls,
+        *,
+        require_hardened_image: bool = False,
+        docker_url: str | None = None,
+    ) -> str:
         """Pick the hardened image if it's available locally, else legacy.
 
         Tries to query the local Docker daemon for ``HARDENED_IMAGE_TAG``.
         Any failure (no Docker, image not built, permission denied) falls
-        back silently to ``python:3.11-slim`` so existing setups keep
-        working. Callers who want to force one or the other should pass
-        ``image=...`` explicitly.
+        back to ``python:3.11-slim`` with a warning so existing setups keep
+        working unless ``require_hardened_image`` is true.
         """
         try:
             import docker  # type: ignore[import-untyped]
-            client = docker.from_env()
+            client = (
+                docker.DockerClient(base_url=docker_url)
+                if docker_url
+                else docker.from_env()
+            )
             client.images.get(cls.HARDENED_IMAGE_TAG)
             return cls.HARDENED_IMAGE_TAG
-        except Exception:
+        except Exception as exc:
+            if require_hardened_image:
+                raise RuntimeError(
+                    f"Hardened sandbox image '{cls.HARDENED_IMAGE_TAG}' is "
+                    "required but is not available locally. Build it from "
+                    "agent-sandbox/docker/Dockerfile.sandbox before creating "
+                    "the provider."
+                ) from exc
+            logger.warning(
+                "Hardened sandbox image '%s' is unavailable; falling back to "
+                "'%s'. Minimal-PATH command restrictions are not active. "
+                "Set require_hardened_image=True to fail closed.",
+                cls.HARDENED_IMAGE_TAG,
+                cls._LEGACY_DEFAULT_IMAGE,
+            )
             return cls._LEGACY_DEFAULT_IMAGE
 
     def _detect_runtime(self) -> IsolationRuntime:
@@ -553,7 +479,36 @@ class DockerSandboxProvider(SandboxProvider):
                     f"Failed to initialize PolicyEvaluator: {exc}"
                 ) from exc
 
-        # 2. Create hardened container
+        # 2. Apply hypervisor ring constraints (#2666)
+        ring = getattr(cfg, 'ring', None)
+        if ring is not None:
+            try:
+                from hypervisor.rings.breach_detector import RingBreachDetector
+                from hypervisor.rings.enforcer import RingEnforcer
+                enforcer = RingEnforcer()
+                constraints = enforcer.get_constraints(ring)
+                # Override network and filesystem from ring constraints
+                cfg.network_enabled = constraints.network_allowed
+                if not constraints.filesystem_scope or constraints.filesystem_scope == 'none':
+                    cfg.read_only_fs = True
+                # Attach enforcer and breach detector to session state
+                self._ring_enforcers[(agent_id, session_id)] = enforcer
+                self._ring_breach_detectors[(agent_id, session_id)] = RingBreachDetector()
+                logger.info(
+                    'Ring %s applied for agent=%s session=%s '
+                    '(network=%s fs_scope=%s subprocess=%s)',
+                    ring, agent_id, session_id,
+                    constraints.network_allowed,
+                    constraints.filesystem_scope,
+                    constraints.subprocess_allowed,
+                )
+            except ImportError:
+                logger.warning(
+                    'agent-hypervisor not installed — ring enforcement skipped '
+                    'for agent=%s', agent_id
+                )
+
+        # 3. Create hardened container
         container = self._create_container(agent_id, session_id, cfg)
         with self._state_lock:
             self._containers[(agent_id, session_id)] = container
@@ -601,7 +556,31 @@ class DockerSandboxProvider(SandboxProvider):
                 )
 
         enforce_no_subprocess_execution(code)
-
+        # Ring subprocess gate (#2666)
+        ring_enforcer = self._ring_enforcers.get(key)
+        breach_detector = self._ring_breach_detectors.get(key)
+        cfg_ring = getattr(session_cfg, 'ring', None) if session_cfg else None
+        if ring_enforcer is not None and cfg_ring is not None:
+            try:
+                from hypervisor.models import ExecutionRing
+                from hypervisor.rings.enforcer import ResourceType
+                result_ring = ring_enforcer.check_resource(cfg_ring, ResourceType.SUBPROCESS)
+                if breach_detector is not None:
+                    breach_detector.record_call(
+                        agent_id, session_id, cfg_ring, ExecutionRing.RING_3_SANDBOX
+                    )
+                    if breach_detector.is_breaker_tripped(agent_id, session_id):
+                        raise PermissionError(
+                            f'Ring breach circuit-breaker tripped for agent {agent_id!r}'
+                        )
+                if not result_ring.allowed:
+                    raise PermissionError(
+                        f'Ring enforcement denied subprocess for agent {agent_id!r}: '
+                        + result_ring.reason
+                    )
+            except ImportError:
+                # hypervisor not installed; ring gate already skipped at create_session
+                pass
         # Run code with the session's configured timeout/env, not defaults.
         result = self.run(
             agent_id,
@@ -639,6 +618,8 @@ class DockerSandboxProvider(SandboxProvider):
             with self._state_lock:
                 self._evaluators.pop(key, None)
                 self._session_configs.pop(key, None)
+                self._ring_enforcers.pop(key, None)  # (#2666)
+                self._ring_breach_detectors.pop(key, None)  # (#2666)
             return
 
         stop_ok = False
@@ -674,6 +655,8 @@ class DockerSandboxProvider(SandboxProvider):
                 self._evaluators.pop(key, None)
                 self._session_configs.pop(key, None)
                 self._exec_locks.pop(key, None)
+                self._ring_enforcers.pop(key, None)  # (#2666)
+                self._ring_breach_detectors.pop(key, None)  # (#2666)
         else:
             # remove() failed: the container is still alive in Docker
             # somewhere. Keep the entry so a follow-up

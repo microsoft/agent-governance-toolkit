@@ -1,33 +1,8 @@
-"""
-pydantic-ai-governance: Governance middleware for PydanticAI.
-
-Semantic policy enforcement, trust scoring, and audit trails
-for agent tool execution.
-"""
-
-from pydantic_ai_governance.policy import (
-    GovernancePolicy,
-    PatternType,
-    GovernanceEventType,
+import warnings
+warnings.warn(
+    "pydantic-ai-agentmesh is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[pydantic-ai] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
 )
-from pydantic_ai_governance.decorator import govern
-from pydantic_ai_governance.toolset import GovernanceToolset
-from pydantic_ai_governance.trust import TrustScore, TrustScorer
-from pydantic_ai_governance.intent import SemanticIntent, classify_intent
-from pydantic_ai_governance.audit import AuditEntry, AuditTrail
-
-__all__ = [
-    "GovernancePolicy",
-    "PatternType",
-    "GovernanceEventType",
-    "govern",
-    "GovernanceToolset",
-    "TrustScore",
-    "TrustScorer",
-    "SemanticIntent",
-    "classify_intent",
-    "AuditEntry",
-    "AuditTrail",
-]
-
-__version__ = "3.2.2"

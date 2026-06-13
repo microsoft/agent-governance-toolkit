@@ -117,4 +117,4 @@ This package maps AGT behavior onto Antigravity CLI's native extension primitive
 ## Release model
 
 GitHub Actions builds and tests the package in CI. Production npm publishing goes through the
-ESRP-backed Azure DevOps release pipeline alongside the other AGT npm packages.
+canonical GitHub Actions release workflow alongside the other AGT npm packages.

@@ -15,7 +15,7 @@ Every SDK exposes:
 
 On top of that base, the SDKs ship framework adapters where the framework and language support them. The supported framework matrix is documented in [adapter-matrix.md](adapter-matrix.md).
 
-The SDKs own host async orchestration, stream aggregation, tool execution, approval resolution, and framework type mapping. The native core remains responsible for deterministic intervention-point evaluation, policy input construction, verdict normalization, and policy-target-only effects.
+The SDKs own host async orchestration, stream aggregation, tool execution, approval resolution, transform application, and framework type mapping. The native core remains responsible for deterministic intervention-point evaluation, policy input construction, verdict normalization, and producing a transformed policy target only for the `transform` verdict.
 
 Manifest and native library load failures can occur before a runtime exists. SDK constructors surface those failures by refusing construction, which is a fail closed outcome for the host. Once construction succeeds, evaluation-time runtime errors are returned as deny verdicts.
 

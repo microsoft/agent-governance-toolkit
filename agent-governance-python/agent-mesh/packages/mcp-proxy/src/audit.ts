@@ -28,6 +28,10 @@ export interface AuditEvent {
 export class AuditLogger {
   private static readonly credentialPatterns = [
     /(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])/g,
+    /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9_-])/g,
+    /(?<![A-Za-z0-9-])xox[abprs]-[A-Za-z0-9-]+(?![A-Za-z0-9-])/g,
+    /\bAKIA[A-Z0-9]{16}\b/g,
+    /\bAIza[0-9A-Za-z\-_]{35}\b/g,
     /-----BEGIN (?<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----(?:\r?\n[!-~ \t]*)*?\r?\n-----END \k<label>-----/g,
   ];
 

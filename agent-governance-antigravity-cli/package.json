@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agent-governance-antigravity-cli",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Public Preview — Antigravity CLI governance installer for Agent Governance Toolkit developer protection policies",
   "type": "module",
   "bin": {
@@ -33,7 +33,7 @@
     "directory": "agent-governance-antigravity-cli"
   },
   "dependencies": {
-    "@microsoft/agent-governance-sdk": "3.7.0"
+    "@microsoft/agent-governance-sdk": "4.0.0"
   },
   "engines": {
     "node": ">=20.19.0"

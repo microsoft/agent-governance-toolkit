@@ -62,13 +62,13 @@ import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
 from ._v5_runtime_bridge import (
     AdapterRuntimeBridge,
     BridgeResult,
     get_runtime_bridge,
 )
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +144,11 @@ class AuditEvent:
     event_type: str
     agent_name: str
     details: dict[str, Any]
+    skill_name: str | None = None
+    skill_origin: str | None = None
+    provenance_source_trust: str | None = None
+    context_hash_before: str | None = None
+    context_hash_after: str | None = None
 
 
 
@@ -483,7 +488,18 @@ class GoogleADKKernel(BaseIntegration):
         """
         logger.error(f"Policy violation: {error}")
 
-    def _record(self, event_type: str, agent_name: str, details: dict[str, Any]) -> None:
+    def _record(
+        self,
+        event_type: str,
+        agent_name: str,
+        details: dict[str, Any],
+        *,
+        skill_name: str | None = None,
+        skill_origin: str | None = None,
+        provenance_source_trust: str | None = None,
+        context_hash_before: str | None = None,
+        context_hash_after: str | None = None,
+    ) -> None:
         """Append an audit event to the internal audit log.
 
         Records the event only when log_all_calls is enabled.
@@ -500,6 +516,11 @@ class GoogleADKKernel(BaseIntegration):
                     event_type=event_type,
                     agent_name=agent_name,
                     details=details,
+                    skill_name=skill_name,
+                    skill_origin=skill_origin,
+                    provenance_source_trust=provenance_source_trust,
+                    context_hash_before=context_hash_before,
+                    context_hash_after=context_hash_after,
                 )
             )
 
@@ -606,7 +627,28 @@ class GoogleADKKernel(BaseIntegration):
         tool_args = getattr(tool_context, "tool_args", kwargs.get("tool_args", {}))
         agent_name = getattr(tool_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        self._record("before_tool", agent_name, {"tool": tool_name, "args": tool_args})
+        trusted_skill_sources = self.trusted_sources_from_attrs(tool_context)
+
+        emitted = self.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=agent_name,
+            action="adk.before_tool_callback",
+            trusted_sources=trusted_skill_sources,
+            default_origin="adk",
+            context_before=tool_args,
+            tool_name=tool_name,
+        )
+
+        self._record(
+            "before_tool",
+            agent_name,
+            {"tool": tool_name, "args": tool_args},
+            skill_name=emitted.get("skill_name"),
+            skill_origin=emitted.get("skill_origin"),
+            provenance_source_trust=emitted.get("provenance_source_trust"),
+            context_hash_before=emitted.get("context_hash_before"),
+            context_hash_after=emitted.get("context_hash_after"),
+        )
 
         # Check timeout
         ok, reason = self._check_timeout()
@@ -780,7 +822,28 @@ class GoogleADKKernel(BaseIntegration):
         tool_name = getattr(tool_context, "tool_name", kwargs.get("tool_name", "unknown"))
         agent_name = getattr(tool_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        self._record("after_tool", agent_name, {"tool": tool_name, "result_type": type(tool_result).__name__})
+        trusted_skill_sources = self.trusted_sources_from_attrs(tool_context)
+
+        emitted = self.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=agent_name,
+            action="adk.after_tool_callback",
+            trusted_sources=trusted_skill_sources,
+            default_origin="adk",
+            context_after=tool_result,
+            tool_name=tool_name,
+        )
+
+        self._record(
+            "after_tool",
+            agent_name,
+            {"tool": tool_name, "result_type": type(tool_result).__name__},
+            skill_name=emitted.get("skill_name"),
+            skill_origin=emitted.get("skill_origin"),
+            provenance_source_trust=emitted.get("provenance_source_trust"),
+            context_hash_before=emitted.get("context_hash_before"),
+            context_hash_after=emitted.get("context_hash_after"),
+        )
 
         # Check output content (legacy local pattern scan).
         if isinstance(tool_result, str):
@@ -832,7 +895,14 @@ class GoogleADKKernel(BaseIntegration):
         """
         agent_name = getattr(callback_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        self._record("before_agent", agent_name, {})
+        trusted_skill_sources = self.trusted_sources_from_attrs(callback_context)
+
+        skill_fields = self.build_skill_audit_fields(
+            trusted_sources=trusted_skill_sources,
+            default_origin="adk",
+        )
+
+        self._record("before_agent", agent_name, {}, **skill_fields)
 
         # Check timeout
         ok, reason = self._check_timeout()
@@ -886,7 +956,20 @@ class GoogleADKKernel(BaseIntegration):
         """
         agent_name = getattr(callback_context, "agent_name", kwargs.get("agent_name", "unknown"))
 
-        self._record("after_agent", agent_name, {"has_content": content is not None})
+        trusted_skill_sources = self.trusted_sources_from_attrs(callback_context)
+
+        skill_fields = self.build_skill_audit_fields(
+            trusted_sources=trusted_skill_sources,
+            default_origin="adk",
+            context_after=content,
+        )
+
+        self._record(
+            "after_agent",
+            agent_name,
+            {"has_content": content is not None},
+            **skill_fields,
+        )
 
         # Check output content if it's a string (legacy local pattern scan)
         if isinstance(content, str):

@@ -4,20 +4,20 @@
 #
 # Build examples:
 #   docker build --build-arg COMPONENT=registry \
-#     -t ghcr.io/microsoft/agentmesh/registry:0.3.0 \
+#     -t ghcr.io/microsoft/agent-governance-toolkit/registry:0.3.0 \
 #     -f agent-governance-python/agent-mesh/docker/Dockerfile .
 #
 #   docker build --build-arg COMPONENT=relay \
-#     -t ghcr.io/microsoft/agentmesh/relay:0.3.0 \
+#     -t ghcr.io/microsoft/agent-governance-toolkit/relay:0.3.0 \
 #     -f agent-governance-python/agent-mesh/docker/Dockerfile .
 #
 #   docker build --build-arg COMPONENT=trust-engine \
-#     -t ghcr.io/microsoft/agentmesh/trust-engine:0.3.0 \
+#     -t ghcr.io/microsoft/agent-governance-toolkit/trust-engine:0.3.0 \
 #     -f agent-governance-python/agent-mesh/docker/Dockerfile .
 #
 # Run:
-#   docker run -p 8082:8082 ghcr.io/microsoft/agentmesh/registry:0.3.0
-#   docker run -p 8083:8083 ghcr.io/microsoft/agentmesh/relay:0.3.0
+#   docker run -p 8082:8082 ghcr.io/microsoft/agent-governance-toolkit/registry:0.3.0
+#   docker run -p 8083:8083 ghcr.io/microsoft/agent-governance-toolkit/relay:0.3.0
 
 ARG PYTHON_VERSION=3.11
 

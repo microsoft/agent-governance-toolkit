@@ -1,0 +1,36 @@
+namespace AGT {
+  type Url = {"host": String, "path": String, "protocol": String};
+  entity Agent = {};
+  entity Resource = {};
+  entity Access_Token = {
+    sub?: String,
+    iss?: TestIssuer::TrustedIssuer,
+    org_id?: String,
+  } tags Set<String>;
+  entity Workload = {};
+  entity User = {};
+  action "ReadData" appliesTo {
+    principal: [Workload, User],
+    resource: [Resource],
+    context: Context
+  };
+  action "Read" appliesTo {
+    principal: [Workload, User],
+    resource: [Resource],
+    context: Context
+  };
+  action "Write" appliesTo {
+    principal: [Workload, User],
+    resource: [Resource],
+    context: Context
+  };
+}
+namespace TestIssuer {
+  entity TrustedIssuer = {"issuer_entity_id": AGT::Url};
+}
+type Context = {
+  tokens: {
+    testissuer_access_token?: AGT::Access_Token,
+    total_token_count: Long
+  }
+};

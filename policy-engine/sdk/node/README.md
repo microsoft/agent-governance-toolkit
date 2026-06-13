@@ -47,7 +47,7 @@ Set `ACS_OPA_NO_BUNDLE=1` to skip bundled binary resolution when a host must use
 
 In enforce mode a `deny` verdict throws `AgentControlBlockedError`. An `escalate` verdict consults an optional approval resolver, a host callback that decides whether the action proceeds. Supply a resolver on the instance with `new AgentControl(runtimeClient, approvalResolver)` (or `AgentControl.fromNative(manifest, annotator, policy, approvalResolver)`) or override it per call with the `approvalResolver` option on `run`, `runTool`, and `protectTool`. The resolver returns `ApprovalResolution.allow(result.actionIdentity)`, `ApprovalResolution.deny()`, or `ApprovalResolution.suspend(handle, result.actionIdentity)`.
 
-- allow proceeds with the original action target. `escalate` verdicts validate effects but do not return or apply transformed targets
+- allow proceeds with the original action target. `escalate` verdicts do not return or apply transformed targets
 - deny, an unrecognized result, or a resolver that rejects throws `AgentControlBlockedError` (the original error is preserved as `cause`)
 - suspend throws `AgentControlSuspendedError` carrying the opaque host handle
 - with no resolver an `escalate` verdict fails closed to a block

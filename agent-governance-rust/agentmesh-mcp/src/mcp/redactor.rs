@@ -15,6 +15,10 @@ pub enum CredentialKind {
     ConnectionString,
     SecretAssignment,
     GitHubToken,
+    OpenAiToken,
+    SlackToken,
+    AwsAccessKey,
+    GoogleApiKey,
     PemPrivateKey,
 }
 
@@ -26,6 +30,10 @@ impl CredentialKind {
             Self::ConnectionString => "connection_string",
             Self::SecretAssignment => "secret_assignment",
             Self::GitHubToken => "github_token",
+            Self::OpenAiToken => "openai_token",
+            Self::SlackToken => "slack_token",
+            Self::AwsAccessKey => "aws_access_key",
+            Self::GoogleApiKey => "google_api_key",
             Self::PemPrivateKey => "pem_private_key",
         }
     }
@@ -37,6 +45,10 @@ impl CredentialKind {
             Self::ConnectionString => "[REDACTED_CONNECTION_STRING]",
             Self::SecretAssignment => "[REDACTED_SECRET]",
             Self::GitHubToken => "[REDACTED_GITHUB_TOKEN]",
+            Self::OpenAiToken => "[REDACTED_OPENAI_TOKEN]",
+            Self::SlackToken => "[REDACTED_SLACK_TOKEN]",
+            Self::AwsAccessKey => "[REDACTED_AWS_ACCESS_KEY]",
+            Self::GoogleApiKey => "[REDACTED_GOOGLE_API_KEY]",
             Self::PemPrivateKey => "[REDACTED_PEM_PRIVATE_KEY]",
         }
     }
@@ -53,6 +65,7 @@ pub struct RedactionResult {
 #[derive(Debug, Clone)]
 pub struct CredentialRedactor {
     patterns: Vec<(CredentialKind, Regex)>,
+    bounded_patterns: Vec<(CredentialKind, Regex)>,
 }
 
 impl CredentialRedactor {
@@ -91,11 +104,6 @@ impl CredentialRedactor {
                         r#"(?i)\b(?:password|secret|token)\s*[:=]\s*["']?[^\s"';,]{4,}["']?"#,
                     )
                     .expect("SecretAssignment regex literal must compile"),
-                ),
-                (
-                    CredentialKind::GitHubToken,
-                    Regex::new(r"\b(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})\b")
-                        .expect("GitHubToken regex literal must compile"),
                 ),
                 (
                     CredentialKind::PemPrivateKey,
@@ -140,6 +148,33 @@ impl CredentialRedactor {
                     .expect("PemPrivateKey regex literal must compile"),
                 ),
             ],
+            bounded_patterns: vec![
+                (
+                    CredentialKind::GitHubToken,
+                    Regex::new(r"(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})")
+                        .expect("GitHubToken regex literal must compile"),
+                ),
+                (
+                    CredentialKind::OpenAiToken,
+                    Regex::new(r"sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}")
+                        .expect("OpenAiToken regex literal must compile"),
+                ),
+                (
+                    CredentialKind::SlackToken,
+                    Regex::new(r"xox[abprs]-[A-Za-z0-9-]+")
+                        .expect("SlackToken regex literal must compile"),
+                ),
+                (
+                    CredentialKind::AwsAccessKey,
+                    Regex::new(r"AKIA[A-Z0-9]{16}")
+                        .expect("AwsAccessKey regex literal must compile"),
+                ),
+                (
+                    CredentialKind::GoogleApiKey,
+                    Regex::new(r"AIza[0-9A-Za-z\-_]{35}")
+                        .expect("GoogleApiKey regex literal must compile"),
+                ),
+            ],
         }
     }
 
@@ -154,9 +189,64 @@ impl CredentialRedactor {
                 .replace_all(&sanitized, kind.placeholder())
                 .into_owned();
         }
+        for (kind, pattern) in &self.bounded_patterns {
+            let (redacted, modified) = Self::redact_bounded_token(&sanitized, pattern, *kind);
+            if modified && !detected.contains(kind) {
+                detected.push(*kind);
+            }
+            sanitized = redacted;
+        }
         RedactionResult {
             sanitized,
             detected,
+        }
+    }
+
+    fn redact_bounded_token(input: &str, pattern: &Regex, kind: CredentialKind) -> (String, bool) {
+        let mut result = String::with_capacity(input.len());
+        let mut last = 0;
+        let mut modified = false;
+
+        for candidate in pattern.find_iter(input) {
+            let previous = input[..candidate.start()].chars().next_back();
+            let next = input[candidate.end()..].chars().next();
+            if previous.is_some_and(|ch| Self::is_left_boundary_char(kind, ch))
+                || next.is_some_and(|ch| Self::is_right_boundary_char(kind, ch))
+            {
+                continue;
+            }
+
+            result.push_str(&input[last..candidate.start()]);
+            result.push_str(kind.placeholder());
+            last = candidate.end();
+            modified = true;
+        }
+
+        if modified {
+            result.push_str(&input[last..]);
+            (result, true)
+        } else {
+            (input.to_string(), false)
+        }
+    }
+
+    fn is_left_boundary_char(kind: CredentialKind, ch: char) -> bool {
+        match kind {
+            CredentialKind::GitHubToken => ch.is_ascii_alphanumeric() || ch == '_',
+            CredentialKind::OpenAiToken | CredentialKind::GoogleApiKey => {
+                ch.is_ascii_alphanumeric() || ch == '_' || ch == '-'
+            }
+            CredentialKind::SlackToken => ch.is_ascii_alphanumeric() || ch == '-',
+            CredentialKind::AwsAccessKey => ch.is_ascii_alphanumeric(),
+            _ => ch.is_ascii_alphanumeric() || ch == '_',
+        }
+    }
+
+    fn is_right_boundary_char(kind: CredentialKind, ch: char) -> bool {
+        match kind {
+            CredentialKind::OpenAiToken => ch.is_ascii_alphanumeric() || ch == '_' || ch == '-',
+            CredentialKind::SlackToken => ch.is_ascii_alphanumeric() || ch == '-',
+            _ => false,
         }
     }
 
@@ -277,6 +367,76 @@ mod tests {
             let result = redactor.redact(&format!("value {token} end"));
             assert_eq!(result.sanitized, "value [REDACTED_GITHUB_TOKEN] end");
             assert!(result.detected.contains(&CredentialKind::GitHubToken));
+        }
+    }
+
+    #[test]
+    fn redacts_github_tokens_with_non_word_boundaries() {
+        let redactor = CredentialRedactor::new();
+        let token = "ghp_FAKEFORTESTING000000000000000000";
+        let result = redactor.redact(&format!("({token}), {token}."));
+
+        assert_eq!(
+            result.sanitized,
+            "([REDACTED_GITHUB_TOKEN]), [REDACTED_GITHUB_TOKEN]."
+        );
+        assert!(result.detected.contains(&CredentialKind::GitHubToken));
+    }
+
+    #[test]
+    fn does_not_redact_embedded_github_token_lookalikes() {
+        let redactor = CredentialRedactor::new();
+        for text in ["prefix_ghp_FAKEFORTESTING000000000000000000"] {
+            let result = redactor.redact(text);
+            assert_eq!(result.sanitized, text);
+            assert!(result.detected.is_empty());
+        }
+    }
+
+    #[test]
+    fn redacts_recoverable_github_token_before_underscore_suffix() {
+        let redactor = CredentialRedactor::new();
+        let result = redactor.redact("ghp_FAKEFORTESTING000000000000000000_suffix");
+
+        assert_eq!(result.sanitized, "[REDACTED_GITHUB_TOKEN]_suffix");
+        assert!(result.detected.contains(&CredentialKind::GitHubToken));
+    }
+
+    #[test]
+    fn redacts_modern_provider_token_patterns() {
+        let redactor = CredentialRedactor::new();
+        let openai_token = format!("sk-FAKEFORTESTING{}", "x".repeat(20));
+        let slack_token = "xoxb-FAKE-FOR-TESTING-0000000000";
+        let aws_access_key = format!("AKIA{}", "A".repeat(16));
+        let google_api_key = format!("AIza{}", "A".repeat(35));
+
+        let result = redactor.redact(&format!(
+            "openai {openai_token} slack {slack_token} aws {aws_access_key} google {google_api_key}"
+        ));
+
+        assert_eq!(
+            result.sanitized,
+            "openai [REDACTED_OPENAI_TOKEN] slack [REDACTED_SLACK_TOKEN] aws [REDACTED_AWS_ACCESS_KEY] google [REDACTED_GOOGLE_API_KEY]"
+        );
+        assert!(result.detected.contains(&CredentialKind::OpenAiToken));
+        assert!(result.detected.contains(&CredentialKind::SlackToken));
+        assert!(result.detected.contains(&CredentialKind::AwsAccessKey));
+        assert!(result.detected.contains(&CredentialKind::GoogleApiKey));
+    }
+
+    #[test]
+    fn does_not_redact_malformed_provider_token_lookalikes() {
+        let redactor = CredentialRedactor::new();
+        let embedded_aws_access_key = format!("prefix{}", format!("AKIA{}", "A".repeat(16)));
+        for text in [
+            "sk-short",
+            "xoxq-FAKE-FOR-TESTING-0000000000",
+            embedded_aws_access_key.as_str(),
+            "AIzaFAKE_FOR_TESTING_000000000000000",
+        ] {
+            let result = redactor.redact(text);
+            assert_eq!(result.sanitized, text);
+            assert!(result.detected.is_empty());
         }
     }
 

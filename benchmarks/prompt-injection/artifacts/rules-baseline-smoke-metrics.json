@@ -1,0 +1,453 @@
+{
+  "by_benign_subclass": {
+    "benign_compact_obfuscation_control": {
+      "benign": 30,
+      "benign_flagged": 0,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 30,
+        "upper": 0.11351339317396876
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "benign_obfuscation_control": {
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 10,
+        "upper": 0.2775327998628892
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "benign_security_discussion": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "benign_tool_use": {
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 10,
+        "upper": 0.2775327998628892
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "detector_code_fixture": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "docs_code_comment": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "high_entropy_structured_data": {
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 10,
+        "upper": 0.2775327998628892
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "legitimate_imperative_request": {
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 10,
+        "upper": 0.2775327998628892
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "owasp_ncsc_guidance": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "quoted_injection_example": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "research_blog_excerpt": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "security_changelog": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "security_training_material": {
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.2,
+        "lower": 0.05668215145437522,
+        "successes": 2,
+        "total": 10,
+        "upper": 0.5098375284633582
+      },
+      "fp_per_1k_benign": 200.0
+    },
+    "support_urgency": {
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 10,
+        "upper": 0.2775327998628892
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "tool_policy_documentation": {
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 10,
+        "upper": 0.2775327998628892
+      },
+      "fp_per_1k_benign": 0.0
+    }
+  },
+  "by_bypass_class": {
+    "chunked_leet": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "compact_leet": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "compact_plain": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "diacritics": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 8,
+        "upper": 0.32440756488388023
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 1,
+        "upper": 0.7934506856227626
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "encoding": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.25,
+        "lower": 0.11999366228595006,
+        "successes": 6,
+        "total": 24,
+        "upper": 0.44899444005154
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 4.8683609171202235e-17,
+        "successes": 0,
+        "total": 3,
+        "upper": 0.5614970317550455
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "homoglyph": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 8,
+        "upper": 0.32440756488388023
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 1,
+        "upper": 0.7934506856227626
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "leet_letter_spaced": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "leet_spacing": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 8,
+        "upper": 0.32440756488388023
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 1,
+        "upper": 0.7934506856227626
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "letter_spaced": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 13,
+        "upper": 0.22809537235419838
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 3.384324554477539e-17,
+        "successes": 0,
+        "total": 6,
+        "upper": 0.39033428790216534
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "multilingual": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 8,
+        "upper": 0.32440756488388023
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 1,
+        "upper": 0.7934506856227626
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "none": {
+      "attack_recall_wilson_95": {
+        "estimate": null,
+        "lower": null,
+        "successes": 0,
+        "total": 0,
+        "upper": null
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.12307692307692308,
+        "lower": 0.07719629884646625,
+        "successes": 16,
+        "total": 130,
+        "upper": 0.1905941088231821
+      },
+      "fp_per_1k_benign": 123.07692307692308
+    },
+    "plain": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.125,
+        "lower": 0.022417491450056667,
+        "successes": 1,
+        "total": 8,
+        "upper": 0.47088818221285345
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 1,
+        "upper": 0.7934506856227626
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "rot13": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 8,
+        "upper": 0.32440756488388023
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 1,
+        "upper": 0.7934506856227626
+      },
+      "fp_per_1k_benign": 0.0
+    },
+    "separator_spaced": {
+      "attack_recall_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "benign_fp_rate_wilson_95": {
+        "estimate": 0.0,
+        "lower": 0.0,
+        "successes": 0,
+        "total": 5,
+        "upper": 0.43448246478317476
+      },
+      "fp_per_1k_benign": 0.0
+    }
+  },
+  "detector": "AGT Rust PromptInjectionDetector::new / Sensitivity::Balanced / default config",
+  "overall": {
+    "attack_recall_wilson_95": {
+      "estimate": 0.06363636363636363,
+      "lower": 0.03116451801447761,
+      "successes": 7,
+      "total": 110,
+      "upper": 0.125557461882102
+    },
+    "attacks": 110,
+    "attacks_caught": 7,
+    "base_rate_precision": {
+      "1_attack_per_1000_benign": 0.0006756795121480362,
+      "1_attack_per_100_benign": 0.006715954624978836
+    },
+    "benign": 170,
+    "benign_flagged": 16,
+    "benign_fp_rate_wilson_95": {
+      "estimate": 0.09411764705882353,
+      "lower": 0.058764358872737586,
+      "successes": 16,
+      "total": 170,
+      "upper": 0.14740889268552387
+    },
+    "fp_per_1k_benign": 94.11764705882352
+  },
+  "processed": 280,
+  "raw_text_in_output": false,
+  "source_summary": "benchmarks/prompt-injection/corpus/injection-smoke.jsonl"
+}

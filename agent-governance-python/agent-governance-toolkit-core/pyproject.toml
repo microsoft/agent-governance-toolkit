@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-governance-toolkit-core"
-version = "4.0.0"
+version = "4.1.0"
 description = "Core runtime, kernel, and trust layer for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}
@@ -46,7 +46,7 @@ dependencies = [
     "pynacl>=1.5.0,<2.0",
     "httpx>=0.27.0,<1.0",
     "aiohttp>=3.13.4,<4.0",
-    "structlog>=24.1.0,<26.0",
+    "structlog>=24.1.0,<27.0",
     "click>=8.1.0,<9.0",
     "python-dateutil>=2.8.0,<3.0",
     "jsonschema>=4.0.0,<5.0",
@@ -134,8 +134,11 @@ Repository = "https://github.com/microsoft/agent-governance-toolkit"
 # ============================================================================
 # Hatchling build config: pull sources from sibling package directories
 # ============================================================================
+# This wheel has no package directory of its own: every source tree is pulled in
+# via force-include from sibling package directories below. bypass-selection tells
+# hatchling not to look for a local package to auto-include.
 [tool.hatch.build.targets.wheel]
-packages = ["_placeholder"]
+bypass-selection = true
 
 [tool.hatch.build.targets.wheel.force-include]
 # --- agent-os-kernel (kernel + all internal modules) ---
@@ -148,7 +151,19 @@ packages = ["_placeholder"]
 "../agent-os/modules/atr/atr" = "atr"
 "../agent-os/modules/control-plane/src/agent_control_plane" = "agent_control_plane"
 "../agent-os/modules/observability/src/agent_os_observability" = "agent_os_observability"
-"../agent-os/modules/nexus" = "nexus"
+# nexus is laid out flat (the package files live directly in the module dir
+# alongside its own pyproject.toml and tests/). Map only the package sources so
+# the build metadata and test suite do not ship inside this wheel.
+"../agent-os/modules/nexus/__init__.py" = "nexus/__init__.py"
+"../agent-os/modules/nexus/arbiter.py" = "nexus/arbiter.py"
+"../agent-os/modules/nexus/client.py" = "nexus/client.py"
+"../agent-os/modules/nexus/crypto.py" = "nexus/crypto.py"
+"../agent-os/modules/nexus/dmz.py" = "nexus/dmz.py"
+"../agent-os/modules/nexus/escrow.py" = "nexus/escrow.py"
+"../agent-os/modules/nexus/exceptions.py" = "nexus/exceptions.py"
+"../agent-os/modules/nexus/registry.py" = "nexus/registry.py"
+"../agent-os/modules/nexus/reputation.py" = "nexus/reputation.py"
+"../agent-os/modules/nexus/schemas" = "nexus/schemas"
 "../agent-os/modules/mcp-kernel-server/src/mcp_kernel_server" = "mcp_kernel_server"
 # --- agentmesh-primitives ---
 "../agent-primitives/agent_primitives" = "agent_primitives"

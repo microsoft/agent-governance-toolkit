@@ -1,6 +1,7 @@
 {
   "name": "@microsoft/agent-os-copilot-extension",
-  "version": "4.0.0",
+  "version": "4.1.0",
+  "private": true,
   "description": "Public Preview — AgentOS GitHub Copilot Extension: Build safe AI agents with natural language and 0% policy violations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -39,7 +40,7 @@
   },
   "dependencies": {
     "@octokit/webhooks": "14.2.0",
-    "axios": "1.16.1",
+    "axios": "1.17.0",
     "dotenv": "17.4.2",
     "express": "5.2.1",
     "path-to-regexp": "8.4.2",
@@ -48,10 +49,10 @@
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
-    "@types/node": "25.9.1",
-    "@typescript-eslint/eslint-plugin": "8.60.0",
-    "@typescript-eslint/parser": "8.60.0",
-    "eslint": "10.4.0",
+    "@types/node": "25.9.2",
+    "@typescript-eslint/eslint-plugin": "8.60.1",
+    "@typescript-eslint/parser": "8.61.0",
+    "eslint": "10.4.1",
     "jest": "30.4.2",
     "ts-jest": "29.4.11",
     "ts-node": "10.9.2",

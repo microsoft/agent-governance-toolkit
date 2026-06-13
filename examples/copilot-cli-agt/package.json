@@ -10,5 +10,5 @@
     "check": "node --check ./.github/extensions/agt-global-policy/extension.mjs && node --check ./.github/extensions/agt-global-policy/main.mjs && node --check ./.github/extensions/agt-global-policy/lib/policy.mjs && node --check ./.github/extensions/agt-global-policy/lib/poisoning.mjs && node --check ./.github/extensions/agt-global-policy/lib/sdk-loader.mjs && node --check ./test/policy-engine.test.mjs",
     "test": "node --test ./test/*.test.mjs"
   },
-  "version": "4.0.0"
+  "version": "4.1.0"
 }

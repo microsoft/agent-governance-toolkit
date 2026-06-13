@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-governance-toolkit-integrations"
-version = "4.0.0"
+version = "4.1.0"
 description = "Framework adapters for the Agent Governance Toolkit (LangChain, CrewAI, OpenAI Agents, and more)"
 readme = "README.md"
 license = {text = "MIT"}
@@ -43,7 +43,7 @@ langchain = ["langchain-core>=1.2.11,<2.0"]
 crewai = ["crewai>=0.100.0,<1.0"]
 openai-agents = ["openai-agents>=0.0.3,<1.0"]
 langgraph = ["langgraph>=0.2.0,<1.0"]
-llamaindex = ["llama-index-core>=0.10,<1.0"]
+llamaindex = ["llama-index-core>=0.12,<0.13"]
 haystack = ["haystack-ai>=2.0,<3.0"]
 pydantic-ai = ["pydantic-ai>=0.0.10,<1.0"]
 flowise = []

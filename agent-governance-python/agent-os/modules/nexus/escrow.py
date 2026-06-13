@@ -345,8 +345,25 @@ class ProofOfOutcome:
         timeout_seconds: int = 3600,
         require_scak: bool = True,
         drift_threshold: float = 0.15,
+        requester_signature: Optional[str] = None,
     ) -> EscrowReceipt:
-        """Create an escrow for a task."""
+        """
+        Create an escrow for a task.
+
+        Args:
+            requester_signature: Base64-encoded Ed25519 signature of
+                ``nexus.crypto.escrow_message(requester_did, provider_did,
+                task_hash, credits)`` signed with the requester's private key.
+                Use ``nexus.crypto.sign(private_key_bytes, escrow_message(...))``
+                to produce it.
+        """
+        if requester_signature is None:
+            raise ValueError(
+                "requester_signature is required. "
+                "Sign nexus.crypto.escrow_message(requester_did, provider_did, task_hash, credits) "
+                "with your Ed25519 private key using nexus.crypto.sign()."
+            )
+
         request = EscrowRequest(
             requester_did=requester_did,
             provider_did=provider_did,
@@ -356,12 +373,9 @@ class ProofOfOutcome:
             require_scak_validation=require_scak,
             scak_drift_threshold=drift_threshold,
         )
-        
-        # TODO: Generate actual signature
-        signature = f"sig_{requester_did}_{task_hash[:8]}"
-        
-        return await self.escrow_manager.create_escrow(request, signature)
-    
+
+        return await self.escrow_manager.create_escrow(request, requester_signature)
+
     async def validate_outcome(
         self,
         escrow_id: str,

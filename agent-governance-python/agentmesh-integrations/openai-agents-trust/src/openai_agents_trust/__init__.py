@@ -1,33 +1,8 @@
-"""openai-agents-trust: Trust & governance layer for OpenAI Agents SDK."""
-
-from .guardrails import (
-    trust_input_guardrail,
-    policy_input_guardrail,
-    content_output_guardrail,
-    TrustGuardrailConfig,
-    PolicyGuardrailConfig,
+import warnings
+warnings.warn(
+    "agentmesh-openai-agents-trust is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[openai-agents] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
 )
-from .hooks import GovernanceHooks
-from .handoffs import trust_gated_handoff
-from .identity import AgentIdentity
-from .trust import TrustScorer, TrustScore
-from .policy import GovernancePolicy
-from .audit import AuditLog, AuditEntry
-
-__all__ = [
-    "trust_input_guardrail",
-    "policy_input_guardrail",
-    "content_output_guardrail",
-    "TrustGuardrailConfig",
-    "PolicyGuardrailConfig",
-    "GovernanceHooks",
-    "trust_gated_handoff",
-    "AgentIdentity",
-    "TrustScorer",
-    "TrustScore",
-    "GovernancePolicy",
-    "AuditLog",
-    "AuditEntry",
-]
-
-__version__ = "3.2.2"

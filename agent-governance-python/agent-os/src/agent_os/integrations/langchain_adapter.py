@@ -71,16 +71,16 @@ import functools
 import logging
 import time
 import warnings
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+from .base import PII_PATTERNS, BaseIntegration, GovernanceEventType, GovernancePolicy
 from ._v5_runtime_bridge import (
     AdapterRuntimeBridge,
     BridgeResult,
     get_runtime_bridge,
 )
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import PII_PATTERNS, BaseIntegration, GovernancePolicy
 
 logger = logging.getLogger("agent_os.langchain")
 
@@ -203,6 +203,10 @@ class LangChainKernel(BaseIntegration):
             ctx, tool_name=tool_name, args=args, call_id=call_id
         )
 
+    def evaluate_output(self, ctx: Any, output_data: Any) -> BridgeResult:
+        """AGT ``output`` evaluation for buffered LangChain output."""
+        return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
+
     @staticmethod
     def _to_body(data: Any) -> Any:
         """Normalise a LangChain input payload to a JSON-serialisable body."""
@@ -316,14 +320,20 @@ class LangChainKernel(BaseIntegration):
             )
 
     def _record_tool_invocation(
-        self, tool_name: str, args: Any, kwargs: Any
+        self,
+        tool_name: str,
+        args: Any,
+        kwargs: Any,
+        *,
+        skill_fields: dict[str, str | None] | None = None,
     ) -> None:
         """Append a tool invocation record to the audit log."""
         record = {
             "tool_name": tool_name,
             "args": str(args),
             "kwargs": str(kwargs),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **(skill_fields or self.build_skill_audit_fields()),
         }
         self._tool_invocations.append(record)
         if self.policy.log_all_calls:
@@ -724,8 +734,8 @@ class LangChainKernel(BaseIntegration):
                 """Governed streaming execution.
 
                 The input is policy-checked before streaming begins.
-                Individual chunks are yielded as-is; a post-execution
-                check runs after the stream is fully consumed.
+                Output chunks are buffered and post-checked before any
+                chunk is yielded so policy can block disclosure.
 
                 Args:
                     input_data: Input to pass to the chain/agent.
@@ -746,9 +756,77 @@ class LangChainKernel(BaseIntegration):
                     raise PolicyViolationError(reason)
                 logger.info("Policy ALLOW on stream")
 
-                yield from self._original.stream(input_data, **kwargs)
+                chunks = list(self._original.stream(input_data, **kwargs))
+                bridge_result = self._kernel.evaluate_output(self._ctx, chunks)
+                if not bridge_result.allowed:
+                    logger.info("Policy DENY on stream result: %s", bridge_result.reason)
+                    raise PolicyViolationError.from_check_result(
+                        bridge_result.check_result
+                    )
+                if bridge_result.transform is not None:
+                    transformed = bridge_result.transform.value
+                    chunks = transformed if isinstance(transformed, list) else [transformed]
+                valid, reason = self._kernel.post_execute(self._ctx, chunks)
+                if not valid:
+                    logger.info("Policy DENY on stream bookkeeping: %s", reason)
+                    raise PolicyViolationError(reason)
+                yield from chunks
 
-                self._kernel.post_execute(self._ctx, None)
+            async def astream(self, input_data: Any, **kwargs):
+                """Governed async streaming execution."""
+                async for chunk in self._govern_async_stream("astream", input_data, **kwargs):
+                    yield chunk
+
+            async def astream_log(self, input_data: Any, **kwargs):
+                """Governed async streaming log execution."""
+                async for chunk in self._govern_async_stream("astream_log", input_data, **kwargs):
+                    yield chunk
+
+            async def astream_events(self, input_data: Any, **kwargs):
+                """Governed async streaming events execution."""
+                async for chunk in self._govern_async_stream("astream_events", input_data, **kwargs):
+                    yield chunk
+
+            async def _govern_async_stream(self, method_name: str, input_data: Any, **kwargs):
+                logger.debug("%s called with input=%r kwargs=%r", method_name, input_data, kwargs)
+                allowed, reason = self._kernel.pre_execute(self._ctx, input_data)
+                if not allowed:
+                    logger.info("Policy DENY on %s: %s", method_name, reason)
+                    raise PolicyViolationError(reason)
+                logger.info("Policy ALLOW on %s", method_name)
+
+                stream = getattr(self._original, method_name)(input_data, **kwargs)
+                if hasattr(stream, "__await__"):
+                    stream = await stream
+                if not hasattr(stream, "__aiter__"):
+                    raise PolicyViolationError(
+                        f"{method_name} returned an uninspectable async stream; "
+                        "cannot enforce output mediation before disclosure"
+                    )
+                chunks = [chunk async for chunk in stream]
+                bridge_result = self._kernel.evaluate_output(self._ctx, chunks)
+                if not bridge_result.allowed:
+                    logger.info("Policy DENY on %s result: %s", method_name, bridge_result.reason)
+                    raise PolicyViolationError.from_check_result(
+                        bridge_result.check_result
+                    )
+                if bridge_result.transform is not None:
+                    transformed = bridge_result.transform.value
+                    if isinstance(transformed, list):
+                        chunks = transformed
+                    elif method_name in {"astream_log", "astream_events"}:
+                        raise PolicyViolationError(
+                            f"{method_name} output transform must return a list "
+                            "to preserve the async stream API contract"
+                        )
+                    else:
+                        chunks = [transformed]
+                valid, reason = self._kernel.post_execute(self._ctx, chunks)
+                if not valid:
+                    logger.info("Policy DENY on %s bookkeeping: %s", method_name, reason)
+                    raise PolicyViolationError(reason)
+                for chunk in chunks:
+                    yield chunk
 
             # Passthrough for non-execution methods
             def __getattr__(self, name):
@@ -899,6 +977,28 @@ class GovernanceMiddleware(_MiddlewareBase):
             tool_args,
         )
 
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(request),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(request, "skill_metadata", None)
+            ),
+        )
+
+        skill_fields = self._kernel.build_skill_audit_fields(
+            trusted_sources=trusted_skill_sources,
+            default_origin="langchain",
+            context_before=tool_args,
+        )
+        self._kernel.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=self._ctx.agent_id,
+            action="langchain.wrap_tool_call",
+            trusted_sources=trusted_skill_sources,
+            default_origin="langchain",
+            context_before=tool_args,
+            tool_name=tool_name,
+        )
+
         # ─── 1. Tool allowlist / blocklist ────────────────────────
         self._kernel._check_tool_policy(
             tool_name, (tool_args,), {}, self._ctx
@@ -937,7 +1037,12 @@ class GovernanceMiddleware(_MiddlewareBase):
         logger.info("[%s] Policy ALLOW on tool '%s'", self._name, tool_name)
 
         # ─── 3. Record invocation ─────────────────────────────────
-        self._kernel._record_tool_invocation(tool_name, (tool_args,), {})
+        self._kernel._record_tool_invocation(
+            tool_name,
+            (tool_args,),
+            {},
+            skill_fields=skill_fields,
+        )
 
         # ─── 4. Execute the tool ──────────────────────────────────
         try:
@@ -1030,6 +1135,23 @@ class GovernanceMiddleware(_MiddlewareBase):
             len(input_text),
         )
 
+        trusted_skill_sources = self._kernel.trusted_sources(
+            *self._kernel.trusted_sources_from_attrs(request),
+            self._kernel.trusted_skill_metadata_from_mapping(
+                getattr(request, "skill_metadata", None)
+            ),
+        )
+
+        self._kernel.emit_skill_audit_event(
+            GovernanceEventType.POLICY_CHECK,
+            agent_id=self._ctx.agent_id,
+            action="langchain.wrap_model_call",
+            trusted_sources=trusted_skill_sources,
+            default_origin="langchain",
+            context_before=input_text.strip() if input_text.strip() else None,
+        )
+
+        # ─── 1. Content filter on input ───────────────────────────
         # ─── 1. AGT input intervention point ──────────────────────
         if input_text.strip():
             pre_result = self._kernel.evaluate_input(

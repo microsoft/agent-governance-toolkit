@@ -1,0 +1,46 @@
+[
+  {
+    "id": "k8s-get-pods-allowed",
+    "input": {
+      "agent_did": "did:web:k8s-agent-01",
+      "action": "read_document",
+      "context": {
+        "resource": "pods",
+        "namespace": "staging",
+        "verb": "get"
+      }
+    },
+    "expected_verdict": "allow",
+    "expected_rule": "saas-allow-read-operations",
+    "recorded_at": "2026-05-22T11:00:00Z"
+  },
+  {
+    "id": "k8s-delete-prod-pod-blocked",
+    "input": {
+      "agent_did": "did:web:k8s-agent-01",
+      "action": "exec_shell",
+      "context": {
+        "resource": "pods",
+        "namespace": "production",
+        "verb": "delete"
+      }
+    },
+    "expected_verdict": "deny",
+    "expected_rule": "asi02-block-shell-execution",
+    "recorded_at": "2026-05-22T11:01:00Z"
+  },
+  {
+    "id": "k8s-grant-admin-blocked",
+    "input": {
+      "agent_did": "did:web:k8s-agent-01",
+      "action": "grant_admin",
+      "context": {
+        "resource": "clusterrolebinding",
+        "namespace": "kube-system"
+      }
+    },
+    "expected_verdict": "deny",
+    "expected_rule": "asi03-block-privilege-escalation",
+    "recorded_at": "2026-05-22T11:02:00Z"
+  }
+]

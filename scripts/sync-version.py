@@ -32,6 +32,33 @@ SKIP_DIRS = {
     ".tox", "egg-info",
 }
 
+# Manifests that are intentionally versioned independently of the repo-wide
+# VERSION file and must NOT be synced. Paths are relative to REPO_ROOT and use
+# forward slashes; a manifest is exempt if its relative path starts with any
+# entry below.
+#
+# Rationale:
+#   - policy-engine/  : the vendored Agent Control Specification (ACS) runtime
+#                       and its language SDKs ship on their own pre-1.0 release
+#                       cadence (currently 0.3.x). They are published as the
+#                       `agent-control-specification` / `acs-generator`
+#                       distributions, not as part of the AGT toolkit release,
+#                       so they track a separate version line. (see PR #2855)
+#   - agent-governance-python/agt-policies : the "AGT 5.0 policy layer" over the
+#                       vendored ACS engine. It is deliberately on the 5.x line
+#                       to signal the policy-layer contract version and must not
+#                       be dragged back to the toolkit version.
+EXEMPT_PREFIXES = (
+    "policy-engine/",
+    "agent-governance-python/agt-policies/",
+)
+
+
+def is_exempt(path: Path) -> bool:
+    """Return True if this manifest is intentionally versioned independently."""
+    rel = path.relative_to(REPO_ROOT).as_posix()
+    return any(rel.startswith(prefix) for prefix in EXEMPT_PREFIXES)
+
 
 def read_version() -> str:
     return VERSION_FILE.read_text(encoding="utf-8").strip()
@@ -77,6 +104,10 @@ def sync_package_json(path: Path, version: str, check: bool) -> bool:
     """Update the top-level 'version' key in a package.json file."""
     text = path.read_text(encoding="utf-8")
     data = json.loads(text)
+    # Some package.json files (e.g. private asset bundles) intentionally carry
+    # no top-level version. Do not inject one; leave them untouched.
+    if "version" not in data:
+        return True
     if data.get("version") == version:
         return True
     if check:
@@ -268,11 +299,15 @@ def main() -> int:
     # Python
     print("Python (pyproject.toml):")
     for p in find_files("pyproject.toml"):
+        if is_exempt(p):
+            continue
         ok &= sync_pyproject(p, version, check)
 
     # Node / TypeScript
     print("\nNode/TypeScript (package.json):")
     for p in find_files("package.json"):
+        if is_exempt(p):
+            continue
         ok &= sync_package_json(p, version, check)
 
     print("\nClaude Code plugin marketplace:")

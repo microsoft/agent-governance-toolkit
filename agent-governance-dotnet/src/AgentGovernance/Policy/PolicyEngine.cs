@@ -284,7 +284,9 @@ public sealed class PolicyEngine
     {
         if (snapshot.Count == 0)
         {
-            return new InternalEvaluation(PolicyDecision.AllowDefault(evaluatedAt, sw.Elapsed.TotalMilliseconds), HadPolicies: false, HadMatches: false);
+            // Fail closed when no policies are loaded so all three SDKs agree on default-deny.
+            // To opt back into permissive behavior, load a policy with an explicit allow default.
+            return new InternalEvaluation(PolicyDecision.DenyDefault(evaluatedAt, sw.Elapsed.TotalMilliseconds), HadPolicies: false, HadMatches: false);
         }
 
         var candidates = new List<CandidateDecision>();

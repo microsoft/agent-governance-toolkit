@@ -1,99 +1,104 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# ruff: noqa: E402 — deprecation warning must fire before re-exports
-"""
-Agent Hypervisor v2.0
+"""Agent Hypervisor - runtime supervisor for multi-agent Shared Sessions.
 
-Runtime supervisor for multi-agent Shared Sessions with execution rings,
-liability tracking, saga orchestration, and audit trails.
-
-Usage:
-    >>> from hypervisor import Hypervisor, SessionConfig, ConsistencyMode
-    >>> hv = Hypervisor()
-    >>> session = await hv.create_session(
-    ...     config=SessionConfig(consistency_mode=ConsistencyMode.EVENTUAL)
-    ... )
-
-Version: 2.0.0
+.. deprecated::
+    ``agent-hypervisor`` is deprecated and will be removed in a future
+    release. Use ``agent-governance-toolkit-core`` instead. See
+    https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md
 """
 
+import warnings
 
-import warnings as _warnings
-_warnings.warn(
-    "agent-hypervisor is deprecated. Use agent-governance-toolkit-core instead. "
+warnings.warn(
+    "agent-hypervisor is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-core instead. "
     "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
     DeprecationWarning,
     stacklevel=2,
 )
-del _warnings
-__version__ = "3.2.2"
+
+# Keep in sync with the ``version`` field in pyproject.toml.
+__version__ = "4.1.0"
 
 # Centralized constants
-from hypervisor import constants  # noqa: F401
-
-# Core models
-from hypervisor.audit.commitment import CommitmentEngine
+from hypervisor import constants  # noqa: F401,E402
 
 # Audit
-from hypervisor.audit.delta import DeltaEngine
-from hypervisor.audit.gc import EphemeralGC
+from hypervisor.audit.commitment import CommitmentEngine  # noqa: E402
+from hypervisor.audit.delta import DeltaEngine  # noqa: E402
+from hypervisor.audit.gc import EphemeralGC  # noqa: E402
 
 # Top-level orchestrator
-from hypervisor.core import Hypervisor
-from hypervisor.liability import LiabilityMatrix
-from hypervisor.liability.attribution import AttributionResult, CausalAttributor
-from hypervisor.liability.ledger import LedgerEntryType, LiabilityLedger
-from hypervisor.liability.quarantine import QuarantineManager, QuarantineReason
-from hypervisor.liability.slashing import SlashingEngine
+from hypervisor.core import Hypervisor  # noqa: E402
 
-# Liability engine
-from hypervisor.liability.vouching import VouchingEngine, VouchRecord
-from hypervisor.models import (
+# Liability
+from hypervisor.liability import LiabilityMatrix  # noqa: E402
+from hypervisor.liability.attribution import AttributionResult, CausalAttributor  # noqa: E402
+from hypervisor.liability.ledger import LedgerEntryType, LiabilityLedger  # noqa: E402
+from hypervisor.liability.quarantine import QuarantineManager, QuarantineReason  # noqa: E402
+from hypervisor.liability.slashing import SlashingEngine  # noqa: E402
+from hypervisor.liability.vouching import VouchingEngine, VouchRecord  # noqa: E402
+
+# Core models
+from hypervisor.models import (  # noqa: E402
     ConsistencyMode,
     ExecutionRing,
     ReversibilityLevel,
     SessionConfig,
     SessionState,
 )
-from hypervisor.observability.causal_trace import CausalTraceId
 
 # Observability
-from hypervisor.observability.event_bus import EventType, HypervisorEvent, HypervisorEventBus
+from hypervisor.observability.causal_trace import CausalTraceId  # noqa: E402
+from hypervisor.observability.event_bus import (  # noqa: E402
+    EventType,
+    HypervisorEvent,
+    HypervisorEventBus,
+)
 
 # Reversibility
-from hypervisor.reversibility.registry import ReversibilityRegistry
-from hypervisor.rings.breach_detector import BreachSeverity, RingBreachDetector
-from hypervisor.rings.classifier import ActionClassifier
-from hypervisor.rings.elevation import ElevationDenialReason, RingElevation, RingElevationManager
+from hypervisor.reversibility.registry import ReversibilityRegistry  # noqa: E402
 
 # Execution rings
-from hypervisor.rings.enforcer import RingEnforcer
-from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint
-from hypervisor.saga.dsl import SagaDefinition, SagaDSLParser
-from hypervisor.saga.fan_out import FanOutOrchestrator, FanOutPolicy
+from hypervisor.rings.breach_detector import BreachSeverity, RingBreachDetector  # noqa: E402
+from hypervisor.rings.classifier import ActionClassifier  # noqa: E402
+from hypervisor.rings.elevation import (  # noqa: E402
+    ElevationDenialReason,
+    RingElevation,
+    RingElevationManager,
+)
+from hypervisor.rings.enforcer import RingEnforcer  # noqa: E402
 
 # Saga
-from hypervisor.saga.orchestrator import SagaOrchestrator, SagaTimeoutError
-from hypervisor.saga.state_machine import SagaState, StepState
-from hypervisor.security.kill_switch import KillResult, KillSwitch
+from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint  # noqa: E402
+from hypervisor.saga.dsl import SagaDefinition, SagaDSLParser  # noqa: E402
+from hypervisor.saga.fan_out import FanOutOrchestrator, FanOutPolicy  # noqa: E402
+from hypervisor.saga.orchestrator import SagaOrchestrator, SagaTimeoutError  # noqa: E402
+from hypervisor.saga.state_machine import SagaState, StepState  # noqa: E402
 
 # Security
-from hypervisor.security.rate_limiter import AgentRateLimiter, RateLimitExceeded
+from hypervisor.security.kill_switch import KillResult, KillSwitch  # noqa: E402
+from hypervisor.security.rate_limiter import AgentRateLimiter, RateLimitExceeded  # noqa: E402
 
 # Session management
-from hypervisor.session import SharedSessionObject
-from hypervisor.session.intent_locks import (
+from hypervisor.session import SharedSessionObject  # noqa: E402
+from hypervisor.session.intent_locks import (  # noqa: E402
     DeadlockError,
     IntentLockManager,
     LockContentionError,
     LockIntent,
 )
-from hypervisor.session.isolation import IsolationLevel
-from hypervisor.session.sso import SessionVFS, VFSEdit, VFSPermissionError
-from hypervisor.session.vector_clock import CausalViolationError, VectorClock, VectorClockManager
+from hypervisor.session.isolation import IsolationLevel  # noqa: E402
+from hypervisor.session.sso import SessionVFS, VFSEdit, VFSPermissionError  # noqa: E402
+from hypervisor.session.vector_clock import (  # noqa: E402
+    CausalViolationError,
+    VectorClock,
+    VectorClockManager,
+)
 
 # Verification
-from hypervisor.verification.history import TransactionHistoryVerifier
+from hypervisor.verification.history import TransactionHistoryVerifier  # noqa: E402
 
 __all__ = [
     # Version

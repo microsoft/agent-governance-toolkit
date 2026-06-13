@@ -72,7 +72,9 @@ class PolicyDefaults(BaseModel):
     ignored by the rule engine itself.
     """
 
-    action: PolicyAction = PolicyAction.ALLOW
+    # Fail closed by default so Python matches the TS and .NET SDKs.
+    # To opt back into permissive behavior, set defaults.action: allow explicitly.
+    action: PolicyAction = PolicyAction.DENY
     max_tokens: int = 4096
     max_tool_calls: int = 10
     confidence_threshold: float = 0.8
@@ -97,6 +99,25 @@ class PolicyDefaults(BaseModel):
             "network_allowlist. 'deny' is fail-closed and is the default. "
             "Set to 'allow' only for trusted dev/research workloads."
         ),
+    )
+
+
+class SandboxMounts(BaseModel):
+    """Host directories exposed to a sandbox session.
+
+    Both paths are optional. ``input_dir`` is mounted read-only and
+    ``output_dir`` read-write by the sandbox providers. Defined natively
+    so policies loaded from YAML/JSON retain the mounts (Pydantic drops
+    unknown keys, so a duck-typed block would otherwise be lost).
+    """
+
+    input_dir: str | None = Field(
+        default=None,
+        description="Host path mounted read-only into the sandbox.",
+    )
+    output_dir: str | None = Field(
+        default=None,
+        description="Host path mounted read-write into the sandbox.",
     )
 
 
@@ -136,6 +157,15 @@ class PolicyDocument(BaseModel):
             "PolicyEvaluator before any sandbox call."
         ),
     )
+    sandbox_mounts: SandboxMounts = Field(
+        default_factory=SandboxMounts,
+        description=(
+            "Host directories exposed to the sandbox. ``input_dir`` is "
+            "mounted read-only and ``output_dir`` read-write. Consumed by "
+            "the sandbox providers (Docker / Hyperlight / MXC); ignored by "
+            "the rule engine."
+        ),
+    )
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> PolicyDocument:
@@ -143,10 +173,12 @@ class PolicyDocument(BaseModel):
         try:
             import yaml
         except ImportError as exc:
-            raise ImportError("pyyaml is required: pip install pyyaml") from exc
+            raise ImportError(
+                "pyyaml is required: pip install pyyaml"
+            ) from exc
 
         path = Path(path)
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return cls.model_validate(data)
 
@@ -155,7 +187,9 @@ class PolicyDocument(BaseModel):
         try:
             import yaml
         except ImportError as exc:
-            raise ImportError("pyyaml is required: pip install pyyaml") from exc
+            raise ImportError(
+                "pyyaml is required: pip install pyyaml"
+            ) from exc
 
         path = Path(path)
         with open(path, "w") as f:
@@ -165,7 +199,7 @@ class PolicyDocument(BaseModel):
     def from_json(cls, path: str | Path) -> PolicyDocument:
         """Load a PolicyDocument from a JSON file."""
         path = Path(path)
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return cls.model_validate(data)
 
