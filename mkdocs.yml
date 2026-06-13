@@ -203,6 +203,8 @@ nav:
     - Post-Market Monitoring: compliance/post-market-monitoring.md
     - Record Retention Policy: compliance/record-retention-policy.md
     - Data Provenance Model: compliance/data-provenance-model.md
+  - Studio:
+    - Engine API Contract: studio/engine-api-contract.md
   - Specifications:
     - "Agent OS Policy Engine": specs/AGENT-OS-POLICY-ENGINE-1.0.md
     - "AgentMesh Identity & Trust": specs/AGENTMESH-IDENTITY-TRUST-1.0.md
