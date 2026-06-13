@@ -29,6 +29,50 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Detection module configuration
+# ---------------------------------------------------------------------------
+
+
+class DetectionEnforcementAction(str, Enum):
+    """Enforcement action taken when a detection module fires."""
+
+    LOCK = "lock"    # Block the request and raise PolicyViolationError
+    WARN = "warn"    # Log a warning but allow the request
+    LOG = "log"      # Silently record to audit log only
+
+
+@dataclass
+class DetectionModuleConfig:
+    """Per-module on/off and enforcement action.
+
+    Each detection module that ``BaseIntegration`` auto-wires can be
+    individually disabled or have its enforcement action overridden.
+    Modules are opt-out: all are enabled by default. Set ``<module>_enabled``
+    to ``False`` to skip a module entirely.
+
+    Security modules default to ``LOCK`` (fail-closed).
+    Advisory modules default to ``WARN``.
+    """
+
+    # Per-module enable/disable
+    prompt_injection_enabled: bool = True
+    token_budget_enabled: bool = True
+    rate_limiter_enabled: bool = True
+    bounded_semaphore_enabled: bool = True
+    scope_guard_enabled: bool = True
+    supply_chain_guard_enabled: bool = True
+    mcp_security_scanner_enabled: bool = True
+
+    # Per-module enforcement actions
+    prompt_injection_action: DetectionEnforcementAction = DetectionEnforcementAction.LOCK
+    token_budget_action: DetectionEnforcementAction = DetectionEnforcementAction.LOCK
+    rate_limiter_action: DetectionEnforcementAction = DetectionEnforcementAction.LOCK
+    scope_guard_action: DetectionEnforcementAction = DetectionEnforcementAction.WARN
+    supply_chain_guard_action: DetectionEnforcementAction = DetectionEnforcementAction.LOCK
+    mcp_security_action: DetectionEnforcementAction = DetectionEnforcementAction.LOCK
+
+
 # Shared PII / secrets detection patterns reused by every framework
 # adapter (LangChain, AutoGen, CrewAI, Bedrock, ...).
 #
@@ -233,6 +277,9 @@ class GovernancePolicy:
             return tuple(GovernancePolicy._freeze_mapping(v) for v in value)
         return value
 
+    # Detection module configuration (opt-out per module)
+    detection: DetectionModuleConfig = field(default_factory=DetectionModuleConfig)
+
     def __repr__(self) -> str:
         return (
             f"GovernancePolicy(max_tokens={self.max_tokens!r}, "
@@ -265,7 +312,7 @@ class GovernancePolicy:
                 self._freeze_mapping(self.supply_chain),
                 self._freeze_mapping(self.mcp_security),
             )
-        )
+        )  # detection excluded from hash intentionally (mutable config object)
 
     def __post_init__(self) -> None:
         """Validate policy fields on construction."""
@@ -1148,6 +1195,9 @@ class BaseIntegration(ABC):
 
             self._mcp_security_scanner = MCPSecurityScanner(config=MCPSecurityConfig())
 
+        self._detection_modules: list[Any] = []
+        self._register_detection_modules()
+
     def _release_semaphore_if_held(self, ctx: ExecutionContext) -> None:
         """Release a bounded-semaphore slot if this context currently holds one."""
         if self._bounded_semaphore is None:
@@ -1155,6 +1205,203 @@ class BaseIntegration(ABC):
         if ctx.session_id in self._semaphore_held_sessions:
             self._bounded_semaphore.release()
             self._semaphore_held_sessions.remove(ctx.session_id)
+
+    # ------------------------------------------------------------------
+    # Detection module auto-registration  (#2477)
+    # ------------------------------------------------------------------
+
+    def _register_detection_modules(self) -> None:
+        """Auto-register all installed detection modules based on policy config.
+
+        Modules are opt-out: each is registered unless the corresponding
+        detection.<module>_enabled flag is False. Modules whose package is not
+        installed are silently skipped. Security modules default to LOCK
+        enforcement; advisory modules default to WARN.
+        """
+        dcfg = self.policy.detection
+
+        if dcfg.prompt_injection_enabled:
+            try:
+                from agent_os.prompt_injection import PromptInjectionDetector
+                self._detection_modules.append((
+                    "prompt_injection",
+                    PromptInjectionDetector(),
+                    dcfg.prompt_injection_action,
+                ))
+            except ImportError:
+                logger.debug("PromptInjectionDetector not available")
+
+        if dcfg.token_budget_enabled:
+            try:
+                from agent_os.integrations.token_budget import TokenBudgetTracker
+                self._detection_modules.append((
+                    "token_budget",
+                    TokenBudgetTracker(policy=self.policy),
+                    dcfg.token_budget_action,
+                ))
+            except ImportError:
+                logger.debug("TokenBudgetTracker not available")
+
+        if dcfg.rate_limiter_enabled:
+            try:
+                from agent_os.integrations.rate_limiter import RateLimiter
+                self._detection_modules.append((
+                    "rate_limiter",
+                    RateLimiter(policy=self.policy),
+                    dcfg.rate_limiter_action,
+                ))
+            except ImportError:
+                logger.debug("RateLimiter not available")
+
+        if dcfg.bounded_semaphore_enabled:
+            # BoundedSemaphore is defined in this module; always available.
+            self._detection_modules.append((
+                "bounded_semaphore",
+                BoundedSemaphore(
+                    max_concurrent=self.policy.max_concurrent,
+                    backpressure_threshold=self.policy.backpressure_threshold,
+                ),
+                DetectionEnforcementAction.LOCK,
+            ))
+
+        if dcfg.scope_guard_enabled:
+            try:
+                from agent_os.integrations.scope_guard import ScopeGuard
+                self._detection_modules.append((
+                    "scope_guard",
+                    ScopeGuard(),
+                    dcfg.scope_guard_action,
+                ))
+            except ImportError:
+                logger.debug("ScopeGuard not available")
+
+        if dcfg.supply_chain_guard_enabled:
+            try:
+                from agent_compliance.supply_chain import SupplyChainGuard  # type: ignore[import]
+                self._detection_modules.append((
+                    "supply_chain_guard",
+                    SupplyChainGuard(),
+                    dcfg.supply_chain_guard_action,
+                ))
+            except ImportError:
+                logger.debug("SupplyChainGuard not available")
+
+        if dcfg.mcp_security_scanner_enabled:
+            try:
+                from agent_os.mcp_security import MCPSecurityScanner
+                self._detection_modules.append((
+                    "mcp_security_scanner",
+                    MCPSecurityScanner(),
+                    dcfg.mcp_security_action,
+                ))
+            except ImportError:
+                logger.debug("MCPSecurityScanner not available")
+
+        logger.debug(
+            "BaseIntegration: %d detection module(s) registered: %s",
+            len(self._detection_modules),
+            [n for n, _, _ in self._detection_modules],
+        )
+
+    def _run_detection_modules(
+        self,
+        ctx: ExecutionContext,
+        input_data: Any,
+    ) -> tuple[bool, str]:
+        """Run all registered detection modules against input_data.
+
+        Returns (allowed, reason). The first LOCK module that fires denies the
+        request. WARN and LOG modules are recorded but do not block.
+
+        Fail-closed: if a detection module raises, access is denied.
+        """
+        input_str = str(input_data)
+
+        for module_name, module, action in self._detection_modules:
+            try:
+                blocked = False
+                reason = ""
+
+                if module_name == "prompt_injection":
+                    result = module.detect(input_str, source=ctx.agent_id)
+                    if result.is_injection:
+                        blocked = True
+                        reason = "Prompt injection detected: " + result.explanation
+
+                elif module_name == "token_budget":
+                    status = module.check_budget(ctx.agent_id)
+                    if status.is_exceeded:
+                        blocked = True
+                        reason = (
+                            "Token budget exceeded: "
+                            + str(status.used)
+                            + "/"
+                            + str(status.limit)
+                            + " tokens"
+                        )
+
+                elif module_name == "rate_limiter":
+                    if not module.allow(ctx.agent_id):
+                        blocked = True
+                        reason = "Rate limit exceeded for agent " + repr(ctx.agent_id)
+
+                elif module_name == "bounded_semaphore":
+                    acquired, sem_reason = module.try_acquire()
+                    if not acquired:
+                        blocked = True
+                        reason = "Concurrency limit: " + (sem_reason or "")
+                    else:
+                        module.release()
+
+                elif module_name == "mcp_security_scanner":
+                    if (
+                        isinstance(input_data, dict)
+                        and "name" in input_data
+                        and "description" in input_data
+                    ):
+                        threats = module.scan_tool(
+                            input_data["name"],
+                            input_data["description"],
+                            schema=input_data.get("inputSchema"),
+                            server_name=input_data.get("server_name", "unknown"),
+                        )
+                        critical = [
+                            t for t in threats if t.severity.value == "critical"
+                        ]
+                        if critical:
+                            blocked = True
+                            reason = "MCP security threat: " + critical[0].message
+
+                if blocked:
+                    if action == DetectionEnforcementAction.LOCK:
+                        logger.warning(
+                            "Detection module %r blocked agent=%s: %s",
+                            module_name, ctx.agent_id, reason,
+                        )
+                        return False, reason
+                    elif action == DetectionEnforcementAction.WARN:
+                        logger.warning(
+                            "Detection module %r warned agent=%s: %s",
+                            module_name, ctx.agent_id, reason,
+                        )
+                    else:
+                        logger.info(
+                            "Detection module %r logged agent=%s: %s",
+                            module_name, ctx.agent_id, reason,
+                        )
+
+            except Exception as exc:
+                logger.error(
+                    "Detection module %r raised exception (fail-closed): %s",
+                    module_name, exc, exc_info=True,
+                )
+                return (
+                    False,
+                    "Detection module " + repr(module_name) + " error (fail-closed): " + str(exc),
+                )
+
+        return True, ""
+
 
     # ------------------------------------------------------------------
     # Cedar / PolicyEvaluator integration
@@ -1552,7 +1799,17 @@ class BaseIntegration(ABC):
                 )
                 return result
 
-        # Check call count
+        # Check call count.
+        #
+        # The legacy ``max_tool_calls`` budget runs *before* the detection
+        # module gate below.  The auto-wired ``rate_limiter`` detection
+        # module governs the same dimension (its bucket size defaults to
+        # ``max_tool_calls``), so without this ordering the rate limiter
+        # would intercept the over-budget call first and report
+        # "Rate limit exceeded" instead of the canonical "Max tool calls"
+        # reason that callers and tests depend on.  Running the legacy
+        # check first preserves the documented public reason while keeping
+        # the rate limiter active for time-window based throttling.
         if ctx.call_count >= ctx.policy.max_tool_calls:
             self._release_semaphore_if_held(ctx)
             result = deny_max_tool_calls(ctx.policy.max_tool_calls, ctx.call_count)
@@ -1726,6 +1983,26 @@ class BaseIntegration(ABC):
                         {**event_base, "reason": result.reason, "source": "mcp_security"},
                     )
                     return result
+
+        # ── Detection module gate (#2477) ──────────────────────────
+        #
+        # Runs as a backstop *after* the legacy budget and the explicitly
+        # configured runtime modules above.  The auto-wired detection
+        # modules (prompt_injection, token_budget, rate_limiter,
+        # mcp_security_scanner, ...) cover the same dimensions as those
+        # legacy checks, so running them last ensures that when a caller
+        # opts a legacy module in via the policy, that module's specific
+        # reason wins.  Detection modules still catch any dimension not
+        # already governed by an enabled legacy module.
+        det_allowed, det_reason = self._run_detection_modules(ctx, input_data)
+        if not det_allowed:
+            self._release_semaphore_if_held(ctx)
+            result = deny_policy_error(det_reason)
+            self.emit(
+                GovernanceEventType.TOOL_CALL_BLOCKED,
+                {**event_base, "reason": det_reason, "source": "detection_module"},
+            )
+            return result
 
         if self._bounded_semaphore is not None:
             acquired, reason = self._bounded_semaphore.try_acquire()
@@ -1989,4 +2266,4 @@ class AsyncGovernedWrapper:
 
 
 # Backward compatibility: import from the centralized exception hierarchy
-from agent_os.exceptions import PolicyViolationError as PolicyViolationError  # noqa: F401
+from agent_os.exceptions import PolicyViolationError as PolicyViolationError  # noqa: E402, F401

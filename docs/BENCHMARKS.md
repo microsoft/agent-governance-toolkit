@@ -205,6 +205,9 @@ The governance layer adds less overhead than a single Redis read and is **10,000
 
 ## Security & Red-Team Benchmarks
 
+AGT includes a standalone prompt-injection evaluation fixture at [`benchmarks/prompt-injection/`](../benchmarks/prompt-injection/) with methodology notes in [`docs/benchmarks/prompt-injection-evaluation.md`](benchmarks/prompt-injection-evaluation.md).
+The fixture is evaluation-only: it does not change runtime behavior, introduce a detector, or publish production detector-performance claims.
+
 AGT does **not** currently publish an in-house Attack Success Rate (ASR) benchmark for its enforcement layer. We intentionally avoid quoting unsourced violation-rate percentages. Instead, we point users to reproducible external sources for the security side of the conversation:
 
 | Source | What it measures | Why it matters |

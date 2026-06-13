@@ -21,6 +21,7 @@ CTEF alignment: data-quality scheme in CTEF v0.3.2 source_version registry
 import sys
 import json
 import asyncio
+import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -49,6 +50,25 @@ from agent_control_plane.signals import AgentKernelPanic
 # Data Quality Registry (simulated)
 # In production this would pull from dbt artifacts or a metadata catalog
 # ---------------------------------------------------------------------------
+
+def load_data_quality_policy() -> dict:
+    """Load data quality policy configuration from policy.yaml."""
+
+    policy_path = Path(__file__).parent / "policy.yaml"
+    if not policy_path.exists():
+        raise RuntimeError(
+            f"Policy file not found: {policy_path}"
+        )
+
+    with open(policy_path, "r", encoding="utf-8") as f:
+        policy = yaml.safe_load(f)
+
+    if "data_quality" not in policy:
+        raise ValueError(
+            "policy.yaml is missing required 'data_quality' section"
+        )
+
+    return policy["data_quality"]
 
 @dataclass
 class DatasetQualitySnapshot:
@@ -315,6 +335,28 @@ async def main():
     print("Data Quality-Aware Agent Governance — Example")
     print("=" * 60)
 
+    policy = load_data_quality_policy()
+    defaults = policy["global_defaults"]
+    datasets = policy["datasets"]
+
+    def dataset_policy(dataset_id: str):
+        dataset_cfg = datasets.get(dataset_id, {})
+
+        return {
+            "freshness_threshold_hours": dataset_cfg.get(
+                "freshness_threshold_hours",
+                defaults["freshness_threshold_hours"],
+            ),
+            "quality_threshold": dataset_cfg.get(
+                "quality_score_threshold",
+                defaults["quality_score_threshold"],
+            ),
+            "drift_threshold": dataset_cfg.get(
+                "drift_threshold",
+                defaults["drift_threshold"],
+            ),
+        }
+
     # ------------------------------------------------------------------
     # Setup: Policy Engine
     # ------------------------------------------------------------------
@@ -344,19 +386,22 @@ async def main():
     # Simulates what a dbt-based governance platform would expose
     # ------------------------------------------------------------------
     registry = DataQualityRegistry()
+    user_events_policy = dataset_policy("user_events")
+    revenue_metrics_policy = dataset_policy("revenue_metrics")
+    customer_behavior_policy = dataset_policy("customer_behavior")
 
     # user_events: STALE and FAILING — should be blocked
     registry.register(DatasetQualitySnapshot(
         dataset_id="user_events",
         owner_did="did:web:analytics.example.com",
         freshness_at=datetime.now() - timedelta(hours=14),  # 14h stale
-        freshness_threshold_hours=6.0,
+        freshness_threshold_hours=user_events_policy["freshness_threshold_hours"],
         quality_score=0.72,
-        quality_threshold=0.85,
+        quality_threshold=user_events_policy["quality_threshold"],
         failed_tests=["not_null_user_id", "accepted_values_event_type"],
         validation_status="fail",
         drift_score=0.12,
-        drift_threshold=0.25,
+        drift_threshold=user_events_policy["drift_threshold"],
     ))
 
     # revenue_metrics: FRESH and PASSING — should be allowed
@@ -364,13 +409,13 @@ async def main():
         dataset_id="revenue_metrics",
         owner_did="did:web:finance.example.com",
         freshness_at=datetime.now() - timedelta(hours=1),  # 1h fresh
-        freshness_threshold_hours=6.0,
+        freshness_threshold_hours=revenue_metrics_policy["freshness_threshold_hours"],
         quality_score=0.97,
-        quality_threshold=0.85,
+        quality_threshold=revenue_metrics_policy["quality_threshold"],
         failed_tests=[],
         validation_status="pass",
         drift_score=0.08,
-        drift_threshold=0.25,
+        drift_threshold=revenue_metrics_policy["drift_threshold"],
     ))
     
     # customer_behavior: FRESH and HIGH QUALITY but DRIFTING — should be blocked
@@ -378,13 +423,13 @@ async def main():
         dataset_id="customer_behavior",
         owner_did="did:web:marketing.example.com",
         freshness_at=datetime.now() - timedelta(hours=1),
-        freshness_threshold_hours=6.0,
+        freshness_threshold_hours=customer_behavior_policy["freshness_threshold_hours"],
         quality_score=0.96,
-        quality_threshold=0.85,
+        quality_threshold=customer_behavior_policy["quality_threshold"],
         failed_tests=[],
         validation_status="pass",
         drift_score=0.41,
-        drift_threshold=0.25,
+        drift_threshold=revenue_metrics_policy["drift_threshold"],
     ))
 
     audit_log = AuditLog()

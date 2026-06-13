@@ -13,9 +13,105 @@ authors = [
 ]
 dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
 
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agent_os source tree under src/ (and tests/) is still exercised in CI via
+# `pip install -e ".[dev]"`. PR #2794 stripped [project.optional-dependencies]
+# entirely, which silently turned `.[dev]` into a no-op and left the test suite
+# unable to import fastapi/pynacl/cryptography/aiohttp — every `pytest tests/`
+# run failed at COLLECTION (ModuleNotFoundError) on Python 3.11-3.13. The `dev`
+# extra below restores exactly the test/dev dependencies the suite needs to
+# collect and run; the component extras mirror the pre-#2794 structure so the
+# `dev` bundle stays self-describing. This does NOT change the published runtime
+# dependency surface (the [project] stub still ships only the -core redirect).
+[project.optional-dependencies]
+# Test/dev dependencies required for `pytest tests/` to collect and run.
+# fastapi:      tests/test_server.py, tests/cloud_board/test_api_auth.py,
+#               services/cloud-board/api/* (imported by the cloud_board tests).
+# pynacl:       tests/cloud_board/test_api_auth.py (nacl.signing).
+# cryptography: tests/test_cmd_sign.py, modules/nexus (imported transitively
+#               by the cloud_board tests via services/cloud-board/api/main.py).
+# aiohttp:      modules/nexus.client (same transitive import path as above).
+# pyyaml:       tests/test_cmd_sign.py and several others (import yaml).
+dev = [
+    "pytest>=8.4.2,<10.0",
+    "pytest-asyncio>=1.2.0,<2.0",
+    "pytest-cov>=7.1.0,<8.0",
+    "mypy>=1.19.1,<3.0",
+    "ruff>=0.15.17,<1.0",
+    "import-linter>=2.0,<3.0",
+    "pyyaml>=6.0.0,<7.0",
+    "typer>=0.9.0,<1.0",
+    "rich>=15.0.0,<16.0",
+    "numpy>=1.20.0,<3.0",
+    "httpx>=0.27.0,<1.0",
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.27.0,<1.0",
+    "anyio>=4.12.1,<5.0",
+    "aiohttp>=3.13.4,<4.0",
+    "structlog>=25.5.0,<27.0",
+    "redis>=4.0.0,<8.0",
+    "cryptography>=48.0.0,<49.0",
+    "pynacl>=1.6.2,<2.0",
+    "eval_type_backport>=0.2.0; python_version < '3.10'",
+]
+# Optional local backend for the (default-off) embedding evidence signal in
+# `agent_os.prompt_injection_embedding`. Never required: the module is inert
+# unless explicitly enabled, and an embedder can be injected instead.
+embedding = [
+    "fastembed>=0.3.0,<1.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
 "Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_os"]
+
+# ============================================================================
+# Ruff - Fast Python Linter & Formatter
+#
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agent_os source tree under src/ is still linted and tested in CI. These
+# dev-tooling sections were dropped during the package consolidation in #2794;
+# without per-file-ignores, ruff reports E402/F401 on previously-clean files
+# such as agent_os/integrations/__init__.py. Restoring them keeps CI green.
+# ============================================================================
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+src = ["src", "modules"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+"src/agent_os/integrations/*.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent_os"]
+
+# ============================================================================
+# Pytest
+# ============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests", "modules/*/tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "benchmark: performance benchmark tests",
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]

@@ -2,7 +2,7 @@
 
 Public Preview — execution isolation for AI agents with policy-driven
 resource limits, tool proxies, network enforcement, and filesystem
-checkpointing. Ships three interchangeable backends behind the same
+checkpointing. Ships four interchangeable backends behind the same
 `SandboxProvider` ABC.
 
 Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
@@ -14,8 +14,9 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 | `DockerSandboxProvider` | Hardened OCI container (runc, auto-upgrades to gVisor / Kata) | Local dev, CI, self-hosted runners | `agt-sandbox[docker]` |
 | `HyperLightSandboxProvider` | KVM / mshv / WHP micro-VM via [hyperlight-sandbox](https://github.com/hyperlight-dev/hyperlight-sandbox) | Sub-millisecond cold start, per-call VM isolation | `agt-sandbox[hyperlight]` |
 | `ACASandboxProvider` | [Azure Container Apps sandbox](https://github.com/microsoft/azure-container-apps) (managed) | Production, multi-tenant, no infra to run | `agt-sandbox[azure]` + the [early-access SDK wheel](https://github.com/microsoft/azure-container-apps/releases) |
+| `MxcSandboxProvider` | OS-native containment via the [MXC](https://github.com/microsoft/mxc) binary (bubblewrap / AppContainer / Seatbelt / micro-VM) | No daemon, hypervisor SDK, or cloud account; CI and laptops | native MXC binary (no Python dep) — see [tutorial](tutorials/mxc-quickstart/README.md) |
 
-All three implement the same async + sync API (`create_session`,
+All four implement the same async + sync API (`create_session`,
 `execute_code`, `destroy_session`, plus `*_async` variants) and consume
 the same `PolicyDocument` for resource caps, network allowlists, and
 tool allowlists.
@@ -38,18 +39,20 @@ The Azure data-plane SDK ships as an early-access wheel — pin the URL:
 pip install https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
 ```
 
-## Quick start (all three providers)
+## Quick start (all four providers)
 
 ```python
 from agent_sandbox import (
     DockerSandboxProvider,
     HyperLightSandboxProvider,
     ACASandboxProvider,
+    MxcSandboxProvider,
 )
 
 # Pick one:
 provider = DockerSandboxProvider()
 # provider = HyperLightSandboxProvider(backend="wasm")
+# provider = MxcSandboxProvider(backend="bubblewrap")
 # provider = ACASandboxProvider(
 #     resource_group="my-rg", sandbox_group="agents",
 #     region="eastus2", disk="python-3.13",
@@ -122,6 +125,10 @@ asyncio.run(run_agent_task())
 | Runtime | `runc` (auto-upgrades to gVisor or Kata when available) |
 | State | `save_state` / `restore_state` via image commit |
 
+Filesystem mounts come from the policy: `sandbox_mounts.input_dir` is
+bind-mounted read-only and `sandbox_mounts.output_dir` read-write
+(see [Policy-driven configuration](#policy-driven-configuration)).
+
 ---
 
 ## 2. `HyperLightSandboxProvider` — micro-VM isolation
@@ -164,6 +171,9 @@ Notes:
   WHP / KVM passthrough).
 - Only tools listed in a session's `policy.tool_allowlist` are exposed
   to that session's guest; the rest stay host-side.
+- Filesystem mounts come from the policy: `sandbox_mounts.input_dir`
+  is mounted into the guest as read-only `/input` and
+  `sandbox_mounts.output_dir` as writable `/output`.
 
 ---
 
@@ -222,11 +232,49 @@ and reads its policy from
 
 ---
 
+## 4. `MxcSandboxProvider` — OS-native containment via MXC
+
+Runs each execution behind whichever OS-native primitive the host
+provides, driven by the [MXC](https://github.com/microsoft/mxc)
+(Microsoft eXecution Container) native binary — bubblewrap / LXC on
+Linux, AppContainer on Windows, Seatbelt on macOS, plus experimental
+micro-VM backends. No daemon, hypervisor SDK, or cloud account, and
+**no new Python dependency**: MXC ships as a native binary you build
+from source and place on `PATH` (or point to with `MXC_BINARY`).
+
+```python
+from agent_sandbox import MxcSandboxProvider, SandboxConfig
+
+provider = MxcSandboxProvider(backend="bubblewrap")  # None = platform default
+if not provider.is_available():
+    raise SystemExit("MXC binary not found; set MXC_BINARY or add it to PATH")
+
+# One-shot: create + execute + destroy in a single call (no session_id
+# to track), since the MXC sandbox self-destructs after each run.
+execution = provider.run_once(
+    "agent-1",
+    "print('hello from mxc')",
+    config=SandboxConfig(timeout_seconds=20, network_enabled=False),
+)
+print(execution.result.stdout)
+```
+
+For repeated executions that share the persistent `output/` directory,
+use the full `create_session` + `execute_code` lifecycle instead.
+Because the MXC schema has no tool or resource-cap concept,
+`tool_allowlist` is enforced host-side before spawn and `max_cpu` /
+`max_memory_mb` are carried but not rendered into the MXC config. See
+the [MXC quickstart tutorial](tutorials/mxc-quickstart/README.md) and the
+[design doc](../../docs/proposals/MXC-SANDBOX-PROVIDER.md) for details.
+
+---
+
 ## Policy-driven configuration
 
-All three providers consume the same `agent_os.policies.PolicyDocument`.
-Sandbox resource caps, network allowlists, and tool allowlists are
-native fields on the schema as of AGT 3.3, so policies live in YAML:
+All four providers consume the same `agent_os.policies.PolicyDocument`.
+Sandbox resource caps, network allowlists, tool allowlists, and
+filesystem mounts (`sandbox_mounts`) are native fields on the schema, so
+policies live in YAML and load directly with `PolicyDocument.from_yaml`:
 
 ```yaml
 name: research-agent
@@ -245,6 +293,10 @@ network_allowlist:
 
 tool_allowlist:
   - fetch_arxiv
+
+sandbox_mounts:
+  input_dir: /data/agent-input    # mounted read-only
+  output_dir: /data/agent-output  # mounted read-write
 
 rules:
   - name: deny-shell-out

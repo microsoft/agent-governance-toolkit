@@ -19,6 +19,14 @@ public enum CredentialKind
     SecretAssignment,
     /// <summary>GitHub access token.</summary>
     GitHubToken,
+    /// <summary>OpenAI API token.</summary>
+    OpenAiToken,
+    /// <summary>Slack access token.</summary>
+    SlackToken,
+    /// <summary>AWS access key identifier.</summary>
+    AwsAccessKey,
+    /// <summary>Google API key.</summary>
+    GoogleApiKey,
     /// <summary>RFC 7468 PEM private key block.</summary>
     PemPrivateKey
 }
@@ -68,6 +76,22 @@ public sealed class McpCredentialRedactor
         (CredentialKind.GitHubToken,
          new Regex(@"(?<![A-Za-z0-9_])(?:gh[psour]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{22,})(?![A-Za-z0-9_])", RegexOptions.Compiled, RegexTimeout),
          "[REDACTED_GITHUB_TOKEN]"),
+
+        (CredentialKind.OpenAiToken,
+         new Regex(@"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9][A-Za-z0-9_-]{18,}(?![A-Za-z0-9_-])", RegexOptions.Compiled, RegexTimeout),
+         "[REDACTED_OPENAI_TOKEN]"),
+
+        (CredentialKind.SlackToken,
+         new Regex(@"(?<![A-Za-z0-9-])xox[abprs]-[A-Za-z0-9-]+(?![A-Za-z0-9-])", RegexOptions.Compiled, RegexTimeout),
+         "[REDACTED_SLACK_TOKEN]"),
+
+        (CredentialKind.AwsAccessKey,
+         new Regex(@"\bAKIA[A-Z0-9]{16}\b", RegexOptions.Compiled, RegexTimeout),
+         "[REDACTED_AWS_ACCESS_KEY]"),
+
+        (CredentialKind.GoogleApiKey,
+         new Regex(@"\bAIza[0-9A-Za-z\-_]{35}\b", RegexOptions.Compiled, RegexTimeout),
+         "[REDACTED_GOOGLE_API_KEY]"),
 
         (CredentialKind.PemPrivateKey,
          new Regex(@"-----BEGIN (?<label>(?:(?:RSA|EC|DSA|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----(?:\r?\n[!-~ \t]*)*?\r?\n-----END \k<label>-----", RegexOptions.Compiled, RegexTimeout),
@@ -125,6 +149,10 @@ public sealed class McpCredentialRedactor
         CredentialKind.ConnectionString => "[REDACTED_CONNECTION_STRING]",
         CredentialKind.SecretAssignment => "[REDACTED_SECRET]",
         CredentialKind.GitHubToken => "[REDACTED_GITHUB_TOKEN]",
+        CredentialKind.OpenAiToken => "[REDACTED_OPENAI_TOKEN]",
+        CredentialKind.SlackToken => "[REDACTED_SLACK_TOKEN]",
+        CredentialKind.AwsAccessKey => "[REDACTED_AWS_ACCESS_KEY]",
+        CredentialKind.GoogleApiKey => "[REDACTED_GOOGLE_API_KEY]",
         CredentialKind.PemPrivateKey => "[REDACTED_PEM_PRIVATE_KEY]",
         _ => "[REDACTED]"
     };

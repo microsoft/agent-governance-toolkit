@@ -39,6 +39,7 @@ from .schema import (
     PolicyDocument,
     PolicyOperator,
     PolicyRule,
+    SandboxMounts,
 )
 from .shared import (
     Condition,
@@ -79,6 +80,7 @@ __all__ = [
     "RateLimitConfig",
     "RateLimitExceeded",
     "ResolutionResult",
+    "SandboxMounts",
     "TokenBucket",
     "ViolationCategory",
     "SharedPolicyDecision",
