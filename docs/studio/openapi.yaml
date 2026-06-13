@@ -224,7 +224,7 @@ paths:
                     errors:
                       - line: 3
                         col: 5
-                        message: "Unknown field 'actiom'; did you mean 'action'?"
+                        message: "Policy rule 'r1' references an undefined action type."
         "4XX":
           $ref: "#/components/responses/ErrorResponse"
         "5XX":
@@ -776,7 +776,7 @@ components:
         message:
           type: string
           description: Human-readable error description
-          example: "Unknown field 'actiom'; did you mean 'action'?"
+          example: "Policy rule 'r1' references an undefined action type."
 
     ValidatePolicyRequest:
       type: object

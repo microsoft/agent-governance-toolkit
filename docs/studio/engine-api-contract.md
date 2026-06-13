@@ -602,7 +602,7 @@ without requiring user intent. It is `runtime_mutating: true` and would need to 
 `user_intent_required: true` to appear in the Studio contract. However, policy
 reload has no safe Studio use case: the `POST /api/v1/policy/save` endpoint already
 triggers a reload as a side effect of saving. Exposing a standalone reload button
-in the Studio UI would create a footgun (reloading with no visible change to the
+in the Studio UI would create a dangerous pattern (reloading with no visible change to the
 user). The endpoint remains available as an internal sidecar-management endpoint
 but is explicitly excluded from this contract and from the Studio allowlist.
 
