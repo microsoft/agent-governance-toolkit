@@ -32,7 +32,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      pull-requests: read
       issues: write
       models: read
     if: >-
@@ -262,13 +261,6 @@ jobs:
             const overallVerdict = rows.some(r => r.includes('⚠️'))
               ? '**Verdict: ⚠️ AI review incomplete; ready for human review**'
               : '**Verdict: ✅ Ready for human review**';
-            const allVerdicts = rows.join('\n');
-            let overallVerdict;
-            if (allVerdicts.includes('⚠️')) {
-              overallVerdict = '**Verdict: ⚠️ AI review incomplete; ready for human review**';
-            } else {
-              overallVerdict = '**Verdict: ✅ Ready for human review**';
-            }
 
             const summaryBody = [
               SUMMARY_MARKER,
