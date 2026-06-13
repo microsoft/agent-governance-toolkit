@@ -161,4 +161,27 @@ describe('AuditLogger', () => {
       expect(small.verify()).toBe(false);
     });
   });
+
+  it('detects tampering of skill audit metadata', () => {
+  logger.log({
+    agentId: 'a',
+    action: 'x',
+    decision: 'allow',
+    skillAuditMetadata: {
+      skillName: 'search',
+      skillOrigin: 'langchain',
+      provenanceSourceTrust: 'trusted',
+    },
+  });
+
+  const entries = (logger as any).entries as Array<{
+    skillAuditMetadata?: {
+      skillName?: string;
+    };
+  }>;
+
+  entries[0].skillAuditMetadata!.skillName = 'TAMPERED';
+
+  expect(logger.verify()).toBe(false);
+  });
 });

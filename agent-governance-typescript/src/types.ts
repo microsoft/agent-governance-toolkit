@@ -474,6 +474,20 @@ export interface AuditEntry {
   decision: LegacyPolicyDecision;
   hash: string;
   previousHash: string;
+  skillAuditMetadata?: SkillAuditMetadata;
+}
+
+export interface TrustedSkillMetadataSource {
+  skillName?: string;
+  skillOrigin?: string;
+}
+
+export interface SkillAuditMetadata {
+  skillName?: string;
+  skillOrigin?: string;
+  provenanceSourceTrust?: "trusted";
+  contextHashBefore?: string;
+  contextHashAfter?: string;
 }
 
 // ΓöÇΓöÇ Client ΓöÇΓöÇ
@@ -487,7 +501,6 @@ export interface AgentMeshConfig {
   execution?: ExecutionControlConfig;
   killSwitch?: KillSwitchConfig;
 }
-
 export interface GovernanceResult {
   decision: LegacyPolicyDecision;
   trustScore: TrustScore;
