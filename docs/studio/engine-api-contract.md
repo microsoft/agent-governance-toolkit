@@ -193,8 +193,13 @@ extended support.
 | `/api/v1/agents` | GET | false | false | true |
 | `/api/v1/decisions` | GET | false | false | true |
 | `/api/v1/versions` | GET | false | false | true |
+| `/api/v1/events` | WS | false | false | true |
 
 Exactly one endpoint has `runtime_mutating: true`: `POST /api/v1/policy/save`.
+
+`/api/v1/events` is a reserved WebSocket route (see section 12). It carries
+read-only flags but is not implemented in v1 and is excluded from the client
+allowlist below.
 
 ---
 
@@ -246,6 +251,11 @@ Applying this rule to AGT Studio v1:
 **Blocked (1 operation):**
 
 - `POST /api/v1/policy/save` (`runtime_mutating: true, read_only_surface: false`)
+
+Reserved routes (the WebSocket `/api/v1/events` channel in section 12) are
+excluded from the v1 allowlist entirely: they are not callable operations in v1,
+so they appear in neither the allowlisted nor the blocked set above. The math
+covers the 12 implemented HTTP operations only.
 
 The Studio client enforces this allowlist at the UI layer: "Save" controls are
 not rendered in read-only mode. The engine enforces it at the auth layer: the
@@ -379,7 +389,13 @@ only.
 
 `FixtureResult` fields: `fixture_id`, `passed`, `expected_verdict`,
 `actual_verdict`, `expected_rule` (optional), `actual_rule` (optional),
-`fixture_path` (optional).
+`fixture_path` (optional), `resolution_metadata` (object, optional).
+
+The engine adapts the inline `fixtures` array into the form the existing
+`policy_test.replay` helper expects (which reads policy and fixture files from
+disk) by materializing the inline fixtures into a temporary working directory
+for the duration of the request, then discarding it. No caller-visible files are
+created and no engine state is mutated.
 
 ---
 
@@ -468,7 +484,7 @@ persistent audit store.
 |-------|------|-------------|
 | `agent_did` | string | Agent DID |
 | `trust_score` | integer (0-1000) | Numeric trust score |
-| `trust_level` | enum | `untrusted`, `low`, `medium`, `high`, `full` |
+| `trust_level` | enum | `untrusted`, `probationary`, `standard`, `trusted`, `verified_partner` |
 | `last_updated` | string (date-time, optional) | When the score was last changed |
 
 ---
@@ -511,7 +527,7 @@ Relationship values: `"trusts"`, `"delegates"`, `"sponsors"`.
 | `did` | string | Agent DID (`did:mesh:...`) |
 | `name` | string (optional) | Human-readable name |
 | `trust_score` | integer (0-1000) | Current trust score |
-| `trust_level` | enum | `untrusted`, `low`, `medium`, `high`, `full` |
+| `trust_level` | enum | `untrusted`, `probationary`, `standard`, `trusted`, `verified_partner` |
 | `last_active` | string (date-time, optional) | Timestamp of most recent event |
 | `capabilities` | array of string | List of granted capability strings |
 
@@ -749,6 +765,11 @@ client.
 
 **This endpoint is not implemented in v1.** It will be fully defined in Epic 7a
 (issue #16).
+
+**Capability flags:** `runtime_mutating: false`, `user_intent_required: false`,
+`read_only_surface: true`. The route carries read-only flags because the future
+stream is a read-only push channel, but because it is reserved and not callable
+in v1 it is excluded from the client allowlist derived in section 6.2.
 
 Conformance requirement: a v1 engine MUST return `426 Upgrade Required` when an
 HTTP (non-WebSocket) request is made to `/api/v1/events`. The engine MUST NOT

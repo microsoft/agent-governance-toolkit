@@ -69,6 +69,23 @@ tags:
   - name: meta
     description: Engine metadata and version negotiation
 
+# Reserved routes are not callable HTTP operations in v1, so they are declared
+# here (with capability flags) instead of under `paths`, where every operation
+# would be required to define success responses. The WebSocket message schema is
+# defined in Epic 7a (issue #16).
+x-reserved-routes:
+  - route: /api/v1/events
+    method: WS
+    summary: Real-time event stream (policy decisions, agent events, trust updates)
+    reserved_for: Epic 7a (issue #16)
+    http_behavior: >-
+      A v1 engine MUST return 426 Upgrade Required for plain HTTP requests to
+      this path and MUST NOT implement it as a regular HTTP endpoint.
+    x-capability-flags:
+      runtime_mutating: false
+      user_intent_required: false
+      read_only_surface: true
+
 paths:
   /health:
     get:
@@ -853,6 +870,14 @@ components:
         fixture_path:
           type: string
           description: Path to the fixture file (empty for inline fixtures)
+        resolution_metadata:
+          type:
+            - object
+            - "null"
+          additionalProperties: true
+          description: >-
+            Optional diagnostic metadata from the policy resolver, passed
+            through verbatim from policy_test.FixtureResult.resolution_metadata.
 
     TestPolicyRequest:
       type: object
@@ -1036,12 +1061,15 @@ components:
           type: string
           enum:
             - untrusted
-            - low
-            - medium
-            - high
-            - full
-          description: Categorical trust level derived from the score
-          example: "high"
+            - probationary
+            - standard
+            - trusted
+            - verified_partner
+          description: >-
+            Categorical trust level derived from the score. Mirrors
+            trust_level_for_score in agentmesh.trust.levels (the single source
+            of truth used by the trust engine and CLI).
+          example: "trusted"
         last_updated:
           type: string
           format: date-time
@@ -1154,12 +1182,14 @@ components:
           type: string
           enum:
             - untrusted
-            - low
-            - medium
-            - high
-            - full
-          description: Categorical trust level
-          example: "high"
+            - probationary
+            - standard
+            - trusted
+            - verified_partner
+          description: >-
+            Categorical trust level. Mirrors trust_level_for_score in
+            agentmesh.trust.levels.
+          example: "trusted"
         last_active:
           type:
             - string
