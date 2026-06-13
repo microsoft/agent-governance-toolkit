@@ -17,6 +17,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::prompt_injection_embedding::{Embedder, EmbeddingSignal};
+
 const DEFAULT_AUDIT_CAPACITY: usize = 10_000;
 const MIN_LIST_ENTRY_LEN: usize = 3;
 
@@ -281,8 +283,93 @@ impl Default for DetectionOptions {
     }
 }
 
+/// Advisory, non-enforcing evidence from an optional detection backend.
+///
+/// Appended to [`DetectionResult::evidence`] AFTER the verdict is final; it never
+/// affects `is_injection` / `threat_level` / `injection_type` / `confidence` /
+/// `matched_patterns`. Audit-safe: a static backend identifier, a numeric score,
+/// and an error *code* — never raw input or input-derived text.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EvidenceSignal {
+    /// Static backend identifier (never input-derived).
+    pub backend: String,
+    /// Advisory score, if the backend produced one.
+    #[serde(default)]
+    pub score: Option<f64>,
+    /// Always `false` — evidence never blocks on its own.
+    #[serde(default)]
+    pub blocks: bool,
+    /// Static error code (e.g. "unavailable"); never input-derived.
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+impl EvidenceSignal {
+    /// Build an advisory evidence signal carrying a score.
+    pub fn new(backend: impl Into<String>, score: Option<f64>) -> Self {
+        Self { backend: backend.into(), score, blocks: false, error: None }
+    }
+
+    /// Build an evidence signal carrying a static error code.
+    pub fn with_error(backend: impl Into<String>, code: impl Into<String>) -> Self {
+        Self { backend: backend.into(), score: None, blocks: false, error: Some(code.into()) }
+    }
+}
+
+/// Pluggable, optional, evidence-only detection backend (ADR-0015 pattern).
+///
+/// Consulted by [`PromptInjectionDetector`] only when registered; it surfaces
+/// evidence for review/routing and must never block on its own. The
+/// `Debug + Send + Sync` supertraits keep the detector's auto-traits intact.
+pub trait DetectionEvidenceBackend: std::fmt::Debug + Send + Sync {
+    /// Static backend identifier.
+    fn name(&self) -> &str;
+    /// Return advisory evidence for `text`, or `None` to contribute none.
+    fn evaluate(&self, text: &str) -> Option<EvidenceSignal>;
+}
+
+/// Adapter exposing the optional embedding kNN signal
+/// ([`crate::prompt_injection_embedding::EmbeddingSignal`]) as a
+/// [`DetectionEvidenceBackend`].
+///
+/// Default-off: when the wrapped signal is disabled, `score()` returns `None` and
+/// this backend contributes no evidence.
+pub struct EmbeddingSignalBackend<E: Embedder> {
+    signal: EmbeddingSignal<E>,
+}
+
+impl<E: Embedder> EmbeddingSignalBackend<E> {
+    /// Wrap an [`EmbeddingSignal`] as an evidence backend.
+    pub fn new(signal: EmbeddingSignal<E>) -> Self {
+        Self { signal }
+    }
+}
+
+// `EmbeddingSignal` is not `Debug` (and is import-only here), so print the
+// stable backend name rather than deriving.
+impl<E: Embedder> std::fmt::Debug for EmbeddingSignalBackend<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EmbeddingSignalBackend")
+            .field("name", &"embedding_knn")
+            .finish()
+    }
+}
+
+impl<E: Embedder + Send + Sync> DetectionEvidenceBackend for EmbeddingSignalBackend<E> {
+    fn name(&self) -> &str {
+        "embedding_knn"
+    }
+
+    fn evaluate(&self, text: &str) -> Option<EvidenceSignal> {
+        self.signal
+            .score(text)
+            .map(|ev| EvidenceSignal::new("embedding_knn", Some(f64::from(ev.margin))))
+    }
+}
+
 /// Outcome of scanning one prompt input.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct DetectionResult {
     /// Whether the detector found at least one signal at the configured
     /// sensitivity threshold.
@@ -298,6 +385,10 @@ pub struct DetectionResult {
     pub matched_patterns: Vec<String>,
     /// Human-readable category summary. Kept generic; no raw evidence.
     pub explanation: String,
+    /// Advisory, evidence-only signals from optional backends (default empty).
+    /// Additive and non-enforcing — never influences the verdict fields above.
+    #[serde(default)]
+    pub evidence: Vec<EvidenceSignal>,
 }
 
 impl DetectionResult {
@@ -310,6 +401,7 @@ impl DetectionResult {
             confidence: 0.0,
             matched_patterns: Vec::new(),
             explanation: "No injection patterns detected".to_string(),
+            evidence: Vec::new(),
         }
     }
 
@@ -321,6 +413,7 @@ impl DetectionResult {
             confidence: 1.0,
             matched_patterns: vec!["detection_error".to_string()],
             explanation: "Detection failed closed; prompt execution should be blocked".to_string(),
+            evidence: Vec::new(),
         }
     }
 }
@@ -412,6 +505,9 @@ pub struct PromptInjectionDetector {
     context_patterns: Vec<CompiledRule>,
     multi_turn_patterns: Vec<CompiledRule>,
     audit_log: VecDeque<AuditRecord>,
+    /// Optional, default-off evidence-only backends (ADR-0015 pattern). Empty by
+    /// default → `detect()` behaviour is byte-identical to the rules-only path.
+    evidence_backends: Vec<Box<dyn DetectionEvidenceBackend>>,
 }
 
 impl PromptInjectionDetector {
@@ -487,7 +583,21 @@ impl PromptInjectionDetector {
             custom_patterns,
             blocklist_entries,
             config,
+            evidence_backends: Vec::new(),
         })
+    }
+
+    /// Register optional, default-off evidence-only backends (ADR-0015 pattern).
+    ///
+    /// Each backend's [`EvidenceSignal`] is appended to
+    /// [`DetectionResult::evidence`] after the deterministic verdict is computed;
+    /// evidence never affects the verdict and never blocks on its own.
+    pub fn with_evidence_backends(
+        mut self,
+        backends: Vec<Box<dyn DetectionEvidenceBackend>>,
+    ) -> Self {
+        self.evidence_backends = backends;
+        self
     }
 
     /// Construct a detector from the YAML config-file shape.
@@ -513,11 +623,24 @@ impl PromptInjectionDetector {
         text: &str,
         options: DetectionOptions,
     ) -> DetectionResult {
-        let result = self
+        let mut result = self
             .detect_impl(text, &options)
             .unwrap_or_else(|err| DetectionResult::fail_closed(&err));
+        // Evidence-only backends run AFTER the verdict is final and only append
+        // to result.evidence — they never alter the verdict.
+        self.collect_evidence(text, &mut result);
         self.record_audit(text, options.source, result.clone());
         result
+    }
+
+    /// Append optional backend evidence to `result.evidence` after the verdict.
+    /// Evidence-only: this never reads or mutates the verdict fields.
+    fn collect_evidence(&self, text: &str, result: &mut DetectionResult) {
+        for backend in &self.evidence_backends {
+            if let Some(signal) = backend.evaluate(text) {
+                result.evidence.push(signal);
+            }
+        }
     }
 
     /// Scan one prompt without appending to the detector audit log.
@@ -557,6 +680,7 @@ impl PromptInjectionDetector {
                     confidence: 1.0,
                     matched_patterns: vec![blocked.rule_id.clone()],
                     explanation: "Input matched configured blocklist rule".to_string(),
+                    evidence: Vec::new(),
                 });
             }
         }
@@ -635,6 +759,7 @@ impl PromptInjectionDetector {
                 highest.threat_level,
                 filtered.len()
             ),
+            evidence: Vec::new(),
         })
     }
 
