@@ -1,0 +1,8 @@
+{
+  "tool_name": "bash",
+  "tool_input": {
+    "command": "rm -rf /tmp/deerflow-demo"
+  },
+  "agent_id": "deerflow-demo-agent",
+  "timestamp": "2026-06-13T00:00:00Z"
+}
