@@ -780,3 +780,8 @@ posixpath
 pypy
 fastembed
 Hotfixes
+anchore
+octocat
+sboms
+Syft
+syft
