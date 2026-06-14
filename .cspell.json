@@ -60,7 +60,8 @@
     "dampenable",
     "forgeable",
     "unstarred",
-    "getcode"
+    "getcode",
+    "datetimes"
   ],
   "ignorePaths": [
     "**/node_modules/**",

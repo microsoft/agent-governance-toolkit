@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -66,7 +66,7 @@ PRE_DENIAL_CASES = [
     _PreCase(
         name="timeout",
         policy_factory=lambda: GovernancePolicy(timeout_seconds=1),
-        context_mutator=lambda ctx: setattr(ctx, "start_time", datetime.now() - timedelta(seconds=2)),
+        context_mutator=lambda ctx: setattr(ctx, "start_time", datetime.now(timezone.utc) - timedelta(seconds=2)),
         input_factory=lambda: "safe input",
         expected_category=ViolationCategory.TIMEOUT,
     ),
