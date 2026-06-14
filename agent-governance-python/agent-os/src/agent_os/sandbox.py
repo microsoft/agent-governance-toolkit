@@ -33,11 +33,12 @@ import sys
 import threading
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel, Field
 
 from agent_os.exceptions import SecurityError
+from agent_os.continuity import ContinuityVerifier, ContinuityTrace
 
 
 class SandboxSecurityWarning(UserWarning):
@@ -216,6 +217,10 @@ class SandboxConfig(BaseModel):
         enforce_ast_validation: When True (default), ``execute_code_sandboxed``
             runs ``validate_code`` first and refuses to execute on any
             violation (fail-closed).
+        enable_continuity: When True, enables pre‑/post‑execution hashing of
+            observer identity and reference frame to detect drift (default False).
+        enforcement_mode: Mode for continuity drift handling: "enforce" (default)
+            raises SecurityError on drift; "audit" logs but does not block.
     """
 
     blocked_modules: list[str] = Field(default_factory=lambda: list(_DEFAULT_BLOCKED_MODULES))
@@ -225,6 +230,8 @@ class SandboxConfig(BaseModel):
     max_cpu_seconds: int | None = None
     shadow_sys_modules: bool = True
     enforce_ast_validation: bool = True
+    enable_continuity: bool = False
+    enforcement_mode: str = Field(default="enforce")  # <-- NEW FIELD: "enforce" or "audit"
 
 
 @dataclass
@@ -602,9 +609,6 @@ def _uninstall_hook_reentrant() -> None:
             hook.uninstall()
 
 
-
-
-
 class ExecutionSandbox:
     """Restricted execution environment that frustrates stdlib bypass.
 
@@ -634,6 +638,16 @@ class ExecutionSandbox:
         self.config = config or SandboxConfig()
         self.policy = policy
         self._hook = SandboxImportHook(self.config.blocked_modules)
+
+        # Validate enforcement_mode if continuity is enabled (optional, but safe)
+        if self.config.enable_continuity:
+            if self.config.enforcement_mode not in ("enforce", "audit"):
+                raise ValueError("enforcement_mode must be 'enforce' or 'audit'")
+
+        # Continuity verification support
+        self.continuity = None
+        if self.config.enable_continuity:
+            self.continuity = ContinuityVerifier(sandbox_id=f"exec-sandbox-{id(self)}")
 
     def check_import(self, module_name: str) -> bool:
         """Check if a module import is allowed.
@@ -831,10 +845,53 @@ class ExecutionSandbox:
             finally:
                 self._hook.uninstall()
 
+    def _capture_pre_continuity(self, context: dict) -> None:
+        """Capture pre‑execution hashes using current governance context."""
+        if not self.config.enable_continuity or self.continuity is None:
+            return
+        # Default values if context missing – fail‑closed with unknown identity.
+        self.continuity.capture_pre_state(
+            agent_id=context.get("agent_id", "unknown"),
+            session_id=context.get("session_id", "unknown"),
+            memory_state=context.get("memory_state", {}),
+            policy_version=context.get("policy_version", "v1"),
+            delegation_chain=context.get("delegation_chain", []),
+            external_reference_state=context.get("external_reference_state", {}),
+        )
+
+    def _capture_post_continuity(self, context: dict) -> Optional[ContinuityTrace]:
+        """Capture post‑execution hashes and compare. Raises SecurityError on drift."""
+        if not self.config.enable_continuity or self.continuity is None:
+            return None
+        trace = self.continuity.capture_post_state(
+            agent_id=context.get("agent_id", "unknown"),
+            session_id=context.get("session_id", "unknown"),
+            memory_state=context.get("memory_state", {}),
+            policy_version=context.get("policy_version", "v1"),
+            delegation_chain=context.get("delegation_chain", []),
+            external_reference_state=context.get("external_reference_state", {}),
+        )
+        # Always log the trace (stderr or logging)
+        print(trace.to_json(), file=sys.stderr)
+
+        if not trace.continuity_valid:
+            mode = getattr(self.config, "enforcement_mode", "enforce")
+            if mode == "enforce":
+                raise SecurityError(
+                    f"Continuity drift detected: {trace.reference_frame_diff}",
+                    error_code="CONTINUITY_DRIFT",
+                    details={"trace": trace.__dict__},
+                )
+            else:  # audit mode
+                import logging
+                logging.warning(f"Continuity drift in audit mode: {trace.reference_frame_diff}")
+        return trace
+
     def execute_code_sandboxed(
         self,
         code: str,
         user_globals: dict[str, Any] | None = None,
+        continuity_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Validate, then ``exec`` source code under all sandbox protections.
 
@@ -850,13 +907,17 @@ class ExecutionSandbox:
         Args:
             code: Python source to execute.
             user_globals: Optional extra names to expose to the code.
+            continuity_context: Optional dict containing agent_id, session_id,
+                memory_state, policy_version, delegation_chain, external_reference_state.
+                Required when enable_continuity=True; ignored otherwise.
 
         Returns:
             The post-execution globals dict (without ``__builtins__``).
 
         Raises:
             SecurityError: If validation finds any violation, or if execution
-                triggers a blocked import / builtin / sys.modules access.
+                triggers a blocked import / builtin / sys.modules access,
+                or if continuity drift is detected (when enabled and in enforce mode).
         """
         if self.config.enforce_ast_validation:
             violations = self.validate_code(code)
@@ -882,12 +943,17 @@ class ExecutionSandbox:
                 )
 
         restricted = self.create_restricted_globals(user_globals)
+        ctx = continuity_context or {}
 
         def _run() -> None:
             exec(code, restricted)  # noqa: S102 - sandboxed execution by design
 
         try:
+            if self.config.enable_continuity:
+                self._capture_pre_continuity(ctx)
             self.execute_sandboxed(_run)
+            if self.config.enable_continuity:
+                self._capture_post_continuity(ctx)
         except SecurityError:
             raise
         except Exception as e:
