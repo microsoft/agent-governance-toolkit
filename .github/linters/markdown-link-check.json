@@ -47,6 +47,7 @@
     { "pattern": "huggingface\\.co/datasets/microsoft" },
     { "pattern": "datatracker\\.ietf\\.org" },
     { "pattern": "ExternalPlatform\\.dev" },
+    { "pattern": "github\\.com/agentrust-io" },
     { "pattern": "arxiv\\.org" },
     { "pattern": "genai\\.owasp\\.org" },
     { "pattern": "learn\\.microsoft\\.com" },

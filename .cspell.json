@@ -64,7 +64,12 @@
     "getcode",
     "datetimes",
     "tzdata",
-    "pyatr"
+    "pyatr",
+    "RTMR",
+    "SCITT",
+    "Dayos",
+    "Provedit",
+    "Nobulex"
   ],
   "ignorePaths": [
     "**/node_modules/**",
