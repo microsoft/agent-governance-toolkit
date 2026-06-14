@@ -217,7 +217,7 @@ class PolicyEvaluator:
                     "policy": None,
                     "rule": None,
                     "action": "deny",
-                    "context_snapshot": context,
+                    "context_snapshot": copy.deepcopy(context),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "error": True,
                 },

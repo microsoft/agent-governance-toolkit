@@ -10,6 +10,7 @@ YAML serialization and a bridge to the existing PolicyDocument format.
 
 from __future__ import annotations
 
+import copy
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -189,7 +190,7 @@ class SharedPolicyEvaluator:
                     audit={
                         "rule_id": rule.id,
                         "action": rule.action,
-                        "context_snapshot": context,
+                        "context_snapshot": copy.deepcopy(context),
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                 )
