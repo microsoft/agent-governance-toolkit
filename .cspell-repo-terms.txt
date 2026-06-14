@@ -311,6 +311,7 @@ NFKC
 NNNN
 nonimport
 nonlocal
+nono
 noqa
 normalisation
 normalises
@@ -515,6 +516,7 @@ Unregisters
 unrevocation
 unrevoke
 Unrevoking
+unsandboxed
 unscanned
 unsets
 uppercased
@@ -607,6 +609,7 @@ bytearray
 canonicality
 cedarschema
 cfgs
+cffi
 chargeback
 chatcmpl
 chatcompletions

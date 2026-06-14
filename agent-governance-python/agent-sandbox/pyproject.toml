@@ -18,6 +18,7 @@ maintainers = [
 keywords = [
     "ai", "agents", "sandbox", "docker", "isolation",
     "governance", "safety", "containers", "gvisor", "kata",
+    "landlock", "seatbelt", "nono",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -49,6 +50,15 @@ azure = [
     # Installed via the GitHub release wheel — see README.
     "azure-identity>=1.19.0,<2.0",
     "azure-core>=1.32.0,<2.0",
+]
+nono = [
+    # OS-native (Landlock / Seatbelt) capability sandbox. Linux & macOS
+    # only — no Windows wheels are published.
+    #
+    # nono-py is PyPI-classified Alpha (upstream always-further/nono).
+    # Suitable for defense-in-depth and dev/CI; evaluate kernel-enforced
+    # guarantees against your production bar before hard-boundary use.
+    "nono-py>=0.10.1,<0.11",
 ]
 policy = [
     "agent-governance-toolkit-core>=4.0.0,<5.0",
