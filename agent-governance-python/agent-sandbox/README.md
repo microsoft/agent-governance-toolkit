@@ -294,8 +294,22 @@ dir (so by-name calls are caught). Any attempt:
 
 The shim is Python (not shell) because the image strips the execute bit off
 every shell; `python3` is an allowed interpreter. Shells, interpreters, and
-encoders stay execute-bit-stripped — disabled but not logged. Extend the routed
-set via the `DENIED_LOGGED_BIN_NAMES` build-arg in `Dockerfile.sandbox`.
+encoders stay execute-bit-stripped — disabled but not logged.
+
+**Behavior change vs. the bare minimal-PATH image.** Routing a denied binary
+through the shim makes it *executable again* (the shim itself runs), so an
+absolute-path call now exits `126` with a logged record instead of raising
+`EACCES`/`PermissionError`. The denial signal is the non-zero exit plus the
+`command_denied` record, not an OS-level permission error. (No in-tree caller
+relies on the `PermissionError` form; sandboxed code is still denied either
+way.)
+
+**Customizing the routed set.** The `DENIED_LOGGED_BIN_NAMES` build-arg
+*replaces* the default set rather than extending it — pass the full list you
+want logged, not just additions, or the image will silently under-restrict.
+The allow-list wins: a name present in both `ALLOWED_BIN_NAMES` and
+`DENIED_LOGGED_BIN_NAMES` is left allowed (not shimmed), so do not list the same
+binary in both.
 
 ```bash
 # Build with the default allow-list (python3, cat, echo, ls).

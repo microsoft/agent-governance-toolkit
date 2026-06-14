@@ -81,8 +81,15 @@ RUN set -eux; \
 COPY agt-deny-shim.py /usr/local/lib/agt-deny-shim.py
 ARG DENIED_LOGGED_BIN_NAMES="curl wget nc netcat ncat socat ssh scp rsync git apt apt-get dpkg dnf yum apk aws az gcloud kubectl terraform helm ansible telnet ftp tftp"
 RUN set -eux; \
+    set -f; \
     chmod 0755 /usr/local/lib/agt-deny-shim.py; \
     for bin in $DENIED_LOGGED_BIN_NAMES; do \
+        # Allow-list wins: if this name is already an allowed entry in the
+        # pinned PATH dir (created above from ALLOWED_BIN_NAMES), leave it
+        # alone rather than silently clobbering it with the deny shim. A name
+        # should not appear in both lists; if it does, the allow-list is
+        # treated as the intentional one.
+        if [ -e "/usr/local/sandbox-bin/$bin" ]; then continue; fi; \
         # Replace the real binary wherever it resides (explicit dirs, not a
         # PATH lookup, since PATH is pinned to the sandbox-bin allow-list) so
         # absolute-path invocations are logged too, not silently EACCES.

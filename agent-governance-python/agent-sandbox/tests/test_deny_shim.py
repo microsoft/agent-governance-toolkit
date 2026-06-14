@@ -51,7 +51,8 @@ class TestDenyShim:
         assert record["binary"] == "kubectl"
         assert record["argv"] == ["get", "pods"]
         assert record["issue"] == 2662
-        assert record["ts"].endswith("Z")
+        # Audit records key on "timestamp" across AGT (compliance/flight_recorder/…).
+        assert record["timestamp"].endswith("Z")
 
     def test_emits_human_readable_line(self, tmp_path):
         result = _invoke_as(tmp_path, "terraform", "apply")
@@ -72,12 +73,45 @@ class TestDenyShim:
         assert record["binary"] == "az"
         assert record["argv"] == ["login"]
 
-    def test_unwritable_audit_log_does_not_crash(self, tmp_path):
-        # A bad log path must not turn a denial into a hard error.
+    def test_unwritable_audit_log_warns_but_does_not_crash(self, tmp_path):
+        # A bad log path must not turn a denial into a hard error, but the
+        # failure to record should be surfaced rather than swallowed.
         result = _invoke_as(
             tmp_path, "az", env={"AGT_DENIED_LOG": "/nonexistent-dir/x.log"}
         )
         assert result.returncode == DENY_EXIT_CODE
+        assert "could not write AGT_DENIED_LOG" in result.stderr
+
+    def test_audit_log_does_not_follow_symlink(self, tmp_path):
+        # A planted AGT_DENIED_LOG symlink must not redirect the append
+        # (O_NOFOLLOW). The symlink target stays untouched and the failure
+        # is surfaced on stderr.
+        target = tmp_path / "secret.txt"
+        target.write_text("original", encoding="utf-8")
+        link = tmp_path / "evil.log"
+        link.symlink_to(target)
+
+        result = _invoke_as(tmp_path, "az", env={"AGT_DENIED_LOG": str(link)})
+
+        assert result.returncode == DENY_EXIT_CODE
+        assert target.read_text(encoding="utf-8") == "original"
+        assert "could not write AGT_DENIED_LOG" in result.stderr
+
+    def test_main_with_empty_argv_reports_unknown(self):
+        # main([]) is reachable as a direct call; the argv[0] guard must hold.
+        import contextlib
+        import importlib.util
+        import io
+
+        spec = importlib.util.spec_from_file_location("agt_deny_shim", SHIM)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            rc = module.main([])
+        assert rc == DENY_EXIT_CODE
+        assert json.loads(stderr.getvalue().splitlines()[0])["binary"] == "unknown"
 
 
 class TestDockerfileWiresShim:
