@@ -272,10 +272,30 @@ infra CLIs (`curl`, `wget`, `ssh`, `git`, `az`, `aws`, `gcloud`, `kubectl`,
 in case a caller goes through an absolute path.
 
 This closes the gap that issue [#2662](https://github.com/microsoft/agent-governance-toolkit/issues/2662)
-identifies: without a pinned PATH, a tool can invoke `os.system('az account list')`
+identifies: without a pinned PATH, a tool can shell out to `az account list`
 inside the sandbox and the attempt is not blocked or logged by AGT even though
-the network-egress policy would later refuse the call. The hardened image makes
-the attempt itself fail with "command not found".
+the network-egress policy would later refuse the call.
+
+### Logging denial shim (#2662 option 2)
+
+The pinned PATH and execute-bit stripping *prevent* denied commands, but a bare
+"command not found" / `EACCES` is silent — and for compliance, detecting the
+attempt matters as much as preventing it. The image therefore routes the denied
+network/infra CLIs (`curl`, `az`, `kubectl`, `terraform`, …) to a small Python
+logging shim (`docker/agt-deny-shim.py`), installed both at each binary's real
+path (so absolute-path calls are caught) and under its name in the pinned PATH
+dir (so by-name calls are caught). Any attempt:
+
+- writes a structured `command_denied` JSON record to stderr (captured in
+  `SandboxResult.stderr`), e.g. `{"argv":["account","list"],"binary":"az",...}`;
+- optionally appends the same record to `$AGT_DENIED_LOG` when that path is set
+  and writable;
+- exits `126`, so the real command never runs.
+
+The shim is Python (not shell) because the image strips the execute bit off
+every shell; `python3` is an allowed interpreter. Shells, interpreters, and
+encoders stay execute-bit-stripped — disabled but not logged. Extend the routed
+set via the `DENIED_LOGGED_BIN_NAMES` build-arg in `Dockerfile.sandbox`.
 
 ```bash
 # Build with the default allow-list (python3, cat, echo, ls).

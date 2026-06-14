@@ -69,6 +69,33 @@ RUN set -eux; \
         fi; \
     done
 
+# Stage 3: route denied network/infra CLIs to a logging denial shim so that
+# attempts are *recorded* (structured `command_denied` JSON on stderr, captured
+# in SandboxResult.stderr), not silently blocked. Issue #2662 (option 2).
+#
+# The shim is Python, not shell: stage 2 strips the execute bit off every shell,
+# so a shell shim could not run; `python3` is an allowed interpreter. Shells,
+# interpreters, and encoders stay execute-bit-stripped above (we disable them
+# but do not need to log them); the network/infra tooling below is what carries
+# the compliance signal when an agent tries to reach out.
+COPY agt-deny-shim.py /usr/local/lib/agt-deny-shim.py
+ARG DENIED_LOGGED_BIN_NAMES="curl wget nc netcat ncat socat ssh scp rsync git apt apt-get dpkg dnf yum apk aws az gcloud kubectl terraform helm ansible telnet ftp tftp"
+RUN set -eux; \
+    chmod 0755 /usr/local/lib/agt-deny-shim.py; \
+    for bin in $DENIED_LOGGED_BIN_NAMES; do \
+        # Replace the real binary wherever it resides (explicit dirs, not a
+        # PATH lookup, since PATH is pinned to the sandbox-bin allow-list) so
+        # absolute-path invocations are logged too, not silently EACCES.
+        for dir in /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin; do \
+            if [ -e "$dir/$bin" ] || [ -L "$dir/$bin" ]; then \
+                ln -sf /usr/local/lib/agt-deny-shim.py "$dir/$bin"; \
+            fi; \
+        done; \
+        # Expose the name in the pinned PATH dir so a by-name call is logged
+        # rather than failing with a bare "command not found".
+        ln -sf /usr/local/lib/agt-deny-shim.py "/usr/local/sandbox-bin/$bin"; \
+    done
+
 # Drop to nobody. The provider already sets `user="65534:65534"` on the
 # container, but pinning it in the image too means a sandboxed image started
 # outside the provider (e.g. ad-hoc `docker run` for inspection) also drops
