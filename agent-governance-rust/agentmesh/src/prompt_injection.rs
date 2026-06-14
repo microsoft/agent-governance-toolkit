@@ -334,11 +334,17 @@ pub trait DetectionEvidenceBackend: std::fmt::Debug + Send + Sync {
 ///
 /// Default-off: when the wrapped signal is disabled, `score()` returns `None` and
 /// this backend contributes no evidence.
-pub struct EmbeddingSignalBackend<E: Embedder> {
+///
+/// The `Send + Sync` bound lives on the struct (not just the
+/// [`DetectionEvidenceBackend`] impl) so that an `EmbeddingSignalBackend` built
+/// from a non-`Send`/`Sync` embedder fails to construct with a clear error,
+/// rather than only erroring later at the `Box<dyn DetectionEvidenceBackend>`
+/// coercion site.
+pub struct EmbeddingSignalBackend<E: Embedder + Send + Sync> {
     signal: EmbeddingSignal<E>,
 }
 
-impl<E: Embedder> EmbeddingSignalBackend<E> {
+impl<E: Embedder + Send + Sync> EmbeddingSignalBackend<E> {
     /// Wrap an [`EmbeddingSignal`] as an evidence backend.
     pub fn new(signal: EmbeddingSignal<E>) -> Self {
         Self { signal }
@@ -347,7 +353,7 @@ impl<E: Embedder> EmbeddingSignalBackend<E> {
 
 // `EmbeddingSignal` is not `Debug` (and is import-only here), so print the
 // stable backend name rather than deriving.
-impl<E: Embedder> std::fmt::Debug for EmbeddingSignalBackend<E> {
+impl<E: Embedder + Send + Sync> std::fmt::Debug for EmbeddingSignalBackend<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EmbeddingSignalBackend")
             .field("name", &"embedding_knn")
@@ -635,18 +641,40 @@ impl PromptInjectionDetector {
 
     /// Append optional backend evidence to `result.evidence` after the verdict.
     /// Evidence-only: this never reads or mutates the verdict fields.
+    ///
+    /// A backend that *panics* (for example, the embedding signal's `cosine()`
+    /// asserts on a dimension mismatch) is caught here and recorded as a static
+    /// `backend_error` code, symmetric with the Python detector's
+    /// `except Exception` guard. Without this, a panic would unwind through
+    /// `detect()` and escape the `unwrap_or_else` fail-closed path entirely,
+    /// which only catches `Err`. Each surviving signal is also sanitized so a
+    /// misbehaving backend cannot smuggle an enforcing (`blocks == true`) or
+    /// non-finite-scored signal into the result or audit trail.
     fn collect_evidence(&self, text: &str, result: &mut DetectionResult) {
         for backend in &self.evidence_backends {
-            if let Some(signal) = backend.evaluate(text) {
-                result.evidence.push(signal);
+            let evaluated =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| backend.evaluate(text)));
+            match evaluated {
+                Ok(Some(signal)) => result.evidence.push(sanitize_evidence(signal)),
+                Ok(None) => {}
+                Err(_) => result
+                    .evidence
+                    .push(EvidenceSignal::with_error(backend.name(), "backend_error")),
             }
         }
     }
 
     /// Scan one prompt without appending to the detector audit log.
+    ///
+    /// Evidence backends are still consulted, so this path is consistent with
+    /// [`detect_with_options`](Self::detect_with_options); only the audit-log
+    /// write is skipped.
     pub(crate) fn detect_without_audit(&self, text: &str) -> DetectionResult {
-        self.detect_impl(text, &DetectionOptions::default())
-            .unwrap_or_else(|err| DetectionResult::fail_closed(&err))
+        let mut result = self
+            .detect_impl(text, &DetectionOptions::default())
+            .unwrap_or_else(|err| DetectionResult::fail_closed(&err));
+        self.collect_evidence(text, &mut result);
+        result
     }
 
     /// Scan multiple prompts in order and append one audit record per input.
@@ -943,13 +971,22 @@ impl PromptInjectionDetector {
             .collect()
     }
 
-    fn record_audit(&mut self, text: &str, source: String, result: DetectionResult) {
+    fn record_audit(&mut self, text: &str, source: String, mut result: DetectionResult) {
         let cap = self.config.audit_capacity;
         if cap == 0 {
             return;
         }
         while self.audit_log.len() >= cap {
             self.audit_log.pop_front();
+        }
+        // Drop raw evidence scores from the durable audit copy. A continuous
+        // per-request score is an evasion oracle: anyone with audit-log access
+        // could otherwise watch the margin move and tune a payload toward a
+        // lower score. The `DetectionResult` returned to the caller keeps raw
+        // scores for in-process telemetry; only this persisted copy is
+        // coarsened. Backend identity and static error codes are retained.
+        for signal in &mut result.evidence {
+            signal.score = None;
         }
         self.audit_log.push_back(AuditRecord {
             timestamp_unix_ms: unix_ms_now(),
@@ -1509,6 +1546,22 @@ fn overlaps(left: (usize, usize), right: (usize, usize)) -> bool {
     left.0 < right.1 && right.0 < left.1
 }
 
+/// Enforce the evidence-only invariants on a backend-produced signal before it
+/// reaches the result or audit trail. `blocks` is forced to `false` so a
+/// backend cannot smuggle an enforcing signal past the detector, and a
+/// non-finite (`NaN`/`inf`) score is dropped to a static `non_finite_score`
+/// error code rather than propagating unchecked.
+fn sanitize_evidence(mut signal: EvidenceSignal) -> EvidenceSignal {
+    signal.blocks = false;
+    if signal.score.is_some_and(|score| !score.is_finite()) {
+        signal.score = None;
+        if signal.error.is_none() {
+            signal.error = Some("non_finite_score".to_string());
+        }
+    }
+    signal
+}
+
 fn sha256_hex(text: &str) -> String {
     format!("{:x}", Sha256::digest(text.as_bytes()))
 }
@@ -1899,6 +1952,36 @@ mod tests {
         assert!(
             !format!("{result:?}").contains(raw_entry),
             "public result must not expose raw blocklist entry"
+        );
+    }
+
+    #[derive(Debug)]
+    struct ScoreStubBackend;
+    impl DetectionEvidenceBackend for ScoreStubBackend {
+        fn name(&self) -> &str {
+            "stub"
+        }
+        fn evaluate(&self, _text: &str) -> Option<EvidenceSignal> {
+            Some(EvidenceSignal::new("stub", Some(0.5)))
+        }
+    }
+
+    #[test]
+    fn detect_without_audit_still_collects_evidence() {
+        let detector = PromptInjectionDetector::new()
+            .unwrap()
+            .with_evidence_backends(vec![Box::new(ScoreStubBackend)]);
+
+        let result = detector.detect_without_audit("ordinary support question");
+
+        // Audit-free path is consistent with detect(): evidence is collected,
+        // only the audit-log write is skipped.
+        assert_eq!(result.evidence.len(), 1);
+        assert_eq!(result.evidence[0].backend, "stub");
+        assert_eq!(result.evidence[0].score, Some(0.5));
+        assert!(
+            detector.audit_log().is_empty(),
+            "detect_without_audit must not write to the audit log"
         );
     }
 }

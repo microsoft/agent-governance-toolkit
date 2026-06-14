@@ -686,3 +686,58 @@ def test_embedding_signal_backend_with_fake_embedder():
     # The verdict still comes from the regex pipeline only — evidence is advisory.
     baseline = PromptInjectionDetector(DetectionConfig()).detect(_ATTACK_TEXT)
     assert _verdict(result) == _verdict(baseline)
+
+
+def test_evidence_signal_rejects_blocks_true():
+    # blocks is a runtime invariant: a backend cannot construct an enforcing signal.
+    with pytest.raises(ValueError, match="blocks must be False"):
+        EvidenceSignal(backend="x", score=0.5, blocks=True)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_evidence_signal_rejects_non_finite_score(bad):
+    with pytest.raises(ValueError, match="finite"):
+        EvidenceSignal(backend="x", score=bad)
+
+
+def test_non_finite_backend_score_degrades_to_error_code():
+    # A backend that returns a non-finite score must not corrupt results or audit;
+    # the detector records a static error code instead.
+    class _NaNBackend:
+        name = "nan_backend"
+
+        def evaluate(self, text: str) -> EvidenceSignal | None:
+            return EvidenceSignal(backend=self.name, score=float("inf"))
+
+    detector = PromptInjectionDetector(
+        DetectionConfig(), evidence_backends=[_NaNBackend()]
+    )
+    result = detector.detect(_BENIGN_TEXT)
+    assert result.is_injection is False
+    assert len(result.evidence) == 1
+    assert result.evidence[0].error == "backend_error"
+    assert result.evidence[0].score is None
+
+
+def test_audit_record_drops_raw_evidence_score():
+    # Live result keeps the raw score; the persisted audit copy must not, so it
+    # cannot be used as a per-request evasion oracle.
+    detector = PromptInjectionDetector(
+        DetectionConfig(), evidence_backends=[_StubBackend(score=0.4242)]
+    )
+    result = detector.detect(_BENIGN_TEXT)
+    assert result.evidence[0].score == 0.4242  # live result keeps raw score
+
+    audit_result = detector.audit_log[-1].result
+    assert len(audit_result.evidence) == 1
+    assert audit_result.evidence[0].backend == "stub"
+    assert audit_result.evidence[0].score is None  # raw score stripped from audit
+
+
+def test_audit_record_preserves_evidence_error_code():
+    detector = PromptInjectionDetector(
+        DetectionConfig(), evidence_backends=[_StubBackend(raises=True)]
+    )
+    detector.detect(_BENIGN_TEXT)
+    audit_result = detector.audit_log[-1].result
+    assert audit_result.evidence[0].error == "backend_error"

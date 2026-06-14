@@ -35,6 +35,13 @@ pluggable-backend pattern of ADR-0015:
   additive `DetectionResult.evidence` field. Evidence **never** influences
   `is_injection` / `threat_level` / `injection_type` / `confidence` /
   `matched_patterns`, and `EvidenceSignal.blocks` is always false.
+- The evidence-only invariants are **enforced**, not conventional: `blocks=true`
+  and a non-finite (`NaN`/`inf`) score are rejected at the boundary (Python
+  raises in `__post_init__`; Rust forces `blocks=false` and drops a non-finite
+  score to a `non_finite_score` error code). A backend that raises — or, in
+  Rust, *panics* (e.g. the embedding signal's `cosine()` asserting on a
+  dimension mismatch) — is caught and recorded as a static `backend_error` code,
+  so a misbehaving backend can never alter the verdict or break detection.
 - `EmbeddingSignalBackend` adapts the existing `prompt_injection_embedding` kNN
   signal to this interface. It is inert unless explicitly enabled, so the
   embedding model/runtime remains an optional dependency.
@@ -46,7 +53,12 @@ pluggable-backend pattern of ADR-0015:
 
 `EvidenceSignal` carries only a static backend identifier, a numeric score, and
 a static error *code* — never raw input or input-derived text — so the audit
-surface stays hash/ID-only.
+surface stays hash/ID-only. The raw numeric score is additionally **stripped
+from the durable audit copy**: a continuous per-request score is an evasion
+oracle (anyone with audit-log access could watch the margin move and tune a
+payload toward a lower score), so only backend identity and error codes are
+persisted. The live `DetectionResult` returned to the caller keeps raw scores
+for in-process telemetry and aggregation.
 
 ## Consequences
 

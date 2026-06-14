@@ -36,15 +36,19 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import math
 import os
 import re
 import warnings
 from collections import deque
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from agent_os.prompt_injection_embedding import EmbeddingSignal
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +111,28 @@ class EvidenceSignal:
     error: str | None = None
     """Static error code (e.g. "unavailable", "backend_error"); never input-derived."""
 
+    def __post_init__(self) -> None:
+        """Enforce the evidence-only invariants at construction time.
+
+        ``blocks`` is a runtime invariant, not just a convention: a backend
+        cannot smuggle an enforcing signal past the detector by constructing
+        ``EvidenceSignal(..., blocks=True)``. A non-finite ``score`` (``nan`` /
+        ``inf``) is rejected so a misbehaving embedder cannot leak unchecked
+        values into results or the audit trail. Either violation raises, which
+        the detector catches and records as a static ``backend_error`` code, so
+        a bad backend degrades to evidence-with-an-error rather than corrupting
+        the verdict.
+        """
+        if self.blocks:
+            raise ValueError(
+                "EvidenceSignal.blocks must be False — evidence never blocks on its own"
+            )
+        if self.score is not None and not math.isfinite(self.score):
+            raise ValueError(
+                "EvidenceSignal.score must be a finite number or None "
+                "(got non-finite value)"
+            )
+
 
 @runtime_checkable
 class DetectionEvidenceBackend(Protocol):
@@ -136,14 +162,14 @@ class EmbeddingSignalBackend:
 
     name = "embedding_knn"
 
-    def __init__(self, signal: object) -> None:
+    def __init__(self, signal: EmbeddingSignal) -> None:
         self._signal = signal
 
     def evaluate(self, text: str) -> EvidenceSignal | None:
         from agent_os.prompt_injection_embedding import EmbeddingSignalUnavailable
 
         try:
-            evidence = self._signal.score(text)  # type: ignore[attr-defined]
+            evidence = self._signal.score(text)
         except EmbeddingSignalUnavailable:
             return EvidenceSignal(backend=self.name, score=None, error="unavailable")
         if evidence is None:
@@ -889,6 +915,26 @@ class PromptInjectionDetector:
 
     # -- audit trail --------------------------------------------------------
 
+    @staticmethod
+    def _audit_safe_result(result: DetectionResult) -> DetectionResult:
+        """Return a copy of *result* safe to persist in the audit trail.
+
+        Raw evidence scores are dropped from the persisted record. A continuous
+        per-request score is an evasion oracle: an operator (or anyone) with
+        audit-log access could otherwise watch the margin move and iteratively
+        tune a payload toward a lower score. The live ``DetectionResult``
+        returned to the caller keeps raw scores for in-process telemetry and
+        aggregation; only the durable audit copy is coarsened. Backend identity
+        and static error codes are retained for forensics.
+        """
+        if not result.evidence:
+            return result
+        redacted = [
+            sig if sig.score is None else replace(sig, score=None)
+            for sig in result.evidence
+        ]
+        return replace(result, evidence=redacted)
+
     def _record_audit(
         self, text: str, source: str, result: DetectionResult,
     ) -> None:
@@ -896,7 +942,7 @@ class PromptInjectionDetector:
             timestamp=datetime.now(timezone.utc),
             input_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
             source=source,
-            result=result,
+            result=self._audit_safe_result(result),
         )
         self._audit_log.append(record)
 
