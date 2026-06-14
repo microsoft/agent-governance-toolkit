@@ -3,9 +3,17 @@
 #
 # When lockfiles or vendored content changes, a corresponding entry must exist
 # in docs/dependency-audits/ explaining what changed and why.
+#
+# Exception (issue #2975): routine Dependabot patch/minor bumps cannot author
+# that doc by construction, so they are exempt when the caller sets
+# PR_ACTOR=dependabot[bot] and DEPENDABOT_UPDATE_TYPE to a non-major update.
+# This mirrors auto-merge-dependabot.yml, which already auto-merges exactly that
+# set. Human PRs and Dependabot major bumps still require the doc.
 set -euo pipefail
 
 BASE_REF="${1:-origin/main}"
+PR_ACTOR="${PR_ACTOR:-}"
+DEPENDABOT_UPDATE_TYPE="${DEPENDABOT_UPDATE_TYPE:-}"
 
 # Lockfile patterns across all SDK ecosystems
 LOCK_PATTERNS=(
@@ -39,6 +47,16 @@ fi
 
 if [ "$LOCK_TOUCHED" = false ]; then
   echo "✅ vendored-patch-audit: no lockfiles or vendored content changed"
+  exit 0
+fi
+
+# Exempt routine Dependabot patch/minor bumps (issue #2975). "Not major"
+# matches the auto-merge policy in auto-merge-dependabot.yml. Human PRs (no
+# PR_ACTOR match) and Dependabot major bumps fall through and still need a doc.
+if [ "$PR_ACTOR" = "dependabot[bot]" ] && \
+   [ -n "$DEPENDABOT_UPDATE_TYPE" ] && \
+   [ "$DEPENDABOT_UPDATE_TYPE" != "version-update:semver-major" ]; then
+  echo "✅ vendored-patch-audit: exempt — Dependabot $DEPENDABOT_UPDATE_TYPE bump (#2975)"
   exit 0
 fi
 

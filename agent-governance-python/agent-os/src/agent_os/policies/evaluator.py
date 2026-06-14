@@ -258,8 +258,32 @@ class PolicyEvaluator:
             # No YAML rule matched — consult external backends
             for backend in self._backends:
                 result = backend.evaluate(context)
-                if result.error is None:
+                if result.error is not None:
+                    # Backend errored — fail closed immediately. Skipping an
+                    # errored backend and falling through to the default action
+                    # discards the backend's intended fail-closed deny. See #2992.
+                    logger.error(
+                        "Backend %r returned an error — denying access (fail closed): %s",
+                        backend.name,
+                        result.error,
+                    )
                     return PolicyDecision(
+                        allowed=False,
+                        matched_rule=None,
+                        action="deny",
+                        reason=f"Backend '{backend.name}' error — access denied (fail closed)",
+                        audit_entry={
+                            "policy": f"external:{backend.name}",
+                            "rule": None,
+                            "action": "deny",
+                            "backend": backend.name,
+                            "context_snapshot": copy.deepcopy(context),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "error": True,
+                            "error_detail": str(result.error),
+                        },
+                    )
+                return PolicyDecision(
                         allowed=result.allowed,
                         matched_rule=None,
                         action=result.action,
@@ -355,22 +379,44 @@ class PolicyEvaluator:
             # No rule matched — consult external backends
             for backend in self._backends:
                 result = backend.evaluate(context)
-                if result.error is None:
+                if result.error is not None:
+                    # Backend errored — fail closed immediately (see #2992).
+                    logger.error(
+                        "Backend %r returned an error — denying access (fail closed): %s",
+                        backend.name,
+                        result.error,
+                    )
                     return PolicyDecision(
-                        allowed=result.allowed,
+                        allowed=False,
                         matched_rule=None,
-                        action=result.action,
-                        reason=result.reason,
+                        action="deny",
+                        reason=f"Backend '{backend.name}' error — access denied (fail closed)",
                         audit_entry={
                             "policy": f"external:{backend.name}",
                             "rule": None,
-                            "action": result.action,
+                            "action": "deny",
                             "backend": backend.name,
-                            "evaluation_ms": result.evaluation_ms,
                             "context_snapshot": copy.deepcopy(context),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "error": True,
+                            "error_detail": str(result.error),
                         },
                     )
+                return PolicyDecision(
+                    allowed=result.allowed,
+                    matched_rule=None,
+                    action=result.action,
+                    reason=result.reason,
+                    audit_entry={
+                        "policy": f"external:{backend.name}",
+                        "rule": None,
+                        "action": result.action,
+                        "backend": backend.name,
+                        "evaluation_ms": result.evaluation_ms,
+                        "context_snapshot": copy.deepcopy(context),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
 
             # Defaults from most specific policy
             default_action = docs[-1].defaults.action if docs else PolicyAction.ALLOW
