@@ -780,3 +780,17 @@ posixpath
 pypy
 fastembed
 Hotfixes
+devdeps
+getvalue
+maxsplit
+mockall
+myorg
+newurl
+redef
+securityscorecards
+subpkg
+unvalidated
+userinfo
+winres
+worktree
+psour

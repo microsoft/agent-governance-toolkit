@@ -237,3 +237,58 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/check_lockfile_integrity.py --base "${AGT_BASE_REF}" --max-deps 2000
+
+  # ------------------------------------------------------------------
+  # OSSF Scorecard on new direct dependencies: when a PR adds a new
+  # direct dep, resolve its source repo via registry metadata, query
+  # the hosted Scorecard API, and warn if the score is below threshold.
+  # Warn-only by default (warn != fail).
+  # ------------------------------------------------------------------
+  dependency-scorecard:
+    name: OSSF Scorecard on new direct dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: scanner-trip-wire
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          # Scorecard "Token-Permissions" hardening: don't leave
+          # GITHUB_TOKEN authenticated in the worktree git config after
+          # checkout. The job only needs read-only access to history.
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Run dependency Scorecard check
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Org-level override hook: maintainers can extend the script's
+          # hard-coded skip list without editing the workflow. Format:
+          # whitespace-separated regexes (e.g. "^@myorg/" for org-internal
+          # npm packages that 404 on the public registry).
+          EXTRA_SKIP_PATTERNS: ${{ vars.SCORECARD_EXTRA_SKIP_PATTERNS }}
+        run: |
+          set -euo pipefail
+          # Defense-in-depth: GitHub disallows branch names starting with '-'
+          # today, but pin the contract here so a future policy change cannot
+          # turn this into a git fetch --upload-pack=... style injection.
+          if ! [[ "$BASE_REF" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "$BASE_REF" == -* ]]; then
+            echo "::error::refusing unsafe BASE_REF: $BASE_REF"; exit 1
+          fi
+          git fetch --no-tags --depth=50 origin -- "$BASE_REF"
+          # Each token becomes its own --skip-pattern arg so the script's
+          # per-pattern regex validation runs over each value individually.
+          extra_args=()
+          if [[ -n "${EXTRA_SKIP_PATTERNS:-}" ]]; then
+            for pat in $EXTRA_SKIP_PATTERNS; do
+              extra_args+=(--skip-pattern "$pat")
+            done
+          fi
+          python3 scripts/check_dependency_scorecard.py \
+            --base-ref "origin/${BASE_REF}" \
+            --head-ref "${HEAD_SHA}" \
+            --min-score 5.0 \
+            --max-deps 50 \
+            "${extra_args[@]}"
