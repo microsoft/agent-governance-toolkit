@@ -33,6 +33,8 @@ from .dynamic_context import (
 from .evaluator import PolicyDecision, PolicyEvaluator
 from .rate_limiting import RateLimitConfig, RateLimitExceeded, TokenBucket
 from .schema import (
+    DynamicCondition,
+    DynamicConditionType,
     PolicyAction,
     PolicyCondition,
     PolicyDefaults,
@@ -59,6 +61,8 @@ __all__ = [
     "ConcurrencyStats",
     "Condition",
     "ConflictResolutionStrategy",
+    "DynamicCondition",
+    "DynamicConditionType",
     "ExternalPolicyBackend",
     "OPABackend",
     "CostContext",
