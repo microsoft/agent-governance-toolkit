@@ -2,167 +2,262 @@
 
 # AGT Conformance
 
-**Claim that your implementation correctly enforces the Agent Governance Toolkit specifications.**
+Regulated buyers, auditors, and supply chain verifiers increasingly ask a single question before signing off on an agentic deployment: *can you prove the agent was governed?* An AGT conformance claim is how you answer that question — it asserts that your implementation correctly intercepts agent actions before execution, evaluates them against policy, enforces authorization decisions, and produces tamper-evident records that a third party can verify offline.
 
-An AGT-conformant implementation correctly intercepts agent actions, evaluates them against policy, enforces authorization decisions, and produces tamper-evident audit records. Conformance is verified by running the AGT conformance test suite (992 tests across all specifications) against your implementation.
+Conformance is verified by running the AGT spec conformance suite — nine test files, one per formal specification, each test annotated with the normative section it covers.
+
+---
+
+## Conformance at a Glance
+
+| Level | Specs covered | Required for |
+|---|---|---|
+| **Baseline** | Policy Engine, Audit & Compliance | Any AGT conformance claim |
+| **Standard** | + Identity & Trust, MCP Gateway, AgentMesh Wire, Framework Adapter | Enterprise deployments; MCP tool governance |
+| **Advanced** | + Hypervisor Execution Control, Agent Lightning, Agent SRE | Regulated industries; hardware-attested proof |
 
 ---
 
 ## Conformance Levels
 
-### Baseline — Core Policy Enforcement
+### Baseline — Policy Engine and Audit
 
-The minimum bar. Covers the Policy Engine and audit chain.
+The non-negotiable minimum. If these six requirements fail, no governance claim holds.
 
-| Requirement | Specification | What it means |
-|---|---|---|
-| **B-1 Pre-execution interception** | [Agent OS Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §10 | Every tool call is intercepted before execution |
-| **B-2 Policy evaluation** | [Agent OS Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §7 | Rules evaluated deterministically; deny-on-error |
-| **B-3 Authorization decisions** | [Agent OS Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §6 | ALLOW / DENY / MODIFY / STEP_UP / DEFER emitted |
-| **B-4 Tamper-evident audit** | [Audit & Compliance](specs/AUDIT-COMPLIANCE-1.0.md) §3 | Merkle-chained audit records; offline verifiable |
-| **B-5 Fail closed** | [Agent OS Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §16 | Policy evaluation errors result in DENY, not ALLOW |
-| **B-6 Policy composability** | [Agent OS Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §18 | Parent DENY rules survive merge; additive contract |
+| # | Requirement | Specification | Normative rule |
+|---|---|---|---|
+| B-1 | Pre-execution interception | [Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §10 | Every tool call intercepted before execution; bypass paths forbidden |
+| B-2 | Deterministic policy evaluation | [Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §7 | Same input, same policy → same decision; no probabilistic shortcuts |
+| B-3 | Authorization decision set | [Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §6 | Exactly ALLOW / DENY / MODIFY / STEP\_UP / DEFER; no other values emitted |
+| B-4 | Tamper-evident audit chain | [Audit & Compliance](specs/AUDIT-COMPLIANCE-1.0.md) §3 | Merkle-chained records; each entry hashes the previous; offline verifiable |
+| B-5 | Fail closed | [Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §16 | Policy evaluation error → DENY, never ALLOW; exception must be logged |
+| B-6 | Additive policy contract | [Policy Engine](specs/AGENT-OS-POLICY-ENGINE-1.0.md) §18 | Parent DENY rules immutable through merge; child cannot widen a deny |
 
-### Standard — Identity and Trust
+**Conformance tests:** `agent-governance-python/agent-os/tests/test_spec_policy_engine_conformance.py` and `test_spec_audit_compliance_conformance.py`
 
-Adds cryptographic agent identity and cross-organization trust.
+---
+
+### Standard — Identity, Trust, and MCP Governance
+
+Adds cryptographic agent identity and tool-call governance — the layer regulated buyers require before connecting agents to production data sources.
 
 All Baseline requirements, plus:
 
-| Requirement | Specification | What it means |
-|---|---|---|
-| **S-1 Cryptographic agent identity** | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §4 | Ed25519 DID assigned; signing key never leaves agent |
-| **S-2 Challenge-response handshake** | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §6 | IATP handshake completes within 200 ms |
-| **S-3 Delegation chain enforcement** | [AgentMesh Trust & Coordination](specs/AGENTMESH-TRUST-COORDINATION-1.0.md) §5 | Trust ceiling propagation; delegated agent cannot exceed parent |
-| **S-4 MCP tool-call governance** | [MCP Security Gateway](specs/MCP-SECURITY-GATEWAY-1.0.md) §3 | Policy applied to every MCP tool invocation |
-| **S-5 Wire protocol integrity** | [AgentMesh Wire Protocol](specs/AGENTMESH-WIRE-1.0.md) §4 | Messages signed; replay protection enforced |
+| # | Requirement | Specification | Normative rule |
+|---|---|---|---|
+| S-1 | Cryptographic agent identity | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §4 | Ed25519 `did:mesh:<fingerprint>` assigned; signing key never leaves the agent process |
+| S-2 | Challenge-response handshake | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §6 | IATP handshake completes within 200 ms; challenge is single-use |
+| S-3 | Delegation ceiling propagation | [AgentMesh Trust & Coordination](specs/AGENTMESH-TRUST-COORDINATION-1.0.md) §5 | Delegated agent's trust ceiling ≤ parent's; no upward grant possible |
+| S-4 | MCP tool-call governance | [MCP Security Gateway](specs/MCP-SECURITY-GATEWAY-1.0.md) §3 | Policy applied to every MCP tool invocation; ungoverned tool paths forbidden |
+| S-5 | Wire integrity | [AgentMesh Wire Protocol](specs/AGENTMESH-WIRE-1.0.md) §4 | Every message signed; replay detected via sequence monotonicity |
+| S-6 | Framework adapter contract | [Framework Adapter Contract](specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md) §3 | Adapter exposes `ToolCallInterceptor` interface; framework-specific paths wire through it |
 
-### Advanced — Execution Control and Attestation
+**Conformance tests:** `test_spec_identity_trust_conformance.py`, `test_spec_mesh_trust_conformance.py`, `test_spec_mcp_gateway_conformance.py`, `test_spec_adapter_contract_conformance.py`
 
-Adds hardware-backed enforcement and execution isolation.
+---
+
+### Advanced — Execution Control and Hardware Attestation
+
+Adds execution isolation, liveness proof, and hardware-rooted signing. Required for deployments where the regulator or counterparty cannot trust the operator.
 
 All Standard requirements, plus:
 
-| Requirement | Specification | What it means |
-|---|---|---|
-| **A-1 Execution ring enforcement** | [Agent Hypervisor Execution Control](specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) §3 | Four-ring privilege model; ring boundaries enforced |
-| **A-2 Liveness attestation** | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §8 | Liveness proof included in every trust handshake |
-| **A-3 Hardware keystore** | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §9 | Signing key sealed in TEE (SEV-SNP, TDX, or TPM) |
-| **A-4 SLO enforcement** | [Agent SRE Governance](specs/AGENT-SRE-GOVERNANCE-1.0.md) §4 | Governance latency SLOs instrumented and enforced |
-| **A-5 TRACE claim emission** | External: [TRACE spec](https://github.com/agentrust-io/trace-spec) | Hardware-attested governance record produced per session |
+| # | Requirement | Specification | Normative rule |
+|---|---|---|---|
+| A-1 | Execution ring enforcement | [Hypervisor Execution Control](specs/AGENT-HYPERVISOR-EXECUTION-CONTROL-1.0.md) §3 | Four-ring privilege model; ring boundary crossings are gated and logged |
+| A-2 | Liveness attestation in handshake | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §8 | Liveness proof included in every trust handshake; stale proofs rejected |
+| A-3 | Hardware keystore | [AgentMesh Identity & Trust](specs/AGENTMESH-IDENTITY-TRUST-1.0.md) §9 | Signing key sealed in TEE (SEV-SNP, TDX, or TPM); software-only key rejected for this level |
+| A-4 | Governance latency SLOs | [Agent SRE Governance](specs/AGENT-SRE-GOVERNANCE-1.0.md) §4 | Policy evaluation latency instrumented; SLO breaches trigger circuit breaker |
+| A-5 | Fast-path integrity | [Agent Lightning Fast-Path](specs/AGENT-LIGHTNING-FAST-PATH-1.0.md) §3 | Fast-path decisions cryptographically consistent with full-path; no policy bypass |
+
+**Conformance tests:** `test_spec_hypervisor_conformance.py`, `test_spec_sre_conformance.py`, `test_spec_lightning_conformance.py`
 
 ---
 
 ## Running the Conformance Suite
 
-The conformance test suite is included in the repository. It runs against your implementation via the [Framework Adapter Contract](specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md).
+The nine conformance test files live alongside their respective packages. Each test is annotated with the spec section it covers. No custom pytest markers required — run the files directly.
 
-### Prerequisites
+### Install
 
 ```bash
+# Baseline
 pip install -e "agent-governance-python/agent-governance-toolkit-core[dev]"
-pip install -e "agent-governance-python/agent-governance-toolkit-integrations"
-```
 
-### Run all conformance tests
+# Standard adds
+pip install -e "agent-governance-python/agent-governance-toolkit-integrations[dev]"
 
-```bash
-pytest tests/ -m conformance -v
+# Advanced adds
+pip install -e "agent-governance-python/agent-hypervisor[dev]"
+pip install -e "agent-governance-python/agent-lightning[dev]"
+pip install -e "agent-governance-python/agent-sre[dev]"
 ```
 
 ### Run by level
 
+=== "Baseline"
+
+    ```bash
+    pytest \
+      agent-governance-python/agent-os/tests/test_spec_policy_engine_conformance.py \
+      agent-governance-python/agent-os/tests/test_spec_audit_compliance_conformance.py \
+      -v
+    ```
+
+=== "Standard"
+
+    ```bash
+    pytest \
+      agent-governance-python/agent-os/tests/test_spec_policy_engine_conformance.py \
+      agent-governance-python/agent-os/tests/test_spec_audit_compliance_conformance.py \
+      agent-governance-python/agent-mesh/tests/test_spec_identity_trust_conformance.py \
+      agent-governance-python/agent-mesh/tests/test_spec_mesh_trust_conformance.py \
+      agent-governance-python/agent-os/tests/test_spec_mcp_gateway_conformance.py \
+      agent-governance-python/agent-os/tests/test_spec_adapter_contract_conformance.py \
+      -v
+    ```
+
+=== "Advanced (full suite)"
+
+    ```bash
+    pytest \
+      agent-governance-python/*/tests/test_spec_*_conformance.py \
+      -v
+    ```
+
+### Run a single spec
+
 ```bash
-# Baseline only
-pytest tests/ -m "conformance and baseline" -v
+# Just the Policy Engine
+pytest agent-governance-python/agent-os/tests/test_spec_policy_engine_conformance.py -v
 
-# Standard (includes Baseline)
-pytest tests/ -m "conformance and (baseline or standard)" -v
+# Just MCP Gateway governance
+pytest agent-governance-python/agent-os/tests/test_spec_mcp_gateway_conformance.py -v
 
-# Full Advanced suite
-pytest tests/ -m "conformance" -v
+# Just identity and trust
+pytest agent-governance-python/agent-mesh/tests/test_spec_identity_trust_conformance.py -v
 ```
 
-### Run against a specific spec
-
-```bash
-# Policy Engine spec conformance
-pytest tests/ -m "conformance and policy_engine" -v
-
-# MCP Security Gateway spec conformance
-pytest tests/ -m "conformance and mcp_gateway" -v
-
-# AgentMesh identity conformance
-pytest tests/ -m "conformance and agentmesh_identity" -v
-```
-
-### Expected output
-
-A conformant implementation produces:
+### What passing looks like
 
 ```
-========================= conformance results =========================
-PASSED  tests/conformance/test_b1_pre_execution_interception.py
-PASSED  tests/conformance/test_b2_policy_evaluation.py
+PASSED  test_spec_policy_engine_conformance.py::TestSection10::test_pre_execution_interception_mandatory
+PASSED  test_spec_policy_engine_conformance.py::TestSection7::test_policy_evaluation_deterministic
+PASSED  test_spec_audit_compliance_conformance.py::TestSection3::test_merkle_chain_tamper_evidence
 ...
-========================= 992 passed in 4.3s ==========================
 ```
 
-All 992 tests must pass for the corresponding conformance level claim to be valid.
+Each test name includes its spec section. A failed test tells you exactly which normative requirement your implementation violates.
+
+---
+
+## Regulatory Alignment
+
+Conformance levels map to regulatory obligations. The table below is indicative — your legal team determines what suffices for your jurisdiction.
+
+| Regulation | Minimum level | What AGT conformance satisfies |
+|---|---|---|
+| **EU AI Act Art. 9** (risk management) | Baseline | Policy engine coverage of high-risk actions |
+| **EU AI Act Art. 12** (tamper-evident logging) | Baseline | Merkle-chained audit chain (B-4) |
+| **EU AI Act Art. 14** (human oversight) | Standard | STEP\_UP and DEFER decisions (B-3) wired to human approval flows |
+| **DORA Art. 9** (ICT risk) | Standard | Audit chain + agent identity binding |
+| **SOC 2 CC6.1 / CC6.6** | Standard | Identity binding, delegation chain, tool-call logs |
+| **HIPAA** (minimum necessary) | Standard | MCP tool-call governance (S-4) with PHI-scoped policy |
+| **FedRAMP High / IL-4+** | Advanced | Hardware keystore (A-3) + execution ring enforcement (A-1) |
+| **EU AI Act + DORA with hardware proof** | Advanced + TRACE | Hardware-attested governance record for offline third-party verification |
+
+Full regulatory crosswalk documentation is in the [Compliance](compliance/index.md) section.
 
 ---
 
 ## Claiming Conformance
 
-To register your implementation as AGT-conformant:
+To register as AGT-conformant:
 
-1. **Run the full suite** against your implementation and confirm all tests for your target level pass.
-2. **Open a PR** adding your implementation to [ADOPTERS.md](ADOPTERS.md) with the conformance level, test run evidence (CI link or artifact), and a contact.
-3. **Meet the community conditions** below.
+1. Run the suite for your target level and confirm all tests pass.
+2. Link a CI run or test artifact that is publicly accessible (or sharable with maintainers under NDA for proprietary deployments).
+3. Open a PR adding your implementation to [ADOPTERS.md](ADOPTERS.md) with: organization, implementation name, conformance level, test evidence link, and a maintainer contact.
 
-### Community conditions
-
-| Condition | Requirement |
-|---|---|
-| Production deployment | At least one production deployment with active users |
-| Open test evidence | CI run or test artifact publicly linkable |
-| Maintainer contact | Named maintainer reachable via GitHub |
-| Security disclosure | Committed to responsible disclosure via [SECURITY.md](../SECURITY.md) |
-
-Advanced-level claims additionally require:
+### Baseline and Standard claims
 
 | Condition | Requirement |
 |---|---|
-| Hardware evidence | TEE measurement or TPM PCR values from a production run |
-| Audit log sample | Anonymized Merkle-chained audit log demonstrating tamper-evidence |
+| Test evidence | CI run or artifact showing all suite tests passing |
+| Production or pilot | At least one deployment (evaluation counts) |
+| Maintainer contact | Named individual reachable via GitHub |
+| Security disclosure | Acknowledge [SECURITY.md](../SECURITY.md) responsible disclosure process |
+
+### Advanced claims — additional requirements
+
+| Condition | Requirement |
+|---|---|
+| Hardware evidence | TEE measurement (SEV-SNP measurement, TDX RTMR, or TPM PCR values) from a production or staging run |
+| Audit log sample | Anonymized Merkle-chained audit log with at least one STEP\_UP or DEFER record |
+| Key isolation proof | Attestation report or HSM certificate showing signing key never left hardware boundary |
 
 ---
 
 ## Conformant Implementations
 
-| Implementation | Level | Language | Maintained by |
-|---|---|---|---|
-| [agent-governance-python](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python) | Advanced | Python | Microsoft |
-| [agent-governance-typescript](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript) | Standard | TypeScript | Microsoft |
-| [agent-governance-dotnet](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-dotnet) | Standard | .NET / C# | Microsoft |
-| [agent-governance-rust](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-rust) | Baseline | Rust | Microsoft |
-| [agent-governance-golang](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang) | Baseline | Go | Microsoft |
+### Microsoft reference implementations
 
-*Want to list your implementation? Follow the [claiming conformance](#claiming-conformance) steps above.*
+| SDK | Level | Language | Conformance tests |
+|---|---|---|---|
+| [agent-governance-python](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python) | **Advanced** | Python | All 9 spec files |
+| [agent-governance-typescript](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript) | **Standard** | TypeScript | Policy Engine, Identity & Trust, MCP Gateway |
+| [agent-governance-dotnet](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-dotnet) | **Standard** | .NET / C# | Policy Engine, Identity & Trust |
+| [agent-governance-rust](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-rust) | **Baseline** | Rust | Policy Engine, Audit |
+| [agent-governance-golang](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang) | **Baseline** | Go | Policy Engine, Audit |
+
+### Community
+
+| Organization | Implementation | Level |
+|---|---|---|
+| [Dayos](https://dayos.com) | Cedar-based tool-dispatch governance for Google ADK (production) | Standard |
+| [Provedit](https://provedit.ai) | OTLP receiver re-signing AGT decisions into Merkle chain with per-tenant dashboards | Standard |
+| [Nobulex](https://github.com/arian-gogani/nobulex) | Bilateral receipt primitive for tamper-evident audit trails | Baseline |
+| [chamber](https://github.com/ianphil/chamber) | AGT governance workflows for agent execution policy enforcement | Baseline |
+
+*See [ADOPTERS.md](ADOPTERS.md) for the full adopter list, including organizations in evaluation.*
+
+Want your implementation listed? Follow the [claiming conformance](#claiming-conformance) steps above.
 
 ---
 
 ## Conformance and TRACE
 
-Advanced conformance claims pair naturally with [TRACE](https://github.com/agentrust-io/trace-spec) — the hardware-attested governance record format. A conformant Advanced implementation can produce a TRACE Trust Record proving that policy was enforced in a verified hardware environment, giving auditors and counterparties offline-verifiable proof of governance without trusting the operator.
+Standard and Advanced conformance produce cryptographically signed audit records. TRACE takes this one step further: it binds the policy version, hardware measurement, and tool-call transcript into a single signed artifact that a third party — a regulator, counterparty, or auditor — can verify offline without trusting the operator.
 
-See [cMCP](https://github.com/agentrust-io/cmcp) for a reference implementation of AGT policy enforcement inside a confidential TEE with TRACE claim emission.
+```
+AGT policy enforcement (conformant)
+        ↓
+cMCP gateway (TEE-enforced policy, hardware-attested)
+        ↓
+TRACE Trust Record (signed: model + policy + hardware measurement + transcript)
+        ↓
+SCITT transparency log (public, append-only anchor)
+```
+
+An Advanced AGT conformance claim combined with TRACE emission is what moves the answer to "can you prove it was governed?" from *we have logs* to *here is a signed artifact, verifiable offline, rooted in silicon*.
+
+- [TRACE specification](https://github.com/agentrust-io/trace-spec) — the open attestation format
+- [cMCP](https://github.com/agentrust-io/cmcp) — reference implementation of AGT policy enforcement inside a confidential TEE with TRACE claim emission
+- [TRACE registry](https://github.com/agentrust-io/trace-registry) — public Merkle anchor log
+
+---
+
+## Versioning
+
+This page documents AGT conformance **v1.0**, corresponding to the 1.0 release of each formal specification. Specification versions are pinned in each spec file header. Conformance claims should record the spec version used for verification.
+
+When specifications advance to v2.0, existing v1.0 claims remain valid for the specs they covered. The conformance suite version is recorded in `agent-governance-python/agent-governance-toolkit-core/src/agent_os/conformance/version.py`.
 
 ---
 
 ## Related
 
-- [Testing Guide](TESTING_GUIDE.md) — how to use the test suite end-to-end
-- [CSA ATF Conformance Assessment](compliance/atf-conformance-assessment.md) — AGT's self-assessment against the CSA Agentic Trust Framework
-- [Specifications](specs/) — the normative specs each conformance requirement references
-- [ADOPTERS.md](ADOPTERS.md) — registered conformant implementations
+- [TESTING\_GUIDE.md](TESTING_GUIDE.md) — how to use the test suite end-to-end
+- [Integration Tiers](integration-tiers.md) — governance depth at Tier 0 (sidecar), Tier 1 (SDK), and Tier 2 (deep hooks)
+- [CSA ATF Conformance Assessment](compliance/atf-conformance-assessment.md) — AGT's self-assessment against the CSA Agentic Trust Framework (25/25 requirements, Senior maturity)
+- [Specifications](specs/) — the normative specs each requirement references
+- [ADOPTERS.md](ADOPTERS.md) — full adopter registry

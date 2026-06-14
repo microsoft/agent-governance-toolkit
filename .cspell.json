@@ -61,7 +61,13 @@
     "forgeable",
     "unstarred",
     "getcode",
-    "datetimes"
+    "datetimes",
+    "RTMR",
+    "SCITT",
+    "Dayos",
+    "Provedit",
+    "Nobulex",
+    "tzdata"
   ],
   "ignorePaths": [
     "**/node_modules/**",

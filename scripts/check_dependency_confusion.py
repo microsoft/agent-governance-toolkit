@@ -156,6 +156,8 @@ REGISTERED_PACKAGES = {
     "autogen-agentchat", "autogen_agentchat",
     "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
     "agentdojo",
+    # IANA timezone database for Python (real PyPI package, optional dep for Windows tz support)
+    "tzdata",
     # With extras (base name is what matters)
 }
 
