@@ -1,0 +1,5 @@
+{
+  "_comment": "Maintainer-curated allowlist for the contributor reputation check. Entries here ONLY soften an automated HIGH flag to MEDIUM (still surfaced for human review); they NEVER set LOW and NEVER bypass code review or branch protection. The softening is REFUSED (recorded as an 'allowlist_blocked' signal) when a deliberate-abuse signal or a multi-repo split-clone is present, so the allowlist cannot rescue an actively abusive contributor. Add a username to 'users' or an org login to 'orgs' (case-insensitive) when a known-good contributor is repeatedly mis-flagged by the heuristic. Each addition should be made by a maintainer in a reviewable commit with a rationale in the PR description. Ships empty by design.",
+  "users": [],
+  "orgs": []
+}

@@ -708,7 +708,7 @@ class ExecutionContext:
     agent_id: str
     session_id: str
     policy: GovernancePolicy
-    start_time: datetime = field(default_factory=datetime.now)
+    start_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     call_count: int = 0
     total_tokens: int = 0
     tool_calls: list[dict] = field(default_factory=list)
@@ -1767,7 +1767,7 @@ class BaseIntegration(ABC):
             deny_timeout,
         )
 
-        event_base = {"agent_id": ctx.agent_id, "timestamp": datetime.now().isoformat()}
+        event_base = {"agent_id": ctx.agent_id, "timestamp": datetime.now(timezone.utc).isoformat()}
 
         self.emit(GovernanceEventType.POLICY_CHECK, {**event_base, "phase": "pre_execute"})
 
@@ -1819,8 +1819,17 @@ class BaseIntegration(ABC):
             )
             return result
 
-        # Check timeout
-        elapsed = (datetime.now() - ctx.start_time).total_seconds()
+        # Check timeout.
+        # Normalize start_time to UTC-aware if it is naive (e.g. set by an external
+        # caller before the default factory was made tz-aware) so the subtraction
+        # never raises TypeError for mixed-awareness datetimes.
+        # astimezone() correctly interprets the naive datetime as local time and
+        # converts it to UTC, unlike replace() which would just label it UTC without
+        # adjusting the value.
+        start = ctx.start_time
+        if start.tzinfo is None:
+            start = start.astimezone(timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - start).total_seconds()
         if elapsed > ctx.policy.timeout_seconds:
             self._release_semaphore_if_held(ctx)
             result = deny_timeout(ctx.policy.timeout_seconds, elapsed)
@@ -2068,7 +2077,7 @@ class BaseIntegration(ABC):
                     )
                     self.emit(GovernanceEventType.DRIFT_DETECTED, {
                         "agent_id": ctx.agent_id,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "reason": reason,
                         "drift_score": drift_result.score,
                         "threshold": drift_result.threshold,
@@ -2089,7 +2098,7 @@ class BaseIntegration(ABC):
             ctx.checkpoints.append(checkpoint_id)
             self.emit(GovernanceEventType.CHECKPOINT_CREATED, {
                 "agent_id": ctx.agent_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "checkpoint_id": checkpoint_id,
                 "call_count": ctx.call_count,
             })

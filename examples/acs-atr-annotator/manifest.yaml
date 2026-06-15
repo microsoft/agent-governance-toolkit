@@ -1,0 +1,36 @@
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: acs-atr-annotator
+  version: "0.1.0"
+policies:
+  # A custom policy backed by a host-provided dispatcher (ATRPolicy). The
+  # adapter string is a label the host routes on; rules_dir / min_severity are
+  # adapter_config read by make_control() and passed to the ATR annotator.
+  atr_policy:
+    type: custom
+    adapter: atr_annotator
+    rules_dir: ""        # empty => use the rules bundled with pyatr; set a path to override
+    min_severity: high   # deny matches at or above this severity: low | medium | high | critical
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy_target: "$.input"
+    annotations:
+      atr_scanner:
+        from: "$policy_target.text"
+    policy:
+      id: atr_policy
+  pre_tool_call:
+    policy_target_kind: tool_args
+    policy_target: "$.tool_call.args"
+    tool_name_from: "$.tool_call.name"
+    annotations:
+      atr_scanner:
+        from: "$policy_target"
+    policy:
+      id: atr_policy
+annotators:
+  atr_scanner:
+    type: classifier
+tools:
+  send_message: {}

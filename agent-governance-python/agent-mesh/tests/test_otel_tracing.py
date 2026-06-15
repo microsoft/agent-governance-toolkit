@@ -3,7 +3,7 @@
 """Tests for OpenTelemetry tracing of trust operations."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from agentmesh.observability.tracing import (
     MeshTracer,
@@ -319,6 +319,99 @@ class TestConfigureTracing:
         with patch.dict("os.environ", {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317"}):
             provider = configure_tracing(service_name="test-env")
             assert provider is not None
+
+
+# ---------------------------------------------------------------------------
+# TLS enforcement tests (security regression tests)
+# ---------------------------------------------------------------------------
+
+
+class TestConfigureTracingTLSEnforcement:
+    """Security tests: configure_tracing must default to TLS and block insecure on non-local endpoints."""
+
+    _otlp = pytest.importorskip(
+        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+        reason="opentelemetry-exporter-otlp-proto-grpc not installed",
+    )
+
+    def test_default_non_local_endpoint_does_not_use_insecure(self):
+        """configure_tracing() with a non-local endpoint MUST NOT pass insecure=True."""
+        if not _OTEL_AVAILABLE:
+            pytest.skip("opentelemetry not installed")
+
+        with patch("agentmesh.observability.tracing._OTLP_AVAILABLE", True):
+            with patch("agentmesh.observability.tracing.OTLPSpanExporter") as mock_exporter:
+                configure_tracing(
+                    service_name="test",
+                    endpoint="https://collector.example.com:4317",
+                )
+                mock_exporter.assert_called_once()
+                call_kwargs = mock_exporter.call_args[1]
+                assert call_kwargs.get("insecure") is not True, (
+                    "configure_tracing() must NOT use insecure=True for non-local endpoints"
+                )
+
+    def test_localhost_allow_insecure_flag_permits_plaintext_and_warns(self):
+        """Localhost + allow_insecure=True is permitted but must log a WARNING."""
+        if not _OTEL_AVAILABLE:
+            pytest.skip("opentelemetry not installed")
+
+        with patch("agentmesh.observability.tracing._OTLP_AVAILABLE", True):
+            with patch("agentmesh.observability.tracing.OTLPSpanExporter") as mock_exporter:
+                with patch("agentmesh.observability.tracing._logger") as mock_logger:
+                    configure_tracing(
+                        service_name="test-local",
+                        endpoint="localhost:4317",
+                        allow_insecure=True,
+                    )
+                    mock_exporter.assert_called_once()
+                    call_kwargs = mock_exporter.call_args[1]
+                    assert call_kwargs.get("insecure") is True, (
+                        "localhost + allow_insecure=True must set insecure=True"
+                    )
+                    mock_logger.warning.assert_called()
+
+    def test_127_0_0_1_allow_insecure_flag_permits_plaintext(self):
+        """127.0.0.1 + allow_insecure=True is a valid local-dev override."""
+        if not _OTEL_AVAILABLE:
+            pytest.skip("opentelemetry not installed")
+
+        with patch("agentmesh.observability.tracing._OTLP_AVAILABLE", True):
+            with patch("agentmesh.observability.tracing.OTLPSpanExporter") as mock_exporter:
+                with patch("agentmesh.observability.tracing._logger"):
+                    configure_tracing(
+                        service_name="test-loopback",
+                        endpoint="127.0.0.1:4317",
+                        allow_insecure=True,
+                    )
+                    mock_exporter.assert_called_once()
+                    call_kwargs = mock_exporter.call_args[1]
+                    assert call_kwargs.get("insecure") is True
+
+    def test_non_local_allow_insecure_raises(self):
+        """Non-local endpoint + allow_insecure=True must raise ValueError (deny)."""
+        if not _OTEL_AVAILABLE:
+            pytest.skip("opentelemetry not installed")
+
+        with pytest.raises(ValueError, match="[Ii]nsecure"):
+            configure_tracing(
+                service_name="test",
+                endpoint="collector.prod.example.com:4317",
+                allow_insecure=True,
+            )
+
+    def test_env_var_non_local_endpoint_uses_tls(self):
+        """OTEL_EXPORTER_OTLP_ENDPOINT pointing to non-local host must use TLS."""
+        if not _OTEL_AVAILABLE:
+            pytest.skip("opentelemetry not installed")
+
+        with patch("agentmesh.observability.tracing._OTLP_AVAILABLE", True):
+            with patch("agentmesh.observability.tracing.OTLPSpanExporter") as mock_exporter:
+                with patch.dict("os.environ", {"OTEL_EXPORTER_OTLP_ENDPOINT": "https://otel.example.com:4317"}):
+                    configure_tracing(service_name="test-env")
+                    mock_exporter.assert_called_once()
+                    call_kwargs = mock_exporter.call_args[1]
+                    assert call_kwargs.get("insecure") is not True
 
 
 # ---------------------------------------------------------------------------

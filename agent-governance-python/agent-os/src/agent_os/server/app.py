@@ -22,6 +22,7 @@ from agent_os.server.models import (
     DetectionBatchResponse,
     DetectionResponse,
     ErrorResponse,
+    EvidenceSignalResponse,
     ExecuteRequest,
     ExecuteResponse,
     HealthResponse,
@@ -91,6 +92,15 @@ def _detection_result_to_response(result: Any) -> DetectionResponse:
         confidence=result.confidence,
         matched_patterns=list(result.matched_patterns),
         explanation=result.explanation,
+        evidence=[
+            EvidenceSignalResponse(
+                backend=signal.backend,
+                score=signal.score,
+                blocks=signal.blocks,
+                error=signal.error,
+            )
+            for signal in getattr(result, "evidence", ())
+        ],
     )
 
 

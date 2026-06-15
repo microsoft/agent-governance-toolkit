@@ -107,6 +107,7 @@ REGISTERED_PACKAGES = {
     # Telemetry / monitoring
     "sentry-sdk",
     "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
+    "opentelemetry-exporter-otlp-proto-grpc", "opentelemetry-exporter-otlp-proto-http",
     "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
     # pyproject.toml optional-dependency group names (not real packages)
     "dev", "cli", "all", "server", "storage", "observability",
@@ -168,7 +169,17 @@ REGISTERED_PACKAGES = {
     "autogen-agentchat", "autogen_agentchat",
     "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
     "agentdojo",
+    # IANA timezone database for Python (real PyPI package, optional dep for Windows tz support)
+    "tzdata",
+    # AGT Audit Trail Record library (real PyPI package, pre-1.0; used in acs-atr-annotator example)
+    "pyatr",
+    # OS-native (Landlock / Seatbelt) capability sandbox (real PyPI package, Alpha; agt-sandbox[nono])
+    "nono-py", "nono_py",
     # With extras (base name is what matters)
+    # ACS annotator example dependency (real PyPI package)
+    "pyatr", "pyatr_core",
+    # Timezone data package (real PyPI package, used on Windows/Alpine)
+    "tzdata",
 }
 
 # Local-only packages that should NEVER appear with version pins in

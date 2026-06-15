@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: write
       models: read
     if: >-
@@ -204,6 +204,7 @@ jobs:
     steps:
       - name: Collect agent comments and post summary
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        continue-on-error: true
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -257,13 +258,9 @@ jobs:
               return `| ${agent.icon} ${agent.label} | ${verdict.status} ${verdict.statusLabel} | ${verdict.detail} |`;
             });
 
-            const allVerdicts = rows.join('\n');
-            let overallVerdict;
-            if (allVerdicts.includes('⚠️')) {
-              overallVerdict = '**Verdict: ⚠️ AI review incomplete; ready for human review**';
-            } else {
-              overallVerdict = '**Verdict: ✅ Ready for human review**';
-            }
+            const overallVerdict = rows.some(r => r.includes('⚠️'))
+              ? '**Verdict: ⚠️ AI review incomplete; ready for human review**'
+              : '**Verdict: ✅ Ready for human review**';
 
             const summaryBody = [
               SUMMARY_MARKER,
@@ -292,9 +289,15 @@ jobs:
                 core.info('Created summary comment');
               }
             } catch (error) {
+              core.warning(`Unable to post PR summary comment: ${error.message}`);
               if (error?.status === 403 && String(error?.message || '').includes('Resource not accessible')) {
                 core.warning('Unable to post advisory AI review summary because this run token cannot write PR comments.');
               } else {
                 throw error;
               }
             }
+
+            await core.summary
+              .addHeading('PR Review Summary')
+              .addRaw(summaryBody, true)
+              .write();

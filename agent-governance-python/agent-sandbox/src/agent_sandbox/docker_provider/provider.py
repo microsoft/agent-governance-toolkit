@@ -13,8 +13,6 @@ up at session creation time when a ``PolicyDocument`` is passed.
 from __future__ import annotations
 
 import logging
-import os
-import platform
 import re
 import shutil
 import threading
@@ -22,6 +20,10 @@ import time
 import uuid
 from typing import Any, Callable
 
+from agent_sandbox._hardening import (
+    sanitize_env_vars as _sanitize_env_vars,
+    validate_mount_path as _validate_mount_path,
+)
 from agent_sandbox.code_scanner import enforce_no_subprocess_execution
 from agent_sandbox.docker_provider.state import SandboxCheckpoint, SandboxStateManager
 from agent_sandbox.isolation_runtime import IsolationRuntime
@@ -115,36 +117,6 @@ def _cap_output_bytes(
 
     return stdout, stderr, truncated
 
-# Protected system directories that must never be bind-mounted.
-_PROTECTED_PATHS_UNIX = frozenset(
-    {
-        "/", "/etc", "/proc", "/sys", "/usr", "/var",
-        "/boot", "/dev", "/sbin", "/bin", "/lib",
-    }
-)
-
-# Windows system directories that must never be bind-mounted.  Compared
-# case-insensitively against the realpath of the requested mount.
-_PROTECTED_PATHS_WINDOWS = frozenset(
-    p.lower()
-    for p in (
-        "C:\\Windows",
-        "C:\\Program Files",
-        "C:\\Program Files (x86)",
-        "C:\\ProgramData",
-        "C:\\System Volume Information",
-    )
-)
-
-# Paths blocked only when mounted at their exact root — not their
-# subdirectories. Mounting ``C:\Users`` exposes every user's profile
-# (documents, browser data, SSH keys); mounting a specific subdir like
-# ``C:\Users\agent\workspace`` is a legitimate per-user pattern and
-# remains allowed.
-_PROTECTED_PATHS_WINDOWS_ROOT_ONLY = frozenset(
-    p.lower() for p in ("C:\\Users",)
-)
-
 # Docker resource-name pattern (containers, image repos, tags).
 # Must start with [a-zA-Z0-9] and may include _.- afterwards, max 128 chars.
 _DOCKER_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")
@@ -161,91 +133,6 @@ def _validate_resource_name(value: str, label: str) -> None:
         raise ValueError(
             f"Invalid {label} '{value}': must match "
             f"[a-zA-Z0-9][a-zA-Z0-9_.-]{{0,127}}"
-        )
-
-
-# Environment variables that could break container hardening.
-# Anything an interpreter/loader will source at startup belongs here:
-# each variable below redirects code execution before the sandbox's
-# entrypoint runs, defeating the cap_drop / no-new-privileges hardening.
-_BLOCKED_ENV_VARS = frozenset(
-    {
-        # glibc dynamic linker
-        "LD_PRELOAD",
-        "LD_LIBRARY_PATH",
-        "LD_AUDIT",
-        "LD_DEBUG",
-        "LD_PROFILE",
-        "LD_SHOW_AUXV",
-        "LD_DYNAMIC_WEAK",
-        # POSIX shell startup hooks (bash, dash, sh)
-        "BASH_ENV",
-        "ENV",
-        # Python
-        "PYTHONSTARTUP",
-        "PYTHONPATH",
-        "PYTHONHOME",
-        # Node.js
-        "NODE_OPTIONS",
-        # Ruby
-        "RUBYOPT",
-        # Perl
-        "PERL5LIB",
-        "PERL5OPT",
-        # Java
-        "JAVA_TOOL_OPTIONS",
-        "_JAVA_OPTIONS",
-    }
-)
-
-
-def _sanitize_env_vars(env_vars: dict[str, str]) -> dict[str, str]:
-    """Remove dangerous env vars that could escape sandbox hardening."""
-    blocked_found = [
-        k for k in env_vars if k.upper() in _BLOCKED_ENV_VARS
-    ]
-    if blocked_found:
-        logger.warning(
-            "Blocked dangerous environment variables: %s",
-            blocked_found,
-        )
-    return {
-        k: v
-        for k, v in env_vars.items()
-        if k.upper() not in _BLOCKED_ENV_VARS
-    }
-
-
-def _is_protected_path(path: str) -> bool:
-    """Check whether *path* is a system directory that must not be mounted."""
-    system = platform.system()
-
-    if system == "Windows":
-        normalised = os.path.normpath(os.path.realpath(path))
-        # Block drive roots like C:\, D:\
-        if len(normalised) <= 3 and normalised.endswith((":\\", ":")):
-            return True
-        # Block well-known Windows system directories (case-insensitive).
-        lowered = normalised.lower()
-        if lowered in _PROTECTED_PATHS_WINDOWS_ROOT_ONLY:
-            return True
-        for protected in _PROTECTED_PATHS_WINDOWS:
-            if lowered == protected or lowered.startswith(protected + "\\"):
-                return True
-        return False
-
-    # Unix-like: resolve symlinks then normalize
-    import posixpath
-
-    resolved = os.path.realpath(path)
-    normalised = posixpath.normpath(resolved)
-    return normalised in _PROTECTED_PATHS_UNIX
-
-
-def _validate_mount_path(path: str, label: str) -> None:
-    if _is_protected_path(path):
-        raise ValueError(
-            f"Cannot mount protected system directory '{path}' as {label}"
         )
 
 

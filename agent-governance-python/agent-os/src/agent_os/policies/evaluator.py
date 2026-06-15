@@ -14,14 +14,12 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .dynamic_conditions import DynamicConditionEvaluator
 from .schema import PolicyAction, PolicyDocument, PolicyOperator, PolicyRule
-
-if TYPE_CHECKING:
-    from .dynamic_context import DynamicContext
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +58,7 @@ class PolicyEvaluator:
         self.policies: list[PolicyDocument] = policies or []
         self.root_dir: Path | None = Path(root_dir) if root_dir else None
         self._backends: list[Any] = []
+        self._dynamic_condition_evaluator = DynamicConditionEvaluator()
 
     def load_policies(self, directory: str | Path) -> None:
         """Load all YAML policy files from a directory."""
@@ -142,16 +141,15 @@ class PolicyEvaluator:
     def evaluate(
         self,
         context: dict[str, Any],
-        dynamic_context: DynamicContext | None = None,
+        dynamic_context: dict[str, Any] | None = None,
     ) -> PolicyDecision:
         """Evaluate all loaded policy rules against the given context.
 
         Args:
             context: Action-level properties (tool_name, token_count, etc.)
-            dynamic_context: Optional runtime context (time, cost, quota,
-                system).  When supplied, its fields are merged into the
-                evaluation dict under context.time.*, context.cost.*
-                etc.  Existing callers that omit this argument are unaffected.
+            dynamic_context: Optional runtime context used by v1 dynamic
+                conditions (timestamp, budget metrics, etc.). Existing
+                callers that omit this argument are unaffected.
 
         If root_dir is set and context contains a path key,
         folder-scoped policy discovery is used — governance.yaml files
@@ -164,18 +162,18 @@ class PolicyEvaluator:
         matches, the default action from the first policy (or global allow)
         is used.
         """
-        # Merge dynamic context into the evaluation dict (additive only)
-        if dynamic_context is not None:
-            context = {**context, **dynamic_context.to_flat_dict()}
-
         # Folder-scoped evaluation path
         if self.root_dir and "path" in context:
-            return self._evaluate_scoped(context)
+            return self._evaluate_scoped(context, dynamic_context)
 
         # Flat evaluation (original behavior)
-        return self._evaluate_flat(context)
+        return self._evaluate_flat(context, dynamic_context)
 
-    def _evaluate_scoped(self, context: dict[str, Any]) -> PolicyDecision:
+    def _evaluate_scoped(
+        self,
+        context: dict[str, Any],
+        dynamic_context: dict[str, Any] | None,
+    ) -> PolicyDecision:
         """Evaluate using folder-level policy discovery and merge.
 
         The discovery, parse, and merge phase is wrapped in a fail-closed
@@ -191,8 +189,8 @@ class PolicyEvaluator:
             chain_paths = discover_policies(action_path, self.root_dir)
 
             if not chain_paths:
-                # No governance files found, fall back to loaded policies
-                return self._evaluate_flat(context)
+                # No governance files found — fall back to loaded policies
+                return self._evaluate_flat(context, dynamic_context)
 
             docs = [PolicyDocument.from_yaml(p) for p in chain_paths]
 
@@ -203,7 +201,7 @@ class PolicyEvaluator:
                     filtered.append(doc)
 
             if not filtered:
-                return self._evaluate_flat(context)
+                return self._evaluate_flat(context, dynamic_context)
 
             merged_rules = merge_policies(filtered)
         except Exception:
@@ -219,15 +217,19 @@ class PolicyEvaluator:
                     "policy": None,
                     "rule": None,
                     "action": "deny",
-                    "context_snapshot": context,
+                    "context_snapshot": copy.deepcopy(context),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "error": True,
                 },
             )
 
-        return self._evaluate_rules(merged_rules, filtered, context)
+        return self._evaluate_rules(merged_rules, filtered, context, dynamic_context)
 
-    def _evaluate_flat(self, context: dict[str, Any]) -> PolicyDecision:
+    def _evaluate_flat(
+        self,
+        context: dict[str, Any],
+        dynamic_context: dict[str, Any] | None,
+    ) -> PolicyDecision:
         """Flat evaluation using the loaded policy list (original behavior)."""
         try:
             all_rules: list[tuple[PolicyRule, PolicyDocument]] = []
@@ -239,27 +241,62 @@ class PolicyEvaluator:
             all_rules.sort(key=lambda pair: pair[0].priority, reverse=True)
 
             for rule, doc in all_rules:
-                if _match_condition(rule.condition, context):
+                if _match_condition(rule.condition, context) and self._dynamic_condition_evaluator.evaluate(
+                    rule,
+                    dynamic_context,
+                ):
                     allowed = rule.action in (PolicyAction.ALLOW, PolicyAction.AUDIT)
+                    audit_entry: dict[str, Any] = {
+                        "policy": doc.name,
+                        "rule": rule.name,
+                        "action": rule.action.value,
+                        "context_snapshot": copy.deepcopy(context),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if rule.dynamic_condition is not None:
+                        audit_entry["dynamic_condition"] = rule.dynamic_condition.model_dump()
+                        budget_summary = _summarize_evaluated_budget(
+                            rule.dynamic_condition, dynamic_context
+                        )
+                        if budget_summary is not None:
+                            audit_entry["evaluated_budget"] = budget_summary
                     return PolicyDecision(
                         allowed=allowed,
                         matched_rule=rule.name,
                         action=rule.action.value,
                         reason=rule.message or f"Matched rule '{rule.name}'",
-                        audit_entry={
-                            "policy": doc.name,
-                            "rule": rule.name,
-                            "action": rule.action.value,
-                            "context_snapshot": copy.deepcopy(context),
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        },
+                        audit_entry=audit_entry,
                     )
 
             # No YAML rule matched — consult external backends
             for backend in self._backends:
                 result = backend.evaluate(context)
-                if result.error is None:
+                if result.error is not None:
+                    # Backend errored — fail closed immediately. Skipping an
+                    # errored backend and falling through to the default action
+                    # discards the backend's intended fail-closed deny. See #2992.
+                    logger.error(
+                        "Backend %r returned an error — denying access (fail closed): %s",
+                        backend.name,
+                        result.error,
+                    )
                     return PolicyDecision(
+                        allowed=False,
+                        matched_rule=None,
+                        action="deny",
+                        reason=f"Backend '{backend.name}' error — access denied (fail closed)",
+                        audit_entry={
+                            "policy": f"external:{backend.name}",
+                            "rule": None,
+                            "action": "deny",
+                            "backend": backend.name,
+                            "context_snapshot": copy.deepcopy(context),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "error": True,
+                            "error_detail": str(result.error),
+                        },
+                    )
+                return PolicyDecision(
                         allowed=result.allowed,
                         matched_rule=None,
                         action=result.action,
@@ -331,46 +368,80 @@ class PolicyEvaluator:
         rules: list[PolicyRule],
         docs: list[PolicyDocument],
         context: dict[str, Any],
+        dynamic_context: dict[str, Any] | None,
     ) -> PolicyDecision:
         """Evaluate a merged rule list from folder-scoped discovery."""
         try:
             for rule in rules:
-                if _match_condition(rule.condition, context):
+                if _match_condition(rule.condition, context) and self._dynamic_condition_evaluator.evaluate(
+                    rule,
+                    dynamic_context,
+                ):
                     allowed = rule.action in (PolicyAction.ALLOW, PolicyAction.AUDIT)
+                    audit_entry: dict[str, Any] = {
+                        "policy": "folder-scoped",
+                        "rule": rule.name,
+                        "action": rule.action.value,
+                        "policy_chain": [d.name for d in docs],
+                        "context_snapshot": context,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if rule.dynamic_condition is not None:
+                        audit_entry["dynamic_condition"] = rule.dynamic_condition.model_dump()
+                        budget_summary = _summarize_evaluated_budget(
+                            rule.dynamic_condition, dynamic_context
+                        )
+                        if budget_summary is not None:
+                            audit_entry["evaluated_budget"] = budget_summary
                     return PolicyDecision(
                         allowed=allowed,
                         matched_rule=rule.name,
                         action=rule.action.value,
                         reason=rule.message or f"Matched rule '{rule.name}'",
-                        audit_entry={
-                            "policy": "folder-scoped",
-                            "rule": rule.name,
-                            "action": rule.action.value,
-                            "policy_chain": [d.name for d in docs],
-                            "context_snapshot": copy.deepcopy(context),
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        },
+                        audit_entry=audit_entry,
                     )
 
             # No rule matched — consult external backends
             for backend in self._backends:
                 result = backend.evaluate(context)
-                if result.error is None:
+                if result.error is not None:
+                    # Backend errored — fail closed immediately (see #2992).
+                    logger.error(
+                        "Backend %r returned an error — denying access (fail closed): %s",
+                        backend.name,
+                        result.error,
+                    )
                     return PolicyDecision(
-                        allowed=result.allowed,
+                        allowed=False,
                         matched_rule=None,
-                        action=result.action,
-                        reason=result.reason,
+                        action="deny",
+                        reason=f"Backend '{backend.name}' error — access denied (fail closed)",
                         audit_entry={
                             "policy": f"external:{backend.name}",
                             "rule": None,
-                            "action": result.action,
+                            "action": "deny",
                             "backend": backend.name,
-                            "evaluation_ms": result.evaluation_ms,
                             "context_snapshot": copy.deepcopy(context),
                             "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "error": True,
+                            "error_detail": str(result.error),
                         },
                     )
+                return PolicyDecision(
+                    allowed=result.allowed,
+                    matched_rule=None,
+                    action=result.action,
+                    reason=result.reason,
+                    audit_entry={
+                        "policy": f"external:{backend.name}",
+                        "rule": None,
+                        "action": result.action,
+                        "backend": backend.name,
+                        "evaluation_ms": result.evaluation_ms,
+                        "context_snapshot": copy.deepcopy(context),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
 
             # Defaults from most specific policy
             default_action = docs[-1].defaults.action if docs else PolicyAction.ALLOW
@@ -426,3 +497,42 @@ def _match_condition(condition: Any, context: dict[str, Any]) -> bool:
         return bool(re.search(str(target), str(ctx_value)))
 
     return False
+
+
+def _summarize_evaluated_budget(
+    dynamic_condition: Any,
+    dynamic_context: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Return a minimal budget summary for audit, or None for non-budget conditions.
+
+    Records only the metric actually evaluated and the current observed
+    amount (not the full dynamic_context), so audit logs do not persist
+    arbitrary runtime context.
+    """
+    from .schema import DynamicConditionType
+
+    budget_types = {
+        DynamicConditionType.TOKEN_COUNT_PER_WINDOW,
+        DynamicConditionType.COST_PER_WINDOW,
+    }
+    if dynamic_condition.type not in budget_types:
+        return None
+
+    metric = (
+        "token_count"
+        if dynamic_condition.type == DynamicConditionType.TOKEN_COUNT_PER_WINDOW
+        else "cost"
+    )
+    budget = (dynamic_context or {}).get("budget") or {}
+    raw_amount = budget.get(metric)
+    try:
+        amount = float(raw_amount) if raw_amount is not None else None
+    except (TypeError, ValueError):
+        amount = None
+
+    return {
+        "metric": metric,
+        "window": dynamic_condition.window,
+        "limit": float(dynamic_condition.limit) if dynamic_condition.limit is not None else None,
+        "amount": amount,
+    }

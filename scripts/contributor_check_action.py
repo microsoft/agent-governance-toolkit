@@ -71,7 +71,12 @@ def _run_check(script: str, args: list[str], out_path: str) -> str:
         )
         Path(out_path).write_text(result.stdout)
         data = json.loads(result.stdout)
-        return data.get("risk", "UNKNOWN")
+        risk = data.get("risk", "UNKNOWN")
+        # credential_audit returns "NONE" when a user has no merged PRs in the
+        # target repo (nothing to launder = not applicable). Normalize to "LOW"
+        # so it aggregates correctly rather than being treated as UNKNOWN (which
+        # is reserved for checks that errored or could not be determined).
+        return "LOW" if risk == "NONE" else risk
     except Exception:
         return "UNKNOWN"
 
