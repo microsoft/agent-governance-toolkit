@@ -103,6 +103,7 @@ class AGTGuardrailProvider:
             "timestamp": _read(request, "timestamp") or "",
             "tool_input_sha256": hashlib.sha256(input_json.encode("utf-8")).hexdigest(),
             "tool_input_size": len(input_json.encode("utf-8")),
+            # Prefer typed fields below for policies; keep this only as a broad fallback.
             "tool_input_json": input_json,
         }
 
