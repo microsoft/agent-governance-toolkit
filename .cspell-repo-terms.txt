@@ -792,4 +792,6 @@ anchore
 octocat
 sboms
 Syft
+laintext
+nsecure
 syft

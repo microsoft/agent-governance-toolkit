@@ -158,6 +158,10 @@ REGISTERED_PACKAGES = {
     "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
     "agentdojo",
     # With extras (base name is what matters)
+    # ACS annotator example dependency (real PyPI package)
+    "pyatr", "pyatr_core",
+    # Timezone data package (real PyPI package, used on Windows/Alpine)
+    "tzdata",
 }
 
 # Local-only packages that should NEVER appear with version pins in
