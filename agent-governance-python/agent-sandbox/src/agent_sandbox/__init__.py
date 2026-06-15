@@ -4,7 +4,7 @@
 """Agent Sandbox — execution isolation for AI agents.
 
 Provides ``SandboxProvider``, the abstract base class for all sandbox
-backends, plus three built-in implementations:
+backends, plus five built-in implementations:
 
 * :class:`DockerSandboxProvider` — hardened Docker containers with
   policy-driven resource limits, tool/network proxies, and filesystem
@@ -20,6 +20,10 @@ backends, plus three built-in implementations:
   (Microsoft eXecution Container) native sandbox runner driven through
   its ``wxc-exec`` / ``lxc-exec`` / ``mxc-exec-mac`` binary, with
   policy-driven filesystem and network configuration.
+* :class:`NonoSandboxProvider` — `nono <https://github.com/always-further/nono>`_
+  capability-based sandbox enforced by OS-native kernel primitives
+  (Landlock on Linux, Seatbelt on macOS) via its ``nono-py`` bindings,
+  with a policy-driven filtering network proxy. Linux/macOS only.
 """
 
 
@@ -93,6 +97,19 @@ except ImportError:
     MxcSandboxProvider = None  # type: ignore[assignment,misc]
     mxc_config_from_policy = None  # type: ignore[assignment]
 
+# Lazy import: NonoSandboxProvider requires the optional ``nono-py``
+# extension (Linux / macOS only).
+try:
+    from agent_sandbox.nono_sandbox_provider import (
+        NonoConfig,
+        NonoSandboxProvider,
+        nono_config_from_policy,
+    )
+except ImportError:
+    NonoConfig = None  # type: ignore[assignment,misc]
+    NonoSandboxProvider = None  # type: ignore[assignment,misc]
+    nono_config_from_policy = None  # type: ignore[assignment]
+
 try:
     __version__ = version("agt-sandbox")
 except PackageNotFoundError:
@@ -110,6 +127,8 @@ __all__ = [
     "IsolationRuntime",
     "MxcConfig",
     "MxcSandboxProvider",
+    "NonoConfig",
+    "NonoSandboxProvider",
     "SandboxCheckpoint",
     "SandboxConfig",
     "SandboxProvider",
@@ -120,4 +139,5 @@ __all__ = [
     "SnapshotHandle",
     "hyperlight_config_from_policy",
     "mxc_config_from_policy",
+    "nono_config_from_policy",
 ]

@@ -49,6 +49,51 @@
       "description": "Action a policy rule prescribes.",
       "enum": ["allow", "deny", "audit", "block"]
     },
+    "DynamicConditionType": {
+      "type": "string",
+      "description": "Supported v1 dynamic condition types.",
+      "enum": ["time_window", "day_of_week", "token_count_per_window", "cost_per_window"]
+    },
+    "DynamicCondition": {
+      "type": "object",
+      "description": "Optional runtime-aware condition for temporal and per-window budget checks.",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/DynamicConditionType"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone name, for example America/New_York."
+        },
+        "start_time": {
+          "type": "string",
+          "description": "Inclusive HH:MM start time in local timezone."
+        },
+        "end_time": {
+          "type": "string",
+          "description": "Exclusive HH:MM end time in local timezone."
+        },
+        "days_of_week": {
+          "type": "array",
+          "description": "ISO weekdays 1=Mon..7=Sun.",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          }
+        },
+        "window": {
+          "type": "string",
+          "description": "Budget window duration, e.g. 15m, 1h, 1d."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Per-window cap for token/cost conditions."
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
     "PolicyCondition": {
       "type": "object",
       "description": "A single condition evaluated against execution context.",
@@ -93,6 +138,10 @@
           "type": "string",
           "description": "Human-readable explanation of the rule.",
           "default": ""
+        },
+        "dynamic_condition": {
+          "$ref": "#/definitions/DynamicCondition",
+          "description": "Optional v1 runtime-aware condition."
         }
       },
       "required": ["name", "condition", "action"],

@@ -1,0 +1,162 @@
+# DeerFlow governed example policy.
+# This sample uses default allow plus targeted deny rules for high-risk tool calls.
+version: '1.0'
+name: deerflow-governed-example
+description: AGT policy example for DeerFlow tool-call pre-execution guardrails
+
+rules:
+  - name: deny-pii-email
+    condition:
+      field: message
+      operator: matches
+      value: "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+"
+    action: deny
+    priority: 250
+    message: PII detected - email address found in tool input
+
+  - name: deny-pii-phone
+    condition:
+      field: message
+      operator: matches
+      value: "(?:\\+?1[-.\\s]?)?\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}"
+    action: deny
+    priority: 250
+    message: PII detected - phone number found in tool input
+
+  - name: deny-pii-ssn
+    condition:
+      field: message
+      operator: matches
+      value: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+    action: deny
+    priority: 250
+    message: PII detected - SSN-like pattern found in tool input
+
+  - name: deny-prompt-injection-ignore-instructions
+    condition:
+      field: message
+      operator: matches
+      value: "(?i)(ignore|disregard|forget)\\s+(all\\s+)?(previous|above|prior|earlier)\\s+(instructions?|rules?|policies?|constraints?)"
+    action: deny
+    priority: 240
+    message: Prompt injection detected - attempt to override instructions
+
+  - name: deny-prompt-injection-jailbreak
+    condition:
+      field: message
+      operator: matches
+      value: "(?i)(you\\s+are\\s+now|act\\s+as\\s+if|pretend\\s+(you\\s+are|to\\s+be)|from\\s+now\\s+on\\s+you)"
+    action: deny
+    priority: 240
+    message: Prompt injection detected - jailbreak-style request
+
+  - name: deny-system-prompt-leak
+    condition:
+      field: message
+      operator: matches
+      value: "(?i)(reveal|show|display|print|output)\\s+(your\\s+)?(system\\s+prompt|instructions|rules|policy)"
+    action: deny
+    priority: 240
+    message: Prompt injection detected - system prompt extraction request
+
+  - name: deny-base64-execution
+    condition:
+      field: message
+      operator: matches
+      value: "(?i)(decode|execute|eval|run)\\s+(this\\s+)?base64"
+    action: deny
+    priority: 230
+    message: Encoded payload execution request is denied
+
+  - name: deny-workflow-bypass-review
+    condition:
+      field: message
+      operator: matches
+      value: "(?i)(skip|bypass|circumvent)\\s+(the\\s+)?(editor|review|approval)"
+    action: deny
+    priority: 220
+    message: Workflow bypass request is denied
+
+  - name: deny-direct-publish-without-review
+    condition:
+      field: message
+      operator: matches
+      value: "(?i)publish\\s+(directly|immediately|now)\\s+(without|skipping)"
+    action: deny
+    priority: 220
+    message: Direct publish without review is denied
+
+  - name: deny-destructive-sql
+    condition:
+      field: message
+      operator: matches
+      value: "\\bDROP\\s+(TABLE|DATABASE)\\b"
+    action: deny
+    priority: 210
+    message: Destructive SQL statement detected
+
+  - name: deny-dangerous-bash-rm-rf
+    condition:
+      field: message
+      operator: matches
+      value: "\\brm\\s+-rf\\b"
+    action: deny
+    priority: 200
+    message: Dangerous shell command detected
+
+  - name: deny-internal-resource
+    condition:
+      field: message
+      operator: contains
+      value: internal
+    action: deny
+    priority: 180
+    message: Internal resource access is denied
+
+  - name: deny-secrets-access
+    condition:
+      field: message
+      operator: contains
+      value: secrets
+    action: deny
+    priority: 180
+    message: Secret resource access is denied
+
+  - name: deny-credentials-access
+    condition:
+      field: message
+      operator: contains
+      value: credentials
+    action: deny
+    priority: 180
+    message: Credential access is denied
+
+  - name: deny-sensitive-write-path
+    condition:
+      field: path
+      operator: matches
+      value: "^/(etc|var|usr|bin|sbin)(/|$)"
+    action: deny
+    priority: 170
+    message: Writes to sensitive system paths are denied
+
+  - name: deny-cloud-metadata-ip
+    condition:
+      field: url
+      operator: matches
+      value: "(?i)^(?:https?://)?(?:169\\.254\\.169\\.254|169\\.254\\.170\\.2|100\\.100\\.100\\.200|\\[?fd00:ec2::254\\]?)(?::\\d+)?(?:/|$)"
+    action: deny
+    priority: 160
+    message: Cloud metadata endpoint IP access is denied
+
+  - name: deny-cloud-metadata-host
+    condition:
+      field: host
+      operator: contains
+      value: "metadata.google.internal"
+    action: deny
+    priority: 150
+    message: Cloud metadata host access is denied
+
+defaults:
+  action: allow

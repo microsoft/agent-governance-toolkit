@@ -2,7 +2,7 @@
 
 Public Preview — execution isolation for AI agents with policy-driven
 resource limits, tool proxies, network enforcement, and filesystem
-checkpointing. Ships four interchangeable backends behind the same
+checkpointing. Ships five interchangeable backends behind the same
 `SandboxProvider` ABC.
 
 Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
@@ -15,8 +15,9 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 | `HyperLightSandboxProvider` | KVM / mshv / WHP micro-VM via [hyperlight-sandbox](https://github.com/hyperlight-dev/hyperlight-sandbox) | Sub-millisecond cold start, per-call VM isolation | `agt-sandbox[hyperlight]` |
 | `ACASandboxProvider` | [Azure Container Apps sandbox](https://github.com/microsoft/azure-container-apps) (managed) | Production, multi-tenant, no infra to run | `agt-sandbox[azure]` + the [early-access SDK wheel](https://github.com/microsoft/azure-container-apps/releases) |
 | `MxcSandboxProvider` | OS-native containment via the [MXC](https://github.com/microsoft/mxc) binary (bubblewrap / AppContainer / Seatbelt / micro-VM) | No daemon, hypervisor SDK, or cloud account; CI and laptops | native MXC binary (no Python dep) — see [tutorial](tutorials/mxc-quickstart/README.md) |
+| `NonoSandboxProvider` | OS-native kernel sandbox via [nono](https://github.com/always-further/nono) (Landlock on Linux, Seatbelt on macOS) with a filtering network proxy | Kernel-enforced isolation with a pure-Python install; CI and laptops (**Linux/macOS only**) | `agt-sandbox[nono]` |
 
-All four implement the same async + sync API (`create_session`,
+All five implement the same async + sync API (`create_session`,
 `execute_code`, `destroy_session`, plus `*_async` variants) and consume
 the same `PolicyDocument` for resource caps, network allowlists, and
 tool allowlists.
@@ -31,6 +32,7 @@ pip install "agt-sandbox[full]"
 pip install "agt-sandbox[docker]"
 pip install "agt-sandbox[hyperlight]"
 pip install "agt-sandbox[azure,policy]"
+pip install "agt-sandbox[nono]"   # Linux/macOS only
 ```
 
 The Azure data-plane SDK ships as an early-access wheel — pin the URL:
@@ -39,7 +41,7 @@ The Azure data-plane SDK ships as an early-access wheel — pin the URL:
 pip install https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
 ```
 
-## Quick start (all four providers)
+## Quick start (all five providers)
 
 ```python
 from agent_sandbox import (
@@ -47,12 +49,14 @@ from agent_sandbox import (
     HyperLightSandboxProvider,
     ACASandboxProvider,
     MxcSandboxProvider,
+    NonoSandboxProvider,
 )
 
 # Pick one:
 provider = DockerSandboxProvider()
 # provider = HyperLightSandboxProvider(backend="wasm")
 # provider = MxcSandboxProvider(backend="bubblewrap")
+# provider = NonoSandboxProvider()  # Linux/macOS, kernel-enforced
 # provider = ACASandboxProvider(
 #     resource_group="my-rg", sandbox_group="agents",
 #     region="eastus2", disk="python-3.13",
@@ -269,12 +273,72 @@ the [MXC quickstart tutorial](tutorials/mxc-quickstart/README.md) and the
 
 ---
 
+## 5. `NonoSandboxProvider` — OS-native kernel sandbox via nono
+
+Runs each execution behind a capability set enforced by **OS-native
+kernel primitives** — [Landlock](https://docs.kernel.org/userspace-api/landlock.html)
+on Linux (kernel 5.13+) and Seatbelt on macOS — using the
+[nono](https://github.com/always-further/nono) library's `nono-py`
+bindings. No daemon, hypervisor SDK, or cloud account; install with
+`agt-sandbox[nono]` (prebuilt wheels). Network egress is mediated by a
+built-in filtering proxy restricted to the policy's `network_allowlist`.
+**Linux/macOS only** — there are no Windows wheels.
+
+```python
+from agent_sandbox import NonoSandboxProvider, SandboxConfig
+
+provider = NonoSandboxProvider()
+if not provider.is_available():
+    raise SystemExit("nono not supported here (needs Linux+Landlock or macOS)")
+
+# One-shot: create + execute + destroy in a single call, since each nono
+# sandbox is a fresh forked child that exits after the run.
+execution = provider.run_once(
+    "agent-1",
+    "print('hello from nono')",
+    config=SandboxConfig(timeout_seconds=20, network_enabled=False),
+)
+print(execution.result.stdout)
+```
+
+For repeated executions that share the persistent `output/` directory (and
+a long-lived network proxy), use the full `create_session` + `execute_code`
+lifecycle. nono has no in-sandbox tool channel, so a non-empty
+`tool_allowlist` is **refused** at session creation
+rather than silently ignored, and `max_cpu` / `max_memory_mb` are delegated
+to the OS. See the
+[design doc](../../docs/proposals/NONO-SANDBOX-PROVIDER.md) for details.
+
+> **Production readiness.** `nono-py` is PyPI-classified **Alpha**
+> (upstream [always-further/nono](https://github.com/always-further/nono)).
+> Kernel enforcement (Landlock / Seatbelt) is structurally stronger than
+> in-process guards, but the project is still maturing — use for
+> defense-in-depth, dev, and CI first; run your own security review
+> before treating it as a production hard boundary. On Windows or kernels
+> without Landlock, use `DockerSandboxProvider` or another backend.
+
+---
+
 ## Policy-driven configuration
 
-All four providers consume the same `agent_os.policies.PolicyDocument`.
+All five providers consume the same `agent_os.policies.PolicyDocument`.
 Sandbox resource caps, network allowlists, tool allowlists, and
 filesystem mounts (`sandbox_mounts`) are native fields on the schema, so
-policies live in YAML and load directly with `PolicyDocument.from_yaml`:
+policies live in YAML and load directly with `PolicyDocument.from_yaml`.
+
+**Provider-specific notes:**
+
+| Provider | `tool_allowlist` | Platform |
+|----------|------------------|----------|
+| `DockerSandboxProvider` | host-side enforcement | Linux, macOS, Windows |
+| `HyperLightSandboxProvider` | in-sandbox tool registration | Linux, macOS, Windows |
+| `ACASandboxProvider` | host-side enforcement | cloud (Azure) |
+| `MxcSandboxProvider` | host-side enforcement | Linux, macOS, Windows |
+| `NonoSandboxProvider` | **refused** if non-empty — use a `tool_name` rule instead | Linux, macOS only |
+
+See `examples/quickstart/nono_sandbox_test.py` and
+`examples/quickstart/policies/nono_research_agent.yaml` for a full
+governed nono walkthrough (policy gate → AST scan → kernel isolation).
 
 ```yaml
 name: research-agent
@@ -324,10 +388,44 @@ infra CLIs (`curl`, `wget`, `ssh`, `git`, `az`, `aws`, `gcloud`, `kubectl`,
 in case a caller goes through an absolute path.
 
 This closes the gap that issue [#2662](https://github.com/microsoft/agent-governance-toolkit/issues/2662)
-identifies: without a pinned PATH, a tool can invoke `os.system('az account list')`
+identifies: without a pinned PATH, a tool can shell out to `az account list`
 inside the sandbox and the attempt is not blocked or logged by AGT even though
-the network-egress policy would later refuse the call. The hardened image makes
-the attempt itself fail with "command not found".
+the network-egress policy would later refuse the call.
+
+### Logging denial shim (#2662 option 2)
+
+The pinned PATH and execute-bit stripping *prevent* denied commands, but a bare
+"command not found" / `EACCES` is silent — and for compliance, detecting the
+attempt matters as much as preventing it. The image therefore routes the denied
+network/infra CLIs (`curl`, `az`, `kubectl`, `terraform`, …) to a small Python
+logging shim (`docker/agt-deny-shim.py`), installed both at each binary's real
+path (so absolute-path calls are caught) and under its name in the pinned PATH
+dir (so by-name calls are caught). Any attempt:
+
+- writes a structured `command_denied` JSON record to stderr (captured in
+  `SandboxResult.stderr`), e.g. `{"argv":["account","list"],"binary":"az",...}`;
+- optionally appends the same record to `$AGT_DENIED_LOG` when that path is set
+  and writable;
+- exits `126`, so the real command never runs.
+
+The shim is Python (not shell) because the image strips the execute bit off
+every shell; `python3` is an allowed interpreter. Shells, interpreters, and
+encoders stay execute-bit-stripped — disabled but not logged.
+
+**Behavior change vs. the bare minimal-PATH image.** Routing a denied binary
+through the shim makes it *executable again* (the shim itself runs), so an
+absolute-path call now exits `126` with a logged record instead of raising
+`EACCES`/`PermissionError`. The denial signal is the non-zero exit plus the
+`command_denied` record, not an OS-level permission error. (No in-tree caller
+relies on the `PermissionError` form; sandboxed code is still denied either
+way.)
+
+**Customizing the routed set.** The `DENIED_LOGGED_BIN_NAMES` build-arg
+*replaces* the default set rather than extending it — pass the full list you
+want logged, not just additions, or the image will silently under-restrict.
+The allow-list wins: a name present in both `ALLOWED_BIN_NAMES` and
+`DENIED_LOGGED_BIN_NAMES` is left allowed (not shimmed), so do not list the same
+binary in both.
 
 ```bash
 # Build with the default allow-list (python3, cat, echo, ls, sleep).

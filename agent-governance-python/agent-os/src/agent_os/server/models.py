@@ -69,6 +69,19 @@ class ExecuteResponse(BaseModel):
     signal: str | None = None
 
 
+class EvidenceSignalResponse(BaseModel):
+    """Advisory, evidence-only signal from an optional detection backend.
+
+    Additive and non-enforcing — never influences the verdict fields of
+    :class:`DetectionResponse`. ``blocks`` is always ``False``.
+    """
+
+    backend: str
+    score: float | None = None
+    blocks: bool = False
+    error: str | None = None
+
+
 class DetectionResponse(BaseModel):
     """Response from prompt injection detection."""
 
@@ -78,6 +91,7 @@ class DetectionResponse(BaseModel):
     confidence: float
     matched_patterns: list[str] = Field(default_factory=list)
     explanation: str = ""
+    evidence: list[EvidenceSignalResponse] = Field(default_factory=list)
 
 
 class DetectionBatchResponse(BaseModel):

@@ -1,0 +1,1326 @@
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+#
+# AGT Studio Engine API - OpenAPI 3.1 specification
+#
+# This is the machine-readable companion to docs/studio/engine-api-contract.md.
+# Every operation declares x-capability-flags with runtime_mutating,
+# user_intent_required, and read_only_surface.
+#
+# Validate: npx @redocly/cli lint docs/studio/openapi.yaml
+
+openapi: "3.1.0"
+
+info:
+  title: "AGT Studio Engine API"
+  version: "1.0.0"
+  description: |
+    Engine API for AGT Studio (AGT v1).
+
+    This document is the machine-readable companion to
+    `docs/studio/engine-api-contract.md`. All requests and responses
+    conform to the schemas defined here.
+
+    **Capability flags** (`x-capability-flags`) appear on every operation:
+    - `runtime_mutating`: the operation persists state changes to disk
+    - `user_intent_required`: MUST only be invoked from an explicit user gesture
+    - `read_only_surface`: safe to expose on a read-only Studio surface
+
+    Exactly one operation has `runtime_mutating: true`: `POST /policy/save`.
+
+    **Authentication:** Loopback connections (127.0.0.1 / ::1) require no
+    token. Non-loopback connections must supply a Bearer token read from
+    `~/.config/agt/studio-token`. `GET /health` and `GET /versions` are
+    exempt from authentication on all connections.
+
+    **Reserved route:** `GET /events` is reserved for a WebSocket channel
+    defined in Epic 7a. A v1 engine MUST return `426 Upgrade Required` for
+    non-WebSocket requests to that path.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  contact:
+    name: Agent Governance Toolkit
+    email: agentgovtoolkit@microsoft.com
+
+servers:
+  - url: "http://127.0.0.1:{port}/api/v1"
+    description: "Local loopback (no authentication required)"
+    variables:
+      port:
+        default: "8080"
+        description: "Engine listen port (set via AGT_PORT)"
+
+security:
+  - BearerToken: []
+
+tags:
+  - name: health
+    description: Liveness and version probes
+  - name: policy
+    description: Policy listing, validation, testing, and saving
+  - name: audit
+    description: Audit log retrieval
+  - name: trust
+    description: Trust scores and trust graph
+  - name: agents
+    description: Registered agent listing
+  - name: decisions
+    description: Policy decision history (HTTP poll; WS in Epic 7a)
+  - name: meta
+    description: Engine metadata and version negotiation
+
+# Reserved routes are not callable HTTP operations in v1, so they are declared
+# here (with capability flags) instead of under `paths`, where every operation
+# would be required to define success responses. The WebSocket message schema is
+# defined in Epic 7a (issue #16).
+x-reserved-routes:
+  - route: /api/v1/events
+    method: WS
+    summary: Real-time event stream (policy decisions, agent events, trust updates)
+    reserved_for: Epic 7a (issue #16)
+    http_behavior: >-
+      A v1 engine MUST return 426 Upgrade Required for plain HTTP requests to
+      this path and MUST NOT implement it as a regular HTTP endpoint.
+    x-capability-flags:
+      runtime_mutating: false
+      user_intent_required: false
+      read_only_surface: true
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Engine health probe
+      description: |
+        Returns engine health status and version. No authentication required
+        on any connection type. Used by Studio on startup and for periodic
+        health checks.
+      tags:
+        - health
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      security: []
+      responses:
+        "200":
+          description: Engine is healthy or degraded but responsive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                version: "0.3.0"
+                uptime_seconds: 3661.4
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /policies:
+    get:
+      operationId: listPolicies
+      summary: List all loaded policies
+      description: |
+        Returns a paginated list of all policies currently loaded in the
+        engine. This endpoint fixes the counts-only gap in the existing
+        `policy_server.py` implementation, which returns only totals rather
+        than full policy objects.
+      tags:
+        - policy
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Paginated policy list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyListResponse"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /policies/{id}:
+    get:
+      operationId: getPolicy
+      summary: Get a single policy by ID
+      description: Returns full detail for one policy, including raw content and rule count.
+      tags:
+        - policy
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Policy identifier (derived from filename)
+          example: "pg-staging-reads"
+      responses:
+        "200":
+          description: Policy detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyDetail"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /policy/validate:
+    post:
+      operationId: validatePolicy
+      summary: Validate policy syntax (lint only, no side effects)
+      description: |
+        Parses and lints a policy document. This operation is read-only:
+        no state persists after the response. Uses POST because request bodies
+        can be large.
+      tags:
+        - policy
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidatePolicyRequest"
+            example:
+              content: "name: example\nrules:\n  - id: r1\n    action: allow\n"
+              format: yaml
+      responses:
+        "200":
+          description: Validation result (valid or list of errors)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidatePolicyResponse"
+              examples:
+                valid:
+                  summary: Policy is valid
+                  value:
+                    valid: true
+                    errors: []
+                invalid:
+                  summary: Policy has errors
+                  value:
+                    valid: false
+                    errors:
+                      - line: 3
+                        col: 5
+                        message: "Policy rule 'r1' references an undefined action type."
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /policy/test:
+    post:
+      operationId: testPolicy
+      summary: Run regression fixtures against policies
+      description: |
+        Executes a set of test fixtures against the loaded policies using the
+        `policy_test.replay` engine. No state persists after the response.
+        Uses POST because fixture bodies can be large.
+      tags:
+        - policy
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestPolicyRequest"
+            example:
+              fixtures:
+                - id: "allow-read-staging"
+                  input:
+                    action: "sql_select"
+                    resource: "staging.users"
+                  expected_verdict: "allow"
+                  expected_rule: "pg-staging-reads"
+      responses:
+        "200":
+          description: Replay report with per-fixture results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestPolicyResponse"
+              example:
+                total: 1
+                passed: 1
+                failed: 0
+                results:
+                  - fixture_id: "allow-read-staging"
+                    passed: true
+                    expected_verdict: "allow"
+                    actual_verdict: "allow"
+                    expected_rule: "pg-staging-reads"
+                    actual_rule: "pg-staging-reads"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /policy/save:
+    post:
+      operationId: savePolicy
+      summary: Persist a policy to disk (the sole write endpoint)
+      description: |
+        Writes a policy to the engine's policy directory. This is the ONLY
+        endpoint with `runtime_mutating: true` in the Studio surface.
+
+        `user_intent_required: true` means the Studio client MUST only call
+        this endpoint from a direct user gesture (clicking "Save" or "Publish").
+        It MUST NOT be called speculatively, from a timer, or as a background
+        side effect.
+
+        Requires authentication on non-loopback connections. The studio-token
+        must carry write scope; read-only tokens are rejected with 403.
+      tags:
+        - policy
+      x-capability-flags:
+        runtime_mutating: true
+        user_intent_required: true
+        read_only_surface: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavePolicyRequest"
+            example:
+              id: "my-new-policy"
+              content: "name: my-new-policy\nrules:\n  - id: r1\n    action: allow\n"
+              format: yaml
+              commit_message: "Add allow rule for staging reads"
+      responses:
+        "200":
+          description: Policy saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavePolicyResponse"
+              example:
+                id: "my-new-policy"
+                saved_at: "2026-06-13T10:35:00Z"
+                version: "a1b2c3d4"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /audit/log:
+    get:
+      operationId: getAuditLog
+      summary: Retrieve paginated audit log entries
+      description: |
+        Returns audit log entries from the engine's in-memory and persistent
+        audit store. Supports filtering by agent DID and time range.
+        Entries include the Merkle chain hash from ADR 0017.
+      tags:
+        - audit
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: agent_did
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter entries to a specific agent DID
+          example: "did:mesh:abc123"
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Earliest entry timestamp to include (ISO 8601, inclusive)
+          example: "2026-06-01T00:00:00Z"
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Latest entry timestamp to include (ISO 8601, inclusive)
+          example: "2026-06-13T23:59:59Z"
+      responses:
+        "200":
+          description: Paginated audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogListResponse"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /trust/scores:
+    get:
+      operationId: getTrustScores
+      summary: List agent trust scores
+      description: |
+        Returns trust scores for all known agents, or for a single agent
+        when `agent_did` is specified.
+      tags:
+        - trust
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: agent_did
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter to a single agent DID
+          example: "did:mesh:abc123"
+      responses:
+        "200":
+          description: Paginated trust score list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustScoreListResponse"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /trust/graph:
+    get:
+      operationId: getTrustGraph
+      summary: Get the full trust graph
+      description: |
+        Returns all agents as nodes and all trust, delegation, and sponsor
+        relationships as directed edges. Used by the Studio graph
+        visualization panel.
+      tags:
+        - trust
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      responses:
+        "200":
+          description: Trust graph with nodes and edges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustGraph"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /agents:
+    get:
+      operationId: listAgents
+      summary: List registered agents
+      description: Returns a paginated list of all agents registered in the engine.
+      tags:
+        - agents
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Paginated agent list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentListResponse"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /decisions:
+    get:
+      operationId: listDecisions
+      summary: Retrieve recent policy decisions (HTTP poll)
+      description: |
+        Returns a paginated list of recent policy decisions. In v1, Studio
+        polls this endpoint for updates. In Epic 7a, decisions will also
+        stream in real time over the WebSocket channel at `/api/v1/events`.
+      tags:
+        - decisions
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/LimitParam"
+        - name: agent_did
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter decisions by agent DID
+        - name: verdict
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - allow
+              - deny
+              - warn
+              - require_approval
+          description: Filter decisions by verdict
+      responses:
+        "200":
+          description: Paginated decision list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionListResponse"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /versions:
+    get:
+      operationId: getVersions
+      summary: Engine and API contract version information
+      description: |
+        Returns the engine software version and the API contract version.
+        Studio checks `api` on startup and shows an upgrade message if it
+        does not equal `"1.0.0"`. No authentication required on any
+        connection type.
+      tags:
+        - meta
+      x-capability-flags:
+        runtime_mutating: false
+        user_intent_required: false
+        read_only_surface: true
+      security: []
+      responses:
+        "200":
+          description: Version information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionInfo"
+              example:
+                engine: "0.3.0"
+                api: "1.0.0"
+                python: "3.12.3"
+                capabilities:
+                  - "capability-flags-v1"
+                  - "pagination-v1"
+        "4XX":
+          $ref: "#/components/responses/ErrorResponse"
+        "5XX":
+          $ref: "#/components/responses/ErrorResponse"
+
+components:
+  securitySchemes:
+    BearerToken:
+      type: http
+      scheme: bearer
+      description: |
+        Bearer token read from `~/.config/agt/studio-token`.
+
+        Required for non-loopback connections (all addresses other than
+        127.0.0.1 and ::1). Loopback connections do not require a token.
+
+        `GET /health` and `GET /versions` are exempt from authentication
+        on all connection types.
+
+        Full token format and rotation policy: see the threat model in
+        issue #6 (microsoft/agent-governance-toolkit#6).
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: "1-based page number (default: 1)"
+
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: "Items per page, 1-100 (default: 20)"
+
+  responses:
+    ErrorResponse:
+      description: Error response using the standard error envelope
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            status: 404
+            code: POLICY_NOT_FOUND
+            message: "Policy with id 'my-policy' not found"
+            details: {}
+
+  schemas:
+
+    # ── Error envelope ──────────────────────────────────────────────────
+
+    Error:
+      type: object
+      required:
+        - status
+        - code
+        - message
+      properties:
+        status:
+          type: integer
+          description: HTTP status code mirrored in the response body
+          minimum: 400
+          maximum: 599
+          example: 404
+        code:
+          type: string
+          description: Machine-readable error code in SCREAMING_SNAKE_CASE
+          pattern: "^[A-Z][A-Z0-9_]*$"
+          example: POLICY_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable description safe to display in the UI
+          example: "Policy with id 'my-policy' not found"
+        details:
+          type: object
+          description: Optional endpoint-specific diagnostic information
+          additionalProperties: true
+
+    # ── Pagination ──────────────────────────────────────────────────────
+
+    PaginationMeta:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - has_next
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          description: Current page number (1-based)
+          example: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Items per page
+          example: 20
+        total:
+          type: integer
+          minimum: 0
+          description: Total number of items across all pages
+          example: 87
+        has_next:
+          type: boolean
+          description: Whether more pages exist after this one
+          example: true
+
+    # ── Health ──────────────────────────────────────────────────────────
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+          description: Engine health status
+        version:
+          type: string
+          description: Engine software version
+          example: "0.3.0"
+        uptime_seconds:
+          type: number
+          format: double
+          description: Seconds since engine process start
+          example: 3661.4
+
+    # ── Policy ──────────────────────────────────────────────────────────
+
+    PolicySummary:
+      type: object
+      required:
+        - id
+        - name
+        - format
+        - source
+      properties:
+        id:
+          type: string
+          description: Unique identifier derived from the policy filename
+          example: "pg-staging-reads"
+        name:
+          type: string
+          description: Human-readable policy name
+          example: "PostgreSQL Staging Read Access"
+        format:
+          type: string
+          enum:
+            - yaml
+            - json
+          description: File format of the policy
+        source:
+          type: string
+          description: File path relative to the policy directory
+          example: "pg-staging-reads.yaml"
+        description:
+          type: string
+          description: Policy description if present in the file header
+          example: "Allows SELECT on staging schema tables"
+
+    PolicyListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicySummary"
+        pagination:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    PolicyDetail:
+      allOf:
+        - $ref: "#/components/schemas/PolicySummary"
+        - type: object
+          required:
+            - content
+            - rules_count
+          properties:
+            content:
+              type: string
+              description: Raw policy file content
+            rules_count:
+              type: integer
+              minimum: 0
+              description: Number of rules declared in the policy
+              example: 3
+            last_modified:
+              type: string
+              format: date-time
+              description: Last modification timestamp of the policy file on disk
+
+    ValidationError:
+      type: object
+      required:
+        - message
+      properties:
+        line:
+          type: integer
+          minimum: 1
+          description: Line number of the error (1-based)
+          example: 3
+        col:
+          type: integer
+          minimum: 1
+          description: Column number of the error (1-based)
+          example: 5
+        message:
+          type: string
+          description: Human-readable error description
+          example: "Policy rule 'r1' references an undefined action type."
+
+    ValidatePolicyRequest:
+      type: object
+      required:
+        - content
+        - format
+      properties:
+        content:
+          type: string
+          description: Raw policy content to validate
+        format:
+          type: string
+          enum:
+            - yaml
+            - json
+          description: Format of the content
+
+    ValidatePolicyResponse:
+      type: object
+      required:
+        - valid
+        - errors
+      properties:
+        valid:
+          type: boolean
+          description: True if the policy passes all parse and lint checks
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationError"
+          description: List of parse or lint errors; empty when valid
+
+    FixtureInput:
+      type: object
+      required:
+        - id
+        - input
+        - expected_verdict
+      properties:
+        id:
+          type: string
+          description: Unique fixture identifier
+          example: "allow-read-staging"
+        input:
+          type: object
+          description: Evaluation context passed to the policy engine
+          additionalProperties: true
+          example:
+            action: "sql_select"
+            resource: "staging.users"
+        expected_verdict:
+          type: string
+          enum:
+            - allow
+            - deny
+            - warn
+            - require_approval
+          description: Expected policy verdict for this input
+        expected_rule:
+          type: string
+          description: Expected matched rule name (optional assertion)
+          example: "pg-staging-reads"
+
+    FixtureResult:
+      type: object
+      required:
+        - fixture_id
+        - passed
+        - expected_verdict
+        - actual_verdict
+      properties:
+        fixture_id:
+          type: string
+          example: "allow-read-staging"
+        passed:
+          type: boolean
+        expected_verdict:
+          type: string
+        actual_verdict:
+          type: string
+        expected_rule:
+          type:
+            - string
+            - "null"
+          description: Expected rule (null if not asserted)
+        actual_rule:
+          type:
+            - string
+            - "null"
+          description: Actual matched rule (null if no rule matched)
+        fixture_path:
+          type: string
+          description: Path to the fixture file (empty for inline fixtures)
+        resolution_metadata:
+          type:
+            - object
+            - "null"
+          additionalProperties: true
+          description: >-
+            Optional diagnostic metadata from the policy resolver, passed
+            through verbatim from policy_test.FixtureResult.resolution_metadata.
+
+    TestPolicyRequest:
+      type: object
+      required:
+        - fixtures
+      properties:
+        policy_dir:
+          type: string
+          description: Policy directory override (defaults to engine policy_dir)
+        fixtures:
+          type: array
+          items:
+            $ref: "#/components/schemas/FixtureInput"
+          description: Inline fixtures to execute against the loaded policies
+          minItems: 1
+
+    TestPolicyResponse:
+      type: object
+      required:
+        - total
+        - passed
+        - failed
+        - results
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Total number of fixtures run
+        passed:
+          type: integer
+          minimum: 0
+          description: Fixtures that matched their expected verdict
+        failed:
+          type: integer
+          minimum: 0
+          description: Fixtures that did not match their expected verdict
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/FixtureResult"
+
+    SavePolicyRequest:
+      type: object
+      required:
+        - id
+        - content
+        - format
+      properties:
+        id:
+          type: string
+          description: |
+            Policy identifier used as the filename. Must match the pattern
+            `^[a-z0-9][a-z0-9_-]{0,63}$`.
+          pattern: "^[a-z0-9][a-z0-9_-]{0,63}$"
+          example: "my-new-policy"
+        content:
+          type: string
+          description: Full policy content to persist to disk
+        format:
+          type: string
+          enum:
+            - yaml
+            - json
+          description: File format to write
+        commit_message:
+          type: string
+          description: Human-readable description of this change, written to the audit log
+          maxLength: 512
+          example: "Add allow rule for staging reads"
+
+    SavePolicyResponse:
+      type: object
+      required:
+        - id
+        - saved_at
+      properties:
+        id:
+          type: string
+          description: Saved policy identifier
+          example: "my-new-policy"
+        saved_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of when the policy was written to disk
+          example: "2026-06-13T10:35:00Z"
+        version:
+          type: string
+          description: Opaque version token for optimistic concurrency checks
+          example: "a1b2c3d4"
+
+    # ── Audit ───────────────────────────────────────────────────────────
+
+    AuditLogEntry:
+      type: object
+      required:
+        - entry_id
+        - timestamp
+        - agent_did
+        - action
+        - outcome
+      properties:
+        entry_id:
+          type: string
+          description: Unique entry identifier
+          example: "aud-0001"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the audited event occurred
+          example: "2026-06-13T10:30:00Z"
+        agent_did:
+          type: string
+          description: DID of the agent that performed the action
+          example: "did:mesh:abc123"
+        action:
+          type: string
+          description: Action that was audited
+          example: "sql_execute"
+        outcome:
+          type: string
+          enum:
+            - success
+            - failure
+            - denied
+          description: Result of the action
+        resource:
+          type:
+            - string
+            - "null"
+          description: Target resource of the action
+          example: "staging.users"
+        target_did:
+          type:
+            - string
+            - "null"
+          description: DID of a target agent if applicable
+        policy_decision:
+          type:
+            - string
+            - "null"
+          description: Policy verdict that produced this audit entry
+          example: "allow"
+        entry_hash:
+          type: string
+          description: SHA-256 hash of this entry for Merkle chain integrity (ADR 0017)
+          example: "e3b0c44298fc1c149afb"
+
+    AuditLogListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogEntry"
+        pagination:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    # ── Trust ───────────────────────────────────────────────────────────
+
+    TrustScoreItem:
+      type: object
+      required:
+        - agent_did
+        - trust_score
+        - trust_level
+      properties:
+        agent_did:
+          type: string
+          description: Agent DID
+          example: "did:mesh:abc123"
+        trust_score:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: Numeric trust score (0-1000)
+          example: 750
+        trust_level:
+          type: string
+          enum:
+            - untrusted
+            - probationary
+            - standard
+            - trusted
+            - verified_partner
+          description: >-
+            Categorical trust level derived from the score. Mirrors
+            trust_level_for_score in agentmesh.trust.levels (the single source
+            of truth used by the trust engine and CLI).
+          example: "trusted"
+        last_updated:
+          type: string
+          format: date-time
+          description: Timestamp of the most recent score change
+
+    TrustScoreListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrustScoreItem"
+        pagination:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    TrustGraphNode:
+      type: object
+      required:
+        - agent_did
+        - trust_score
+      properties:
+        agent_did:
+          type: string
+          description: Agent DID
+          example: "did:mesh:abc123"
+        trust_score:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: Current trust score for graph rendering
+          example: 750
+        name:
+          type: string
+          description: Human-readable agent name (if registered)
+          example: "data-agent-prod"
+
+    TrustGraphEdge:
+      type: object
+      required:
+        - from_did
+        - to_did
+        - relationship
+      properties:
+        from_did:
+          type: string
+          description: Source agent DID
+          example: "did:mesh:abc123"
+        to_did:
+          type: string
+          description: Target agent DID
+          example: "did:mesh:def456"
+        relationship:
+          type: string
+          enum:
+            - trusts
+            - delegates
+            - sponsors
+          description: Type of trust relationship from source to target
+          example: "trusts"
+        weight:
+          type: number
+          format: double
+          description: Optional edge weight for graph layout (0.0-1.0)
+          minimum: 0.0
+          maximum: 1.0
+
+    TrustGraph:
+      type: object
+      required:
+        - nodes
+        - edges
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrustGraphNode"
+          description: All registered agents as graph nodes
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrustGraphEdge"
+          description: All trust, delegation, and sponsor relationships as directed edges
+
+    # ── Agents ──────────────────────────────────────────────────────────
+
+    AgentSummary:
+      type: object
+      required:
+        - did
+        - trust_score
+      properties:
+        did:
+          type: string
+          description: Agent DID (did:mesh:...)
+          example: "did:mesh:abc123"
+        name:
+          type: string
+          description: Human-readable agent name
+          example: "data-agent-prod"
+        trust_score:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: Current numeric trust score
+          example: 750
+        trust_level:
+          type: string
+          enum:
+            - untrusted
+            - probationary
+            - standard
+            - trusted
+            - verified_partner
+          description: >-
+            Categorical trust level. Mirrors trust_level_for_score in
+            agentmesh.trust.levels.
+          example: "trusted"
+        last_active:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Timestamp of the most recent event from this agent
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: List of granted capability strings
+          example:
+            - "read:data"
+            - "write:audit"
+
+    AgentListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSummary"
+        pagination:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    # ── Decisions ───────────────────────────────────────────────────────
+
+    Decision:
+      type: object
+      required:
+        - decision_id
+        - timestamp
+        - agent_did
+        - action
+        - verdict
+        - reason
+      properties:
+        decision_id:
+          type: string
+          description: Unique decision identifier
+          example: "dec-001"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the policy decision was made
+          example: "2026-06-13T10:30:00Z"
+        agent_did:
+          type: string
+          description: DID of the agent whose action was evaluated
+          example: "did:mesh:abc123"
+        action:
+          type: string
+          description: Action that was evaluated
+          example: "sql_execute"
+        resource:
+          type:
+            - string
+            - "null"
+          description: Target resource of the evaluated action
+          example: "production.orders"
+        verdict:
+          type: string
+          enum:
+            - allow
+            - deny
+            - warn
+            - require_approval
+          description: Policy verdict
+          example: "deny"
+        matched_rule:
+          type:
+            - string
+            - "null"
+          description: Name of the rule that produced the verdict
+          example: "deny-prod-writes"
+        policy_name:
+          type:
+            - string
+            - "null"
+          description: Name of the policy that matched
+          example: "production-guardrails"
+        reason:
+          type: string
+          description: Human-readable reason for the verdict
+          example: "Rule 'deny-prod-writes' matched: direct writes to production are blocked"
+
+    DecisionListResponse:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Decision"
+        pagination:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    # ── Version ─────────────────────────────────────────────────────────
+
+    VersionInfo:
+      type: object
+      required:
+        - engine
+        - api
+      properties:
+        engine:
+          type: string
+          description: Engine software version (semver)
+          example: "0.3.0"
+        api:
+          type: string
+          description: |
+            API contract version. Must equal "1.0.0" for this spec.
+            Studio shows an upgrade message if this does not match.
+          example: "1.0.0"
+        python:
+          type: string
+          description: Python runtime version (informational)
+          example: "3.12.3"
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: |
+            Optional list of capability identifiers the engine supports.
+            Well-known values: "capability-flags-v1", "pagination-v1".
+          example:
+            - "capability-flags-v1"
+            - "pagination-v1"
