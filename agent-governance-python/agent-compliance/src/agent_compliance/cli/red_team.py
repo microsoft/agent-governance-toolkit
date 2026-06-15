@@ -78,11 +78,11 @@ def red_team() -> None:
 @click.option("--json", "output_json", is_flag=True, help="Output results as JSON.")
 @click.option("--strict", is_flag=True, help="Exit non-zero if any prompt fails.")
 def scan(path: str, min_grade: str, output_json: bool, strict: bool) -> None:
-    """Scan system prompts for missing defenses against 12 attack vectors.
+    """Scan system prompts for missing defenses against 17 attack vectors.
 
     PATH can be a single prompt file (.txt, .md) or a directory
     containing prompt files. Each file is evaluated against OWASP-mapped
-    defense patterns.
+    defense patterns (OWASP LLM Top 10 + OWASP Agentic Top 10 / ASI).
 
     \b
     Examples:

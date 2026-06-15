@@ -1,0 +1,8 @@
+# The ACS Python SDK is installed from this repo (builds the native core):
+#   pip install -e policy-engine/sdk/python
+# Runtime detection engine (optional, pre-1.0):
+pyatr>=0.2.6
+# Used by atr_adapter to read manifest adapter_config (also a transitive ACS dep):
+PyYAML>=6.0
+# Test runner:
+pytest>=8.0

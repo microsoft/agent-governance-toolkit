@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Agent sandbox nono provider** — added `NonoSandboxProvider` to `agt-sandbox`, a Linux/macOS kernel-enforced sandbox backend via the `nono-py` bindings (Landlock / Seatbelt) with policy-driven egress proxying, host-side `PolicyEvaluator` gating, AST pre-scan, and a runnable quickstart (`examples/quickstart/nono_sandbox_test.py`); install with `pip install "agt-sandbox[nono]"`. A non-empty `tool_allowlist` is refused at session creation (fail-closed) because nono has no in-sandbox tool channel — gate tools with policy rules on `tool_name` instead.
+
 ### Fixed
 - **agent-os policy evaluator** - folder-scoped backend decisions now include `policy`, `backend`, `evaluation_ms`, `context_snapshot`, and `timestamp` fields in `audit_entry`, matching the flat evaluation path and eliminating the parity gap when an external backend (OPA / Cedar) returns a decision under folder-scoped evaluation (#2861).
 

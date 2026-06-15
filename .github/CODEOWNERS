@@ -21,4 +21,4 @@
 # Documentation
 /docs/                       @imran-siddique @MohammadHaroonAbuomar
 /site/                       @imran-siddique @MohammadHaroonAbuomar
-*.md                         @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar
+*.md                         @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar @imran-siddique

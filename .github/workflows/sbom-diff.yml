@@ -1,0 +1,97 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+name: SBOM Diff (PR)
+
+# This is the UNTRUSTED half of a two-workflow pattern. It runs against PR
+# content (including forks) with `on: pull_request`, so the GITHUB_TOKEN is
+# read-only and no secrets are exposed. It only produces SBOM artifacts;
+# rendering the markdown body and posting the PR comment is delegated to the
+# trusted companion workflow `sbom-diff-comment.yml`, which runs in the base
+# repo context via `workflow_run`.
+on:
+  pull_request:
+    paths:
+      - "**/package.json"
+      - "**/package-lock.json"
+      - "**/pnpm-lock.yaml"
+      - "**/yarn.lock"
+      - "**/pyproject.toml"
+      - "**/requirements*.txt"
+      - "**/poetry.lock"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "**/go.mod"
+      - "**/go.sum"
+      - "**/*.csproj"
+      - "**/packages.lock.json"
+      - "scripts/diff_sbom.py"
+      - ".github/workflows/sbom-diff.yml"
+      - ".github/workflows/sbom-diff-comment.yml"
+
+# Workflow-level least privilege. Nothing in this file ever needs write scopes
+# because comment posting lives in the trusted companion workflow.
+permissions:
+  contents: read
+
+concurrency:
+  group: sbom-diff-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    name: Generate SBOM artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout is pinned to the v6.0.3 commit SHA to match the
+      # repo-wide convention used by every other workflow on main (see
+      # `git grep "actions/checkout@" .github/workflows`). v6.0.3 is the
+      # current latest-stable release; downgrading to v4 here would diverge
+      # from the rest of the tree without a security or compatibility reason.
+      - name: Check out PR head
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: head
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Check out PR base
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          path: base
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Generate base SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: base
+          format: spdx-json
+          output-file: ${{ github.workspace }}/base.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate head SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: head
+          format: spdx-json
+          output-file: ${{ github.workspace }}/head.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Upload SBOM artifact
+        # The artifact contains ONLY data files (SBOM JSON). The trusted
+        # companion workflow re-derives PR identity from the workflow_run's
+        # head SHA via the GitHub API, so nothing in this artifact is trusted
+        # for routing or identity purposes.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-diff-inputs
+          path: |
+            ${{ github.workspace }}/base.spdx.json
+            ${{ github.workspace }}/head.spdx.json
+          retention-days: 14
+          if-no-files-found: error

@@ -4,7 +4,7 @@
 """Agent Sandbox — execution isolation for AI agents.
 
 Provides ``SandboxProvider``, the abstract base class for all sandbox
-backends, plus three built-in implementations:
+backends, plus five built-in implementations:
 
 * :class:`DockerSandboxProvider` — hardened Docker containers with
   policy-driven resource limits, tool/network proxies, and filesystem
@@ -16,6 +16,14 @@ backends, plus three built-in implementations:
 * :class:`ACASandboxProvider` — Azure Container Apps (ACA)
   managed sandbox sessions with host-side policy gating and Azure-side
   egress allowlist enforcement.
+* :class:`MxcSandboxProvider` — `MXC <https://github.com/microsoft/mxc>`_
+  (Microsoft eXecution Container) native sandbox runner driven through
+  its ``wxc-exec`` / ``lxc-exec`` / ``mxc-exec-mac`` binary, with
+  policy-driven filesystem and network configuration.
+* :class:`NonoSandboxProvider` — `nono <https://github.com/always-further/nono>`_
+  capability-based sandbox enforced by OS-native kernel primitives
+  (Landlock on Linux, Seatbelt on macOS) via its ``nono-py`` bindings,
+  with a policy-driven filtering network proxy. Linux/macOS only.
 """
 
 
@@ -75,6 +83,33 @@ try:
 except ImportError:
     ACASandboxProvider = None  # type: ignore[assignment,misc]
 
+# MxcSandboxProvider has no Python package dependency — it drives the
+# native MXC binary via subprocess — but is imported defensively for
+# symmetry with the other optional providers.
+try:
+    from agent_sandbox.mxc_sandbox_provider import (
+        MxcConfig,
+        MxcSandboxProvider,
+        mxc_config_from_policy,
+    )
+except ImportError:
+    MxcConfig = None  # type: ignore[assignment,misc]
+    MxcSandboxProvider = None  # type: ignore[assignment,misc]
+    mxc_config_from_policy = None  # type: ignore[assignment]
+
+# Lazy import: NonoSandboxProvider requires the optional ``nono-py``
+# extension (Linux / macOS only).
+try:
+    from agent_sandbox.nono_sandbox_provider import (
+        NonoConfig,
+        NonoSandboxProvider,
+        nono_config_from_policy,
+    )
+except ImportError:
+    NonoConfig = None  # type: ignore[assignment,misc]
+    NonoSandboxProvider = None  # type: ignore[assignment,misc]
+    nono_config_from_policy = None  # type: ignore[assignment]
+
 try:
     __version__ = version("agt-sandbox")
 except PackageNotFoundError:
@@ -90,6 +125,10 @@ __all__ = [
     "HyperlightBackend",
     "HyperlightConfig",
     "IsolationRuntime",
+    "MxcConfig",
+    "MxcSandboxProvider",
+    "NonoConfig",
+    "NonoSandboxProvider",
     "SandboxCheckpoint",
     "SandboxConfig",
     "SandboxProvider",
@@ -99,4 +138,6 @@ __all__ = [
     "SessionStatus",
     "SnapshotHandle",
     "hyperlight_config_from_policy",
+    "mxc_config_from_policy",
+    "nono_config_from_policy",
 ]

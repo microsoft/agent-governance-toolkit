@@ -1,0 +1,83 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+#
+# Conflict Resolution Policy — demonstrates rule priority and resolution
+# strategies for overlapping policy rules.
+#
+# This policy defines rules that intentionally overlap to exercise
+# different conflict-resolution strategies (deny-overrides, allow-overrides,
+# first-match). The resolution_metadata field in companion fixtures records
+# which strategy resolved each conflict.
+#
+# Companion fixtures: examples/policy-templates/fixtures/conflict-resolution/
+
+version: "1.0"
+name: conflict-resolution-demo
+description: >
+  Demonstrates conflict-resolution strategies for overlapping policy rules.
+  Use with the conflict-resolution fixture set to verify that the policy
+  engine resolves rule conflicts correctly.
+
+  Strategies covered: deny-overrides, allow-overrides, first-match,
+  most-specific-wins. See companion fixtures in
+  examples/policy-templates/fixtures/conflict-resolution/.
+
+rules:
+  # --- Deny-Overrides: dangerous DML always blocked, even if another rule
+  #     would allow the action. Deny rules at higher priority win. ---
+  - name: deny-dangerous-ddl
+    condition:
+      field: action
+      operator: matches
+      value: "^sql_execute$"
+    priority: 100
+    action: deny
+    message: "Conflict resolution: dangerous DDL denied (deny-overrides)"
+
+  # --- Production reads: allowed when no deny rule matches.
+  #     Uses sql_read action (distinct from sql_execute) to demonstrate
+  #     allow-overrides in a non-conflicting scenario. ---
+  - name: production-reads
+    condition:
+      field: action
+      operator: matches
+      value: "^sql_read$"
+    priority: 50
+    action: allow
+    message: "Conflict resolution: production read access allowed"
+
+  # --- Production writes: deny production namespace mutations ---
+  - name: production-writes
+    condition:
+      field: action
+      operator: matches
+      value: "^k8s_apply$"
+    priority: 80
+    action: deny
+    message: "Conflict resolution: production write denied (first-match)"
+
+  # --- Staging operations: lower priority, allow for staging ---
+  - name: staging-operations
+    condition:
+      field: action
+      operator: matches
+      value: "^k8s_apply$"
+    priority: 40
+    action: allow
+    message: "Conflict resolution: staging operation allowed"
+
+  # --- Config reads: more specific than staging-operations.
+  #     Demonstrates most-specific-wins: k8s_get on configmaps matches
+  #     both config-reads (priority 60) and a generic allow (priority 30). ---
+  - name: config-reads
+    condition:
+      field: action
+      operator: matches
+      value: "^k8s_get$"
+    priority: 60
+    action: allow
+    message: "Conflict resolution: config read allowed (most-specific-wins)"
+
+defaults:
+  action: deny
+  max_tokens: 8192

@@ -109,6 +109,9 @@ REGISTERED_PACKAGES = {
     # Optional integration deps in agt-integrations/pyproject.toml (all real PyPI packages):
     #   flowise (Flowise SDK), boto3 (AWS, for AVP), nostr-sdk (Nostr WoT), oso (Oso authz).
     "flowise", "boto3", "nostr-sdk", "oso",
+    # fastembed: Qdrant's embedding library, optional dep for the default-off
+    # embedding evidence signal (agent-os embedding extra, PR #2974).
+    "fastembed",
     "hypothesis", "fakeredis", "langflow", "langgraph",
     "agentmesh", "pydantic-ai", "haystack", "haystack-ai", "respx",
     "langfuse", "arize", "arize-phoenix", "llamaindex", "braintrust", "helicone",
