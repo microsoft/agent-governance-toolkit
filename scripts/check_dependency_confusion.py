@@ -95,6 +95,7 @@ REGISTERED_PACKAGES = {
     # Telemetry / monitoring
     "sentry-sdk",
     "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
+    "opentelemetry-exporter-otlp-proto-grpc", "opentelemetry-exporter-otlp-proto-http",
     "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
     # pyproject.toml optional-dependency group names (not real packages)
     "dev", "cli", "all", "server", "storage", "observability",
