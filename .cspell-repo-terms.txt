@@ -70,6 +70,8 @@ casefold
 CCPA
 cedarling
 cedarpy
+centralised
+Centralised
 changeme
 chdir
 cheatsheet
@@ -199,6 +201,8 @@ gmtime
 gomod
 GOPROXY
 governancepolicy
+grpc
+GRPC
 gvisor
 h├⌐llo
 hardlinks
@@ -331,6 +335,8 @@ openshell
 ORAS
 oserror
 ospo
+OTLP
+otlp
 oxycodone
 packument
 paramref
@@ -665,6 +671,7 @@ llamaguard
 llms
 logdir
 logprobs
+loopback
 makedirs
 materialisation
 materialises
@@ -788,4 +795,8 @@ anchore
 octocat
 sboms
 Syft
+laintext
+nsecure
+pyatr
+tzdata
 syft
