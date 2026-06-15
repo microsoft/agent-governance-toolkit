@@ -181,42 +181,36 @@ class TestGRPCTransport:
 
     @pytest.mark.asyncio
     async def test_request_trust(self, connected_transport: GRPCTransport) -> None:
-        """request_trust returns a TrustResponse."""
+        """request_trust raises NotImplementedError until a real gRPC stub is wired."""
         req = TrustRequest(
             agent_did="did:mesh:a",
             requester_did="did:mesh:b",
             request_id="r1",
         )
-        resp = await connected_transport.request_trust(req)
-        assert isinstance(resp, TrustResponse)
-        assert resp.agent_did == "did:mesh:a"
-        assert resp.request_id == "r1"
+        with pytest.raises(NotImplementedError, match="round-trip"):
+            await connected_transport.request_trust(req)
 
     @pytest.mark.asyncio
     async def test_initiate_handshake(self, connected_transport: GRPCTransport) -> None:
-        """initiate_handshake returns an accepted HandshakeResponse."""
+        """initiate_handshake raises NotImplementedError until a real gRPC stub is wired."""
         req = HandshakeRequest(
             initiator_did="did:mesh:a",
             target_did="did:mesh:b",
         )
-        resp = await connected_transport.initiate_handshake(req)
-        assert isinstance(resp, HandshakeResponse)
-        assert resp.accepted is True
-        assert "did:mesh:a" in resp.session_id
+        with pytest.raises(NotImplementedError, match="round-trip"):
+            await connected_transport.initiate_handshake(req)
 
     @pytest.mark.asyncio
     async def test_check_policy(self, connected_transport: GRPCTransport) -> None:
-        """check_policy returns a PolicyCheckResponse."""
+        """check_policy raises NotImplementedError until a real gRPC stub is wired."""
         req = PolicyCheckRequest(
             agent_did="did:mesh:a",
             action="execute",
             resource="/pipeline",
             request_id="p1",
         )
-        resp = await connected_transport.check_policy(req)
-        assert isinstance(resp, PolicyCheckResponse)
-        assert resp.allowed is True
-        assert resp.request_id == "p1"
+        with pytest.raises(NotImplementedError, match="round-trip"):
+            await connected_transport.check_policy(req)
 
     def test_register_handler(self, connected_transport: GRPCTransport) -> None:
         """register_handler stores the handler for a topic."""
