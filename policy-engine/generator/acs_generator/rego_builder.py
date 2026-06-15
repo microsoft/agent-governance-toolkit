@@ -146,9 +146,9 @@ def _normalize_transform_path(path: str) -> str:
     # leaving deeper nested paths ($policy_target.a.b, $policy_target[0]) intact.
     if path == "$policy_target.value":
         return "$policy_target"
-    # Anything that is not a well-formed $policy_target path (bad root like
-    # "$policy_targetevil", or a trailing-dot/empty segment) is reset to the root
-    # so the core never fails closed on a malformed path.
+    # Anything that is not a well-formed $policy_target path (a bad root such as
+    # "$policy_target" with an unexpected suffix, or a trailing-dot/empty segment) is
+    # reset to the root so the core never fails closed on a malformed path.
     if not _TRANSFORM_PATH_RE.match(path):
         return "$policy_target"
     return path

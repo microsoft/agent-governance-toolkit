@@ -800,3 +800,6 @@ nsecure
 pyatr
 tzdata
 syft
+arraycomprehension
+setcomprehension
+objectcomprehension

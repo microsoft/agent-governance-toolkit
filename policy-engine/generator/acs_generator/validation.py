@@ -398,7 +398,7 @@ def _collect_body_patterns(body: list, inherited: dict[str, list], patterns: lis
             _bind(assigns, args[0], [args[1]])
             if op == "eq":
                 _bind(assigns, args[1], [args[0]])
-    # `some` membership and bare-ref membership (`coll[x]`) bindings, to a fixpoint.
+    # `some` membership and bare-ref membership (`coll[x]`) bindings, to a fixed point.
     for _ in range(_RESOLVE_MAX_DEPTH):
         changed = False
         for stmt in statements:
@@ -432,7 +432,7 @@ def _collect_body_patterns(body: list, inherited: dict[str, list], patterns: lis
         terms = expr.get("terms")
         if not (isinstance(terms, list) and len(terms) == 3 and _ref_name(terms[0]) in ("equal", "eq")):
             continue
-        # var == <fully-pinnable scalar>. The right side is resolved with the same
+        # var == <fully static scalar>. The right side is resolved with the same
         # exact-or-None logic as a selector key (`_resolve_selector_keys` returns None
         # if any reachable value is dynamic), so a var pinned to a literal narrows but a
         # var that could also be input-derived does NOT — preserving fail-open safety.
