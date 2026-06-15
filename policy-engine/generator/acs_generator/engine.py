@@ -6,7 +6,7 @@ from typing import Any
 
 from .llm import LanguageModel
 from .manifest_builder import build_manifest, referenced_tool_names
-from .plan import PlanError, PolicyPlan, parse_policy_plan
+from .plan import PlanError, PolicyPlan, parse_policy_plan, redact_patterns
 from .rego_builder import build_rego
 from .report import build_report
 from .validation import ValidationError, dump_manifest_yaml, validate_artifacts
@@ -16,8 +16,9 @@ SYSTEM_PROMPT = """You author only a constrained JSON policy plan for ACS artifa
 Return JSON only. Do not emit YAML. Do not emit complete Rego modules.
 Schema: {name, guarded_points, annotators, annotations, tools, rules, warnings}.
 Valid intervention points: %s.
-Annotator types: classifier, llm, endpoint. Decisions: allow, warn, deny, escalate.
-Effects must use append, replace, or redact and paths beginning with $policy_target.
+Annotator types: classifier, llm, endpoint. Decisions: allow, warn, deny, escalate, transform.
+To mutate the policy target (for example redaction) use decision "transform" with a single effect of type redact or replace and a path beginning with $policy_target; allow, warn, deny, and escalate must never carry effects.
+A transform path is rooted at the mediated policy target value itself, so use "$policy_target" to replace it; never append ".value".
 Rule conditions are Rego body lines that may read only input.intervention_point, input.annotations.<annotator>, input.policy_target.value, input.tool.name, input.tool.id, and constants.
 Every rule must set "point" to one of the valid intervention points and include at least one condition that selects when it fires, unless its decision is "allow" with no effects. Never emit a rule with an empty point or empty conditions.
 """ % ", ".join(INTERVENTION_POINT_NAMES)
@@ -61,7 +62,7 @@ class GenerationEngine:
                 manifest, slug = build_manifest(plan, inventory)
                 rego = build_rego(plan, slug)
                 manifest_yaml = dump_manifest_yaml(manifest)
-                result = validate_artifacts(manifest, manifest_yaml, rego, slug, out_dir, strict=strict)
+                result = validate_artifacts(manifest, manifest_yaml, rego, slug, out_dir, strict=strict, regex_patterns=redact_patterns(plan))
                 all_warnings = [*warnings, *result.warnings]
                 report = build_report(plan, slug, manifest, all_warnings)
                 generation = GenerationResult(slug, manifest, manifest_yaml, rego, report, tuple(all_warnings))
@@ -89,6 +90,14 @@ class GenerationEngine:
         if undocumented:
             warnings.append(
                 "Tools declared with minimal metadata (no inventory provided): " + ", ".join(undocumented)
+            )
+        # AGT D1.1: only a transform decision may mutate the policy target, so any
+        # effects on allow/warn/deny/escalate rules are dropped from the policy.
+        dropped = sorted({rule.reason or rule.decision for rule in plan.rules if rule.effects and rule.decision != "transform"})
+        if dropped:
+            warnings.append(
+                "Effects on non-transform decisions were dropped (only transform mutates per AGT D1.1); "
+                "use decision 'transform' to redact or replace. Affected rules: " + ", ".join(dropped)
             )
         return warnings
 
