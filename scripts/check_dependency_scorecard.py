@@ -79,7 +79,7 @@ SCORECARD_API_BASE = "https://api.securityscorecards.dev/projects/github.com"
 # restricted to safe characters (alphanumerics, dash, underscore, dot) and a
 # bounded length. This is the SSRF gate: the resolved URL is matched against
 # this regex BEFORE being embedded into the Scorecard API URL.
-_GH_OWNER = r"[A-Za-z0-9][A-Za-z0-9-]{0,38}"
+_GH_OWNER = r"[A-Za-z0-9][A-Za-z0-9._-]{0,38}"
 _GH_REPO = r"[A-Za-z0-9._-]{1,100}"
 GITHUB_REPO_RE = re.compile(
     rf"^https://github\.com/(?P<owner>{_GH_OWNER})/(?P<repo>{_GH_REPO})/?$"

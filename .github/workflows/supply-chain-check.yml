@@ -27,10 +27,12 @@ on:
       - 'scripts/check_release_age.py'
       - 'scripts/check_install_scripts.py'
       - 'scripts/check_build_hooks.py'
+      - 'scripts/check_dependency_scorecard.py'
       - 'scripts/_supply_chain_common.py'
       - 'scripts/tests/test_check_release_age.py'
       - 'scripts/tests/test_check_install_scripts.py'
       - 'scripts/tests/test_check_build_hooks.py'
+      - 'scripts/tests/test_check_dependency_scorecard.py'
       - 'scripts/tests/test_supply_chain_common.py'
       - '.github/workflows/supply-chain-check.yml'
 
@@ -60,7 +62,7 @@ jobs:
           set -euo pipefail
           CHANGED="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
           SCANNER_HITS="$(printf '%s\n' "$CHANGED" \
-            | grep -E '^(scripts/(check_release_age|check_install_scripts|check_build_hooks|_supply_chain_common)\.py|scripts/tests/test_(check_release_age|check_install_scripts|check_build_hooks|supply_chain_common)\.py|\.github/workflows/supply-chain-check\.yml)$' \
+            | grep -E '^(scripts/(check_release_age|check_install_scripts|check_build_hooks|check_dependency_scorecard|_supply_chain_common)\.py|scripts/tests/test_(check_release_age|check_install_scripts|check_build_hooks|check_dependency_scorecard|supply_chain_common)\.py|\.github/workflows/supply-chain-check\.yml)$' \
             || true)"
           DEP_HITS="$(printf '%s\n' "$CHANGED" \
             | grep -E '(^|/)(package\.json|package-lock\.json|npm-shrinkwrap\.json|Cargo\.toml|Cargo\.lock|pyproject\.toml|requirements[^/]*\.txt|setup\.py|setup\.cfg|Pipfile|Pipfile\.lock|poetry\.lock|uv\.lock|.*\.csproj|packages\.config|go\.mod|go\.sum|build\.rs)$' \

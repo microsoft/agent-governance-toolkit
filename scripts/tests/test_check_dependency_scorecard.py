@@ -227,6 +227,14 @@ def test_canonicalize_accepts_known_github_forms(raw, expected):
             "git@github.com:org123/repo-name.git",
             "https://github.com/org123/repo-name",
         ),
+        (
+            "git@github.com:my_org/repo",
+            "https://github.com/my_org/repo",
+        ),
+        (
+            "git@github.com:my.org/repo",
+            "https://github.com/my.org/repo",
+        ),
     ],
 )
 def test_canonicalize_ssh_owner_regex_matches_github_repo_re(raw, expected):
@@ -574,7 +582,7 @@ def test_emit_annotations_silent_on_pass():
     """Passing scores must not emit any annotation (warn-only by default)."""
     r = cds.ScoreResult(
         dep=cds.NewDep("npm", "good-pkg", "package.json"),
-        status="pass",
+        status="above",
         score=8.5,
         repo_url="https://github.com/good/pkg",
     )
