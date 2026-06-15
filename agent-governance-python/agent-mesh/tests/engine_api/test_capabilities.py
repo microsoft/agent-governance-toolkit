@@ -51,15 +51,15 @@ def _mutating_flags() -> dict[str, bool]:
 class TestCapabilityFlags:
     def test_valid_read_only_combination(self):
         flags = CapabilityFlags(**_read_only_flags())
-        assert flags.runtime_mutating is False
-        assert flags.user_intent_required is False
-        assert flags.read_only_surface is True
+        assert not flags.runtime_mutating
+        assert not flags.user_intent_required
+        assert flags.read_only_surface
 
     def test_valid_mutating_combination(self):
         flags = CapabilityFlags(**_mutating_flags())
-        assert flags.runtime_mutating is True
-        assert flags.user_intent_required is True
-        assert flags.read_only_surface is False
+        assert flags.runtime_mutating
+        assert flags.user_intent_required
+        assert not flags.read_only_surface
 
     def test_mutating_endpoint_may_skip_user_intent(self):
         # The invariant only couples read_only_surface and runtime_mutating;
@@ -69,7 +69,7 @@ class TestCapabilityFlags:
             user_intent_required=False,
             read_only_surface=False,
         )
-        assert flags.read_only_surface is False
+        assert not flags.read_only_surface
 
     def test_invariant_rejects_mutating_marked_read_only(self):
         with pytest.raises(ValueError, match="read-only invariant violated"):
@@ -114,8 +114,8 @@ class TestCapabilityFlagsDecorator:
 
         attached = getattr(endpoint, CAPABILITY_FLAGS_ATTR)
         assert isinstance(attached, CapabilityFlags)
-        assert attached.runtime_mutating is False
-        assert attached.read_only_surface is True
+        assert not attached.runtime_mutating
+        assert attached.read_only_surface
 
     def test_returns_original_callable(self):
         def endpoint():

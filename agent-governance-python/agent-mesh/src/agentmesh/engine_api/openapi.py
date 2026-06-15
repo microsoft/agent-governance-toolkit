@@ -137,7 +137,8 @@ def derive_studio_client_allowlist(openapi_doc: dict[str, Any]) -> list[str]:
             operation_id = operation.get("operationId")
             if not operation_id:
                 continue
-            if flags.get("runtime_mutating") is False:
+            runtime_mutating = flags.get("runtime_mutating")
+            if isinstance(runtime_mutating, bool) and not runtime_mutating:
                 allowlist.append(operation_id)
 
     return sorted(allowlist)
