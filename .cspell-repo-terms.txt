@@ -794,4 +794,6 @@ sboms
 Syft
 laintext
 nsecure
+pyatr
+tzdata
 syft
