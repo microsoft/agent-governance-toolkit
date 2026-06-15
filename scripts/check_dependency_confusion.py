@@ -156,6 +156,12 @@ REGISTERED_PACKAGES = {
     "autogen-agentchat", "autogen_agentchat",
     "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
     "agentdojo",
+    # IANA timezone database for Python (real PyPI package, optional dep for Windows tz support)
+    "tzdata",
+    # AGT Audit Trail Record library (real PyPI package, pre-1.0; used in acs-atr-annotator example)
+    "pyatr",
+    # OS-native (Landlock / Seatbelt) capability sandbox (real PyPI package, Alpha; agt-sandbox[nono])
+    "nono-py", "nono_py",
     # With extras (base name is what matters)
 }
 
