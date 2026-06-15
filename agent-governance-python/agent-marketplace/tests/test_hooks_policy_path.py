@@ -25,6 +25,8 @@ _POLICY_TEMPLATE = """\
 version: "1.0"
 name: {name}
 description: {name} policy
+defaults:
+  action: allow
 rules:
   - name: {name}-rule
     condition:

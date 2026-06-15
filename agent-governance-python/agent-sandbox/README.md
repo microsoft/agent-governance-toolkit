@@ -2,7 +2,7 @@
 
 Public Preview — execution isolation for AI agents with policy-driven
 resource limits, tool proxies, network enforcement, and filesystem
-checkpointing. Ships three interchangeable backends behind the same
+checkpointing. Ships five interchangeable backends behind the same
 `SandboxProvider` ABC.
 
 Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
@@ -14,8 +14,10 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 | `DockerSandboxProvider` | Hardened OCI container (runc, auto-upgrades to gVisor / Kata) | Local dev, CI, self-hosted runners | `agt-sandbox[docker]` |
 | `HyperLightSandboxProvider` | KVM / mshv / WHP micro-VM via [hyperlight-sandbox](https://github.com/hyperlight-dev/hyperlight-sandbox) | Sub-millisecond cold start, per-call VM isolation | `agt-sandbox[hyperlight]` |
 | `ACASandboxProvider` | [Azure Container Apps sandbox](https://github.com/microsoft/azure-container-apps) (managed) | Production, multi-tenant, no infra to run | `agt-sandbox[azure]` + the [early-access SDK wheel](https://github.com/microsoft/azure-container-apps/releases) |
+| `MxcSandboxProvider` | OS-native containment via the [MXC](https://github.com/microsoft/mxc) binary (bubblewrap / AppContainer / Seatbelt / micro-VM) | No daemon, hypervisor SDK, or cloud account; CI and laptops | native MXC binary (no Python dep) — see [tutorial](tutorials/mxc-quickstart/README.md) |
+| `NonoSandboxProvider` | OS-native kernel sandbox via [nono](https://github.com/always-further/nono) (Landlock on Linux, Seatbelt on macOS) with a filtering network proxy | Kernel-enforced isolation with a pure-Python install; CI and laptops (**Linux/macOS only**) | `agt-sandbox[nono]` |
 
-All three implement the same async + sync API (`create_session`,
+All five implement the same async + sync API (`create_session`,
 `execute_code`, `destroy_session`, plus `*_async` variants) and consume
 the same `PolicyDocument` for resource caps, network allowlists, and
 tool allowlists.
@@ -30,6 +32,7 @@ pip install "agt-sandbox[full]"
 pip install "agt-sandbox[docker]"
 pip install "agt-sandbox[hyperlight]"
 pip install "agt-sandbox[azure,policy]"
+pip install "agt-sandbox[nono]"   # Linux/macOS only
 ```
 
 The Azure data-plane SDK ships as an early-access wheel — pin the URL:
@@ -38,18 +41,22 @@ The Azure data-plane SDK ships as an early-access wheel — pin the URL:
 pip install https://github.com/microsoft/azure-container-apps/releases/download/python-sdk-v0.1.0b1-early-access/azure_containerapps_sandbox-0.1.0b1-py3-none-any.whl
 ```
 
-## Quick start (all three providers)
+## Quick start (all five providers)
 
 ```python
 from agent_sandbox import (
     DockerSandboxProvider,
     HyperLightSandboxProvider,
     ACASandboxProvider,
+    MxcSandboxProvider,
+    NonoSandboxProvider,
 )
 
 # Pick one:
 provider = DockerSandboxProvider()
 # provider = HyperLightSandboxProvider(backend="wasm")
+# provider = MxcSandboxProvider(backend="bubblewrap")
+# provider = NonoSandboxProvider()  # Linux/macOS, kernel-enforced
 # provider = ACASandboxProvider(
 #     resource_group="my-rg", sandbox_group="agents",
 #     region="eastus2", disk="python-3.13",
@@ -122,6 +129,10 @@ asyncio.run(run_agent_task())
 | Runtime | `runc` (auto-upgrades to gVisor or Kata when available) |
 | State | `save_state` / `restore_state` via image commit |
 
+Filesystem mounts come from the policy: `sandbox_mounts.input_dir` is
+bind-mounted read-only and `sandbox_mounts.output_dir` read-write
+(see [Policy-driven configuration](#policy-driven-configuration)).
+
 ---
 
 ## 2. `HyperLightSandboxProvider` — micro-VM isolation
@@ -164,6 +175,9 @@ Notes:
   WHP / KVM passthrough).
 - Only tools listed in a session's `policy.tool_allowlist` are exposed
   to that session's guest; the rest stay host-side.
+- Filesystem mounts come from the policy: `sandbox_mounts.input_dir`
+  is mounted into the guest as read-only `/input` and
+  `sandbox_mounts.output_dir` as writable `/output`.
 
 ---
 
@@ -222,11 +236,109 @@ and reads its policy from
 
 ---
 
+## 4. `MxcSandboxProvider` — OS-native containment via MXC
+
+Runs each execution behind whichever OS-native primitive the host
+provides, driven by the [MXC](https://github.com/microsoft/mxc)
+(Microsoft eXecution Container) native binary — bubblewrap / LXC on
+Linux, AppContainer on Windows, Seatbelt on macOS, plus experimental
+micro-VM backends. No daemon, hypervisor SDK, or cloud account, and
+**no new Python dependency**: MXC ships as a native binary you build
+from source and place on `PATH` (or point to with `MXC_BINARY`).
+
+```python
+from agent_sandbox import MxcSandboxProvider, SandboxConfig
+
+provider = MxcSandboxProvider(backend="bubblewrap")  # None = platform default
+if not provider.is_available():
+    raise SystemExit("MXC binary not found; set MXC_BINARY or add it to PATH")
+
+# One-shot: create + execute + destroy in a single call (no session_id
+# to track), since the MXC sandbox self-destructs after each run.
+execution = provider.run_once(
+    "agent-1",
+    "print('hello from mxc')",
+    config=SandboxConfig(timeout_seconds=20, network_enabled=False),
+)
+print(execution.result.stdout)
+```
+
+For repeated executions that share the persistent `output/` directory,
+use the full `create_session` + `execute_code` lifecycle instead.
+Because the MXC schema has no tool or resource-cap concept,
+`tool_allowlist` is enforced host-side before spawn and `max_cpu` /
+`max_memory_mb` are carried but not rendered into the MXC config. See
+the [MXC quickstart tutorial](tutorials/mxc-quickstart/README.md) and the
+[design doc](../../docs/proposals/MXC-SANDBOX-PROVIDER.md) for details.
+
+---
+
+## 5. `NonoSandboxProvider` — OS-native kernel sandbox via nono
+
+Runs each execution behind a capability set enforced by **OS-native
+kernel primitives** — [Landlock](https://docs.kernel.org/userspace-api/landlock.html)
+on Linux (kernel 5.13+) and Seatbelt on macOS — using the
+[nono](https://github.com/always-further/nono) library's `nono-py`
+bindings. No daemon, hypervisor SDK, or cloud account; install with
+`agt-sandbox[nono]` (prebuilt wheels). Network egress is mediated by a
+built-in filtering proxy restricted to the policy's `network_allowlist`.
+**Linux/macOS only** — there are no Windows wheels.
+
+```python
+from agent_sandbox import NonoSandboxProvider, SandboxConfig
+
+provider = NonoSandboxProvider()
+if not provider.is_available():
+    raise SystemExit("nono not supported here (needs Linux+Landlock or macOS)")
+
+# One-shot: create + execute + destroy in a single call, since each nono
+# sandbox is a fresh forked child that exits after the run.
+execution = provider.run_once(
+    "agent-1",
+    "print('hello from nono')",
+    config=SandboxConfig(timeout_seconds=20, network_enabled=False),
+)
+print(execution.result.stdout)
+```
+
+For repeated executions that share the persistent `output/` directory (and
+a long-lived network proxy), use the full `create_session` + `execute_code`
+lifecycle. nono has no in-sandbox tool channel, so a non-empty
+`tool_allowlist` is **refused** at session creation
+rather than silently ignored, and `max_cpu` / `max_memory_mb` are delegated
+to the OS. See the
+[design doc](../../docs/proposals/NONO-SANDBOX-PROVIDER.md) for details.
+
+> **Production readiness.** `nono-py` is PyPI-classified **Alpha**
+> (upstream [always-further/nono](https://github.com/always-further/nono)).
+> Kernel enforcement (Landlock / Seatbelt) is structurally stronger than
+> in-process guards, but the project is still maturing — use for
+> defense-in-depth, dev, and CI first; run your own security review
+> before treating it as a production hard boundary. On Windows or kernels
+> without Landlock, use `DockerSandboxProvider` or another backend.
+
+---
+
 ## Policy-driven configuration
 
-All three providers consume the same `agent_os.policies.PolicyDocument`.
-Sandbox resource caps, network allowlists, and tool allowlists are
-native fields on the schema as of AGT 3.3, so policies live in YAML:
+All five providers consume the same `agent_os.policies.PolicyDocument`.
+Sandbox resource caps, network allowlists, tool allowlists, and
+filesystem mounts (`sandbox_mounts`) are native fields on the schema, so
+policies live in YAML and load directly with `PolicyDocument.from_yaml`.
+
+**Provider-specific notes:**
+
+| Provider | `tool_allowlist` | Platform |
+|----------|------------------|----------|
+| `DockerSandboxProvider` | host-side enforcement | Linux, macOS, Windows |
+| `HyperLightSandboxProvider` | in-sandbox tool registration | Linux, macOS, Windows |
+| `ACASandboxProvider` | host-side enforcement | cloud (Azure) |
+| `MxcSandboxProvider` | host-side enforcement | Linux, macOS, Windows |
+| `NonoSandboxProvider` | **refused** if non-empty — use a `tool_name` rule instead | Linux, macOS only |
+
+See `examples/quickstart/nono_sandbox_test.py` and
+`examples/quickstart/policies/nono_research_agent.yaml` for a full
+governed nono walkthrough (policy gate → AST scan → kernel isolation).
 
 ```yaml
 name: research-agent
@@ -245,6 +357,10 @@ network_allowlist:
 
 tool_allowlist:
   - fetch_arxiv
+
+sandbox_mounts:
+  input_dir: /data/agent-input    # mounted read-only
+  output_dir: /data/agent-output  # mounted read-write
 
 rules:
   - name: deny-shell-out

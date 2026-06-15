@@ -288,6 +288,8 @@ class HyperLightSandboxProvider(SandboxProvider):
         self._evaluators: dict[tuple[str, str], Any] = {}
         self._session_configs: dict[tuple[str, str], HyperlightConfig] = {}
         self._snapshots: dict[tuple[str, str, str], Any] = {}
+        self._ring_enforcers: dict[tuple[str, str], Any] = {}  # (#2666)
+        self._ring_breach_detectors: dict[tuple[str, str], Any] = {}  # (#2666)
 
         # Resolve the upstream SDK lazily but eagerly enough to set
         # ``_available`` correctly at __init__ time.
@@ -399,6 +401,39 @@ class HyperLightSandboxProvider(SandboxProvider):
             name: self._tools[name] for name in tool_allow
         }
 
+        # Apply ring constraints (#2666)
+        ring = getattr(base_cfg, 'ring', None)
+        if ring is not None:
+            try:
+                from hypervisor.rings.breach_detector import RingBreachDetector
+                from hypervisor.rings.enforcer import RingEnforcer
+                _enforcer = RingEnforcer()
+                _constraints = _enforcer.get_constraints(ring)
+                # Ring 3 (sandbox): strip network allowlist and tool access
+                if not _constraints.network_allowed:
+                    net_allow = []
+                    base_cfg.network_enabled = False
+                    hl_cfg.network_allowed = False
+                if not _constraints.subprocess_allowed:
+                    # No subprocess at ring 3 — also clear tool list
+                    tools_to_register = {}
+                # Store for execute_code gate
+                self._ring_enforcers[(agent_id, session_id)] = _enforcer
+                self._ring_breach_detectors[(agent_id, session_id)] = RingBreachDetector()
+                logger.info(
+                    'Ring %s applied for agent=%s session=%s '
+                    '(network=%s fs_scope=%s subprocess=%s)',
+                    ring, agent_id, session_id,
+                    _constraints.network_allowed,
+                    _constraints.filesystem_scope,
+                    _constraints.subprocess_allowed,
+                )
+            except ImportError:
+                logger.warning(
+                    'agent-hypervisor not installed — ring enforcement skipped '
+                    'for agent=%s', agent_id
+                )
+
         # Apply nanvix capability check before spinning up a worker.
         if hl_cfg.backend == "nanvix" and (tools_to_register or net_allow):
             raise ValueError(
@@ -497,6 +532,31 @@ class HyperLightSandboxProvider(SandboxProvider):
                 raise PermissionError(f"Policy denied: {reason}")
 
         enforce_no_subprocess_execution(code)
+        # Ring subprocess gate (#2666)
+        ring_enforcer = self._ring_enforcers.get(key)
+        breach_detector = self._ring_breach_detectors.get(key)
+        cfg_ring = getattr(cfg, 'ring', None) if cfg else None
+        if ring_enforcer is not None and cfg_ring is not None:
+            try:
+                from hypervisor.models import ExecutionRing
+                from hypervisor.rings.enforcer import ResourceType
+                result_ring = ring_enforcer.check_resource(cfg_ring, ResourceType.SUBPROCESS)
+                if breach_detector is not None:
+                    breach_detector.record_call(
+                        agent_id, session_id, cfg_ring, ExecutionRing.RING_3_SANDBOX
+                    )
+                    if breach_detector.is_breaker_tripped(agent_id, session_id):
+                        raise PermissionError(
+                            f'Ring breach circuit-breaker tripped for agent {agent_id!r}'
+                        )
+                if not result_ring.allowed:
+                    raise PermissionError(
+                        f'Ring enforcement denied subprocess for agent {agent_id!r}: '
+                        + result_ring.reason
+                    )
+            except ImportError:
+                # hypervisor not installed; ring gate already skipped at create_session
+                pass
 
         execution_id = uuid.uuid4().hex[:8]
         timeout_s = (cfg.max_execution_time_ms / 1000.0) if cfg else 60.0
@@ -554,6 +614,8 @@ class HyperLightSandboxProvider(SandboxProvider):
             sandbox = self._sandboxes.pop(key, None)
             self._evaluators.pop(key, None)
             self._session_configs.pop(key, None)
+            self._ring_enforcers.pop(key, None)  # (#2666)
+            self._ring_breach_detectors.pop(key, None)  # (#2666)
             # Pop any snapshots associated with this session into a
             # separate list so we can drop them on the worker thread
             # below — snapshot objects share the unsendable invariant

@@ -375,7 +375,7 @@ class ProofOfOutcome:
         )
 
         return await self.escrow_manager.create_escrow(request, requester_signature)
-    
+
     async def validate_outcome(
         self,
         escrow_id: str,

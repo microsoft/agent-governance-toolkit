@@ -96,6 +96,12 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    # nuget does not auto-apply the repo's conventional-commit prefix, so the
+    # generated PR title ("Bump X from A to B") fails the pr-title check. Set
+    # it explicitly so nuget bumps match the required title format.
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
 
   # Rust
   - package-ecosystem: "cargo"

@@ -1,0 +1,18 @@
+{
+  "id": "deny-drop-table-staging",
+  "input": {
+    "action": "sql_execute",
+    "agent_did": "did:web:staging-agent",
+    "context": {
+      "statement": "DROP TABLE users",
+      "endpoint": "pg-staging"
+    }
+  },
+  "expected_verdict": "deny",
+  "expected_rule": "deny-dangerous-ddl",
+  "resolution_metadata": {
+    "rule_id": "deny-dangerous-ddl",
+    "strategy": "deny-overrides"
+  },
+  "recorded_at": "2026-05-22T10:00:00Z"
+}

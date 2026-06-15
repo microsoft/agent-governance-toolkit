@@ -1,0 +1,18 @@
+{
+  "id": "allow-select-production",
+  "input": {
+    "action": "sql_read",
+    "agent_did": "did:web:analytics-agent",
+    "context": {
+      "statement": "SELECT name, email FROM users WHERE active = true LIMIT 100",
+      "endpoint": "pg-production"
+    }
+  },
+  "expected_verdict": "allow",
+  "expected_rule": "production-reads",
+  "resolution_metadata": {
+    "rule_id": "production-reads",
+    "strategy": "allow-overrides"
+  },
+  "recorded_at": "2026-05-22T10:05:00Z"
+}

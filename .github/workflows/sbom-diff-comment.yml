@@ -1,0 +1,210 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+name: SBOM Diff Comment
+
+# TRUSTED half of the two-workflow pattern. Triggered by `workflow_run` when
+# `sbom-diff.yml` finishes. This workflow runs in the BASE repository context
+# (not the PR's fork), checks out the default branch (reviewed code), and
+# uses the TRUSTED `scripts/diff_sbom.py` to render the comment body from the
+# untrusted SBOM artifacts produced by the PR workflow.
+#
+# Security model:
+#   - The companion workflow runs untrusted PR code and uploads ONLY SBOM
+#     JSON files (data, never executables, never scripts).
+#   - This workflow never checks out PR code. It checks out the base repo's
+#     default branch — which is always pre-merge reviewed.
+#   - PR identity (number, head/base refs) is re-derived from the
+#     workflow_run's head SHA via the GitHub API. Nothing in the artifact is
+#     trusted for routing — an attacker cannot forge a comment onto another
+#     PR by tampering with artifact contents.
+#   - The diff script raises ValueError on malformed JSON; the workflow
+#     catches it and exits cleanly with a warning.
+on:
+  workflow_run:
+    workflows: ["SBOM Diff (PR)"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+# Serialise comment runs per triggering PR head SHA. If a newer PR push
+# kicks off another `sbom-diff` run, we cancel the in-flight comment job so
+# it cannot overwrite the newer result with a stale comment.
+concurrency:
+  group: sbom-diff-comment-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  comment:
+    name: Post SBOM diff comment
+    runs-on: ubuntu-latest
+    # Only act on successful PR runs. We must not post comments for runs that
+    # were cancelled or failed (no artifact, or partial data).
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      # actions:read is required to download artifacts from another workflow
+      # run via actions/download-artifact's `run-id` parameter.
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Check out trusted tooling (default branch)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          # Only the diff helper is needed. Sparse checkout narrows the trust
+          # surface to a single file from the default branch.
+          sparse-checkout: |
+            scripts/diff_sbom.py
+          sparse-checkout-cone-mode: false
+
+      - name: Verify trusted script is present
+        id: verify
+        run: |
+          set -euo pipefail
+          if [ ! -f scripts/diff_sbom.py ]; then
+            echo "::warning::scripts/diff_sbom.py not present on default branch yet (bootstrap PR). Skipping comment; reviewers can inspect the SBOM artifact directly."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.verify.outputs.skip != 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Download SBOM artifact from triggering workflow run
+        if: steps.verify.outputs.skip != 'true'
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: sbom-diff-inputs
+          path: artifact
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve PR from workflow_run head SHA
+        if: steps.verify.outputs.skip != 'true'
+        id: resolve
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          # PR identity MUST be derived from trusted GitHub state, not from
+          # anything inside `artifact/`. Two-step resolution:
+          #
+          #   1. Prefer `workflow_run.pull_requests` (populated for same-repo
+          #      PRs and includes the exact PR that triggered the run).
+          #   2. Fall back to `listPullRequestsAssociatedWithCommit` for fork
+          #      PRs where step 1 is empty.
+          #
+          # In BOTH cases we re-fetch the PR and require that its CURRENT
+          # head SHA still matches the workflow_run's head SHA. This blocks
+          # the stale-comment race where commit A's slow trusted run could
+          # otherwise overwrite the comment for the newer commit B.
+          script: |
+            const headSha = context.payload.workflow_run.head_sha;
+            const { owner, repo } = context.repo;
+            const wrPRs = context.payload.workflow_run.pull_requests || [];
+            let candidate = null;
+            if (wrPRs.length > 0) {
+              candidate = wrPRs[0];
+            } else {
+              const { data: assoc } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner, repo, commit_sha: headSha,
+              });
+              candidate = assoc.find(p => p.state === 'open') || null;
+            }
+            if (!candidate) {
+              core.warning(`No PR found for commit ${headSha}; nothing to comment on.`);
+              core.setOutput('found', 'false');
+              return;
+            }
+            // Re-fetch authoritative PR state and validate it's still on the
+            // SHA that triggered us. Closed PRs or moved heads => skip.
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo, pull_number: candidate.number,
+            });
+            if (pr.state !== 'open') {
+              core.warning(`PR #${pr.number} is ${pr.state}; skipping.`);
+              core.setOutput('found', 'false');
+              return;
+            }
+            if (pr.head.sha !== headSha) {
+              core.warning(
+                `PR #${pr.number} head is now ${pr.head.sha}, but this run was ` +
+                `for ${headSha}; skipping to avoid stale comment.`
+              );
+              core.setOutput('found', 'false');
+              return;
+            }
+            core.setOutput('found', 'true');
+            core.setOutput('pr_number', String(pr.number));
+            core.setOutput('base_ref', pr.base.ref);
+            core.setOutput('head_ref', pr.head.ref);
+
+      - name: Render diff with trusted script
+        if: steps.verify.outputs.skip != 'true' && steps.resolve.outputs.found == 'true'
+        # Refs are passed via env vars so they are never expanded as GHA
+        # expressions inside `run:` (defence against shell-injection via a
+        # branch name like `$(curl evil)`). The diff script also sanitizes
+        # them before embedding in the markdown body.
+        env:
+          BASE_REF: ${{ steps.resolve.outputs.base_ref }}
+          HEAD_REF: ${{ steps.resolve.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          python scripts/diff_sbom.py \
+            --base artifact/base.spdx.json \
+            --head artifact/head.spdx.json \
+            --output "$GITHUB_WORKSPACE/sbom-diff.md" \
+            --base-ref "$BASE_REF" \
+            --head-ref "$HEAD_REF" \
+            --max-added 500
+
+      - name: Post or update PR comment
+        if: steps.verify.outputs.skip != 'true' && steps.resolve.outputs.found == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+        with:
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- sbom-diff-bot -->';
+            const body = fs.readFileSync(`${process.env.GITHUB_WORKSPACE}/sbom-diff.md`, 'utf8');
+            // GitHub PR comment body cap is 65,536 chars. The diff script
+            // already truncates "added" entries; this is defence-in-depth so
+            // a degenerate `removed` or `bumped` section cannot bust the API.
+            const MAX = 65000;
+            const safeBody = body.length > MAX
+              ? body.slice(0, MAX) + '\n\n> ⚠️ Comment truncated; see workflow artifact for the full diff.'
+              : body;
+
+            const { owner, repo } = context.repo;
+            const issue_number = parseInt(process.env.PR_NUMBER, 10);
+            if (!Number.isInteger(issue_number) || issue_number <= 0) {
+              core.setFailed(`Invalid PR number: ${process.env.PR_NUMBER}`);
+              return;
+            }
+
+            const existing = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const prior = existing.find(c =>
+              c.user && c.user.type === 'Bot' && c.body && c.body.startsWith(MARKER)
+            );
+
+            if (prior) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: prior.id, body: safeBody,
+              });
+              core.info(`Updated SBOM diff comment ${prior.id} on PR #${issue_number}`);
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body: safeBody,
+              });
+              core.info(`Created SBOM diff comment on PR #${issue_number}`);
+            }

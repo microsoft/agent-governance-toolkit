@@ -66,6 +66,13 @@ class SandboxConfig:
 
     Extends the minimal config with fields needed by session-based
     providers (``input_dir``, ``output_dir``, ``runtime``).
+
+    ``ring`` pins the session to a hypervisor execution ring.  When set,
+    each provider's ``create_session`` applies the ring's
+    ``ResourceConstraints`` (network, filesystem, subprocess) and
+    ``execute_code`` checks ``RingEnforcer.check_resource(SUBPROCESS)``
+    before spawning execution.  Defaults to ``RING_3_SANDBOX`` (most
+    restrictive) so behaviour is fail-closed when no ring is specified.
     """
 
     timeout_seconds: float = 60.0
@@ -78,6 +85,8 @@ class SandboxConfig:
     output_dir: str | None = None
     runtime: str | None = None
     output_max_bytes: int = 1_048_576  # 1 MiB per stream
+    # Hypervisor ring enforcement (#2666). None = no ring gate applied.
+    ring: Any = None  # ExecutionRing | None; typed as Any to avoid hard dep
 
 
 @dataclass

@@ -24,6 +24,7 @@ data_quality:
   global_defaults:
     freshness_threshold_hours: 6.0
     quality_score_threshold: 0.85
+    drift_threshold: 0.25
     block_on_failed_tests: true
     validation_status_required: "pass"  # pass | warn | fail
 
@@ -32,12 +33,14 @@ data_quality:
       owner_did: "did:web:analytics.example.com"
       freshness_threshold_hours: 6.0
       quality_score_threshold: 0.85
+      drift_threshold: 0.25
       description: "User interaction events — strict freshness required"
 
     revenue_metrics:
       owner_did: "did:web:finance.example.com"
       freshness_threshold_hours: 12.0
       quality_score_threshold: 0.90
+      drift_threshold: 0.25
       description: "Revenue rollups — high quality threshold for financial reporting"
 
 audit:
