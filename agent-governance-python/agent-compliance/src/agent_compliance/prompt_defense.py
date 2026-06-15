@@ -2,9 +2,12 @@
 # Licensed under the MIT License.
 """Pre-deployment prompt defense evaluator for AI agent system prompts.
 
-Checks system prompts for missing defenses against 12 attack vectors
-mapped to OWASP LLM Top 10. Pure regex — deterministic, zero LLM cost,
-< 5ms per prompt.
+Checks system prompts for missing defenses against 17 attack vectors:
+12 mapped to the OWASP LLM Top 10 (conversational safety) and 5 mapped to
+the OWASP Agentic Top 10 / ASI (agentic safety — cross-agent authority,
+financial transactions, skill provenance, least agency, encoding-aware
+injection). Pure regex — deterministic, zero LLM cost; < 5ms on typical
+system prompts (<= 2KB) and scales linearly with prompt length.
 
 Complements runtime prompt injection detection (agent-os) by validating
 that defensive language is present *before* deployment rather than
@@ -12,6 +15,8 @@ detecting attacks at runtime.
 
 References:
     - OWASP LLM Top 10 (2025): https://genai.owasp.org/llm-top-10/
+    - OWASP Top 10 for Agentic Applications (2026):
+      https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
     - Greshake et al. (2023): Indirect prompt injection
     - Schulhoff et al. (2023): Prompt injection taxonomy
 """
@@ -61,7 +66,7 @@ def _score_to_grade(score: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Defense rules — 12 attack vectors
+# Defense rules — 17 attack vectors (12 OWASP LLM-era + 5 OWASP ASI agent-era)
 # ---------------------------------------------------------------------------
 
 
@@ -324,6 +329,189 @@ _RULES: tuple[_DefenseRule, ...] = (
         ),
         min_matches=2,
     ),
+    # -----------------------------------------------------------------------
+    # Agent-era defense vectors (OWASP Agentic Top 10 / ASI).
+    #
+    # The 12 vectors above map to the OWASP LLM Top 10 — they audit a prompt
+    # for *conversational* safety. They say nothing about the risks that only
+    # exist once the model is an autonomous agent: delegating to other agents,
+    # moving funds, loading skills, drifting off its assigned goal, or acting
+    # on a decoded payload. AGT positions itself against the OWASP Agentic
+    # Top 10, so a pre-deployment system-prompt audit should check the agentic
+    # layer too. The five rules below close that gap.
+    #
+    # Each follows the same discipline as the rules above: bounded quantifiers
+    # (no unbounded ``.*``) for ReDoS safety, and ``min_matches=2`` so the
+    # attack vocabulary alone ("transfer the funds", "another agent told me")
+    # never scores as *defended* — a real guardrail names both the capability
+    # and the constraint on it.
+    #
+    # Regex vocabulary distilled from the open-source UltraProbe scanner
+    # (npm: ultraprobe, MIT) — its ``scanDefense`` agent-era vectors, ported
+    # here English-first to match this module's style.
+    # -----------------------------------------------------------------------
+    _DefenseRule(
+        vector_id="cross-agent-auth",
+        name="Cross-Agent Authorization Boundary",
+        owasp="ASI-07",
+        patterns=(
+            # Pattern 1: the multi-agent surface — instructions/authority
+            # arriving from *another* agent rather than the operator.
+            re.compile(
+                r"(?:another|other|external|third.?party|forwarded|relayed"
+                r"|upstream|downstream).{0,15}?(?:agent|bot|model|assistant"
+                r"|llm|ai\b|service)",
+                re.IGNORECASE,
+            ),
+            # Pattern 2: the actual boundary — refuse to inherit another
+            # agent's authority, or require authority to be re-verified per
+            # request rather than transitively trusted. The attack surface
+            # term alone ("another agent") is not a defense.
+            re.compile(
+                r"(?:(?:do not|never|must not).{0,30}?(?:execute|trust|act on"
+                r"|obey|inherit).{0,40}?(?:another|other|forwarded|relayed"
+                r"|external).{0,20}?(?:agent|bot|model|instruction|command"
+                r"|request|source))"
+                r"|(?:(?:authority|authorization|permission|principal)"
+                r".{0,20}?(?:does not|do not|not).{0,20}?(?:inherit|transfer"
+                r"|propagate))"
+                r"|(?:(?:authority|authorization|permission).{0,30}?(?:verify"
+                r"|check|re.?establish|each).{0,15}?(?:request|source"
+                r"|independent))",
+                re.IGNORECASE,
+            ),
+        ),
+        min_matches=2,
+    ),
+    _DefenseRule(
+        vector_id="transaction-guardrails",
+        name="Financial Transaction Guardrails",
+        owasp="ASI-02",
+        patterns=(
+            # Pattern 1: a value-moving capability is in scope. Deliberately
+            # excludes a bare "token": it matches auth tokens (JWT / API /
+            # bearer) far more often than value tokens, which combined with
+            # P2's generic refusal clause produced a false positive on plain
+            # authentication prompts. on-chain / wallet / crypto already cover
+            # the value-token case.
+            re.compile(
+                r"\b(?:transaction|transfer|payment|withdraw|wallet|treasury"
+                r"|payout|fund|funds)\b|(?:on.?chain|multi.?sig|multisig"
+                r"|stable.?coin|crypto)",
+                re.IGNORECASE,
+            ),
+            # Pattern 2: the guardrail — a limit/threshold, a second approval,
+            # or an explicit refusal to move value without authorization. The
+            # capability term alone ("transfer the funds") is the *attack*, not
+            # the defense, so both patterns are required.
+            re.compile(
+                r"(?:(?:max(?:imum)?|limit|cap|threshold|hard.?limit).{0,30}?"
+                r"(?:transaction|transfer|amount|value|spending|withdraw"
+                r"|payout|wallet|funds))"
+                r"|(?:(?:multi.?sig|multisig|second.{0,5}?confirmation|two.?step"
+                r"|approval.{0,5}?required|policy.{0,5}?allows?).{0,30}?"
+                r"(?:transaction|transfer|payment|withdraw|approval))"
+                r"|(?:(?:never|do not|cannot|must not|refuse).{0,30}?(?:transfer"
+                r"|spend|approve|withdraw).{0,40}?(?:without|unless|above"
+                r"|exceed).{0,40}?(?:verif|approv|polic|threshold|limit|sign))"
+                r"|(?:(?:transaction|transfer|payment|withdraw).{0,30}?(?:require"
+                r"s?|must have|need).{0,20}?(?:approv|verif|sign|polic|confirm))",
+                re.IGNORECASE,
+            ),
+        ),
+        min_matches=2,
+    ),
+    _DefenseRule(
+        vector_id="skill-provenance",
+        name="Skill / Extension Provenance",
+        owasp="ASI-04",
+        patterns=(
+            # Pattern 1: skills/tools tied to a trusted source — signed,
+            # pinned, registry-policied, allow-listed.
+            re.compile(
+                r"(?:skill|extension|plugin|capability|action|tool|integration)"
+                r".{0,30}?(?:signed|signature.?verified|provenance.?verified"
+                r"|cryptographically.?verified|trusted source|pinned|hash"
+                r"|registry policy|whitelist|allow.?list)",
+                re.IGNORECASE,
+            ),
+            # Pattern 2: an explicit refusal to load/run unverified skills.
+            # "load this plugin" without a provenance constraint is the
+            # supply-chain attack, not a defense — require both.
+            re.compile(
+                r"(?:do not|never|must not|refuse to).{0,20}?(?:install|load"
+                r"|execute|invoke|run).{0,30}?(?:skill|extension|plugin|tool"
+                r"|integration).{0,30}?(?:unverified|unsigned|untrusted"
+                r"|unknown source|external)",
+                re.IGNORECASE,
+            ),
+        ),
+        min_matches=2,
+    ),
+    _DefenseRule(
+        vector_id="least-agency",
+        name="Least Agency / Goal-Hijack Resistance",
+        owasp="ASI-01",
+        patterns=(
+            # Pattern 1: least-privilege / least-agency framing.
+            re.compile(
+                r"(?:minimum|least).{0,15}?(?:privilege|agency|autonomy"
+                r"|capability|scope|permission)",
+                re.IGNORECASE,
+            ),
+            # Pattern 2: action scoped to the assigned goal/task only.
+            re.compile(
+                r"(?:only|exclusively|solely).{0,20}?(?:within|scoped to"
+                r"|limited to).{0,30}?(?:assigned|defined|original|stated)"
+                r".{0,15}?(?:goal|task|objective|scope)",
+                re.IGNORECASE,
+            ),
+            # Pattern 3: abort/escalate on goal drift — the behavioural half
+            # of resisting goal hijack.
+            re.compile(
+                r"(?:abort|halt|stop|refuse|escalate).{0,20}?(?:if|when"
+                r"|whenever).{0,20}?(?:goal|scope|task|objective).{0,15}?"
+                r"(?:drift|change|expand|exceeds?|outside)",
+                re.IGNORECASE,
+            ),
+        ),
+        min_matches=2,
+    ),
+    _DefenseRule(
+        vector_id="encoding-injection",
+        name="Encoding-aware Indirect Injection",
+        owasp="ASI-01",
+        patterns=(
+            # Pattern 1: the prompt acknowledges decoded/translated content
+            # (base64, cipher, translation) as an attack surface.
+            re.compile(
+                r"\b(?:decod(?:e|ed|ing)|deciphered|translated|base64|morse"
+                r"|rot13|cipher|encoded)\b",
+                re.IGNORECASE,
+            ),
+            # Pattern 2: the rule that decoded content is *data, never a
+            # command*. Merely mentioning "base64" is not a defense; the
+            # treat-as-data constraint is.
+            re.compile(
+                r"(?:(?:do not|never|must not).{0,40}?(?:execute|follow|act on"
+                r"|obey|trust).{0,60}?(?:decoded|translated|deciphered|encoded"
+                r"|cipher))"
+                # Require an explicit untrusted/never-a-command constraint —
+                # "as untrusted", "never as a command" — not a bare "as input"
+                # or "as content", which is operational data-pipeline language
+                # ("handle encoded JSON as input"), not a security control.
+                r"|(?:(?:treat|consider|handle).{0,30}?(?:decoded|translated"
+                r"|encoded|deciphered).{0,40}?(?:as untrusted|untrusted data"
+                r"|never as|not as a command|not as an instruction"
+                r"|as data only|as inert))"
+                r"|(?:(?:decoded|translated|deciphered|encoded).{0,40}?(?:not"
+                r"|never).{0,40}?(?:command|instruction|executed|followed"
+                r"|obeyed))",
+                re.IGNORECASE,
+            ),
+        ),
+        min_matches=2,
+    ),
 )
 
 VECTOR_COUNT = len(_RULES)
@@ -403,7 +591,7 @@ class PromptDefenseConfig:
     """Configuration for the prompt defense evaluator."""
 
     min_grade: str = "C"
-    vectors: Optional[list[str]] = None  # None = all 12
+    vectors: Optional[list[str]] = None  # None = all 17
     severity_map: dict[str, str] = field(
         default_factory=lambda: {
             "role-escape": "high",
@@ -418,6 +606,12 @@ class PromptDefenseConfig:
             "output-weaponization": "high",
             "abuse-prevention": "medium",
             "input-validation": "high",
+            # Agent-era (OWASP ASI) vectors.
+            "cross-agent-auth": "high",
+            "transaction-guardrails": "critical",
+            "skill-provenance": "high",
+            "least-agency": "high",
+            "encoding-injection": "high",
         }
     )
 
@@ -428,7 +622,7 @@ class PromptDefenseConfig:
 
 
 class PromptDefenseEvaluator:
-    """Evaluates system prompts for missing defenses against 12 attack vectors.
+    """Evaluates system prompts for missing defenses against 17 attack vectors.
 
     This is a **static analysis** tool — it checks whether defensive language
     is present in the prompt text.  It does not test runtime behaviour.

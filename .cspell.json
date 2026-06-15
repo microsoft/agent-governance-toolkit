@@ -58,9 +58,18 @@
     "javascripts",
     "tabindex",
     "dampenable",
+    "dunder",
     "forgeable",
     "unstarred",
-    "getcode"
+    "getcode",
+    "datetimes",
+    "tzdata",
+    "pyatr",
+    "RTMR",
+    "SCITT",
+    "Dayos",
+    "Provedit",
+    "Nobulex"
   ],
   "ignorePaths": [
     "**/node_modules/**",

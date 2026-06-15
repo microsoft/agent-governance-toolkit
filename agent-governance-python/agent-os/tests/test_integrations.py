@@ -10,7 +10,7 @@ Run with: python -m pytest tests/test_integrations.py -v --tb=short
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 import asyncio
@@ -724,7 +724,16 @@ class TestBaseIntegrationPreExecute:
     def test_blocked_when_timeout_exceeded(self):
         k = self._kernel(timeout_seconds=10)
         ctx = k.create_context("a1")
-        ctx.start_time = datetime.now() - timedelta(seconds=20)
+        ctx.start_time = datetime.now(timezone.utc) - timedelta(seconds=20)
+        allowed, reason = k.pre_execute(ctx, "hello")
+        assert allowed is False
+        assert "Timeout" in reason
+
+    def test_blocked_when_timeout_exceeded_naive_start_time(self):
+        """Timeout check must not raise TypeError when start_time is naive (defensive normalization)."""
+        k = self._kernel(timeout_seconds=10)
+        ctx = k.create_context("a1")
+        ctx.start_time = datetime.now() - timedelta(seconds=20)  # naive datetime
         allowed, reason = k.pre_execute(ctx, "hello")
         assert allowed is False
         assert "Timeout" in reason
@@ -2028,7 +2037,7 @@ class TestGovernancePipelineIntegration:
 
         ctx = integration.create_context("slow-agent")
         # Simulate elapsed time
-        ctx.start_time = datetime.now() - timedelta(seconds=10)
+        ctx.start_time = datetime.now(timezone.utc) - timedelta(seconds=10)
 
         allowed, reason = integration.pre_execute(ctx, "late request")
         assert allowed is False

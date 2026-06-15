@@ -698,8 +698,16 @@ class IntentManager:
         """
         intent = await self._load(intent_id)
 
-        # Verification finalizes execution results and must only occur while
-        # actively executing to preserve the declare->approve->execute->verify lifecycle.
+        # Verification finalizes execution results and compares planned vs actual
+        # actions.  It must only run while the intent is actively executing.
+        #
+        # The intent lifecycle is strictly:
+        #   declare_intent() -> approve_intent() -> execute actions -> verify_intent()
+        #
+        # Accepting APPROVED here would skip the execution phase entirely, meaning
+        # there would be no execution records to compare against the declared plan.
+        # Callers must transition through execute_action() at least once before
+        # calling verify_intent().
         if intent.state != IntentState.EXECUTING:
             raise IntentStateError(
                 f"Cannot verify intent in state '{intent.state.value}'"
