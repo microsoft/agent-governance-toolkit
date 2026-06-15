@@ -1,0 +1,40 @@
+name: nono-research-agent
+version: "2"
+
+# Defaults consumed by both the rule engine and the sandbox provider.
+# network_default: deny keeps egress fail-closed; network_allowlist below
+# opens a filtered proxy to exactly those hosts.
+defaults:
+  action: allow
+  timeout_seconds: 30
+  network_default: deny
+
+# Sandbox egress allowlist. NonoSandboxProvider starts a filtering proxy
+# restricted to these hosts and binds the sandbox to it (proxy_only).
+network_allowlist:
+  - pypi.org
+  - files.pythonhosted.org
+
+# NOTE: nono has no in-sandbox tool-registration channel, so a non-empty
+# `tool_allowlist` is refused at create_session (fail-closed). Gate tools
+# with a rule on `tool_name` instead — the PolicyEvaluator runs host-side
+# before any sandbox is forked.
+
+rules:
+  # Host-side policy gate: block shell-out attempts before the sandbox runs.
+  - name: deny-shell-out-subprocess
+    condition: { field: code, operator: contains, value: "subprocess" }
+    action: deny
+    priority: 100
+    message: "shell-out blocked by nono-research-agent policy"
+
+  # Tool gating: only these tools are permitted. Executions that pass no
+  # tool_name in context skip this rule and fall through to default allow.
+  - name: deny-tool-not-in-allowlist
+    condition:
+      field: tool_name
+      operator: not_in
+      value: [fetch_arxiv, search_index]
+    action: deny
+    priority: 200
+    message: "tool not in nono-research-agent allowlist"

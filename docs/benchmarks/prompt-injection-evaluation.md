@@ -4,6 +4,10 @@ AGT now includes a standalone prompt-injection evaluation fixture under [`benchm
 
 This fixture is not a runtime feature and does not change enforcement behavior. It provides a reproducible corpus and harness for inspecting the current Rust prompt-injection detector on labelled synthetic examples.
 
+> For how the corpus is generated, split, de-duplicated, and baselined — the
+> reviewable methodology — see
+> [prompt-injection-methodology.md](prompt-injection-methodology.md).
+
 ## Scope
 
 The fixture covers:
@@ -17,7 +21,9 @@ The fixture covers:
 
 The fixture does not introduce:
 
-- an embedding detector
+- an embedding detector (the optional, default-off embedding evidence signal
+  lives in the SDK — `agent_os.prompt_injection_embedding` /
+  `agentmesh::prompt_injection_embedding` — not in this fixture)
 - new blocking policy
 - production thresholds
 - policy-routing integration

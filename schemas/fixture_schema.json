@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Policy Replay Fixture",
+  "description": "Test fixture for agt policy replay. Each fixture records a policy decision and its expected outcome.",
+  "type": "object",
+  "required": [
+    "id",
+    "input",
+    "expected_verdict"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique fixture identifier, e.g. 'deny-drop-table-staging'."
+    },
+    "input": {
+      "type": "object",
+      "description": "Execution context passed to PolicyEvaluator.evaluate().",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "agent_did": {
+          "type": "string"
+        },
+        "context": {
+          "type": "object"
+        }
+      }
+    },
+    "expected_verdict": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny",
+        "audit",
+        "block"
+      ],
+      "description": "Expected policy verdict. 'audit' and 'block' are reserved for future use; current fixtures use 'allow' and 'deny'."
+    },
+    "expected_rule": {
+      "type": "string",
+      "description": "Optional: expected matched rule name."
+    },
+    "resolution_metadata": {
+      "type": "object",
+      "description": "Optional: resolution details for conflict-resolution strategies.",
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "description": "The winning rule ID after conflict resolution."
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "deny-overrides",
+            "allow-overrides",
+            "first-match",
+            "most-specific-wins"
+          ],
+          "description": "Informational: the conflict resolution strategy that produced the verdict. Not used for pass/fail determination; recorded for audit and debugging only."
+        }
+      }
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this fixture was originally recorded."
+    }
+  },
+  "additionalProperties": true
+}

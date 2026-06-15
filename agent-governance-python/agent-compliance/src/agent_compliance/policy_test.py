@@ -14,6 +14,8 @@ Fixture format:
      "expected_rule": "pg-staging-reads"  # optional
     }
 
+See schemas/fixture_schema.json for the full JSON Schema.
+
 Usage (programmatic):
     from agent_compliance.policy_test import replay
     results = replay("policies/", "fixtures/")
@@ -45,6 +47,7 @@ class FixtureResult:
     expected_rule: str | None = None
     actual_rule: str | None = None
     fixture_path: str = ""
+    resolution_metadata: dict[str, Any] | None = None
 
     def mismatch_summary(self) -> str:
         """Human-readable diff for a failed fixture."""
@@ -102,6 +105,7 @@ class ReplayReport:
                     "expected_rule": r.expected_rule,
                     "actual_rule": r.actual_rule,
                     "fixture_path": r.fixture_path,
+                    "resolution_metadata": r.resolution_metadata,
                 }
                 for r in self.results
             ],
@@ -221,6 +225,7 @@ def replay(
 
         # Also support expected_allowed (boolean) from tutorial format
         expected_allowed = fixture.get("expected_allowed")
+        resolution_metadata = fixture.get("resolution_metadata")
 
         if expected_verdict is None and expected_allowed is None:
             logger.warning(
@@ -242,6 +247,17 @@ def replay(
         if expected_rule is not None and actual_rule != expected_rule:
             passed = False
 
+        # Validate resolution_metadata.rule_id if provided (superset of
+        # expected_rule: rule_id is resolution-aware, checked after expected_rule)
+        if resolution_metadata is not None and passed:
+            rule_id = resolution_metadata.get("rule_id")
+            if rule_id is not None and actual_rule != rule_id:
+                passed = False
+                logger.debug(
+                    "resolution_metadata mismatch: expected rule_id=%r, got %r",
+                    rule_id, actual_rule,
+                )
+
         report.results.append(
             FixtureResult(
                 fixture_id=fixture_id,
@@ -251,6 +267,7 @@ def replay(
                 expected_rule=expected_rule,
                 actual_rule=actual_rule,
                 fixture_path=source,
+                resolution_metadata=resolution_metadata,
             )
         )
 
