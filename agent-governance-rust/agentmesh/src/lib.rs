@@ -103,9 +103,12 @@ pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
 pub use policy::{PolicyEngine, PolicyError};
 pub use prompt_injection::{
     AuditRecord as PromptInjectionAuditRecord, DetectionConfig as PromptInjectionDetectionConfig,
+    DetectionEvidenceBackend as PromptInjectionEvidenceBackend,
     DetectionOptions as PromptInjectionDetectionOptions, DetectionResult as PromptInjectionResult,
-    InjectionType, PromptInjectionConfig, PromptInjectionDetector, PromptInjectionError,
-    Sensitivity as PromptInjectionSensitivity, ThreatLevel as PromptInjectionThreatLevel,
+    EmbeddingSignalBackend as PromptInjectionEmbeddingSignalBackend,
+    EvidenceSignal as PromptInjectionEvidenceSignal, InjectionType, PromptInjectionConfig,
+    PromptInjectionDetector, PromptInjectionError, Sensitivity as PromptInjectionSensitivity,
+    ThreatLevel as PromptInjectionThreatLevel,
 };
 pub use protocol_facets::{
     default_registry, extract_k8s_facets, extract_protocol_facets, extract_protocol_facets_with,

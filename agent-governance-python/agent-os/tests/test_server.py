@@ -145,6 +145,39 @@ class TestInjectionDetection:
         assert resp.status_code == 200
         assert resp.json()["is_injection"] is True
 
+    def test_detect_response_includes_evidence_field(self, client):
+        # The response schema always exposes `evidence` (empty when no backend
+        # is registered), so API consumers can rely on the key being present.
+        resp = client.post(
+            "/api/v1/detect/injection",
+            json={"text": "What is the weather today?"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["evidence"] == []
+
+    def test_detection_result_to_response_maps_evidence(self):
+        # Regression: the REST extractor previously dropped evidence signals,
+        # so backends would never surface through the API even when configured.
+        from agent_os.prompt_injection import (
+            DetectionResult,
+            EvidenceSignal,
+            ThreatLevel,
+        )
+        from agent_os.server.app import _detection_result_to_response
+
+        result = DetectionResult(
+            is_injection=False,
+            threat_level=ThreatLevel.NONE,
+            injection_type=None,
+            confidence=0.0,
+            evidence=[EvidenceSignal(backend="embedding_knn", score=0.42)],
+        )
+        response = _detection_result_to_response(result)
+        assert len(response.evidence) == 1
+        assert response.evidence[0].backend == "embedding_knn"
+        assert response.evidence[0].score == 0.42
+        assert response.evidence[0].blocks is False
+
 
 # =========================================================================
 # Batch detection
