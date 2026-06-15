@@ -37,6 +37,7 @@ export class AuditLogger {
       action: entry.action,
       decision: entry.decision,
       previousHash,
+      skillAuditMetadata: entry.skillAuditMetadata,
     });
 
     const hash = createHash('sha256').update(payload).digest('hex');
@@ -48,6 +49,7 @@ export class AuditLogger {
       decision: entry.decision,
       hash,
       previousHash,
+      skillAuditMetadata: entry.skillAuditMetadata,
     };
 
     this.entries.push(full);
@@ -78,6 +80,7 @@ export class AuditLogger {
         action: entry.action,
         decision: entry.decision,
         previousHash: entry.previousHash,
+        skillAuditMetadata: entry.skillAuditMetadata,
       });
 
       const expectedHash = createHash('sha256').update(payload).digest('hex');
