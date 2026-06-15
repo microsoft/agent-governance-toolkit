@@ -218,3 +218,56 @@ class TestMetricsWithGovernance:
             mm.record_handshake(0.05, "success")
             response = client.get("/metrics")
             assert "agentmesh_handshake_duration_seconds" in response.text
+
+
+# ---------------------------------------------------------------------------
+# TLS enforcement tests for _attach_trace_exporter (security regression)
+# ---------------------------------------------------------------------------
+
+
+class TestAttachTraceExporterTLSEnforcement:
+    """Security tests: _attach_trace_exporter must block non-local plaintext."""
+
+    def test_non_local_http_endpoint_raises(self):
+        """http:// pointing to a non-local host must raise ValueError."""
+        from agentmesh.telemetry import _attach_trace_exporter
+        from unittest.mock import MagicMock
+
+        provider = MagicMock()
+        with pytest.raises(ValueError, match="[Pp]laintext"):
+            _attach_trace_exporter(provider, "http://collector.prod.example.com:4317", "grpc")
+
+    def test_local_http_endpoint_warns_and_proceeds(self):
+        """http://localhost is allowed but must log a WARNING."""
+        from agentmesh.telemetry import _attach_trace_exporter
+        from unittest.mock import MagicMock, patch
+
+        provider = MagicMock()
+        with patch("agentmesh.telemetry.logger") as mock_logger:
+            _attach_trace_exporter(provider, "http://localhost:4317", "grpc")
+        mock_logger.warning.assert_called_once()
+
+    def test_https_remote_endpoint_does_not_raise(self):
+        """https:// for a remote host must NOT raise (TLS is fine)."""
+        from agentmesh.telemetry import _attach_trace_exporter
+        from unittest.mock import MagicMock
+
+        provider = MagicMock()
+        # Should not raise ValueError; ImportError is acceptable if exporter is absent.
+        try:
+            _attach_trace_exporter(provider, "https://collector.example.com:4317", "grpc")
+        except ImportError:
+            pass  # exporter not installed — that's fine, security check passed
+
+    def test_bootstrap_otel_non_local_http_raises(self):
+        """bootstrap_otel() with a non-local http:// endpoint must raise ValueError."""
+        from agentmesh.telemetry import bootstrap_otel, reset
+
+        reset()
+        with pytest.raises(ValueError, match="[Pp]laintext"):
+            bootstrap_otel(
+                service_name="test",
+                endpoint="http://remote.collector.internal:4317",
+                enable_metrics=False,
+            )
+        reset()

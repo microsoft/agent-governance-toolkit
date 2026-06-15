@@ -95,6 +95,7 @@ REGISTERED_PACKAGES = {
     # Telemetry / monitoring
     "sentry-sdk",
     "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
+    "opentelemetry-exporter-otlp-proto-grpc", "opentelemetry-exporter-otlp-proto-http",
     "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
     # pyproject.toml optional-dependency group names (not real packages)
     "dev", "cli", "all", "server", "storage", "observability",
@@ -163,6 +164,10 @@ REGISTERED_PACKAGES = {
     # OS-native (Landlock / Seatbelt) capability sandbox (real PyPI package, Alpha; agt-sandbox[nono])
     "nono-py", "nono_py",
     # With extras (base name is what matters)
+    # ACS annotator example dependency (real PyPI package)
+    "pyatr", "pyatr_core",
+    # Timezone data package (real PyPI package, used on Windows/Alpine)
+    "tzdata",
 }
 
 # Local-only packages that should NEVER appear with version pins in
