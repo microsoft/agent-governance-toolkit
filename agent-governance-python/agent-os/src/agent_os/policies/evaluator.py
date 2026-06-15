@@ -250,7 +250,7 @@ class PolicyEvaluator:
                         "policy": doc.name,
                         "rule": rule.name,
                         "action": rule.action.value,
-                        "context_snapshot": context,
+                        "context_snapshot": copy.deepcopy(context),
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                     if rule.dynamic_condition is not None:
