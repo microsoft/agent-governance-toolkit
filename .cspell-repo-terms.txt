@@ -803,3 +803,4 @@ syft
 arraycomprehension
 setcomprehension
 objectcomprehension
+innererror

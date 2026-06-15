@@ -139,7 +139,7 @@ def _rule(item: Any) -> RulePlan:
             )
         # A single verdict yields a single value, so contradictory effect
         # combinations (a whole-value replace mixed with a regex redact, or two
-        # replaces) cannot be honored together and would be silently miscompiled.
+        # replaces) cannot be honored together and would be silently compiled wrong.
         replaces = [effect for effect in effects if str(effect.get("type")) == "replace"]
         redacts = [effect for effect in effects if str(effect.get("type")) == "redact"]
         if replaces and redacts:
@@ -176,7 +176,7 @@ def _validate_effect(effect: Any) -> None:
         raise PlanError(f"effect path must start with $policy_target: {path}")
     # Only redact and replace are expressible as a single AGT D1.1 transform.
     # `append` has no faithful single-target transform form (string vs array,
-    # path semantics), so reject it rather than miscompile it.
+    # path semantics), so reject it rather than compile it incorrectly.
     if effect_type == "append":
         raise PlanError("append effect is not expressible as an AGT D1.1 transform; use replace or redact")
     if effect_type == "redact":
