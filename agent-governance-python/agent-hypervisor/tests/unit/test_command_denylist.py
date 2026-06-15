@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-from hypervisor.sandbox import DENIED_COMMANDS
-from hypervisor.rings.enforcer import RingEnforcer, ResourceType
 from hypervisor.models import ExecutionRing
+from hypervisor.rings.enforcer import ResourceType, RingEnforcer
+from hypervisor.sandbox import DENIED_COMMANDS
 
 
 class TestCommandDenylist:
@@ -85,6 +85,7 @@ class TestCommandDenylist:
         # CURL (uppercase) is not in the denylist, so it would be allowed
         # This is the current behavior - exact string match
         # If we want case-insensitive, we'd need to change the implementation
+        assert result.allowed is True
 
     def test_check_command_with_args(self):
         """Commands with arguments should check only the command name."""
