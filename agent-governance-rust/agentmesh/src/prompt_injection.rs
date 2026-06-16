@@ -1719,30 +1719,29 @@ const CONTEXT_RULES: &[(&str, ThreatLevel, f64, &str)] = &[
         0.75,
         "secret_password_override",
     ),
-    // Indirect / tool-output injection rules (OWASP LLM01 / MITRE ATLAS AML.T0051.001).
-    // These cover payloads that arrive through retrieved content (web pages, emails,
-    // RAG documents, tool results) and address the model directly rather than
-    // impersonating the user speaking first-person.
+    // Indirect / tool-output injection family (OWASP LLM01 / MITRE ATLAS AML.T0051.001).
+    // These cover payloads that arrive inside retrieved content — web pages, emails,
+    // RAG documents, tool results — and address the model directly rather than the user.
     (
-        r"(?i)instructions?\s+for\s+(?:the\s+)?(?:ai|assistant|model|llm|chatbot|bot)\s+(?:reading|processing|viewing|that\s+reads)",
+        r"(?i)instructions?\s+for\s+(?:the\s+)?(?:ai|assistant|model|llm|chatbot|bot)\s+(?:reading|processing|analyzing|viewing|evaluating|that\s+reads)\s+this",
         ThreatLevel::High,
         0.9,
         "instructions_for_ai_reading",
     ),
     (
-        r"(?i)(?:system\s+note|note\s+to\s+(?:the\s+)?(?:ai|assistant|model)|attention\s*(?:ai|assistant))\s*:",
+        r"(?i)(?:system\s+note|note\s+to\s+(?:the\s+)?(?:ai|assistant|model|llm)|attention\s*(?:ai|assistant))\s*:",
         ThreatLevel::High,
         0.9,
         "system_note_to_assistant",
     ),
     (
-        r"(?i)<!--\s*(?:ai|assistant|system|llm)\s*:",
+        r"(?i)<!--\s*(?:ai|assistant|system|llm|model)\s*:",
         ThreatLevel::Medium,
         0.8,
         "embedded_tool_directive",
     ),
     (
-        r"(?i)(?:this\s+(?:document|page|email|message|file)|the\s+(?:webpage|email|document|text\s+above))\s+(?:instructs|requires|tells|wants|asks)\s+you\s+to\s+(?:ignore|disregard|forget|override|replace|execute|run|call|send|exfiltrate|leak|reveal|output|delete|forward|disclose|bypass)",
+        r"(?i)(?:this\s+(?:document|page|email|message|file|article|text|result)|the\s+(?:webpage|email|document|text\s+above))\s+(?:instructs?|requires|tells|wants|asks)\s+(?:you|the\s+(?:ai|assistant|model|llm))\s+to\s+(?:ignore|disregard|forget|override|replace|execute|run|call|send|exfiltrate|leak|reveal|output|delete|forward|disclose|bypass)",
         ThreatLevel::High,
         0.9,
         "retrieved_doc_override",
