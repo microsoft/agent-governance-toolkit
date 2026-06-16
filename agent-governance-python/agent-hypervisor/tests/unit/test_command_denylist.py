@@ -78,14 +78,21 @@ class TestCommandDenylist:
             result = self.enforcer.check_command(tool)
             assert result.allowed is False, f"{tool} should be denied"
 
-    def test_check_command_case_sensitive(self):
-        """Command matching should be case-sensitive (exact match)."""
-        # The denylist uses lowercase
+    def test_check_command_case_insensitive(self):
+        """Command matching should be case-insensitive."""
+        # The denylist uses lowercase, but uppercase variants should also be denied
         result = self.enforcer.check_command("CURL")
-        # CURL (uppercase) is not in the denylist, so it would be allowed
-        # This is the current behavior - exact string match
-        # If we want case-insensitive, we'd need to change the implementation
-        assert result.allowed is True
+        assert result.allowed is False
+        assert "curl" in result.reason.lower()
+
+        result = self.enforcer.check_command("CuRl")
+        assert result.allowed is False
+
+        result = self.enforcer.check_command("WGET")
+        assert result.allowed is False
+
+        result = self.enforcer.check_command("BaSh")
+        assert result.allowed is False
 
     def test_check_command_with_args(self):
         """Commands with arguments should check only the command name."""
@@ -105,6 +112,53 @@ class TestCommandDenylist:
         """None command should be denied."""
         result = self.enforcer.check_command(None)
         assert result.allowed is False
+
+    def test_check_command_whitespace_variations(self):
+        """Commands with leading/trailing/multiple spaces should be handled correctly."""
+        result = self.enforcer.check_command("  curl  ")
+        assert result.allowed is False
+        assert "curl" in result.reason.lower()
+
+        result = self.enforcer.check_command("\tcurl\n")
+        assert result.allowed is False
+
+        result = self.enforcer.check_command("  curl  -X  POST  ")
+        assert result.allowed is False
+
+        result = self.enforcer.check_command("  python3  ")
+        assert result.allowed is True
+
+    def test_check_command_special_characters(self):
+        """Commands with shell metacharacters should be handled safely."""
+        # Command injection attempts should be treated as the base command
+        result = self.enforcer.check_command("curl; rm -rf /")
+        assert result.allowed is False
+        assert "curl" in result.reason.lower()
+
+        result = self.enforcer.check_command("curl && rm -rf /")
+        assert result.allowed is False
+
+        result = self.enforcer.check_command("curl | sh")
+        assert result.allowed is False
+
+    def test_check_command_partial_match(self):
+        """Partial matches should not be denied if not explicitly in denylist."""
+        # "curl123" is not "curl", so it should be allowed
+        result = self.enforcer.check_command("curl123")
+        assert result.allowed is True
+
+        result = self.enforcer.check_command("wget2")
+        assert result.allowed is True
+
+        result = self.enforcer.check_command("bashful")
+        assert result.allowed is True
+
+    def test_check_command_large_input(self):
+        """Excessively long command strings should be handled gracefully."""
+        long_cmd = "curl " + "x" * 10000
+        result = self.enforcer.check_command(long_cmd)
+        assert result.allowed is False
+        assert "curl" in result.reason.lower()
 
     def test_all_denied_commands_are_checked(self):
         """Every entry in DENIED_COMMANDS should be denied by check_command."""
