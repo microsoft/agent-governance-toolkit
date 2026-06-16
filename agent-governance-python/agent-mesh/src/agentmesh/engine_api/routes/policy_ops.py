@@ -13,6 +13,7 @@ by the spec and is deliberately not registered anywhere in this app.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,6 +58,34 @@ def _load_replay():
     from agent_compliance.policy_test import replay
 
     return replay
+
+
+def _safe_policy_dir(request: Request, override: str | None) -> str:
+    """Resolve the policy directory for a test run with a path-containment guard.
+
+    ``override`` arrives over HTTP and is therefore untrusted. Resolve it (and the
+    engine's configured policy root) to real absolute paths and require the override to
+    stay within that root; otherwise an HTTP client could steer the file-reading replay
+    engine at arbitrary server paths. Returns the engine policy directory unchanged when
+    no override is supplied. Raises a ``422 FIXTURE_LOAD_ERROR`` envelope when the
+    override escapes the configured root.
+    """
+    base = os.path.realpath(_registry(request).policy_dir)
+    if override is None:
+        return base
+    candidate = os.path.realpath(override)
+    try:
+        contained = os.path.commonpath([base, candidate]) == base
+    except ValueError:
+        contained = False
+    if not contained:
+        raise ApiError(
+            422,
+            FIXTURE_LOAD_ERROR,
+            "policy_dir override must resolve within the engine policy directory",
+            {"policy_dir": override},
+        )
+    return candidate
 
 
 @router.post(
@@ -120,7 +149,7 @@ async def test_policy(request: Request, body: TestRequest) -> TestResponse:
             {"package": "agent-compliance"},
         )
 
-    policy_dir = body.policy_dir or str(_registry(request).policy_dir)
+    policy_dir = _safe_policy_dir(request, body.policy_dir)
     fixtures_payload = [fixture.model_dump() for fixture in body.fixtures]
 
     with tempfile.TemporaryDirectory(prefix="agt-policy-test-") as tmp:

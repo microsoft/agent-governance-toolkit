@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -133,29 +134,47 @@ class TestTestPolicyWithFakeEngine:
         assert resp.status_code == 422
         assert resp.json()["code"] == "FIXTURE_LOAD_ERROR"
 
-    def test_uses_policy_dir_override(self, client, monkeypatch, tmp_path):
+    def test_uses_policy_dir_override(self, client, monkeypatch, policy_dir):
         captured = {}
 
-        def _capturing_replay(policy_dir, _fixtures):
-            captured["policy_dir"] = policy_dir
+        def _capturing_replay(policy_dir_arg, _fixtures):
+            captured["policy_dir"] = policy_dir_arg
             return _fake_report()
 
         monkeypatch.setattr(policy_ops, "_load_replay", lambda: _capturing_replay)
-        body = dict(_TEST_BODY, policy_dir=str(tmp_path))
+        # The override must resolve within the engine policy root, so use a subdirectory
+        # of the configured policy directory rather than an unrelated temp path.
+        override = policy_dir / "subset"
+        override.mkdir()
+        body = dict(_TEST_BODY, policy_dir=str(override))
         resp = client.post("/api/v1/policy/test", json=body)
         assert resp.status_code == 200
-        assert captured["policy_dir"] == str(tmp_path)
+        assert captured["policy_dir"] == os.path.realpath(str(override))
+
+    def test_policy_dir_override_outside_root_is_rejected(self, client, monkeypatch, tmp_path_factory):
+        def _capturing_replay(_policy_dir, _fixtures):
+            raise AssertionError("replay must not run for an out-of-root override")
+
+        monkeypatch.setattr(policy_ops, "_load_replay", lambda: _capturing_replay)
+        # A directory outside the configured policy root (the engine policy dir is the
+        # per-test ``policy_dir`` fixture; this factory dir is a sibling, not a child).
+        outside = tmp_path_factory.mktemp("outside_root")
+        body = dict(_TEST_BODY, policy_dir=str(outside))
+        resp = client.post("/api/v1/policy/test", json=body)
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "FIXTURE_LOAD_ERROR"
 
 
 class TestTestPolicyWithRealEngine:
     """End-to-end against the real replay engine when agent-compliance is installed."""
 
-    def test_real_replay_round_trip(self, client, tmp_path):
+    def test_real_replay_round_trip(self, client, policy_dir):
         pytest.importorskip("agent_compliance.policy_test")
         pytest.importorskip("agent_os.policies.evaluator")
 
-        # Isolated policy directory so only the probe policy drives the verdicts.
-        probe_dir = tmp_path / "probe_policies"
+        # Isolated policy directory (within the engine policy root) so only the probe
+        # policy drives the verdicts and the containment guard accepts the override.
+        probe_dir = policy_dir / "probe_policies"
         probe_dir.mkdir()
         (probe_dir / "probe.yaml").write_text(
             'version: "1.0"\n'
