@@ -13,8 +13,7 @@ function computeChainHash(entry: Omit<AuditEntry, "hash">): string {
   // a fast cryptographic hash is the correct primitive. Do not replace with
   // bcrypt/scrypt/argon2 — those are password-KDFs with different goals
   // (slowdown vs. brute force) and would make every audit append O(100ms).
-  // lgtm [js/insufficient-password-hash]
-  // codeql[js/insufficient-password-hash]
+  // codeql[js/insufficient-password-hash] Not a password hash: SHA-256 here is a content-addressed Merkle-chain integrity hash for tamper-evident audit-log entries. Password-KDFs (bcrypt/argon2/scrypt) are wrong here — see comment above.
   const data = JSON.stringify({
     id: entry.id,
     timestamp: entry.timestamp,
