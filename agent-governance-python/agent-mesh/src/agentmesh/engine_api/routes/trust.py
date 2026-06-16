@@ -6,8 +6,8 @@
 :class:`~agentmesh.engine_api.models.TrustGraph` object and is NOT paginated. Both are
 placeholder surfaces: contract-conformant shape, real backend delivered by a later epic.
 
-TODO(Epic 8): wire both routes to the trust engine (scores from the trust store, graph from
-the delegation/sponsorship relationships).
+A later epic wires both routes to the trust engine (scores from the trust store, graph from
+the delegation and sponsorship relationships).
 """
 
 from __future__ import annotations

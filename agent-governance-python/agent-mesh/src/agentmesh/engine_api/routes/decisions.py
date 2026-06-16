@@ -4,7 +4,7 @@
 
 Placeholder surface: contract-conformant shape, real backend delivered by a later epic.
 
-TODO(Epic 7): wire this to the decision log and return persisted
+A later epic wires this to the decision log to return persisted
 :class:`~agentmesh.engine_api.models.Decision` records.
 """
 

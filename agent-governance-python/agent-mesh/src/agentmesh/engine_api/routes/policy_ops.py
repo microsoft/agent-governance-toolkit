@@ -51,7 +51,7 @@ def _load_replay():
 
     Imported lazily so the adapter carries no hard dependency on agent-compliance. Raises
     :class:`ImportError` when the policy-test engine is not installed; the caller maps that
-    to a ``503 ENGINE_UNAVAILABLE`` envelope. Indirected through this helper so tests can
+    to a ``503 ENGINE_UNAVAILABLE`` envelope. Routed through this helper so tests can
     substitute a fake replay without agent-compliance present.
     """
     from agent_compliance.policy_test import replay

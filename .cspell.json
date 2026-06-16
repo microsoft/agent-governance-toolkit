@@ -44,6 +44,7 @@
     "uvicorn",
     "tomli",
     "fastapi",
+    "starlette",
     "structlog",
     "scipy",
     "croniter",

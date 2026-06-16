@@ -31,7 +31,7 @@ class TestArgParser:
 
     def test_port_must_be_int(self):
         with pytest.raises(SystemExit):
-            _build_arg_parser().parse_args(["--port", "notanumber"])
+            _build_arg_parser().parse_args(["--port", "not-a-number"])
 
 
 class TestMain:

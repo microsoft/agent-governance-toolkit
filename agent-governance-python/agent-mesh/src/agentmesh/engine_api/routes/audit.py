@@ -6,7 +6,7 @@ Placeholder surface: the route, its capability flags, pagination, and query para
 contract-conformant, but the audit backend is delivered by a later epic. Until then the
 endpoint returns an empty, well-formed paginated payload rather than fabricated entries.
 
-TODO(Epic 9): wire this to the real audit store and return persisted
+A later epic wires this to the real audit store to return persisted
 :class:`~agentmesh.engine_api.models.AuditLogEntry` records.
 """
 

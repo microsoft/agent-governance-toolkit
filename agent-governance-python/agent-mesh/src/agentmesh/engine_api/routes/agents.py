@@ -4,7 +4,7 @@
 
 Placeholder surface: contract-conformant shape, real backend delivered by a later epic.
 
-TODO(Epic 8): wire this to the agent registry and return persisted
+A later epic wires this to the agent registry to return persisted
 :class:`~agentmesh.engine_api.models.AgentSummary` records.
 """
 
