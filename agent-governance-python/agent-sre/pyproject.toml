@@ -30,11 +30,11 @@ dependencies = ["agent-governance-toolkit-cli>=4.0.0,<5.0"]
 # the `api` extra, which the stub no longer carries; they are imported directly by
 # the test suite at collection time, so the dev bundle must list them.
 dev = [
-    "pytest>=8.0,<10.0",
-    "pytest-cov>=5.0,<8.0",
-    "pytest-asyncio>=0.23,<2.0",
-    "ruff>=0.8,<1.0",
-    "mypy>=1.10,<3.0",
+    "pytest>=9.1.0,<10.0",
+    "pytest-cov>=7.1.0,<8.0",
+    "pytest-asyncio>=1.4.0,<2.0",
+    "ruff>=0.15.17,<1.0",
+    "mypy>=2.1.0,<3.0",
     "pydantic>=2.13.4,<3.0",
     "pyyaml>=6.0.3,<7.0",
     "croniter>=2.0,<7.0",

@@ -28,12 +28,12 @@ dependencies = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
 # extra; both are imported directly by the test suite at collection time, so the
 # stub's dev bundle must list them.
 dev = [
-    "pytest>=8.0.0,<10.0",
-    "pytest-asyncio>=0.23.0,<2.0",
-    "pytest-cov>=4.0.0,<8.0",
+    "pytest>=9.1.0,<10.0",
+    "pytest-asyncio>=1.4.0,<2.0",
+    "pytest-cov>=7.1.0,<8.0",
     "hypothesis>=6.155.1,<7.0",
-    "ruff>=0.4.0,<1.0",
-    "mypy>=1.8.0,<3.0",
+    "ruff>=0.15.17,<1.0",
+    "mypy>=2.1.0,<3.0",
     "jsonschema>=4.26.0,<5.0",
     "pydantic>=2.13.4,<3.0",
     "fastapi>=0.136.3,<1.0",
