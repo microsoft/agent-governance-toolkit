@@ -41,6 +41,9 @@
   "dependencies": {
     "@microsoft/agent-governance-sdk": "4.0.0"
   },
+  "overrides": {
+    "js-yaml": "4.2.0"
+  },
   "engines": {
     "node": ">=22.0.0"
   }
