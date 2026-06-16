@@ -28,6 +28,14 @@ from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
+from .approval_protocol import (
+    ActionBinding,
+    ActionTarget,
+    ApprovalCoordinator,
+    ApprovalProtocolError,
+    ApproverKind,
+    EntryDecision,
+)
 
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
@@ -117,6 +125,15 @@ class GovernanceConfig:
     conflict_strategy: str = "deny_overrides"
     ring: Optional["ExecutionRing"] = None
     session_id: str = ""
+    # Action-bound approval protocol (ADR-0030). When both an
+    # ``approval_coordinator`` and an ``approval_chain_id`` are set,
+    # ``require_approval`` decisions are routed through the coordinator
+    # (action-binding, audit linkage, fail-closed timeout) instead of the
+    # legacy approval-handler-only path. The ``approval_handler`` is reused as
+    # the synchronous source of the approver's decision.
+    approval_coordinator: Optional[ApprovalCoordinator] = None
+    approval_chain_id: Optional[str] = None
+    approval_ttl_seconds: float = 300.0
 
 
 class GovernanceDenied(Exception):
@@ -162,6 +179,10 @@ class GovernedCallable:
         # specified, default to wildcard so govern() works out of the box.
         if not loaded.agent and not loaded.agents:
             loaded.agents = ["*"]
+
+        # Policy version stamped onto action-bound approval records (ADR-0030),
+        # so an approval is bound to the policy revision in effect when granted.
+        self._policy_version = getattr(loaded, "version", "1.0") or "1.0"
 
         # Ring enforcement — only active when a ring is explicitly configured.
         self._ring_enforcer: Any = None
@@ -316,7 +337,18 @@ class GovernedCallable:
         )
 
     def _handle_approval(self, decision: PolicyDecision, context: dict) -> PolicyDecision:
-        """Route require_approval decisions through the approval handler."""
+        """Route require_approval decisions to the approver.
+
+        Uses the action-bound approval coordinator (ADR-0030) when both an
+        ``approval_coordinator`` and an ``approval_chain_id`` are configured;
+        otherwise falls back to the legacy approval-handler-only path.
+        """
+        if (
+            self._config.approval_coordinator is not None
+            and self._config.approval_chain_id is not None
+        ):
+            return self._handle_approval_via_coordinator(decision, context)
+
         handler = self._config.approval_handler or AutoRejectApproval()
 
         request = ApprovalRequest(
@@ -360,6 +392,159 @@ class GovernedCallable:
                 policy_name=decision.policy_name,
                 reason=f"Approval rejected by {approval.approver}: {approval.reason}",
             )
+
+    def _handle_approval_via_coordinator(
+        self, decision: PolicyDecision, context: dict
+    ) -> PolicyDecision:
+        """Route require_approval through the action-bound coordinator (ADR-0030).
+
+        The decision is bound to the exact action (digest), an approval request
+        is opened against the configured chain, the configured approval handler
+        supplies the approver's vote as one authenticated chain entry, and the
+        request is revalidated immediately before execution. Anything short of a
+        terminal allow over the same action/policy/chain version denies,
+        fail-closed (including an unpermitted approver identity or an expired
+        request).
+        """
+        coordinator = self._config.approval_coordinator
+        binding = self._build_action_binding(context)
+
+        decision_record, request = coordinator.open_request(
+            binding,
+            policy_rule_id=decision.matched_rule or "",
+            policy_version=self._policy_version,
+            chain_id=self._config.approval_chain_id,
+            ttl_seconds=self._config.approval_ttl_seconds,
+        )
+
+        # The legacy handler is the synchronous source of the approver's vote;
+        # its result becomes one authenticated chain entry at stage 0.
+        handler = self._config.approval_handler or AutoRejectApproval()
+        approval = handler.request_approval(
+            ApprovalRequest(
+                action=context.get("action", {}).get("type", "unknown"),
+                rule_name=decision.matched_rule or "",
+                policy_name=decision.policy_name or "",
+                agent_id=self._config.agent_id,
+                context=context,
+                approvers=decision.approvers,
+            )
+        )
+
+        verdict = None
+        fail_reason: Optional[str] = None
+        try:
+            coordinator.submit_entry(
+                request.approval_request_id,
+                stage_index=0,
+                approver_kind=ApproverKind.HUMAN,
+                approver_identity=approval.approver or "unknown",
+                identity_assurance="approval-handler",
+                decision=(
+                    EntryDecision.ALLOW if approval.approved else EntryDecision.DENY
+                ),
+                reason_code=approval.reason or "",
+            )
+        except ApprovalProtocolError as exc:
+            # Unpermitted identity, expired request, etc. Fail closed.
+            fail_reason = f"approval entry rejected: {exc}"
+        else:
+            verdict = coordinator.validate_for_execution(
+                request.approval_request_id,
+                current_action_digest=binding.digest(),
+                current_policy_version=self._policy_version,
+                current_chain_version=request.approval_chain_version,
+            )
+
+        allowed = bool(verdict and verdict.allowed)
+        reason_code = verdict.reason_code if verdict is not None else fail_reason
+
+        # Audit linkage: tie the entry to the protocol record ids and the action
+        # digest (ADR-0030 section 7); reuse the AuditEntry assurance fields.
+        resolution = coordinator.store.get_resolution(request.approval_request_id)
+        if self._audit:
+            self._audit.log(
+                event_type="approval_decision",
+                agent_did=self._config.agent_id,
+                action=context.get("action", {}).get("type", "unknown"),
+                outcome="approved" if allowed else "rejected",
+                arguments_hash=binding.digest(),
+                approver_did=approval.approver or None,
+                policy_version=self._policy_version,
+                data={
+                    "rule": decision.matched_rule or "",
+                    "approver": approval.approver,
+                    "reason": approval.reason,
+                    "reason_code": reason_code,
+                    "policy_decision_id": decision_record.policy_decision_id,
+                    "approval_request_id": request.approval_request_id,
+                    "approval_resolution_id": (
+                        resolution.approval_resolution_id if resolution else None
+                    ),
+                },
+            )
+
+        if allowed:
+            return PolicyDecision(
+                allowed=True,
+                action="allow",
+                matched_rule=decision.matched_rule,
+                policy_name=decision.policy_name,
+                reason=(
+                    f"Approved by {approval.approver} "
+                    f"(request {request.approval_request_id})"
+                ),
+            )
+        return PolicyDecision(
+            allowed=False,
+            action="deny",
+            matched_rule=decision.matched_rule,
+            policy_name=decision.policy_name,
+            reason=(
+                f"Approval denied ({reason_code}) for request "
+                f"{request.approval_request_id}"
+            ),
+        )
+
+    def _build_action_binding(self, context: dict) -> ActionBinding:
+        """Construct the ADR-0030 ActionBinding for the current call."""
+        action = context.get("action", {})
+        if isinstance(action, dict):
+            action_type = action.get("type", "unknown")
+            resource = action.get("resource")
+        else:
+            action_type = str(action)
+            resource = None
+        tool_name = getattr(self._fn, "__name__", None) or action_type
+        subject = context.get("subject")
+        subject_id = subject if isinstance(subject, str) else None
+        # JSON-safe projection of the context so the action digest is stable and
+        # reproducible at the execution boundary.
+        parameters = {k: self._json_safe(v) for k, v in context.items()}
+        return ActionBinding(
+            operation="tool.invoke",
+            agent_id=self._config.agent_id,
+            target=ActionTarget(
+                tool_name=str(tool_name),
+                tool_schema_version="1",
+                resource=resource if isinstance(resource, str) else None,
+            ),
+            parameters=parameters,
+            subject_id=subject_id,
+        )
+
+    @staticmethod
+    def _json_safe(value: Any) -> Any:
+        """Coerce a value to JSON-canonicalizable types for the action digest."""
+        if value is None or isinstance(value, (bool, int, float, str)):
+            return value
+        if isinstance(value, dict):
+            return {
+                str(k): GovernedCallable._json_safe(v) for k, v in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [GovernedCallable._json_safe(v) for v in value]
+        return str(value)
 
     def _build_context(self, args: tuple, kwargs: dict) -> dict:
         """Build policy evaluation context from function arguments."""
@@ -437,6 +622,9 @@ def govern(
     conflict_strategy: str = "deny_overrides",
     ring: Optional["ExecutionRing"] = None,
     session_id: str = "",
+    approval_coordinator: Optional[ApprovalCoordinator] = None,
+    approval_chain_id: Optional[str] = None,
+    approval_ttl_seconds: float = 300.0,
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
 
@@ -474,5 +662,8 @@ def govern(
         conflict_strategy=conflict_strategy,
         ring=ring,
         session_id=session_id,
+        approval_coordinator=approval_coordinator,
+        approval_chain_id=approval_chain_id,
+        approval_ttl_seconds=approval_ttl_seconds,
     )
     return GovernedCallable(fn, config)
