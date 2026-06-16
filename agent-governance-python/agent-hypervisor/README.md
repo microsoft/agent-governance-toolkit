@@ -597,6 +597,8 @@ Ring 3 (Sandbox)    — Read-only / research — default for unknown agents
 
 **v2.0 additions:** Dynamic ring elevation (sudo with TTL), ring breach detection with circuit breakers, ring inheritance for spawned agents, **behavioral anomaly detection** with sliding-window rate analysis and ring-distance amplification.
 
+**v2.1 additions:** Command denylist enforcement — `RingEnforcer.check_command()` validates subprocess commands against a global `DENIED_COMMANDS` list with case-insensitive matching and shell metacharacter stripping to prevent injection bypasses (curl, wget, shells, compilers, network tools, alternative interpreters).
+
 ### 🔄 Saga Orchestrator — Deep Dive
 
 - **Timeout enforcement** — steps that hang are automatically cancelled

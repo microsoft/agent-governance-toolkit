@@ -2,6 +2,16 @@
 
 All notable changes to Agent Hypervisor will be documented in this file.
 
+## [2.1.0] — 2026-06-15
+
+### Added — Security
+- **Command Denylist Enforcement** (`rings/enforcer.py`) — `RingEnforcer.check_command()` method for subprocess command validation against a global `DENIED_COMMANDS` list with case-insensitive matching and shell metacharacter stripping to prevent injection bypasses
+- **CommandCheckResult** dataclass with `allowed`, `reason`, `command`, and `matched_denylist_entry` fields for detailed check results
+
+### Changed
+- `DENIED_COMMANDS` in `hypervisor.sandbox` now enforced at runtime via `RingEnforcer`
+- 21 new tests for command denylist edge cases (case variation, whitespace, injection attempts, partial matches, large inputs)
+
 ## [2.0.0] — 2026-02-20
 
 ### Added — Observability

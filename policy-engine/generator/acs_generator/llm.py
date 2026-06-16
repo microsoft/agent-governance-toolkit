@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from typing import Protocol
-from urllib import parse, request
+from urllib import error, parse, request
 
 
 class LanguageModel(Protocol):
@@ -49,8 +49,11 @@ class OpenAICompatibleLanguageModel:
             headers=headers,
             method="POST",
         )
-        with request.urlopen(req, timeout=60) as response:
-            body = json.loads(response.read().decode("utf-8"))
+        try:
+            with request.urlopen(req, timeout=60) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as exc:
+            raise RuntimeError(_http_error_detail(exc)) from exc
         return body["choices"][0]["message"]["content"]
 
 
@@ -58,6 +61,32 @@ def _is_azure_api_base(api_base: str) -> bool:
     hostname = parse.urlparse(api_base).hostname or ""
     normalized = hostname.lower().rstrip(".")
     return normalized == "azure.com" or normalized.endswith(".azure.com")
+
+
+def _http_error_detail(exc: "error.HTTPError") -> str:
+    # urllib surfaces only "HTTP Error 400: Bad Request"; the provider body
+    # carries the actionable reason (e.g. Azure content_filter / jailbreak), so
+    # decode and include it. Guardrail prose that reads like an injection
+    # instruction trips the Azure jailbreak shield with a 400.
+    base = f"LLM request failed with HTTP {exc.code}"
+    try:
+        payload = json.loads(exc.read().decode("utf-8"))
+    except Exception:  # noqa: BLE001 - fall back to the bare status line
+        return base
+    err = payload.get("error", payload) if isinstance(payload, dict) else {}
+    parts = [base]
+    if isinstance(err, dict):
+        if err.get("code"):
+            parts.append(f"code={err['code']}")
+        if err.get("message"):
+            parts.append(str(err["message"]))
+        inner = err.get("innererror") or {}
+        cf = inner.get("content_filter_result") if isinstance(inner, dict) else None
+        if isinstance(cf, dict):
+            flagged = sorted(k for k, v in cf.items() if isinstance(v, dict) and (v.get("filtered") or v.get("detected")))
+            if flagged:
+                parts.append(f"content_filter={flagged}")
+    return ". ".join(parts)
 
 
 class FakeLanguageModel:
