@@ -24,8 +24,11 @@ class TestRingEnforcer:
 
     def test_ring3_blocks_ring2_action(self):
         action = ActionDescriptor(
-            action_id="draft", name="Draft", execute_api="/draft",
-            undo_api="/draft/undo", reversibility=ReversibilityLevel.FULL,
+            action_id="draft",
+            name="Draft",
+            execute_api="/draft",
+            undo_api="/draft/undo",
+            reversibility=ReversibilityLevel.FULL,
         )
         result = self.enforcer.check(
             agent_ring=ExecutionRing.RING_3_SANDBOX,
@@ -37,7 +40,9 @@ class TestRingEnforcer:
 
     def test_ring1_requires_consensus(self):
         action = ActionDescriptor(
-            action_id="delete", name="Delete", execute_api="/delete",
+            action_id="delete",
+            name="Delete",
+            execute_api="/delete",
             reversibility=ReversibilityLevel.NONE,
         )
         result = self.enforcer.check(
@@ -51,7 +56,9 @@ class TestRingEnforcer:
 
     def test_ring1_with_consensus_allowed(self):
         action = ActionDescriptor(
-            action_id="delete", name="Delete", execute_api="/delete",
+            action_id="delete",
+            name="Delete",
+            execute_api="/delete",
             reversibility=ReversibilityLevel.NONE,
         )
         result = self.enforcer.check(
@@ -86,8 +93,11 @@ class TestActionClassifier:
 
     def test_classify_reversible(self):
         action = ActionDescriptor(
-            action_id="draft", name="Draft", execute_api="/draft",
-            undo_api="/draft/undo", reversibility=ReversibilityLevel.FULL,
+            action_id="draft",
+            name="Draft",
+            execute_api="/draft",
+            undo_api="/draft/undo",
+            reversibility=ReversibilityLevel.FULL,
         )
         result = self.classifier.classify(action)
         assert result.ring == ExecutionRing.RING_2_STANDARD
@@ -95,7 +105,9 @@ class TestActionClassifier:
 
     def test_classify_non_reversible(self):
         action = ActionDescriptor(
-            action_id="delete", name="Delete", execute_api="/delete",
+            action_id="delete",
+            name="Delete",
+            execute_api="/delete",
             reversibility=ReversibilityLevel.NONE,
         )
         result = self.classifier.classify(action)
@@ -104,7 +116,9 @@ class TestActionClassifier:
 
     def test_cache_hit(self):
         action = ActionDescriptor(
-            action_id="cached", name="Cached", execute_api="/cached",
+            action_id="cached",
+            name="Cached",
+            execute_api="/cached",
             reversibility=ReversibilityLevel.PARTIAL,
         )
         r1 = self.classifier.classify(action)
@@ -113,7 +127,9 @@ class TestActionClassifier:
 
     def test_override(self):
         action = ActionDescriptor(
-            action_id="overridden", name="X", execute_api="/x",
+            action_id="overridden",
+            name="X",
+            execute_api="/x",
             reversibility=ReversibilityLevel.FULL,
         )
         self.classifier.classify(action)

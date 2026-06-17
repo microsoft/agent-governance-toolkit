@@ -90,7 +90,9 @@ class TestRegistryListForOrganization:
         )
         # Fabrikam-specific plugins
         registry.register(
-            _make_manifest(name="fabrikam-tool", version="1.0.0", organization="fabrikam")
+            _make_manifest(
+                name="fabrikam-tool", version="1.0.0", organization="fabrikam"
+            )
         )
         return registry
 
@@ -232,7 +234,9 @@ class TestQualityScore:
 class TestPluginQualityProfile:
     """PluginQualityProfile aggregation."""
 
-    def _make_profile(self, scores: list[tuple[QualityDimension, float]]) -> PluginQualityProfile:
+    def _make_profile(
+        self, scores: list[tuple[QualityDimension, float]]
+    ) -> PluginQualityProfile:
         return PluginQualityProfile(
             plugin_name="test",
             plugin_version="1.0.0",
@@ -244,10 +248,12 @@ class TestPluginQualityProfile:
         assert profile.overall_score == 0.0
 
     def test_overall_score_average(self) -> None:
-        profile = self._make_profile([
-            (QualityDimension.DOCUMENTATION, 0.8),
-            (QualityDimension.RELIABILITY, 0.6),
-        ])
+        profile = self._make_profile(
+            [
+                (QualityDimension.DOCUMENTATION, 0.8),
+                (QualityDimension.RELIABILITY, 0.6),
+            ]
+        )
         assert profile.overall_score == pytest.approx(0.7)
 
     def test_badge_platinum(self) -> None:
@@ -300,11 +306,13 @@ class TestQualityStore:
     def test_record_updates_existing_dimension(self) -> None:
         store = QualityStore()
         store.record_score(
-            "my-plugin", "1.0.0",
+            "my-plugin",
+            "1.0.0",
             QualityScore(dimension=QualityDimension.DOCUMENTATION, score=0.5),
         )
         store.record_score(
-            "my-plugin", "1.0.0",
+            "my-plugin",
+            "1.0.0",
             QualityScore(dimension=QualityDimension.DOCUMENTATION, score=0.9),
         )
         profile = store.get_profile("my-plugin", "1.0.0")
@@ -314,11 +322,13 @@ class TestQualityStore:
     def test_record_multiple_dimensions(self) -> None:
         store = QualityStore()
         store.record_score(
-            "p", "1.0.0",
+            "p",
+            "1.0.0",
             QualityScore(dimension=QualityDimension.DOCUMENTATION, score=0.8),
         )
         store.record_score(
-            "p", "1.0.0",
+            "p",
+            "1.0.0",
             QualityScore(dimension=QualityDimension.RELIABILITY, score=0.6),
         )
         profile = store.get_profile("p", "1.0.0")
@@ -332,7 +342,8 @@ class TestQualityStore:
     def test_get_badge_known_plugin(self) -> None:
         store = QualityStore()
         store.record_score(
-            "good-plugin", "1.0.0",
+            "good-plugin",
+            "1.0.0",
             QualityScore(dimension=QualityDimension.OUTPUT_ACCURACY, score=0.92),
         )
         assert store.get_badge("good-plugin", "1.0.0") == QualityBadge.PLATINUM
@@ -340,11 +351,13 @@ class TestQualityStore:
     def test_separate_versions_have_separate_profiles(self) -> None:
         store = QualityStore()
         store.record_score(
-            "p", "1.0.0",
+            "p",
+            "1.0.0",
             QualityScore(dimension=QualityDimension.RELIABILITY, score=0.4),
         )
         store.record_score(
-            "p", "2.0.0",
+            "p",
+            "2.0.0",
             QualityScore(dimension=QualityDimension.RELIABILITY, score=0.95),
         )
         assert store.get_badge("p", "1.0.0") == QualityBadge.BRONZE
@@ -410,13 +423,9 @@ class TestGetEffectiveMCPPolicy:
     def test_blocklist_require_declaration_inherits(self) -> None:
         """If base requires declaration, org inherits it."""
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="blocklist", require_declaration=True
-            ),
+            mcp_servers=MCPServerPolicy(mode="blocklist", require_declaration=True),
             org_mcp_policies={
-                "contoso": MCPServerPolicy(
-                    mode="blocklist", require_declaration=False
-                ),
+                "contoso": MCPServerPolicy(mode="blocklist", require_declaration=False),
             },
         )
         effective = policy.get_effective_mcp_policy("contoso")
@@ -471,8 +480,7 @@ class TestGetEffectiveMCPPolicy:
         assert "server-a" not in effective.allowed
         assert "server-z" not in effective.allowed
         assert any(
-            "no overlap with enterprise allowlist" in r.message
-            for r in caplog.records
+            "no overlap with enterprise allowlist" in r.message for r in caplog.records
         )
 
     def test_allowlist_org_empty_when_base_empty_uses_org(self) -> None:
@@ -555,9 +563,7 @@ class TestEvaluatePluginComplianceWithOrg:
     def test_without_org_uses_base_policy(self) -> None:
         manifest = _make_manifest()
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="allowlist", allowed=["approved"]
-            ),
+            mcp_servers=MCPServerPolicy(mode="allowlist", allowed=["approved"]),
         )
         result = evaluate_plugin_compliance(
             manifest, policy, mcp_servers=["approved"], organization=None

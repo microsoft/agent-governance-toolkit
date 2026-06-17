@@ -118,6 +118,7 @@ class TestEphemeralGC:
 
     def test_retention_policy(self):
         from datetime import datetime, timedelta
+
         gc = EphemeralGC(RetentionPolicy(delta_retention_days=30))
         old = datetime.now(UTC) - timedelta(days=31)
         # Public preview: never expires deltas

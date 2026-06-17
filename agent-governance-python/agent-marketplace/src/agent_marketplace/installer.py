@@ -266,6 +266,7 @@ class PluginInstaller:
         # local-path schemes from exposing files on the host system.
         try:
             from urllib.parse import urlparse
+
             scheme = urlparse(artifact_url).scheme.lower()
         except Exception as exc:
             raise MarketplaceError(
@@ -352,13 +353,16 @@ class PluginInstaller:
         if not manifest.signature:
             logger.warning(
                 "Skipping plugin %s at %s: no signature on disk",
-                manifest.name, location,
+                manifest.name,
+                location,
             )
             return False
         if manifest.author not in self._trusted_keys:
             logger.warning(
                 "Skipping plugin %s at %s: untrusted author %r",
-                manifest.name, location, manifest.author,
+                manifest.name,
+                location,
+                manifest.author,
             )
             return False
         try:
@@ -366,7 +370,9 @@ class PluginInstaller:
         except MarketplaceError as exc:
             logger.warning(
                 "Skipping plugin %s at %s: signature verification failed (%s)",
-                manifest.name, location, exc,
+                manifest.name,
+                location,
+                exc,
             )
             return False
 
@@ -379,7 +385,9 @@ class PluginInstaller:
                 logger.warning(
                     "Skipping plugin %s at %s: .artifact.zip missing "
                     "(expected artifact_sha256 %s)",
-                    manifest.name, location, manifest.artifact_sha256,
+                    manifest.name,
+                    location,
+                    manifest.artifact_sha256,
                 )
                 return False
             try:
@@ -387,7 +395,9 @@ class PluginInstaller:
             except MarketplaceError as exc:
                 logger.warning(
                     "Skipping plugin %s at %s: artifact hash verification failed (%s)",
-                    manifest.name, location, exc,
+                    manifest.name,
+                    location,
+                    exc,
                 )
                 return False
 
@@ -490,9 +500,7 @@ class PluginInstaller:
                     for alias in node.names:
                         top = alias.name.split(".")[0]
                         if top in RESTRICTED_MODULES:
-                            violations.append(
-                                f"{py_file}: imports '{alias.name}'"
-                            )
+                            violations.append(f"{py_file}: imports '{alias.name}'")
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
                         top = node.module.split(".")[0]
@@ -570,9 +578,10 @@ def _parse_dependency(dep_spec: str) -> tuple[str, Optional[str]]:
     try:
         req = Requirement(dep_spec)
     except InvalidRequirement as exc:
-        raise MarketplaceError(f"Invalid dependency specifier {dep_spec!r}: {exc}") from exc
+        raise MarketplaceError(
+            f"Invalid dependency specifier {dep_spec!r}: {exc}"
+        ) from exc
     for spec in req.specifier:
         if spec.operator == "==":
             return req.name, spec.version
     return req.name, None
-

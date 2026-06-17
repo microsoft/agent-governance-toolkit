@@ -330,7 +330,9 @@ class TestOnDiskArtifactReVerification:
             with caplog.at_level("WARNING"):
                 result = installer.list_installed()
             assert result == []
-            assert any("artifact hash verification failed" in r.message for r in caplog.records)
+            assert any(
+                "artifact hash verification failed" in r.message for r in caplog.records
+            )
         finally:
             server.shutdown()
 
@@ -433,7 +435,6 @@ class TestSecurityGuards:
             server.shutdown()
 
 
-
 class TestArtifactHashInSignableBytes:
     """artifact_sha256 is part of signable_bytes() so the signature binds the artifact."""
 
@@ -494,6 +495,8 @@ class TestArtifactHashInSignableBytes:
             with caplog.at_level("WARNING"):
                 result = installer.list_installed()
             assert result == []
-            assert any("signature verification failed" in r.message for r in caplog.records)
+            assert any(
+                "signature verification failed" in r.message for r in caplog.records
+            )
         finally:
             server.shutdown()

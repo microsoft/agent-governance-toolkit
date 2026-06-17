@@ -73,7 +73,8 @@ def test_single_file_policy_does_not_pull_in_siblings(monkeypatch, tmp_path, cap
 
     monkeypatch.setattr(RealEvaluator, "__init__", spying_init)
     monkeypatch.setattr(
-        sys, "argv",
+        sys,
+        "argv",
         ["evaluate-policy", "--policy", str(target_policy), str(manifest)],
     )
 
@@ -109,7 +110,8 @@ def test_directory_policy_still_loads_every_file(monkeypatch, tmp_path):
 
     monkeypatch.setattr(RealEvaluator, "__init__", spying_init)
     monkeypatch.setattr(
-        sys, "argv",
+        sys,
+        "argv",
         ["evaluate-policy", "--policy", str(policy_dir), str(manifest)],
     )
 
@@ -127,10 +129,12 @@ def test_missing_policy_path_exits_nonzero(monkeypatch, tmp_path, capsys):
     manifest.write_text(_MANIFEST_TEMPLATE, encoding="utf-8")
 
     monkeypatch.setattr(
-        sys, "argv",
+        sys,
+        "argv",
         [
             "evaluate-policy",
-            "--policy", str(tmp_path / "does-not-exist.yaml"),
+            "--policy",
+            str(tmp_path / "does-not-exist.yaml"),
             str(manifest),
         ],
     )

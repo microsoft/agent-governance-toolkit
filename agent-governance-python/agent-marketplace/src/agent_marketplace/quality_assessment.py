@@ -5,6 +5,7 @@
 Goes beyond binary pass/fail to provide actionable quality scores
 across multiple dimensions with improvement recommendations.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -26,11 +27,11 @@ class AssessmentDimension(str, Enum):
 class AssessmentGrade(str, Enum):
     """Letter grades for quality assessment results."""
 
-    A = "A"    # 90-100: Excellent
-    B = "B"    # 75-89: Good
-    C = "C"    # 60-74: Adequate
-    D = "D"    # 40-59: Needs improvement
-    F = "F"    # 0-39: Failing
+    A = "A"  # 90-100: Excellent
+    B = "B"  # 75-89: Good
+    C = "C"  # 60-74: Adequate
+    D = "D"  # 40-59: Needs improvement
+    F = "F"  # 0-39: Failing
 
 
 @dataclass
@@ -151,7 +152,11 @@ class QualityAssessor:
         else:
             recs.append("Sign packages for supply chain integrity")
         return DimensionResult(
-            AssessmentDimension.SECURITY_POSTURE, score, 100, findings, recs,
+            AssessmentDimension.SECURITY_POSTURE,
+            score,
+            100,
+            findings,
+            recs,
         )
 
     def assess_documentation(
@@ -185,7 +190,11 @@ class QualityAssessor:
         else:
             recs.append("Maintain a CHANGELOG for version history")
         return DimensionResult(
-            AssessmentDimension.DOCUMENTATION, score, 100, findings, recs,
+            AssessmentDimension.DOCUMENTATION,
+            score,
+            100,
+            findings,
+            recs,
         )
 
     def assess_testing(
@@ -221,7 +230,11 @@ class QualityAssessor:
         else:
             recs.append("Add edge case and error path tests")
         return DimensionResult(
-            AssessmentDimension.TEST_COVERAGE, score, 100, findings, recs,
+            AssessmentDimension.TEST_COVERAGE,
+            score,
+            100,
+            findings,
+            recs,
         )
 
     def assess_operational(
@@ -255,5 +268,9 @@ class QualityAssessor:
         else:
             recs.append("Add license file")
         return DimensionResult(
-            AssessmentDimension.OPERATIONAL_READINESS, score, 100, findings, recs,
+            AssessmentDimension.OPERATIONAL_READINESS,
+            score,
+            100,
+            findings,
+            recs,
         )

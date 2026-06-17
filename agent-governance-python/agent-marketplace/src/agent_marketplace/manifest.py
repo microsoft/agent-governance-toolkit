@@ -63,14 +63,18 @@ class PluginManifest(BaseModel):
     description: str = Field(..., description="Short human-readable description")
     author: str = Field(..., description="Author name or email")
     plugin_type: PluginType = Field(..., description="Type of plugin")
-    capabilities: list[str] = Field(default_factory=list, description="Declared capabilities")
+    capabilities: list[str] = Field(
+        default_factory=list, description="Declared capabilities"
+    )
     dependencies: list[str] = Field(
         default_factory=list, description="Required plugins (name>=version)"
     )
     min_agentmesh_version: Optional[str] = Field(
         None, description="Minimum AgentMesh version required"
     )
-    signature: Optional[str] = Field(None, description="Base64-encoded Ed25519 signature")
+    signature: Optional[str] = Field(
+        None, description="Base64-encoded Ed25519 signature"
+    )
     organization: Optional[str] = Field(
         None,
         description="Owning organization (None = global/shared plugin)",
@@ -114,7 +118,9 @@ class PluginManifest(BaseModel):
         """
         parts = v.split(".")
         if len(parts) < 2 or len(parts) > 3:
-            raise MarketplaceError(f"Invalid version format: {v} (expected MAJOR.MINOR[.PATCH])")
+            raise MarketplaceError(
+                f"Invalid version format: {v} (expected MAJOR.MINOR[.PATCH])"
+            )
         for part in parts:
             if not part or not _ASCII_DIGITS_RE.match(part):
                 raise MarketplaceError(f"Invalid version component: {part}")

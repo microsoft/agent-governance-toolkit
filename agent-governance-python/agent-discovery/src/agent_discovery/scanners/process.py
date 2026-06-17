@@ -15,7 +15,7 @@ import os
 import platform
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..models import (
@@ -252,5 +252,5 @@ class ProcessScanner(BaseScanner):
                     result.agents.append(agent)
                     break  # one match per process
 
-        result.completed_at = datetime.now(timezone.utc)
+        result.completed_at = datetime.now(UTC)
         return result
