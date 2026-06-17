@@ -21,13 +21,29 @@ Usage::
 from __future__ import annotations
 
 import logging
+import os
 import time
+import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable, Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
+
+# Strict mode (ADR-0030 section 9, step 5) rejects the two unsafe legacy
+# behaviors this module retains for backward compatibility: timeout
+# auto-approval and trusting an unverified, body-supplied approver identity.
+# Off by default (deprecation warnings only); enable per-handler with
+# ``strict=True`` or globally with AGT_APPROVAL_STRICT=1. The environment
+# variable is a floor: per-handler ``strict=False`` cannot loosen it.
+_STRICT_ENV = "AGT_APPROVAL_STRICT"
+
+
+def _strict_mode(explicit: bool | None) -> bool:
+    """Resolve the effective strict mode for a handler."""
+    env = os.environ.get(_STRICT_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+    return bool(explicit) or env
 
 
 @dataclass
@@ -51,7 +67,7 @@ class ApprovalRequest:
     context: dict = field(default_factory=dict)
     approvers: list[str] = field(default_factory=list)
     requested_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
 
@@ -70,7 +86,7 @@ class ApprovalDecision:
     approver: str = ""
     reason: str = ""
     decided_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
 
@@ -132,10 +148,23 @@ class CallbackApproval(ApprovalHandler):
         callback: Callable[[ApprovalRequest], ApprovalDecision],
         timeout_seconds: float = 300,
         on_timeout: str = "deny",
+        *,
+        strict: bool | None = None,
     ):
+        # Timeout auto-approval is unsafe at a governance boundary (ADR-0030
+        # section 9). A timeout always denies; ``on_timeout`` is deprecated and
+        # any non-"deny" value is rejected in strict mode.
+        if on_timeout != "deny":
+            message = (
+                "CallbackApproval on_timeout is deprecated: timeout auto-approval "
+                "is unsafe and unsupported, so a timeout always denies. Remove the "
+                "on_timeout argument."
+            )
+            if _strict_mode(strict):
+                raise ValueError(message)
+            warnings.warn(message, FutureWarning, stacklevel=2)
         self._callback = callback
         self._timeout = timeout_seconds
-        self._on_timeout = on_timeout
 
     def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
         start = time.monotonic()
@@ -209,7 +238,9 @@ class WebhookApproval(ApprovalHandler):
         self,
         url: str,
         timeout_seconds: float = 300,
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
+        *,
+        strict: bool | None = None,
     ):
         from agentmesh.governance.advisory import _validate_webhook_url
 
@@ -217,10 +248,24 @@ class WebhookApproval(ApprovalHandler):
         self._url = url
         self._timeout = timeout_seconds
         self._headers = headers or {}
+        # This handler trusts an unverified, body-supplied approver identity,
+        # which ADR-0030 section 5 forbids. Use VersionedWebhookApproval
+        # (agentmesh.governance.approval_webhook) for the action-bound contract.
+        message = (
+            "WebhookApproval is deprecated: it trusts an unverified body-supplied "
+            "approver identity. Use VersionedWebhookApproval (ADR-0030)."
+        )
+        if _strict_mode(strict):
+            raise ValueError(message)
+        warnings.warn(
+            message,
+            FutureWarning,
+            stacklevel=2,
+        )
 
     def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
-        import urllib.request
         import json
+        import urllib.request
 
         payload = json.dumps({
             "type": "approval_request",
@@ -243,8 +288,9 @@ class WebhookApproval(ApprovalHandler):
             )
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
+                approved = body.get("approved", False)
                 return ApprovalDecision(
-                    approved=body.get("approved", False),
+                    approved=approved,
                     approver=body.get("approver", "webhook"),
                     reason=body.get("reason", ""),
                 )
