@@ -8,7 +8,7 @@ version = "4.1.0"
 description = "Mathematical drift detection library for calculating drift/hallucination scores between outputs"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]

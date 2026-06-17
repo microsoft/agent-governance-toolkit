@@ -7,7 +7,7 @@ name = "crewai_agentmesh"
 version = "4.1.0"
 description = "Deprecated. Previously published as crewai-agentmesh. Install agent-governance-toolkit-integrations[crewai] instead."
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
