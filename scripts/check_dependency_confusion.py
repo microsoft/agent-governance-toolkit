@@ -161,6 +161,8 @@ REGISTERED_PACKAGES = {
     "tzdata",
     # AGT Audit Trail Record library (real PyPI package, pre-1.0; used in acs-atr-annotator example)
     "pyatr",
+    # agentrust-trace: TRACE v0.2 Trust Record library (real PyPI package; runtime dep for TRACE emission)
+    "agentrust-trace", "agentrust_trace",
     # OS-native (Landlock / Seatbelt) capability sandbox (real PyPI package, Alpha; agt-sandbox[nono])
     "nono-py", "nono_py",
     # With extras (base name is what matters)

@@ -46,8 +46,12 @@ class MCPServerDef(BaseModel):
 
     name: str = Field(..., description="Server identifier")
     url: Optional[str] = Field(None, description="HTTP endpoint for the server")
-    command: Optional[str] = Field(None, description="Local command to launch the server")
-    tools: list[str] = Field(default_factory=list, description="Tools exposed by the server")
+    command: Optional[str] = Field(
+        None, description="Local command to launch the server"
+    )
+    tools: list[str] = Field(
+        default_factory=list, description="Tools exposed by the server"
+    )
 
     @model_validator(mode="after")
     def require_url_or_command(self) -> MCPServerDef:
@@ -69,9 +73,15 @@ class CopilotPluginManifest(BaseModel):
     name: str = Field(..., description="Plugin name")
     description: str = Field("", description="Plugin description")
     version: str = Field("1.0.0", description="Semver version string")
-    skills: list[SkillDef] = Field(default_factory=list, description="Skill definitions")
-    agents: list[AgentDef] = Field(default_factory=list, description="Agent definitions")
-    mcps: list[MCPServerDef] = Field(default_factory=list, description="MCP server registrations")
+    skills: list[SkillDef] = Field(
+        default_factory=list, description="Skill definitions"
+    )
+    agents: list[AgentDef] = Field(
+        default_factory=list, description="Agent definitions"
+    )
+    mcps: list[MCPServerDef] = Field(
+        default_factory=list, description="MCP server registrations"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -91,9 +101,15 @@ class ClaudePluginManifest(BaseModel):
     allowed_tools: list[str] = Field(
         default_factory=list, description="Tools the plugin is allowed to invoke"
     )
-    skills: list[SkillDef] = Field(default_factory=list, description="Skill definitions")
-    agents: list[AgentDef] = Field(default_factory=list, description="Agent definitions")
-    mcps: list[MCPServerDef] = Field(default_factory=list, description="MCP server registrations")
+    skills: list[SkillDef] = Field(
+        default_factory=list, description="Skill definitions"
+    )
+    agents: list[AgentDef] = Field(
+        default_factory=list, description="Agent definitions"
+    )
+    mcps: list[MCPServerDef] = Field(
+        default_factory=list, description="MCP server registrations"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@
 Bundles package related agents, skills, tools, and knowledge resources
 into a single deployable unit with shared dependencies and governance.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -95,12 +96,15 @@ class BundleRegistry:
                 seen_names.add(comp.name)
         return errors
 
-    def search(self, component_type: ComponentType | None = None) -> list[WorkflowBundle]:
+    def search(
+        self, component_type: ComponentType | None = None
+    ) -> list[WorkflowBundle]:
         """Search bundles optionally filtered by component type."""
         if component_type is None:
             return self.list_bundles()
         return [
-            b for b in self._bundles.values()
+            b
+            for b in self._bundles.values()
             if any(c.component_type == component_type for c in b.components)
         ]
 

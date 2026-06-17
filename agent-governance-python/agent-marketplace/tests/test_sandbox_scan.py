@@ -159,9 +159,7 @@ class TestInstallRejectsRestrictedImports:
         # Plugin directory must be cleaned up after rejection.
         assert not plugin_dir.exists()
 
-    def test_install_succeeds_when_no_restricted_imports(
-        self, tmp_path: Path
-    ) -> None:
+    def test_install_succeeds_when_no_restricted_imports(self, tmp_path: Path) -> None:
         from agent_marketplace.installer import PluginInstaller
         from agent_marketplace.registry import PluginRegistry
 

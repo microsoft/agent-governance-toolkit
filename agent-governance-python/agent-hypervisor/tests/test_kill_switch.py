@@ -42,9 +42,7 @@ class TestHandoffStatus:
 
 class TestStepHandoff:
     def test_defaults(self):
-        handoff = StepHandoff(
-            step_id="step-1", saga_id="saga-1", from_agent="agent-1"
-        )
+        handoff = StepHandoff(step_id="step-1", saga_id="saga-1", from_agent="agent-1")
         assert handoff.to_agent is None
         assert handoff.status == HandoffStatus.COMPENSATED
 
@@ -211,9 +209,7 @@ class TestKillSwitch:
             {"step_id": "s1", "saga_id": "saga-1"},
             {"step_id": "s2", "saga_id": "saga-1"},
         ]
-        result = ks.kill(
-            "agent-1", "sess-1", KillReason.RING_BREACH, in_flight_steps=steps
-        )
+        result = ks.kill("agent-1", "sess-1", KillReason.RING_BREACH, in_flight_steps=steps)
         assert result.handoff_success_count == 2
         assert all(h.status == HandoffStatus.HANDED_OFF for h in result.handoffs)
         assert all(h.to_agent == "backup-agent" for h in result.handoffs)

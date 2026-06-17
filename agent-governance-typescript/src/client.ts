@@ -4,7 +4,7 @@ import { AgentIdentity } from './identity';
 import { TrustManager } from './trust';
 import { PolicyEngine } from './policy';
 import { AuditLogger } from './audit';
-import { AgentMeshConfig, GovernanceResult } from './types';
+import { AgentMeshConfig, GovernanceResult, SkillAuditMetadata } from './types';
 import { KillSwitch } from './kill-switch';
 import { LifecycleManager, LifecycleState } from './lifecycle';
 import { RingBreachError, RingEnforcer } from './rings';
@@ -53,6 +53,7 @@ export class AgentMeshClient {
   async executeWithGovernance(
     action: string,
     params: Record<string, unknown> = {},
+    skillAuditMetadata?: SkillAuditMetadata,
   ): Promise<GovernanceResult> {
     const start = performance.now();
 
@@ -106,6 +107,7 @@ export class AgentMeshClient {
       agentId: this.identity.did,
       action,
       decision,
+      skillAuditMetadata,
     });
 
     if (decision === 'allow') {

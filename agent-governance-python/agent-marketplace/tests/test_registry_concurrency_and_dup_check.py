@@ -48,20 +48,14 @@ class TestRegisterDuplicateCheckOrdering:
         registry.register(manifest)
 
         # Snapshot state before the duplicate attempt.
-        before = {
-            n: set(versions.keys())
-            for n, versions in registry._plugins.items()
-        }
+        before = {n: set(versions.keys()) for n, versions in registry._plugins.items()}
 
         # Duplicate must raise — and must NOT add a second entry or
         # introduce any new key.
         with pytest.raises(MarketplaceError, match="already registered"):
             registry.register(manifest)
 
-        after = {
-            n: set(versions.keys())
-            for n, versions in registry._plugins.items()
-        }
+        after = {n: set(versions.keys()) for n, versions in registry._plugins.items()}
         assert before == after
 
     def test_register_unknown_plugin_does_not_leave_empty_inner_dict_on_failure(self):
@@ -142,7 +136,9 @@ class TestRegistryConcurrentRegister:
         for t in threads:
             t.join()
 
-        assert results.count("ok") == 1, f"expected one winner, got {results.count('ok')}: {results}"
+        assert results.count("ok") == 1, (
+            f"expected one winner, got {results.count('ok')}: {results}"
+        )
         assert results.count("dup") == N - 1, f"unexpected outcomes: {results}"
         assert len(registry._plugins["hotspot"]) == 1
 

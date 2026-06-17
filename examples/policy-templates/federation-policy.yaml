@@ -1,0 +1,36 @@
+# Federation policy: trusted external JWKS endpoints (ADR-0007)
+#
+# Operators add entries to allow cross-org agent identity resolution.
+# Each entry maps a DID-web domain to the JWKS endpoint and federation tier.
+#
+# Federation tiers:
+#   trusted    - full trust; acts like a local registry agent
+#   restricted - limited scope; capabilities must be declared in the JWT
+#   observer   - read-only; cannot invoke policies or write audit entries
+
+version: "1"
+kind: FederationPolicy
+
+trusted_endpoints:
+  - domain: "partner.example.com"
+    jwks_uri: "https://partner.example.com/.well-known/agent-jwks.json"
+    tier: "trusted"
+    # Optional: restrict which DID paths are allowed under this domain.
+    # Omit to allow any DID rooted at the domain.
+    allowed_did_paths:
+      - "did:web:partner.example.com:agents:*"
+    # Optional: override the JWKS cache TTL (seconds). Default is 300.
+    cache_ttl_seconds: 300
+
+  - domain: "readonly-partner.example.org"
+    jwks_uri: "https://readonly-partner.example.org/.well-known/agent-jwks.json"
+    tier: "observer"
+
+  - domain: "restricted-vendor.example.net"
+    jwks_uri: "https://restricted-vendor.example.net/agents/jwks"
+    tier: "restricted"
+    # For restricted tier, declare the authority scopes the remote agents
+    # may claim. JWTs asserting scopes outside this list are rejected.
+    allowed_scopes:
+      - "read:audit-trail"
+      - "read:policy-status"

@@ -29,6 +29,7 @@ class LightningSpan:
     Maps Agent OS Flight Recorder entries to the span format
     expected by Agent-Lightning's training and analysis tools.
     """
+
     span_id: str
     trace_id: str
     name: str
@@ -108,20 +109,22 @@ class FlightRecorderEmitter:
 
     def _convert_entry(self, entry: Any) -> LightningSpan | None:
         """Convert a Flight Recorder entry to a Lightning span."""
-        entry_type = getattr(entry, 'type', getattr(entry, 'entry_type', 'unknown'))
+        entry_type = getattr(entry, "type", getattr(entry, "entry_type", "unknown"))
 
         # Filter by entry type
-        if entry_type == 'policy_check' and not self.include_policy_checks:
+        if entry_type == "policy_check" and not self.include_policy_checks:
             return None
-        if entry_type == 'signal' and not self.include_signals:
+        if entry_type == "signal" and not self.include_signals:
             return None
-        if entry_type == 'tool_call' and not self.include_tool_calls:
+        if entry_type == "tool_call" and not self.include_tool_calls:
             return None
 
         # Extract common fields
-        span_id = getattr(entry, 'id', getattr(entry, 'entry_id', str(self._emitted_count)))
-        timestamp = getattr(entry, 'timestamp', datetime.now(timezone.utc))
-        agent_id = getattr(entry, 'agent_id', 'unknown')
+        span_id = getattr(
+            entry, "id", getattr(entry, "entry_id", str(self._emitted_count))
+        )
+        timestamp = getattr(entry, "timestamp", datetime.now(timezone.utc))
+        agent_id = getattr(entry, "agent_id", "unknown")
 
         # Build attributes
         attributes = {
@@ -130,26 +133,34 @@ class FlightRecorderEmitter:
         }
 
         # Add type-specific attributes
-        if entry_type == 'policy_check':
-            attributes.update({
-                "agent_os.policy_name": getattr(entry, 'policy_name', 'unknown'),
-                "agent_os.policy_result": getattr(entry, 'result', 'unknown'),
-                "agent_os.policy_violated": getattr(entry, 'violated', False),
-            })
-        elif entry_type == 'signal':
-            attributes.update({
-                "agent_os.signal_type": getattr(entry, 'signal', 'unknown'),
-                "agent_os.signal_target": getattr(entry, 'target', 'unknown'),
-            })
-        elif entry_type == 'tool_call':
-            attributes.update({
-                "agent_os.tool_name": getattr(entry, 'tool_name', 'unknown'),
-                "agent_os.tool_args": str(getattr(entry, 'args', {}))[:1000],  # Truncate
-                "agent_os.tool_result": str(getattr(entry, 'result', None))[:1000],
-            })
+        if entry_type == "policy_check":
+            attributes.update(
+                {
+                    "agent_os.policy_name": getattr(entry, "policy_name", "unknown"),
+                    "agent_os.policy_result": getattr(entry, "result", "unknown"),
+                    "agent_os.policy_violated": getattr(entry, "violated", False),
+                }
+            )
+        elif entry_type == "signal":
+            attributes.update(
+                {
+                    "agent_os.signal_type": getattr(entry, "signal", "unknown"),
+                    "agent_os.signal_target": getattr(entry, "target", "unknown"),
+                }
+            )
+        elif entry_type == "tool_call":
+            attributes.update(
+                {
+                    "agent_os.tool_name": getattr(entry, "tool_name", "unknown"),
+                    "agent_os.tool_args": str(getattr(entry, "args", {}))[
+                        :1000
+                    ],  # Truncate
+                    "agent_os.tool_result": str(getattr(entry, "result", None))[:1000],
+                }
+            )
 
         # Copy any additional attributes
-        if hasattr(entry, 'metadata'):
+        if hasattr(entry, "metadata"):
             for key, value in entry.metadata.items():
                 attributes[f"agent_os.{key}"] = value
 
@@ -165,11 +176,11 @@ class FlightRecorderEmitter:
     def _get_entries(self) -> list:
         """Return the recorder's full entry list, normalising the three
         supported accessors (``get_entries``, ``entries``, ``get_logs``)."""
-        if hasattr(self.recorder, 'get_entries'):
+        if hasattr(self.recorder, "get_entries"):
             return list(self.recorder.get_entries())
-        if hasattr(self.recorder, 'entries'):
+        if hasattr(self.recorder, "entries"):
             return self.recorder.entries
-        if hasattr(self.recorder, 'get_logs'):
+        if hasattr(self.recorder, "get_logs"):
             return list(self.recorder.get_logs())
         logger.warning("Flight recorder has no recognized entry accessor")
         return []
@@ -208,7 +219,7 @@ class FlightRecorderEmitter:
             List of new LightningSpan objects.
         """
         entries = self._get_entries()
-        new_entries = entries[self._last_position:]
+        new_entries = entries[self._last_position :]
         self._last_position = len(entries)
 
         new_spans: list[LightningSpan] = []
@@ -260,9 +271,9 @@ class FlightRecorderEmitter:
 
         for span in spans:
             try:
-                if hasattr(store, 'emit_span'):
+                if hasattr(store, "emit_span"):
                     store.emit_span(span.to_dict())
-                elif hasattr(store, 'add_span'):
+                elif hasattr(store, "add_span"):
                     store.add_span(span.to_dict())
                 else:
                     logger.warning("Store has no recognized span emitter")
@@ -285,7 +296,7 @@ class FlightRecorderEmitter:
         """
         spans = self.get_spans()
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump([s.to_dict() for s in spans], f, indent=2)
 
         logger.info(f"Exported {len(spans)} spans to {filepath}")
@@ -301,8 +312,7 @@ class FlightRecorderEmitter:
         spans = self.get_spans()
 
         violations = [
-            s for s in spans
-            if s.attributes.get("agent_os.policy_violated", False)
+            s for s in spans if s.attributes.get("agent_os.policy_violated", False)
         ]
 
         policies_violated = {}

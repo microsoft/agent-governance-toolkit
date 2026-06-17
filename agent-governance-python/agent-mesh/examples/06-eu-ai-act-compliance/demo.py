@@ -28,6 +28,7 @@ from compliance_checker import (
 def _redact(value, visible_chars: int = 0) -> str:
     """Redact a sensitive value for safe logging."""
     import hashlib
+
     raw = str(value)
     if not raw:
         return "[REDACTED]"
@@ -110,11 +111,11 @@ def main() -> None:
         description="Automated resume screening and candidate ranking",
         domain="employment_recruitment",
         capabilities=["autonomous_decision_making", "personal_data_processing"],
-        has_human_oversight=False,       # ← critical gap
-        transparency_disclosure=False,   # ← violation
-        logs_decisions=False,            # ← violation
-        tested_for_bias=False,           # ← violation
-        has_documentation=False,         # ← violation
+        has_human_oversight=False,  # ← critical gap
+        transparency_disclosure=False,  # ← violation
+        logs_decisions=False,  # ← violation
+        tested_for_bias=False,  # ← violation
+        has_documentation=False,  # ← violation
         has_risk_assessment=False,
         has_quality_management=False,
         cybersecurity_measures=False,

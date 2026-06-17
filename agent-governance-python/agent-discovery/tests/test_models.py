@@ -1,7 +1,8 @@
 """Tests for agent discovery data models."""
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from agent_discovery.models import (
     AgentStatus,
@@ -27,7 +28,7 @@ class TestEvidence:
         assert ev.scanner == "process"
         assert ev.confidence == 0.85
         assert ev.basis == DetectionBasis.PROCESS
-        assert ev.timestamp <= datetime.now(timezone.utc)
+        assert ev.timestamp <= datetime.now(UTC)
 
     def test_confidence_bounds(self):
         with pytest.raises(Exception):

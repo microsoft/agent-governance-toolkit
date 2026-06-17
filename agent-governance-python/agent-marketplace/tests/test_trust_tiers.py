@@ -12,7 +12,6 @@ from click.testing import CliRunner
 
 from agent_marketplace.manifest import PluginManifest, PluginType
 from agent_marketplace.trust_tiers import (
-    DEFAULT_TIER_CONFIGS,
     TRUST_TIERS,
     PluginTrustConfig,
     PluginTrustStore,
@@ -135,7 +134,9 @@ class TestFilterCapabilities:
         assert "admin" not in caps
 
     def test_verified_allows_all(self) -> None:
-        caps = filter_capabilities(["network", "filesystem", "execute", "admin"], "verified")
+        caps = filter_capabilities(
+            ["network", "filesystem", "execute", "admin"], "verified"
+        )
         assert caps == ["network", "filesystem", "execute", "admin"]
 
     def test_revoked_strips_restricted(self) -> None:

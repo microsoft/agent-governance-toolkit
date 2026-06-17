@@ -5,6 +5,8 @@ Ring Enforcer — resource-constrained ring-based access control.
 
 Maps execution rings to concrete resource constraints (network, filesystem,
 subprocess) and enforces both ring-level access and resource-level restrictions.
+
+Also provides command denylist enforcement for subprocess execution.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from enum import Enum
 
 from hypervisor.constants import RING_1_ENFORCER_THRESHOLD
 from hypervisor.models import ActionDescriptor, ExecutionRing
+from hypervisor.sandbox import DENIED_COMMANDS
 
 
 class ResourceType(str, Enum):
@@ -100,6 +103,23 @@ class RingCheckResult:
     denied_resources: list[ResourceType] = field(default_factory=list)
 
 
+@dataclass
+class CommandCheckResult:
+    """Result of a command denylist check.
+
+    Attributes:
+        allowed: Whether the command is allowed (not in denylist).
+        reason: Human-readable explanation of the decision.
+        command: The command that was checked (base command name, without args).
+        matched_denylist_entry: The denylist entry that matched, if denied.
+    """
+
+    allowed: bool
+    reason: str
+    command: str
+    matched_denylist_entry: str | None = None
+
+
 class RingEnforcer:
     """Ring enforcer with resource constraint validation.
 
@@ -147,8 +167,7 @@ class RingEnforcer:
                 agent_ring=agent_ring,
                 eff_score=eff_score,
                 reason=(
-                    f"Agent ring {agent_ring.value} insufficient for "
-                    f"required ring {required.value}"
+                    f"Agent ring {agent_ring.value} insufficient for required ring {required.value}"
                 ),
             )
 
@@ -213,3 +232,61 @@ class RingEnforcer:
         """Check if an agent should be demoted based on trust drop."""
         appropriate = self.compute_ring(eff_score)
         return appropriate.value > current_ring.value
+
+    def check_command(self, command: str | None) -> CommandCheckResult:
+        """Check if a command is allowed by the denylist.
+
+        This method validates whether a command (or command string with arguments)
+        is present in the global DENIED_COMMANDS list. The check is performed
+        against the base command name (first token before any whitespace).
+        Matching is case-insensitive to prevent bypasses via case variation.
+
+        Args:
+            command: The command to check (e.g., "curl", "curl -X POST", "python3").
+                     Can be None or empty string.
+
+        Returns:
+            CommandCheckResult with allowed status, reason, and the base command name.
+        """
+        if not command:
+            return CommandCheckResult(
+                allowed=False,
+                reason="Empty or None command is not allowed",
+                command="",
+                matched_denylist_entry=None,
+            )
+
+        # Extract base command (first token before whitespace)
+        stripped = command.strip()
+        if not stripped:
+            return CommandCheckResult(
+                allowed=False,
+                reason="Command contains no executable name",
+                command="",
+                matched_denylist_entry=None,
+            )
+
+        base_command = stripped.split()[0]
+
+        # Strip trailing shell metacharacters that could be used for command injection
+        # e.g., "curl;" -> "curl", "curl&&" -> "curl"
+        base_command = base_command.rstrip(";&|")
+
+        base_command_lower = base_command.lower()
+
+        # Check against denylist (case-insensitive match)
+        for denied_cmd in DENIED_COMMANDS:
+            if base_command_lower == denied_cmd.lower():
+                return CommandCheckResult(
+                    allowed=False,
+                    reason=f"Command '{base_command}' is denied by sandbox policy",
+                    command=base_command,
+                    matched_denylist_entry=denied_cmd,
+                )
+
+        return CommandCheckResult(
+            allowed=True,
+            reason=f"Command '{base_command}' is allowed",
+            command=base_command,
+            matched_denylist_entry=None,
+        )

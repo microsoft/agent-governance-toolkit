@@ -17,10 +17,15 @@ class TestExecutionRing:
         assert ExecutionRing.from_eff_score(0.7) == ExecutionRing.RING_2_STANDARD
 
     def test_from_eff_score_privileged_with_consensus(self):
-        assert ExecutionRing.from_eff_score(0.96, has_consensus=True) == ExecutionRing.RING_1_PRIVILEGED
+        assert (
+            ExecutionRing.from_eff_score(0.96, has_consensus=True)
+            == ExecutionRing.RING_1_PRIVILEGED
+        )
 
     def test_from_eff_score_privileged_without_consensus_gets_standard(self):
-        assert ExecutionRing.from_eff_score(0.96, has_consensus=False) == ExecutionRing.RING_2_STANDARD
+        assert (
+            ExecutionRing.from_eff_score(0.96, has_consensus=False) == ExecutionRing.RING_2_STANDARD
+        )
 
     def test_from_eff_score_boundary_060(self):
         # Exactly 0.60 is NOT > 0.60, so sandbox

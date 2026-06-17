@@ -156,19 +156,13 @@ class HypervisorEventBus:
         with self._lock:
             self._events.append(event)
 
-            self._by_type.setdefault(
-                event.event_type, self._new_index_deque()
-            ).append(event)
+            self._by_type.setdefault(event.event_type, self._new_index_deque()).append(event)
 
             if event.session_id:
-                self._by_session.setdefault(
-                    event.session_id, self._new_index_deque()
-                ).append(event)
+                self._by_session.setdefault(event.session_id, self._new_index_deque()).append(event)
 
             if event.agent_did:
-                self._by_agent.setdefault(
-                    event.agent_did, self._new_index_deque()
-                ).append(event)
+                self._by_agent.setdefault(event.agent_did, self._new_index_deque()).append(event)
 
             # Snapshot subscriber lists while holding the lock so a
             # subscriber that mutates the registry mid-notify doesn't

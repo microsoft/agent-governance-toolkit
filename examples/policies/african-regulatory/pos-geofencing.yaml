@@ -1,0 +1,158 @@
+# agt-policies — African Regulatory Pack
+# CBN POS / Agent Banking Geo-Fencing Policy
+#
+# Regulatory references:
+#   CBN Agent Banking Guidelines (Revised 2021)
+#   CBN POS Terminal Deployment Guidelines
+#   CBN Framework for the Regulation of Agent Banking in Nigeria
+#
+# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
+# POS geo-fencing rules assume that the agent's execution context includes
+# location metadata from the calling system (e.g. GeoGuard, terminal registry).
+# Rules match on output patterns and action names as a safety net; integrate
+# with your terminal registry for full enforcement.
+#
+# Context:
+#   POS terminals in Nigeria must be registered to a specific business location
+#   under CBN Agent Banking Guidelines. Transactions initiated from outside the
+#   registered geo-zone are a regulatory flag and a common fraud vector.
+#   This policy enforces geo-compliance at the agent action layer.
+
+version: "1.0"
+name: pos-geofencing
+description: >
+  CBN Agent Banking and POS geo-compliance governance for AI agents.
+  Blocks POS terminal actions where location context is absent, mismatched,
+  or outside the registered geo-zone. Requires human approval for terminal
+  registration changes, cross-state transactions, and geo-zone exceptions.
+  Designed to complement GeoGuard terminal registry integration.
+
+metadata:
+  source_regulation: "CBN Agent Banking Guidelines 2020; CBN POS Operational Guidelines"
+  jurisdiction: "NG"
+  enforcing_authority: "Central Bank of Nigeria (CBN)"
+
+rules:
+
+  # =========================================================================
+  # Missing Location Context — Block All POS Actions
+  # An AI agent processing a POS terminal action without location metadata
+  # cannot verify geo-compliance. Fail closed: block until context is present.
+  # =========================================================================
+
+  - name: pos-missing-location-context-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(pos_transaction|pos_payment|pos_charge|terminal_transaction|tap_pay|swipe_card)$"
+    action: block
+    priority: 95
+    message: "CBN POS Geo-Fencing: POS action intercepted — location context must be verified against terminal registration before execution"
+
+  - name: pos-location-absent-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(pos|terminal|point.of.sale).{0,60}(no\\s+(location|geo|coordinates)|location\\s+(unknown|missing|unavailable|not\\s+found))"
+    action: deny
+    priority: 100
+    message: "CBN POS Geo-Fencing: POS action blocked — terminal location is unknown. Cannot verify geo-zone compliance."
+
+  # =========================================================================
+  # Geo-Zone Mismatch — Block Transactions
+  # If the terminal's current location does not match its registered
+  # geo-zone, the transaction must be blocked. This is the primary
+  # fraud vector for stolen/relocated POS terminals in Nigeria.
+  # =========================================================================
+
+  - name: pos-geomatch-failure-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(terminal|pos).{0,60}(outside|beyond|not\\s+in|mismatch|wrong).{0,40}(zone|region|location|registered\\s+area|geo.?fence)"
+    action: deny
+    priority: 100
+    message: "CBN POS Geo-Fencing: Terminal location does not match registered geo-zone — transaction blocked. Raise alert to terminal owner."
+
+  - name: pos-crossstate-mismatch-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(terminal.{0,30}(Lagos|Abuja|Kano|Rivers|Oyo|Kaduna|Enugu|Delta|Anambra|Kogi).{0,30}(registered.{0,20}(Abuja|Lagos|Kano|Rivers|Oyo|Kaduna|Enugu|Delta|Anambra|Kogi)))"
+    action: block
+    priority: 90
+    message: "CBN POS Geo-Fencing: Cross-state terminal transaction detected — requires approval to verify authorised terminal relocation"
+
+  # =========================================================================
+  # Terminal Registration Changes
+  # Changes to terminal registration (location update, re-assignment, ownership
+  # transfer) must always go through a human approval process.
+  # Fraudulent terminal registration updates are a known attack vector.
+  # =========================================================================
+
+  - name: pos-registration-change-approval
+    condition:
+      field: action
+      operator: matches
+      value: "^(update_terminal_location|register_terminal|reassign_terminal|transfer_terminal|deactivate_terminal|activate_terminal)$"
+    action: block
+    priority: 95
+    message: "CBN Agent Banking: Terminal registration change requires human approval — CBN Agent Banking Guidelines mandate documented authorisation"
+
+  - name: pos-ownership-transfer-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(transfer.{0,30}terminal|reassign.{0,30}pos|change.{0,20}(terminal\\s+owner|merchant\\s+id)|new\\s+merchant\\s+(for|on)\\s+(terminal|pos))"
+    action: block
+    priority: 90
+    message: "CBN Agent Banking: Terminal ownership transfer detected — requires human approval and CBN agent banking documentation"
+
+  # =========================================================================
+  # High-Value POS Transactions
+  # POS transactions above CBN agent banking limits for specific tiers
+  # require approval regardless of location status.
+  # Agent banking limit: ₦300,000 per transaction (standard POS agent)
+  # =========================================================================
+
+  - name: pos-high-value-transaction-gate
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(pos|terminal|point.of.sale).{0,60}(₦|NGN)\\s*[3-9][0-9]{2},?[0-9]{3}"
+    action: block
+    priority: 90
+    message: "CBN Agent Banking: POS transaction above ₦300,000 agent banking limit detected — requires human approval"
+
+  # =========================================================================
+  # Terminal Audit Trail
+  # All POS terminal actions must be logged for CBN examination purposes.
+  # =========================================================================
+
+  - name: pos-all-actions-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(pos_|terminal_|merchant_).*"
+    action: audit
+    priority: 75
+    message: "CBN POS Audit: Terminal/POS action logged — required for CBN agent banking examination records"
+
+  # =========================================================================
+  # Geo-Fencing Override Attempt
+  # Blocks any attempt to programmatically bypass geo-zone enforcement.
+  # =========================================================================
+
+  - name: pos-geofence-override-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(bypass.{0,30}(geo.?fence|location\\s+check|geo.?zone)|disable.{0,30}(location\\s+verification|geo.?compliance)|skip.{0,20}(location|geo)\\s+(check|verify|validation))"
+    action: deny
+    priority: 100
+    message: "CBN POS Geo-Fencing: Attempt to bypass geo-zone enforcement blocked — location verification cannot be disabled by agent"
+
+defaults:
+  action: audit
+  max_tokens: 4000
+  max_tool_calls: 15

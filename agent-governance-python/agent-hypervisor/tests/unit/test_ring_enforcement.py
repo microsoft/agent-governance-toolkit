@@ -11,17 +11,17 @@ import pytest
 
 from hypervisor.models import ActionDescriptor, ExecutionRing
 from hypervisor.rings.elevation import (
+    ELEVATION_TRUST_THRESHOLDS,
     ChildRegistration,
     ElevationDenialReason,
-    ELEVATION_TRUST_THRESHOLDS,
     RingElevation,
     RingElevationError,
     RingElevationManager,
 )
 from hypervisor.rings.enforcer import (
+    RING_CONSTRAINTS,
     ResourceConstraints,
     ResourceType,
-    RING_CONSTRAINTS,
     RingCheckResult,
     RingEnforcer,
 )
@@ -31,7 +31,6 @@ from hypervisor.session.isolation import (
     SessionIsolationManager,
     SessionScope,
 )
-
 
 # ── Elevation Tests ──────────────────────────────────────────────────
 
@@ -262,16 +261,12 @@ class TestElevationLifecycle:
             target_ring=ExecutionRing.RING_2_STANDARD,
             trust_score=0.6,
         )
-        effective = mgr.get_effective_ring(
-            "did:mesh:a", "s", ExecutionRing.RING_3_SANDBOX
-        )
+        effective = mgr.get_effective_ring("did:mesh:a", "s", ExecutionRing.RING_3_SANDBOX)
         assert effective == ExecutionRing.RING_2_STANDARD
 
     def test_get_effective_ring_without_elevation(self):
         mgr = RingElevationManager()
-        effective = mgr.get_effective_ring(
-            "did:mesh:a", "s", ExecutionRing.RING_3_SANDBOX
-        )
+        effective = mgr.get_effective_ring("did:mesh:a", "s", ExecutionRing.RING_3_SANDBOX)
         assert effective == ExecutionRing.RING_3_SANDBOX
 
     def test_tick_expires_past_ttl(self):
@@ -306,9 +301,7 @@ class TestElevationLifecycle:
         assert len(mgr.active_elevations) == 1
 
     def test_trust_provider_callback(self):
-        mgr = RingElevationManager(
-            trust_provider=lambda did: 0.7
-        )
+        mgr = RingElevationManager(trust_provider=lambda did: 0.7)
         elev = mgr.request_elevation(
             agent_did="did:mesh:a",
             session_id="s",
@@ -337,9 +330,7 @@ class TestChildRegistration:
 
     def test_child_registration_tracked(self):
         mgr = RingElevationManager()
-        mgr.register_child(
-            "did:mesh:parent", "did:mesh:child", ExecutionRing.RING_2_STANDARD
-        )
+        mgr.register_child("did:mesh:parent", "did:mesh:child", ExecutionRing.RING_2_STANDARD)
         reg = mgr.get_child_registration("did:mesh:child")
         assert reg is not None
         assert reg.parent_did == "did:mesh:parent"
@@ -399,24 +390,18 @@ class TestRingEnforcerResources:
 
     def test_sandbox_network_denied(self):
         enforcer = RingEnforcer()
-        result = enforcer.check_resource(
-            ExecutionRing.RING_3_SANDBOX, ResourceType.NETWORK
-        )
+        result = enforcer.check_resource(ExecutionRing.RING_3_SANDBOX, ResourceType.NETWORK)
         assert result.allowed is False
         assert ResourceType.NETWORK in result.denied_resources
 
     def test_standard_network_allowed(self):
         enforcer = RingEnforcer()
-        result = enforcer.check_resource(
-            ExecutionRing.RING_2_STANDARD, ResourceType.NETWORK
-        )
+        result = enforcer.check_resource(ExecutionRing.RING_2_STANDARD, ResourceType.NETWORK)
         assert result.allowed is True
 
     def test_sandbox_subprocess_denied(self):
         enforcer = RingEnforcer()
-        result = enforcer.check_resource(
-            ExecutionRing.RING_3_SANDBOX, ResourceType.SUBPROCESS
-        )
+        result = enforcer.check_resource(ExecutionRing.RING_3_SANDBOX, ResourceType.SUBPROCESS)
         assert result.allowed is False
 
     def test_get_constraints(self):
@@ -455,31 +440,23 @@ class TestSessionIsolation:
 
     def test_path_denied_outside_session(self):
         mgr = SessionIsolationManager()
-        scope = mgr.create_scope(
-            "sess-1", "did:mesh:agent1", IsolationLevel.SERIALIZABLE
-        )
+        scope = mgr.create_scope("sess-1", "did:mesh:agent1", IsolationLevel.SERIALIZABLE)
         assert scope.is_path_allowed("/var/agt/sessions/sess-2/data.json") is False
 
     def test_cross_session_with_grant(self):
         mgr = SessionIsolationManager()
-        scope = mgr.create_scope(
-            "sess-1", "did:mesh:agent1", IsolationLevel.READ_COMMITTED
-        )
+        scope = mgr.create_scope("sess-1", "did:mesh:agent1", IsolationLevel.READ_COMMITTED)
         scope.grant_access("sess-2")
         assert scope.is_path_allowed("/var/agt/sessions/sess-2/data.json") is True
 
     def test_cross_session_without_grant(self):
         mgr = SessionIsolationManager()
-        scope = mgr.create_scope(
-            "sess-1", "did:mesh:agent1", IsolationLevel.READ_COMMITTED
-        )
+        scope = mgr.create_scope("sess-1", "did:mesh:agent1", IsolationLevel.READ_COMMITTED)
         assert scope.is_path_allowed("/var/agt/sessions/sess-2/data.json") is False
 
     def test_grant_only_works_for_read_committed(self):
         mgr = SessionIsolationManager()
-        scope = mgr.create_scope(
-            "sess-1", "did:mesh:agent1", IsolationLevel.SNAPSHOT
-        )
+        scope = mgr.create_scope("sess-1", "did:mesh:agent1", IsolationLevel.SNAPSHOT)
         scope.grant_access("sess-2")
         # Snapshot ignores grants
         assert scope.is_path_allowed("/var/agt/sessions/sess-2/data.json") is False
