@@ -28,14 +28,8 @@ from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
-from .approval_protocol import (
-    ActionBinding,
-    ActionTarget,
-    ApprovalCoordinator,
-    ApprovalProtocolError,
-    ApproverKind,
-    EntryDecision,
-)
+from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
+from .approval_bridge import LegacyHandlerAdapter
 
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
@@ -418,9 +412,13 @@ class GovernedCallable:
         )
 
         # The legacy handler is the synchronous source of the approver's vote;
-        # its result becomes one authenticated chain entry at stage 0.
+        # the adapter turns that vote into one authenticated chain entry at
+        # stage 0, fail-closed on an unpermitted identity or expired request.
         handler = self._config.approval_handler or AutoRejectApproval()
-        approval = handler.request_approval(
+        adapter = LegacyHandlerAdapter(handler)
+        result = adapter.collect(
+            coordinator,
+            request,
             ApprovalRequest(
                 action=context.get("action", {}).get("type", "unknown"),
                 rule_name=decision.matched_rule or "",
@@ -428,27 +426,12 @@ class GovernedCallable:
                 agent_id=self._config.agent_id,
                 context=context,
                 approvers=decision.approvers,
-            )
+            ),
         )
+        approval = result.approval
 
         verdict = None
-        fail_reason: Optional[str] = None
-        try:
-            coordinator.submit_entry(
-                request.approval_request_id,
-                stage_index=0,
-                approver_kind=ApproverKind.HUMAN,
-                approver_identity=approval.approver or "unknown",
-                identity_assurance="approval-handler",
-                decision=(
-                    EntryDecision.ALLOW if approval.approved else EntryDecision.DENY
-                ),
-                reason_code=approval.reason or "",
-            )
-        except ApprovalProtocolError as exc:
-            # Unpermitted identity, expired request, etc. Fail closed.
-            fail_reason = f"approval entry rejected: {exc}"
-        else:
+        if result.submitted:
             verdict = coordinator.validate_for_execution(
                 request.approval_request_id,
                 current_action_digest=binding.digest(),
@@ -457,7 +440,7 @@ class GovernedCallable:
             )
 
         allowed = bool(verdict and verdict.allowed)
-        reason_code = verdict.reason_code if verdict is not None else fail_reason
+        reason_code = verdict.reason_code if verdict is not None else result.error
 
         # Audit linkage: tie the entry to the protocol record ids and the action
         # digest (ADR-0030 section 7); reuse the AuditEntry assurance fields.
