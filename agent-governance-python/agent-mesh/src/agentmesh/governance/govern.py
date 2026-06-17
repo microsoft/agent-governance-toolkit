@@ -32,7 +32,7 @@ from .trace_sink import TraceConfig, TRACEAuditSink
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
 from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
-from .approval_bridge import LegacyHandlerAdapter
+from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
 
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
@@ -131,6 +131,10 @@ class GovernanceConfig:
     approval_coordinator: Optional[ApprovalCoordinator] = None
     approval_chain_id: Optional[str] = None
     approval_ttl_seconds: float = 300.0
+    # Optional protocol-native approval source (e.g. VersionedWebhookApproval).
+    # When set, it receives the full protocol request (action digest, versions,
+    # expiry) instead of the legacy handler. Requires a coordinator + chain.
+    approval_transport: Optional[ApprovalTransport] = None
     trace: Optional[TraceConfig] = None
 
 
@@ -450,23 +454,33 @@ class GovernedCallable:
             ttl_seconds=self._config.approval_ttl_seconds,
         )
 
-        # The legacy handler is the synchronous source of the approver's vote;
-        # the adapter turns that vote into one authenticated chain entry at
-        # stage 0, fail-closed on an unpermitted identity or expired request.
-        handler = self._config.approval_handler or AutoRejectApproval()
-        adapter = LegacyHandlerAdapter(handler)
-        result = adapter.collect(
-            coordinator,
-            request,
-            ApprovalRequest(
-                action=context.get("action", {}).get("type", "unknown"),
-                rule_name=decision.matched_rule or "",
-                policy_name=decision.policy_name or "",
-                agent_id=self._config.agent_id,
-                context=context,
-                approvers=decision.approvers,
-            ),
-        )
+        # Obtain the approver's vote and record it as one authenticated chain
+        # entry at stage 0 (fail-closed on an unpermitted identity or expired
+        # request). A configured protocol-native transport receives the full
+        # request (action digest, versions, expiry); otherwise the legacy
+        # handler is bridged via the thin legacy request.
+        transport = self._config.approval_transport
+        if transport is not None:
+            result = submit_vote(
+                coordinator,
+                request,
+                transport.request_decision(request),
+                identity_assurance="webhook",
+            )
+        else:
+            handler = self._config.approval_handler or AutoRejectApproval()
+            result = LegacyHandlerAdapter(handler).collect(
+                coordinator,
+                request,
+                ApprovalRequest(
+                    action=context.get("action", {}).get("type", "unknown"),
+                    rule_name=decision.matched_rule or "",
+                    policy_name=decision.policy_name or "",
+                    agent_id=self._config.agent_id,
+                    context=context,
+                    approvers=decision.approvers,
+                ),
+            )
         approval = result.approval
 
         verdict = None
@@ -662,6 +676,7 @@ def govern(
     approval_coordinator: Optional[ApprovalCoordinator] = None,
     approval_chain_id: Optional[str] = None,
     approval_ttl_seconds: float = 300.0,
+    approval_transport: Optional[ApprovalTransport] = None,
     trace: Optional[TraceConfig] = None,
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
@@ -703,6 +718,7 @@ def govern(
         approval_coordinator=approval_coordinator,
         approval_chain_id=approval_chain_id,
         approval_ttl_seconds=approval_ttl_seconds,
+        approval_transport=approval_transport,
         trace=trace,
     )
     return GovernedCallable(fn, config)

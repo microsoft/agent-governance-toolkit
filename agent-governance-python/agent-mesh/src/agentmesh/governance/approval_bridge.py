@@ -23,7 +23,7 @@ This module is allowed to depend on both the legacy ``approval`` module and the
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Protocol, runtime_checkable
 
 from .approval import ApprovalDecision, ApprovalHandler, ApprovalRequest
 from .approval_protocol import (
@@ -35,7 +35,28 @@ from .approval_protocol import (
 )
 from .approval_protocol import ApprovalRequest as ProtocolApprovalRequest
 
-__all__ = ["AdapterResult", "LegacyHandlerAdapter"]
+__all__ = [
+    "AdapterResult",
+    "ApprovalTransport",
+    "LegacyHandlerAdapter",
+    "submit_vote",
+]
+
+
+@runtime_checkable
+class ApprovalTransport(Protocol):
+    """A protocol-native approval source.
+
+    Unlike a legacy :class:`~agentmesh.governance.approval.ApprovalHandler`
+    (which only receives the thin legacy request), a transport is handed the
+    full protocol :class:`ApprovalRequest` so it can present the action digest,
+    versions, and expiry to the approver. :class:`VersionedWebhookApproval`
+    satisfies this.
+    """
+
+    def request_decision(
+        self, request: ProtocolApprovalRequest
+    ) -> ApprovalDecision: ...
 
 
 @dataclass
@@ -56,6 +77,42 @@ class AdapterResult:
     @property
     def submitted(self) -> bool:
         return self.entry is not None
+
+
+def submit_vote(
+    coordinator: ApprovalCoordinator,
+    request: ProtocolApprovalRequest,
+    approval: ApprovalDecision,
+    *,
+    approver_kind: ApproverKind = ApproverKind.HUMAN,
+    identity_assurance: str = "approval-handler",
+    stage_index: int = 0,
+) -> AdapterResult:
+    """Record an already-obtained approver vote as one protocol chain entry.
+
+    Shared by every vote source (legacy handler, webhook transport, ...).
+    Fail-closed: any :class:`ApprovalProtocolError` from ``submit_entry``
+    (unpermitted identity, expired request, unknown stage) yields an
+    :class:`AdapterResult` with ``entry=None`` and a populated ``error`` rather
+    than propagating, so callers can deny without special-casing.
+    """
+    try:
+        entry = coordinator.submit_entry(
+            request.approval_request_id,
+            stage_index=stage_index,
+            approver_kind=approver_kind,
+            approver_identity=approval.approver or "unknown",
+            identity_assurance=identity_assurance,
+            decision=(
+                EntryDecision.ALLOW if approval.approved else EntryDecision.DENY
+            ),
+            reason_code=approval.reason or "",
+        )
+    except ApprovalProtocolError as exc:
+        return AdapterResult(
+            approval=approval, entry=None, error=f"approval entry rejected: {exc}"
+        )
+    return AdapterResult(approval=approval, entry=entry, error=None)
 
 
 class LegacyHandlerAdapter:
@@ -88,22 +145,11 @@ class LegacyHandlerAdapter:
         rather than propagating, so callers can deny without special-casing.
         """
         approval = self._handler.request_approval(legacy_request)
-        try:
-            entry = coordinator.submit_entry(
-                request.approval_request_id,
-                stage_index=stage_index,
-                approver_kind=self._approver_kind,
-                approver_identity=approval.approver or "unknown",
-                identity_assurance=self._identity_assurance,
-                decision=(
-                    EntryDecision.ALLOW if approval.approved else EntryDecision.DENY
-                ),
-                reason_code=approval.reason or "",
-            )
-        except ApprovalProtocolError as exc:
-            return AdapterResult(
-                approval=approval,
-                entry=None,
-                error=f"approval entry rejected: {exc}",
-            )
-        return AdapterResult(approval=approval, entry=entry, error=None)
+        return submit_vote(
+            coordinator,
+            request,
+            approval,
+            approver_kind=self._approver_kind,
+            identity_assurance=self._identity_assurance,
+            stage_index=stage_index,
+        )
