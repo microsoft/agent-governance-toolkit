@@ -219,7 +219,7 @@ This model follows established attribute and sink enforcement practice. ABAC and
 
 A `policies` entry is a named, reusable policy definition. The schema defines four types.
 
-A `rego` policy targets Open Policy Agent. Its `query` and `bundle` members are optional in the schema. The runtime offers an optional bundled dispatcher that runs the `opa` executable when it is present, and the host MAY supply its own dispatcher instead.
+A `rego` policy targets Open Policy Agent. Its `query` and `bundle` members are optional in the schema. The runtime offers an optional bundled dispatcher that runs the `opa` executable when it is present, and the host MAY supply its own dispatcher instead. A `rego` policy MAY instead declare a `bundle_url` object with a `url` member and a `sha256` or `integrity` pin. The bundled dispatcher fetches that bundle over the extends fetch path and trust gate defined in section 2.2, verifies the pin, writes it to a private temporary directory, and passes the local path to `opa eval`. `bundle` and `bundle_url` are mutually exclusive, a `bundle_url` MUST use HTTPS and MUST declare a pin, and a non HTTPS URL, a missing pin, a fetch error, a body size breach, or a hash mismatch MUST fail closed. The fetched body is bounded by the same limit as URL extends.
 
 A `cedar` policy targets the Cedar policy language. Its configuration, request mapping, and verdict mapping are defined in section 12.4. The runtime offers an optional bundled `cedar` dispatcher, and the host MAY supply its own dispatcher instead. `rego` and `cedar` are the two types with a bundled runtime execution path.
 

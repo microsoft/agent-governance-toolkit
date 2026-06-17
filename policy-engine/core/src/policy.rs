@@ -127,6 +127,11 @@ pub struct RegoPolicyConfig {
     pub query: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle: Option<String>,
+    /// AGT addition: a pinned HTTPS object `{url, sha256|integrity}` that the
+    /// bundled OPA dispatcher fetches and verifies before passing the local
+    /// path to `opa eval`. Mutually exclusive with `bundle`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_url: Option<JsonValue>,
     #[serde(default, flatten, skip_serializing_if = "BTreeMap::is_empty")]
     pub adapter_config: BTreeMap<String, JsonValue>,
 }
@@ -201,6 +206,8 @@ pub struct RegoPolicyInvocation {
     pub query: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bundle: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_url: Option<JsonValue>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub adapter_config: BTreeMap<String, JsonValue>,
     pub input: JsonValue,
@@ -252,6 +259,14 @@ pub fn validate_policy_definition(name: &str, config: &PolicyConfig) -> Result<(
         PolicyConfig::Rego(config) => {
             validate_optional_string("rego.query", config.query.as_deref())?;
             validate_optional_string("rego.bundle", config.bundle.as_deref())?;
+            if config.bundle.is_some() && config.bundle_url.is_some() {
+                return Err(RuntimeError::ManifestInvalid(
+                    "rego policies must declare at most one of bundle or bundle_url".to_string(),
+                ));
+            }
+            if let Some(bundle_url) = &config.bundle_url {
+                crate::manifest::validate_pinned_https_url("rego.bundle_url", bundle_url)?;
+            }
             for field in cedar_field::ALL {
                 if config.adapter_config.contains_key(field) {
                     return Err(RuntimeError::ManifestInvalid(format!(
@@ -342,6 +357,7 @@ pub fn prepare_policy_invocation(
                     )
                 })?,
             bundle: config.bundle.clone(),
+            bundle_url: config.bundle_url.clone(),
             adapter_config: merge_adapter_config(&config.adapter_config, &binding.adapter_config),
             input: final_policy_input.clone(),
             canonical_input: canonical_policy_input(final_policy_input)?,
@@ -420,6 +436,7 @@ mod path_resolution_tests {
         PolicyConfig::Rego(RegoPolicyConfig {
             query: Some("data.x.verdict".to_string()),
             bundle: bundle.map(str::to_string),
+            bundle_url: None,
             adapter_config: adapter
                 .as_object()
                 .unwrap()
@@ -656,5 +673,72 @@ intervention_points:
         let error = parse(&yaml).unwrap_err();
         assert_eq!(error.reason(), "runtime_error:manifest_invalid");
         assert!(error.detail().contains("query"));
+    }
+
+    fn rego_bundle_manifest(policy_body: &str) -> String {
+        format!(
+            r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  guard:
+    type: rego
+    query: data.x.verdict
+{policy_body}
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: guard
+"#
+        )
+    }
+
+    #[test]
+    fn rego_with_pinned_bundle_url_is_accepted() {
+        let yaml = rego_bundle_manifest(
+            "    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        );
+        let manifest = parse(&yaml).expect("pinned bundle_url should parse");
+        assert_eq!(manifest.policies["guard"].engine_type(), "rego");
+    }
+
+    #[test]
+    fn rego_with_bundle_and_bundle_url_is_rejected() {
+        let yaml = rego_bundle_manifest(
+            "    bundle: ./local\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert!(
+            error
+                .detail()
+                .contains("at most one of bundle or bundle_url"),
+            "got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn rego_with_unpinned_bundle_url_is_rejected() {
+        let yaml = rego_bundle_manifest(
+            "    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n",
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert!(
+            error.detail().contains("must declare a 'sha256'"),
+            "got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn rego_with_non_https_bundle_url_is_rejected() {
+        let yaml = rego_bundle_manifest(
+            "    bundle_url:\n      url: http://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert!(
+            error.detail().contains("only https is allowed"),
+            "got: {}",
+            error.detail()
+        );
     }
 }
