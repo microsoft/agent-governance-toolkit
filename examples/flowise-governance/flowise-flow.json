@@ -1,0 +1,229 @@
+{
+  "nodes": [
+    {
+      "id": "chatInput_0",
+      "type": "customNode",
+      "position": { "x": 80, "y": 280 },
+      "data": {
+        "id": "chatInput_0",
+        "label": "Chat Input",
+        "name": "chatInput",
+        "type": "ChatInput",
+        "baseClasses": ["BaseMessage"],
+        "inputs": {},
+        "outputs": { "output": "chatInput_0-output-output-BaseMessage" },
+        "selected": false
+      }
+    },
+    {
+      "id": "customFunction_0",
+      "type": "customNode",
+      "position": { "x": 400, "y": 160 },
+      "data": {
+        "id": "customFunction_0",
+        "label": "Build Governance Payload",
+        "name": "customFunction",
+        "type": "CustomFunction",
+        "baseClasses": ["CustomFunction"],
+        "inputs": {
+          "functionName": "buildGovernancePayload",
+          "javascriptFunction": "const input = $flow.input;\nconst tool = $vars.tool || 'search_web';\nconst agentId = $vars.agent_id || 'flowise-agent';\nreturn JSON.stringify({\n  tool: tool,\n  content: input,\n  agent_id: agentId\n});",
+          "input": "{{chatInput_0.data.output}}"
+        },
+        "outputs": { "output": "customFunction_0-output-output-string" },
+        "selected": false
+      }
+    },
+    {
+      "id": "httpRequest_0",
+      "type": "customNode",
+      "position": { "x": 720, "y": 160 },
+      "data": {
+        "id": "httpRequest_0",
+        "label": "AGT Governance Check",
+        "name": "httpRequestNode",
+        "type": "HttpRequest",
+        "baseClasses": ["HttpRequest"],
+        "inputs": {
+          "url": "http://localhost:8000/govern",
+          "method": "POST",
+          "headers": "Content-Type: application/json",
+          "body": "{{customFunction_0.data.output}}"
+        },
+        "outputs": { "output": "httpRequest_0-output-output-string" },
+        "selected": false
+      }
+    },
+    {
+      "id": "customFunction_1",
+      "type": "customNode",
+      "position": { "x": 1040, "y": 160 },
+      "data": {
+        "id": "customFunction_1",
+        "label": "Check Governance Decision",
+        "name": "customFunction",
+        "type": "CustomFunction",
+        "baseClasses": ["CustomFunction"],
+        "inputs": {
+          "functionName": "checkGovernanceDecision",
+          "javascriptFunction": "const response = JSON.parse($flow.input);\nif (!response.allowed) {\n  return {\n    blocked: true,\n    message: 'Request blocked by governance policy: ' + (response.reason || 'policy violation'),\n    tool: response.tool\n  };\n}\nreturn {\n  blocked: false,\n  tool: response.tool,\n  agent_id: response.agent_id,\n  original_input: $vars.original_input\n};",
+          "input": "{{httpRequest_0.data.output}}"
+        },
+        "outputs": { "output": "customFunction_1-output-output-string" },
+        "selected": false
+      }
+    },
+    {
+      "id": "ifElse_0",
+      "type": "customNode",
+      "position": { "x": 1360, "y": 160 },
+      "data": {
+        "id": "ifElse_0",
+        "label": "Allowed?",
+        "name": "ifElseFunction",
+        "type": "IfElseFunction",
+        "baseClasses": ["IfElseFunction"],
+        "inputs": {
+          "condition": "{{customFunction_1.data.output}}.blocked === true",
+          "input": "{{customFunction_1.data.output}}"
+        },
+        "outputs": {
+          "true": "ifElse_0-output-true",
+          "false": "ifElse_0-output-false"
+        },
+        "selected": false
+      }
+    },
+    {
+      "id": "chatOpenAI_0",
+      "type": "customNode",
+      "position": { "x": 1680, "y": 60 },
+      "data": {
+        "id": "chatOpenAI_0",
+        "label": "ChatOpenAI",
+        "name": "chatOpenAI",
+        "type": "ChatOpenAI",
+        "baseClasses": ["ChatOpenAI", "BaseChatModel", "BaseLanguageModel"],
+        "inputs": {
+          "modelName": "gpt-4o-mini",
+          "temperature": 0.7,
+          "input": "{{ifElse_0.data.false}}"
+        },
+        "outputs": { "output": "chatOpenAI_0-output-output-string" },
+        "selected": false
+      }
+    },
+    {
+      "id": "customFunction_2",
+      "type": "customNode",
+      "position": { "x": 1680, "y": 320 },
+      "data": {
+        "id": "customFunction_2",
+        "label": "Format Block Message",
+        "name": "customFunction",
+        "type": "CustomFunction",
+        "baseClasses": ["CustomFunction"],
+        "inputs": {
+          "functionName": "formatBlockMessage",
+          "javascriptFunction": "const data = $flow.input;\nreturn data.message || 'This request was blocked by the governance policy.';",
+          "input": "{{ifElse_0.data.true}}"
+        },
+        "outputs": { "output": "customFunction_2-output-output-string" },
+        "selected": false
+      }
+    },
+    {
+      "id": "chatOutput_0",
+      "type": "customNode",
+      "position": { "x": 2000, "y": 60 },
+      "data": {
+        "id": "chatOutput_0",
+        "label": "Chat Output (LLM)",
+        "name": "chatOutput",
+        "type": "ChatOutput",
+        "baseClasses": ["ChatOutput"],
+        "inputs": {
+          "input": "{{chatOpenAI_0.data.output}}"
+        },
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "chatOutput_1",
+      "type": "customNode",
+      "position": { "x": 2000, "y": 320 },
+      "data": {
+        "id": "chatOutput_1",
+        "label": "Chat Output (Blocked)",
+        "name": "chatOutput",
+        "type": "ChatOutput",
+        "baseClasses": ["ChatOutput"],
+        "inputs": {
+          "input": "{{customFunction_2.data.output}}"
+        },
+        "outputs": {},
+        "selected": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-chatInput_0-customFunction_0",
+      "source": "chatInput_0",
+      "sourceHandle": "chatInput_0-output-output-BaseMessage",
+      "target": "customFunction_0",
+      "targetHandle": "customFunction_0-input-input-BaseMessage"
+    },
+    {
+      "id": "edge-customFunction_0-httpRequest_0",
+      "source": "customFunction_0",
+      "sourceHandle": "customFunction_0-output-output-string",
+      "target": "httpRequest_0",
+      "targetHandle": "httpRequest_0-input-body-string"
+    },
+    {
+      "id": "edge-httpRequest_0-customFunction_1",
+      "source": "httpRequest_0",
+      "sourceHandle": "httpRequest_0-output-output-string",
+      "target": "customFunction_1",
+      "targetHandle": "customFunction_1-input-input-string"
+    },
+    {
+      "id": "edge-customFunction_1-ifElse_0",
+      "source": "customFunction_1",
+      "sourceHandle": "customFunction_1-output-output-string",
+      "target": "ifElse_0",
+      "targetHandle": "ifElse_0-input-input-string"
+    },
+    {
+      "id": "edge-ifElse_0-chatOpenAI_0-false",
+      "source": "ifElse_0",
+      "sourceHandle": "ifElse_0-output-false",
+      "target": "chatOpenAI_0",
+      "targetHandle": "chatOpenAI_0-input-input-string"
+    },
+    {
+      "id": "edge-ifElse_0-customFunction_2-true",
+      "source": "ifElse_0",
+      "sourceHandle": "ifElse_0-output-true",
+      "target": "customFunction_2",
+      "targetHandle": "customFunction_2-input-input-string"
+    },
+    {
+      "id": "edge-chatOpenAI_0-chatOutput_0",
+      "source": "chatOpenAI_0",
+      "sourceHandle": "chatOpenAI_0-output-output-string",
+      "target": "chatOutput_0",
+      "targetHandle": "chatOutput_0-input-input-string"
+    },
+    {
+      "id": "edge-customFunction_2-chatOutput_1",
+      "source": "customFunction_2",
+      "sourceHandle": "customFunction_2-output-output-string",
+      "target": "chatOutput_1",
+      "targetHandle": "chatOutput_1-input-input-string"
+    }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.75 }
+}
