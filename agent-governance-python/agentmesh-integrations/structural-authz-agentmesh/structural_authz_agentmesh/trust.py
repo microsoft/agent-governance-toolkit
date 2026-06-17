@@ -383,6 +383,20 @@ class DelegationChain:
 
         return True, ""
 
+    def effective_restrictions(
+        self,
+        parent_restrictions: frozenset[str],
+        child_declared: frozenset[str],
+    ) -> frozenset[str]:
+        """Return a delegated child's effective restrictions: parent ∪ child.
+
+        Grow-only restriction inheritance for Context Accumulation Governance: a
+        delegatee may ADD restrictions but never DROP one held by the parent.
+        This composes ALONGSIDE the scope attenuation in ``validate()``; it does
+        not call or modify ``validate()`` and shares none of its state.
+        """
+        return frozenset(parent_restrictions) | frozenset(child_declared)
+
     def effective_scopes_for(self, did: str) -> Set[str]:
         """Return the effective scopes held by a given DID in this chain."""
         if did == self._root_did:
