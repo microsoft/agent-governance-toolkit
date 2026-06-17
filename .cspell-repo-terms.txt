@@ -4,6 +4,8 @@ AAIF
 abprs
 abspath
 agentrust
+CBOR
+COSE
 isfile
 reimplementation
 abstractmethod
