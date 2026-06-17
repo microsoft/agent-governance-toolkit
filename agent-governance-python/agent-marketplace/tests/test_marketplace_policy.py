@@ -210,9 +210,7 @@ class TestEvaluatePluginCompliance:
     def test_allowlist_blocks_unlisted_server(self) -> None:
         manifest = _make_manifest()
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="allowlist", allowed=["approved-server"]
-            )
+            mcp_servers=MCPServerPolicy(mode="allowlist", allowed=["approved-server"])
         )
 
         result = evaluate_plugin_compliance(
@@ -226,9 +224,7 @@ class TestEvaluatePluginCompliance:
     def test_allowlist_permits_listed_server(self) -> None:
         manifest = _make_manifest()
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="allowlist", allowed=["approved-server"]
-            )
+            mcp_servers=MCPServerPolicy(mode="allowlist", allowed=["approved-server"])
         )
 
         result = evaluate_plugin_compliance(
@@ -240,9 +236,7 @@ class TestEvaluatePluginCompliance:
     def test_blocklist_blocks_listed_server(self) -> None:
         manifest = _make_manifest()
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="blocklist", blocked=["evil-server"]
-            )
+            mcp_servers=MCPServerPolicy(mode="blocklist", blocked=["evil-server"])
         )
 
         result = evaluate_plugin_compliance(
@@ -255,9 +249,7 @@ class TestEvaluatePluginCompliance:
     def test_blocklist_permits_unlisted_server(self) -> None:
         manifest = _make_manifest()
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="blocklist", blocked=["evil-server"]
-            )
+            mcp_servers=MCPServerPolicy(mode="blocklist", blocked=["evil-server"])
         )
 
         result = evaluate_plugin_compliance(
@@ -283,9 +275,7 @@ class TestEvaluatePluginCompliance:
             mcp_servers=MCPServerPolicy(require_declaration=True)
         )
 
-        result = evaluate_plugin_compliance(
-            manifest, policy, mcp_servers=["server-a"]
-        )
+        result = evaluate_plugin_compliance(manifest, policy, mcp_servers=["server-a"])
 
         assert result.compliant is True
 
@@ -294,9 +284,7 @@ class TestEvaluatePluginCompliance:
         policy = MarketplacePolicy(
             require_signature=True,
             allowed_plugin_types=["integration"],
-            mcp_servers=MCPServerPolicy(
-                mode="allowlist", allowed=["good-server"]
-            ),
+            mcp_servers=MCPServerPolicy(mode="allowlist", allowed=["good-server"]),
         )
 
         result = evaluate_plugin_compliance(
@@ -368,9 +356,7 @@ class TestRegistryPolicyEnforcement:
 
     def test_register_with_mcp_servers(self) -> None:
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="allowlist", allowed=["approved-server"]
-            )
+            mcp_servers=MCPServerPolicy(mode="allowlist", allowed=["approved-server"])
         )
         registry = PluginRegistry(marketplace_policy=policy)
         manifest = _make_manifest()
@@ -381,9 +367,7 @@ class TestRegistryPolicyEnforcement:
 
     def test_register_rejects_blocked_mcp_server(self) -> None:
         policy = MarketplacePolicy(
-            mcp_servers=MCPServerPolicy(
-                mode="allowlist", allowed=["approved-server"]
-            )
+            mcp_servers=MCPServerPolicy(mode="allowlist", allowed=["approved-server"])
         )
         registry = PluginRegistry(marketplace_policy=policy)
         manifest = _make_manifest()

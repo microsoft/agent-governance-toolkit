@@ -149,8 +149,9 @@ def scan(
             agent.tags["risk_level"] = risk.level.value
             agent.tags["risk_score"] = str(risk.score)
 
-    console.print(f"\n[bold]Total: {total_found} agents discovered, "
-                  f"{inventory.count} in inventory[/bold]\n")
+    console.print(
+        f"\n[bold]Total: {total_found} agents discovered, {inventory.count} in inventory[/bold]\n"
+    )
 
     if output == "json":
         click.echo(inventory.export_json())
@@ -239,9 +240,7 @@ def reconcile(storage: str, registry_file: str | None, output: str) -> None:
     for shadow in shadow_agents:
         shadow.risk = scorer.score(shadow.agent)
 
-    registered_count = sum(
-        1 for a in inv.agents if a.status == AgentStatus.REGISTERED
-    )
+    registered_count = sum(1 for a in inv.agents if a.status == AgentStatus.REGISTERED)
     console.print(f"  Registered: [green]{registered_count}[/green]")
     console.print(f"  Shadow:     [red]{len(shadow_agents)}[/red]")
 

@@ -1,9 +1,8 @@
 """Tests for scanner base classes and registry."""
 
-import pytest
 
-from agent_discovery.scanners.base import BaseScanner, ScannerRegistry
 from agent_discovery.models import ScanResult
+from agent_discovery.scanners.base import BaseScanner, ScannerRegistry
 
 
 class MockScanner(BaseScanner):
@@ -47,6 +46,7 @@ class TestScannerRegistry:
 class TestGlobalRegistry:
     def test_builtin_scanners_registered(self):
         from agent_discovery.scanners.base import registry
+
         names = registry.list_scanners()
         assert "process" in names
         assert "config" in names

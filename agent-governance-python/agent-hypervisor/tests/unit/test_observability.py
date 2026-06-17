@@ -57,21 +57,27 @@ class TestHypervisorEventBus:
 
     def test_query_combined_filters(self):
         bus = HypervisorEventBus()
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            session_id="s1",
-            agent_did="a1",
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            session_id="s1",
-            agent_did="a2",
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.SLASH_EXECUTED,
-            session_id="s1",
-            agent_did="a1",
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                session_id="s1",
+                agent_did="a1",
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                session_id="s1",
+                agent_did="a2",
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.SLASH_EXECUTED,
+                session_id="s1",
+                agent_did="a1",
+            )
+        )
 
         results = bus.query(
             event_type=EventType.RING_ASSIGNED,
@@ -283,10 +289,7 @@ class TestEventBusBounds:
                     )
                 )
 
-        threads = [
-            threading.Thread(target=producer, args=(t,))
-            for t in range(N_THREADS)
-        ]
+        threads = [threading.Thread(target=producer, args=(t,)) for t in range(N_THREADS)]
         for t in threads:
             t.start()
         for t in threads:
@@ -307,9 +310,7 @@ class TestEventBusBounds:
             seen.append(event)
             if event.event_type == EventType.SESSION_CREATED:
                 # Re-enter: handler emits a follow-up event.
-                bus.emit(
-                    HypervisorEvent(event_type=EventType.RING_ASSIGNED)
-                )
+                bus.emit(HypervisorEvent(event_type=EventType.RING_ASSIGNED))
 
         bus.subscribe(None, re_emit_on_first)
         bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))

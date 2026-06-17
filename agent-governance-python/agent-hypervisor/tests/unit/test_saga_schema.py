@@ -210,8 +210,9 @@ class TestActionTypes:
         for prefix in VALID_ACTION_PREFIXES:
             step = _valid_step(action_id=f"{prefix}run")
             errors = self.validator.validate(_valid_definition(steps=[step]))
-            assert not any("action_id" in e and "prefix" in e for e in errors), \
+            assert not any("action_id" in e and "prefix" in e for e in errors), (
                 f"Prefix '{prefix}' should be valid"
+            )
 
     def test_invalid_action_prefix(self):
         step = _valid_step(action_id="unknown.action")
@@ -315,11 +316,13 @@ class TestParserSchemaIntegration:
     def test_parser_without_schema_validation(self):
         """Default parser does not enforce schema validation."""
         parser = SagaDSLParser()
-        defn = parser.parse({
-            "name": "x",
-            "session_id": "s1",
-            "steps": [{"id": "s", "action_id": "a", "agent": "x"}],
-        })
+        defn = parser.parse(
+            {
+                "name": "x",
+                "session_id": "s1",
+                "steps": [{"id": "s", "action_id": "a", "agent": "x"}],
+            }
+        )
         assert defn.name == "x"
 
     def test_parser_with_schema_validation_valid(self):
@@ -336,4 +339,6 @@ class TestParserSchemaIntegration:
         """Existing SagaDSLError still raised for structural issues."""
         parser = SagaDSLParser()
         with pytest.raises(SagaDSLError, match="name"):
-            parser.parse({"session_id": "s", "steps": [{"id": "s", "action_id": "a", "agent": "x"}]})
+            parser.parse(
+                {"session_id": "s", "steps": [{"id": "s", "action_id": "a", "agent": "x"}]}
+            )

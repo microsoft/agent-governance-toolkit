@@ -65,14 +65,16 @@ class TestQualityAssessmentReport:
 
     def test_overall_score_single_dimension(self) -> None:
         report = QualityAssessmentReport(
-            name="test", version="1.0",
+            name="test",
+            version="1.0",
             dimensions=[DimensionResult(AssessmentDimension.SECURITY_POSTURE, 80)],
         )
         assert report.overall_score == pytest.approx(80.0)
 
     def test_overall_score_multiple_dimensions(self) -> None:
         report = QualityAssessmentReport(
-            name="test", version="1.0",
+            name="test",
+            version="1.0",
             dimensions=[
                 DimensionResult(AssessmentDimension.SECURITY_POSTURE, 90),
                 DimensionResult(AssessmentDimension.DOCUMENTATION, 70),
@@ -82,22 +84,27 @@ class TestQualityAssessmentReport:
 
     def test_overall_grade(self) -> None:
         report = QualityAssessmentReport(
-            name="test", version="1.0",
+            name="test",
+            version="1.0",
             dimensions=[DimensionResult(AssessmentDimension.SECURITY_POSTURE, 92)],
         )
         assert report.overall_grade == AssessmentGrade.A
 
     def test_top_recommendations_ordered_by_lowest_score(self) -> None:
         low = DimensionResult(
-            AssessmentDimension.TEST_COVERAGE, 20,
+            AssessmentDimension.TEST_COVERAGE,
+            20,
             recommendations=["add tests", "add CI"],
         )
         high = DimensionResult(
-            AssessmentDimension.SECURITY_POSTURE, 90,
+            AssessmentDimension.SECURITY_POSTURE,
+            90,
             recommendations=["sign packages"],
         )
         report = QualityAssessmentReport(
-            name="test", version="1.0", dimensions=[high, low],
+            name="test",
+            version="1.0",
+            dimensions=[high, low],
         )
         recs = report.top_recommendations
         assert recs[0] == "add tests"
@@ -106,15 +113,18 @@ class TestQualityAssessmentReport:
     def test_top_recommendations_capped_at_five(self) -> None:
         dims = [
             DimensionResult(
-                AssessmentDimension.SECURITY_POSTURE, 10,
+                AssessmentDimension.SECURITY_POSTURE,
+                10,
                 recommendations=["r1", "r2", "r3"],
             ),
             DimensionResult(
-                AssessmentDimension.DOCUMENTATION, 20,
+                AssessmentDimension.DOCUMENTATION,
+                20,
                 recommendations=["r4", "r5", "r6"],
             ),
             DimensionResult(
-                AssessmentDimension.TEST_COVERAGE, 30,
+                AssessmentDimension.TEST_COVERAGE,
+                30,
                 recommendations=["r7", "r8", "r9"],
             ),
         ]
@@ -123,11 +133,16 @@ class TestQualityAssessmentReport:
 
     def test_to_dict_structure(self) -> None:
         dim = DimensionResult(
-            AssessmentDimension.SECURITY_POSTURE, 80, 100,
-            findings=["OWASP ok"], recommendations=["sign"],
+            AssessmentDimension.SECURITY_POSTURE,
+            80,
+            100,
+            findings=["OWASP ok"],
+            recommendations=["sign"],
         )
         report = QualityAssessmentReport(
-            name="my-plugin", version="2.0", dimensions=[dim],
+            name="my-plugin",
+            version="2.0",
+            dimensions=[dim],
         )
         d = report.to_dict()
         assert d["name"] == "my-plugin"

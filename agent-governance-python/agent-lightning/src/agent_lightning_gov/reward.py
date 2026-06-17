@@ -78,7 +78,7 @@ def policy_penalty(
 
     total_penalty = 0.0
     for violation in violations:
-        severity = getattr(violation, 'severity', 'medium')
+        severity = getattr(violation, "severity", "medium")
         total_penalty += severity_penalties.get(severity, medium_penalty)
 
     return total_penalty
@@ -136,9 +136,9 @@ class PolicyReward:
 
     def _default_base_reward(self, rollout: Any) -> float:
         """Default base reward: 1.0 for success, 0.0 for failure."""
-        if hasattr(rollout, 'success'):
+        if hasattr(rollout, "success"):
             return 1.0 if rollout.success else 0.0
-        if hasattr(rollout, 'task_output'):
+        if hasattr(rollout, "task_output"):
             return 1.0 if rollout.task_output is not None else 0.0
         return 0.0
 
@@ -198,11 +198,11 @@ class PolicyReward:
 
     def _get_violations(self, rollout: Any) -> list[Any]:
         """Extract violations from rollout."""
-        if hasattr(rollout, 'violations'):
+        if hasattr(rollout, "violations"):
             return rollout.violations
 
         # Try to get from kernel's recent history
-        if hasattr(self.kernel, 'get_recent_violations'):
+        if hasattr(self.kernel, "get_recent_violations"):
             return self.kernel.get_recent_violations()
 
         return []

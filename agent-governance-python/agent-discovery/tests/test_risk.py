@@ -1,6 +1,6 @@
 """Tests for risk scoring."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from agent_discovery.models import AgentStatus, DiscoveredAgent, RiskLevel
 from agent_discovery.risk import RiskScorer
@@ -48,7 +48,7 @@ class TestRiskScorer:
     def test_long_ungoverned_increases_risk(self):
         agent = _make_agent(
             status=AgentStatus.SHADOW,
-            first_seen_at=datetime.now(timezone.utc) - timedelta(days=60),
+            first_seen_at=datetime.now(UTC) - timedelta(days=60),
         )
         risk = self.scorer.score(agent)
         assert any("Ungoverned for" in f for f in risk.factors)
@@ -65,7 +65,7 @@ class TestRiskScorer:
         agent = _make_agent(
             status=AgentStatus.SHADOW,
             agent_type="autogen",
-            first_seen_at=datetime.now(timezone.utc) - timedelta(days=400),
+            first_seen_at=datetime.now(UTC) - timedelta(days=400),
         )
         risk = self.scorer.score(agent)
         assert risk.score <= 100.0
@@ -88,7 +88,7 @@ class TestRiskScorer:
         """
         agent = _make_agent(
             status=AgentStatus.SHADOW,
-            first_seen_at=datetime.now(timezone.utc) + timedelta(days=365),
+            first_seen_at=datetime.now(UTC) + timedelta(days=365),
         )
         risk = self.scorer.score(agent)
         # A future timestamp should NOT add ungoverned-time risk

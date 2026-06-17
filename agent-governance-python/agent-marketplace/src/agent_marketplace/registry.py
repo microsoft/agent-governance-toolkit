@@ -76,7 +76,9 @@ class PluginRegistry:
         """
         if self._marketplace_policy is not None:
             result = evaluate_plugin_compliance(
-                manifest, self._marketplace_policy, mcp_servers,
+                manifest,
+                self._marketplace_policy,
+                mcp_servers,
                 organization=organization,
             )
             if not result.compliant:
@@ -173,11 +175,16 @@ class PluginRegistry:
         with self._lock:
             for versions in self._plugins.values():
                 latest = max(versions.values(), key=lambda m: _semver_tuple(m.version))
-                if query_lower in latest.name.lower() or query_lower in latest.description.lower():
+                if (
+                    query_lower in latest.name.lower()
+                    or query_lower in latest.description.lower()
+                ):
                     results.append(latest)
         return results
 
-    def list_plugins(self, type_filter: Optional[PluginType] = None) -> list[PluginManifest]:
+    def list_plugins(
+        self, type_filter: Optional[PluginType] = None
+    ) -> list[PluginManifest]:
         """List all registered plugins (latest version of each).
 
         Args:
@@ -210,7 +217,10 @@ class PluginRegistry:
         with self._lock:
             for versions in self._plugins.values():
                 for manifest in versions.values():
-                    if manifest.organization is None or manifest.organization == organization:
+                    if (
+                        manifest.organization is None
+                        or manifest.organization == organization
+                    ):
                         results.append(manifest)
         return results
 
@@ -258,8 +268,7 @@ def _semver_tuple(version: str) -> tuple[int, ...]:
         return tuple(int(p) for p in version.split("."))
     except (ValueError, TypeError) as exc:
         logger.warning(
-            "Cannot parse version %r as ASCII semver tuple (%s); "
-            "sorting as (0,)",
+            "Cannot parse version %r as ASCII semver tuple (%s); sorting as (0,)",
             version,
             exc,
         )
