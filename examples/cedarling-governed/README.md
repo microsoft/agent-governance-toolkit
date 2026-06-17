@@ -79,7 +79,7 @@ In this example use-case, Users from the operations team are requesting authoriz
 
 ### Tokens to carry the context
 
-Capability data is extracted from the access token using [TBAC](https://docs.jans.io/stable/cedarling/#proof-based-authorization-token-based-access-control-tbac) principles. Policies reason over the claims the issuers vouch for, plus the request context.
+Capability data is extracted from the access token using [TBAC](https://docs.jans.io/stable/cedarling/#proof-based-authorization-token-based-access-control-tbac) principles. Policies reason over the claims the issuers have published in the token. Plus, the request context.
  
 This mode is called "Multi-issuer" because the policy store can be configured to trust tokens issued by several issuers. 
 
@@ -145,15 +145,15 @@ decision = evaluator.evaluate({
 
 ## How a request maps to Cedar
 
-The backend translates each AGT request dict into a Cedar authorization query:
+The backend translates each AGT request parameters into a Cedar authorization query:
 
 | AGT request key        | Cedar field                                                      |
 |------------------------|------------------------------------------------------------------|
 | `agent_id`             | `principal` entity id (`AGT::Agent`) — unsigned only             |
 | `tool_name`            | `action` — snake_case → PascalCase (`read_data` → `ReadData`)    |
 | `resource`             | `resource` entity id (`AGT::Resource`)                           |
-| `principal_attributes` | principal entity attributes — **unsigned only**                  |
-| `tokens`               | JWTs keyed by Cedar entity type — **multi-issuer only**          |
+| `principal_attributes` | principal entity attributes — **unsigned mode only**                  |
+| `tokens`               | JWTs keyed by Cedar entity type — **multi-issuer mode only**          |
 | any other key          | Cedar `context` attribute (also spread onto the resource entity) |
 
 The `AGT::` prefix comes from the `namespace="AGT"` argument, which matches the
