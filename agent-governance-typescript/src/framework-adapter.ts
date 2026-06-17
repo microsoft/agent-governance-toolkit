@@ -9,7 +9,11 @@ import {
   TraceSpanKind,
   TraceSpanStatus,
 } from './metrics';
-import { GovernanceResult } from './types';
+import { GovernanceResult,
+         SkillAuditMetadata,
+         TrustedSkillMetadataSource,
+} from './types';
+import { createHash } from 'crypto';
 
 export interface FrameworkInvocation {
   name: string;
@@ -19,6 +23,7 @@ export interface FrameworkInvocation {
   agentId?: string;
   input?: Record<string, unknown>;
   attributes?: Record<string, unknown>;
+  trustedSkillMetadata?: TrustedSkillMetadataSource;
 }
 
 export interface FrameworkInvocationOutcome<TOutput = unknown> {
@@ -170,10 +175,14 @@ export class GenericFrameworkAdapter {
         ...(assertedAgentId ? { assertedAgentId } : {}),
       },
     );
+    const skillAuditMetadata = buildSkillAuditMetadata(
+      normalizedInvocation.trustedSkillMetadata,
+      normalizedInvocation.input,
+    );
 
     const governanceResult = identityMismatchReason
       ? this.rejectIdentityMismatch(action, canonicalAgentId, identityMismatchReason)
-      : await this.client.executeWithGovernance(action, normalizedInvocation.input ?? {});
+      : await this.client.executeWithGovernance(action, normalizedInvocation.input ?? {}, skillAuditMetadata,);
     this.metrics?.recordPolicyDecision(
       governanceResult.decision,
       governanceResult.executionTime,
@@ -305,4 +314,76 @@ function stringifyOutput(output: unknown): string {
   } catch {
     return String(output);
   }
+}
+
+function hashContext(context: unknown): string | undefined {
+  if (context === undefined || context === null) {
+    return undefined;
+  }
+
+  try {
+    const canonical = stableStringify(context);
+
+    return createHash('sha256')
+      .update(canonical, 'utf8')
+      .digest('hex');
+  } catch {
+    // Fail-safe: non-canonical payloads should not produce hashes.
+    return undefined;
+  }
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(sortKeys(value));
+}
+
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortKeys);
+  }
+
+  if (
+    value !== null &&
+    typeof value === 'object'
+  ) {
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = sortKeys(
+          (value as Record<string, unknown>)[key],
+        );
+        return acc;
+      }, {});
+  }
+
+  return value;
+}
+
+function buildSkillAuditMetadata(
+  trusted?: TrustedSkillMetadataSource,
+  contextBefore?: unknown,
+  contextAfter?: unknown,
+): SkillAuditMetadata | undefined {
+  const contextHashBefore = hashContext(contextBefore);
+  const contextHashAfter = hashContext(contextAfter);
+
+  if (
+    !trusted?.skillName &&
+    !trusted?.skillOrigin &&
+    !contextHashBefore &&
+    !contextHashAfter
+  ) {
+    return undefined;
+  }
+
+  return {
+    skillName: trusted?.skillName,
+    skillOrigin: trusted?.skillOrigin,
+    provenanceSourceTrust:
+      trusted?.skillName || trusted?.skillOrigin
+        ? 'trusted'
+        : undefined,
+    contextHashBefore,
+    contextHashAfter,
+  };
 }

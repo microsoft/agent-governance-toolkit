@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@octokit/webhooks": "14.2.0",
-    "axios": "1.17.0",
+    "axios": "1.18.0",
     "dotenv": "17.4.2",
     "express": "5.2.1",
     "path-to-regexp": "8.4.2",
@@ -49,10 +49,10 @@
   "devDependencies": {
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
-    "@types/node": "25.9.2",
-    "@typescript-eslint/eslint-plugin": "8.60.1",
-    "@typescript-eslint/parser": "8.61.0",
-    "eslint": "10.4.1",
+    "@types/node": "25.9.3",
+    "@typescript-eslint/eslint-plugin": "8.61.1",
+    "@typescript-eslint/parser": "8.61.1",
+    "eslint": "10.5.0",
     "jest": "30.4.2",
     "ts-jest": "29.4.11",
     "ts-node": "10.9.2",

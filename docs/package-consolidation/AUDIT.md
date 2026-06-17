@@ -52,16 +52,16 @@ None of these 10 modules are published to PyPI. They appear to be internal kerne
 
 | Module | PyPI name | Description |
 |--------|-----------|-------------|
-| `amb` | `agentmesh-message-bus` | Broker-agnostic message bus for agents |
-| `atr` | `agentmesh-tool-registry` | Decentralized agent capability marketplace |
-| `caas` | `agentmesh-context` | Context routing and RAG window management |
-| `cmvk` | `agentmesh-drift` | Drift and hallucination score detection |
-| `control-plane` | `agentmesh-control-plane` | Deterministic governance kernel with POSIX signals |
-| `emk` | `agentmesh-memory` | Episodic Memory Kernel |
-| `iatp` | `agentmesh-trust-protocol` | Inter-Agent Trust Protocol sidecar |
-| `mcp-kernel-server` | `agentmesh-mcp-server` | MCP Server for Claude Desktop kernel primitives |
-| `nexus` | `agentmesh-nexus` | Agent Trust Exchange (research prototype) |
-| `observability` | `agentmesh-observability` | OTel traces, Prometheus metrics, Grafana dashboards |
+| `amb` | `agent-governance-toolkit-message-bus` | Broker-agnostic message bus for agents |
+| `atr` | `agent-governance-toolkit-tool-registry` | Decentralized agent capability marketplace |
+| `caas` | `agent-governance-toolkit-context` | Context routing and RAG window management |
+| `cmvk` | `agent-governance-toolkit-drift` | Drift and hallucination score detection |
+| `control-plane` | `agent-governance-toolkit-control-plane` | Deterministic governance kernel with POSIX signals |
+| `emk` | `agent-governance-toolkit-memory` | Episodic Memory Kernel |
+| `iatp` | `agent-governance-toolkit-trust-protocol` | Inter-Agent Trust Protocol sidecar |
+| `mcp-kernel-server` | `agent-governance-toolkit-mcp-server` | MCP Server for Claude Desktop kernel primitives |
+| `nexus` | `agent-governance-toolkit-nexus` | Agent Trust Exchange (research prototype) |
+| `observability` | `agent-governance-toolkit-observability` | OTel traces, Prometheus metrics, Grafana dashboards |
 
 ### Framework Integrations under `agent-governance-python/agentmesh-integrations/`
 
@@ -106,8 +106,8 @@ agent-mcp-governance
 cedarling-agentmesh
     agent-os-kernel
 
-agentmesh-nexus
-    agentmesh-trust-protocol
+agent-governance-toolkit-nexus
+    agent-governance-toolkit-trust-protocol
         agentmesh-primitives
 ```
 

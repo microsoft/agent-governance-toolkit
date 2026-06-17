@@ -1,0 +1,19 @@
+{
+  "id": "most-specific-config-read",
+  "input": {
+    "action": "k8s_get",
+    "agent_did": "did:web:ops-agent",
+    "context": {
+      "resource": "ConfigMap",
+      "namespace": "production",
+      "operation": "get"
+    }
+  },
+  "expected_verdict": "allow",
+  "expected_rule": "config-reads",
+  "resolution_metadata": {
+    "rule_id": "config-reads",
+    "strategy": "most-specific-wins"
+  },
+  "recorded_at": "2026-05-22T10:20:00Z"
+}

@@ -1,0 +1,17 @@
+# AGT packages verified during Phase 0.
+agent-governance-toolkit-core==4.1.0
+agent-governance-toolkit-protocols==4.1.0
+agt-policies==5.0.0
+
+# Used by AGT policy loading and example runtime helpers.
+pyyaml
+
+# Optional for running the example tests.
+pytest
+
+# Optional for real DeerFlow integration:
+# deerflow-harness is the local package name in the DeerFlow repository, but it
+# is not currently available on PyPI. Install it from a local DeerFlow checkout
+# or from GitHub when you want native deerflow.guardrails.provider types:
+#   pip install -e /path/to/deer-flow/backend/packages/harness
+#   pip install "deerflow-harness @ git+https://github.com/bytedance/deer-flow.git#subdirectory=backend/packages/harness"

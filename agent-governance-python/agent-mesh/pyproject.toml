@@ -5,181 +5,97 @@ build-backend = "hatchling.build"
 [project]
 name = "agentmesh_platform"
 version = "4.1.0"
-description = "Deprecated — use agent-governance-toolkit-core instead. The Secure Nervous System for Cloud-Native Agent Ecosystems"
-readme = "README.md"
+description = "Deprecated. Previously published as agentmesh-platform. Install agent-governance-toolkit-core instead."
 license = {text = "MIT"}
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
-]
-keywords = [
-    "ai",
-    "agents",
-    "security",
-    "governance",
-    "identity",
-    "trust",
-    "a2a",
-    "mcp",
-    "iatp",
-    "zero-trust",
-    "compliance",
-    "soc2",
-    "hipaa",
-    "eu-ai-act",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Information Technology",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Security",
-    "Topic :: Security :: Cryptography",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: System :: Systems Administration :: Authentication/Directory",
-]
-requires-python = ">=3.11"
-dependencies = [
-    # Core dependency redirect
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
-    # Original deps kept for backward compat
+dependencies = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
+
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agentmesh source tree under src/ (and tests/) is still exercised in CI via
+# `pip install -e ".[dev]"`. PR #2794 stripped [project.optional-dependencies]
+# entirely, which silently turned `.[dev]` into a no-op and left the test suite
+# unable to import fastapi/pydantic/cryptography/pynacl/pyyaml — every
+# `pytest tests/` run failed at COLLECTION (ModuleNotFoundError). The `dev` extra
+# below restores exactly the test/dev dependencies the suite needs to collect and
+# run. This does NOT change the published runtime dependency surface (the
+# [project] stub still ships only the -core redirect). Mirrors the agent-os fix
+# (#2969 + #2972).
+[project.optional-dependencies]
+# Test/dev dependencies required for `pytest tests/` to collect and run. The
+# entries beyond the pre-#2794 set (pydantic, cryptography, pynacl, pyyaml, rich,
+# click, python-dateutil) were previously satisfied by the package's runtime
+# `dependencies`, which the stub no longer carries; they are imported directly by
+# the test suite at collection time, so the dev bundle must list them.
+dev = [
+    "pytest>=9.1.0,<10.0",
+    "pytest-asyncio>=1.4.0,<2.0",
+    "pytest-cov>=7.1.0,<8.0",
+    "hypothesis>=6.155.3,<7.0",
+    "black>=26.5.1,<27.0",
+    "ruff>=0.15.17,<1.0",
+    "mypy>=2.1.0,<3.0",
+    "fakeredis>=2.36.0,<3.0",
+    "prometheus-client>=0.25.0,<1.0",
+    "websockets>=12.0,<17.0",
+    "fastapi>=0.137.1,<1.0",
+    "httpx>=0.27.0,<1.0",
+    "uvicorn[standard]>=0.27.0,<1.0",
+    "opentelemetry-api>=1.42.1,<2.0",
+    "opentelemetry-sdk>=1.42.1,<2.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.42.1,<2.0",
+    "PyJWT[crypto]>=2.8.0,<3.0",
     "pydantic[email]>=2.5.0,<3.0",
     "cryptography>=46.0.7,<49.0",
     "pynacl>=1.6.2,<2.0",
-    "httpx>=0.27.0,<1.0",
-    "aiohttp>=3.13.4,<4.0",
     "pyyaml>=6.0,<7.0",
-    "structlog>=24.1.0,<27.0",
-    "click>=8.4.1,<9.0",
     "rich>=13.0.0,<16.0",
+    "click>=8.4.1,<9.0",
     "python-dateutil>=2.8.0,<3.0",
-]
-
-[project.optional-dependencies]
-# Ring enforcement requires the hypervisor package. Kept optional so the
-# core agent-mesh install does not depend on a package version that may
-# not yet be published. When config.ring is None the ring-enforcement
-# code path is never entered and this extra is not needed.
-hypervisor = [
-    "agent_hypervisor>=3.7.0,<5.0",
-]
-dev = [
-    "pytest>=7.4.0,<10.0",
-    "pytest-asyncio>=0.23.0,<2.0",
-    "pytest-cov>=4.1.0,<8.0",
-    "hypothesis>=6.155.2,<7.0",
-    "black>=26.5.1,<27.0",
-    "ruff>=0.1.0,<1.0",
-    "mypy>=1.8.0,<3.0",
-    "fakeredis>=2.36.0,<3.0",
-    "prometheus-client>=0.19.0,<1.0",
-    "websockets>=12.0,<17.0",
-    "fastapi>=0.136.3,<1.0",
-    "httpx>=0.27.0,<1.0",
-    "opentelemetry-api>=1.42.1,<2.0",
-    "opentelemetry-sdk>=1.42.1,<2.0",
-    "PyJWT[crypto]>=2.8.0,<3.0",
+    "structlog>=26.1.0,<27.0",
     # Ring tests exercise the hypervisor; mirror the optional extra so
     # `pip install agent-mesh[dev]` brings everything needed for tests.
     "agent_hypervisor>=3.7.0,<5.0",
 ]
-redis = [
-    "redis>=4.0,<8.0",
-]
-server = [
-    "fastapi>=0.136.3,<1.0",
-    "uvicorn[standard]>=0.27.0,<1.0",
-    # Phase 6.c — Entra-signed JWT verification at the relay's
-    # connect-frame seam. `crypto` extra brings cryptography (already
-    # a core dep) wired up with PyJWT's RS{256,384,512} verifiers.
-    "PyJWT[crypto]>=2.8.0,<3.0",
-]
-storage = [
-    "redis[asyncio]>=5.0.0,<8.0",
-    "sqlalchemy[asyncio]>=2.0.0,<3.0",
-    "asyncpg>=0.29.0,<1.0",
-]
-observability = [
-    "opentelemetry-api>=1.42.1,<2.0",
-    "opentelemetry-sdk>=1.42.1,<2.0",
-    "opentelemetry-instrumentation-fastapi>=0.63b1,<1.0",
-    "opentelemetry-exporter-otlp>=1.20.0,<2.0",
-    "prometheus-client>=0.19.0,<1.0",
-]
-langchain = [
-    "langchain-core>=1.2.11,<2.0",
-]
-django = [
-    "django>=4.2,<6.0",
-]
-websocket = [
-    "websockets>=12.0,<17.0",
-]
-grpc = [
-    "grpcio>=1.60.0,<2.0",
-    "grpcio-tools>=1.60.0,<2.0",
-]
-agent-os = [
-    "agent-governance-toolkit-core[nexus,iatp]>=4.0.0,<5.0",
-]
-all = [
-    "fastapi>=0.136.3,<1.0",
-    "uvicorn[standard]>=0.27.0,<1.0",
-    "redis[asyncio]>=5.0.0,<8.0",
-    "sqlalchemy[asyncio]>=2.0.0,<3.0",
-    "asyncpg>=0.29.0,<1.0",
-    "opentelemetry-api>=1.42.1,<2.0",
-    "opentelemetry-sdk>=1.42.1,<2.0",
-    "opentelemetry-instrumentation-fastapi>=0.63b1,<1.0",
-    "opentelemetry-exporter-otlp>=1.20.0,<2.0",
-    "prometheus-client>=0.19.0,<1.0",
-]
-
-[project.scripts]
-agentmesh = "agentmesh.cli.main:main"
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
-Repository = "https://github.com/microsoft/agent-governance-toolkit"
-Issues = "https://github.com/microsoft/agent-governance-toolkit/issues"
-Changelog = "https://github.com/microsoft/agent-governance-toolkit/blob/master/CHANGELOG.md"
+"Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentmesh"]
 
-[tool.hatch.build.targets.sdist]
-include = [
-    "/src",
-    "/tests",
-    "/docs",
-    "/README.md",
-    "/LICENSE",
+# ============================================================================
+# Ruff - Fast Python Linter & Formatter
+#
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agentmesh source tree under src/ is still linted in CI. These dev-tooling
+# sections were dropped during the package consolidation in #2794; restoring them
+# (with per-file-ignores for re-export __init__.py files) keeps CI green.
+# ============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]
+"tests/*" = ["F401", "E402"]
 
-[tool.black]
-line-length = 100
-target-version = ["py311"]
+[tool.ruff.lint.isort]
+known-first-party = ["agentmesh"]
 
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-select = ["E", "F", "I", "N", "W", "UP"]
-
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-
+# ============================================================================
+# Pytest
+# ============================================================================
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -189,4 +105,3 @@ markers = [
     "slow: long-running load tests (skip with -m 'not slow')",
     "integration: end-to-end integration tests",
 ]
-

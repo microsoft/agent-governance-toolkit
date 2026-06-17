@@ -91,6 +91,26 @@ public class McpCredentialRedactorTests
         Assert.Contains(CredentialKind.GitHubToken, result.Detected);
     }
 
+    [Fact]
+    public void Redact_ModernProviderTokenPatterns()
+    {
+        var openAiToken = $"sk-FAKEFORTESTING{new string('x', 20)}";
+        var slackToken = "xoxb-FAKE-FOR-TESTING-0000000000";
+        var awsAccessKey = $"AKIA{new string('A', 16)}";
+        var googleApiKey = $"AIza{new string('A', 35)}";
+
+        var result = _redactor.Redact(
+            $"openai {openAiToken} slack {slackToken} aws {awsAccessKey} google {googleApiKey}");
+
+        Assert.Equal(
+            "openai [REDACTED_OPENAI_TOKEN] slack [REDACTED_SLACK_TOKEN] aws [REDACTED_AWS_ACCESS_KEY] google [REDACTED_GOOGLE_API_KEY]",
+            result.Sanitized);
+        Assert.Contains(CredentialKind.OpenAiToken, result.Detected);
+        Assert.Contains(CredentialKind.SlackToken, result.Detected);
+        Assert.Contains(CredentialKind.AwsAccessKey, result.Detected);
+        Assert.Contains(CredentialKind.GoogleApiKey, result.Detected);
+    }
+
     [Theory]
     [InlineData("RSA PRIVATE KEY")]
     [InlineData("EC PRIVATE KEY")]
@@ -112,6 +132,10 @@ public class McpCredentialRedactorTests
     [InlineData("-----BEGIN PUBLIC KEY-----\nZmFrZQ==\n-----END PUBLIC KEY-----")]
     [InlineData("-----BEGIN RSA PRIVATE KEY-----\nZmFrZQ==\n-----END EC PRIVATE KEY-----")]
     [InlineData("github_pat_short")]
+    [InlineData("sk-short")]
+    [InlineData("xoxq-FAKE-FOR-TESTING-0000000000")]
+    [InlineData("AKIAFAKEFORTEST0000")]
+    [InlineData("AIzaFAKE_FOR_TESTING_000000000000000")]
     public void Redact_DoesNotRedactMalformedCredentialLookalikes(string text)
     {
         var result = _redactor.Redact(text);

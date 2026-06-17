@@ -1,12 +1,11 @@
-"""
-crewai-agentmesh: Trust layer for CrewAI multi-agent workflows.
-
-Components:
-- AgentProfile: Agent identity with capabilities and trust score
-- TrustedCrew: Trust-verified crew member selection
-- CapabilityGate: Task-to-agent capability matching
-- TrustTracker: Trust score tracking across crew runs
-"""
+import warnings
+warnings.warn(
+    "crewai-agentmesh is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[crewai] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from crewai_agentmesh.trust import (
     AgentProfile,

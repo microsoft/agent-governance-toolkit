@@ -1,0 +1,359 @@
+{
+  "corpus": "benchmarks/prompt-injection/corpus/injection-smoke.jsonl",
+  "split_filter": null,
+  "detector": "AGT Rust PromptInjectionDetector::new / Sensitivity::Balanced / default config",
+  "raw_text_in_output": false,
+  "processed": 280,
+  "overall": {
+    "attacks": 110,
+    "attacks_caught": 7,
+    "attack_recall": 0.06363636363636363,
+    "benign": 170,
+    "benign_flagged": 16,
+    "benign_fp_rate": 0.09411764705882353
+  },
+  "by_attack_class": {
+    "benign": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 170,
+      "benign_flagged": 16,
+      "benign_fp_rate": 0.09411764705882353
+    },
+    "data_boundary_abuse": {
+      "attacks": 10,
+      "attacks_caught": 1,
+      "attack_recall": 0.1,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "direct_override": {
+      "attacks": 22,
+      "attacks_caught": 2,
+      "attack_recall": 0.09090909090909091,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "indirect_injection": {
+      "attacks": 10,
+      "attacks_caught": 1,
+      "attack_recall": 0.1,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "memory_poisoning": {
+      "attacks": 10,
+      "attacks_caught": 1,
+      "attack_recall": 0.1,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "output_exfiltration": {
+      "attacks": 16,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "prompt_leakage": {
+      "attacks": 16,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "tool_abuse": {
+      "attacks": 16,
+      "attacks_caught": 1,
+      "attack_recall": 0.0625,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "tool_result_injection": {
+      "attacks": 10,
+      "attacks_caught": 1,
+      "attack_recall": 0.1,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    }
+  },
+  "by_benign_subclass": {
+    "benign_compact_obfuscation_control": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 30,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "benign_obfuscation_control": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "benign_security_discussion": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "benign_tool_use": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "detector_code_fixture": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "docs_code_comment": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "high_entropy_structured_data": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "legitimate_imperative_request": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "not_applicable": {
+      "attacks": 110,
+      "attacks_caught": 7,
+      "attack_recall": 0.06363636363636363,
+      "benign": 0,
+      "benign_flagged": 0,
+      "benign_fp_rate": null
+    },
+    "owasp_ncsc_guidance": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "quoted_injection_example": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "research_blog_excerpt": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "security_changelog": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "security_training_material": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.2
+    },
+    "support_urgency": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "tool_policy_documentation": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 10,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    }
+  },
+  "by_bypass_class": {
+    "chunked_leet": {
+      "attacks": 5,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 5,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "compact_leet": {
+      "attacks": 5,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 5,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "compact_plain": {
+      "attacks": 5,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 5,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "diacritics": {
+      "attacks": 8,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 1,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "encoding": {
+      "attacks": 24,
+      "attacks_caught": 6,
+      "attack_recall": 0.25,
+      "benign": 3,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "homoglyph": {
+      "attacks": 8,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 1,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "leet_letter_spaced": {
+      "attacks": 5,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 5,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "leet_spacing": {
+      "attacks": 8,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 1,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "letter_spaced": {
+      "attacks": 13,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 6,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "multilingual": {
+      "attacks": 8,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 1,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "none": {
+      "attacks": 0,
+      "attacks_caught": 0,
+      "attack_recall": null,
+      "benign": 130,
+      "benign_flagged": 16,
+      "benign_fp_rate": 0.12307692307692308
+    },
+    "plain": {
+      "attacks": 8,
+      "attacks_caught": 1,
+      "attack_recall": 0.125,
+      "benign": 1,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "rot13": {
+      "attacks": 8,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 1,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    },
+    "separator_spaced": {
+      "attacks": 5,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 5,
+      "benign_flagged": 0,
+      "benign_fp_rate": 0.0
+    }
+  },
+  "by_split": {
+    "exemplar_bank": {
+      "attacks": 58,
+      "attacks_caught": 4,
+      "attack_recall": 0.06896551724137931,
+      "benign": 113,
+      "benign_flagged": 11,
+      "benign_fp_rate": 0.09734513274336283
+    },
+    "test": {
+      "attacks": 17,
+      "attacks_caught": 0,
+      "attack_recall": 0.0,
+      "benign": 28,
+      "benign_flagged": 2,
+      "benign_fp_rate": 0.07142857142857142
+    },
+    "validation": {
+      "attacks": 35,
+      "attacks_caught": 3,
+      "attack_recall": 0.08571428571428572,
+      "benign": 29,
+      "benign_flagged": 3,
+      "benign_fp_rate": 0.10344827586206896
+    }
+  }
+}

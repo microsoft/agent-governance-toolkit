@@ -1,61 +1,27 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# ruff: noqa: E402 — deprecation warning must fire before re-exports
+"""Agent OS - A Safety-First Kernel for Autonomous AI Agents.
+
+.. deprecated::
+    ``agent-os-kernel`` is deprecated and will be removed in a future
+    release. Use ``agent-governance-toolkit-core`` instead. See
+    https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md
 """
-Agent OS - A Safety-First Kernel for Autonomous AI Agents
-
-Agent OS provides POSIX-inspired primitives for AI agent systems with
-a 0% policy violation guarantee through kernel-level enforcement.
-
-Core capabilities:
-    - Policy engine and action interception
-    - Prompt injection detection
-    - MCP tool-poisoning defense
-    - Semantic policy enforcement
-    - Context budget scheduling
-    - Stateless kernel execution
-
-Quick Start:
-    >>> from agent_os import KernelSpace, AgentSignal, AgentVFS
-    >>> kernel = KernelSpace()
-    >>> ctx = kernel.create_agent_context("agent-001")
-    >>> await ctx.write("/mem/working/task.txt", "Hello World")
-
-Stateless API (MCP June 2026):
-    >>> from agent_os import stateless_execute
-    >>> result = await stateless_execute(
-    ...     action="database_query",
-    ...     params={"query": "SELECT * FROM users"},
-    ...     agent_id="analyst-001",
-    ...     policies=["read_only"]
-    ... )
-
-Optional ecosystem packages (import directly):
-    - agent_primitives: Base failure models
-    - cmvk: Verification kernel / drift detection
-    - caas: Context-as-a-Service pipelines
-    - emk: Episodic memory kernel
-    - amb_core: Agent message bus
-    - atr: Agent tool registry
-
-Installation:
-    pip install agent-os-kernel[full]  # Everything
-    pip install agent-os-kernel        # Core
-"""
-
 
 from __future__ import annotations
 
-import warnings as _warnings
-_warnings.warn(
-    "agent-os-kernel is deprecated. Use agent-governance-toolkit-core instead. "
+import warnings
+
+warnings.warn(
+    "agent-os-kernel is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-core instead. "
     "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
     DeprecationWarning,
     stacklevel=2,
 )
-del _warnings
 
-__version__ = "3.2.2"
+# Keep in sync with the ``version`` field in pyproject.toml.
+__version__ = "4.1.0"
 __author__ = "Microsoft Corporation"
 __license__ = "MIT"
 
@@ -81,6 +47,8 @@ AVAILABLE_PACKAGES: dict[str, bool] = {
     "emk": _check_optional("emk"),
     "amb": _check_optional("amb_core"),
     "atr": _check_optional("atr"),
+    "scak": _check_optional("agent_kernel"),
+    "mute_agent": _check_optional("mute_agent"),
 }
 
 
@@ -89,7 +57,7 @@ def check_installation() -> None:
     logger.info("Agent OS Installation Status:")
     logger.info("=" * 40)
     for pkg, available in AVAILABLE_PACKAGES.items():
-        status = "✓ Installed" if available else "✗ Not installed"
+        status = "Installed" if available else "Not installed"
         logger.info(f"  {pkg:15} {status}")
     logger.info("=" * 40)
     logger.info("\nInstall missing packages with:")
@@ -97,7 +65,7 @@ def check_installation() -> None:
 
 
 # ============================================================================
-# Control Plane (optional — requires agent_control_plane package)
+# Control Plane (optional - requires agent_control_plane package)
 # ============================================================================
 
 try:
@@ -144,6 +112,8 @@ except ImportError:
 # AGENTS.md Compatibility
 from agent_os.agents_compat import (
     AgentConfig as AgentsConfig,
+)
+from agent_os.agents_compat import (
     AgentSkill,
     AgentsParser,
     discover_agents,
@@ -178,15 +148,7 @@ try:
 except ImportError:
     pass
 
-# MCP Security — tool poisoning defense
-from agent_os.mcp_security import (
-    MCPSecurityScanner,
-    MCPSeverity,
-    MCPThreat,
-    MCPThreatType,
-    ScanResult,
-    ToolFingerprint,
-)
+# MCP Security - tool poisoning defense
 from agent_os.credential_redactor import CredentialMatch, CredentialPattern, CredentialRedactor
 from agent_os.credential_vault import (
     DENY_REASON,
@@ -221,14 +183,22 @@ from agent_os.mcp_protocols import (
     MCPSessionStore,
 )
 from agent_os.mcp_response_scanner import (
-    MCPResponseScanResult,
     MCPResponseScanner,
+    MCPResponseScanResult,
     MCPResponseThreat,
+)
+from agent_os.mcp_security import (
+    MCPSecurityScanner,
+    MCPSeverity,
+    MCPThreat,
+    MCPThreatType,
+    ScanResult,
+    ToolFingerprint,
 )
 from agent_os.mcp_session_auth import MCPSession, MCPSessionAuthenticator
 from agent_os.mcp_sliding_rate_limiter import MCPSlidingRateLimiter
 
-# Mute Agent Primitives — Face/Hands kernel-level decorators
+# Mute Agent Primitives - Face/Hands kernel-level decorators
 from agent_os.mute import (
     ActionStatus,
     ActionStep,
@@ -268,6 +238,68 @@ from agent_os.stateless import (
 )
 from agent_os.stateless import (
     MemoryBackend as StatelessMemoryBackend,
+)
+
+# ============================================================================
+# Content Governance (v3.0.2+)
+# ============================================================================
+
+try:
+    from agent_os.content_governance import (
+        ContentDimension,
+        ContentQualityEvaluator,
+        ContentQualityReport,
+        QualityGate,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.execution_context_policy import (
+        ContextualPolicyEngine,
+        EnforcementLevel,
+    )
+    from agent_os.execution_context_policy import (
+        ExecutionContext as ContextualExecutionContext,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.github_enterprise import (
+        EnterpriseGovernanceManager,
+        GovernanceTier,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.shift_left_metrics import (
+        ShiftLeftTracker,
+        ViolationStage,
+    )
+except ImportError:
+    pass
+
+try:
+    from agent_os.audit_logger import GovernanceAuditLogger
+except ImportError:
+    pass
+
+try:
+    from agent_os.otel_audit_backend import OTelLogsBackend
+except ImportError:
+    pass
+
+# GovernanceEventSink SPI (v3.7+)
+from agent_os.event_sink import (
+    AuditBackendSinkAdapter,
+    GovernanceEvent,
+    GovernanceEventKind,
+    GovernanceEventProcessor,
+    GovernanceEventSink,
+    GovernanceEventSinkBase,
+    SinkExportResult,
 )
 
 # ============================================================================
@@ -403,30 +435,24 @@ __all__ = [
     "ContextWindow",
     "ContextPriority",
     "BudgetExceeded",
-
     # Content Governance
     "ContentQualityEvaluator",
     "ContentDimension",
     "QualityGate",
     "ContentQualityReport",
-
     # Execution Context Policy
     "ContextualPolicyEngine",
     "ExecutionContext",
     "EnforcementLevel",
-
     # GitHub Enterprise Integration
     "EnterpriseGovernanceManager",
     "GovernanceTier",
-
     # Shift-Left Metrics
     "ShiftLeftTracker",
     "ViolationStage",
-
     # Audit Logger + OTel Backend
     "GovernanceAuditLogger",
     "OTelLogsBackend",
-
     # GovernanceEventSink SPI
     "GovernanceEvent",
     "GovernanceEventKind",
@@ -436,64 +462,3 @@ __all__ = [
     "SinkExportResult",
     "AuditBackendSinkAdapter",
 ]
-
-# ============================================================================
-# Content Governance (v3.0.2+)
-# ============================================================================
-
-try:
-    from agent_os.content_governance import (
-        ContentDimension,
-        ContentQualityEvaluator,
-        ContentQualityReport,
-        QualityGate,
-    )
-except ImportError:
-    pass
-
-try:
-    from agent_os.execution_context_policy import (
-        ContextualPolicyEngine,
-        EnforcementLevel,
-        ExecutionContext as ContextualExecutionContext,
-    )
-except ImportError:
-    pass
-
-try:
-    from agent_os.github_enterprise import (
-        EnterpriseGovernanceManager,
-        GovernanceTier,
-    )
-except ImportError:
-    pass
-
-try:
-    from agent_os.shift_left_metrics import (
-        ShiftLeftTracker,
-        ViolationStage,
-    )
-except ImportError:
-    pass
-
-try:
-    from agent_os.audit_logger import GovernanceAuditLogger
-except ImportError:
-    pass
-
-try:
-    from agent_os.otel_audit_backend import OTelLogsBackend
-except ImportError:
-    pass
-
-# GovernanceEventSink SPI (v3.7+)
-from agent_os.event_sink import (
-    AuditBackendSinkAdapter,
-    GovernanceEvent,
-    GovernanceEventKind,
-    GovernanceEventProcessor,
-    GovernanceEventSink,
-    GovernanceEventSinkBase,
-    SinkExportResult,
-)
-

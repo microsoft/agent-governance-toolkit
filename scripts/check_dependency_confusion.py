@@ -48,6 +48,13 @@ REGISTERED_PACKAGES = {
     "agent-governance-toolkit-cli", "agent_governance_toolkit_cli",
     "agent-governance-toolkit-integrations", "agent_governance_toolkit_integrations",
     "agent-governance-toolkit-protocols", "agent_governance_toolkit_protocols",
+    # First-party agent-os module packages from the package rename (#2779/#2935).
+    # Referenced as cross-module deps in agent-os/modules/*/pyproject.toml.
+    # MUST be reserved/published on PyPI to prevent dependency-confusion takeover.
+    "agent-governance-toolkit-tool-registry", "agent_governance_toolkit_tool_registry",
+    "agent-governance-toolkit-trust-protocol", "agent_governance_toolkit_trust_protocol",
+    "agent-governance-toolkit-control-plane", "agent_governance_toolkit_control_plane",
+    "agent-governance-toolkit-drift", "agent_governance_toolkit_drift",
     "agentmesh-lightning", "agentmesh_lightning",
     "agentmesh-marketplace", "agentmesh_marketplace",
     "agent-discovery", "agent_discovery",
@@ -88,6 +95,7 @@ REGISTERED_PACKAGES = {
     # Telemetry / monitoring
     "sentry-sdk",
     "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
+    "opentelemetry-exporter-otlp-proto-grpc", "opentelemetry-exporter-otlp-proto-http",
     "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
     # pyproject.toml optional-dependency group names (not real packages)
     "dev", "cli", "all", "server", "storage", "observability",
@@ -99,6 +107,12 @@ REGISTERED_PACKAGES = {
     "sql", "async", "nexus", "caas-core", "message-bus",
     "ai-agents", "amb", "eval_type_backport",
     # Integration packages / real PyPI packages used as deps
+    # Optional integration deps in agt-integrations/pyproject.toml (all real PyPI packages):
+    #   flowise (Flowise SDK), boto3 (AWS, for AVP), nostr-sdk (Nostr WoT), oso (Oso authz).
+    "flowise", "boto3", "nostr-sdk", "oso",
+    # fastembed: Qdrant's embedding library, optional dep for the default-off
+    # embedding evidence signal (agent-os embedding extra, PR #2974).
+    "fastembed",
     "hypothesis", "fakeredis", "langflow", "langgraph",
     "agentmesh", "pydantic-ai", "haystack", "haystack-ai", "respx",
     "langfuse", "arize", "arize-phoenix", "llamaindex", "braintrust", "helicone",
@@ -143,7 +157,17 @@ REGISTERED_PACKAGES = {
     "autogen-agentchat", "autogen_agentchat",
     "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
     "agentdojo",
+    # IANA timezone database for Python (real PyPI package, optional dep for Windows tz support)
+    "tzdata",
+    # AGT Audit Trail Record library (real PyPI package, pre-1.0; used in acs-atr-annotator example)
+    "pyatr",
+    # OS-native (Landlock / Seatbelt) capability sandbox (real PyPI package, Alpha; agt-sandbox[nono])
+    "nono-py", "nono_py",
     # With extras (base name is what matters)
+    # ACS annotator example dependency (real PyPI package)
+    "pyatr", "pyatr_core",
+    # Timezone data package (real PyPI package, used on Windows/Alpine)
+    "tzdata",
 }
 
 # Local-only packages that should NEVER appear with version pins in

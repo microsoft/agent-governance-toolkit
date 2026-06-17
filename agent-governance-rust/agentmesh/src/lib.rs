@@ -43,8 +43,10 @@ pub mod lifecycle;
 pub mod mcp {
     pub use agentmesh_mcp::mcp::*;
 }
+pub mod normalize;
 pub mod policy;
 pub mod prompt_injection;
+pub mod prompt_injection_embedding;
 pub mod protocol_facets;
 pub(crate) mod regex_cache;
 pub mod reward_support;
@@ -99,15 +101,18 @@ pub use integration_support::{
 };
 pub use lifecycle::{LifecycleEvent, LifecycleManager, LifecycleState};
 pub use policy::{PolicyEngine, PolicyError};
+pub use prompt_injection::{
+    AuditRecord as PromptInjectionAuditRecord, DetectionConfig as PromptInjectionDetectionConfig,
+    DetectionEvidenceBackend as PromptInjectionEvidenceBackend,
+    DetectionOptions as PromptInjectionDetectionOptions, DetectionResult as PromptInjectionResult,
+    EmbeddingSignalBackend as PromptInjectionEmbeddingSignalBackend,
+    EvidenceSignal as PromptInjectionEvidenceSignal, InjectionType, PromptInjectionConfig,
+    PromptInjectionDetector, PromptInjectionError, Sensitivity as PromptInjectionSensitivity,
+    ThreatLevel as PromptInjectionThreatLevel,
+};
 pub use protocol_facets::{
     default_registry, extract_k8s_facets, extract_protocol_facets, extract_protocol_facets_with,
     extract_sql_facets, FacetRegistry,
-};
-pub use prompt_injection::{
-    AuditRecord as PromptInjectionAuditRecord, DetectionConfig as PromptInjectionDetectionConfig,
-    DetectionOptions as PromptInjectionDetectionOptions, DetectionResult as PromptInjectionResult,
-    InjectionType, PromptInjectionConfig, PromptInjectionDetector, PromptInjectionError,
-    Sensitivity as PromptInjectionSensitivity, ThreatLevel as PromptInjectionThreatLevel,
 };
 pub use reward_support::{
     AgentRewardState, ContributionWeightedStrategy, DimensionType, DistributionResult,

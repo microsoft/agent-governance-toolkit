@@ -1,0 +1,184 @@
+# agt-policies — African Regulatory Pack
+# BVN / NIN Data Protection Policy
+#
+# Regulatory references:
+#   CBN BVN Policy Framework (2014, updated 2023) — BVN as sensitive identifier
+#   National Identity Management Commission (NIMC) Act — NIN protection
+#   NDPA 2023 Schedule 1                            — biometric data as sensitive personal data
+#   CBN Circular on BVN Operations                  — controls on BVN usage and sharing
+#
+# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
+# BVN and NIN are the two most sensitive personal identifiers in Nigeria.
+# Their exposure or misuse constitutes both a NDPA violation and a CBN
+# regulatory breach. These rules are conservative by design.
+#
+# Identifiers governed:
+#   BVN  — 11-digit number issued by NIBSS, biometrically linked
+#   NIN  — 11-digit number issued by NIMC, biometrically linked
+#   vNIN — 16-character virtual NIN (alphanumeric), tokenised form of NIN
+
+version: "1.0"
+name: bvn-nin-protection
+description: >
+  Protects Nigeria's two most sensitive personal identifiers — BVN and NIN —
+  from exposure, logging, or unauthorised transmission by AI agents.
+  Enforces NDPA 2023 Schedule 1 (biometric data as sensitive personal data)
+  and CBN BVN operational guidelines. Deny-by-default on exposure.
+
+metadata:
+  source_regulation: "CBN BVN Framework (2014); NIBSS BVN Scheme Rules; NDPA 2023 s.30"
+  jurisdiction: "NG"
+  enforcing_authority: "Central Bank of Nigeria (CBN) / NIBSS"
+
+rules:
+
+  # =========================================================================
+  # BVN Pattern Detection — Block Exposure in Agent Output
+  # BVN is an 11-digit number, biometrically enrolled via NIBSS.
+  # Any agent output containing a BVN must be blocked to prevent logging
+  # or downstream transmission.
+  # =========================================================================
+
+  - name: bvn-pattern-in-output-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(bvn|bank\\s+verification\\s+number)[\\s:=]+[0-9]{11}"
+    action: deny
+    priority: 100
+    message: "BVN Protection: BVN value detected in agent output — blocked to prevent exposure and NDPA Schedule 1 violation"
+
+  - name: bvn-label-context-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(bvn\\s+is|bvn:\\s*|bvn\\s*=|your\\s+bvn|the\\s+bvn)[\\s:]*[0-9]{10,11}"
+    action: deny
+    priority: 100
+    message: "BVN Protection: BVN disclosure detected in agent response — blocked"
+
+  - name: bvn-standalone-eleven-digit-context
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(bvn|bank\\s+verification).{0,20}\\b[0-9]{11}\\b"
+    action: deny
+    priority: 100
+    message: "BVN Protection: Contextual BVN pattern detected in output — blocked to prevent credential exposure"
+
+  # =========================================================================
+  # NIN Pattern Detection — Block Exposure in Agent Output
+  # NIN is an 11-digit number issued by NIMC, required for SIM registration,
+  # bank account opening, and most government services in Nigeria.
+  # =========================================================================
+
+  - name: nin-pattern-in-output-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(nin|national\\s+identity\\s+number|national\\s+id\\s+number)[\\s:=]+[0-9]{11}"
+    action: deny
+    priority: 100
+    message: "NIN Protection: NIN value detected in agent output — blocked to prevent NDPA Schedule 1 (biometric data) violation"
+
+  - name: nin-label-context-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(nin\\s+is|nin:\\s*|nin\\s*=|your\\s+nin|the\\s+nin)[\\s:]*[0-9]{10,11}"
+    action: deny
+    priority: 100
+    message: "NIN Protection: NIN disclosure in agent response — blocked"
+
+  - name: vnin-pattern-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(vnin|virtual\\s+nin)[\\s:=]+[A-Z0-9]{16}"
+    action: deny
+    priority: 100
+    message: "NIN Protection: Virtual NIN (vNIN) detected in agent output — blocked"
+
+  # =========================================================================
+  # BVN/NIN Transmission to External Endpoints
+  # Agents must not pass BVN or NIN values to external APIs, webhooks,
+  # or third-party services without explicit human approval.
+  # This is a CBN BVN Circular and NDPA s.25 cross-border restriction.
+  # =========================================================================
+
+  - name: bvn-nin-external-transmission-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(send_bvn|transmit_bvn|share_bvn|send_nin|transmit_nin|share_nin|post_identity|relay_kyc)$"
+    action: deny
+    priority: 100
+    message: "BVN/NIN Transmission: Direct BVN/NIN transmission to external system blocked — use tokenised reference only"
+
+  - name: bvn-nin-third-party-request
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|pass(ing)?|forward(ing)?|share|relay).{0,40}(bvn|nin|bank\\s+verification|national\\s+id).{0,40}(to|external|third.?party|api|endpoint|webhook)"
+    action: deny
+    priority: 100
+    message: "BVN/NIN Transmission: Attempt to relay BVN/NIN to external party detected — blocked. Use NIBSS tokenised verification flow."
+
+  # =========================================================================
+  # BVN/NIN Verification Actions — Require Human Approval
+  # BVN/NIN verification should go through official NIBSS/NIMC channels.
+  # Agents must not autonomously trigger verification without human oversight.
+  # =========================================================================
+
+  - name: bvn-verification-approval-gate
+    condition:
+      field: action
+      operator: matches
+      value: "^(verify_bvn|check_bvn|validate_bvn|bvn_lookup|nibss_bvn_verify)$"
+    action: block
+    priority: 90
+    message: "BVN Verification: BVN verification requires human approval — CBN BVN Framework requires audit trail for all lookups"
+
+  - name: nin-verification-approval-gate
+    condition:
+      field: action
+      operator: matches
+      value: "^(verify_nin|check_nin|validate_nin|nin_lookup|nimc_nin_verify)$"
+    action: block
+    priority: 90
+    message: "NIN Verification: NIN verification requires human approval — NIMC Act requires documented purpose for each lookup"
+
+  # =========================================================================
+  # BVN/NIN Request Pretext Detection
+  # Attackers use social engineering to get agents to retrieve or disclose
+  # BVN/NIN under pretextual justification. Block these patterns.
+  # =========================================================================
+
+  - name: bvn-nin-social-engineering-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(customer\\s+(wants|needs|asked|requested).{0,30}(bvn|nin)|confirm.{0,20}(bvn|nin).{0,20}(over|via|through)\\s+(chat|call|whatsapp|email))"
+    action: deny
+    priority: 100
+    message: "BVN/NIN Social Engineering: Attempt to disclose BVN/NIN through conversational channel detected — blocked"
+
+  # =========================================================================
+  # Audit — All BVN/NIN Access Events
+  # Every action that touches BVN/NIN must be logged for NDPA s.30
+  # accountability and CBN BVN audit trail requirements.
+  # =========================================================================
+
+  - name: bvn-nin-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(.*bvn.*|.*nin.*|.*kyc.*|.*identity_verify.*)$"
+    action: audit
+    priority: 75
+    message: "BVN/NIN Audit: Identity verification action logged — NDPA s.30 and CBN BVN audit trail requirement"
+
+defaults:
+  action: deny
+  max_tokens: 4000
+  max_tool_calls: 15

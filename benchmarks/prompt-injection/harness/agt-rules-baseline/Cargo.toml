@@ -1,0 +1,9 @@
+[package]
+name = "agt-prompt-injection-baseline"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+agentmesh = { path = "../../../../agent-governance-rust/agentmesh" }
+serde_json = "=1.0.150"

@@ -22,12 +22,6 @@ except ImportError:  # pragma: no cover
             return cls
 
         @staticmethod
-        def input_types(**kwargs):
-            def decorator(func):
-                return func
-            return decorator
-
-        @staticmethod
         def output_types(**kwargs):
             def decorator(func):
                 return func
@@ -74,12 +68,11 @@ class AuditLogger:
 
     # ── Component interface ───────────────────────────────────────
 
-    @component.input_types(
-        action=str,
-        agent_id=str,
-        decision=str,
-        metadata=Optional[Dict[str, Any]],
-    )
+    # Input types are inferred by haystack-ai from the typed `run` signature.
+    # A previous `@component.input_types(...)` decorator was invalid (the real
+    # API exposes `component.set_input_types(self, ...)` from __init__, and that
+    # requires a `**kwargs` run parameter, which these components don't use).
+    # See https://github.com/microsoft/agent-governance-toolkit/issues/2971
     @component.output_types(entry_id=str, chain_hash=str)
     def run(
         self,

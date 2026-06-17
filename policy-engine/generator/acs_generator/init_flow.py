@@ -11,7 +11,7 @@ from typing import Any, TextIO
 import yaml
 
 from .manifest_builder import build_manifest
-from .plan import PolicyPlan, RulePlan
+from .plan import PolicyPlan, RulePlan, redact_patterns
 from .rego_builder import build_rego
 from .report import build_report
 from .validation import ValidationError, ValidationResult, dump_manifest_yaml, validate_artifacts
@@ -84,7 +84,10 @@ def run_init(args: argparse.Namespace, *, stdin: TextIO) -> InitResult:
     rego = build_rego(plan, slug)
     manifest_yaml = dump_manifest_yaml(manifest)
     out_dir = Path(args.out)
-    validation = _validate_init_artifacts(manifest, manifest_yaml, rego, slug, out_dir, strict=args.strict, dry_run=args.dry_run)
+    validation = _validate_init_artifacts(
+        manifest, manifest_yaml, rego, slug, out_dir,
+        strict=args.strict, dry_run=args.dry_run, regex_patterns=redact_patterns(plan),
+    )
     warnings = tuple([*plan.warnings, *validation.warnings])
     report = build_report(plan, slug, manifest, list(warnings))
     snapshots = _sample_snapshots(manifest) if args.sample_snapshot or args.sample_test else {}
@@ -109,12 +112,13 @@ def _validate_init_artifacts(
     *,
     strict: bool,
     dry_run: bool,
+    regex_patterns: tuple[str, ...] = (),
 ) -> ValidationResult:
     if not dry_run:
-        return validate_artifacts(manifest, manifest_yaml, rego, slug, out_dir, strict=strict)
+        return validate_artifacts(manifest, manifest_yaml, rego, slug, out_dir, strict=strict, regex_patterns=regex_patterns)
     validation_dir = Path.cwd() / _DRY_RUN_VALIDATION_ROOT / slug
     try:
-        return validate_artifacts(manifest, manifest_yaml, rego, slug, validation_dir, strict=strict)
+        return validate_artifacts(manifest, manifest_yaml, rego, slug, validation_dir, strict=strict, regex_patterns=regex_patterns)
     finally:
         root = Path.cwd() / _DRY_RUN_VALIDATION_ROOT
         if root.exists():
@@ -257,17 +261,19 @@ def _plan_from_answers(answers: dict[str, Any]) -> tuple[PolicyPlan, dict[str, d
             )
         )
         inventory.setdefault(tool, {"type": "Tool", "id": tool})
-    for pattern in _list(answers.get("redact_output_patterns") or answers.get("redact_output_pattern")):
-        if "output" not in points:
-            continue
+    redact_patterns = _list(answers.get("redact_output_patterns") or answers.get("redact_output_pattern"))
+    if redact_patterns and "output" in points:
+        # One transform rule chaining every pattern, so multiple redaction
+        # patterns compose instead of the else-chain firing only the first.
+        combined = redact_patterns[0] if len(redact_patterns) == 1 else "|".join(f"(?:{pattern})" for pattern in redact_patterns)
         rules.append(
             RulePlan(
                 point="output",
-                decision="warn",
+                decision="transform",
                 reason="output_redacted",
                 message="The output policy target was redacted.",
-                conditions=(f"is_string(input.policy_target.value)", f"regex.match({json.dumps(pattern)}, input.policy_target.value)"),
-                effects=({"type": "redact", "path": "$policy_target", "pattern": pattern},),
+                conditions=("is_string(input.policy_target.value)", f"regex.match({json.dumps(combined)}, input.policy_target.value)"),
+                effects=tuple({"type": "redact", "path": "$policy_target", "pattern": pattern} for pattern in redact_patterns),
             )
         )
     if any(point in TOOL_POINTS for point in points) and not inventory:
@@ -426,5 +432,5 @@ def test_generated_policy_accepts_sample_snapshot(point: str) -> None:
     control = AgentControl.from_path(str(root / "manifest.yaml"))
     snapshot = json.loads((root / "snapshots" / f"{{point}}.json").read_text(encoding="utf-8"))
     result = asyncio.run(control.evaluate_intervention_point(InterventionPoint(point), snapshot))
-    assert result.verdict.decision.value in {{"allow", "warn", "deny", "escalate"}}
+    assert result.verdict.decision.value in {{"allow", "warn", "deny", "escalate", "transform"}}
 '''

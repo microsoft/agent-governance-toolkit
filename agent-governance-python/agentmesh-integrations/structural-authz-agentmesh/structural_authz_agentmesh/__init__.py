@@ -1,22 +1,8 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-"""Structural authorization gates adapter for AgentMesh."""
-
-from __future__ import annotations
-
-from .trust import (AgentProfile, AuthzDecision, AuthzGate,
-                    ChainValidationError, DelegationChain, DelegationLink,
-                    TrustArtifact, TrustGrade, TrustTracker, generate_keypair)
-
-__all__ = [
-    "AgentProfile",
-    "AuthzDecision",
-    "AuthzGate",
-    "ChainValidationError",
-    "DelegationChain",
-    "DelegationLink",
-    "TrustArtifact",
-    "TrustGrade",
-    "TrustTracker",
-    "generate_keypair",
-]
+import warnings
+warnings.warn(
+    "structural-authz-agentmesh is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-integrations[structural-authz] instead. "
+    "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
+    DeprecationWarning,
+    stacklevel=2,
+)

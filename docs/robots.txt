@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://microsoft.github.io/agent-governance-toolkit/sitemap.xml

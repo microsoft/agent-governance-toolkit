@@ -1,33 +1,30 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# ruff: noqa: E402 — deprecation warning must fire before re-exports
-"""
-Agent Runtime — Execution supervisor for multi-agent sessions.
+"""Agent Runtime - execution supervisor for multi-agent sessions.
 
-This package is the successor to ``agent-hypervisor``.  It re-exports the
-full public API from ``hypervisor`` so that callers can migrate their imports
-incrementally::
+This package re-exports the full public API from ``hypervisor`` so that
+callers can migrate their imports incrementally.
 
-    # Old
-    from hypervisor import Hypervisor, SessionConfig
-    # New (equivalent)
-    from agent_runtime import Hypervisor, SessionConfig
-
-The ``agent-hypervisor`` package remains available for backward compatibility
-and will be deprecated in a future release.
+.. deprecated::
+    ``agentmesh-runtime`` is deprecated and will be removed in a future
+    release. Use ``agent-governance-toolkit-core`` instead. See
+    https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md
 """
 
+import warnings
 
-import warnings as _warnings
-_warnings.warn(
-    "agentmesh-runtime is deprecated. Use agent-governance-toolkit-core instead. "
+warnings.warn(
+    "agentmesh-runtime is deprecated and will be removed in a future release. "
+    "Use agent-governance-toolkit-core instead. "
     "See https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md",
     DeprecationWarning,
     stacklevel=2,
 )
-del _warnings
-from hypervisor import (  # noqa: F401
-    __version__,
+
+# Keep in sync with the ``version`` field in pyproject.toml.
+__version__ = "4.1.0"
+
+from hypervisor import (  # noqa: E402,F401
     # Core
     Hypervisor,
     # Models
@@ -99,6 +96,7 @@ from hypervisor import (  # noqa: F401
     KillResult,
 )
 
+# Deployment Runtime (v3.0.2+)
 from agent_runtime.deploy import (  # noqa: E402
     DeploymentResult,
     DeploymentStatus,

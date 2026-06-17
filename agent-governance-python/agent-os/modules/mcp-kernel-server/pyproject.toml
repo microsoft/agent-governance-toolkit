@@ -3,7 +3,7 @@ requires = ["setuptools>=78.1.1,<83.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentmesh_mcp_server"
+name = "agent-governance-toolkit-mcp-server"
 version = "4.1.0"
 description = "MCP Server for Claude Desktop - Agent OS kernel primitives including code safety verification, CMVK multi-model review, and IATP trust"
 readme = "README.md"
@@ -39,9 +39,9 @@ dependencies = [
 
 [project.optional-dependencies]
 full = [
-    "agentmesh-control-plane>=4,<5",
-    "cmvk>=0.3.0,<1.0",
-    "agentmesh-trust-protocol>=4,<5",
+    "agent-governance-toolkit-control-plane>=4,<5",
+    "agent-governance-toolkit-drift>=0.3.0,<1.0",
+    "agent-governance-toolkit-trust-protocol>=4,<5",
 ]
 dev = [
     "pytest>=7.0.0,<8.0",

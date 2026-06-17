@@ -5,96 +5,58 @@ build-backend = "hatchling.build"
 [project]
 name = "agent_hypervisor"
 version = "4.1.0"
-description = "Deprecated — use agent-governance-toolkit-core instead. Agent Hypervisor: Runtime supervisor for multi-agent Shared Sessions"
-readme = "README.md"
+description = "Deprecated. Previously published as agent-hypervisor. Install agent-governance-toolkit-core instead."
 license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
-]
-keywords = [
-    "ai", "agents", "hypervisor", "trust", "multi-agent",
-    "shared-sessions", "liability", "execution-rings", "saga",
-    "governance", "safety", "audit", "hash-chain",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Typing :: Typed",
-]
+dependencies = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
 
-# This package is deprecated. All functionality is now in agent-governance-toolkit-core.
-dependencies = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
-    "pydantic>=2.13.4,<3.0",
-]
-
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the hypervisor source tree under src/ (and tests/) is still exercised in CI via
+# `pip install -e ".[dev]"`. PR #2794 stripped [project.optional-dependencies]
+# entirely, which silently turned `.[dev]` into a no-op and left the test suite
+# unable to import fastapi/pydantic/jsonschema — every `pytest tests/` run failed
+# at COLLECTION (ModuleNotFoundError). The `dev` extra below restores exactly the
+# test/dev dependencies the suite needs to collect and run. This does NOT change
+# the published runtime dependency surface (the [project] stub still ships only
+# the -core redirect). Mirrors the agent-os fix (#2969 + #2972).
 [project.optional-dependencies]
-# Integration adapters (optional — hypervisor works standalone)
-nexus = [
-    "structlog>=25.5.0,<27.0",
-]
-api = [
-    "fastapi>=0.136.3,<1.0",
-    "uvicorn>=0.49.0,<1.0",
-]
-full = [
-    "agent-hypervisor[nexus]",
-]
+# Test/dev dependencies required for `pytest tests/` to collect and run.
+# pydantic was previously a runtime dependency and fastapi lived in the `api`
+# extra; both are imported directly by the test suite at collection time, so the
+# stub's dev bundle must list them.
 dev = [
-    "pytest>=8.0.0,<10.0",
-    "pytest-asyncio>=0.23.0,<2.0",
-    "pytest-cov>=4.0.0,<8.0",
-    "hypothesis>=6.155.1,<7.0",
-    "ruff>=0.4.0,<1.0",
-    "mypy>=1.8.0,<3.0",
+    "pytest>=9.1.0,<10.0",
+    "pytest-asyncio>=1.4.0,<2.0",
+    "pytest-cov>=7.1.0,<8.0",
+    "hypothesis>=6.155.3,<7.0",
+    "ruff>=0.15.17,<1.0",
+    "mypy>=2.1.0,<3.0",
     "jsonschema>=4.26.0,<5.0",
-]
-blockchain = [
-    "web3>=7.16.0,<8.0",  # Reserved for future blockchain anchoring — not yet used
-]
-observability = [
-    "agent-governance-toolkit-cli>=4.0.0,<5.0",  # PrometheusExporter bridge for RingMetricsCollector
-]
-otel = [
-    "opentelemetry-api>=1.20,<2.0",  # OTel span creation for SagaSpanExporter
+    "pydantic>=2.13.4,<3.0",
+    "fastapi>=0.137.1,<1.0",
+    "uvicorn>=0.49.0,<1.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Repository = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit#readme"
-"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
-"Agent OS" = "https://github.com/microsoft/agent-governance-toolkit"
-"Agent Mesh" = "https://github.com/microsoft/agent-governance-toolkit"
-"Agent SRE" = "https://github.com/microsoft/agent-governance-toolkit"
-
-[project.scripts]
-hypervisor = "hypervisor.cli.session_commands:main"
+"Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hypervisor"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-addopts = "-v --tb=short"
-markers = [
-    "slow: long-running tests (skip with -m 'not slow')",
-    "integration: end-to-end integration tests",
-]
-
+# ============================================================================
+# Ruff - Fast Python Linter & Formatter
+#
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the hypervisor source tree under src/ is still linted in CI. These dev-tooling
+# sections were dropped during the package consolidation in #2794; without the
+# per-file-ignores, ruff reports F401 on re-export __init__.py files such as
+# hypervisor/liability/__init__.py and hypervisor/session/__init__.py. Restoring
+# them keeps CI green.
+# ============================================================================
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -113,10 +75,14 @@ ignore = [
 "__init__.py" = ["F401"]
 "tests/*" = ["F401"]
 
-[tool.mypy]
-python_version = "3.11"
-strict = true
-
-[tool.coverage.run]
-source = ["src/hypervisor"]
-branch = true
+# ============================================================================
+# Pytest
+# ============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "slow: long-running tests (skip with -m 'not slow')",
+    "integration: end-to-end integration tests",
+]

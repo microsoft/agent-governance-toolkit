@@ -1,0 +1,126 @@
+{
+  "counts": {
+    "attack_class": {
+      "benign": 170,
+      "data_boundary_abuse": 10,
+      "direct_override": 22,
+      "indirect_injection": 10,
+      "memory_poisoning": 10,
+      "output_exfiltration": 16,
+      "prompt_leakage": 16,
+      "tool_abuse": 16,
+      "tool_result_injection": 10
+    },
+    "benign_subclass": {
+      "benign_compact_obfuscation_control": 30,
+      "benign_obfuscation_control": 10,
+      "benign_security_discussion": 10,
+      "benign_tool_use": 10,
+      "detector_code_fixture": 10,
+      "docs_code_comment": 10,
+      "high_entropy_structured_data": 10,
+      "legitimate_imperative_request": 10,
+      "not_applicable": 110,
+      "owasp_ncsc_guidance": 10,
+      "quoted_injection_example": 10,
+      "research_blog_excerpt": 10,
+      "security_changelog": 10,
+      "security_training_material": 10,
+      "support_urgency": 10,
+      "tool_policy_documentation": 10
+    },
+    "bypass_class": {
+      "chunked_leet": 10,
+      "compact_leet": 10,
+      "compact_plain": 10,
+      "diacritics": 9,
+      "encoding": 27,
+      "homoglyph": 9,
+      "leet_letter_spaced": 10,
+      "leet_spacing": 9,
+      "letter_spaced": 19,
+      "multilingual": 9,
+      "none": 130,
+      "plain": 9,
+      "rot13": 9,
+      "separator_spaced": 10
+    },
+    "expected_action": {
+      "allow": 170,
+      "block": 62,
+      "quarantine": 10,
+      "require_approval": 38
+    },
+    "source_type": {
+      "document": 80,
+      "memory": 10,
+      "rag_chunk": 40,
+      "ticket": 30,
+      "tool_result": 10,
+      "user": 110
+    },
+    "split": {
+      "exemplar_bank": 171,
+      "test": 45,
+      "validation": 64
+    },
+    "trust_level": {
+      "authenticated_user": 60,
+      "tool_output": 10,
+      "untrusted": 210
+    }
+  },
+  "duplicate_check": {
+    "exact_cross_split_duplicate_count": 0,
+    "exact_cross_split_duplicates": [],
+    "near_cross_split_duplicates": [],
+    "near_duplicate_cross_split_count": 0,
+    "near_duplicate_ngram": 7,
+    "near_duplicate_threshold": 0.92,
+    "normalized_hash_count": 280,
+    "passed": true
+  },
+  "hash_check": {
+    "lf_normalized_output_sha256": null,
+    "manifest_output_sha256": "f26c216eaf8ad3e623b32a696f6686f69a092e153ec2eae1acb9d8c59f21eca5",
+    "mode": "byte_exact",
+    "passed": true,
+    "worktree_output_sha256": "f26c216eaf8ad3e623b32a696f6686f69a092e153ec2eae1acb9d8c59f21eca5"
+  },
+  "leakage_check": {
+    "family_count": 80,
+    "family_split_leaks": [],
+    "group_count": 184,
+    "group_split_leaks": [],
+    "passed": true
+  },
+  "normalized_text_check": {
+    "exact_normalized_hash_cross_split_count": 0,
+    "exact_normalized_hash_cross_split_examples": [],
+    "near_duplicate_cross_split_count": 0,
+    "near_duplicate_examples": [],
+    "near_duplicate_ngram": 7,
+    "near_duplicate_threshold": 0.92,
+    "normalized_hash_count": 280,
+    "passed": true
+  },
+  "row_count": 280,
+  "split_label_coverage_check": {
+    "by_split": {
+      "exemplar_bank": {
+        "attack": 58,
+        "benign": 113
+      },
+      "test": {
+        "attack": 17,
+        "benign": 28
+      },
+      "validation": {
+        "attack": 35,
+        "benign": 29
+      }
+    },
+    "missing": [],
+    "passed": true
+  }
+}

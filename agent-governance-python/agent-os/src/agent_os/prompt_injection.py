@@ -36,14 +36,19 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import math
 import os
 import re
 import warnings
 from collections import deque
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from agent_os.prompt_injection_embedding import EmbeddingSignal
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +93,90 @@ _THREAT_ORDER = {
 }
 
 
+@dataclass(frozen=True)
+class EvidenceSignal:
+    """Advisory, non-enforcing evidence from an optional detection backend.
+
+    Evidence is appended to :attr:`DetectionResult.evidence` AFTER the verdict is
+    final; it NEVER affects ``is_injection`` / ``threat_level`` /
+    ``injection_type`` / ``confidence`` / ``matched_patterns``. Audit-safe: it
+    carries a static backend identifier, a numeric score, and an error *code* —
+    never raw input, payloads, or free text derived from the input.
+    """
+
+    backend: str
+    score: float | None = None
+    blocks: bool = False
+    """Always False — evidence never blocks on its own (evidence-only)."""
+    error: str | None = None
+    """Static error code (e.g. "unavailable", "backend_error"); never input-derived."""
+
+    def __post_init__(self) -> None:
+        """Enforce the evidence-only invariants at construction time.
+
+        ``blocks`` is a runtime invariant, not just a convention: a backend
+        cannot smuggle an enforcing signal past the detector by constructing
+        ``EvidenceSignal(..., blocks=True)``. A non-finite ``score`` (``nan`` /
+        ``inf``) is rejected so a misbehaving embedder cannot leak unchecked
+        values into results or the audit trail. Either violation raises, which
+        the detector catches and records as a static ``backend_error`` code, so
+        a bad backend degrades to evidence-with-an-error rather than corrupting
+        the verdict.
+        """
+        if self.blocks:
+            raise ValueError(
+                "EvidenceSignal.blocks must be False — evidence never blocks on its own"
+            )
+        if self.score is not None and not math.isfinite(self.score):
+            raise ValueError(
+                "EvidenceSignal.score must be a finite number or None "
+                "(got non-finite value)"
+            )
+
+
+@runtime_checkable
+class DetectionEvidenceBackend(Protocol):
+    """ADR-0015-style pluggable, optional, evidence-only detection backend.
+
+    Consulted by :class:`PromptInjectionDetector` only when registered. It
+    surfaces evidence for review/routing and must never block on its own.
+    """
+
+    name: str
+
+    def evaluate(self, text: str) -> EvidenceSignal | None:
+        """Return advisory evidence for ``text``, or ``None`` to contribute none."""
+        ...
+
+
+class EmbeddingSignalBackend:
+    """Adapter exposing the optional embedding kNN signal
+    (:mod:`agent_os.prompt_injection_embedding`) as a
+    :class:`DetectionEvidenceBackend`.
+
+    Default-off: when the wrapped signal is disabled its ``score()`` returns
+    ``None`` and this backend contributes no evidence. The embedding module is
+    reached only through the injected ``signal`` and a lazy import, so
+    ``prompt_injection`` carries no hard dependency on it.
+    """
+
+    name = "embedding_knn"
+
+    def __init__(self, signal: EmbeddingSignal) -> None:
+        self._signal = signal
+
+    def evaluate(self, text: str) -> EvidenceSignal | None:
+        from agent_os.prompt_injection_embedding import EmbeddingSignalUnavailable
+
+        try:
+            evidence = self._signal.score(text)
+        except EmbeddingSignalUnavailable:
+            return EvidenceSignal(backend=self.name, score=None, error="unavailable")
+        if evidence is None:
+            return None
+        return EvidenceSignal(backend=self.name, score=float(evidence.margin), blocks=False)
+
+
 @dataclass
 class DetectionResult:
     """Outcome of scanning a single input for prompt injection.
@@ -106,6 +195,11 @@ class DetectionResult:
     confidence: float
     matched_patterns: list[str] = field(default_factory=list)
     explanation: str = ""
+    evidence: list[EvidenceSignal] = field(default_factory=list)
+    """Advisory, evidence-only signals from optional backends (default empty).
+
+    Additive and non-enforcing — never influences the verdict fields above.
+    """
 
 
 _MIN_ALLOWLIST_ENTRY_LENGTH = 3
@@ -376,6 +470,7 @@ class PromptInjectionDetector:
         config: DetectionConfig | None = None,
         *,
         injection_config: PromptInjectionConfig | None = None,
+        evidence_backends: Sequence[DetectionEvidenceBackend] = (),
     ) -> None:
         """Initialize the detector.
 
@@ -404,6 +499,9 @@ class PromptInjectionDetector:
         # long-running deployments. 10k entries is enough headroom for
         # any reasonable analysis window; older entries roll off.
         self._audit_log: deque[AuditRecord] = deque(maxlen=10_000)
+        # Optional, default-off evidence-only backends (ADR-0015 style). Empty by
+        # default → detect() behaviour is byte-identical to the rules-only path.
+        self._evidence_backends: list[DetectionEvidenceBackend] = list(evidence_backends)
 
     def _compile_injection_patterns(self) -> None:
         """Compile pattern strings from ``self._injection_config`` into
@@ -610,8 +708,34 @@ class PromptInjectionDetector:
                 ),
             )
 
+        # Evidence-only backends run AFTER the verdict is final and only append
+        # to result.evidence — they never alter the verdict (evidence-only).
+        self._collect_evidence(text, result)
         self._record_audit(text, source, result)
         return result
+
+    def _collect_evidence(self, text: str, result: DetectionResult) -> None:
+        """Append optional backend evidence to ``result.evidence``.
+
+        The verdict is already final when this runs. A backend that raises is
+        recorded as a static ``backend_error`` code and never propagates, so an
+        evidence backend can never break or change detection.
+        """
+        for backend in self._evidence_backends:
+            backend_name = getattr(backend, "name", "unknown")
+            try:
+                signal = backend.evaluate(text)
+            except Exception:  # noqa: BLE001 — evidence must never break detection
+                logger.warning(
+                    "evidence backend %r failed; recording error code",
+                    backend_name, exc_info=True,
+                )
+                result.evidence.append(
+                    EvidenceSignal(backend=str(backend_name), score=None, error="backend_error")
+                )
+                continue
+            if signal is not None:
+                result.evidence.append(signal)
 
     # -- allowlist filtering ------------------------------------------------
 
@@ -791,6 +915,26 @@ class PromptInjectionDetector:
 
     # -- audit trail --------------------------------------------------------
 
+    @staticmethod
+    def _audit_safe_result(result: DetectionResult) -> DetectionResult:
+        """Return a copy of *result* safe to persist in the audit trail.
+
+        Raw evidence scores are dropped from the persisted record. A continuous
+        per-request score is an evasion oracle: an operator (or anyone) with
+        audit-log access could otherwise watch the margin move and iteratively
+        tune a payload toward a lower score. The live ``DetectionResult``
+        returned to the caller keeps raw scores for in-process telemetry and
+        aggregation; only the durable audit copy is coarsened. Backend identity
+        and static error codes are retained for forensics.
+        """
+        if not result.evidence:
+            return result
+        redacted = [
+            sig if sig.score is None else replace(sig, score=None)
+            for sig in result.evidence
+        ]
+        return replace(result, evidence=redacted)
+
     def _record_audit(
         self, text: str, source: str, result: DetectionResult,
     ) -> None:
@@ -798,7 +942,7 @@ class PromptInjectionDetector:
             timestamp=datetime.now(timezone.utc),
             input_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
             source=source,
-            result=result,
+            result=self._audit_safe_result(result),
         )
         self._audit_log.append(record)
 

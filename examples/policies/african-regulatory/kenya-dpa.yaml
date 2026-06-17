@@ -1,0 +1,168 @@
+# agt-policies-africa
+# Kenya Data Protection Act 2019 — Data Protection Policy
+#
+# Regulatory reference: Kenya Data Protection Act 2019 (Kenya DPA)
+# Enforcing authority: Office of the Data Protection Commissioner (ODPC)
+#
+# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
+# It is NOT a certified legal compliance instrument. Organisations must
+# perform their own compliance assessments with qualified advisors before
+# deploying in regulated environments.
+#
+# Key obligations enforced:
+#   s.25  — Sensitive personal data — requires explicit consent or legal basis
+#   s.26  — Consent — processing must have documented lawful basis
+#   s.30  — Data minimisation — collect and process only what is necessary
+#   s.41  — Breach notification — 72 hours to ODPC
+#   s.49  — Cross-border transfers — requires adequate protection in destination
+#   s.31  — Accountability / audit trail requirements
+
+version: "1.0"
+name: kenya-dpa
+description: >
+  Kenya Data Protection Act 2019 compliance policy for AI agents processing
+  Kenyan personal data. Enforces cross-border transfer restrictions, sensitive
+  data handling, consent requirements, and breach notification obligations.
+
+metadata:
+  source_regulation: "Kenya Data Protection Act 2019"
+  jurisdiction: "KE"
+  enforcing_authority: "Office of the Data Protection Commissioner (ODPC)"
+
+rules:
+
+  # =========================================================================
+  # Kenya DPA s.41 — Breach Notification (72 hours to ODPC)
+  # =========================================================================
+
+  - name: kdpa-breach-suppression
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+report)"
+    action: deny
+    priority: 1
+    message: "Kenya DPA s.41: Agent cannot suppress breach notifications — 72-hour ODPC reporting obligation applies"
+
+  # =========================================================================
+  # Kenya DPA s.25 — Sensitive Personal Data
+  # =========================================================================
+
+  - name: kdpa-health-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription)"
+    action: block
+    priority: 1
+    message: "Kenya DPA s.25: Health/medical sensitive personal data detected — requires explicit consent or documented legal basis"
+
+  - name: kdpa-special-category-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(ethnic\\s+origin|race|religion|political\\s+opinion|sexual\\s+orientation|trade\\s+union|criminal\\s+conviction)"
+    action: block
+    priority: 1
+    message: "Kenya DPA s.25: Special category personal data detected — explicit consent or Schedule 3 condition required"
+
+  - name: kdpa-biometric-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data))"
+    action: deny
+    priority: 1
+    message: "Kenya DPA s.25: Biometric data detected — must not be transmitted by AI agents without documented lawful basis"
+
+  # =========================================================================
+  # Kenya DPA s.26 — Consent Requirements
+  # =========================================================================
+
+  - name: kdpa-processing-without-consent
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(process(ing)?|shar(ing)?|us(ing)?).{0,30}(without\\s+consent|no\\s+consent|bypass.{0,10}consent|skip.{0,10}consent)"
+    action: deny
+    priority: 1
+    message: "Kenya DPA s.26: Data processing without consent is prohibited — valid consent or documented legal basis required"
+
+  # =========================================================================
+  # Kenya DPA s.49 — Cross-Border Data Transfers
+  # =========================================================================
+
+  - name: kdpa-cross-border-language-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+kenya|cross.?border|international\\s+transfer|offshore)"
+    action: block
+    priority: 1
+    message: "Kenya DPA s.49: Cross-border data transfer detected — requires ODPC adequacy verification before proceeding"
+
+  - name: kdpa-cross-border-action
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: block
+    priority: 2
+    message: "Kenya DPA s.49: Cross-border data transfer action requires adequacy check — destination must provide equivalent protection"
+
+  # =========================================================================
+  # Kenya DPA s.30 — Data Minimisation
+  # =========================================================================
+
+  - name: kdpa-bulk-export
+    condition:
+      field: action
+      operator: matches
+      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
+    action: block
+    priority: 2
+    message: "Kenya DPA s.30: Bulk personal data export — data minimisation principle requires DPO approval and documented legal basis"
+
+  # =========================================================================
+  # Kenya — National ID / KRA PIN Exposure
+  # =========================================================================
+
+  - name: kdpa-national-id-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(national\\s+id|id\\s+number|identity\\s+card)[\\s:=]{0,5}[0-9]{6,8}"
+    action: deny
+    priority: 1
+    message: "Kenya DPA: National ID number detected in agent output — blocked to prevent identity exposure"
+
+  - name: kdpa-kra-pin-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(kra\\s+pin|tax\\s+pin|pin\\s+number)[\\s:=]{0,5}[A-Z][0-9]{9}[A-Z]"
+    action: deny
+    priority: 1
+    message: "Kenya DPA: KRA PIN detected in agent output — blocked to prevent tax identity exposure"
+
+  # =========================================================================
+  # Kenya DPA s.31 — Accountability / Audit Trail
+  # =========================================================================
+
+  - name: kdpa-pii-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii"
+    action: audit
+    priority: 3
+    message: "Kenya DPA s.31: Personal data access logged — ODPC accountability audit trail requirement"
+
+  - name: kdpa-pii-modification-audit
+    condition:
+      field: action
+      operator: matches
+      value: "update_user|modify_profile|patch_account|edit_customer|change_personal"
+    action: audit
+    priority: 3
+    message: "Kenya DPA s.31: Personal data modification logged — ODPC accountability audit trail requirement"

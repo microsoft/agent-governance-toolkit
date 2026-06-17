@@ -5,176 +5,78 @@ build-backend = "hatchling.build"
 [project]
 name = "agent_os_kernel"
 version = "4.1.0"
-description = "Deprecated — use agent-governance-toolkit-core instead. A kernel architecture for governing autonomous AI agents with Nexus Trust Exchange"
-readme = "README.md"
+description = "Deprecated. Previously published as agent-os-kernel. Install agent-governance-toolkit-core instead."
 license = {text = "MIT"}
 requires-python = ">=3.9"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-maintainers = [
-    {name = "Agent Governance Toolkit Team", email = "agentgovtoolkit@microsoft.com"},
-]
-keywords = [
-    "ai",
-    "agents",
-    "llm",
-    "kernel",
-    "safety",
-    "governance",
-    "control-plane",
-    "multi-agent",
-]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Typing :: Typed",
-]
+dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
 
-# This package is deprecated. All functionality is now in agent-governance-toolkit-core.
-# The dependency below ensures existing installs continue to work.
-dependencies = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
-    "pydantic>=2.4.0,<3.0",
-    "rich>=15.0.0,<16.0",
-]
-
-[project.urls]
-Homepage = "https://github.com/microsoft/agent-governance-toolkit"
-Documentation = "https://github.com/microsoft/agent-governance-toolkit/tree/master/docs"
-Repository = "https://github.com/microsoft/agent-governance-toolkit"
-"Bug Tracker" = "https://github.com/microsoft/agent-governance-toolkit/issues"
-
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agent_os source tree under src/ (and tests/) is still exercised in CI via
+# `pip install -e ".[dev]"`. PR #2794 stripped [project.optional-dependencies]
+# entirely, which silently turned `.[dev]` into a no-op and left the test suite
+# unable to import fastapi/pynacl/cryptography/aiohttp — every `pytest tests/`
+# run failed at COLLECTION (ModuleNotFoundError) on Python 3.11-3.13. The `dev`
+# extra below restores exactly the test/dev dependencies the suite needs to
+# collect and run; the component extras mirror the pre-#2794 structure so the
+# `dev` bundle stays self-describing. This does NOT change the published runtime
+# dependency surface (the [project] stub still ships only the -core redirect).
 [project.optional-dependencies]
-# Individual components
-cmvk = [
-    "numpy>=1.20.0,<3.0",
-]
-
-iatp = [
-    "fastapi>=0.115.0,<1.0",
-    "uvicorn>=0.27.0,<1.0",
-    "httpx>=0.27.0,<1.0",
-    "cryptography>=48.0.0,<49.0",
-    "pynacl>=1.6.2,<2.0",
-]
-
-amb = [
-    "anyio>=4.12.1,<5.0",
-    "aiofiles>=25.1.0,<26.0",
-]
-
-observability = [
-    "prometheus-client>=0.25.0,<1.0",
-    "opentelemetry-api>=1.20.0,<2.0",
-    "opentelemetry-sdk>=1.41.1,<2.0",
-]
-
-mcp = [
-    "mcp>=1.0.0,<2.0",
-]
-
-langgraph = [
-    "langgraph>=1.0.0,<2.0",
-]
-
-nexus = [
-    "agent-os-kernel[iatp]",
-    "pyyaml>=6.0.0,<7.0",
-    "structlog>=24.1.0,<27.0",
-    "aiohttp>=3.13.4,<4.0",
-]
-
-# Bundles
-full = [
-    "agent-os-kernel[cmvk,iatp,amb,observability,mcp,nexus]",
-]
-hypervisor = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
-]
-
-# Development (includes all optional deps for full testing)
+# Test/dev dependencies required for `pytest tests/` to collect and run.
+# fastapi:      tests/test_server.py, tests/cloud_board/test_api_auth.py,
+#               services/cloud-board/api/* (imported by the cloud_board tests).
+# pynacl:       tests/cloud_board/test_api_auth.py (nacl.signing).
+# cryptography: tests/test_cmd_sign.py, modules/nexus (imported transitively
+#               by the cloud_board tests via services/cloud-board/api/main.py).
+# aiohttp:      modules/nexus.client (same transitive import path as above).
+# pyyaml:       tests/test_cmd_sign.py and several others (import yaml).
 dev = [
     "pytest>=8.4.2,<10.0",
-    "pytest-asyncio>=0.21.0,<2.0",
-    "pytest-cov>=4.0.0,<8.0",
+    "pytest-asyncio>=1.2.0,<2.0",
+    "pytest-cov>=7.1.0,<8.0",
     "mypy>=1.19.1,<3.0",
-    "ruff>=0.15.15,<1.0",
+    "ruff>=0.15.17,<1.0",
     "import-linter>=2.0,<3.0",
     "pyyaml>=6.0.0,<7.0",
     "typer>=0.9.0,<1.0",
     "rich>=15.0.0,<16.0",
     "numpy>=1.20.0,<3.0",
     "httpx>=0.27.0,<1.0",
-    "fastapi>=0.115.0,<1.0",
+    "fastapi>=0.128.8,<1.0",
     "uvicorn>=0.27.0,<1.0",
     "anyio>=4.12.1,<5.0",
     "aiohttp>=3.13.4,<4.0",
-    "structlog>=24.1.0,<27.0",
+    "structlog>=25.5.0,<27.0",
     "redis>=4.0.0,<8.0",
     "cryptography>=48.0.0,<49.0",
+    "pynacl>=1.6.2,<2.0",
     "eval_type_backport>=0.2.0; python_version < '3.10'",
+    "tzdata>=2024.1,<2027.0",
+]
+# Optional local backend for the (default-off) embedding evidence signal in
+# `agent_os.prompt_injection_embedding`. Never required: the module is inert
+# unless explicitly enabled, and an embedder can be injected instead.
+embedding = [
+    "fastembed>=0.3.0,<1.0",
 ]
 
-[project.scripts]
-agent-os = "agent_os.cli:main"
-mcp-scan = "agent_os.cli.mcp_scan:main"
+[project.urls]
+Homepage = "https://github.com/microsoft/agent-governance-toolkit"
+"Migration Guide" = "https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/package-consolidation/MIGRATION.md"
 
 [tool.hatch.build.targets.wheel]
-packages = [
-    "src/agent_os",
-    "modules/cmvk/src/cmvk",
-    "modules/caas/src/caas",
-    "modules/emk/emk",
-    # Layer 2 – Infrastructure
-    "modules/iatp/iatp",
-    "modules/amb/amb_core",
-    "modules/atr/atr",
-    # Layer 3 – Framework
-    "modules/control-plane/src/agent_control_plane",
-    "modules/observability/src/agent_os_observability",
-    "modules/nexus",
-    # Servers
-    "modules/mcp-kernel-server/src/mcp_kernel_server",
-]
-
-# Remap source paths so each subpackage installs at the wheel root.
-# Without this, hatch preserves intermediate dirs (e.g. control-plane/src/).
-[tool.hatch.build.targets.wheel.sources]
-"src" = ""
-"modules/cmvk/src" = ""
-"modules/caas/src" = ""
-"modules/emk" = ""
-"modules/iatp" = ""
-"modules/amb" = ""
-"modules/atr" = ""
-"modules/control-plane/src" = ""
-"modules/observability/src" = ""
-"modules/nexus" = "nexus"
-"modules/mcp-kernel-server/src" = ""
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/src",
-    "/modules",
-    "/services",
-    "/docs",
-    "/README.md",
-    "/LICENSE",
-]
+packages = ["src/agent_os"]
 
 # ============================================================================
 # Ruff - Fast Python Linter & Formatter
+#
+# The published wheel is a dep-only deprecation stub (see [project] above), but
+# the agent_os source tree under src/ is still linted and tested in CI. These
+# dev-tooling sections were dropped during the package consolidation in #2794;
+# without per-file-ignores, ruff reports E402/F401 on previously-clean files
+# such as agent_os/integrations/__init__.py. Restoring them keeps CI green.
 # ============================================================================
 [tool.ruff]
 target-version = "py39"
@@ -213,35 +115,4 @@ markers = [
     "benchmark: performance benchmark tests",
     "slow: long-running tests (skip with -m 'not slow')",
     "integration: end-to-end integration tests",
-]
-
-# ============================================================================
-# MyPy
-# ============================================================================
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
-plugins = ["pydantic.mypy"]
-
-[[tool.mypy.overrides]]
-module = ["tests.*"]
-disallow_untyped_defs = false
-
-# ============================================================================
-# Coverage
-# ============================================================================
-[tool.coverage.run]
-source = ["src/agent_os", "modules"]
-branch = true
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
 ]

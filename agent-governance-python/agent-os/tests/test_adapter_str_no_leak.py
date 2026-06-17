@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -109,7 +109,7 @@ def _base_pre_execute_max_tool_calls() -> _DenialSnapshot:
 
 def _base_pre_execute_timeout() -> _DenialSnapshot:
     kernel, ctx = _base_context(GovernancePolicy(timeout_seconds=1))
-    ctx.start_time = datetime.now() - timedelta(seconds=2)
+    ctx.start_time = datetime.now(timezone.utc) - timedelta(seconds=2)
     allowed, reason = kernel.pre_execute(ctx, "safe input")
     assert allowed is False
     return _from_tool_result(reason)

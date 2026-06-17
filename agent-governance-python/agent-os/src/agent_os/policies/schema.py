@@ -14,7 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PolicyOperator(str, Enum):
@@ -41,6 +41,65 @@ class PolicyAction(str, Enum):
     BLOCK = "block"
 
 
+class DynamicConditionType(str, Enum):
+    """Supported dynamic condition types for v1."""
+
+    TIME_WINDOW = "time_window"
+    DAY_OF_WEEK = "day_of_week"
+    TOKEN_COUNT_PER_WINDOW = "token_count_per_window"
+    COST_PER_WINDOW = "cost_per_window"
+
+
+class DynamicCondition(BaseModel):
+    """Optional dynamic runtime condition attached to a policy rule.
+
+    This model is additive and does not alter existing field/operator/value
+    behavior for static conditions.
+    """
+
+    type: DynamicConditionType
+    timezone: str | None = Field(
+        default=None,
+        description="IANA timezone name (for temporal conditions), e.g. 'America/New_York'.",
+    )
+    start_time: str | None = Field(
+        default=None,
+        description="Inclusive window start in HH:MM (24-hour) local time.",
+    )
+    end_time: str | None = Field(
+        default=None,
+        description="Exclusive window end in HH:MM (24-hour) local time.",
+    )
+    days_of_week: list[int] | None = Field(
+        default=None,
+        description="ISO weekday numbers (1=Mon .. 7=Sun).",
+    )
+    window: str | None = Field(
+        default=None,
+        description="Budget window duration (e.g. '1h', '1d', '15m').",
+    )
+    limit: float | int | None = Field(
+        default=None,
+        description="Per-window budget cap for token/cost conditions.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_shape(self) -> "DynamicCondition":
+        if self.type == DynamicConditionType.TIME_WINDOW:
+            if self.start_time is None or self.end_time is None:
+                raise ValueError("time_window requires start_time and end_time")
+        elif self.type == DynamicConditionType.DAY_OF_WEEK:
+            if not self.days_of_week:
+                raise ValueError("day_of_week requires days_of_week")
+        elif self.type in (
+            DynamicConditionType.TOKEN_COUNT_PER_WINDOW,
+            DynamicConditionType.COST_PER_WINDOW,
+        ):
+            if self.window is None or self.limit is None:
+                raise ValueError("budget conditions require window and limit")
+        return self
+
+
 class PolicyCondition(BaseModel):
     """A single condition evaluated against execution context."""
 
@@ -57,6 +116,10 @@ class PolicyRule(BaseModel):
     action: PolicyAction
     priority: int = Field(default=0, description="Higher priority rules are evaluated first")
     message: str = Field(default="", description="Human-readable explanation")
+    dynamic_condition: DynamicCondition | None = Field(
+        default=None,
+        description="Optional v1 dynamic runtime condition.",
+    )
     override: bool = Field(
         default=False,
         description="If true, replaces a parent rule with the same name during folder-level merge",
@@ -102,6 +165,25 @@ class PolicyDefaults(BaseModel):
     )
 
 
+class SandboxMounts(BaseModel):
+    """Host directories exposed to a sandbox session.
+
+    Both paths are optional. ``input_dir`` is mounted read-only and
+    ``output_dir`` read-write by the sandbox providers. Defined natively
+    so policies loaded from YAML/JSON retain the mounts (Pydantic drops
+    unknown keys, so a duck-typed block would otherwise be lost).
+    """
+
+    input_dir: str | None = Field(
+        default=None,
+        description="Host path mounted read-only into the sandbox.",
+    )
+    output_dir: str | None = Field(
+        default=None,
+        description="Host path mounted read-write into the sandbox.",
+    )
+
+
 class PolicyDocument(BaseModel):
     """Top-level declarative policy document."""
 
@@ -138,6 +220,15 @@ class PolicyDocument(BaseModel):
             "PolicyEvaluator before any sandbox call."
         ),
     )
+    sandbox_mounts: SandboxMounts = Field(
+        default_factory=SandboxMounts,
+        description=(
+            "Host directories exposed to the sandbox. ``input_dir`` is "
+            "mounted read-only and ``output_dir`` read-write. Consumed by "
+            "the sandbox providers (Docker / Hyperlight / MXC); ignored by "
+            "the rule engine."
+        ),
+    )
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> PolicyDocument:
@@ -145,10 +236,12 @@ class PolicyDocument(BaseModel):
         try:
             import yaml
         except ImportError as exc:
-            raise ImportError("pyyaml is required: pip install pyyaml") from exc
+            raise ImportError(
+                "pyyaml is required: pip install pyyaml"
+            ) from exc
 
         path = Path(path)
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return cls.model_validate(data)
 
@@ -157,7 +250,9 @@ class PolicyDocument(BaseModel):
         try:
             import yaml
         except ImportError as exc:
-            raise ImportError("pyyaml is required: pip install pyyaml") from exc
+            raise ImportError(
+                "pyyaml is required: pip install pyyaml"
+            ) from exc
 
         path = Path(path)
         with open(path, "w") as f:
@@ -167,7 +262,7 @@ class PolicyDocument(BaseModel):
     def from_json(cls, path: str | Path) -> PolicyDocument:
         """Load a PolicyDocument from a JSON file."""
         path = Path(path)
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return cls.model_validate(data)
 
