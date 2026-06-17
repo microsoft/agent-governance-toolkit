@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import pytest
 from typing import Optional
 from unittest.mock import MagicMock, AsyncMock
