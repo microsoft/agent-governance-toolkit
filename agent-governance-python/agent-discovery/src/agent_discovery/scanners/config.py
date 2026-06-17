@@ -101,6 +101,18 @@ class ConfigScanner(BaseScanner):
         return errors
 
     async def scan(self, **kwargs: Any) -> ScanResult:
+        """Execute the configuration scan.
+
+        Walks the provided directories looking for agent framework configuration
+        files, MCP server setups, and Docker/Compose files referencing agent images.
+
+        Args:
+            paths: List of directory paths to scan (default: ["."]).
+            max_depth: Maximum directory depth to traverse (default: 10).
+
+        Returns:
+            ScanResult containing discovered agents, any errors, and metadata.
+        """
         result = ScanResult(scanner_name=self.name)
         paths: list[str] = kwargs.get("paths", ["."])
         max_depth: int = kwargs.get("max_depth", 10)

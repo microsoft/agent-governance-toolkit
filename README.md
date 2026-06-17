@@ -238,7 +238,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | [**Agent Compliance**](agent-governance-python/agent-compliance/) | OWASP verification, policy linting, integrity checks |
 | [**Agent Marketplace**](agent-governance-python/agent-marketplace/) | Plugin governance and trust scoring |
 | [**Agent Lightning**](agent-governance-python/agent-lightning/) | RL training governance with violation penalties |
-| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, commitment anchoring |
+| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, commitment anchoring, command denylist enforcement |
 
 ### Additional Capabilities
 
@@ -277,7 +277,7 @@ As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
 | Distribution | PyPI | What's included |
 |--------------|------|-----------------|
 | `agent-governance-toolkit-core` | [`agent-governance-toolkit-core`](https://pypi.org/project/agent-governance-toolkit-core/) | Policy engine, capability model, audit, MCP gateway, zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
-| `agent-governance-toolkit-runtime` | [`agent-governance-toolkit-runtime`](https://pypi.org/project/agent-governance-toolkit-runtime/) | Privilege rings, saga orchestration, termination control, execution plan validation |
+| `agent-governance-toolkit-runtime` | [`agent-governance-toolkit-runtime`](https://pypi.org/project/agent-governance-toolkit-runtime/) | Privilege rings, saga orchestration, termination control, execution plan validation, command denylist enforcement |
 | `agent-governance-toolkit-sre` | [`agent-governance-toolkit-sre`](https://pypi.org/project/agent-governance-toolkit-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
 | `agent-governance-toolkit-cli` | [`agent-governance-toolkit-cli`](https://pypi.org/project/agent-governance-toolkit-cli/) | `agt` CLI, OWASP verification, integrity checks, policy linting |
 | `agent-governance-toolkit[full]` | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Meta-package installing all of the above |
