@@ -865,9 +865,15 @@ class PolicyInterceptor:
     - Call count within limits
     """
 
-    def __init__(self, policy: GovernancePolicy, context: ExecutionContext | None = None):
+    def __init__(
+        self,
+        policy: GovernancePolicy,
+        context: ExecutionContext | None = None,
+        policy_bundle_hash: str | None = None,
+    ):
         self.policy = policy
         self.context = context
+        self.policy_bundle_hash = policy_bundle_hash
 
     def intercept(self, request: ToolCallRequest) -> ToolCallResult:
         from agent_os.policies.decision_factory import (

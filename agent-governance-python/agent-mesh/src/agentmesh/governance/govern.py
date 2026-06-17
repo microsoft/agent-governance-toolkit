@@ -17,6 +17,7 @@ Or wrap an entire callable (agent, tool, function):
 from __future__ import annotations
 
 import functools
+import hashlib
 import logging
 import os
 import re
@@ -161,19 +162,29 @@ class GovernedCallable:
 
         # Load policy
         policy = config.policy
+        _bundle_bytes: bytes = b""
         if isinstance(policy, str):
             if os.path.isfile(policy):
+                with open(policy, "rb") as _f:
+                    _bundle_bytes = _f.read()
                 loaded = self._engine.load_yaml_file(policy)
             else:
+                _bundle_bytes = policy.encode("utf-8")
                 loaded = self._engine.load_yaml(policy)
         elif isinstance(policy, Policy):
             loaded = policy
             self._engine.load_policy(loaded)
+            _bundle_bytes = loaded.to_yaml().encode("utf-8") if hasattr(loaded, "to_yaml") else b""
         else:
             raise TypeError(
                 f"policy must be a file path, YAML string, or Policy object, "
                 f"got {type(policy).__name__}"
             )
+
+        # Hash of policy bundle bytes at load time — consumed by TRACEAuditSink (ADR-0032).
+        self._policy_bundle_hash: str = (
+            "sha256:" + hashlib.sha256(_bundle_bytes).hexdigest() if _bundle_bytes else ""
+        )
 
         # Ensure the policy applies to our agent_id. If no agents are
         # specified, default to wildcard so govern() works out of the box.

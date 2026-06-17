@@ -107,6 +107,12 @@ from .protocol_facets import (
     extract_protocol_facets,
     default_registry,
 )
+from .trace_model import (
+    TraceModelConfig,
+    TraceSession,
+    TrustRecord,
+    session_to_trust_record,
+)
 
 __all__ = [
     # High-level wrapper (issue #1372)
@@ -223,5 +229,10 @@ __all__ = [
     "FacetRegistry",
     "extract_protocol_facets",
     "default_registry",
+    # TRACE v0.2 Trust Record model (ADR-0032, issue #3086)
+    "TraceModelConfig",
+    "TraceSession",
+    "TrustRecord",
+    "session_to_trust_record",
 ]
 

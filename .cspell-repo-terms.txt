@@ -842,3 +842,10 @@ geofencing
 geofence
 geomatch
 YYMMDDGSSSCAZ
+
+# --- TRACE / identity-chain / advisory terms ---
+agentrust
+contextvars
+miyannishar
+GHSA
+ghsa
