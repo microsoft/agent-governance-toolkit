@@ -24,7 +24,7 @@ agents:
   - did:web:example.org/agent/test
 rules:
   - name: allow-all
-    condition: "true"
+    condition: "action.type != 'deny'"
     action: allow
 """
 
