@@ -44,14 +44,16 @@ def _build_session_detail(managed: ManagedSession) -> dict[str, Any]:
     saga_steps: list[dict[str, Any]] = []
     for saga in managed.saga._sagas.values():
         for step in saga.steps:
-            saga_steps.append({
-                "saga_id": saga.saga_id,
-                "step_id": step.step_id,
-                "action_id": step.action_id,
-                "agent_did": step.agent_did,
-                "state": step.state.value,
-                "error": step.error,
-            })
+            saga_steps.append(
+                {
+                    "saga_id": saga.saga_id,
+                    "step_id": step.step_id,
+                    "action_id": step.action_id,
+                    "agent_did": step.agent_did,
+                    "state": step.state.value,
+                    "error": step.error,
+                }
+            )
 
     # Audit deltas
     audit_entries = [
@@ -124,12 +126,14 @@ def cmd_kill(
             details="Killed via CLI",
         )
         managed.sso.leave(p.agent_did)
-        results.append({
-            "kill_id": result.kill_id,
-            "agent_did": result.agent_did,
-            "reason": result.reason.value,
-            "timestamp": result.timestamp.isoformat(),
-        })
+        results.append(
+            {
+                "kill_id": result.kill_id,
+                "agent_did": result.agent_did,
+                "reason": result.reason.value,
+                "timestamp": result.timestamp.isoformat(),
+            }
+        )
 
     return format_output(results, fmt)
 

@@ -67,16 +67,20 @@ class CausalAttributor:
         """Assign full liability to the direct-cause agent."""
         attributions = []
         for agent_did in agent_actions:
-            attributions.append(FaultAttribution(
-                agent_did=agent_did,
-                liability_score=1.0 if agent_did == failure_agent_did else 0.0,
-                causal_contribution=1.0 if agent_did == failure_agent_did else 0.0,
-                is_direct_cause=(agent_did == failure_agent_did),
-                reason="Direct cause" if agent_did == failure_agent_did else "",
-            ))
+            attributions.append(
+                FaultAttribution(
+                    agent_did=agent_did,
+                    liability_score=1.0 if agent_did == failure_agent_did else 0.0,
+                    causal_contribution=1.0 if agent_did == failure_agent_did else 0.0,
+                    is_direct_cause=(agent_did == failure_agent_did),
+                    reason="Direct cause" if agent_did == failure_agent_did else "",
+                )
+            )
         result = AttributionResult(
-            saga_id=saga_id, session_id=session_id,
-            attributions=attributions, root_cause_agent=failure_agent_did,
+            saga_id=saga_id,
+            session_id=session_id,
+            attributions=attributions,
+            root_cause_agent=failure_agent_did,
         )
         self._history.append(result)
         return result

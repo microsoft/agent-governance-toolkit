@@ -13,6 +13,7 @@ from hypervisor.models import ConsistencyMode
 
 # ── Session models ──────────────────────────────────────────────────────────
 
+
 class CreateSessionRequest(BaseModel):
     """Request body for creating a new session."""
 
@@ -88,6 +89,7 @@ class JoinSessionResponse(BaseModel):
 
 # ── Ring models ─────────────────────────────────────────────────────────────
 
+
 class RingDistributionResponse(BaseModel):
     """Ring distribution across session participants."""
 
@@ -127,6 +129,7 @@ class RingCheckResponse(BaseModel):
 
 
 # ── Saga models ─────────────────────────────────────────────────────────────
+
 
 class CreateSagaResponse(BaseModel):
     """Response after creating a saga."""
@@ -180,6 +183,7 @@ class ExecuteStepResponse(BaseModel):
 
 # ── Liability models ────────────────────────────────────────────────────────
 
+
 class CreateVouchRequest(BaseModel):
     """Request body for creating a sponsor."""
 
@@ -213,6 +217,7 @@ class LiabilityExposureResponse(BaseModel):
 
 # ── Event models ────────────────────────────────────────────────────────────
 
+
 class EventResponse(BaseModel):
     """Serialized hypervisor event."""
 
@@ -234,6 +239,7 @@ class EventStatsResponse(BaseModel):
 
 # ── Stats models ────────────────────────────────────────────────────────────
 
+
 class StatsResponse(BaseModel):
     """Overall hypervisor statistics."""
 
@@ -248,6 +254,7 @@ class StatsResponse(BaseModel):
 
 # ── Audit models ────────────────────────────────────────────────────────────
 
+
 class CommitmentResponse(BaseModel):
     session_id: str
     hash_chain_root: str
@@ -257,13 +264,16 @@ class CommitmentResponse(BaseModel):
     committed_to: str = "local"
     blockchain_tx_id: str | None = None
 
+
 class VerifyCommitmentResponse(BaseModel):
     session_id: str
     valid: bool
     committed_root: str
     expected_root: str
 
+
 # ── Verification models ─────────────────────────────────────────────────────
+
 
 class TransactionInput(BaseModel):
     session_id: str
@@ -271,9 +281,11 @@ class TransactionInput(BaseModel):
     timestamp: datetime
     participant_count: int = 0
 
+
 class VerifyHistoryRequest(BaseModel):
     agent_did: str
     transactions: list[TransactionInput]
+
 
 class VerifyHistoryResponse(BaseModel):
     agent_did: str
