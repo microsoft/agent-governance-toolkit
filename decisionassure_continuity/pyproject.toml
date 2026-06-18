@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "decisionassure-continuity"
+version = "1.0.0"
+description = "Constitutional continuity verification for AI agents"
+authors = [
+    {name = "Akhilesh Warik", email = "warikakhilesh319@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "docs/README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0",
+    "numpy>=1.26.0",
+    "click>=8.0.0",
+]

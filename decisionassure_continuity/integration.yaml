@@ -1,0 +1,41 @@
+apiVersion: integration/v1
+kind: Integration
+metadata:
+  name: decisionassure-continuity
+  displayName: DecisionAssure Capability Witness Engine
+  description: |
+    Emergent capability discovery, cryptographic witness chains, counterfactual verification,
+    TRACE-compatible claims, governance review queue, ontology evolution, and capability drift replay.
+  category: governance
+  maintainer:
+    name: Akhilesh Warik
+    email: warikakhilesh319@gmail.com
+    github: a1k7
+  license: MIT
+  version: 1.0.0
+spec:
+  compatibility:
+    - trace-spec: v0.2
+    - conformance: Level 1
+  files:
+    - src/
+    - examples/
+    - requirements.txt
+    - docs/
+    - README.md
+  usage:
+    command: |
+      pip install -r requirements.txt
+      # Run the governance learning loop
+      python examples/review_queue_demo.py
+      # Process traces with review queue enabled
+      python examples/batch_witness_demo.py ./traces/ autogen --learn --review
+      # Replay drift comparison
+      python -m src.capability_drift_replay evolved_ontology.json ./traces/
+    command: |
+      # Generate ontology diff report
+      python examples/ontology_diff_report.py
+  evidence:
+    - type: capability_witness
+    - type: ontology_evolution
+    - type: drift_replay

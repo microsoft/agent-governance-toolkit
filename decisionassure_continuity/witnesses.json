@@ -1,0 +1,28 @@
+{
+  "witnesses": [
+    {
+      "index": 0,
+      "previous_witness_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "agent_id": "alice",
+      "session_id": "s1",
+      "constitution_hash": "hash1",
+      "observer_hash": "hash1",
+      "reference_frame_hash": "hash1",
+      "action_hash": "action1",
+      "timestamp": "2026-06-18T10:00:00Z",
+      "witness_hash": "witness_hash_1"
+    },
+    {
+      "index": 1,
+      "previous_witness_hash": "witness_hash_1",
+      "agent_id": "alice",
+      "session_id": "s1",
+      "constitution_hash": "hash1",
+      "observer_hash": "hash2",
+      "reference_frame_hash": "hash1",
+      "action_hash": "action2",
+      "timestamp": "2026-06-18T10:00:01Z",
+      "witness_hash": "witness_hash_2"
+    }
+  ]
+}
