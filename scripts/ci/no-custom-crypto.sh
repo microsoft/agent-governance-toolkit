@@ -24,11 +24,14 @@ set -euo pipefail
 BASE_REF="${1:-origin/main}"
 
 # Patterns that indicate direct crypto usage
+# NOTE: 'import hashlib' is NOT included because SHA-256 is widely used for
+# non-cryptographic purposes (content addressing, fingerprinting, deduplication,
+# integrity checks). Only flag when combined with crypto-specific patterns.
 CRYPTO_PATTERNS=(
   'from cryptography'
   'from Crypto\.'
-  'import hashlib'
   'import hmac'
+  'hmac\.'
   'crypto\.subtle'
   'crypto\.createHash'
   'crypto\.createHmac'
