@@ -17,6 +17,8 @@ Or wrap an entire callable (agent, tool, function):
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
 import logging
 import os
 import re
@@ -26,16 +28,11 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from .policy import Policy, PolicyDecision, PolicyEngine
 from .audit import AuditLog
+from .trace_sink import TraceConfig, TRACEAuditSink
 from .approval import ApprovalHandler, ApprovalRequest, AutoRejectApproval
 from .advisory import AdvisoryCheck, AdvisoryDecision
-from .approval_protocol import (
-    ActionBinding,
-    ActionTarget,
-    ApprovalCoordinator,
-    ApprovalProtocolError,
-    ApproverKind,
-    EntryDecision,
-)
+from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
+from .approval_bridge import LegacyHandlerAdapter
 
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
@@ -134,6 +131,7 @@ class GovernanceConfig:
     approval_coordinator: Optional[ApprovalCoordinator] = None
     approval_chain_id: Optional[str] = None
     approval_ttl_seconds: float = 300.0
+    trace: Optional[TraceConfig] = None
 
 
 class GovernanceDenied(Exception):
@@ -161,19 +159,29 @@ class GovernedCallable:
 
         # Load policy
         policy = config.policy
+        _bundle_bytes: bytes = b""
         if isinstance(policy, str):
             if os.path.isfile(policy):
+                with open(policy, "rb") as _f:
+                    _bundle_bytes = _f.read()
                 loaded = self._engine.load_yaml_file(policy)
             else:
+                _bundle_bytes = policy.encode("utf-8")
                 loaded = self._engine.load_yaml(policy)
         elif isinstance(policy, Policy):
             loaded = policy
             self._engine.load_policy(loaded)
+            _bundle_bytes = loaded.to_yaml().encode("utf-8") if hasattr(loaded, "to_yaml") else b""
         else:
             raise TypeError(
                 f"policy must be a file path, YAML string, or Policy object, "
                 f"got {type(policy).__name__}"
             )
+
+        # Hash of policy bundle bytes at load time — consumed by TRACEAuditSink (ADR-0032).
+        self._policy_bundle_hash: str = (
+            "sha256:" + hashlib.sha256(_bundle_bytes).hexdigest() if _bundle_bytes else ""
+        )
 
         # Ensure the policy applies to our agent_id. If no agents are
         # specified, default to wildcard so govern() works out of the box.
@@ -183,6 +191,31 @@ class GovernedCallable:
         # Policy version stamped onto action-bound approval records (ADR-0030),
         # so an approval is bound to the policy revision in effect when granted.
         self._policy_version = getattr(loaded, "version", "1.0") or "1.0"
+
+        # Policy bundle hash for TRACE emission (ADR-0032). Computed once at
+        # init from the raw policy bytes so emit() has a stable, verifiable hash.
+        if isinstance(policy, str):
+            if os.path.isfile(policy):
+                with open(policy, "rb") as _f:
+                    _policy_bytes = _f.read()
+            else:
+                _policy_bytes = policy.encode()
+        else:
+            _policy_bytes = json.dumps(
+                loaded.model_dump() if hasattr(loaded, "model_dump") else {},
+                sort_keys=True,
+                default=str,
+            ).encode()
+        self._policy_bundle_hash = "sha256:" + hashlib.sha256(_policy_bytes).hexdigest()
+
+        # TRACE session-close sink (ADR-0032) -- only active when config.trace is set.
+        self._trace_sink: Optional[TRACEAuditSink] = None
+        if config.trace is not None:
+            self._trace_sink = TRACEAuditSink(
+                config=config.trace,
+                agent_did=config.agent_id,
+                policy_bundle_hash=self._policy_bundle_hash,
+            )
 
         # Ring enforcement — only active when a ring is explicitly configured.
         self._ring_enforcer: Any = None
@@ -418,9 +451,13 @@ class GovernedCallable:
         )
 
         # The legacy handler is the synchronous source of the approver's vote;
-        # its result becomes one authenticated chain entry at stage 0.
+        # the adapter turns that vote into one authenticated chain entry at
+        # stage 0, fail-closed on an unpermitted identity or expired request.
         handler = self._config.approval_handler or AutoRejectApproval()
-        approval = handler.request_approval(
+        adapter = LegacyHandlerAdapter(handler)
+        result = adapter.collect(
+            coordinator,
+            request,
             ApprovalRequest(
                 action=context.get("action", {}).get("type", "unknown"),
                 rule_name=decision.matched_rule or "",
@@ -428,27 +465,12 @@ class GovernedCallable:
                 agent_id=self._config.agent_id,
                 context=context,
                 approvers=decision.approvers,
-            )
+            ),
         )
+        approval = result.approval
 
         verdict = None
-        fail_reason: Optional[str] = None
-        try:
-            coordinator.submit_entry(
-                request.approval_request_id,
-                stage_index=0,
-                approver_kind=ApproverKind.HUMAN,
-                approver_identity=approval.approver or "unknown",
-                identity_assurance="approval-handler",
-                decision=(
-                    EntryDecision.ALLOW if approval.approved else EntryDecision.DENY
-                ),
-                reason_code=approval.reason or "",
-            )
-        except ApprovalProtocolError as exc:
-            # Unpermitted identity, expired request, etc. Fail closed.
-            fail_reason = f"approval entry rejected: {exc}"
-        else:
+        if result.submitted:
             verdict = coordinator.validate_for_execution(
                 request.approval_request_id,
                 current_action_digest=binding.digest(),
@@ -457,7 +479,7 @@ class GovernedCallable:
             )
 
         allowed = bool(verdict and verdict.allowed)
-        reason_code = verdict.reason_code if verdict is not None else fail_reason
+        reason_code = verdict.reason_code if verdict is not None else result.error
 
         # Audit linkage: tie the entry to the protocol record ids and the action
         # digest (ADR-0030 section 7); reuse the AuditEntry assurance fields.
@@ -609,6 +631,21 @@ class GovernedCallable:
         """Access the audit log for inspection."""
         return self._audit
 
+    def close_session(self) -> Optional[str]:
+        """Emit a TRACE v0.2 Trust Record for this governed session (ADR-0032).
+
+        Call once after all governed tool calls for a session are complete.
+        Writes a signed Trust Record JSON to the path configured in
+        GovernanceConfig.trace.output_path.
+
+        Returns the path of the written file, or None when TRACE emission is
+        not configured (config.trace is None), the audit log has no entries,
+        or the agent_id is not a SPIFFE URI or DID.
+        """
+        if self._trace_sink is None:
+            return None
+        return self._trace_sink.emit(self._audit)
+
 
 def govern(
     fn: Callable,
@@ -625,6 +662,7 @@ def govern(
     approval_coordinator: Optional[ApprovalCoordinator] = None,
     approval_chain_id: Optional[str] = None,
     approval_ttl_seconds: float = 300.0,
+    trace: Optional[TraceConfig] = None,
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
 
@@ -665,5 +703,6 @@ def govern(
         approval_coordinator=approval_coordinator,
         approval_chain_id=approval_chain_id,
         approval_ttl_seconds=approval_ttl_seconds,
+        trace=trace,
     )
     return GovernedCallable(fn, config)

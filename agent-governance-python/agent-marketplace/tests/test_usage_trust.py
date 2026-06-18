@@ -7,7 +7,6 @@ import pytest
 
 from agent_marketplace.usage_trust import (
     UsageSignals,
-    UsageTrustAdjustment,
     UsageTrustScorer,
 )
 
@@ -56,7 +55,10 @@ class TestUsageTrustScorer:
     def test_excellent_reliability_bonus(self) -> None:
         scorer = UsageTrustScorer()
         signals = UsageSignals(
-            "p", "1.0", total_invocations=10000, error_count=0,
+            "p",
+            "1.0",
+            total_invocations=10000,
+            error_count=0,
         )
         adjustments = scorer.compute_adjustments(signals)
         reliability = [a for a in adjustments if a.signal_name == "error_rate"]
@@ -66,7 +68,10 @@ class TestUsageTrustScorer:
     def test_poor_reliability_penalty(self) -> None:
         scorer = UsageTrustScorer()
         signals = UsageSignals(
-            "p", "1.0", total_invocations=1000, error_count=200,
+            "p",
+            "1.0",
+            total_invocations=1000,
+            error_count=200,
         )
         adjustments = scorer.compute_adjustments(signals)
         reliability = [a for a in adjustments if a.signal_name == "error_rate"]
@@ -92,7 +97,8 @@ class TestUsageTrustScorer:
     def test_total_adjustment_capping_positive(self) -> None:
         scorer = UsageTrustScorer(max_adjustment=200)
         signals = UsageSignals(
-            "p", "1.0",
+            "p",
+            "1.0",
             daily_active_users=5000,
             total_invocations=100000,
             error_count=0,
@@ -104,7 +110,8 @@ class TestUsageTrustScorer:
     def test_total_adjustment_capping_negative(self) -> None:
         scorer = UsageTrustScorer(max_adjustment=200)
         signals = UsageSignals(
-            "p", "1.0",
+            "p",
+            "1.0",
             incident_count=10,
             days_since_update=400,
             adoption_trend=-0.5,

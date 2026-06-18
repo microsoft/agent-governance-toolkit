@@ -11,8 +11,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from .models import AgentStatus, DiscoveredAgent, ShadowAgent
 from .inventory import AgentInventory
+from .models import AgentStatus, DiscoveredAgent, ShadowAgent
 
 
 class RegistryProvider(ABC):
@@ -106,13 +106,9 @@ class Reconciler:
         actions = []
 
         if agent.confidence >= 0.8:
-            actions.append(
-                "Register this agent with AgentMesh to establish governance identity"
-            )
+            actions.append("Register this agent with AgentMesh to establish governance identity")
         else:
-            actions.append(
-                "Investigate to confirm this is an active AI agent"
-            )
+            actions.append("Investigate to confirm this is an active AI agent")
 
         if not agent.owner:
             actions.append("Assign an owner responsible for this agent's lifecycle")

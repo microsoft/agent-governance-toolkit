@@ -42,6 +42,13 @@ from .external_jwks import (
     FederationPolicy,
     TrustedEndpoint,
 )
+from .provider_chain import (
+    IdentityProvider,
+    IdentityProviderChain,
+    IdentityResult,
+    LocalRegistryProvider,
+    ExternalJWKSProviderAdapter,
+)
 from .jwk import from_jwk, from_jwks, to_jwk, to_jwks
 from .keystore import KeyStore, PKCS11KeyStore, SoftwareKeyStore
 from .managed_identity import (
@@ -130,4 +137,10 @@ __all__ = [
     "ExternalJWKSProvider",
     "FederationPolicy",
     "TrustedEndpoint",
+    # Identity provider chain (ADR-0007 follow-up)
+    "IdentityProvider",
+    "IdentityProviderChain",
+    "IdentityResult",
+    "LocalRegistryProvider",
+    "ExternalJWKSProviderAdapter",
 ]

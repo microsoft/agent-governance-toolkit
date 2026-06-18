@@ -35,7 +35,7 @@ from hypervisor.models import (  # noqa: E402
     ReversibilityLevel,
 )
 from hypervisor.rings.enforcer import RingEnforcer  # noqa: E402
-from hypervisor.security.kill_switch import KillSwitch, KillReason  # noqa: E402
+from hypervisor.security.kill_switch import KillReason, KillSwitch  # noqa: E402
 
 # ── Agent definitions ────────────────────────────────────────────────────────
 
@@ -153,8 +153,9 @@ def print_scenario(number: int, title: str) -> None:
     print(f"\n{'━━ Scenario ' + str(number) + ': ' + title + ' ':━<60}")
 
 
-def print_check(agent: str, action_id: str, allowed: bool,
-                agent_ring: int, required_ring: int) -> None:
+def print_check(
+    agent: str, action_id: str, allowed: bool, agent_ring: int, required_ring: int
+) -> None:
     symbol = "✓" if allowed else "✗"
     status = "ALLOWED" if allowed else "DENIED "
     op = "≤" if allowed else ">"
@@ -182,8 +183,9 @@ def run_scenario_1(enforcer: RingEnforcer, audit: AuditTrail) -> None:
         action = ACTIONS[action_id]
         eff = AGENTS[agent_name]["eff_score"]
         result = enforcer.check(agent_ring=agent_ring, action=action, eff_score=eff)
-        print_check(agent_name, action_id, result.allowed,
-                     agent_ring.value, result.required_ring.value)
+        print_check(
+            agent_name, action_id, result.allowed, agent_ring.value, result.required_ring.value
+        )
         audit.log("access_granted", agent_name, action_id)
 
 
@@ -201,8 +203,9 @@ def run_scenario_2(enforcer: RingEnforcer, audit: AuditTrail) -> None:
         action = ACTIONS[action_id]
         eff = AGENTS[agent_name]["eff_score"]
         result = enforcer.check(agent_ring=agent_ring, action=action, eff_score=eff)
-        print_check(agent_name, action_id, result.allowed,
-                     agent_ring.value, result.required_ring.value)
+        print_check(
+            agent_name, action_id, result.allowed, agent_ring.value, result.required_ring.value
+        )
         audit.log("access_denied", agent_name, action_id)
 
 
@@ -224,24 +227,24 @@ def run_scenario_3(enforcer: RingEnforcer, audit: AuditTrail) -> None:
         f"  ↑ {agent_name:<18} elevated Ring {original_ring.value}"
         f" → Ring {elevated_ring.value} (reason: {reason})"
     )
-    audit.log("ring_elevated", agent_name,
-              f"Ring {original_ring.value} → Ring {elevated_ring.value}")
+    audit.log(
+        "ring_elevated", agent_name, f"Ring {original_ring.value} → Ring {elevated_ring.value}"
+    )
 
     # With elevated ring, the agent can now perform Ring 1 actions
     action = ACTIONS["write_report"]
     eff = AGENTS[agent_name]["eff_score"]
     result = enforcer.check(agent_ring=elevated_ring, action=action, eff_score=eff)
-    print_check(agent_name, "write_report", result.allowed,
-                 elevated_ring.value, result.required_ring.value)
+    print_check(
+        agent_name, "write_report", result.allowed, elevated_ring.value, result.required_ring.value
+    )
     audit.log("access_granted", agent_name, "write_report (elevated)")
 
     # Revoke elevation
-    print(
-        f"  ↓ {agent_name:<18} elevation revoked"
-        f" — back to Ring {original_ring.value}"
+    print(f"  ↓ {agent_name:<18} elevation revoked — back to Ring {original_ring.value}")
+    audit.log(
+        "ring_revoked", agent_name, f"Ring {elevated_ring.value} → Ring {original_ring.value}"
     )
-    audit.log("ring_revoked", agent_name,
-              f"Ring {elevated_ring.value} → Ring {original_ring.value}")
 
 
 def run_scenario_4(kill_switch: KillSwitch, audit: AuditTrail) -> None:

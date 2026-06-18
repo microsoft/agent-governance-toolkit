@@ -88,15 +88,21 @@ class IATPAdapter:
         ring_hint = TRUST_LEVEL_RING_HINTS.get(trust_level, ExecutionRing.RING_3_SANDBOX)
         iatp_score = manifest.calculate_trust_score()
         import math
+
         if not isinstance(iatp_score, (int, float)) or not math.isfinite(iatp_score):
             iatp_score = 0.0
         iatp_score = min(max(iatp_score, 0.0), 100.0)
         sigma_hint = min(max(iatp_score / 10.0, 0.0), 1.0)
         analysis = ManifestAnalysis(
-            agent_did=agent_did, trust_level=trust_level, ring_hint=ring_hint,
-            iatp_trust_score=iatp_score, sigma_hint=sigma_hint, actions=[],
+            agent_did=agent_did,
+            trust_level=trust_level,
+            ring_hint=ring_hint,
+            iatp_trust_score=iatp_score,
+            sigma_hint=sigma_hint,
+            actions=[],
             scopes=list(manifest.scopes) if manifest.scopes else [],
-            has_reversible_actions=False, has_non_reversible_actions=False,
+            has_reversible_actions=False,
+            has_non_reversible_actions=False,
         )
         self._manifest_cache[agent_did] = analysis
         return analysis
@@ -112,6 +118,7 @@ class IATPAdapter:
         ring_hint = TRUST_LEVEL_RING_HINTS.get(trust_level, ExecutionRing.RING_3_SANDBOX)
         iatp_score = manifest_dict.get("trust_score", 5)
         import math
+
         if not isinstance(iatp_score, (int, float)) or not math.isfinite(iatp_score):
             iatp_score = 0.0
         iatp_score = min(max(iatp_score, 0.0), 100.0)
@@ -119,21 +126,29 @@ class IATPAdapter:
         actions = []
         for cap in manifest_dict.get("actions", []):
             rev_str = cap.get("reversibility", "none")
-            actions.append(ActionDescriptor(
-                action_id=cap.get("action_id", "unknown"),
-                name=cap.get("name", ""),
-                execute_api=cap.get("execute_api", ""),
-                undo_api=cap.get("undo_api"),
-                reversibility=REVERSIBILITY_MAP.get(rev_str, ReversibilityLevel.NONE),
-                is_read_only=cap.get("is_read_only", False),
-                is_admin=cap.get("is_admin", False),
-            ))
+            actions.append(
+                ActionDescriptor(
+                    action_id=cap.get("action_id", "unknown"),
+                    name=cap.get("name", ""),
+                    execute_api=cap.get("execute_api", ""),
+                    undo_api=cap.get("undo_api"),
+                    reversibility=REVERSIBILITY_MAP.get(rev_str, ReversibilityLevel.NONE),
+                    is_read_only=cap.get("is_read_only", False),
+                    is_admin=cap.get("is_admin", False),
+                )
+            )
         analysis = ManifestAnalysis(
-            agent_did=agent_did, trust_level=trust_level, ring_hint=ring_hint,
-            iatp_trust_score=iatp_score, sigma_hint=sigma_hint, actions=actions,
+            agent_did=agent_did,
+            trust_level=trust_level,
+            ring_hint=ring_hint,
+            iatp_trust_score=iatp_score,
+            sigma_hint=sigma_hint,
+            actions=actions,
             scopes=manifest_dict.get("scopes", []),
             has_reversible_actions=any(a.reversibility != ReversibilityLevel.NONE for a in actions),
-            has_non_reversible_actions=any(a.reversibility == ReversibilityLevel.NONE and not a.is_read_only for a in actions),
+            has_non_reversible_actions=any(
+                a.reversibility == ReversibilityLevel.NONE and not a.is_read_only for a in actions
+            ),
         )
         self._manifest_cache[agent_did] = analysis
         return analysis

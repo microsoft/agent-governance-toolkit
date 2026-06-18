@@ -3,9 +3,9 @@
 """Scanner plugin architecture for agent discovery."""
 
 from .base import BaseScanner, ScannerRegistry
-from .process import ProcessScanner
-from .github import GitHubScanner
 from .config import ConfigScanner
+from .github import GitHubScanner
+from .process import ProcessScanner
 
 __all__ = [
     "BaseScanner",

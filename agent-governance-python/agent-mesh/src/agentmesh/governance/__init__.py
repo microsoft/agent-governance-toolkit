@@ -7,6 +7,7 @@ Declarative policy engine with automated compliance mapping.
 Append-only audit logs with optional external sinks.
 """
 from .govern import govern, GovernedCallable, GovernanceConfig, GovernanceDenied
+from .trace_sink import TraceConfig, TRACEAuditSink
 from hypervisor.models import ExecutionRing
 from hypervisor.rings.enforcer import ResourceConstraints, ResourceType, RING_CONSTRAINTS, RingCheckResult
 from .approval import (
@@ -107,6 +108,12 @@ from .protocol_facets import (
     extract_protocol_facets,
     default_registry,
 )
+from .trace_model import (
+    TraceModelConfig,
+    TraceSession,
+    TrustRecord,
+    session_to_trust_record,
+)
 
 __all__ = [
     # High-level wrapper (issue #1372)
@@ -114,6 +121,9 @@ __all__ = [
     "GovernedCallable",
     "GovernanceConfig",
     "GovernanceDenied",
+    # TRACE Trust Record emission (ADR-0032)
+    "TraceConfig",
+    "TRACEAuditSink",
     # Ring enforcement (issue #2667)
     "ExecutionRing",
     "ResourceConstraints",
@@ -223,5 +233,10 @@ __all__ = [
     "FacetRegistry",
     "extract_protocol_facets",
     "default_registry",
+    # TRACE v0.2 Trust Record model (ADR-0032, issue #3086)
+    "TraceModelConfig",
+    "TraceSession",
+    "TrustRecord",
+    "session_to_trust_record",
 ]
 

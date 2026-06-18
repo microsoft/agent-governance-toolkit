@@ -5,6 +5,7 @@
 Extends trust tiers with real-world usage data: invocation counts,
 error rates, adoption trends, and incident history.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -51,7 +52,8 @@ class UsageTrustScorer:
         self._max_adjustment = max_adjustment
 
     def compute_adjustments(
-        self, signals: UsageSignals,
+        self,
+        signals: UsageSignals,
     ) -> list[UsageTrustAdjustment]:
         adjustments: list[UsageTrustAdjustment] = []
 
@@ -59,22 +61,28 @@ class UsageTrustScorer:
         if signals.daily_active_users >= 1000:
             adjustments.append(
                 UsageTrustAdjustment(
-                    "High adoption", 100,
-                    "daily_active_users", signals.daily_active_users,
+                    "High adoption",
+                    100,
+                    "daily_active_users",
+                    signals.daily_active_users,
                 ),
             )
         elif signals.daily_active_users >= 100:
             adjustments.append(
                 UsageTrustAdjustment(
-                    "Moderate adoption", 50,
-                    "daily_active_users", signals.daily_active_users,
+                    "Moderate adoption",
+                    50,
+                    "daily_active_users",
+                    signals.daily_active_users,
                 ),
             )
         elif signals.daily_active_users >= 10:
             adjustments.append(
                 UsageTrustAdjustment(
-                    "Low adoption", 10,
-                    "daily_active_users", signals.daily_active_users,
+                    "Low adoption",
+                    10,
+                    "daily_active_users",
+                    signals.daily_active_users,
                 ),
             )
 
@@ -83,22 +91,28 @@ class UsageTrustScorer:
             if signals.error_rate < 0.001:
                 adjustments.append(
                     UsageTrustAdjustment(
-                        "Excellent reliability", 75,
-                        "error_rate", signals.error_rate,
+                        "Excellent reliability",
+                        75,
+                        "error_rate",
+                        signals.error_rate,
                     ),
                 )
             elif signals.error_rate < 0.01:
                 adjustments.append(
                     UsageTrustAdjustment(
-                        "Good reliability", 25,
-                        "error_rate", signals.error_rate,
+                        "Good reliability",
+                        25,
+                        "error_rate",
+                        signals.error_rate,
                     ),
                 )
             elif signals.error_rate > 0.1:
                 adjustments.append(
                     UsageTrustAdjustment(
-                        "Poor reliability", -100,
-                        "error_rate", signals.error_rate,
+                        "Poor reliability",
+                        -100,
+                        "error_rate",
+                        signals.error_rate,
                     ),
                 )
 
@@ -107,8 +121,10 @@ class UsageTrustScorer:
             penalty = max(signals.incident_count * -50, -200)
             adjustments.append(
                 UsageTrustAdjustment(
-                    "Security incidents", penalty,
-                    "incident_count", signals.incident_count,
+                    "Security incidents",
+                    penalty,
+                    "incident_count",
+                    signals.incident_count,
                 ),
             )
 
@@ -116,8 +132,10 @@ class UsageTrustScorer:
         if signals.is_stale:
             adjustments.append(
                 UsageTrustAdjustment(
-                    "Stale package", -50,
-                    "days_since_update", signals.days_since_update,
+                    "Stale package",
+                    -50,
+                    "days_since_update",
+                    signals.days_since_update,
                 ),
             )
 
@@ -125,15 +143,19 @@ class UsageTrustScorer:
         if signals.adoption_trend > 0.1:
             adjustments.append(
                 UsageTrustAdjustment(
-                    "Growing adoption", 25,
-                    "adoption_trend", signals.adoption_trend,
+                    "Growing adoption",
+                    25,
+                    "adoption_trend",
+                    signals.adoption_trend,
                 ),
             )
         elif signals.adoption_trend < -0.2:
             adjustments.append(
                 UsageTrustAdjustment(
-                    "Declining adoption", -25,
-                    "adoption_trend", signals.adoption_trend,
+                    "Declining adoption",
+                    -25,
+                    "adoption_trend",
+                    signals.adoption_trend,
                 ),
             )
 

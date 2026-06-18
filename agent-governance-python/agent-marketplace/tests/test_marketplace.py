@@ -51,13 +51,15 @@ def test_signable_bytes_independent_of_field_order():
     # Construct b via dict to vary insertion order; pydantic will
     # canonicalise it, and signable_bytes should produce the same
     # output as a.
-    b = PluginManifest.model_validate({
-        "description": "desc",
-        "plugin_type": PluginType.POLICY_TEMPLATE.value,
-        "version": "1.0.0",
-        "author": "a@example.com",
-        "name": "x",
-    })
+    b = PluginManifest.model_validate(
+        {
+            "description": "desc",
+            "plugin_type": PluginType.POLICY_TEMPLATE.value,
+            "version": "1.0.0",
+            "author": "a@example.com",
+            "name": "x",
+        }
+    )
     assert a.signable_bytes() == b.signable_bytes()
 
 
@@ -85,17 +87,12 @@ def test_signable_bytes_omits_signature_field():
 def test_top_level_imports():
     """All public symbols are importable from the top-level package."""
     from agent_marketplace import (
-        MANIFEST_FILENAME,
         MarketplaceError,
-        PluginInstaller,
-        PluginManifest,
-        PluginRegistry,
-        PluginSigner,
-        PluginType,
         load_manifest,
         save_manifest,
         verify_signature,
     )
+
     assert MarketplaceError is not None
     assert callable(load_manifest)
     assert callable(save_manifest)
@@ -195,11 +192,11 @@ class TestVersionValidatorRejectsUnicodeDigits:
     @pytest.mark.parametrize(
         "bad_version",
         [
-            "1.0.²",         # superscript 2 — isdigit() True, int() fails
-            "1.0.⒈",         # digit-one-full-stop — same
-            "1.0.⓵",         # circled digit one — same
-            "¹.0.0",         # superscript in major
-            "1.²⁰.0",        # superscripts in minor
+            "1.0.²",  # superscript 2 — isdigit() True, int() fails
+            "1.0.⒈",  # digit-one-full-stop — same
+            "1.0.⓵",  # circled digit one — same
+            "¹.0.0",  # superscript in major
+            "1.²⁰.0",  # superscripts in minor
         ],
     )
     def test_unicode_digit_components_rejected(self, bad_version: str):

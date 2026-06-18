@@ -11,9 +11,9 @@ for sensitive rings, and automatically expire via tick().
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Callable, Optional
 
 from hypervisor.models import ExecutionRing
 
@@ -114,7 +114,7 @@ class RingElevationManager:
 
     def __init__(
         self,
-        trust_provider: Optional[Callable[[str], float]] = None,
+        trust_provider: Callable[[str], float] | None = None,
     ) -> None:
         """Initialize the elevation manager.
 
@@ -136,7 +136,7 @@ class RingElevationManager:
         ttl_seconds: int = 0,
         attestation: str | None = None,
         reason: str = "",
-        trust_score: Optional[float] = None,
+        trust_score: float | None = None,
     ) -> RingElevation:
         """Request temporary ring elevation.
 
@@ -391,8 +391,7 @@ _REMEDIATION: dict[str, str] = {
         "threshold by completing successful operations in the current ring."
     ),
     ElevationDenialReason.NO_SPONSORSHIP: (
-        "Obtain a sponsorship from a Ring 1 or Ring 0 agent to vouch "
-        "for this elevation request."
+        "Obtain a sponsorship from a Ring 1 or Ring 0 agent to vouch for this elevation request."
     ),
     ElevationDenialReason.EXPIRED_TTL: (
         "Submit a new elevation request with a valid TTL "

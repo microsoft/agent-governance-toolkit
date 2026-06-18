@@ -73,7 +73,9 @@ def show_audit() -> None:
     print("\n── Audit log ──────────────────────────────────")
     r = httpx.get(f"{API}/audit", timeout=10)
     for entry in r.json():
-        print(f"  [{entry['timestamp']}] {entry['event']:20s} {entry['agent_did']}  {entry['detail']}")
+        print(
+            f"  [{entry['timestamp']}] {entry['event']:20s} {entry['agent_did']}  {entry['detail']}"
+        )
 
 
 def main() -> None:

@@ -22,6 +22,28 @@ from .conflict_resolution import (
     PolicyScope,
     ResolutionResult,
 )
+from .context_accumulation import (
+    ContextDecision,
+    ContextOutcome,
+    accumulate,
+    decide_next,
+    to_policy_action,
+)
+from .context_aggregation import (
+    AggregationResult,
+    AggregationRule,
+    AggregationRuleSet,
+    evaluate_aggregation,
+)
+from .context_audit import ContextEvent, context_event
+from .context_delegation import merge_restrictions
+from .context_envelope import (
+    ContextEnvelope,
+    EnvelopeReference,
+    apply_restrictions,
+    envelope_reference,
+    fold,
+)
 from .decision import PolicyCheckResult, ViolationCategory
 from .dynamic_context import (
     CostContext,
@@ -31,6 +53,7 @@ from .dynamic_context import (
     TimeContext,
 )
 from .evaluator import PolicyDecision, PolicyEvaluator
+from .obligations import Obligation, ObligationSet
 from .rate_limiting import RateLimitConfig, RateLimitExceeded, TokenBucket
 from .schema import (
     DynamicCondition,
@@ -54,6 +77,9 @@ from .shared import (
 )
 
 __all__ = [
+    "AggregationResult",
+    "AggregationRule",
+    "AggregationRuleSet",
     "AsyncPolicyEvaluator",
     "BackendDecision",
     "CandidateDecision",
@@ -63,6 +89,22 @@ __all__ = [
     "ConflictResolutionStrategy",
     "DynamicCondition",
     "DynamicConditionType",
+    "ContextDecision",
+    "ContextEnvelope",
+    "ContextEvent",
+    "ContextOutcome",
+    "EnvelopeReference",
+    "Obligation",
+    "ObligationSet",
+    "accumulate",
+    "apply_restrictions",
+    "context_event",
+    "decide_next",
+    "envelope_reference",
+    "evaluate_aggregation",
+    "fold",
+    "merge_restrictions",
+    "to_policy_action",
     "ExternalPolicyBackend",
     "OPABackend",
     "CostContext",

@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -50,9 +50,15 @@ from agent_lightning_gov.runner import (
 
 def _make_mock_kernel(**overrides: Any) -> MagicMock:
     """Create a mock kernel suitable for most tests."""
-    kernel = MagicMock(spec=[
-        "execute", "reset", "policies", "on_policy_violation", "on_signal",
-    ])
+    kernel = MagicMock(
+        spec=[
+            "execute",
+            "reset",
+            "policies",
+            "on_policy_violation",
+            "on_signal",
+        ]
+    )
     kernel.execute = MagicMock(return_value="result")
     kernel.reset = MagicMock()
     kernel.policies = []
@@ -135,7 +141,9 @@ class TestGovernedRunnerStep:
         runner._handle_violation("SQLPolicy", "DROP TABLE", "critical", True)
         assert runner._total_violations == 1
         assert len(runner._current_violations) == 1
-        assert runner._current_violations[0].violation_type == PolicyViolationType.BLOCKED
+        assert (
+            runner._current_violations[0].violation_type == PolicyViolationType.BLOCKED
+        )
 
     def test_step_warned_action(self, runner):
         runner._handle_violation("CostPolicy", "high cost", "medium", False)
@@ -230,7 +238,10 @@ class TestGovernedRunnerCallableAnnotation:
         # The non-None arg should be a Callable, not the builtin `callable`.
         non_none = [a for a in args if a is not type(None)]
         assert len(non_none) == 1
-        assert typing.get_origin(non_none[0]) in (typing.Callable, __import__("collections.abc", fromlist=["Callable"]).Callable)
+        assert typing.get_origin(non_none[0]) in (
+            typing.Callable,
+            __import__("collections.abc", fromlist=["Callable"]).Callable,
+        )
 
 
 class TestGovernedRunnerStepConcurrency:
@@ -370,9 +381,7 @@ class TestGovernedRunnerLifecycle:
 
 class TestPolicyViolation:
     def test_severity_penalty_critical(self):
-        v = PolicyViolation(
-            PolicyViolationType.BLOCKED, "P", "d", "critical"
-        )
+        v = PolicyViolation(PolicyViolationType.BLOCKED, "P", "d", "critical")
         assert v.penalty == 100.0
 
     def test_severity_penalty_high(self):
@@ -422,6 +431,7 @@ class TestPolicyViolation:
         # Compare against an aware ``now`` without raising — naive
         # vs. aware comparison was the symptom.
         from datetime import datetime as _dt, timezone as _tz
+
         assert v.timestamp <= _dt.now(_tz.utc)
 
 
@@ -507,7 +517,9 @@ class TestPolicyRewardMultiplicative:
         assert r == pytest.approx(0.5)
 
     def test_multiplicative_no_violations(self):
-        cfg = RewardConfig(multiplicative=True, multiplicative_factor=0.5, clean_bonus=5.0)
+        cfg = RewardConfig(
+            multiplicative=True, multiplicative_factor=0.5, clean_bonus=5.0
+        )
         reward = PolicyReward(_make_mock_kernel(), config=cfg)
         rollout = _FakeRollout(violations=[])
         r = reward(rollout, emit=False)
@@ -549,9 +561,7 @@ class TestPolicyPenaltyHelper:
         assert policy_penalty([]) == 0.0
 
     def test_custom_penalties(self):
-        r = policy_penalty(
-            [_FakeViolation("critical")], critical_penalty=-200.0
-        )
+        r = policy_penalty([_FakeViolation("critical")], critical_penalty=-200.0)
         assert r == pytest.approx(-200.0)
 
 
@@ -734,6 +744,7 @@ class TestGovernedEnvironmentStep:
     def test_step_pull_violations_object_attributes(self):
         """``get_recent_violations`` may return objects with attributes
         rather than dicts (e.g. dataclasses); the env should normalize."""
+
         @dataclass
         class _ObjViolation:
             policy_name: str
@@ -780,7 +791,14 @@ class TestGovernedEnvironmentStep:
                 # double-counted with the hook's invocation. We never
                 # invoke the hook here, so a non-empty pull-result with
                 # no hook fire would expose the bug if it happened.
-                return [{"policy": "X", "description": "Y", "severity": "low", "blocked": False}]
+                return [
+                    {
+                        "policy": "X",
+                        "description": "Y",
+                        "severity": "low",
+                        "blocked": False,
+                    }
+                ]
 
         kernel = _HookKernel()
         env = GovernedEnvironment(kernel)
@@ -910,9 +928,7 @@ class TestFlightRecorderEmitterLogSpan:
 
     def test_get_spans_filters_signals(self):
         entries = [_FakeEntry(type="signal")]
-        emitter = FlightRecorderEmitter(
-            _make_recorder(entries), include_signals=False
-        )
+        emitter = FlightRecorderEmitter(_make_recorder(entries), include_signals=False)
         spans = emitter.get_spans()
         assert len(spans) == 0
 

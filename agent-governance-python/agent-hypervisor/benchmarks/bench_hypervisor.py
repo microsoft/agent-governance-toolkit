@@ -16,31 +16,28 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import statistics
-import time
-from typing import Any
 
 # Adjust path for module import
 import sys
-import os
+import time
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hypervisor import (
     Hypervisor,
     SessionConfig,
-    ConsistencyMode,
-    ExecutionRing,
 )
-from hypervisor.models import ActionDescriptor, ReversibilityLevel
 from hypervisor.audit.delta import DeltaEngine, VFSChange
 from hypervisor.liability.vouching import VouchingEngine
 from hypervisor.rings.enforcer import RingEnforcer
 from hypervisor.saga.orchestrator import SagaOrchestrator
-from hypervisor.saga.state_machine import SagaState
 
 
 def benchmark(name: str, iterations: int = 10000):
     """Decorator to benchmark a sync function."""
+
     def decorator(func):
         def wrapper():
             times = []
@@ -54,12 +51,15 @@ def benchmark(name: str, iterations: int = 10000):
                 elapsed = time.perf_counter_ns() - start
                 times.append(elapsed)
             return BenchmarkResult(name, times, iterations)
+
         return wrapper
+
     return decorator
 
 
 def benchmark_async(name: str, iterations: int = 10000):
     """Decorator to benchmark an async function."""
+
     def decorator(func):
         def wrapper():
             async def run():
@@ -74,8 +74,11 @@ def benchmark_async(name: str, iterations: int = 10000):
                     elapsed = time.perf_counter_ns() - start
                     times.append(elapsed)
                 return BenchmarkResult(name, times, iterations)
+
             return asyncio.run(run())
+
         return wrapper
+
     return decorator
 
 
@@ -95,10 +98,10 @@ class BenchmarkResult:
     def __str__(self):
         return (
             f"  {self.name:<40} "
-            f"mean={self.mean_ns/1000:.1f}μs  "
-            f"p50={self.median_ns/1000:.1f}μs  "
-            f"p95={self.p95_ns/1000:.1f}μs  "
-            f"p99={self.p99_ns/1000:.1f}μs  "
+            f"mean={self.mean_ns / 1000:.1f}μs  "
+            f"p50={self.median_ns / 1000:.1f}μs  "
+            f"p95={self.p95_ns / 1000:.1f}μs  "
+            f"p99={self.p99_ns / 1000:.1f}μs  "
             f"ops={self.ops_per_sec:,.0f}/s"
         )
 
@@ -122,9 +125,11 @@ class BenchmarkResult:
 
 enforcer = RingEnforcer()
 
+
 @benchmark("ring_computation", iterations=50000)
 def bench_ring_computation():
     enforcer.compute_ring(0.85)
+
 
 # ---------------------------------------------------------------------------
 # Benchmark: Sponsorship + eff_score
@@ -133,6 +138,7 @@ def bench_ring_computation():
 ve = VouchingEngine()
 _vouch_counter = [0]
 
+
 @benchmark("sponsorship_eff_score", iterations=10000)
 def bench_eff_score():
     _vouch_counter[0] += 1
@@ -140,9 +146,11 @@ def bench_eff_score():
     ve.vouch(f"did:v:{_vouch_counter[0]}", f"did:e:{_vouch_counter[0]}", sid, 0.9, bond_pct=0.2)
     ve.compute_eff_score(f"did:e:{_vouch_counter[0]}", sid, 0.4, risk_weight=0.5)
 
+
 # ---------------------------------------------------------------------------
 # Benchmark: Delta Capture
 # ---------------------------------------------------------------------------
+
 
 @benchmark("delta_capture", iterations=50000)
 def bench_delta_capture():
@@ -152,9 +160,11 @@ def bench_delta_capture():
         [VFSChange(path="/data/file.txt", operation="add", content_hash="abc123")],
     )
 
+
 # ---------------------------------------------------------------------------
 # Benchmark: Audit Log Root (10 deltas)
 # ---------------------------------------------------------------------------
+
 
 @benchmark("hash_chain_root_10_deltas", iterations=10000)
 def bench_hash_chain_root_10():
@@ -163,9 +173,11 @@ def bench_hash_chain_root_10():
         de.capture("did:mesh:a", [VFSChange(path=f"/f{i}", operation="add", content_hash=f"h{i}")])
     de.compute_hash_chain_root()
 
+
 # ---------------------------------------------------------------------------
 # Benchmark: Audit Log Root (100 deltas)
 # ---------------------------------------------------------------------------
+
 
 @benchmark("hash_chain_root_100_deltas", iterations=1000)
 def bench_hash_chain_root_100():
@@ -174,9 +186,11 @@ def bench_hash_chain_root_100():
         de.capture("did:mesh:a", [VFSChange(path=f"/f{i}", operation="add", content_hash=f"h{i}")])
     de.compute_hash_chain_root()
 
+
 # ---------------------------------------------------------------------------
 # Benchmark: Chain Verification (50 deltas)
 # ---------------------------------------------------------------------------
+
 
 @benchmark("chain_verify_50_deltas", iterations=2000)
 def bench_chain_verify():
@@ -185,9 +199,11 @@ def bench_chain_verify():
         de.capture("did:mesh:a", [VFSChange(path=f"/f{i}", operation="add", content_hash=f"h{i}")])
     de.verify_chain()
 
+
 # ---------------------------------------------------------------------------
 # Benchmark: Session Create + Join + Terminate
 # ---------------------------------------------------------------------------
+
 
 @benchmark_async("session_lifecycle", iterations=5000)
 async def bench_session_lifecycle():
@@ -197,9 +213,11 @@ async def bench_session_lifecycle():
     await hv.activate_session(s.sso.session_id)
     await hv.terminate_session(s.sso.session_id)
 
+
 # ---------------------------------------------------------------------------
 # Benchmark: Saga (3 steps)
 # ---------------------------------------------------------------------------
+
 
 @benchmark_async("saga_3_steps", iterations=5000)
 async def bench_saga_3_steps():
@@ -207,14 +225,18 @@ async def bench_saga_3_steps():
     saga = orch.create_saga("bench-session")
     steps = []
     for i in range(3):
-        step = orch.add_step(saga.saga_id, f"action{i}", f"did:mesh:{i}", f"/api/{i}", undo_api=f"/api/undo/{i}")
+        step = orch.add_step(
+            saga.saga_id, f"action{i}", f"did:mesh:{i}", f"/api/{i}", undo_api=f"/api/undo/{i}"
+        )
         steps.append(step)
     for step in steps:
         await orch.execute_step(saga.saga_id, step.step_id, executor=lambda: asyncio.sleep(0))
 
+
 # ---------------------------------------------------------------------------
 # Benchmark: Full Pipeline (session + join + audit + saga + terminate)
 # ---------------------------------------------------------------------------
+
 
 @benchmark_async("full_governance_pipeline", iterations=2000)
 async def bench_full_pipeline():
@@ -245,6 +267,7 @@ async def bench_full_pipeline():
 # Benchmark: Monitor Sessions (batch with early exits)
 # ---------------------------------------------------------------------------
 
+
 @benchmark_async("monitor_50_sessions", iterations=2000)
 async def bench_monitor_sessions():
     hv = Hypervisor()
@@ -274,6 +297,7 @@ async def bench_active_sessions():
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
+
 
 def main():
     print("=" * 90)
@@ -326,9 +350,13 @@ def main():
             )
         f.write("\n## Key Takeaways\n\n")
         f.write("- **Ring computation**: Sub-microsecond — zero overhead for privilege checks\n")
-        f.write("- **Sponsorship + eff_score**: Single-digit microseconds — real-time trust scoring\n")
+        f.write(
+            "- **Sponsorship + eff_score**: Single-digit microseconds — real-time trust scoring\n"
+        )
         f.write("- **Delta audit**: Microsecond-level — forensic logging adds negligible latency\n")
-        f.write("- **Audit log verification**: Scales linearly with delta count, remains sub-millisecond\n")
+        f.write(
+            "- **Audit log verification**: Scales linearly with delta count, remains sub-millisecond\n"
+        )
         f.write("- **Full pipeline**: Session + audit + saga + terminate in < 1ms\n")
         f.write("\n## Methodology\n\n")
         f.write("- Python 3.13, Windows, in-memory (no I/O)\n")

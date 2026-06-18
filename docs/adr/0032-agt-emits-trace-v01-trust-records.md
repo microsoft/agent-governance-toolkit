@@ -1,6 +1,6 @@
 # ADR 0032: AGT emits TRACE v0.1 Trust Records
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-06-16
 
 ## Context
@@ -22,9 +22,8 @@ deployment boundary.
 AGT already has the raw data for most TRACE fields: the Merkle chain tip covers
 `tool_transcript.hash`, `SessionState` carries the monotonic `data_class`,
 `PolicyInterceptor` evaluates and records Cedar policy decisions. The gap is the
-TRACE envelope, the EdDSA signature over a JCS-canonical payload, and a handful
-of fields (model, runtime, build provenance) that must be injected from
-configuration.
+TRACE envelope, the EdDSA signature over the payload, and a handful of fields
+(model, runtime, build provenance) that must be injected from configuration.
 
 Phase 2 of TRACE (hardware attestation: TEE-measured policy bundle, TEE-bound
 key in `cnf.jwk`, SCITT receipt in `transparency`) is explicitly out of scope
@@ -33,78 +32,96 @@ own boundary. When cMCP emits a TRACE record, it supersedes AGT's software-only
 claim for that session. AGT's Phase 1 record is the baseline evidence for
 deployments that do not run inside a TEE.
 
-Subject identity: TRACE v0.1 requires a `spiffe://` URI in `subject`. AGT uses
-`did:mesh:` identities. For Phase 1, deployments configure `TRACE_AGENT_SVID`
-explicitly. A spec issue is filed against trace-spec to add DID support in
-TRACE v0.2 so that DID-native deployments do not require a parallel SPIFFE
-identity.
+Subject identity: TRACE v0.2 accepts both `spiffe://` and `did:` URIs in
+`subject` (agentrust-io/trace-spec#35, merged in trace-spec v0.2.0). AGT uses
+`did:` identities and emits them directly in `subject`. No parallel SPIFFE
+identity is required.
 
 ## Decision
 
 AGT emits one TRACE v0.1 Trust Record per session, at session close, via a new
-**`TRACEAuditSink`** that follows the pluggable-sink protocol of ADR-0025.
+**`TRACEAuditSink`** driven by `GovernedCallable.close_session()`.
 
 **Scope of AGT's TRACE record (Phase 1, Level 0 software-only):**
 
 - `eat_profile`: constant `"tag:agentrust.io,2026:trace-v0.1"`
-- `iat`: session-close Unix epoch seconds
-- `subject`: value of `TRACE_AGENT_SVID` config; fail-fast at startup if
-  `TRACE_EMIT=true` but the field is absent
-- `model`, `runtime`, `build_provenance`: config-injected; `runtime.platform`
-  is `"software-only"` and `runtime.measurement` is zero-filled for Phase 1
-- `policy.bundle_hash`: SHA-256 of the Cedar policy bundle bytes, captured at
-  `PolicyInterceptor` load time and carried through to the sink
-- `policy.enforcement_mode`: `"enforce"` or `"advisory"` from config
-- `data_class`: `SessionState.monotonic_data_class` (highest classification
-  reached in the session)
-- `appraisal.status`: `"affirming"` if the session had zero deny decisions,
-  `"contraindicated"` if any deny was recorded
+- `iat`: Unix epoch seconds taken from the last `AuditEntry` timestamp
+- `subject`: `agent_did` passed to `govern()` (must be a DID or SPIFFE URI;
+  a bare identifier like `"*"` emits a warning and skips the record)
+- `model`, `runtime`, `build_provenance`: injected from `TraceConfig`;
+  `runtime.platform` is `"software-only"`, `runtime.measurement` is
+  SHA-256 of the Merkle root hash
+- `policy.bundle_hash`: SHA-256 of the Cedar policy bytes, captured at
+  `GovernedCallable` construction time
+- `policy.enforcement_mode`: `"enforce"` (Phase 1; advisory mode is a future
+  extension)
+- `data_class`: taken from `TraceConfig.data_class` (defaults to `"internal"`)
+- `appraisal.status`: `"affirming"` for Phase 1
 - `transparency`: empty string for Phase 1
-- `cnf.jwk`: Ed25519 public key derived from `TRACE_PRIVATE_KEY_PEM` env var;
-  ephemeral key generated with a startup warning if the var is absent
-- `tool_transcript.hash`: SHA-256 of RFC 8785 JCS-canonical JSON of the
-  `AuditEntry` list for the session (same preimage as the Merkle chain tip,
-  making the two independently verifiable against each other)
-- `tool_transcript.call_count`: count of `tool_invocation` entries in the chain
+- `tool_transcript.hash`: SHA-256 of the sort-keys canonical JSON of the
+  `AuditEntry` list for the session
+- `tool_transcript.call_count`: total number of entries in the chain
 
-The record is serialized as a compact JWT, signed with EdDSA over the
-JCS-canonical payload. The JWT is written by `TRACEAuditSink` to a configured
-path or POSTed to a configured endpoint.
+**Wire format:**
+
+The record is a signed JSON object (not a compact JWT). `agentrust-trace`'s
+`sign_record()` embeds the Ed25519 signature as `signature` (base64url, no
+padding) and the public key as `cnf.jwk` directly in the JSON dict.
+`TRACEAuditSink` calls `TrustRecord.model_validate()` on the signed dict before
+writing to catch schema violations at emit time. The output is written to a
+UTF-8 JSON file at `TraceConfig.output_path`.
+
+**Key management:**
+
+Key loading is delegated entirely to `agentrust_trace.load_signing_key()`. AGT
+does not manage key material directly. The `agentrust-trace` package documents
+the expected environment variable for key injection; AGT does not re-expose it.
+
+**Config surface:**
+
+`TraceConfig` is a dataclass with: `output_path`, `model_provider`, `model_id`,
+`model_version`, `build_provenance_slsa_level`, `build_provenance_digest`,
+`appraisal_verifier`, `data_class`. Pass it as `trace=TraceConfig(...)` to
+`govern()` or as `GovernanceConfig.trace`. The feature is default-off: omitting
+`trace=` leaves the existing audit sinks unchanged.
+
+`GovernedCallable.close_session()` triggers emission and returns the path of
+the written file, or `None` if the audit log is empty or the agent ID is not a
+DID/SPIFFE URI.
+
+**Implementation:**
+
+- `agentmesh/governance/trace_sink.py`: `TraceConfig`, `session_to_trust_record()`,
+  `TRACEAuditSink`
+- `agentmesh/governance/govern.py`: `GovernanceConfig.trace`, `GovernedCallable.close_session()`
+- Runtime dependency: `agentrust-trace>=0.2.0` (imported inside `emit()` to
+  keep the import optional at load time)
 
 **What does not change:**
 
 `AuditEntry`, `MerkleAuditChain`, `PolicyInterceptor`, and `SessionState` are
-unchanged. `TRACEAuditSink` is an adapter over the existing chain: it reads the
-chain at session close and maps fields to the TRACE model. No existing sink is
-affected. The HMAC-chained audit log continues to be written by existing sinks
-in parallel.
-
-**Config surface:**
-
-New top-level `trace:` config block with: `emit` (bool, default false),
-`agent_svid`, `output_path`, `endpoint`, `model`, `build_provenance`. Key
-material via `TRACE_PRIVATE_KEY_PEM` env var only (never in config files).
+unchanged. `TRACEAuditSink` is an adapter over the existing chain. No existing
+sink is affected. The HMAC-chained audit log continues to be written in parallel.
 
 ## Consequences
 
 - AGT sessions produce a signed, portable evidence record verifiable by any
   holder of the public key -- no shared secret, no operator trust required for
   verification.
-- Deployments that do not set `TRACE_EMIT=true` are unaffected. The feature
-  is additive and default-off.
-- `tool_transcript.hash` being derived from the Merkle chain tip means the
-  TRACE record and the audit log are mutually verifiable: a verifier can
-  recompute the hash from the log and confirm it matches the claim.
+- Deployments that do not pass `trace=TraceConfig(...)` are unaffected. The
+  feature is additive and default-off.
+- `tool_transcript.hash` and the Merkle chain tip are independently derivable
+  from the same `AuditEntry` list, making the TRACE record and the audit log
+  mutually verifiable without a shared secret.
 - Phase 2 (hardware attestation) requires no AGT changes. When cMCP or another
   TEE runtime emits a Level 2 TRACE record over the same session, it carries a
   TEE-measured `policy.bundle_hash` and a TEE-bound `cnf.jwk` that supersede
-  AGT's software-only fields. The two records are linked by the shared
-  `subject` SVID and `tool_transcript.hash`.
-- `did:mesh:` deployments must configure a parallel SPIFFE SVID for Phase 1.
-  This is resolved at the protocol level in TRACE v0.2 (filed as
-  agentrust-io/trace-spec#35).
-- EAT wire format is JWT for Phase 1. CBOR-COSE is deferred to a future ADR if
-  constrained-device deployments require it.
+  AGT's software-only fields. The two records are linked by the shared `subject`
+  and `tool_transcript.hash`.
+- `did:` identities are emitted directly in `subject` -- no SPIFFE SVID
+  required. TRACE v0.2 (agentrust-io/trace-spec#35) accepts `did:` natively.
+- CBOR-COSE wire format is deferred to a future ADR if constrained-device
+  deployments require it.
 
 ## References
 
@@ -114,6 +131,7 @@ material via `TRACE_PRIVATE_KEY_PEM` env var only (never in config files).
   this sink implements.
 - ADR-0009 (RFC 9334 RATS architecture alignment) -- the attestation framing
   TRACE extends.
-- agentrust-io/trace-spec v0.1 -- the claim schema and conformance tests.
+- agentrust-io/trace-spec v0.2.0 -- the claim schema and conformance tests.
+- agentrust-trace v0.2.0 (PyPI) -- `TrustRecord`, `sign_record`, `load_signing_key`.
 - agentrust-io/cmcp#124 -- Phase 2 TEE enforcement; the runtime that will
   supersede this record for TEE deployments.

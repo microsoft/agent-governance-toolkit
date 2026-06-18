@@ -82,9 +82,7 @@ class KillSwitch:
     callback to stop the agent process.
     """
 
-    def __init__(
-        self, callback_timeout: float = DEFAULT_CALLBACK_TIMEOUT_SECONDS
-    ) -> None:
+    def __init__(self, callback_timeout: float = DEFAULT_CALLBACK_TIMEOUT_SECONDS) -> None:
         self._kill_history: list[KillResult] = []
         self._substitutes: dict[str, list[str]] = {}
         self._agents: dict[str, Callable[[], None]] = {}
@@ -95,9 +93,7 @@ class KillSwitch:
 
     # ── Agent process registry ─────────────────────────────────────
 
-    def register_agent(
-        self, agent_did: str, process_handle: Callable[[], None]
-    ) -> None:
+    def register_agent(self, agent_did: str, process_handle: Callable[[], None]) -> None:
         """Register an agent with its termination callback."""
         with self._lock:
             self._agents[agent_did] = process_handle
@@ -109,16 +105,12 @@ class KillSwitch:
 
     # ── Substitute management ──────────────────────────────────────
 
-    def register_substitute(
-        self, session_id: str, agent_did: str
-    ) -> None:
+    def register_substitute(self, session_id: str, agent_did: str) -> None:
         """Register a substitute agent for a session."""
         with self._lock:
             self._substitutes.setdefault(session_id, []).append(agent_did)
 
-    def unregister_substitute(
-        self, session_id: str, agent_did: str
-    ) -> None:
+    def unregister_substitute(self, session_id: str, agent_did: str) -> None:
         with self._lock:
             subs = self._substitutes.get(session_id, [])
             if agent_did in subs:
@@ -183,9 +175,7 @@ class KillSwitch:
         # kill flow — the whole point of a kill switch is responsiveness.
         terminated = False
         if callback is not None:
-            terminated = self._invoke_callback_with_timeout(
-                agent_did, callback
-            )
+            terminated = self._invoke_callback_with_timeout(agent_did, callback)
         else:
             _logger.warning(
                 "No termination callback registered for agent %s",
@@ -198,9 +188,7 @@ class KillSwitch:
             reason=reason,
             handoffs=handoffs,
             handoff_success_count=handoff_success_count,
-            compensation_triggered=any(
-                h.status == HandoffStatus.COMPENSATED for h in handoffs
-            ),
+            compensation_triggered=any(h.status == HandoffStatus.COMPENSATED for h in handoffs),
             terminated=terminated,
             details=details,
         )
@@ -210,9 +198,7 @@ class KillSwitch:
         self.unregister_agent(agent_did)
         return result
 
-    def _invoke_callback_with_timeout(
-        self, agent_did: str, callback: Callable[[], None]
-    ) -> bool:
+    def _invoke_callback_with_timeout(self, agent_did: str, callback: Callable[[], None]) -> bool:
         """Run *callback* in a daemon thread bounded by ``callback_timeout``.
 
         Returns ``True`` if the callback completed cleanly within the
@@ -228,9 +214,7 @@ class KillSwitch:
             except BaseException as exc:  # noqa: BLE001 — surface but don't propagate
                 error_box.append(exc)
 
-        thread = threading.Thread(
-            target=_runner, name=f"kill-callback:{agent_did}", daemon=True
-        )
+        thread = threading.Thread(target=_runner, name=f"kill-callback:{agent_did}", daemon=True)
         thread.start()
         thread.join(timeout=self._callback_timeout)
 
@@ -251,9 +235,7 @@ class KillSwitch:
             return False
         return True
 
-    def _find_substitute(
-        self, session_id: str, exclude_did: str
-    ) -> str | None:
+    def _find_substitute(self, session_id: str, exclude_did: str) -> str | None:
         """Find a registered substitute for the session, excluding the given agent."""
         subs = self._substitutes.get(session_id, [])
         for sub in subs:

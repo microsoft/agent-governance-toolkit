@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import unittest
-from dataclasses import fields
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -51,9 +50,15 @@ from agent_lightning_gov.emitter import (
 
 def _mock_kernel(**overrides):
     """Create a mock kernel suitable for most tests."""
-    kernel = MagicMock(spec=[
-        "execute", "reset", "policies", "on_policy_violation", "on_signal",
-    ])
+    kernel = MagicMock(
+        spec=[
+            "execute",
+            "reset",
+            "policies",
+            "on_policy_violation",
+            "on_signal",
+        ]
+    )
     kernel.execute = MagicMock(return_value="result")
     kernel.reset = MagicMock()
     kernel.policies = []
@@ -62,10 +67,14 @@ def _mock_kernel(**overrides):
     return kernel
 
 
-def _make_violation(severity="medium", policy_name="TestPolicy",
-                    description="test violation",
-                    violation_type=PolicyViolationType.WARNED,
-                    action_blocked=False, penalty=None):
+def _make_violation(
+    severity="medium",
+    policy_name="TestPolicy",
+    description="test violation",
+    violation_type=PolicyViolationType.WARNED,
+    action_blocked=False,
+    penalty=None,
+):
     """Create a PolicyViolation for testing."""
     return PolicyViolation(
         violation_type=violation_type,
@@ -77,8 +86,9 @@ def _make_violation(severity="medium", policy_name="TestPolicy",
     )
 
 
-def _make_rollout(success=True, violations=None, task_input="in",
-                  task_output="out", signals_sent=None):
+def _make_rollout(
+    success=True, violations=None, task_input="in", task_output="out", signals_sent=None
+):
     """Create a GovernedRollout for testing."""
     return GovernedRollout(
         task_input=task_input,
@@ -470,10 +480,12 @@ class TestCompositeReward(unittest.TestCase):
 
     def test_two_components_weighted(self):
         """S8.2 -- two components with different weights."""
-        cr = CompositeReward([
-            (lambda r: 10.0, 1.0),
-            (lambda r: 20.0, 0.5),
-        ])
+        cr = CompositeReward(
+            [
+                (lambda r: 10.0, 1.0),
+                (lambda r: 20.0, 0.5),
+            ]
+        )
         # 10*1.0 + 20*0.5 = 20.0
         self.assertEqual(cr(_make_rollout()), 20.0)
 
@@ -488,10 +500,12 @@ class TestCompositeReward(unittest.TestCase):
 
     def test_zero_weight_component(self):
         """S8.4 -- zero-weight component contributes nothing."""
-        cr = CompositeReward([
-            (lambda r: 100.0, 0.0),
-            (lambda r: 5.0, 1.0),
-        ])
+        cr = CompositeReward(
+            [
+                (lambda r: 100.0, 0.0),
+                (lambda r: 5.0, 1.0),
+            ]
+        )
         self.assertEqual(cr(_make_rollout()), 5.0)
 
 
@@ -595,12 +609,16 @@ class TestGovernedEnvironment(unittest.TestCase):
     def test_terminate_on_critical_violation(self):
         """S9.11 -- critical violation terminates episode."""
         kernel = _mock_kernel()
+
         # Wire kernel.execute to trigger a critical violation via the env hook
         def _exec_with_violation(action):
             env._handle_violation("P", "critical fail", "critical", True)
             return "result"
+
         kernel.execute = _exec_with_violation
-        env = GovernedEnvironment(kernel, config=EnvironmentConfig(terminate_on_critical=True))
+        env = GovernedEnvironment(
+            kernel, config=EnvironmentConfig(terminate_on_critical=True)
+        )
         env.reset()
         _, _, terminated, _, _ = env.step("action")
         self.assertTrue(terminated)
@@ -625,9 +643,15 @@ class TestGovernedEnvironment(unittest.TestCase):
         """S9.14 -- get_metrics returns required keys."""
         env = GovernedEnvironment(_mock_kernel())
         metrics = env.get_metrics()
-        for key in ("total_episodes", "total_steps", "total_violations",
-                     "successful_episodes", "success_rate",
-                     "violations_per_episode", "steps_per_episode"):
+        for key in (
+            "total_episodes",
+            "total_steps",
+            "total_violations",
+            "successful_episodes",
+            "success_rate",
+            "violations_per_episode",
+            "steps_per_episode",
+        ):
             self.assertIn(key, metrics)
 
     def test_close_does_not_raise(self):
@@ -677,8 +701,15 @@ class TestLightningSpan(unittest.TestCase):
     def test_to_dict_keys(self):
         """S11.1 -- to_dict has required keys."""
         d = self._make_span().to_dict()
-        for key in ("span_id", "trace_id", "name", "start_time",
-                     "end_time", "attributes", "events"):
+        for key in (
+            "span_id",
+            "trace_id",
+            "name",
+            "start_time",
+            "end_time",
+            "attributes",
+            "events",
+        ):
             self.assertIn(key, d)
 
     def test_to_dict_values(self):
@@ -698,7 +729,9 @@ class TestLightningSpan(unittest.TestCase):
     def test_to_dict_end_time_none(self):
         """S11.4 -- end_time=None serializes to None."""
         span = LightningSpan(
-            span_id="s1", trace_id="t1", name="n",
+            span_id="s1",
+            trace_id="t1",
+            name="n",
             start_time=datetime.now(timezone.utc),
         )
         d = span.to_dict()
@@ -714,7 +747,9 @@ class TestLightningSpan(unittest.TestCase):
     def test_default_attributes_empty(self):
         """S11.6 -- default attributes is empty dict."""
         span = LightningSpan(
-            span_id="s1", trace_id="t1", name="n",
+            span_id="s1",
+            trace_id="t1",
+            name="n",
             start_time=datetime.now(timezone.utc),
         )
         self.assertEqual(span.attributes, {})
@@ -722,7 +757,9 @@ class TestLightningSpan(unittest.TestCase):
     def test_default_events_empty(self):
         """S11.7 -- default events is empty list."""
         span = LightningSpan(
-            span_id="s1", trace_id="t1", name="n",
+            span_id="s1",
+            trace_id="t1",
+            name="n",
             start_time=datetime.now(timezone.utc),
         )
         self.assertEqual(span.events, [])
