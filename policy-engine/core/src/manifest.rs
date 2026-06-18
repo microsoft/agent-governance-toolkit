@@ -408,6 +408,14 @@ fn validate_point_config(
                 "annotation '{annotation_name}' for intervention point {intervention_point} must not reference existing policy-input annotations"
             )));
         }
+        if let Some(annotator) = manifest.annotators.get(annotation_name) {
+            validate_merged_annotation_prompt_sources(
+                intervention_point,
+                annotation_name,
+                annotation_config,
+                annotator,
+            )?;
+        }
     }
 
     let policy = &config.policy;
@@ -833,14 +841,36 @@ fn validate_annotator_prompt_sources(
     name: &str,
     annotator: &AnnotatorConfig,
 ) -> Result<(), RuntimeError> {
-    let fields = &annotator.fields;
+    validate_prompt_source_fields(
+        &format!("annotator '{name}'"),
+        annotator.annotator_type == AnnotatorType::Llm,
+        &annotator.fields,
+    )
+}
+
+/// Validate the prompt-source fields of a field map. Enforces at most one of
+/// `system_prompt`/`prompt`, `system_prompt_file`, or `system_prompt_url`; that
+/// a file source is a non empty string; and that a URL source is a pinned HTTPS
+/// object. `is_llm` gates the file/url sources to the `llm` annotator type.
+///
+/// This runs against both the annotator declaration and, separately, the
+/// declaration merged with each intervention point's annotation binding, since
+/// `AnnotatorInvocation::from_annotation` overlays binding fields over the
+/// declaration. Without the merged check a binding could set an inline `prompt`
+/// that silently overrides a pinned `system_prompt_url` on the declaration,
+/// defeating the pin requirement.
+fn validate_prompt_source_fields(
+    context: &str,
+    is_llm: bool,
+    fields: &BTreeMap<String, JsonValue>,
+) -> Result<(), RuntimeError> {
     let has_inline = fields.contains_key(FIELD_SYSTEM_PROMPT) || fields.contains_key(FIELD_PROMPT);
     let has_file = fields.contains_key(FIELD_SYSTEM_PROMPT_FILE);
     let has_url = fields.contains_key(FIELD_SYSTEM_PROMPT_URL);
 
-    if (has_file || has_url) && annotator.annotator_type != AnnotatorType::Llm {
+    if (has_file || has_url) && !is_llm {
         return Err(RuntimeError::ManifestInvalid(format!(
-            "annotator '{name}' declares a system prompt source but only the 'llm' annotator type consumes one"
+            "{context} declares a system prompt source but only the 'llm' annotator type consumes one"
         )));
     }
 
@@ -850,7 +880,7 @@ fn validate_annotator_prompt_sources(
         .count();
     if source_count > 1 {
         return Err(RuntimeError::ManifestInvalid(format!(
-            "annotator '{name}' must declare at most one of system_prompt/prompt, system_prompt_file, or system_prompt_url"
+            "{context} must declare at most one of system_prompt/prompt, system_prompt_file, or system_prompt_url"
         )));
     }
 
@@ -859,17 +889,38 @@ fn validate_annotator_prompt_sources(
             Some(JsonValue::String(value)) if !value.trim().is_empty() => {}
             _ => {
                 return Err(RuntimeError::ManifestInvalid(format!(
-                    "annotator '{name}' system_prompt_file must be a non empty string"
+                    "{context} system_prompt_file must be a non empty string"
                 )))
             }
         }
     }
 
     if let Some(value) = fields.get(FIELD_SYSTEM_PROMPT_URL) {
-        validate_pinned_https_url(&format!("annotator '{name}' system_prompt_url"), value)?;
+        validate_pinned_https_url(&format!("{context} system_prompt_url"), value)?;
     }
 
     Ok(())
+}
+
+/// Validate the effective prompt source of an opted-in annotation, i.e. the
+/// annotator declaration overlaid with the binding fields. Mirrors the merge in
+/// `AnnotatorInvocation::from_annotation` so a binding cannot smuggle in a
+/// second, weaker prompt source.
+fn validate_merged_annotation_prompt_sources(
+    intervention_point: InterventionPoint,
+    annotation_name: &str,
+    annotation_config: &AnnotationConfig,
+    annotator: &AnnotatorConfig,
+) -> Result<(), RuntimeError> {
+    let mut merged = annotator.fields.clone();
+    for (key, value) in &annotation_config.fields {
+        merged.insert(key.clone(), value.clone());
+    }
+    validate_prompt_source_fields(
+        &format!("annotation '{annotation_name}' for intervention point {intervention_point}"),
+        annotator.annotator_type == AnnotatorType::Llm,
+        &merged,
+    )
 }
 
 /// Validate that a manifest field is a pinned HTTPS URL object. The value MUST
@@ -2176,6 +2227,60 @@ annotators:
         ))
         .unwrap_err();
         assert!(error.detail().contains("at most one"), "got: {error}");
+    }
+
+    #[test]
+    fn binding_prompt_cannot_override_pinned_declaration_url() {
+        // Regression: an annotation binding `prompt` must not bypass the
+        // declaration's pinned system_prompt_url. The effective merged config
+        // has two sources, so validation must fail closed; otherwise the
+        // unpinned binding prompt silently overrides the pinned URL at dispatch.
+        let yaml = r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  p:
+    type: test
+annotators:
+  judge:
+    type: llm
+    system_prompt_url:
+      url: https://policy.example/p.txt
+      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $snap.input.text
+        prompt: LOCAL_OVERRIDE
+"#;
+        let error = Manifest::from_yaml_str(yaml).unwrap_err();
+        assert!(error.detail().contains("at most one"), "got: {error}");
+    }
+
+    #[test]
+    fn binding_prompt_alone_on_inline_declaration_is_allowed() {
+        // A binding may still set a single prompt source when the declaration
+        // sets none; this must remain valid.
+        let yaml = r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  p:
+    type: test
+annotators:
+  judge:
+    type: llm
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: p
+    annotations:
+      judge:
+        from: $snap.input.text
+        prompt: from the binding
+"#;
+        Manifest::from_yaml_str(yaml).expect("single binding prompt source is valid");
     }
 
     #[test]

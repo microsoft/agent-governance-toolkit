@@ -229,8 +229,22 @@ fn remote_bundle_token() -> String {
 /// guard owning the verified local path. Reuses the extends https-only and
 /// sha256/integrity trust gate, so a non HTTPS URL, a missing pin, a fetch
 /// error, a size breach, or a hash mismatch fails closed before opa runs.
+///
+/// The shared fetch helper reports trust failures as `ManifestInvalid` because
+/// it is also used by manifest construction. At dispatch a `bundle_url` failure
+/// is a runtime policy invocation failure, not a static manifest error, so the
+/// reason is remapped to `PolicyInvocationFailed`. A size breach keeps its
+/// `ResourceLimitExceeded` reason.
 fn fetch_remote_bundle(value: &JsonValue) -> Result<RemoteBundle, RuntimeError> {
-    let body = crate::manifest::fetch_pinned_https_bytes(value, Limits::default())?;
+    let body = crate::manifest::fetch_pinned_https_bytes(value, Limits::default()).map_err(
+        |err| match err {
+            RuntimeError::ResourceLimitExceeded(_) => err,
+            other => RuntimeError::PolicyInvocationFailed(format!(
+                "failed to resolve remote rego bundle: {}",
+                other.detail()
+            )),
+        },
+    )?;
     write_remote_bundle(&body)
 }
 
