@@ -27,6 +27,10 @@ from pathlib import Path
 
 VERSION_RE = re.compile(r'(?m)^(version\s*=\s*)"([^"]*)"')
 
+# In every family pyproject.toml the project version is the first ``version =``
+# key (under ``[project]``), so ``count=1`` in the substitution below rewrites
+# only that key and never a coincidental ``version`` in a later tool table.
+
 # Directory holding VERSION and the family pyproject.toml files.
 ROOT = Path(__file__).resolve().parent.parent
 
