@@ -1,0 +1,314 @@
+{
+  "_comment": "Flowise 2.x / 3.x chatflow -- import via Chatflows > Add New > Import icon. Requires AGT sidecar at http://localhost:8000.",
+  "nodes": [
+    {
+      "id": "chatInput_0",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "type": "customNode",
+      "data": {
+        "id": "chatInput_0",
+        "label": "Chat Input",
+        "version": 1,
+        "name": "chatInput",
+        "type": "ChatInput",
+        "baseClasses": [
+          "BaseMessage"
+        ],
+        "category": "Input",
+        "description": "Get chat input from the human",
+        "inputParams": [],
+        "inputAnchors": [],
+        "inputs": {},
+        "outputAnchors": [
+          {
+            "id": "chatInput_0-output-output-string|BaseMessage",
+            "name": "output",
+            "label": "Base Message",
+            "type": "string | BaseMessage"
+          }
+        ],
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "customFunction_0",
+      "position": {
+        "x": 430,
+        "y": 200
+      },
+      "type": "customNode",
+      "data": {
+        "id": "customFunction_0",
+        "label": "Build Governance Payload",
+        "version": 1,
+        "name": "customFunction",
+        "type": "CustomFunction",
+        "baseClasses": [
+          "CustomFunction"
+        ],
+        "category": "Utilities",
+        "description": "Wrap the user message into an AGT governance-sidecar payload",
+        "inputParams": [
+          {
+            "label": "Function Name",
+            "name": "functionName",
+            "type": "string",
+            "default": "fn",
+            "id": "customFunction_0-input-functionName-string"
+          },
+          {
+            "label": "Javascript Function",
+            "name": "javascriptFunction",
+            "type": "code",
+            "id": "customFunction_0-input-javascriptFunction-code"
+          }
+        ],
+        "inputAnchors": [
+          {
+            "label": "Input Variables",
+            "name": "input",
+            "type": "string | number | boolean | json | any",
+            "list": true,
+            "id": "customFunction_0-input-input-string|number|boolean|json|any"
+          }
+        ],
+        "inputs": {
+          "functionName": "buildPayload",
+          "javascriptFunction": "const userMessage = typeof input !== 'undefined' ? input[0] : '';\nreturn JSON.stringify({\n  tool: 'search_web',\n  content: typeof userMessage === 'string' ? userMessage : JSON.stringify(userMessage),\n  agent_id: 'flowise-agent'\n});"
+        },
+        "outputAnchors": [
+          {
+            "id": "customFunction_0-output-output-string|number|boolean|json",
+            "name": "output",
+            "label": "Output",
+            "type": "string | number | boolean | json"
+          }
+        ],
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "httpRequest_0",
+      "position": {
+        "x": 760,
+        "y": 200
+      },
+      "type": "customNode",
+      "data": {
+        "id": "httpRequest_0",
+        "label": "AGT Governance Check",
+        "version": 1,
+        "name": "httpRequest",
+        "type": "HttpRequest",
+        "baseClasses": [
+          "HttpRequest"
+        ],
+        "category": "Utilities",
+        "description": "POST governance payload to the AGT sidecar",
+        "inputParams": [
+          {
+            "label": "URL",
+            "name": "url",
+            "type": "string",
+            "id": "httpRequest_0-input-url-string"
+          },
+          {
+            "label": "Method",
+            "name": "method",
+            "type": "options",
+            "options": [
+              {
+                "label": "GET",
+                "name": "GET"
+              },
+              {
+                "label": "POST",
+                "name": "POST"
+              },
+              {
+                "label": "PUT",
+                "name": "PUT"
+              },
+              {
+                "label": "DELETE",
+                "name": "DELETE"
+              },
+              {
+                "label": "PATCH",
+                "name": "PATCH"
+              }
+            ],
+            "default": "POST",
+            "id": "httpRequest_0-input-method-options"
+          },
+          {
+            "label": "Request Headers",
+            "name": "headers",
+            "type": "json",
+            "optional": true,
+            "id": "httpRequest_0-input-headers-json"
+          }
+        ],
+        "inputAnchors": [
+          {
+            "label": "Body",
+            "name": "body",
+            "type": "string | json",
+            "optional": true,
+            "id": "httpRequest_0-input-body-string|json"
+          }
+        ],
+        "inputs": {
+          "url": "http://localhost:8000/govern",
+          "method": "POST",
+          "headers": "{\"Content-Type\": \"application/json\"}"
+        },
+        "outputAnchors": [
+          {
+            "id": "httpRequest_0-output-output-string|json",
+            "name": "output",
+            "label": "Output",
+            "type": "string | json"
+          }
+        ],
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "customFunction_1",
+      "position": {
+        "x": 1090,
+        "y": 200
+      },
+      "type": "customNode",
+      "data": {
+        "id": "customFunction_1",
+        "label": "Format Governance Response",
+        "version": 1,
+        "name": "customFunction",
+        "type": "CustomFunction",
+        "baseClasses": [
+          "CustomFunction"
+        ],
+        "category": "Utilities",
+        "description": "Parse sidecar response and return allow/block message",
+        "inputParams": [
+          {
+            "label": "Function Name",
+            "name": "functionName",
+            "type": "string",
+            "default": "fn",
+            "id": "customFunction_1-input-functionName-string"
+          },
+          {
+            "label": "Javascript Function",
+            "name": "javascriptFunction",
+            "type": "code",
+            "id": "customFunction_1-input-javascriptFunction-code"
+          }
+        ],
+        "inputAnchors": [
+          {
+            "label": "Input Variables",
+            "name": "input",
+            "type": "string | number | boolean | json | any",
+            "list": true,
+            "id": "customFunction_1-input-input-string|number|boolean|json|any"
+          }
+        ],
+        "inputs": {
+          "functionName": "formatResponse",
+          "javascriptFunction": "const raw = typeof input !== 'undefined' ? input[0] : '{}';\nconst res = typeof raw === 'string' ? JSON.parse(raw) : raw;\nif (!res.allowed) {\n  return '[BLOCKED] ' + (res.reason || 'Request denied by governance policy.');\n}\nreturn '[ALLOWED] Tool: ' + (res.tool || 'unknown') + ' - governance check passed.';"
+        },
+        "outputAnchors": [
+          {
+            "id": "customFunction_1-output-output-string|number|boolean|json",
+            "name": "output",
+            "label": "Output",
+            "type": "string | number | boolean | json"
+          }
+        ],
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "chatOutput_0",
+      "position": {
+        "x": 1420,
+        "y": 300
+      },
+      "type": "customNode",
+      "data": {
+        "id": "chatOutput_0",
+        "label": "Chat Output",
+        "version": 1,
+        "name": "chatOutput",
+        "type": "ChatOutput",
+        "baseClasses": [
+          "BaseMessage"
+        ],
+        "category": "Output",
+        "description": "Return the governance decision to the user",
+        "inputParams": [],
+        "inputAnchors": [
+          {
+            "label": "Text",
+            "name": "input",
+            "type": "string | BaseMessage",
+            "id": "chatOutput_0-input-input-string|BaseMessage"
+          }
+        ],
+        "inputs": {},
+        "outputAnchors": [],
+        "outputs": {},
+        "selected": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "source": "chatInput_0",
+      "sourceHandle": "chatInput_0-output-output-string|BaseMessage",
+      "target": "customFunction_0",
+      "targetHandle": "customFunction_0-input-input-string|number|boolean|json|any",
+      "type": "buttonedge"
+    },
+    {
+      "id": "e1",
+      "source": "customFunction_0",
+      "sourceHandle": "customFunction_0-output-output-string|number|boolean|json",
+      "target": "httpRequest_0",
+      "targetHandle": "httpRequest_0-input-body-string|json",
+      "type": "buttonedge"
+    },
+    {
+      "id": "e2",
+      "source": "httpRequest_0",
+      "sourceHandle": "httpRequest_0-output-output-string|json",
+      "target": "customFunction_1",
+      "targetHandle": "customFunction_1-input-input-string|number|boolean|json|any",
+      "type": "buttonedge"
+    },
+    {
+      "id": "e3",
+      "source": "customFunction_1",
+      "sourceHandle": "customFunction_1-output-output-string|number|boolean|json",
+      "target": "chatOutput_0",
+      "targetHandle": "chatOutput_0-input-input-string|BaseMessage",
+      "type": "buttonedge"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 0.85
+  }
+}

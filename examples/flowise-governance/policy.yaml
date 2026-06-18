@@ -1,0 +1,54 @@
+# AGT governance policy for Flowise agents.
+#
+# default_action: deny means any tool not listed in allowed_tools is blocked,
+# even if it does not appear in blocked_tools. Add tools to allowed_tools to
+# permit them.
+
+default_action: deny
+
+# Tools the flowise-agent may call.
+# Supports fnmatch wildcards: search_* matches search_web, search_news, etc.
+allowed_tools:
+  - search_web
+  - search_news
+  - search_*
+  - read_file
+  - fetch_url
+  - summarize
+  - translate
+  - classify
+  - extract_*
+  - retrieve_*
+  - list_files
+
+# Tools that are always blocked, even if they match an allowed_tools pattern.
+# Blocklist takes priority over allowlist.
+blocked_tools:
+  - rm_*
+  - delete_*
+  - execute_*
+  - shell_*
+  - run_command
+  - write_file
+  - overwrite_*
+  - drop_*
+  - truncate_*
+
+# Regex patterns matched against the content field (case-insensitive).
+# Any match blocks the request.
+blocked_content_patterns:
+  - "DROP\\s+TABLE"
+  - "rm\\s+-rf"
+  - "os\\.system"
+  - "__import__"
+  - "subprocess"
+  - "/etc/passwd"
+  - "/etc/shadow"
+
+# Regex patterns matched against argument values (case-insensitive).
+# Any match blocks the request.
+blocked_argument_patterns:
+  - "\\.\\."          # path traversal
+  - "/etc/"
+  - "~/"
+  - "%00"             # null byte injection
