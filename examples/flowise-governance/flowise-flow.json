@@ -1,167 +1,272 @@
 {
+  "_comment": "Flowise 2.x / 3.x chatflow -- import via Chatflows > Add New > Import icon. Requires AGT sidecar at http://localhost:8000.",
   "nodes": [
     {
       "id": "chatInput_0",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
       "type": "customNode",
-      "position": { "x": 80, "y": 280 },
       "data": {
         "id": "chatInput_0",
         "label": "Chat Input",
+        "version": 1,
         "name": "chatInput",
         "type": "ChatInput",
-        "baseClasses": ["BaseMessage"],
+        "baseClasses": [
+          "BaseMessage"
+        ],
+        "category": "Input",
+        "description": "Get chat input from the human",
+        "inputParams": [],
+        "inputAnchors": [],
         "inputs": {},
-        "outputs": { "output": "chatInput_0-output-output-BaseMessage" },
-        "selected": false
-      }
-    },
-    {
-      "id": "customFunction_0",
-      "type": "customNode",
-      "position": { "x": 400, "y": 160 },
-      "data": {
-        "id": "customFunction_0",
-        "label": "Build Governance Payload",
-        "name": "customFunction",
-        "type": "CustomFunction",
-        "baseClasses": ["CustomFunction"],
-        "inputs": {
-          "functionName": "buildGovernancePayload",
-          "javascriptFunction": "const input = $flow.input;\nconst tool = $vars.tool || 'search_web';\nconst agentId = $vars.agent_id || 'flowise-agent';\nreturn JSON.stringify({\n  tool: tool,\n  content: input,\n  agent_id: agentId\n});",
-          "input": "{{chatInput_0.data.output}}"
-        },
-        "outputs": { "output": "customFunction_0-output-output-string" },
-        "selected": false
-      }
-    },
-    {
-      "id": "httpRequest_0",
-      "type": "customNode",
-      "position": { "x": 720, "y": 160 },
-      "data": {
-        "id": "httpRequest_0",
-        "label": "AGT Governance Check",
-        "name": "httpRequestNode",
-        "type": "HttpRequest",
-        "baseClasses": ["HttpRequest"],
-        "inputs": {
-          "url": "http://localhost:8000/govern",
-          "method": "POST",
-          "headers": "Content-Type: application/json",
-          "body": "{{customFunction_0.data.output}}"
-        },
-        "outputs": { "output": "httpRequest_0-output-output-string" },
-        "selected": false
-      }
-    },
-    {
-      "id": "customFunction_1",
-      "type": "customNode",
-      "position": { "x": 1040, "y": 160 },
-      "data": {
-        "id": "customFunction_1",
-        "label": "Check Governance Decision",
-        "name": "customFunction",
-        "type": "CustomFunction",
-        "baseClasses": ["CustomFunction"],
-        "inputs": {
-          "functionName": "checkGovernanceDecision",
-          "javascriptFunction": "const response = JSON.parse($flow.input);\nif (!response.allowed) {\n  return {\n    blocked: true,\n    message: 'Request blocked by governance policy: ' + (response.reason || 'policy violation'),\n    tool: response.tool\n  };\n}\nreturn {\n  blocked: false,\n  tool: response.tool,\n  agent_id: response.agent_id,\n  original_input: $vars.original_input\n};",
-          "input": "{{httpRequest_0.data.output}}"
-        },
-        "outputs": { "output": "customFunction_1-output-output-string" },
-        "selected": false
-      }
-    },
-    {
-      "id": "ifElse_0",
-      "type": "customNode",
-      "position": { "x": 1360, "y": 160 },
-      "data": {
-        "id": "ifElse_0",
-        "label": "Allowed?",
-        "name": "ifElseFunction",
-        "type": "IfElseFunction",
-        "baseClasses": ["IfElseFunction"],
-        "inputs": {
-          "condition": "{{customFunction_1.data.output}}.blocked === true",
-          "input": "{{customFunction_1.data.output}}"
-        },
-        "outputs": {
-          "true": "ifElse_0-output-true",
-          "false": "ifElse_0-output-false"
-        },
-        "selected": false
-      }
-    },
-    {
-      "id": "chatOpenAI_0",
-      "type": "customNode",
-      "position": { "x": 1680, "y": 60 },
-      "data": {
-        "id": "chatOpenAI_0",
-        "label": "ChatOpenAI",
-        "name": "chatOpenAI",
-        "type": "ChatOpenAI",
-        "baseClasses": ["ChatOpenAI", "BaseChatModel", "BaseLanguageModel"],
-        "inputs": {
-          "modelName": "gpt-4o-mini",
-          "temperature": 0.7,
-          "input": "{{ifElse_0.data.false}}"
-        },
-        "outputs": { "output": "chatOpenAI_0-output-output-string" },
-        "selected": false
-      }
-    },
-    {
-      "id": "customFunction_2",
-      "type": "customNode",
-      "position": { "x": 1680, "y": 320 },
-      "data": {
-        "id": "customFunction_2",
-        "label": "Format Block Message",
-        "name": "customFunction",
-        "type": "CustomFunction",
-        "baseClasses": ["CustomFunction"],
-        "inputs": {
-          "functionName": "formatBlockMessage",
-          "javascriptFunction": "const data = $flow.input;\nreturn data.message || 'This request was blocked by the governance policy.';",
-          "input": "{{ifElse_0.data.true}}"
-        },
-        "outputs": { "output": "customFunction_2-output-output-string" },
-        "selected": false
-      }
-    },
-    {
-      "id": "chatOutput_0",
-      "type": "customNode",
-      "position": { "x": 2000, "y": 60 },
-      "data": {
-        "id": "chatOutput_0",
-        "label": "Chat Output (LLM)",
-        "name": "chatOutput",
-        "type": "ChatOutput",
-        "baseClasses": ["ChatOutput"],
-        "inputs": {
-          "input": "{{chatOpenAI_0.data.output}}"
-        },
+        "outputAnchors": [
+          {
+            "id": "chatInput_0-output-output-string|BaseMessage",
+            "name": "output",
+            "label": "Base Message",
+            "type": "string | BaseMessage"
+          }
+        ],
         "outputs": {},
         "selected": false
       }
     },
     {
-      "id": "chatOutput_1",
+      "id": "customFunction_0",
+      "position": {
+        "x": 430,
+        "y": 200
+      },
       "type": "customNode",
-      "position": { "x": 2000, "y": 320 },
       "data": {
-        "id": "chatOutput_1",
-        "label": "Chat Output (Blocked)",
+        "id": "customFunction_0",
+        "label": "Build Governance Payload",
+        "version": 1,
+        "name": "customFunction",
+        "type": "CustomFunction",
+        "baseClasses": [
+          "CustomFunction"
+        ],
+        "category": "Utilities",
+        "description": "Wrap the user message into an AGT governance-sidecar payload",
+        "inputParams": [
+          {
+            "label": "Function Name",
+            "name": "functionName",
+            "type": "string",
+            "default": "fn",
+            "id": "customFunction_0-input-functionName-string"
+          },
+          {
+            "label": "Javascript Function",
+            "name": "javascriptFunction",
+            "type": "code",
+            "id": "customFunction_0-input-javascriptFunction-code"
+          }
+        ],
+        "inputAnchors": [
+          {
+            "label": "Input Variables",
+            "name": "input",
+            "type": "string | number | boolean | json | any",
+            "list": true,
+            "id": "customFunction_0-input-input-string|number|boolean|json|any"
+          }
+        ],
+        "inputs": {
+          "functionName": "buildPayload",
+          "javascriptFunction": "const userMessage = typeof input !== 'undefined' ? input[0] : '';\nreturn JSON.stringify({\n  tool: 'search_web',\n  content: typeof userMessage === 'string' ? userMessage : JSON.stringify(userMessage),\n  agent_id: 'flowise-agent'\n});"
+        },
+        "outputAnchors": [
+          {
+            "id": "customFunction_0-output-output-string|number|boolean|json",
+            "name": "output",
+            "label": "Output",
+            "type": "string | number | boolean | json"
+          }
+        ],
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "httpRequest_0",
+      "position": {
+        "x": 760,
+        "y": 200
+      },
+      "type": "customNode",
+      "data": {
+        "id": "httpRequest_0",
+        "label": "AGT Governance Check",
+        "version": 1,
+        "name": "httpRequest",
+        "type": "HttpRequest",
+        "baseClasses": [
+          "HttpRequest"
+        ],
+        "category": "Utilities",
+        "description": "POST governance payload to the AGT sidecar",
+        "inputParams": [
+          {
+            "label": "URL",
+            "name": "url",
+            "type": "string",
+            "id": "httpRequest_0-input-url-string"
+          },
+          {
+            "label": "Method",
+            "name": "method",
+            "type": "options",
+            "options": [
+              {
+                "label": "GET",
+                "name": "GET"
+              },
+              {
+                "label": "POST",
+                "name": "POST"
+              },
+              {
+                "label": "PUT",
+                "name": "PUT"
+              },
+              {
+                "label": "DELETE",
+                "name": "DELETE"
+              },
+              {
+                "label": "PATCH",
+                "name": "PATCH"
+              }
+            ],
+            "default": "POST",
+            "id": "httpRequest_0-input-method-options"
+          },
+          {
+            "label": "Request Headers",
+            "name": "headers",
+            "type": "json",
+            "optional": true,
+            "id": "httpRequest_0-input-headers-json"
+          }
+        ],
+        "inputAnchors": [
+          {
+            "label": "Body",
+            "name": "body",
+            "type": "string | json",
+            "optional": true,
+            "id": "httpRequest_0-input-body-string|json"
+          }
+        ],
+        "inputs": {
+          "url": "http://localhost:8000/govern",
+          "method": "POST",
+          "headers": "{\"Content-Type\": \"application/json\"}"
+        },
+        "outputAnchors": [
+          {
+            "id": "httpRequest_0-output-output-string|json",
+            "name": "output",
+            "label": "Output",
+            "type": "string | json"
+          }
+        ],
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "customFunction_1",
+      "position": {
+        "x": 1090,
+        "y": 200
+      },
+      "type": "customNode",
+      "data": {
+        "id": "customFunction_1",
+        "label": "Format Governance Response",
+        "version": 1,
+        "name": "customFunction",
+        "type": "CustomFunction",
+        "baseClasses": [
+          "CustomFunction"
+        ],
+        "category": "Utilities",
+        "description": "Parse sidecar response and return allow/block message",
+        "inputParams": [
+          {
+            "label": "Function Name",
+            "name": "functionName",
+            "type": "string",
+            "default": "fn",
+            "id": "customFunction_1-input-functionName-string"
+          },
+          {
+            "label": "Javascript Function",
+            "name": "javascriptFunction",
+            "type": "code",
+            "id": "customFunction_1-input-javascriptFunction-code"
+          }
+        ],
+        "inputAnchors": [
+          {
+            "label": "Input Variables",
+            "name": "input",
+            "type": "string | number | boolean | json | any",
+            "list": true,
+            "id": "customFunction_1-input-input-string|number|boolean|json|any"
+          }
+        ],
+        "inputs": {
+          "functionName": "formatResponse",
+          "javascriptFunction": "const raw = typeof input !== 'undefined' ? input[0] : '{}';\nconst res = typeof raw === 'string' ? JSON.parse(raw) : raw;\nif (!res.allowed) {\n  return '[BLOCKED] ' + (res.reason || 'Request denied by governance policy.');\n}\nreturn '[ALLOWED] Tool: ' + (res.tool || 'unknown') + ' - governance check passed.';"
+        },
+        "outputAnchors": [
+          {
+            "id": "customFunction_1-output-output-string|number|boolean|json",
+            "name": "output",
+            "label": "Output",
+            "type": "string | number | boolean | json"
+          }
+        ],
+        "outputs": {},
+        "selected": false
+      }
+    },
+    {
+      "id": "chatOutput_0",
+      "position": {
+        "x": 1420,
+        "y": 300
+      },
+      "type": "customNode",
+      "data": {
+        "id": "chatOutput_0",
+        "label": "Chat Output",
+        "version": 1,
         "name": "chatOutput",
         "type": "ChatOutput",
-        "baseClasses": ["ChatOutput"],
-        "inputs": {
-          "input": "{{customFunction_2.data.output}}"
-        },
+        "baseClasses": [
+          "BaseMessage"
+        ],
+        "category": "Output",
+        "description": "Return the governance decision to the user",
+        "inputParams": [],
+        "inputAnchors": [
+          {
+            "label": "Text",
+            "name": "input",
+            "type": "string | BaseMessage",
+            "id": "chatOutput_0-input-input-string|BaseMessage"
+          }
+        ],
+        "inputs": {},
+        "outputAnchors": [],
         "outputs": {},
         "selected": false
       }
@@ -169,61 +274,41 @@
   ],
   "edges": [
     {
-      "id": "edge-chatInput_0-customFunction_0",
+      "id": "e0",
       "source": "chatInput_0",
-      "sourceHandle": "chatInput_0-output-output-BaseMessage",
+      "sourceHandle": "chatInput_0-output-output-string|BaseMessage",
       "target": "customFunction_0",
-      "targetHandle": "customFunction_0-input-input-BaseMessage"
+      "targetHandle": "customFunction_0-input-input-string|number|boolean|json|any",
+      "type": "buttonedge"
     },
     {
-      "id": "edge-customFunction_0-httpRequest_0",
+      "id": "e1",
       "source": "customFunction_0",
-      "sourceHandle": "customFunction_0-output-output-string",
+      "sourceHandle": "customFunction_0-output-output-string|number|boolean|json",
       "target": "httpRequest_0",
-      "targetHandle": "httpRequest_0-input-body-string"
+      "targetHandle": "httpRequest_0-input-body-string|json",
+      "type": "buttonedge"
     },
     {
-      "id": "edge-httpRequest_0-customFunction_1",
+      "id": "e2",
       "source": "httpRequest_0",
-      "sourceHandle": "httpRequest_0-output-output-string",
+      "sourceHandle": "httpRequest_0-output-output-string|json",
       "target": "customFunction_1",
-      "targetHandle": "customFunction_1-input-input-string"
+      "targetHandle": "customFunction_1-input-input-string|number|boolean|json|any",
+      "type": "buttonedge"
     },
     {
-      "id": "edge-customFunction_1-ifElse_0",
+      "id": "e3",
       "source": "customFunction_1",
-      "sourceHandle": "customFunction_1-output-output-string",
-      "target": "ifElse_0",
-      "targetHandle": "ifElse_0-input-input-string"
-    },
-    {
-      "id": "edge-ifElse_0-chatOpenAI_0-false",
-      "source": "ifElse_0",
-      "sourceHandle": "ifElse_0-output-false",
-      "target": "chatOpenAI_0",
-      "targetHandle": "chatOpenAI_0-input-input-string"
-    },
-    {
-      "id": "edge-ifElse_0-customFunction_2-true",
-      "source": "ifElse_0",
-      "sourceHandle": "ifElse_0-output-true",
-      "target": "customFunction_2",
-      "targetHandle": "customFunction_2-input-input-string"
-    },
-    {
-      "id": "edge-chatOpenAI_0-chatOutput_0",
-      "source": "chatOpenAI_0",
-      "sourceHandle": "chatOpenAI_0-output-output-string",
+      "sourceHandle": "customFunction_1-output-output-string|number|boolean|json",
       "target": "chatOutput_0",
-      "targetHandle": "chatOutput_0-input-input-string"
-    },
-    {
-      "id": "edge-customFunction_2-chatOutput_1",
-      "source": "customFunction_2",
-      "sourceHandle": "customFunction_2-output-output-string",
-      "target": "chatOutput_1",
-      "targetHandle": "chatOutput_1-input-input-string"
+      "targetHandle": "chatOutput_0-input-input-string|BaseMessage",
+      "type": "buttonedge"
     }
   ],
-  "viewport": { "x": 0, "y": 0, "zoom": 0.75 }
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 0.85
+  }
 }

@@ -4,34 +4,31 @@ Enforce AGT governance policies inside any Flowise flow. Because Flowise runs in
 
 ## Architecture
 
+The included `flowise-flow.json` is a 5-node sequential demo flow (Flowise 2.x / 3.x):
+
 ```
-[Flowise UI]
-     |
-     | user message
-     v
-[Build Payload node]  -- wraps tool name + content into JSON
+[Chat Input]
      |
      v
-[HTTP Request node]  -- POST http://localhost:8000/govern
+[Custom Function]  -- builds {"tool": "search_web", "content": <msg>, "agent_id": "flowise-agent"}
+     |
+     v
+[HTTP Request]     -- POST http://localhost:8000/govern
      |
      v
 [AGT Governance Sidecar :8000]
-     |-- rate limit check (token bucket per agent/tool)
-     |-- policy check   (allowlist, blocklist, content patterns)
-     |-- audit log      (hash-chain tamper-evident JSONL)
+     |-- rate limit check  (token bucket per agent/tool)
+     |-- policy check      (allowlist, blocklist, content patterns)
+     |-- audit log         (hash-chain tamper-evident JSONL)
+     |
+     v  {"allowed": true/false, "reason": "..."}
+[Custom Function]  -- formats response as "[ALLOWED] ..." or "[BLOCKED] ..."
      |
      v
-[Check Decision node]  -- parses {"allowed": true/false, "reason": "..."}
-     |
-  allowed?
-  /       \
-yes        no
- |          |
-[LLM]    [Block message]
- |          |
- v          v
-[Chat Output]  [Chat Output]
+[Chat Output]
 ```
+
+The demo flow returns the raw governance decision in the chat. To add a full LLM response for allowed requests, wire a ChatOpenAI node between the Format node and Chat Output, and add your OpenAI API key to it.
 
 ## Quick Start
 
@@ -68,12 +65,11 @@ curl -s -X POST http://localhost:8000/govern \
 
 ### 2. Import the flow into Flowise
 
-1. Open your Flowise instance.
+1. Open your Flowise instance (2.x or 3.x).
 2. Go to **Chatflows** and click **Add New**.
 3. Click the **import** icon (top right toolbar) and select `flowise-flow.json` from this directory.
-4. The flow loads with eight nodes already connected.
-5. Add your OpenAI API key to the **ChatOpenAI** node.
-6. Click **Save** and then **Deploy**.
+4. The flow loads with five nodes already connected.
+5. Click **Save** and then **Deploy**.
 
 ### 3. Test the full flow
 
