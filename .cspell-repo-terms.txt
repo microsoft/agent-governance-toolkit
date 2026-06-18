@@ -857,3 +857,7 @@ ghsa
 
 # --- ACS / crypto terms ---
 preimage
+
+# --- Flowise integration terms ---
+chatflow
+Chatflows
