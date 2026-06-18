@@ -17,10 +17,17 @@ This PR standardizes Python packaging metadata. The dependency-relevant changes 
   external `cedarling-python>=0.0.4` and `agent-os-kernel>=3.5.0` lines are
   unchanged.
 - Internal first-party version pins across the `agent-governance-python`
-  packages were bumped from `>=4.0.0,<5.0` to `>=4.1.0,<5.0` so that every
-  internal `agent-governance-toolkit-*` reference tracks the current 4.1.0
-  release line. Third-party pins (for example `cedarpy>=4.0.0,<5.0`) were not
+  packages were normalized to `>=4.1.0,<5.0` so that every internal
+  `agent-governance-toolkit-*` / `agentmesh-*` reference tracks the current
+  4.1.0 release line. This covers the `>=4.0.0,<5.0` form and the looser
+  `>=4,<5` / `>=0.3.0,<1.0` forms (e.g. `agentmesh-primitives`,
+  `agent-governance-toolkit-{control-plane,trust-protocol,drift}`). Third-party
+  pins (for example `cedarpy>=4.0.0,<5.0`, `fastembed>=0.3.0,<1.0`) were not
   touched.
+
+The `requires-python` floor for the family was standardized to `>=3.11` (the
+only floor consistent with the code and the core dependency cone), but that is
+metadata, not a dependency edit.
 
 No lockfile hashes, no new third-party packages, and no transitive dependency
 trees changed. The SBOM diff bot reported "No dependency changes detected".

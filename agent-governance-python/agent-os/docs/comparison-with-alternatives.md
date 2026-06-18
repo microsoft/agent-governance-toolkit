@@ -123,7 +123,7 @@ define flow
 #### Where Agent OS is better
 
 - **Tool call interception** — Agent OS intercepts the actual action, not just the LLM output that might trigger it
-- **Multi-framework support** — 21 framework integrations vs NeMo's primary LangChain focus
+- **Multi-framework support** — 21 integration packages vs NeMo's primary LangChain focus
 - **Performance** — Sub-0.1ms overhead vs NeMo's 10–50ms+ per rail evaluation
 - **Multi-agent governance** — Per-agent policies, inter-agent trust, fleet management
 
@@ -224,7 +224,7 @@ result = guard(llm.complete, prompt="Summarize the report")
 | **Schema enforcement** | ❌ | ✅ Pydantic/JSON Schema |
 | **Auto-retry on failure** | ❌ | ✅ Corrective re-prompting |
 | **Tool call governance** | ✅ Core capability | ❌ Not applicable |
-| **Multi-framework** | ✅ 21 frameworks | ⚠️ OpenAI, Anthropic, Cohere |
+| **Multi-framework** | ✅ 21 integrations | ⚠️ OpenAI, Anthropic, Cohere |
 | **PII detection** | ⚠️ Pattern-based | ✅ Multiple detector validators |
 | **Latency** | <0.1ms p99 | <50ms (async validators) |
 
@@ -238,7 +238,7 @@ result = guard(llm.complete, prompt="Summarize the report")
 #### Where Agent OS is better
 
 - **Action governance** — Agent OS governs what agents *do*, not just what they *say*
-- **Framework coverage** — 21 framework integrations vs. 3 primary LLM providers
+- **Framework coverage** — 21 integration packages vs. 3 primary LLM providers
 - **Deterministic enforcement** — Policies block actions regardless of LLM output
 - **Multi-agent support** — Per-agent policies, inter-agent trust protocols
 
@@ -353,7 +353,7 @@ raise "Don't send email after reading website" if:
 
 #### Where Agent OS is better
 
-- **Framework coverage** — 21 framework integrations vs. proxy-only approach
+- **Framework coverage** — 21 integration packages vs. proxy-only approach
 - **Multi-agent governance** — Per-agent policies, inter-agent trust, fleet management
 - **Human-in-the-loop** — Native human approval workflows
 - **Ecosystem** — Part of a broader governance stack (AgentMesh, Agent SRE, Agent Runtime)
@@ -400,7 +400,7 @@ Cordum is a **standalone Agent Control Plane** built in Go. It provides a Before
 #### Where Agent OS is better
 
 - **Lightweight integration** — `pip install` vs. Docker Compose infrastructure
-- **Framework diversity** — 21 framework adapters vs. CAP protocol adoption
+- **Framework diversity** — 21 integration packages vs. CAP protocol adoption
 - **Action-level granularity** — Per-tool-call policies vs. job-level gating
 - **Open license** — MIT vs. BUSL-1.1 (commercial restrictions)
 - **Ecosystem maturity** — Merged into Dify (65K★), LlamaIndex (47K★), Agent-Lightning (15K★)
