@@ -2470,3 +2470,94 @@ class TestDefaultImageSelection:
     def test_hardened_image_tag_documented(self):
         from agent_sandbox.docker_provider.provider import DockerSandboxProvider
         assert DockerSandboxProvider.HARDENED_IMAGE_TAG == "agt-sandbox/python-minimal-path:3.11"
+
+
+# =========================================================================
+# Section 24: AppArmor profile selection (#3068)
+# =========================================================================
+
+
+class TestAppArmorProfileLoaded:
+    """Unit tests for the _apparmor_profile_loaded helper."""
+
+    def _patch_apparmor_profiles(self, tmp_path, content):
+        """Return a context manager that redirects the AppArmor profiles read."""
+        import builtins
+        profiles = tmp_path / "profiles"
+        profiles.write_text(content)
+        _real_open = builtins.open
+
+        def _fake_open(path, *a, **kw):
+            if path == "/sys/kernel/security/apparmor/profiles":
+                return _real_open(str(profiles), *a, **kw)
+            return _real_open(path, *a, **kw)
+
+        return patch("builtins.open", side_effect=_fake_open)
+
+    def test_returns_true_when_profile_present(self, tmp_path):
+        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
+
+        content = "docker-default (enforce)\nagt-sandbox (enforce)\npython3 (complain)\n"
+        with self._patch_apparmor_profiles(tmp_path, content):
+            assert _apparmor_profile_loaded("agt-sandbox") is True
+
+    def test_returns_false_when_profile_absent(self, tmp_path):
+        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
+
+        with self._patch_apparmor_profiles(tmp_path, "docker-default (enforce)\n"):
+            assert _apparmor_profile_loaded("agt-sandbox") is False
+
+    def test_returns_false_on_oserror(self):
+        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
+
+        with patch("builtins.open", side_effect=OSError("no apparmor")):
+            assert _apparmor_profile_loaded("agt-sandbox") is False
+
+    def test_no_partial_name_match(self, tmp_path):
+        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
+
+        with self._patch_apparmor_profiles(tmp_path, "agt-sandbox-extra (enforce)\n"):
+            assert _apparmor_profile_loaded("agt-sandbox") is False
+
+
+class TestAppArmorProfileSelection:
+    """_create_container picks agt-sandbox when loaded, docker-default otherwise."""
+
+    def _make_raw_provider(self):
+        with patch(
+            "agent_sandbox.docker_provider.provider.DockerSandboxProvider.__init__",
+            return_value=None,
+        ):
+            p = DockerSandboxProvider.__new__(DockerSandboxProvider)
+            p._image = "python:3.11-slim"
+            p._runtime = IsolationRuntime.RUNC
+            client = MagicMock()
+            client.images.get.return_value = MagicMock()
+            client.containers.run.return_value = MagicMock()
+            p._client = client
+            return p, client
+
+    def test_uses_agt_sandbox_when_profile_loaded(self):
+        p, client = self._make_raw_provider()
+        with patch(
+            "agent_sandbox.docker_provider.provider._apparmor_profile_loaded",
+            return_value=True,
+        ):
+            p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert "apparmor=agt-sandbox" in kw["security_opt"]
+        assert not any(o == "apparmor=docker-default" for o in kw["security_opt"])
+
+    def test_falls_back_to_docker_default_when_profile_not_loaded(self):
+        p, client = self._make_raw_provider()
+        with patch(
+            "agent_sandbox.docker_provider.provider._apparmor_profile_loaded",
+            return_value=False,
+        ):
+            p._create_container("a1", "s1", SandboxConfig())
+        kw = client.containers.run.call_args[1]
+        assert "apparmor=docker-default" in kw["security_opt"]
+        assert not any(o == "apparmor=agt-sandbox" for o in kw["security_opt"])
+
+    def test_apparmor_profile_name_constant(self):
+        assert DockerSandboxProvider._APPARMOR_PROFILE_NAME == "agt-sandbox"

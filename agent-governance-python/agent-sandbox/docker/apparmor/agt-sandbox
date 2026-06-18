@@ -1,0 +1,118 @@
+# AGT sandbox AppArmor profile — option 3 of the command-denylist stack (#3068).
+#
+# Relationship to the other enforcement layers:
+#   Option 1 (Dockerfile.sandbox): minimal PATH — dangerous CLIs are unreachable
+#     via name lookup.
+#   Option 2 (agt-deny-shim.py): logging shim — by-name and absolute-path
+#     invocations are logged as structured `command_denied` events.
+#   Option 3 (this file): kernel-level enforcement — exec is denied even when
+#     a caller reconstructs the binary path, bind-mounts an executable, or
+#     invokes a binary not covered by the shim. AppArmor fires unconditionally
+#     before the kernel hands control to the new process.
+#
+# Installation (one-time, requires root):
+#   sudo apparmor_parser -r -W /path/to/agt-sandbox
+#
+# DockerSandboxProvider detects the profile via /sys/kernel/security/apparmor/profiles
+# and applies it automatically. Hosts without AppArmor (e.g. macOS / Docker Desktop)
+# fall back to docker-default transparently.
+#
+# Profile structure mirrors docker-default (moby/moby) so updates to docker-default
+# can be ported here. Our additions are the AGT-specific `deny` blocks below.
+
+#include <tunables/global>
+
+profile agt-sandbox flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network,
+  capability,
+  file,
+  umount,
+
+  # Suppress ptrace reads for userns / overlayfs
+  deny ptrace read peer=@{profile_name},
+
+  # /proc hardening — identical to docker-default
+  deny @{PROC}/{*,**^[0-9*],sys/kernel/shm*} wklx,
+  deny @{PROC}/sysrq-trigger rwklx,
+  deny @{PROC}/mem rwklx,
+  deny @{PROC}/kmem rwklx,
+  deny @{PROC}/kcore rwklx,
+  deny @{PROC}/kmsg rwklx,
+
+  # /sys hardening — identical to docker-default
+  deny mount,
+  deny /sys/[^f]*/** wklx,
+  deny /sys/f[^s]*/** wklx,
+  deny /sys/fs/[^c]*/** wklx,
+  deny /sys/fs/c[^g]*/** wklx,
+  deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware/efi/efivars/** rwklx,
+  deny /sys/kernel/security/** rwklx,
+
+  # Signal handling — identical to docker-default
+  signal (receive) peer=unconfined,
+  signal (send,receive) peer=@{profile_name},
+
+  # ptrace within same profile — identical to docker-default
+  ptrace (read,trace) peer=@{profile_name},
+
+  # ------------------------------------------------------------------
+  # AGT-specific: deny execution of dangerous network and infra CLIs.
+  #
+  # AppArmor deny rules are processed before allow rules regardless of
+  # rule order, so these override the broad `file,` allow above. The
+  # deny covers both named (PATH-based) and absolute-path invocations.
+  #
+  # Keep this list in sync with DENIED_LOGGED_BIN_NAMES in Dockerfile.sandbox
+  # so all three enforcement layers cover the same binary set.
+  # ------------------------------------------------------------------
+
+  # Network exfiltration tools
+  deny /usr/bin/curl    x,
+  deny /usr/bin/wget    x,
+  deny /usr/bin/nc      x,
+  deny /usr/bin/netcat  x,
+  deny /usr/bin/ncat    x,
+  deny /usr/bin/socat   x,
+  deny /bin/nc          x,
+
+  # Remote access / file transfer
+  deny /usr/bin/ssh     x,
+  deny /usr/bin/scp     x,
+  deny /usr/bin/sftp    x,
+  deny /usr/bin/rsync   x,
+  deny /usr/bin/telnet  x,
+  deny /usr/bin/ftp     x,
+  deny /usr/bin/tftp    x,
+
+  # Version control (can exfiltrate or fetch code)
+  deny /usr/bin/git     x,
+
+  # Cloud provider CLIs
+  deny /usr/bin/az           x,
+  deny /usr/local/bin/az     x,
+  deny /usr/bin/aws          x,
+  deny /usr/local/bin/aws    x,
+  deny /usr/bin/gcloud       x,
+  deny /usr/local/bin/gcloud x,
+
+  # Infrastructure orchestration CLIs
+  deny /usr/bin/kubectl        x,
+  deny /usr/local/bin/kubectl  x,
+  deny /usr/bin/terraform      x,
+  deny /usr/local/bin/terraform x,
+  deny /usr/bin/helm           x,
+  deny /usr/local/bin/helm     x,
+  deny /usr/bin/ansible        x,
+  deny /usr/local/bin/ansible  x,
+
+  # Package managers (prevent in-container software installation)
+  deny /usr/bin/apt      x,
+  deny /usr/bin/apt-get  x,
+  deny /usr/bin/dpkg     x,
+  deny /usr/bin/dnf      x,
+  deny /usr/bin/yum      x,
+  deny /usr/bin/apk      x,
+}
