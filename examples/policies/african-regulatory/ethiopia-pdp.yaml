@@ -1,0 +1,174 @@
+# agt-policies-africa
+# Ethiopia Personal Data Protection — Governance Policy
+#
+# Regulatory reference: Ethiopia Personal Data Protection Proclamation (forthcoming)
+#                       Ethiopia Computer Crime Proclamation No. 958/2016 (interim)
+#                       Ethiopia Electronic Transactions Proclamation No. 1205/2020
+# Enforcing authority: Ethiopian Communications Authority (ECA) /
+#                      Ministry of Innovation and Technology (MInT)
+#
+# ⚠️  NOTE ON REGULATORY STATUS: Ethiopia's dedicated Personal Data Protection
+# Proclamation is in active development. This policy pack is based on:
+# (a) Existing obligations under Proclamation No. 958/2016 and No. 1205/2020
+# (b) The principles in the draft Personal Data Protection Proclamation
+# (c) Continental AI governance principles from the African Union Framework
+# Update this pack when the dedicated Proclamation is enacted and gazetted.
+#
+# ⚠️  This is a community-maintained governance starter policy.
+# It is NOT a certified legal compliance instrument. Organisations must
+# perform their own compliance assessments with qualified advisors.
+#
+# Key obligations covered:
+#   Computer Crime Proclamation No. 958/2016 — unauthorised data access controls
+#   Electronic Transactions Proclamation No. 1205/2020 — data handling in e-transactions
+#   Draft PDPP — cross-border transfers, sensitive data, accountability, breach notification
+
+version: "1.0"
+name: ethiopia-pdp
+description: >
+  Ethiopia data protection governance policy for AI agents processing Ethiopian
+  personal data. Based on Computer Crime Proclamation No. 958/2016, Electronic
+  Transactions Proclamation No. 1205/2020, and the draft Personal Data Protection
+  Proclamation. Covers cross-border restrictions, sensitive data controls, and
+  accountability. Update when dedicated PDPP is enacted.
+
+rules:
+
+  # =========================================================================
+  # Breach Notification — Obligation exists under ECA oversight
+  # AI agents must not suppress breach alerts or delay incident reporting.
+  # =========================================================================
+
+  - name: ethiopia-breach-suppression
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+report)"
+    action: deny
+    priority: 1
+    message: "Ethiopia: Agent cannot suppress breach notifications — ECA incident reporting obligation applies"
+
+  # =========================================================================
+  # Sensitive Personal Data
+  # Ethiopia's draft PDPP and AU AI Framework treat health, biometric,
+  # ethnic, political, religious, and financial data as sensitive.
+  # =========================================================================
+
+  - name: ethiopia-health-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription)"
+    action: escalate
+    priority: 1
+    message: "Ethiopia draft PDPP: Health/medical sensitive data detected — requires explicit consent or documented legal basis"
+
+  - name: ethiopia-special-category-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(ethnic\\s+origin|tribe|political\\s+opinion|religious\\s+belief|trade\\s+union|sexual\\s+orientation|criminal\\s+conviction)"
+    action: escalate
+    priority: 1
+    message: "Ethiopia draft PDPP: Special category personal data detected — requires explicit consent or lawful processing condition"
+
+  - name: ethiopia-biometric-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data))"
+    action: deny
+    priority: 1
+    message: "Ethiopia draft PDPP: Biometric data detected — must not be transmitted without documented lawful basis and ECA notification"
+
+  # =========================================================================
+  # Cross-Border Data Transfers
+  # Ethiopia's draft PDPP requires adequacy or binding contractual safeguards
+  # before personal data leaves Ethiopia. Cross-border transfers are a high
+  # priority for ECA enforcement under the AU AI governance framework.
+  # =========================================================================
+
+  - name: ethiopia-cross-border-language-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+ethiopia|cross.?border|international\\s+transfer|offshore)"
+    action: escalate
+    priority: 1
+    message: "Ethiopia draft PDPP: Cross-border data transfer detected — requires adequacy verification before proceeding"
+
+  - name: ethiopia-cross-border-action
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: escalate
+    priority: 2
+    message: "Ethiopia draft PDPP: Cross-border data transfer action requires adequacy check — ECA approval may be required"
+
+  # =========================================================================
+  # Unauthorised Data Access — Computer Crime Proclamation No. 958/2016
+  # Unauthorised access to personal data and systems is a criminal offence.
+  # AI agents must not facilitate or obscure unauthorised access.
+  # =========================================================================
+
+  - name: ethiopia-unauthorised-access-signal
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(unauthori[sz]ed\\s+(access|login|entry)|bypass(ing)?\\s+(auth|security|login)|circumvent(ing)?\\s+(access|control))"
+    action: deny
+    priority: 1
+    message: "Ethiopia Proclamation 958/2016: Unauthorised system access signal detected — blocked. This may constitute a criminal offence."
+
+  # =========================================================================
+  # Data Minimisation
+  # =========================================================================
+
+  - name: ethiopia-bulk-data-export
+    condition:
+      field: action
+      operator: matches
+      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
+    action: escalate
+    priority: 2
+    message: "Ethiopia draft PDPP: Bulk personal data export — data minimisation principle requires documented lawful basis"
+
+  # =========================================================================
+  # Ethiopian National ID — Fayda Number
+  # Ethiopia's digital identity system (Fayda/MOSIP) issues national IDs.
+  # Exposure of Fayda IDs in agent output constitutes a data breach.
+  # =========================================================================
+
+  - name: ethiopia-fayda-id-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(fayda\\s+(id|number|no)|ethiopia\\s+(national\\s+)?id|mosip\\s+id)[\\s:=]{0,5}[0-9]{10,16}"
+    action: deny
+    priority: 1
+    message: "Ethiopia: Fayda/National ID number detected in agent output — blocked to prevent identity exposure"
+
+  # =========================================================================
+  # Accountability / Audit Trail
+  # ECA and the draft PDPP require data controllers to maintain records of
+  # processing activities accessible to the supervisory authority on request.
+  # =========================================================================
+
+  - name: ethiopia-pii-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii"
+    action: audit
+    priority: 3
+    message: "Ethiopia draft PDPP: Personal data access logged — ECA accountability audit trail requirement"
+
+  - name: ethiopia-pii-modification-audit
+    condition:
+      field: action
+      operator: matches
+      value: "update_user|modify_profile|patch_account|edit_customer|change_personal"
+    action: audit
+    priority: 3
+    message: "Ethiopia draft PDPP: Personal data modification logged — ECA accountability audit trail requirement"
