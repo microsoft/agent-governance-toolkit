@@ -780,3 +780,9 @@ posixpath
 pypy
 fastembed
 Hotfixes
+interp
+ncat
+netcat
+socat
+nmap
+tcpdump
