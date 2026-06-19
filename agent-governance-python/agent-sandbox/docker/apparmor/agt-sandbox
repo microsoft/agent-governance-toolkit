@@ -17,6 +17,8 @@
 # and applies it automatically. Hosts without AppArmor (e.g. macOS / Docker Desktop)
 # fall back to docker-default transparently.
 #
+# Verified on Ubuntu 22.04 with AppArmor 3.0.4 and Docker 24.
+#
 # Profile structure mirrors docker-default (moby/moby) so updates to docker-default
 # can be ported here. Our additions are the AGT-specific `deny` blocks below.
 
