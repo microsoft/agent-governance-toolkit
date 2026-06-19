@@ -187,14 +187,13 @@ async def govern(
     (``annotation_failed`` / ``annotation_timeout``). The host retries those; a
     real policy deny is returned immediately and never retried.
     """
-    result = None
-    for attempt in range(retries + 1):
+    # Retry only a transient fail-closed; a real verdict is returned at once.
+    for _ in range(retries):
         result = await control.evaluate_intervention_point(point, snapshot, EnforcementMode.ENFORCE)
-        reason = result.verdict.reason or ""
-        if reason in _TRANSIENT_REASONS and attempt < retries:
-            continue
-        return result
-    return result
+        if (result.verdict.reason or "") not in _TRANSIENT_REASONS:
+            return result
+    # Final attempt: return whatever verdict it yields.
+    return await control.evaluate_intervention_point(point, snapshot, EnforcementMode.ENFORCE)
 
 
 async def demo_short_path(control: AgentControl) -> None:
@@ -208,14 +207,16 @@ async def demo_short_path(control: AgentControl) -> None:
     guarded = control.protect_tool("run_sql", execute=lambda args: run_sql(**args))
 
     async def call(query: str, *, retries: int = 2):
-        for attempt in range(retries + 1):
+        args = {"query": query}
+        # Retry only a transient fail-closed; a real deny propagates immediately.
+        for _ in range(retries):
             try:
-                return await guarded({"query": query}, tool_call_id="call")
+                return await guarded(args, tool_call_id="call")
             except AgentControlBlocked as blocked:
-                reason = blocked.result.verdict.reason or ""
-                if reason in _TRANSIENT_REASONS and attempt < retries:
-                    continue
-                raise
+                if (blocked.result.verdict.reason or "") not in _TRANSIENT_REASONS:
+                    raise
+        # Final attempt: let any verdict (allow value or block) propagate.
+        return await guarded(args, tool_call_id="call")
 
     # A safe read is allowed and the underlying Foundry tool actually runs.
     result = await call("SELECT name FROM customers WHERE id = 1")
