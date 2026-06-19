@@ -1,5 +1,5 @@
 use crate::{
-    annotation::{AnnotationConfig, AnnotatorConfig, AnnotatorType},
+    annotation::{AnnotationConfig, AnnotatorConfig, AnnotatorInvocation, AnnotatorType},
     constants::manifest_version,
     paths::PathRoot,
     policy::{
@@ -50,6 +50,13 @@ pub struct Manifest {
     /// in host SDKs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approval: Option<ApprovalSection>,
+    /// Runtime provenance, not part of the manifest grammar. True when this
+    /// manifest was loaded from a URL via `Manifest::from_url`. Skipped by serde
+    /// so it never appears in canonical output. A URL sourced manifest is
+    /// treated as untrusted for host local access, so the bundled `llm`
+    /// dispatcher will not fall back to host environment credentials for it.
+    #[serde(skip)]
+    pub url_sourced: bool,
 }
 
 /// AGT D5: parsed shape of the manifest's optional `approval` block.
@@ -220,28 +227,31 @@ impl Manifest {
     /// to an attacker chosen endpoint. Both classes fail closed, so a URL sourced
     /// manifest references remote artefacts through the `*_url` forms or inline
     /// text and supplies any credential inline rather than from the host env.
+    ///
+    /// The scan covers the annotator declarations AND each declaration overlaid
+    /// with its intervention point binding, because
+    /// `AnnotatorInvocation::from_annotation` overlays binding fields, so a
+    /// binding could otherwise smuggle a `system_prompt_file` or a host env
+    /// secret field past an otherwise clean declaration. The bundled `llm`
+    /// dispatcher's provider default credential fallback (which reads a host env
+    /// var with no manifest field, so a field scan cannot see it) is closed
+    /// separately at dispatch through the `url_sourced` flag.
     fn reject_url_sourced_local_access(&self) -> Result<(), RuntimeError> {
-        // Annotator fields that read the host environment at dispatch. A URL
-        // sourced manifest that also picks the egress endpoint must not read
-        // these, or it can exfiltrate a host secret to an attacker endpoint.
-        const HOST_ENV_SECRET_FIELDS: &[&str] = &[
-            "api_key_env",
-            "aws_access_key_id_env",
-            "aws_secret_access_key_env",
-            "aws_session_token_env",
-        ];
         for (name, annotator) in &self.annotators {
-            if annotator.fields.contains_key(FIELD_SYSTEM_PROMPT_FILE) {
-                return Err(RuntimeError::ManifestInvalid(format!(
-                    "annotator '{name}' declares filesystem path field 'system_prompt_file' in a URL sourced manifest; use 'system_prompt_url' instead"
-                )));
-            }
-            for field in HOST_ENV_SECRET_FIELDS {
-                if annotator.fields.contains_key(*field) {
-                    return Err(RuntimeError::ManifestInvalid(format!(
-                        "annotator '{name}' declares host environment secret field '{field}' in a URL sourced manifest; a URL sourced manifest must not read host secrets because it also controls the dispatch endpoint and could exfiltrate them, supply the credential inline instead"
-                    )));
-                }
+            reject_url_sourced_annotator_fields(&format!("annotator '{name}'"), &annotator.fields)?;
+        }
+        for (point, config) in &self.intervention_points {
+            for (annotation_name, annotation) in &config.annotations {
+                let Some(annotator) = self.annotators.get(annotation_name) else {
+                    continue;
+                };
+                let invocation = AnnotatorInvocation::from_annotation(annotator, annotation);
+                reject_url_sourced_annotator_fields(
+                    &format!(
+                        "annotation '{annotation_name}' for intervention point {point}"
+                    ),
+                    &invocation.fields,
+                )?;
             }
         }
         for (id, policy) in &self.policies {
@@ -644,7 +654,8 @@ impl ManifestLoader {
         let previous_root = self.trust_root.take();
         let result = self.load_location_with_body(location.clone(), Some(body), &location);
         self.trust_root = previous_root;
-        let manifest = result?;
+        let mut manifest = result?;
+        manifest.url_sourced = true;
         manifest.reject_url_sourced_local_access()?;
         manifest.validate()?;
         Ok(manifest)
@@ -949,6 +960,39 @@ fn validate_annotator_prompt_sources(
     )
 }
 
+/// Reject the host local access fields on one resolved annotator field map of a
+/// URL sourced manifest. Rejects the filesystem `system_prompt_file` source and
+/// the four host environment secret fields (`api_key_env`, `aws_*_env`). Applied
+/// to each annotator declaration and to each declaration merged with its
+/// intervention point binding, so a binding cannot smuggle one of these fields
+/// past a clean declaration. The error substrings ("filesystem path field",
+/// "host environment secret field", "URL sourced manifest") are stable and
+/// asserted by tests.
+fn reject_url_sourced_annotator_fields(
+    label: &str,
+    fields: &BTreeMap<String, JsonValue>,
+) -> Result<(), RuntimeError> {
+    const HOST_ENV_SECRET_FIELDS: &[&str] = &[
+        "api_key_env",
+        "aws_access_key_id_env",
+        "aws_secret_access_key_env",
+        "aws_session_token_env",
+    ];
+    if fields.contains_key(FIELD_SYSTEM_PROMPT_FILE) {
+        return Err(RuntimeError::ManifestInvalid(format!(
+            "{label} declares filesystem path field 'system_prompt_file' in a URL sourced manifest; use 'system_prompt_url' instead"
+        )));
+    }
+    for field in HOST_ENV_SECRET_FIELDS {
+        if fields.contains_key(*field) {
+            return Err(RuntimeError::ManifestInvalid(format!(
+                "{label} declares host environment secret field '{field}' in a URL sourced manifest; a URL sourced manifest must not read host secrets because it also controls the dispatch endpoint and could exfiltrate them, supply the credential inline instead"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Validate the prompt-source fields of a field map. Enforces at most one of
 /// `system_prompt`/`prompt`, `system_prompt_file`, or `system_prompt_url`; that
 /// a file source is a non empty string; and that a URL source is a pinned HTTPS
@@ -1219,16 +1263,40 @@ fn validate_url_components(mut parsed: url::Url) -> Result<String, RuntimeError>
 /// metadata endpoint. Loopback, the unspecified address, the IPv4 broadcast
 /// address, and link-local (IPv4 169.254.0.0/16 including 169.254.169.254, and
 /// IPv6 fe80::/10) are blocked. RFC1918 and IPv6 unique-local are deliberately
-/// allowed so internal HTTPS policy hosting keeps working.
+/// allowed so internal HTTPS policy hosting keeps working. IPv4-mapped
+/// (`::ffff:a.b.c.d`) and IPv4-compatible (`::a.b.c.d`) IPv6 literals are
+/// canonicalized to their embedded IPv4 address first, so a dual-stack host
+/// cannot route past the guard via `[::ffff:169.254.169.254]` or
+/// `[::ffff:127.0.0.1]`.
 fn is_blocked_fetch_ip(ip: std::net::IpAddr) -> bool {
     match ip {
-        std::net::IpAddr::V4(v4) => {
-            v4.is_loopback() || v4.is_link_local() || v4.is_unspecified() || v4.is_broadcast()
-        }
+        std::net::IpAddr::V4(v4) => is_blocked_fetch_ipv4(v4),
         std::net::IpAddr::V6(v6) => {
-            v6.is_loopback() || v6.is_unspecified() || (v6.segments()[0] & 0xffc0) == 0xfe80
+            // Native IPv6 specials first, so ::1 and :: are caught here before
+            // the IPv4 canonicalization below (to_ipv4 would otherwise map ::1
+            // to 0.0.0.1 and let it slip through).
+            if v6.is_loopback() || v6.is_unspecified() || (v6.segments()[0] & 0xffc0) == 0xfe80 {
+                return true;
+            }
+            // IPv4-mapped (::ffff:a.b.c.d): the dual-stack form a connect()
+            // routes to the embedded IPv4 address.
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_blocked_fetch_ipv4(v4);
+            }
+            // IPv4-compatible (::a.b.c.d, deprecated): the ::1 / :: cases are
+            // already handled above, so any remaining embedded IPv4 is checked.
+            if let Some(v4) = v6.to_ipv4() {
+                return is_blocked_fetch_ipv4(v4);
+            }
+            false
         }
     }
+}
+
+/// Block list for a concrete IPv4 destination of a manifest URL fetch. Shared by
+/// the IPv4 arm and the IPv4-mapped/compatible IPv6 canonicalization.
+fn is_blocked_fetch_ipv4(v4: std::net::Ipv4Addr) -> bool {
+    v4.is_loopback() || v4.is_link_local() || v4.is_unspecified() || v4.is_broadcast()
 }
 
 fn has_url_scheme(reference: &str) -> bool {
@@ -2402,6 +2470,62 @@ intervention_points:
             assert_eq!(error.reason(), "runtime_error:manifest_invalid");
             assert!(error.detail().contains("host environment secret"));
         }
+    }
+
+    #[test]
+    fn from_url_rejects_host_env_secret_in_annotation_binding() {
+        // Regression: a binding overlays its fields onto the annotator
+        // declaration via AnnotatorInvocation::from_annotation, so a clean
+        // declaration plus a binding that injects api_key_env must still fail
+        // closed. A definition-only scan would miss this.
+        let url = "https://policy.example/top.yaml";
+        let body = "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: test\nannotators:\n  judge:\n    type: llm\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n    annotations:\n      judge:\n        from: $policy_target.text\n        api_key_env: AWS_SECRET_ACCESS_KEY\n".to_string();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.into_bytes())]));
+        let error = load_url_with_fetcher(url, None, fetcher, Limits::default()).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("host environment secret"));
+    }
+
+    #[test]
+    fn from_url_rejects_system_prompt_file_in_annotation_binding() {
+        // Regression: same binding overlay path for the filesystem source.
+        let url = "https://policy.example/top.yaml";
+        let body = "agent_control_specification_version: 0.3.1-beta\npolicies:\n  p:\n    type: test\nannotators:\n  judge:\n    type: llm\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: p\n    annotations:\n      judge:\n        from: $policy_target.text\n        system_prompt_file: /etc/secret\n".to_string();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.into_bytes())]));
+        let error = load_url_with_fetcher(url, None, fetcher, Limits::default()).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("filesystem path field"));
+    }
+
+    #[test]
+    fn ssrf_guard_blocks_ipv4_mapped_and_compatible_ipv6() {
+        // Regression: an IPv4-mapped or IPv4-compatible IPv6 literal must be
+        // canonicalized to its embedded IPv4 address, so a dual-stack host
+        // cannot route to a loopback or cloud-metadata endpoint via these forms.
+        use std::net::{IpAddr, Ipv6Addr};
+        for literal in [
+            "::ffff:169.254.169.254",
+            "::ffff:127.0.0.1",
+            "::ffff:0.0.0.0",
+            "::127.0.0.1",
+            "::1",
+            "::",
+            "fe80::1",
+        ] {
+            let ip: Ipv6Addr = literal.parse().unwrap();
+            assert!(
+                is_blocked_fetch_ip(IpAddr::V6(ip)),
+                "expected {literal} to be blocked"
+            );
+        }
+        // A mapped public address must not be a false positive.
+        let public: Ipv6Addr = "::ffff:8.8.8.8".parse().unwrap();
+        assert!(!is_blocked_fetch_ip(IpAddr::V6(public)));
+
+        // End to end through the URL trust gate.
+        assert!(validate_https_url("https://[::ffff:169.254.169.254]/meta").is_err());
+        assert!(validate_https_url("https://[::ffff:127.0.0.1]/x").is_err());
+        assert!(validate_https_url("https://[2606:4700:4700::1111]/dns").is_ok());
     }
 
     #[test]

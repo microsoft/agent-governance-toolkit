@@ -27,9 +27,9 @@ pub use endpoint::EndpointAnnotator;
 pub use llm::LlmAnnotator;
 
 use crate::AnnotatorDispatcher;
-use crate::Limits;
+use crate::{Limits, Manifest};
 #[cfg(feature = "opa")]
-use crate::{Manifest, OpaPolicyDispatcher, OpaRegoRunner, PolicyDispatcher, RuntimeError};
+use crate::{OpaPolicyDispatcher, OpaRegoRunner, PolicyDispatcher, RuntimeError};
 use std::sync::Arc;
 
 /// The bundled native annotator dispatcher used as the zero-config default. It
@@ -45,6 +45,21 @@ pub fn default_annotator_dispatcher() -> Arc<dyn AnnotatorDispatcher> {
 /// default limits; a host with tightened limits builds the dispatcher here.
 pub fn default_annotator_dispatcher_with_limits(limits: Limits) -> Arc<dyn AnnotatorDispatcher> {
     Arc::new(DefaultAnnotatorDispatcher::with_limits(limits))
+}
+
+/// The zero-config annotator dispatcher bound to the host effective `Limits` and
+/// to the manifest provenance. A URL sourced manifest is untrusted for host
+/// local access, so its bundled `llm` annotators never fall back to a host
+/// environment credential (provider default env var included); credentials must
+/// be supplied inline. A file sourced manifest keeps the historical behavior.
+pub fn default_annotator_dispatcher_for(
+    manifest: &Manifest,
+    limits: Limits,
+) -> Arc<dyn AnnotatorDispatcher> {
+    Arc::new(DefaultAnnotatorDispatcher::with_limits_and_source(
+        limits,
+        manifest.url_sourced,
+    ))
 }
 
 /// The bundled native OPA policy dispatcher used as the zero-config default.

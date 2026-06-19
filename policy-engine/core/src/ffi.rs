@@ -511,8 +511,10 @@ fn resolve_default_annotator_dispatcher(
     }
     #[cfg(feature = "default-dispatchers")]
     {
-        let _ = _manifest;
-        Ok(Some(crate::dispatchers::default_annotator_dispatcher()))
+        Ok(Some(crate::dispatchers::default_annotator_dispatcher_for(
+            _manifest,
+            crate::Limits::default(),
+        )))
     }
     #[cfg(not(feature = "default-dispatchers"))]
     {
