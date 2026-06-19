@@ -200,6 +200,46 @@ pub unsafe extern "C" fn acs_builder_from_path(
     })
 }
 
+/// Construct an ACS builder from a top level manifest fetched from a pinned
+/// HTTPS URL. `sha256` MUST be a 64 character hexadecimal SHA-256 digest over
+/// the fetched bytes. A non HTTPS URL, a missing or malformed pin, a fetch
+/// error, a body size breach, or a hash mismatch fails closed.
+///
+/// # Safety
+/// `url` and `sha256` must be valid pointers to NUL-terminated UTF-8 strings.
+/// If `err` is non-null, it must point to writable storage for a `char*`;
+/// populated errors must be freed with `acs_free_string`.
+#[no_mangle]
+pub unsafe extern "C" fn acs_builder_from_url(
+    url: *const c_char,
+    sha256: *const c_char,
+    err: *mut *mut c_char,
+) -> *mut AcsBuilder {
+    ffi_guard!(ptr_with_err, err, {
+        let url = match unsafe { cstr_to_str(url) } {
+            Some(value) => value,
+            None => {
+                unsafe { write_err(err, "null or non-UTF8 url") };
+                return std::ptr::null_mut();
+            }
+        };
+        let sha256 = match unsafe { cstr_to_str(sha256) } {
+            Some(value) => value,
+            None => {
+                unsafe { write_err(err, "null or non-UTF8 sha256") };
+                return std::ptr::null_mut();
+            }
+        };
+        match Manifest::from_url(url, sha256) {
+            Ok(manifest) => builder_from_manifest(manifest),
+            Err(error) => {
+                unsafe { write_err(err, &format!("from_url failed: {error}")) };
+                std::ptr::null_mut()
+            }
+        }
+    })
+}
+
 /// Construct an ACS builder from an ordered chain of YAML manifest strings.
 ///
 /// # Safety

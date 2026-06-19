@@ -193,6 +193,13 @@ type NativeRuntimeConstructor = {
     policyCallback: NativeRuntimeCallback | undefined,
     perfTelemetry?: PerfTelemetry,
   ): NativeRuntime;
+  fromUrl(
+    url: string,
+    sha256: string,
+    annotatorCallback: NativeRuntimeCallback | undefined,
+    policyCallback: NativeRuntimeCallback | undefined,
+    perfTelemetry?: PerfTelemetry,
+  ): NativeRuntime;
   fromManifestChain(
     manifests: string[],
     annotatorCallback: NativeRuntimeCallback | undefined,
@@ -297,6 +304,22 @@ export class AgentControl {
     return new AgentControl(
       new NativeRuntimeClient(path, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
         NativeRuntimeClass.fromPath(path, annotator, policy, perfTelemetry),
+      ),
+      approvalResolver,
+    );
+  }
+
+  static fromUrl(
+    url: string,
+    sha256: string,
+    annotatorDispatcher?: AnnotatorDispatcher,
+    policyDispatcher?: PolicyDispatcher,
+    approvalResolver?: ApprovalResolver,
+    perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+  ): AgentControl {
+    return new AgentControl(
+      new NativeRuntimeClient(url, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
+        NativeRuntimeClass.fromUrl(url, sha256, annotator, policy, perfTelemetry),
       ),
       approvalResolver,
     );

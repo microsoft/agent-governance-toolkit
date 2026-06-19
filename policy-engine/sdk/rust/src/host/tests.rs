@@ -106,6 +106,21 @@ fn from_path_zero_config_evaluates_rego_manifest() {
 }
 
 #[test]
+fn from_url_rejects_non_https_without_network() {
+    let error = AgentControl::from_url("http://policy.example/manifest.yaml", &"00".repeat(32))
+        .unwrap_err();
+    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    assert!(error.detail().contains("unsupported URL scheme"));
+}
+
+#[test]
+fn from_url_requires_a_pin() {
+    let error = AgentControl::from_url("https://policy.example/manifest.yaml", "   ").unwrap_err();
+    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    assert!(error.detail().contains("sha256 pin"));
+}
+
+#[test]
 fn from_manifest_with_dispatchers_prefers_host_policy() {
     let policy = Arc::new(QueuePolicy::with_responses([json!({
         "decision": "deny",

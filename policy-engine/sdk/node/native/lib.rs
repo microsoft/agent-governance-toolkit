@@ -237,6 +237,26 @@ impl NativeRuntime {
     }
 
     #[napi(factory)]
+    pub fn from_url(
+        env: Env,
+        url: String,
+        sha256: String,
+        annotator_callback: Option<JsFunction>,
+        policy_callback: Option<JsFunction>,
+        perf_telemetry: Option<u8>,
+    ) -> Result<Self> {
+        let manifest =
+            Manifest::from_url(&url, &sha256).map_err(|err| Error::from_reason(err.to_string()))?;
+        Self::from_manifest(
+            env,
+            manifest,
+            annotator_callback,
+            policy_callback,
+            perf_telemetry,
+        )
+    }
+
+    #[napi(factory)]
     pub fn from_manifest_chain(
         env: Env,
         manifests: Vec<String>,
