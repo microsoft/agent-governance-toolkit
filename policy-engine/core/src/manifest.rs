@@ -215,6 +215,32 @@ impl Manifest {
         ManifestLoader::with_limits(limits).load(path.as_ref())
     }
 
+    /// Load a top level manifest from a pinned HTTPS URL. The fetch reuses the
+    /// URL `extends` trust gate defined in section 2.2 of the specification, so
+    /// the URL MUST be HTTPS, carries no ambient credentials, and is bounded by
+    /// the same body size limit as URL extends. Unlike an `extends` entry the
+    /// pin is mandatory, because the top level manifest is the root of trust and
+    /// an unpinned remote root would let a network attacker swap the entire
+    /// policy. `sha256` MUST be a 64 character hexadecimal SHA-256 digest over
+    /// the fetched bytes, and a mismatch, a non HTTPS URL, a fetch error, or a
+    /// body size breach MUST fail closed. Filesystem relative fields such as a
+    /// rego `bundle`, an annotator `system_prompt_file`, or adapter `data` paths
+    /// are NOT rebased for a URL sourced manifest, mirroring URL `extends`; a URL
+    /// manifest should reference remote artefacts through the `*_url` forms.
+    pub fn from_url(url: &str, sha256: &str) -> Result<Self, RuntimeError> {
+        Self::from_url_with_limits(url, sha256, Limits::default())
+    }
+
+    /// Load a top level manifest from a pinned HTTPS URL with explicit limits.
+    /// See [`Manifest::from_url`] for the trust gate and pin requirements.
+    pub fn from_url_with_limits(
+        url: &str,
+        sha256: &str,
+        limits: Limits,
+    ) -> Result<Self, RuntimeError> {
+        ManifestLoader::with_limits(limits).load_url(url, sha256)
+    }
+
     pub fn merge_chain(manifests: Vec<Self>) -> Result<Self, RuntimeError> {
         if manifests.is_empty() {
             return Err(RuntimeError::ManifestInvalid(
@@ -543,6 +569,37 @@ impl ManifestLoader {
             .to_path_buf();
         let previous_root = self.trust_root.replace(trust_root);
         let result = self.load_location(ManifestLocation::Path(canonical_path));
+        self.trust_root = previous_root;
+        let manifest = result?;
+        manifest.validate()?;
+        Ok(manifest)
+    }
+
+    /// Load a top level manifest fetched from a pinned HTTPS URL. The URL and
+    /// pin pass through the same trust gate as a URL `extends` entry, except the
+    /// pin is required. A URL sourced top level manifest has no filesystem trust
+    /// root, so any local path `extends` inside it fails closed in the merge
+    /// loop with `remote manifest cannot extend local path`.
+    fn load_url(&mut self, url: &str, sha256: &str) -> Result<Manifest, RuntimeError> {
+        let sha256 = sha256.trim();
+        if sha256.is_empty() {
+            return Err(RuntimeError::ManifestInvalid(
+                "manifest URL load requires a non empty sha256 pin".to_string(),
+            ));
+        }
+        let pin = ManifestUrlExtends {
+            url: url.to_string(),
+            integrity: None,
+            sha256: Some(sha256.to_string()),
+        };
+        let extends = ManifestExtends::Url(pin);
+        validate_extends_trust(&extends)?;
+        let normalized = validate_https_url(url)?;
+        let previous_root = self.trust_root.take();
+        let body = self.fetch_url_body(&normalized)?;
+        verify_extends_hash(&extends, &normalized, &body)?;
+        let location = ManifestLocation::Url(normalized);
+        let result = self.load_location_with_body(location.clone(), Some(body), &location);
         self.trust_root = previous_root;
         let manifest = result?;
         manifest.validate()?;
@@ -1834,6 +1891,15 @@ intervention_points:
         ManifestLoader::with_limits_and_fetcher(limits, Box::new(fetcher)).load(path)
     }
 
+    fn load_url_with_fetcher(
+        url: &str,
+        sha256: &str,
+        fetcher: MockFetcher,
+        limits: Limits,
+    ) -> Result<Manifest, RuntimeError> {
+        ManifestLoader::with_limits_and_fetcher(limits, Box::new(fetcher)).load_url(url, sha256)
+    }
+
     fn sri(body: &[u8]) -> String {
         let digest = sha256_digest(body);
         format!(
@@ -2152,6 +2218,140 @@ intervention_points:
 
         let error = load_with_fetcher(
             &path,
+            fetcher,
+            Limits {
+                max_manifest_url_bytes: 4,
+                ..Limits::default()
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:resource_limit_exceeded");
+    }
+
+    #[test]
+    fn from_url_fetches_and_validates_pinned_manifest() {
+        let url = "https://policy.example/top.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.clone())]));
+
+        let manifest =
+            load_url_with_fetcher(url, &hex_sha256(&body), fetcher.clone(), Limits::default())
+                .unwrap();
+
+        assert!(manifest.policies.contains_key("p"));
+        assert!(manifest
+            .intervention_points
+            .contains_key(&InterventionPoint::Input));
+        assert_eq!(fetcher.calls(url), 1);
+    }
+
+    #[test]
+    fn from_url_rejects_missing_pin() {
+        let url = "https://policy.example/top.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body)]));
+
+        let error =
+            load_url_with_fetcher(url, "   ", fetcher.clone(), Limits::default()).unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("non empty sha256 pin"));
+        assert_eq!(fetcher.calls(url), 0);
+    }
+
+    #[test]
+    fn from_url_rejects_sha256_mismatch() {
+        let url = "https://policy.example/top.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body)]));
+
+        let error =
+            load_url_with_fetcher(url, &"00".repeat(32), fetcher, Limits::default()).unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("sha256 mismatch"));
+    }
+
+    #[test]
+    fn from_url_rejects_non_https_scheme() {
+        let url = "http://policy.example/top.yaml";
+        let error = load_url_with_fetcher(
+            url,
+            &hex_sha256(base_manifest().as_bytes()),
+            MockFetcher::new(BTreeMap::new()),
+            Limits::default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error.detail().contains("unsupported URL scheme"));
+    }
+
+    #[test]
+    fn from_url_resolves_pinned_remote_extends() {
+        let parent_url = "https://policy.example/parent.yaml";
+        let parent_body = base_manifest().as_bytes().to_vec();
+        let child_url = "https://policy.example/child.yaml";
+        let child_body = format!(
+            "agent_control_specification_version: 0.3.1-beta\nextends:\n  - url: {parent_url}\n    sha256: {}\nmetadata:\n  name: child\n",
+            hex_sha256(&parent_body)
+        )
+        .into_bytes();
+        let fetcher = MockFetcher::new(BTreeMap::from([
+            (parent_url.to_string(), parent_body),
+            (child_url.to_string(), child_body.clone()),
+        ]));
+
+        let manifest = load_url_with_fetcher(
+            child_url,
+            &hex_sha256(&child_body),
+            fetcher,
+            Limits::default(),
+        )
+        .unwrap();
+
+        assert!(manifest.extends.is_empty());
+        assert!(manifest.policies.contains_key("p"));
+    }
+
+    #[test]
+    fn from_url_relative_extends_resolves_against_url_not_filesystem() {
+        let parent_url = "https://policy.example/base.yaml";
+        let parent_body = base_manifest().as_bytes().to_vec();
+        let child_url = "https://policy.example/child.yaml";
+        // A relative reference under a URL parent resolves to a sibling URL, so a
+        // URL sourced manifest never reaches the local filesystem.
+        let child_body =
+            "agent_control_specification_version: 0.3.1-beta\nextends:\n  - ./base.yaml\nmetadata:\n  name: child\n"
+                .as_bytes()
+                .to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([
+            (parent_url.to_string(), parent_body),
+            (child_url.to_string(), child_body.clone()),
+        ]));
+
+        let manifest = load_url_with_fetcher(
+            child_url,
+            &hex_sha256(&child_body),
+            fetcher.clone(),
+            Limits::default(),
+        )
+        .unwrap();
+
+        assert!(manifest.policies.contains_key("p"));
+        assert_eq!(fetcher.calls(parent_url), 1);
+    }
+
+    #[test]
+    fn from_url_body_size_limit_fails_closed() {
+        let url = "https://policy.example/top.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.clone())]));
+
+        let error = load_url_with_fetcher(
+            url,
+            &hex_sha256(&body),
             fetcher,
             Limits {
                 max_manifest_url_bytes: 4,
