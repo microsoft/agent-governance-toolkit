@@ -1,537 +1,243 @@
-# DecisionAssure Continuity Kernel
-
-**Prove the agent remained the same agent – and discover dangerous capabilities that emerge from multi‑agent interactions.**
-
-DecisionAssure Continuity Kernel is a governance toolkit for AI agents that goes beyond traditional policy checks. It provides:
-
-- **Continuity Verification** – prove an agent’s identity, policy, and context remained intact across actions.
-- **Witness Chains** – blockchain‑style hash chains for tamper‑evident agent identity continuity.
-- **Collusion Detection** – real‑time detection of hidden coordination between agents (activation‑level).
-- **Deception Probe** – jailbreak detection via internal hidden‑state monitoring.
-- **Capability Discovery** – unsupervised discovery of emergent capabilities from agent traces.
-- **Capability Witness Engine** – cryptographic proof of why a capability existed, with counterfactual verification and governance recommendations.
-
----
-
-## 🧩 What It Does
-
-| Feature | Description |
-|---------|-------------|
-| **Continuity Verification** | Re‑test identity, policy, delegation, and evidence freshness at every step. |
-| **Witness Chains** | Cryptographic hash chain that proves the agent did not drift without re‑authorisation. |
-| **Collusion Interceptor** | Monitors hidden neural states to detect cross‑agent collusion in real time. |
-| **Deception Probe** | Scans hidden states for jailbreak patterns before generation. |
-| **Capability Discovery** | Finds recurring patterns in agent traces without any pre‑defined rules. |
-| **Capability Witness Engine** | Produces verifiable witnesses: required actions, counterfactual proof, confidence, and a governance recommendation (DENY, HUMAN_REVIEW, MONITOR, ADMIT). |
-
----
-
-## 🔌 Supported Frameworks
-
-- **Microsoft AutoGen**
-- **LangGraph**
-- **CrewAI**
-- **OpenAI Agents SDK**
-- Custom (via `BaseAdapter`)
-
----
-
-## 📦 Installation
-
-```bash
-# Clone or download the repository
-cd decisionassure_continuity
-pip install -e .
-```
-
----
-
-## 🚀 Quick Start – Continuity Verification
-
-```python
-from src.models import ContinuityWitness
-from src.ccv_engine import CCVEngine
-
-w1 = ContinuityWitness(
-    index=0, previous_witness_hash="0"*64,
-    agent_id="alice", session_id="s1",
-    constitution_hash="hash1", observer_hash="hash1",
-    reference_frame_hash="hash1", action_hash="action1"
-)
-w2 = ContinuityWitness(
-    index=1, previous_witness_hash=w1.witness_hash,
-    agent_id="alice", session_id="s1",
-    constitution_hash="hash1", observer_hash="hash2",  # Drift!
-    reference_frame_hash="hash1", action_hash="action2"
-)
-
-engine = CCVEngine()
-result = engine.verify_continuity([w1, w2])
-print(f"Continuity Score: {result.continuity_score}")
-print(f"Status: {result.verification_status}")
-```
-
----
-
-## 🧠 Quick Start – Capability Witness Engine
-
-```python
-from src.capability_witness_engine import CapabilityWitnessEngine
-from src.models import AgentAction
-
-# Load traces from any supported framework (AutoGen, LangGraph, etc.)
-# Each trace is a list of AgentAction objects.
-traces = [[
-    AgentAction(agent_id="alice", action_type="read_credentials"),
-    AgentAction(agent_id="charlie", action_type="export_data")
-]]
-
-engine = CapabilityWitnessEngine(min_samples=2, eps=0.5)
-witnesses = engine.process_traces(traces)
-
-for w in witnesses:
-    print(f"Capability: {w['capability']}")
-    print(f"Confidence: {w['confidence']:.2%}")
-    print(f"Recommendation: {w['governance_recommendation']}")
-    print(f"Witness Hash: {w['witness_hash'][:16]}...")
-```
-
----
-
-## 🖥️ CLI Usage
-
-```bash
-# Continuity verification
-continuity verify witnesses.json --output result.json
-
-# Collusion detection
-continuity collusion '{"alice":[0.9,0.8,0.7],"bob":[0.1,0.2,0.3]}'
-
-# Capability discovery (from traces)
-continuity discover traces.json
-
-# Capability Court (end‑to‑end verdict)
-continuity court traces.json --output verdicts.json
-
-# Generate a witness from a single action list
-continuity witness '{"agent":"alice","action":"read_database"}'
-```
-
----
-
-## 📁 Processing Real Traces
-
-The toolkit includes adapters for popular agent frameworks. To process a directory of AutoGen traces:
-
-```bash
-python examples/real_trace_demo.py ./sample_traces/ autogen
-```
-
-Output will include:
-
-- Discovered emergent capability clusters
-- Cryptographic witness hashes
-- Counterfactual verification results
-- Governance recommendations (DENY / HUMAN_REVIEW / MONITOR / ADMIT)
-
----
-
-## 📊 Capability Witness Output Example
-
-```json
-{
-  "capability": "Credential Exfiltration",
-  "confidence": 0.94,
-  "required_actions": [
-    {"agent": "alice", "action": "read_credentials"},
-    {"agent": "charlie", "action": "export_data"}
-  ],
-  "minimal_witness": true,
-  "counterfactual_verified": true,
-  "governance_recommendation": "DENY",
-  "witness_hash": "bb57369c232d1ad7...",
-  "trace_claim": {
-    "format": "TRACE v0.1",
-    "claim_type": "capability_witness",
-    "hash": "bb57369c...",
-    "evidence": [...]
-  }
-}
-```
-
----
-
-## 🔐 Integration with AgentTrust / TRACE
-
-The `trace_claim` field is **TRACE‑compatible**, meaning capability witnesses can be consumed by AgentTrust, TRACE, and other governance systems as portable evidence.
-
----
-
-## 📚 Documentation
-
-- `docs/CONTINUITY_SPEC.md` – Specification for continuity verification
-- `docs/EMERGENT_SPEC.md` – Specification for emergent capability discovery
-- `docs/WITNESS_STANDARD.md` – Capability Witness Standard (v1.0)
-- `docs/METHODOLOGY.md` – Benchmark methodology and metrics
-
----
-## 🚀 Batch Processing Hundreds of Traces
-
-To process a large number of traces from a directory tree:
-
-```bash
-python examples/batch_witness_demo.py ./my_traces/ autogen
-
-
-This will:
-
-Recursively find all JSON trace files
-Parse them with the appropriate adapter
-Run the Capability Witness Engine
-Generate a summary report with:
-
-Total traces processed
-Total witnesses generated
-Recommendations breakdown (DENY, HUMAN_REVIEW, MONITOR, ADMIT)
-Human reviews triggered
-Low Confidence Witness
-Average confidence
-Save a JSON report for further analysis
-
-
-
-
----
-
-## 🧪 How to Run the Full Batch
-
-1. **Generate synthetic traces** (or use your own real traces):
-   ```bash
-   python examples/generate_sample_traces.py
-
-2. Run the batch processor:
-python examples/batch_witness_demo.py sample_traces_large/ autogen 2 0.5
-
-3. Expected output:
-📂 Scanning sample_traces_large/ for autogen traces...
-📁 Found 150 trace files
-✅ Parsed 150 traces successfully (errors: 0)
-   Agents: alice, bob, charlie, dave, eve, frank, grace, heidi, ivan, jack, karen
-🧾 Generated 4 Capability Witness(es)
-==============================================================================
-🧾 Capability Witness Engine – Batch Report
-==============================================================================
-   Timestamp:                2026-06-18T18:00:00
-   Total traces processed:   150
-   Total witnesses generated: 4
-   Parse errors:             0
-   Agents involved:          alice, bob, charlie, ...
-   Frameworks:               autogen: 150
-
-   Recommendations:
-      HUMAN_REVIEW: 3
-      MONITOR: 1
-
-   Severities:
-      critical: 3
-      high: 1
-
-   Human reviews triggered:  3
-   Low Confidence Witness:      0
-   Average confidence:        94.5%
-
-   Witness Details:
-      #1: Credential Exfiltration (conf: 96.67%, rec: HUMAN_REVIEW)
-           Actions: alice->read_credentials, charlie->export_data
-           Hash: bb57369c232d1ad7...
-      ...
-==============================================================================
-✅ Full report saved to witness_report_20260618_180000.json
-
-## 🧠 Governance Learning Loop
-
-Unknown capability witnesses can be labelled and added to the ontology:
-
-```bash
-
-
-The system will suggest labels for unknown witnesses. Analysts can then:
-
-Review the witness and action set.
-Add a label using the learner.
-Export the updated ontology.
-This creates a self-improving governance system.
-
-
----
-
-## 🧪 How to Run with Learning
-
-```bash
-# Generate synthetic traces (or use real ones)
-python examples/generate_sample_traces.py
-
-# Run batch with learning enabled
-python examples/batch_witness_demo.py sample_traces_large/ --framework autogen --learn
-
-## 📄 License
-
-MIT
-
-# DecisionAssure Continuity
-
-**Discover what AI systems can do before they do it.**
-
-DecisionAssure Continuity is a governance engine for multi-agent systems that discovers emergent capabilities directly from execution traces, generates replayable capability witnesses, verifies them through counterfactual replay, and continuously evolves governance knowledge through human review.
-
-Traditional security systems look for known attacks.
-
-DecisionAssure looks for **capabilities**.
-
+## DecisionAssure Continuity
+
+Discover what AI systems can do before they do it.
+A governance platform for autonomous and multi-agent systems that discovers emergent capabilities, generates replayable evidence, verifies capabilities through counterfactual analysis, and continuously improves governance knowledge through human review and ontology evolution.
+
+Why DecisionAssure Exists
+Modern AI systems increasingly operate as teams of autonomous agents.
+Traditional monitoring systems focus on events.
+Traditional governance systems focus on rules.
+DecisionAssure focuses on capabilities.
 A capability is not a single action.
 
-It is a coordinated sequence of actions that collectively enable a dangerous outcome.
-
+It is a coordinated sequence of actions that collectively enable an outcome.
 Examples include:
+Credential Exfiltration
+Privilege Escalation
+Model Exfiltration
+Secret Leakage
+Identity Theft
+Backdoor Installation
+Collusive Coordination
+Emergent Unknown Behaviors
 
-* Credential Exfiltration
-* Privilege Escalation
-* Model Exfiltration
-* Secret Leakage
-* Backdoor Installation
-* Collusive Coordination
-* Identity Theft
+DecisionAssure discovers these capabilities directly from execution traces, produces cryptographic evidence proving they existed, and continuously improves governance coverage as new capabilities emerge.
+Core Platform Capabilities
+Continuity Verification
+Prove that an agent remained the same agent throughout execution.
 
-The system discovers these capabilities from traces, produces cryptographic evidence, and enables governance teams to continuously improve detection through ontology evolution.
+DecisionAssure continuously validates:
+Agent Identity
+Constitution Integrity
+Observer Context
+Reference Frame
+Delegation Integrity
+Evidence Freshness
+Witness Chains
+Blockchain-inspired witness chains provide tamper-evident continuity evidence.
+Each action is linked through cryptographic hashes, enabling replayable verification of agent continuity.
 
----
+Collusion Interceptor
+Detect hidden coordination between AI agents before harmful behavior becomes visible.
+Features:
+Activation-level monitoring
+Cross-agent coordination analysis
+Hidden-state correlation detection
+Real-time collusion alerts
+Deception Probe
+Detect deceptive reasoning and jailbreak attempts before output generation.
 
-## Why This Exists
+Features:
+Hidden-state analysis
+Internal inconsistency detection
+Jailbreak pattern recognition
+Deception risk scoring
+Emergent Capability Discovery
+Discover dangerous capabilities directly from traces without predefined rules.
 
-Modern AI systems increasingly operate as teams of agents.
+Examples:
+alice -> read_credentials
+charlie -> export_data
 
-Individual actions may appear harmless:
-
-Agent A reads credentials.
-
-Agent B accesses a database.
-
-Agent C exports data.
-
-Viewed independently, none of these actions necessarily indicate malicious behavior.
-
-Viewed together, they form a capability:
-
-**Credential Exfiltration**
-
-Most monitoring systems reason about events.
-
-DecisionAssure reasons about capabilities.
-
----
-
-## Core Innovation
-
-DecisionAssure introduces the concept of a:
-
-### Capability Witness
-
-A Capability Witness is a replayable governance artifact proving that a capability existed within a trace.
+→ Credential Exfiltration
+The engine automatically identifies:
+Emergent behaviors
+Multi-agent capabilities
+Previously unseen operational patterns
+Capability Witness Engine
+Generate replayable governance evidence.
 
 Each witness contains:
-
-* Capability classification
-* Required actions
-* Confidence score
-* Severity
-* Counterfactual verification
-* Witness hash
-* Governance recommendation
+Capability Classification
+Required Actions
+Confidence Score
+Severity
+Witness Hash
+Governance Recommendation
+Counterfactual Evidence
 
 Example:
-
-Credential Exfiltration
-
-Required Actions:
-
-* alice → read_credentials
-* charlie → export_data
-
-Counterfactual Verification:
-
-Remove either action and the capability disappears.
-
-This produces evidence that can be replayed, audited, and independently verified.
-
----
-
-## Governance Learning Loop
-
-DecisionAssure continuously learns.
-
-Unknown capabilities are not discarded.
+{
+  "capability": "Credential Exfiltration",
+  "minimal_witness": true,
+  "counterfactual_verified": true,
+  "severity": "critical",
+  "governance_recommendation": "HUMAN_REVIEW"
+}
+Counterfactual Verification
+DecisionAssure verifies causality rather than correlation.
+The system removes required actions one at a time and replays the capability.
+If removing any action causes the capability to disappear, the witness is considered minimal and causally verified.
+Capability Exists
+        ↓
+Remove Action
+        ↓
+Capability Disappears
+This significantly reduces false discoveries.
+TRACE-Compatible Capability Claims
+Capability Witnesses can be exported as portable governance evidence.
+TRACE Claim
+        ↓
+Capability Witness
+        ↓
+Evidence Actions
+        ↓
+Witness Hash
+        ↓
+Governance Recommendation
+Compatible with:
+TRACE
+AgentTrust
+Governance Dashboards
+Audit Pipelines
+Compliance Systems
+Governance Learning Loop
+Unknown capabilities are never discarded.
 
 They enter a governance review workflow.
+Capability Discovery
+        ↓
+Capability Witness
+        ↓
+Counterfactual Verification
+        ↓
+Human Review
+        ↓
+Ontology Evolution
+        ↓
+Historical Replay
+        ↓
+Coverage Analysis
+        ↓
+Governance Knowledge Accumulation Index (GKAI)
+This transforms governance from a static rule system into a continuously improving knowledge system.
+Human Review Queue
+Every unknown capability includes:
+Suggested Label
+Similarity Confidence
+Novelty Score
+Impact Score
+Priority Score
 
+Example:
 Unknown Capability
-→ Human Review
-→ Ontology Update
-→ Historical Replay
-→ Governance Improvement
 
-Every approval expands governance knowledge.
+Suggested Label:
+Model Exfiltration
 
-Every ontology update becomes auditable.
+Confidence:
+66.67%
 
-Every historical replay measures governance impact.
+Novelty:
+33.33%
 
----
+Impact:
+28 Traces
+Ontology Evolution
+Approved reviews become governance knowledge.
+Unknown Capability
+        ↓
+Human Approval
+        ↓
+Model Exfiltration
+        ↓
+Known Capability
+Every update is versioned, auditable, and replayable.
+Historical Replay
 
-## Governance Knowledge Accumulation Index (GKAI)
+After governance knowledge evolves, DecisionAssure asks:
+What incidents would have been detected if this capability had been known earlier?
 
+The platform replays historical traces using the evolved ontology and measures:
+Previously Missed Incidents
+Newly Detected Incidents
+Coverage Growth
+Governance Impact
+Governance Coverage Metrics
+Classification Rate
+Measures how many discovered capabilities are understood.
+Classified Capabilities
+/
+Discovered Capabilities
+Example:
+75%
+→
+100%
+Ontology Coverage
+Measures governance knowledge relative to the capability universe.
+Known Capability Patterns
+/
+Capability Universe
+Example:
+23.1%
+→
+28.6%
+Governance Knowledge Accumulation Index (GKAI)
 Most governance systems measure compliance.
-
 DecisionAssure measures learning.
 
 GKAI tracks:
-
-* Governance knowledge growth
-* Ontology expansion
-* Capability coverage improvements
-* Knowledge gained per review cycle
-
+Ontology Growth
+Governance Coverage Growth
+Knowledge Accumulation
+Learning Efficiency
+Governance Maturity
 Example:
+Base Coverage:
+23.1%
 
-Base Coverage: 23.1%
+Latest Coverage:
+28.6%
 
-After Ontology Evolution: 28.6%
-
-Knowledge Gain: +5.5%
-
-GKAI provides a quantitative measure of governance maturity.
-
----
-
-## Historical Replay
-
-When governance knowledge changes, the system asks:
-
-"What incidents would have been detected if this capability had been known earlier?"
-
-DecisionAssure replays historical traces using the evolved ontology and calculates:
-
-* Previously missed incidents
-* Newly detected incidents
-* Coverage improvements
-* Governance impact
-
-This transforms governance from static policy into a continuously improving system.
-
----
-
-## Architecture
-
-Trace Files
-↓
-Capability Discovery
-↓
-Classification
-↓
-Capability Witness
-↓
-Counterfactual Verification
-↓
-Governance Recommendation
-↓
-Review Queue
-↓
-Human Analyst
-↓
-Ontology Evolution
-↓
-Historical Replay
-↓
-Coverage Analysis
-↓
-GKAI
-
----
-
-## Key Capabilities
-
-### Emergent Capability Discovery
-
-Discovers capabilities directly from traces without requiring predefined labels.
-
-### Capability Witness Engine
-
-Generates replayable evidence artifacts.
-
-### Counterfactual Verification
-
-Proves minimal capability requirements.
-
-### TRACE-Compatible Claims
-
-Exports capability witnesses as governance evidence.
-
-### Human Review Queue
-
-Routes unknown capabilities to analysts.
-
-### Ontology Evolution
-
-Converts reviewed capabilities into governance knowledge.
-
-### Historical Replay
-
-Measures the impact of newly acquired governance knowledge.
-
-### GKAI
-
-Tracks long-term governance learning.
-
----
-
-## Example Governance Outcome
-
+Knowledge Gain:
++5.5%
+GKAI provides a quantitative measure of governance evolution over time.
+Governance Outcome Example
 Before Learning
-
 Classification Rate: 75%
-
 Unknown Capabilities: 1
-
 After Learning
-
 Classification Rate: 100%
-
 Unknown Capabilities: 0
-
 Governance Improvement
-
 +25% Classification Rate
-
 +5.5% Ontology Coverage
-
-+3 Historical Incidents Detected
-
----
-
-## Vision
-
-Security systems answer:
-
-"What happened?"
-
-Governance systems answer:
-
-"Was it allowed?"
-
-DecisionAssure answers:
-
-"What capability emerged, how do we prove it existed, and how does governance improve after learning about it?"
-
-
++3 Previously Missed Incidents Detected
+Supported Frameworks
+Microsoft AutoGen
+LangGraph
+CrewAI
+OpenAI Agents SDK
+AgentTrust
+Custom Adapters
+Vision
+Security asks:
+What happened?
+Governance asks:
+Was it allowed?
+DecisionAssure asks:
+What capability emerged, how do we prove it existed, and how does governance improve after learning about it?
+Discover → Verify → Govern.
 
 📦 1. Install Dependencies
 
