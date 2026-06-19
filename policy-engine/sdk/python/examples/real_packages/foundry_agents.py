@@ -25,11 +25,20 @@ It demonstrates two integration styles for the *same* governed seam:
   transform), which is what you want when wiring ACS into a framework's own
   tool-dispatch hook.
 
-Security invariant: a destructive tool call is *never* executed. That holds for
-both a real judge deny and a fail-closed transient, so it is the assertion this
-example verifies. Because the judge is a live model, a transient infrastructure
-error surfaces as a fail-closed ``annotation_failed`` verdict; the host pattern
-is to retry that (a real policy deny is never retried), shown in ``govern``.
+Security invariant: a destructive tool call is *never* executed. The host policy
+fails closed (it allows only an explicit "safe" judge verdict), so a destructive
+label, an unexpected label, a missing label, or a fail-closed transient all deny.
+That invariant is the assertion this example verifies. Because the judge is a live
+model, a transient infrastructure error surfaces as a fail-closed
+``annotation_failed`` verdict; the host pattern is to retry that (a real policy
+deny is never retried), shown in ``govern``.
+
+Scope and caveats: this example judges tool INPUT on PRE_TOOL_CALL. The judge
+annotation is not bound on POST_TOOL_CALL, so tool output is evaluated but not
+gated here; add an output-side annotation to govern results. The judge also sees
+untrusted tool-argument text, so it is subject to prompt injection (an argument
+that tries to talk the judge into "safe"); treat an LLM judge as defense in depth
+behind deterministic policy, not as the sole control.
 
 How to wire this into a live Foundry agent: register the same callables with
 ``FunctionTool``/``ToolSet`` and route the SDK's auto function-call hook (the
@@ -88,22 +97,34 @@ foundry_tools = FunctionTool(set(TOOLS.values()))
 
 
 class IntentJudgePolicy:
-    """Host-owned policy: deny when the LLM judge labels the intent destructive.
+    """Host-owned policy: allow only an explicit "safe" judge verdict.
 
     ACS computes the annotation (the real Azure OpenAI judge call) and hands the
     host the decision. Keeping enforcement host-side is the Foundry pattern: the
     runtime stays stateless and the host owns the verdict.
+
+    This fails CLOSED: a tool call is allowed only when the judge is present and
+    labels it "safe". A "destructive" label, any unexpected label, or a missing
+    label denies, so a flaky or adversarial judge response can never wave a
+    destructive call through. The judge annotation is bound only on
+    PRE_TOOL_CALL, so POST_TOOL_CALL (no judge annotation) is allowed here; this
+    example governs tool input, not output.
     """
 
     def evaluate(self, invocation):
-        annotations = invocation["input"]["annotations"]
-        label = annotations.get("intent_judge", {}).get("label")
-        if label == "destructive":
-            return {
-                "decision": "deny",
-                "reason": "LLM judge classified the tool argument as destructive",
-            }
-        return {"decision": "allow"}
+        judged = invocation["input"]["annotations"].get("intent_judge")
+        if judged is None:
+            # Not judged (e.g. the post-tool seam). Output is not gated here.
+            return {"decision": "allow"}
+        label = judged.get("label")
+        if label == "safe":
+            return {"decision": "allow"}
+        reason = (
+            f"LLM judge labelled the tool argument {label!r}"
+            if label
+            else "LLM judge returned no usable label"
+        )
+        return {"decision": "deny", "reason": reason}
 
 
 def build_control() -> AgentControl:
@@ -251,21 +272,29 @@ async def demo_long_path(control: AgentControl) -> None:
         if decision is Decision.ESCALATE:
             print(f"  ESCALATE -> {tool_name}: route to a human approver, holding the call")
             return None, False
+        # ESCALATE and TRANSFORM are shown for completeness; this host policy
+        # only emits allow/deny, so those branches illustrate the full decision
+        # space a real policy could use.
         # TRANSFORM hands back a rewritten policy target (e.g. redacted args).
         effective_args = args
-        if decision is Decision.TRANSFORM and pre.transformed_policy_target is not None:
+        if (
+            decision is Decision.TRANSFORM
+            and isinstance(pre.transformed_policy_target, dict)
+        ):
             effective_args = pre.transformed_policy_target
 
         output = TOOLS[tool_name](**effective_args)
 
-        # Gate the output too, then return it.
+        # Evaluate the output seam. This example binds the judge only on
+        # PRE_TOOL_CALL, so POST_TOOL_CALL is not gated here; this is where
+        # output governance would attach (bind an annotation on post).
         post = await govern(
             control,
             InterventionPoint.POST_TOOL_CALL,
             {"tool_call": {"name": tool_name, "args": effective_args}, "tool_result": output},
         )
-        if post.verdict.decision is Decision.DENY:
-            print(f"  DENY (post) -> {tool_name}: {post.verdict.reason}")
+        if post.verdict.decision is not Decision.ALLOW:
+            print(f"  {post.verdict.decision.name} (post) -> {tool_name}: {post.verdict.reason}")
             return None, False
         print(f"  {decision.name:5} -> {tool_name}: ran, output={output!r}")
         return output, True

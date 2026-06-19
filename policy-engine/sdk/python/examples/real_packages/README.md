@@ -36,14 +36,21 @@ python foundry_agents.py
 Shows how a production user gates a Foundry agent's tool calls with ACS. It
 builds real `FunctionTool` definitions from the `azure-ai-agents` SDK and governs
 the tool-execution seam with a policy backed by a **live Azure OpenAI LLM judge**
-(no canned verdicts). Two integration styles for the same seam:
+(no canned verdicts). The host policy fails closed: it allows only an explicit
+"safe" verdict, so a destructive, unexpected, or missing label denies. Two
+integration styles for the same seam:
 
-- **Short path** — `control.protect_tool(name, execute=fn)` returns a drop-in
-  async wrapper that evaluates `PRE_TOOL_CALL`/`POST_TOOL_CALL`, applies any
+- **Short path**: `control.protect_tool(name, execute=fn)` returns a drop-in
+  async wrapper that evaluates `PRE_TOOL_CALL` and `POST_TOOL_CALL`, applies any
   transform, and raises `AgentControlBlocked` on a deny.
-- **Long path** — call `control.evaluate_intervention_point(...)` yourself and
+- **Long path**: call `control.evaluate_intervention_point(...)` yourself and
   branch on `verdict.decision` (allow / deny / escalate / transform). This is the
   shape you drop into a framework's own auto-function-call hook.
+
+The example judges tool input on `PRE_TOOL_CALL`; it does not bind a judge on
+`POST_TOOL_CALL`, so output is evaluated but not gated (that is where output
+governance would attach). The judge sees untrusted argument text and is subject
+to prompt injection, so treat it as defense in depth behind deterministic policy.
 
 To wire it into a live Foundry agent run, register the same callables with
 `FunctionTool`/`ToolSet` and route the SDK's function-invocation hook through
