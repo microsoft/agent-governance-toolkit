@@ -247,9 +247,7 @@ impl Manifest {
                 };
                 let invocation = AnnotatorInvocation::from_annotation(annotator, annotation);
                 reject_url_sourced_annotator_fields(
-                    &format!(
-                        "annotation '{annotation_name}' for intervention point {point}"
-                    ),
+                    &format!("annotation '{annotation_name}' for intervention point {point}"),
                     &invocation.fields,
                 )?;
             }

