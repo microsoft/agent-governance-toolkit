@@ -150,3 +150,37 @@ We will add a new integration: **DecisionAssure Continuity Kernel**, which provi
 - PR #3113 (closed for ADR review)
 - [DecisionAssure Continuity Kernel](https://github.com/a1k7/integrations/tree/main/decisionassure_continuity)
 - [TRACE Specification v0.1](https://github.com/agentrust-io/trace)
+
+
+## Security Considerations
+
+### Threat Model for Self‑Improving Governance
+
+The Governance Learning Loop introduces a self‑improving component to AGT. The primary threats are:
+
+1. **Adversarial Trace Injection**: An attacker submits traces designed to poison the ontology.
+   - Mitigation: Confidence thresholds (default 50%) reject low‑confidence discoveries. Human review gates all ontology changes. All traces are recorded immutably.
+
+2. **Ontology Drift**: The ontology evolves in a direction that reduces governance coverage.
+   - Mitigation: Ontology changes are versioned. Historical replay compares coverage before and after each change. Regressions are detected and can be rolled back.
+
+3. **Replay Attacks**: The same capability is re‑submitted repeatedly.
+   - Mitigation: Duplicate detection using witness hash deduplication. The system tracks `first_seen` and `occurrence_count` to avoid redundant reviews.
+
+### Blast‑Radius Bounds
+
+If the learning loop converges on a bad policy:
+
+- **Impact is bounded**: Only capabilities that have been human‑approved affect governance decisions.
+- **Replay provides validation**: Every ontology change is replayed against historical traces. If coverage decreases, the change can be reverted.
+- **Fail‑closed default**: If the learning loop is unavailable, AGT falls back to its existing static governance. The learning loop is advisory, not mandatory.
+
+## Interaction with Immutable Audit Trail
+
+The Governance Learning Loop does not modify AGT's existing audit logs. It creates new, append‑only records:
+
+- **Trace records**: Immutable records of every uploaded trace.
+- **Witness records**: Cryptographic proofs of discovered capabilities.
+- **Ledger entries**: Versioned ontology changes with reviewer signatures.
+
+These records can be independently verified and audited alongside AGT's existing audit trail.
