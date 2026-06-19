@@ -27,8 +27,9 @@ pub use endpoint::EndpointAnnotator;
 pub use llm::LlmAnnotator;
 
 use crate::AnnotatorDispatcher;
+use crate::Limits;
 #[cfg(feature = "opa")]
-use crate::{Limits, Manifest, OpaPolicyDispatcher, OpaRegoRunner, PolicyDispatcher, RuntimeError};
+use crate::{Manifest, OpaPolicyDispatcher, OpaRegoRunner, PolicyDispatcher, RuntimeError};
 use std::sync::Arc;
 
 /// The bundled native annotator dispatcher used as the zero-config default. It
