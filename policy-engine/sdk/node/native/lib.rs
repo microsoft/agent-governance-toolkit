@@ -240,13 +240,13 @@ impl NativeRuntime {
     pub fn from_url(
         env: Env,
         url: String,
-        sha256: String,
+        sha256: Option<String>,
         annotator_callback: Option<JsFunction>,
         policy_callback: Option<JsFunction>,
         perf_telemetry: Option<u8>,
     ) -> Result<Self> {
-        let manifest =
-            Manifest::from_url(&url, &sha256).map_err(|err| Error::from_reason(err.to_string()))?;
+        let manifest = Manifest::from_url(&url, sha256.as_deref())
+            .map_err(|err| Error::from_reason(err.to_string()))?;
         Self::from_manifest(
             env,
             manifest,

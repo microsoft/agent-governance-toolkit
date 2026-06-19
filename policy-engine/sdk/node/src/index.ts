@@ -195,7 +195,7 @@ type NativeRuntimeConstructor = {
   ): NativeRuntime;
   fromUrl(
     url: string,
-    sha256: string,
+    sha256: string | undefined | null,
     annotatorCallback: NativeRuntimeCallback | undefined,
     policyCallback: NativeRuntimeCallback | undefined,
     perfTelemetry?: PerfTelemetry,
@@ -311,7 +311,7 @@ export class AgentControl {
 
   static fromUrl(
     url: string,
-    sha256: string,
+    sha256?: string,
     annotatorDispatcher?: AnnotatorDispatcher,
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,

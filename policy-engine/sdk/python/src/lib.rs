@@ -222,15 +222,15 @@ impl NativeRuntime {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (url, sha256, annotator_cb = None, policy_cb = None, perf_telemetry = 0))]
+    #[pyo3(signature = (url, sha256 = None, annotator_cb = None, policy_cb = None, perf_telemetry = 0))]
     fn from_url(
         url: String,
-        sha256: String,
+        sha256: Option<String>,
         annotator_cb: Option<Py<PyAny>>,
         policy_cb: Option<Py<PyAny>>,
         perf_telemetry: u8,
     ) -> PyResult<Self> {
-        let manifest = Manifest::from_url(&url, &sha256).map_err(runtime_error)?;
+        let manifest = Manifest::from_url(&url, sha256.as_deref()).map_err(runtime_error)?;
         Self::from_manifest(manifest, annotator_cb, policy_cb, perf_telemetry)
     }
 

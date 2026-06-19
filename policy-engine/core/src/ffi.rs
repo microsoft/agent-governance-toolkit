@@ -200,15 +200,17 @@ pub unsafe extern "C" fn acs_builder_from_path(
     })
 }
 
-/// Construct an ACS builder from a top level manifest fetched from a pinned
-/// HTTPS URL. `sha256` MUST be a 64 character hexadecimal SHA-256 digest over
-/// the fetched bytes. A non HTTPS URL, a missing or malformed pin, a fetch
-/// error, a body size breach, or a hash mismatch fails closed.
+/// Construct an ACS builder from a top level manifest fetched from an HTTPS
+/// URL. `sha256` is optional and MAY be null. When supplied it MUST be a 64
+/// character hexadecimal SHA-256 digest over the fetched bytes. A non HTTPS
+/// URL, a malformed pin, a fetch error, a body size breach, or a hash mismatch
+/// fails closed.
 ///
 /// # Safety
-/// `url` and `sha256` must be valid pointers to NUL-terminated UTF-8 strings.
-/// If `err` is non-null, it must point to writable storage for a `char*`;
-/// populated errors must be freed with `acs_free_string`.
+/// `url` must be a valid pointer to a NUL-terminated UTF-8 string. `sha256` may
+/// be null or a valid pointer to a NUL-terminated UTF-8 string. If `err` is
+/// non-null, it must point to writable storage for a `char*`; populated errors
+/// must be freed with `acs_free_string`.
 #[no_mangle]
 pub unsafe extern "C" fn acs_builder_from_url(
     url: *const c_char,
@@ -223,11 +225,15 @@ pub unsafe extern "C" fn acs_builder_from_url(
                 return std::ptr::null_mut();
             }
         };
-        let sha256 = match unsafe { cstr_to_str(sha256) } {
-            Some(value) => value,
-            None => {
-                unsafe { write_err(err, "null or non-UTF8 sha256") };
-                return std::ptr::null_mut();
+        let sha256 = if sha256.is_null() {
+            None
+        } else {
+            match unsafe { cstr_to_str(sha256) } {
+                Some(value) => Some(value),
+                None => {
+                    unsafe { write_err(err, "non-UTF8 sha256") };
+                    return std::ptr::null_mut();
+                }
             }
         };
         match Manifest::from_url(url, sha256) {

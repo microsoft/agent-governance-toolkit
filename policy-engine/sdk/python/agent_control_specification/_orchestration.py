@@ -79,7 +79,7 @@ class AgentControl:
     def from_url(
         cls,
         url: str,
-        sha256: str,
+        sha256: str | None = None,
         annotator_dispatcher: AnnotatorDispatcher | None = None,
         policy_dispatcher: PolicyDispatcher | None = None,
         *,

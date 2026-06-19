@@ -81,18 +81,19 @@ impl AgentControl {
         Self::from_manifest_with_dispatchers(manifest, annotations, policy)
     }
 
-    /// Load a top level manifest from a pinned HTTPS URL. The URL MUST be HTTPS
-    /// and carry a 64 character hexadecimal `sha256` digest over the fetched
-    /// bytes. See [`agent_control_specification_core::Manifest::from_url`] for the
-    /// trust gate, which fails closed on a non HTTPS URL, a missing pin, a fetch
+    /// Load a top level manifest from an HTTPS URL. The URL MUST be HTTPS. The
+    /// `sha256` pin is optional, mirroring URL `extends`, and when supplied MUST
+    /// be a 64 character hexadecimal digest over the fetched bytes. See
+    /// [`agent_control_specification_core::Manifest::from_url`] for the trust
+    /// gate, which fails closed on a non HTTPS URL, a malformed pin, a fetch
     /// error, a body size breach, or a hash mismatch.
-    pub fn from_url(url: &str, sha256: &str) -> Result<Self, RuntimeError> {
+    pub fn from_url(url: &str, sha256: Option<&str>) -> Result<Self, RuntimeError> {
         Self::from_url_with_dispatchers(url, sha256, None, None)
     }
 
     pub fn from_url_with_dispatchers(
         url: &str,
-        sha256: &str,
+        sha256: Option<&str>,
         annotations: Option<Arc<dyn AnnotatorDispatcher>>,
         policy: Option<Arc<dyn PolicyDispatcher>>,
     ) -> Result<Self, RuntimeError> {

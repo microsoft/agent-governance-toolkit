@@ -294,17 +294,19 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
 
     def test_from_url_rejects_non_https_and_fails_closed(self):
         # The top level manifest URL loader reuses the extends trust gate, so a
-        # non HTTPS URL is refused before any network access.
+        # non HTTPS URL is refused before any network access, with or without a
+        # pin.
         with self.assertRaises(RuntimeError) as ctx:
-            AgentControl.from_url("http://policy.example/manifest.yaml", "00" * 32)
+            AgentControl.from_url("http://policy.example/manifest.yaml")
         self.assertIn("runtime_error:manifest_invalid", str(ctx.exception))
 
-    def test_from_url_requires_a_pin(self):
-        # An empty pin is rejected because the top level manifest is the root of
-        # trust and an unpinned remote root must fail closed.
+    def test_from_url_pin_is_optional(self):
+        # The pin is optional, mirroring URL extends. Omitting it still reaches
+        # the loader; here a non HTTPS URL surfaces the loader error, confirming
+        # the unpinned call path is wired.
         with self.assertRaises(RuntimeError) as ctx:
-            AgentControl.from_url("https://policy.example/manifest.yaml", "   ")
-        self.assertIn("sha256 pin", str(ctx.exception))
+            AgentControl.from_url("http://policy.example/manifest.yaml", sha256=None)
+        self.assertIn("unsupported URL scheme", str(ctx.exception))
 
     def test_from_path_bad_explicit_opa_path_fails_closed_on_evaluation(self):
         import os
