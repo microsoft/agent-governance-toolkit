@@ -27,7 +27,7 @@ impl AnnotatorDispatcher for DefaultAnnotatorDispatcher {
                 ClassifierAnnotator.dispatch(annotator_name, annotator, preliminary_policy_input)
             }
             Some(TYPE_LLM) => {
-                LlmAnnotator.dispatch(annotator_name, annotator, preliminary_policy_input)
+                LlmAnnotator::new().dispatch(annotator_name, annotator, preliminary_policy_input)
             }
             Some(TYPE_ENDPOINT) => {
                 EndpointAnnotator.dispatch(annotator_name, annotator, preliminary_policy_input)

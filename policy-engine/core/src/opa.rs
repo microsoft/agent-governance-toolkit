@@ -26,6 +26,7 @@ pub struct OpaRegoRunner {
     executable: PathBuf,
     data_paths: Vec<PathBuf>,
     eval_timeout: Duration,
+    limits: Limits,
 }
 
 impl OpaRegoRunner {
@@ -34,7 +35,13 @@ impl OpaRegoRunner {
             executable: PathBuf::from("opa"),
             data_paths: Vec::new(),
             eval_timeout: DEFAULT_OPA_TIMEOUT,
+            limits: Limits::default(),
         }
+    }
+
+    pub fn with_limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self
     }
 
     pub fn from_environment() -> Self {
@@ -134,7 +141,7 @@ impl OpaRegoRunner {
         // invoking opa. The temp dir is cleaned up when `remote_bundle` drops
         // at the end of this function, after opa has finished reading it.
         let remote_bundle = match &invocation.bundle_url {
-            Some(value) => Some(fetch_remote_bundle(value)?),
+            Some(value) => Some(fetch_remote_bundle(value, self.limits)?),
             None => None,
         };
         let mut command = Command::new(&self.executable);
@@ -235,8 +242,8 @@ fn remote_bundle_token() -> String {
 /// is a runtime policy invocation failure, not a static manifest error, so the
 /// reason is remapped to `PolicyInvocationFailed`. A size breach keeps its
 /// `ResourceLimitExceeded` reason.
-fn fetch_remote_bundle(value: &JsonValue) -> Result<RemoteBundle, RuntimeError> {
-    let body = crate::manifest::fetch_pinned_https_bytes(value, Limits::default()).map_err(
+fn fetch_remote_bundle(value: &JsonValue, limits: Limits) -> Result<RemoteBundle, RuntimeError> {
+    let body = crate::manifest::fetch_pinned_https_bytes(value, limits).map_err(
         |err| match err {
             RuntimeError::ResourceLimitExceeded(_) => err,
             other => RuntimeError::PolicyInvocationFailed(format!(
@@ -248,11 +255,25 @@ fn fetch_remote_bundle(value: &JsonValue) -> Result<RemoteBundle, RuntimeError> 
     write_remote_bundle(&body)
 }
 
+/// Create a directory accessible only to the current user (mode 0o700 on Unix).
+/// On non-Unix platforms `std::fs::create_dir` is used unchanged because
+/// Windows uses ACLs rather than POSIX permission bits.
+#[cfg(unix)]
+fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().mode(0o700).create(path)
+}
+
+#[cfg(not(unix))]
+fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir(path)
+}
+
 /// Materialize verified bundle bytes into a fresh temp directory. Split from
 /// the network fetch so the temp directory lifecycle is unit testable.
 fn write_remote_bundle(body: &[u8]) -> Result<RemoteBundle, RuntimeError> {
     let dir = env::temp_dir().join(format!("acs-rego-bundle-{}", remote_bundle_token()));
-    std::fs::create_dir(&dir).map_err(|err| {
+    create_private_dir(&dir).map_err(|err| {
         RuntimeError::PolicyInvocationFailed(format!(
             "failed to create temp directory '{}' for remote rego bundle: {err}",
             dir.display()

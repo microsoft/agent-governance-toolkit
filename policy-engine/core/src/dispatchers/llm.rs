@@ -3,17 +3,32 @@ use crate::dispatchers::{
     constants::*,
     http, resolve,
 };
-use crate::{AnnotatorDispatcher, AnnotatorInvocation, JsonValue, RuntimeError};
+use crate::{AnnotatorDispatcher, AnnotatorInvocation, JsonValue, Limits, RuntimeError};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct LlmAnnotator;
+#[derive(Debug, Clone, Copy)]
+pub struct LlmAnnotator {
+    limits: Limits,
+}
+
+impl Default for LlmAnnotator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl LlmAnnotator {
     pub fn new() -> Self {
-        Self
+        Self {
+            limits: Limits::default(),
+        }
+    }
+
+    pub fn with_limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self
     }
 
     pub fn dispatch_with_transport(
@@ -28,6 +43,7 @@ impl LlmAnnotator {
             annotator,
             preliminary_policy_input,
             transport,
+            self.limits,
         )
     }
 }
@@ -44,6 +60,7 @@ impl AnnotatorDispatcher for LlmAnnotator {
             annotator,
             preliminary_policy_input,
             &UreqHttpTransport,
+            self.limits,
         )
     }
 }
@@ -53,6 +70,7 @@ fn dispatch_with_transport(
     annotator: &AnnotatorInvocation,
     preliminary_policy_input: &JsonValue,
     transport: &dyn HttpTransport,
+    limits: Limits,
 ) -> Result<JsonValue, RuntimeError> {
     if annotator.field(ANNOTATOR_TYPE).and_then(JsonValue::as_str) != Some(TYPE_LLM) {
         return Err(resolve::failed(
@@ -60,7 +78,7 @@ fn dispatch_with_transport(
             "LLM dispatcher received a non-LLM annotator",
         ));
     }
-    let cfg = LlmConfig::from_fields(annotator_name, &annotator.fields)?;
+    let cfg = LlmConfig::from_fields(annotator_name, &annotator.fields, limits)?;
     let policy_target =
         resolve::policy_target_text(annotator_name, annotator, preliminary_policy_input)?;
     let request = request_for_provider(annotator_name, &cfg, &policy_target)?;
@@ -138,6 +156,7 @@ impl LlmProvider {
 fn resolve_system_prompt(
     annotator_name: &str,
     fields: &BTreeMap<String, JsonValue>,
+    limits: Limits,
 ) -> Result<String, RuntimeError> {
     if let Some(text) = http::optional_string_field(fields, FIELD_SYSTEM_PROMPT)
         .or_else(|| http::optional_string_field(fields, FIELD_PROMPT))
@@ -153,7 +172,7 @@ fn resolve_system_prompt(
         });
     }
     if let Some(value) = fields.get(FIELD_SYSTEM_PROMPT_URL) {
-        return crate::manifest::fetch_pinned_https_text(value, crate::Limits::default())
+        return crate::manifest::fetch_pinned_https_text(value, limits)
             .map_err(|error| resolve::failed(annotator_name, error.detail().to_string()));
     }
     Ok(DEFAULT_SYSTEM_PROMPT.to_string())
@@ -163,6 +182,7 @@ impl LlmConfig {
     fn from_fields(
         annotator_name: &str,
         fields: &BTreeMap<String, JsonValue>,
+        limits: Limits,
     ) -> Result<Self, RuntimeError> {
         let provider = LlmProvider::parse(http::optional_string_field(fields, FIELD_PROVIDER))
             .map_err(|error| resolve::failed(annotator_name, error))?;
@@ -173,7 +193,7 @@ impl LlmConfig {
                 _ => DEFAULT_MODEL,
             })
             .to_string();
-        let prompt = resolve_system_prompt(annotator_name, fields)?;
+        let prompt = resolve_system_prompt(annotator_name, fields, limits)?;
         Ok(Self {
             provider,
             endpoint: opt_string(fields, FIELD_ENDPOINT),
