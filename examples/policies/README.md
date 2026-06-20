@@ -1,6 +1,6 @@
 # Policies Example
 
-Sample YAML governance policy files for AgentMesh. Each file provides an example configuration covering a specific security or compliance scenario. 
+Sample YAML governance policy files for AgentMesh. Each file provides an example configuration covering a specific security or compliance scenario.
 
 ## Policies
  
@@ -18,14 +18,25 @@ Sample YAML governance policy files for AgentMesh. Each file provides an example
 | `sql-safety.yaml` | Blocks destructive SQL patterns |
 | `sql-strict.yaml` | Strict SQL allowlist for production databases |
 
+## Policy Packs
+
+Multi-file policy libraries for specific regulatory or enterprise scenarios. Each pack has its own README with file listings, usage, and jurisdiction details.
+
+| Directory | Policies | Description |
+|-----------|----------|-------------|
+| [`african-regulatory/`](african-regulatory/) | 15 | African regulatory and universal agent safety controls for Nigeria, Kenya, South Africa, Uganda, Tanzania, and Ethiopia. Includes OPA Rego reference implementations and a jurisdiction router. |
+| [`production/`](production/) | 5 | Ready-to-use enterprise policies (`minimal`, `enterprise`, `healthcare`, `financial`, `strict`) with graduated risk levels. |
+
 ## How to Use
- 
+
 These policy files can be applied to agent workflows to enforce governance rules.
- 
+
 ```bash
 scripts/check-policy.sh --action "web_search" --tokens 1500 --policy examples/policies/sql-safety.yaml
 ```
 
+For pack-specific loading examples and jurisdiction routing, see the README in each pack directory.
+
 ## Related
- 
+
 - [Quickstart](../quickstart/) - Runnable examples that use these policies
