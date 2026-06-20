@@ -5,16 +5,16 @@
   # Enforcing authority: Data Protection Board of India (MeitY)
   # Status: In force, phased — full enforcement 13 May 2027
   #
-  # ⚠️  Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+  # Community-maintained governance starter policy. NOT a certified legal compliance instrument.
   # Perform your own compliance assessment with qualified advisors before deploying.
   #
   # Key obligations enforced:
-  #   s.6        — Consent (free, specific, informed, unambiguous)
-  #   s.8(3)     — Purpose limitation / erasure when purpose served
-  #   s.8(5)     — Reasonable security safeguards
-  #   s.8(6)+R7  — Breach notification (Board + Data Principals; 72h detailed report)
-  #   s.10+R13   — Significant Data Fiduciary: algorithmic due diligence, DPIA, annual audit
-  #   s.16       — Cross-border transfer (negative list; currently empty)
+  #   s.6        Consent (free, specific, informed, unambiguous)
+  #   s.8(3)     Purpose limitation / erasure when purpose served
+  #   s.8(5)     Reasonable security safeguards
+  #   s.8(6)+R7  Breach notification (Board + Data Principals; 72h detailed report)
+  #   s.10+R13   Significant Data Fiduciary: algorithmic due diligence, DPIA, annual audit
+  #   s.16       Cross-border transfer (negative list; currently empty)
   #
   # Rego reference implementation: rego/dpdp-data-protection.rego (NOT loaded at runtime)
 
@@ -26,12 +26,11 @@
     breach-notification non-suppression, SDF algorithmic due diligence, and cross-border review.
 
   metadata:
-    source_regulation: "Digital Personal Data Protection Act 2023 (Act 22 of 2023); DPDP Rules 2025 — ss. 6, 8, 10, 16"
+    source_regulation: "Digital Personal Data Protection Act 2023 (Act 22 of 2023); DPDP Rules 2025 - ss. 6, 8, 10, 16"
     jurisdiction: "IN"
     enforcing_authority: "Data Protection Board of India (MeitY)"
 
   rules:
-
     - name: dpdp-consent-required-block
       condition:
         field: action
@@ -48,7 +47,7 @@
         value: "(?i)(reuse|repurpose|secondary\\s+use).{0,40}(personal\\s+data|pii)"
       action: block
       priority: 90
-      message: "DPDP s.6(1) & s.8(3): personal data may be used only for the consented purpose; erase when purpose is served"
+      message: "DPDP s.6(1) and s.8(3): personal data may be used only for the consented purpose; erase when purpose is served"
 
     - name: dpdp-security-safeguards-block
       condition:
@@ -67,7 +66,7 @@
   eport|notification))"
       action: deny
       priority: 100
-      message: "DPDP s.8(6) + Rule 7: agent cannot suppress or delay breach notification to the Data Protection Board and affected Data Principals
+      message: "DPDP s.8(6) and Rule 7: agent cannot suppress or delay breach notification to the Data Protection Board and affected Data Principals
   (72h detailed report)"
 
     - name: dpdp-sdf-algorithmic-due-diligence-audit
@@ -77,7 +76,7 @@
         value: "^(deploy_model|run_automated_decision|profile_personal_data)$"
       action: audit
       priority: 70
-      message: "DPDP Rule 13 (Significant Data Fiduciary, if notified): verify algorithms/AI tools do not endanger Data Principal rights; DPIA +
+      message: "DPDP Rule 13 (Significant Data Fiduciary, if notified): verify algorithms/AI tools do not endanger Data Principal rights; DPIA plus
   annual independent audit required"
 
     - name: dpdp-crossborder-transfer-audit
