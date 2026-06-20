@@ -185,3 +185,23 @@ These records can be independently verified and audited alongside AGT's existing
 - PR #3113 (closed for ADR review)
 - [DecisionAssure Continuity Kernel](https://github.com/a1k7/integrations/tree/main/decisionassure_continuity)
 - [TRACE Specification v0.1](https://github.com/agentrust-io/trace)
+
+
+
+
+### Assurance Classes and Reviewability
+
+The following table clarifies which governance guarantee each layer provides and how a reviewer can verify it:
+
+| Guarantee Class | Reviewer Checks By | Provided by this ADR? |
+|-----------------|-------------------|----------------------|
+| **Detection / what happened** | Replaying the trace and verifying the witness | ✅ Yes – this is the Governance Learning Loop |
+| **Enforced at the gate** | Checking the policy/sandbox/fail-closed control event or log | ✅ Existing AGT structural controls (referenced, not modified) |
+| **Unreachable by construction** | Inspecting the constructed reachable surface without replaying the run | ❌ No – out of scope for this ADR (a different assurance class) |
+
+This keeps the boundary clear:
+
+- The Governance Learning Loop **strengthens detection and evidence** of emergent capabilities.
+- It does **not** claim construction-level non-reachability.
+- The audit trail captures the first layer, references the second, and does not attempt the third.
+- This aligns with the maintainer review question: *"How does the learning loop interact with the immutable audit trail guarantees?"* — the table makes explicit which guarantee each layer provides and how a reviewer checks it, without mixing the three assurance mechanisms.
