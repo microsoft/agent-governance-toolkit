@@ -1241,3 +1241,12 @@ acall
 Acall
 acheck
 unroutable
+
+# --- Terraform examples ---
+myagent
+myagentprodsa
+passwordless
+appconfig
+appconfiguration
+boto
+hostnames
