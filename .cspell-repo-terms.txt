@@ -152,3 +152,10 @@ Nanvix
 reqwest
 requireapproval
 uncallable
+myagent
+myagentprodsa
+passwordless
+appconfig
+appconfiguration
+boto
+hostnames
