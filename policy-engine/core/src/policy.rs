@@ -116,13 +116,18 @@ impl PolicyConfig {
     /// has no file system manifest root, so a rego `bundle`, a cedar
     /// `policy_path`/`entities_path`/`schema_path`, or adapter `data`/`data_paths`
     /// would resolve against the process working directory at dispatch. A URL
-    /// sourced manifest MUST use the `bundle_url` form or inline policy text, so
-    /// any such field fails closed.
+    /// sourced manifest MUST use inline policy text, so any such field fails
+    /// closed. The remote rego `bundle_url` form is rejected separately by
+    /// [`PolicyConfig::reject_url_sourced_remote_bundle`].
     pub fn reject_filesystem_path_fields(&self, context: &str) -> Result<(), RuntimeError> {
         match self {
             Self::Rego(config) => {
                 if config.bundle.is_some() {
-                    return Err(filesystem_field_error(context, "bundle", "bundle_url"));
+                    return Err(filesystem_field_error(
+                        context,
+                        "bundle",
+                        "inline policy text",
+                    ));
                 }
                 reject_adapter_data_paths(&config.adapter_config, context)?;
             }
@@ -139,6 +144,28 @@ impl PolicyConfig {
             }
             Self::Test(config) => reject_adapter_data_paths(&config.adapter_config, context)?,
             Self::Custom(config) => reject_adapter_data_paths(&config.adapter_config, context)?,
+        }
+        Ok(())
+    }
+
+    /// Reject a remote rego `bundle_url` declared on a URL sourced manifest. The
+    /// bundled OPA dispatcher runs the fetched bundle through `opa eval`, which
+    /// executes the bundle's rego with the host process environment and network
+    /// access. An untrusted URL sourced manifest that named a `bundle_url` could
+    /// therefore ship attacker chosen rego that reads a host secret through
+    /// `opa.runtime` and exfiltrates it through `http.send`. The hash pin does
+    /// not establish trust here because the same untrusted manifest chooses both
+    /// the URL and the pin. A URL sourced manifest therefore cannot carry a
+    /// remote rego bundle, mirroring how it cannot carry a local `bundle` or read
+    /// host credentials. A file sourced manifest, authored by the host operator,
+    /// keeps full `bundle_url` support.
+    pub fn reject_url_sourced_remote_bundle(&self, context: &str) -> Result<(), RuntimeError> {
+        if let Self::Rego(config) = self {
+            if config.bundle_url.is_some() {
+                return Err(RuntimeError::ManifestInvalid(format!(
+                    "{context} declares a remote rego 'bundle_url' in a URL sourced manifest; a URL sourced manifest cannot execute a remote rego bundle because the bundled rego runs with host environment and network access, load the policy from a file sourced manifest instead"
+                )));
+            }
         }
         Ok(())
     }

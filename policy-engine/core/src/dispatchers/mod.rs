@@ -35,13 +35,14 @@ use std::sync::Arc;
 /// The bundled native annotator dispatcher used as the zero-config default. It
 /// routes each annotator to the matching reference dispatcher based on its
 /// declared `type`, reading endpoint configuration from the manifest. It is
-/// bound to the host effective `Limits` for dispatch time fetches and to the
-/// manifest `url_sourced` provenance, so a bundled `llm` annotator on an
+/// bound to the `limits` the caller passes, used for dispatch time fetches, and
+/// to the manifest `url_sourced` provenance, so a bundled `llm` annotator on an
 /// untrusted URL sourced manifest never falls back to a host environment
 /// credential, including a provider default credential variable. Credentials
 /// must be supplied inline. A file sourced manifest keeps the historical
 /// behavior. Every host surface MUST build the annotator dispatcher through this
-/// function so the provenance is never dropped.
+/// function so the provenance is never dropped. Host surfaces currently pass
+/// `Limits::default()` because no host limits knob is wired yet.
 pub fn default_annotator_dispatcher_for(
     manifest: &Manifest,
     limits: Limits,
@@ -52,8 +53,9 @@ pub fn default_annotator_dispatcher_for(
     ))
 }
 
-/// The bundled native OPA policy dispatcher used as the zero-config default,
-/// bound to the host effective `Limits` so a `bundle_url` fetch honors them.
+/// The bundled native OPA policy dispatcher used as the zero-config default. The
+/// dispatch time `bundle_url` fetch uses `Limits::default()` because no host
+/// limits knob is wired through the FFI or SDK builders yet.
 ///
 /// Fails closed if the manifest declares a non-Rego policy because the default
 /// dispatcher only evaluates Rego. OPA process failures happen during

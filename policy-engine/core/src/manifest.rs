@@ -217,16 +217,20 @@ impl Manifest {
 
     /// Reject fields on a manifest that was not loaded from the file system, i.e.
     /// a URL sourced manifest, that would let the remote manifest reach a local
-    /// resource at dispatch. Without a file system manifest root, filesystem path
-    /// fields resolve against the process working directory, so a rego `bundle`,
-    /// an annotator `system_prompt_file`, a cedar path, or adapter `data` fails
-    /// closed. Separately, a URL sourced manifest also controls an `llm`
-    /// annotator's dispatch `endpoint`, so it MUST NOT be allowed to read host
-    /// environment secrets through `api_key_env` / `aws_*_env`; otherwise a
-    /// malicious remote manifest could name `AWS_SECRET_ACCESS_KEY` and ship it
-    /// to an attacker chosen endpoint. Both classes fail closed, so a URL sourced
-    /// manifest references remote artefacts through the `*_url` forms or inline
-    /// text and supplies any credential inline rather than from the host env.
+    /// resource or a host privilege at dispatch. Without a file system manifest
+    /// root, filesystem path fields resolve against the process working
+    /// directory, so a rego `bundle`, an annotator `system_prompt_file`, a cedar
+    /// path, or adapter `data` fails closed. A remote rego `bundle_url` also
+    /// fails closed, because the bundled OPA dispatcher would run that attacker
+    /// chosen rego with the host environment and network, so it could read a host
+    /// secret through `opa.runtime` and exfiltrate it through `http.send`.
+    /// Separately, a URL sourced manifest also controls an `llm` annotator's
+    /// dispatch `endpoint`, so it MUST NOT be allowed to read host environment
+    /// secrets through `api_key_env` / `aws_*_env`; otherwise a malicious remote
+    /// manifest could name `AWS_SECRET_ACCESS_KEY` and ship it to an attacker
+    /// chosen endpoint. All of these fail closed, so a URL sourced manifest
+    /// references a remote prompt through `system_prompt_url` or supplies policy
+    /// and credentials inline rather than from the host file system or host env.
     ///
     /// The scan covers the annotator declarations AND each declaration overlaid
     /// with its intervention point binding, because
@@ -254,6 +258,7 @@ impl Manifest {
         }
         for (id, policy) in &self.policies {
             policy.reject_filesystem_path_fields(&format!("policy '{id}'"))?;
+            policy.reject_url_sourced_remote_bundle(&format!("policy '{id}'"))?;
         }
         for (point, config) in &self.intervention_points {
             config.policy.reject_filesystem_path_fields(&format!(
@@ -2497,6 +2502,31 @@ intervention_points:
 
         let string_manifest = Manifest::from_yaml_str(base_manifest()).unwrap();
         assert!(!string_manifest.url_sourced);
+    }
+
+    #[test]
+    fn from_url_rejects_remote_rego_bundle_url() {
+        // Security regression: a URL sourced (untrusted) manifest must not carry
+        // a remote rego bundle_url, because the bundled OPA dispatcher would run
+        // the fetched rego with the host environment and network, so attacker
+        // chosen rego could read a host secret via opa.runtime and exfiltrate it
+        // via http.send. The hash pin does not establish trust because the same
+        // untrusted manifest chooses both the URL and the pin.
+        let url = "https://policy.example/top.yaml";
+        let body = "agent_control_specification_version: 0.3.1-beta\npolicies:\n  guard:\n    type: rego\n    query: data.x.verdict\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: guard\n".to_string();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.into_bytes())]));
+        let error = load_url_with_fetcher(url, None, fetcher, Limits::default()).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("remote rego 'bundle_url'"),
+            "got: {}",
+            error.detail()
+        );
+        // A file sourced manifest with the same bundle_url stays valid.
+        let file_manifest = Manifest::from_yaml_str(
+            "agent_control_specification_version: 0.3.1-beta\npolicies:\n  guard:\n    type: rego\n    query: data.x.verdict\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: guard\n",
+        );
+        assert!(file_manifest.is_ok(), "file sourced bundle_url stays valid");
     }
 
     #[test]
