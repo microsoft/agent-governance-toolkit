@@ -8,7 +8,7 @@ version = "4.1.0"
 description = "Public Preview — Unified installer and runtime policy enforcement for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
@@ -24,8 +24,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Security",
@@ -39,31 +37,31 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-core = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
-integrations = ["agent-governance-toolkit-integrations>=4.0.0,<5.0"]
-cli = ["agent-governance-toolkit-cli>=4.0.0,<5.0"]
-protocols = ["agent-governance-toolkit-protocols>=4.0.0,<5.0"]
+core = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
+integrations = ["agent-governance-toolkit-integrations>=4.1.0,<5.0"]
+cli = ["agent-governance-toolkit-cli>=4.1.0,<5.0"]
+protocols = ["agent-governance-toolkit-protocols>=4.1.0,<5.0"]
 # Framework-specific extras (delegated to integrations package)
-langchain = ["agent-governance-toolkit-integrations[langchain]>=4.0.0,<5.0"]
-crewai = ["agent-governance-toolkit-integrations[crewai]>=4.0.0,<5.0"]
-openai-agents = ["agent-governance-toolkit-integrations[openai-agents]>=4.0.0,<5.0"]
-langgraph = ["agent-governance-toolkit-integrations[langgraph]>=4.0.0,<5.0"]
-llamaindex = ["agent-governance-toolkit-integrations[llamaindex]>=4.0.0,<5.0"]
-haystack = ["agent-governance-toolkit-integrations[haystack]>=4.0.0,<5.0"]
-pydantic-ai = ["agent-governance-toolkit-integrations[pydantic-ai]>=4.0.0,<5.0"]
-adk = ["agent-governance-toolkit-integrations[adk]>=4.0.0,<5.0"]
+langchain = ["agent-governance-toolkit-integrations[langchain]>=4.1.0,<5.0"]
+crewai = ["agent-governance-toolkit-integrations[crewai]>=4.1.0,<5.0"]
+openai-agents = ["agent-governance-toolkit-integrations[openai-agents]>=4.1.0,<5.0"]
+langgraph = ["agent-governance-toolkit-integrations[langgraph]>=4.1.0,<5.0"]
+llamaindex = ["agent-governance-toolkit-integrations[llamaindex]>=4.1.0,<5.0"]
+haystack = ["agent-governance-toolkit-integrations[haystack]>=4.1.0,<5.0"]
+pydantic-ai = ["agent-governance-toolkit-integrations[pydantic-ai]>=4.1.0,<5.0"]
+adk = ["agent-governance-toolkit-integrations[adk]>=4.1.0,<5.0"]
 # Legacy extras (kept for backward compat)
-kernel = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
-mesh = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
-runtime = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
-sre = ["agent-governance-toolkit-cli>=4.0.0,<5.0"]
+kernel = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
+mesh = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
+runtime = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
+sre = ["agent-governance-toolkit-cli>=4.1.0,<5.0"]
 opa = []
 cedar = ["cedarpy>=4.0.0,<5.0"]
 full = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
-    "agent-governance-toolkit-integrations>=4.0.0,<5.0",
-    "agent-governance-toolkit-cli>=4.0.0,<5.0",
-    "agent-governance-toolkit-protocols>=4.0.0,<5.0",
+    "agent-governance-toolkit-core>=4.1.0,<5.0",
+    "agent-governance-toolkit-integrations>=4.1.0,<5.0",
+    "agent-governance-toolkit-cli>=4.1.0,<5.0",
+    "agent-governance-toolkit-protocols>=4.1.0,<5.0",
 ]
 
 [project.urls]

@@ -14,6 +14,7 @@ bundled local policy store in ``./policy-stores/unsigned``.
 
 Run:
     pip install -r requirements.txt
+    pip install -e ../../agent-governance-python/agentmesh-integrations/cedarling-agentmesh
     python unsigned_example.py
 
 For the JWT / trusted-issuer path, see multi_issuer_example.py.
@@ -32,7 +33,8 @@ except ImportError:
     sys.exit(
         "This example needs the Cedarling bindings. Install them with:\n"
         "    pip install -r requirements.txt\n"
-        "(which pulls in cedarling-python alongside cedarling_agentmesh)."
+        "    pip install -e ../../agent-governance-python/agentmesh-integrations/cedarling-agentmesh\n"
+        "(requirements.txt provides cedarling-python; cedarling_agentmesh installs from source)."
     )
 
 # ---------------------------------------------------------------------------

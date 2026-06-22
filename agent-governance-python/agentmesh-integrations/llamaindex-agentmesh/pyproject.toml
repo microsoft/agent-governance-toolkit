@@ -7,12 +7,12 @@ name = "llamaindex_agentmesh"
 version = "4.1.0"
 description = "Deprecated. Previously published as llamaindex-agentmesh. Install agent-governance-toolkit-integrations[llamaindex] instead."
 license = {text = "MIT"}
-requires-python = ">=3.9,<4.0"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
 dependencies = [
-    "agent-governance-toolkit-integrations[llamaindex]>=4.0.0,<5.0",
+    "agent-governance-toolkit-integrations[llamaindex]>=4.1.0,<5.0",
     # Deprecated stub. The worker imports `AgentRunner` from
     # `llama_index.core.agent`, which upstream removed in llama-index-core 0.13.
     # The published agent-governance-toolkit-integrations[llamaindex] extra only

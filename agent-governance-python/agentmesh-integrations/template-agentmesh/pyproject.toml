@@ -8,7 +8,7 @@ version = "4.1.0"
 description = "AgentMesh trust layer template — copy and rename for your framework"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Microsoft Corporation" }
 ]
