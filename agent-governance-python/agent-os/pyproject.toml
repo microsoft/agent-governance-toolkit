@@ -7,11 +7,11 @@ name = "agent_os_kernel"
 version = "4.1.0"
 description = "Deprecated. Previously published as agent-os-kernel. Install agent-governance-toolkit-core instead."
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
+dependencies = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
 
 # The published wheel is a dep-only deprecation stub (see [project] above), but
 # the agent_os source tree under src/ (and tests/) is still exercised in CI via
@@ -79,7 +79,7 @@ packages = ["src/agent_os"]
 # such as agent_os/integrations/__init__.py. Restoring them keeps CI green.
 # ============================================================================
 [tool.ruff]
-target-version = "py39"
+target-version = "py311"
 line-length = 100
 src = ["src", "modules"]
 

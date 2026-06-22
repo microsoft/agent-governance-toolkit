@@ -18,7 +18,7 @@ Community video series covering the toolkit architecture:
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════╗
-║                    AGENT GOVERNANCE TOOLKIT  v4.0.0                     ║
+║                    AGENT GOVERNANCE TOOLKIT  v4.1.0                     ║
 ║              pip install agent-governance-toolkit[full]                  ║
 ║                                                                         ║
 ║  Agent Action ──► POLICY CHECK ──► Allow / Deny    (< 0.1 ms)          ║
