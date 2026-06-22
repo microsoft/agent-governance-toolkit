@@ -34,24 +34,14 @@ use std::sync::Arc;
 
 /// The bundled native annotator dispatcher used as the zero-config default. It
 /// routes each annotator to the matching reference dispatcher based on its
-/// declared `type`, reading endpoint configuration from the manifest.
-pub fn default_annotator_dispatcher() -> Arc<dyn AnnotatorDispatcher> {
-    default_annotator_dispatcher_with_limits(Limits::default())
-}
-
-/// The zero-config annotator dispatcher bound to the host effective `Limits`, so
-/// a bundled `llm` annotator honors them on its dispatch-time `system_prompt_url`
-/// fetch (body size, timeout, redirects). `default_annotator_dispatcher` uses the
-/// default limits; a host with tightened limits builds the dispatcher here.
-pub fn default_annotator_dispatcher_with_limits(limits: Limits) -> Arc<dyn AnnotatorDispatcher> {
-    Arc::new(DefaultAnnotatorDispatcher::with_limits(limits))
-}
-
-/// The zero-config annotator dispatcher bound to the host effective `Limits` and
-/// to the manifest provenance. A URL sourced manifest is untrusted for host
-/// local access, so its bundled `llm` annotators never fall back to a host
-/// environment credential (provider default env var included); credentials must
-/// be supplied inline. A file sourced manifest keeps the historical behavior.
+/// declared `type`, reading endpoint configuration from the manifest. It is
+/// bound to the host effective `Limits` for dispatch time fetches and to the
+/// manifest `url_sourced` provenance, so a bundled `llm` annotator on an
+/// untrusted URL sourced manifest never falls back to a host environment
+/// credential, including a provider default credential variable. Credentials
+/// must be supplied inline. A file sourced manifest keeps the historical
+/// behavior. Every host surface MUST build the annotator dispatcher through this
+/// function so the provenance is never dropped.
 pub fn default_annotator_dispatcher_for(
     manifest: &Manifest,
     limits: Limits,
@@ -62,7 +52,8 @@ pub fn default_annotator_dispatcher_for(
     ))
 }
 
-/// The bundled native OPA policy dispatcher used as the zero-config default.
+/// The bundled native OPA policy dispatcher used as the zero-config default,
+/// bound to the host effective `Limits` so a `bundle_url` fetch honors them.
 ///
 /// Fails closed if the manifest declares a non-Rego policy because the default
 /// dispatcher only evaluates Rego. OPA process failures happen during
@@ -75,17 +66,6 @@ pub fn default_annotator_dispatcher_for(
 pub fn default_policy_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
-    default_policy_dispatcher_with_limits(manifest, Limits::default())
-}
-
-/// The zero-config OPA policy dispatcher bound to the host effective `Limits`, so
-/// a `bundle_url` fetch honors them. `default_policy_dispatcher` uses the default
-/// limits; a host with tightened limits builds the dispatcher here.
-#[cfg(feature = "opa")]
-pub fn default_policy_dispatcher_with_limits(
-    manifest: &Manifest,
-    limits: Limits,
-) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
     for (name, policy) in &manifest.policies {
         let engine = policy.engine_type();
         if engine != "rego" {
@@ -95,6 +75,6 @@ pub fn default_policy_dispatcher_with_limits(
         }
     }
     Ok(Arc::new(OpaPolicyDispatcher::with_runner(
-        OpaRegoRunner::from_environment().with_limits(limits),
+        OpaRegoRunner::from_environment().with_limits(Limits::default()),
     )))
 }

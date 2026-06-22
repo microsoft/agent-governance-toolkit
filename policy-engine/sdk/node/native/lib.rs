@@ -285,7 +285,12 @@ impl NativeRuntime {
     ) -> Result<Self> {
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_callback {
             Some(callback) => Arc::new(JsAnnotatorDispatcher(make_string_tsfn(&env, callback)?)),
-            None => agent_control_specification_core::dispatchers::default_annotator_dispatcher(),
+            None => {
+                agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
+                    &manifest,
+                    agent_control_specification_core::Limits::default(),
+                )
+            }
         };
         let policy: Arc<dyn PolicyDispatcher> = match policy_callback {
             Some(callback) => Arc::new(JsPolicyDispatcher(make_string_tsfn(&env, callback)?)),

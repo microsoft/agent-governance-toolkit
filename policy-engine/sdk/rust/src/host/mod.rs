@@ -111,7 +111,10 @@ impl AgentControl {
         policy: Option<Arc<dyn PolicyDispatcher>>,
     ) -> Result<Self, RuntimeError> {
         let annotations = annotations.unwrap_or_else(|| {
-            agent_control_specification_core::dispatchers::default_annotator_dispatcher()
+            agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
+                &manifest,
+                agent_control_specification_core::Limits::default(),
+            )
         });
         let policy = match policy {
             Some(policy) => policy,

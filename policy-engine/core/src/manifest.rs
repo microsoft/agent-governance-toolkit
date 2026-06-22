@@ -2485,6 +2485,21 @@ intervention_points:
     }
 
     #[test]
+    fn from_url_marks_manifest_url_sourced() {
+        // Provenance: a URL loaded manifest is flagged url_sourced so the host
+        // annotator dispatcher refuses host environment credentials for it. A
+        // string or file loaded manifest stays url_sourced false by default.
+        let url = "https://policy.example/top.yaml";
+        let body = base_manifest().as_bytes().to_vec();
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body)]));
+        let url_manifest = load_url_with_fetcher(url, None, fetcher, Limits::default()).unwrap();
+        assert!(url_manifest.url_sourced);
+
+        let string_manifest = Manifest::from_yaml_str(base_manifest()).unwrap();
+        assert!(!string_manifest.url_sourced);
+    }
+
+    #[test]
     fn from_url_rejects_system_prompt_file_in_annotation_binding() {
         // Regression: same binding overlay path for the filesystem source.
         let url = "https://policy.example/top.yaml";

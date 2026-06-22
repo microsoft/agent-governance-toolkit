@@ -310,7 +310,12 @@ impl NativeRuntime {
             .ok_or_else(|| PyValueError::new_err("perf_telemetry must be 0, 1, or 2"))?;
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_cb {
             Some(cb) => Arc::new(PyAnnotatorDispatcher { cb }),
-            None => agent_control_specification_core::dispatchers::default_annotator_dispatcher(),
+            None => {
+                agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
+                    &manifest,
+                    agent_control_specification_core::Limits::default(),
+                )
+            }
         };
         let policy: Arc<dyn PolicyDispatcher> = match policy_cb {
             Some(cb) => Arc::new(PyPolicyDispatcher { cb }),
