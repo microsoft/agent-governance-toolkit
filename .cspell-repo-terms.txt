@@ -221,6 +221,8 @@ healthz
 héllo
 helpdesk
 hexdigest
+HKDF
+hkdf
 HMAC
 HMACSHA
 htek
