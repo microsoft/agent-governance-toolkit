@@ -152,7 +152,8 @@ def _apparmor_profile_loaded(name: str) -> bool:
     try:
         with open("/sys/kernel/security/apparmor/profiles") as fh:
             for line in fh:
-                profile_name = line.split()[0] if line.split() else ""
+                parts = line.split()
+                profile_name = parts[0] if parts else ""
                 if profile_name == name:
                     return True
     except OSError:
