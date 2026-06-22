@@ -85,10 +85,20 @@ class AgentControl:
         *,
         approval_resolver: ApprovalResolver | None = None,
         perf_telemetry: int = 0,
+        max_url_bytes: int | None = None,
+        url_timeout_ms: int | None = None,
+        max_url_redirects: int | None = None,
     ) -> "AgentControl":
         return cls(
             NativeRuntimeClient.from_url(
-                url, sha256, annotator_dispatcher, policy_dispatcher, perf_telemetry
+                url,
+                sha256,
+                annotator_dispatcher,
+                policy_dispatcher,
+                perf_telemetry,
+                max_url_bytes=max_url_bytes,
+                url_timeout_ms=url_timeout_ms,
+                max_url_redirects=max_url_redirects,
             ),
             approval_resolver=approval_resolver,
         )

@@ -199,6 +199,9 @@ type NativeRuntimeConstructor = {
     annotatorCallback: NativeRuntimeCallback | undefined,
     policyCallback: NativeRuntimeCallback | undefined,
     perfTelemetry?: PerfTelemetry,
+    maxUrlBytes?: number,
+    urlTimeoutMs?: number,
+    maxUrlRedirects?: number,
   ): NativeRuntime;
   fromManifestChain(
     manifests: string[],
@@ -316,10 +319,24 @@ export class AgentControl {
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    urlFetchLimits?: {
+      maxBytes?: number;
+      timeoutMs?: number;
+      maxRedirects?: number;
+    },
   ): AgentControl {
     return new AgentControl(
       new NativeRuntimeClient(url, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
-        NativeRuntimeClass.fromUrl(url, sha256, annotator, policy, perfTelemetry),
+        NativeRuntimeClass.fromUrl(
+          url,
+          sha256,
+          annotator,
+          policy,
+          perfTelemetry,
+          urlFetchLimits?.maxBytes,
+          urlFetchLimits?.timeoutMs,
+          urlFetchLimits?.maxRedirects,
+        ),
       ),
       approvalResolver,
     );

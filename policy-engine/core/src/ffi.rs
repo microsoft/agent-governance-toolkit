@@ -7,7 +7,7 @@
 
 use crate::{
     AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, JsonValue, Manifest, PerfTelemetry, PolicyDispatcher,
+    InterventionPointRequest, JsonValue, Limits, Manifest, PerfTelemetry, PolicyDispatcher,
     PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use serde_json::json;
@@ -55,6 +55,7 @@ pub struct AcsBuilder {
     perf_telemetry: PerfTelemetry,
     enable_default_annotations: bool,
     enable_default_policy: bool,
+    limits: Limits,
 }
 
 pub struct AcsRuntime {
@@ -168,6 +169,7 @@ fn builder_from_manifest(manifest: Manifest) -> *mut AcsBuilder {
         perf_telemetry: PerfTelemetry::default(),
         enable_default_annotations: false,
         enable_default_policy: false,
+        limits: Limits::default(),
     }))
 }
 
@@ -502,6 +504,41 @@ pub unsafe extern "C" fn acs_builder_set_perf_telemetry(
     })
 }
 
+/// Set the URL fetch limits the bundled default dispatchers use for dispatch
+/// time fetches of a `system_prompt_url` prompt and a file sourced `bundle_url`
+/// rego bundle. `max_bytes` caps the fetched body, `timeout_ms` bounds each
+/// request, and `max_redirects` caps the validated redirect chain. A `max_bytes`
+/// or `timeout_ms` of 0 keeps the built in default for that field; `max_redirects`
+/// is applied as given so 0 forbids redirects. Has no effect unless a bundled
+/// default dispatcher is also enabled.
+///
+/// # Safety
+/// `b` must be a live builder returned by ACS and not concurrently mutated. If
+/// `err` is non-null it must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn acs_builder_set_url_fetch_limits(
+    b: *mut AcsBuilder,
+    max_bytes: u64,
+    timeout_ms: u64,
+    max_redirects: u32,
+    err: *mut *mut c_char,
+) -> i32 {
+    ffi_guard!(code_with_err, err, -1, {
+        let Some(builder) = (unsafe { b.as_mut() }) else {
+            unsafe { write_err(err, "null builder") };
+            return -1;
+        };
+        if max_bytes != 0 {
+            builder.limits.max_manifest_url_bytes = max_bytes as usize;
+        }
+        if timeout_ms != 0 {
+            builder.limits.manifest_url_timeout_ms = timeout_ms;
+        }
+        builder.limits.max_manifest_url_redirects = max_redirects as usize;
+        0
+    })
+}
+
 fn resolve_default_annotator_dispatcher(
     builder: &AcsBuilder,
     _manifest: &Manifest,
@@ -513,7 +550,7 @@ fn resolve_default_annotator_dispatcher(
     {
         Ok(Some(crate::dispatchers::default_annotator_dispatcher_for(
             _manifest,
-            crate::Limits::default(),
+            builder.limits,
         )))
     }
     #[cfg(not(feature = "default-dispatchers"))]
@@ -531,7 +568,7 @@ fn resolve_default_policy_dispatcher(
     }
     #[cfg(all(feature = "default-dispatchers", feature = "opa"))]
     {
-        crate::dispatchers::default_policy_dispatcher(manifest)
+        crate::dispatchers::default_policy_dispatcher_with_limits(manifest, builder.limits)
             .map(Some)
             .map_err(|error| error.to_string())
     }

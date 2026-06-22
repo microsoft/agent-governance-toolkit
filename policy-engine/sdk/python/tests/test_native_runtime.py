@@ -316,6 +316,20 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
             AgentControl.from_url("https://policy.example/manifest.yaml", sha256="zz")
         self.assertIn("runtime_error:manifest_invalid", str(ctx.exception))
 
+    def test_from_url_threads_url_fetch_limits(self):
+        # The optional URL fetch limit overrides thread through the wrapper, the
+        # client, and the native binding. A non HTTPS URL still fails closed
+        # before any network access, confirming the extra arguments are wired
+        # without changing the trust gate.
+        with self.assertRaises(RuntimeError) as ctx:
+            AgentControl.from_url(
+                "http://policy.example/manifest.yaml",
+                max_url_bytes=4096,
+                url_timeout_ms=1000,
+                max_url_redirects=0,
+            )
+        self.assertIn("unsupported URL scheme", str(ctx.exception))
+
     def test_from_path_bad_explicit_opa_path_fails_closed_on_evaluation(self):
         import os
         import tempfile

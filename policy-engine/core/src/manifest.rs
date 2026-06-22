@@ -1408,10 +1408,16 @@ struct HttpExtendsFetcher;
 
 impl ExtendsFetcher for HttpExtendsFetcher {
     fn fetch(&self, url: &str, limits: Limits) -> Result<Vec<u8>, RuntimeError> {
+        // redirects(0) disables ureq's built in redirect follower so this
+        // fetcher follows redirects itself and re runs every hop target through
+        // `validate_url_components` (HTTPS only plus the SSRF IP block). ureq's
+        // built in follower only enforces `https_only`, so without manual
+        // following a vetted public URL could 302 to an internal or loopback
+        // HTTPS host that the initial SSRF check would have rejected.
         let agent = ureq::AgentBuilder::new()
             .https_only(true)
             .try_proxy_from_env(false)
-            .redirects(limits.max_manifest_url_redirects as u32)
+            .redirects(0)
             .timeout(Duration::from_millis(limits.manifest_url_timeout_ms))
             .build();
         self.fetch_with_agent(url, limits, agent)
@@ -1427,32 +1433,70 @@ impl HttpExtendsFetcher {
     ) -> Result<Vec<u8>, RuntimeError> {
         use ureq::OrAnyStatus as _;
 
-        let response = agent.get(url).call().or_any_status().map_err(|err| {
-            RuntimeError::ManifestInvalid(format!("failed to fetch extends URL '{url}': {err}"))
-        })?;
-        if response.status() >= 400 {
-            return Err(RuntimeError::ManifestInvalid(format!(
-                "failed to fetch extends URL '{url}': HTTP {}",
-                response.status()
-            )));
+        let max_redirects = limits.max_manifest_url_redirects;
+        let mut current = url.to_string();
+        // One initial request plus up to `max_redirects` validated hops.
+        for _hop in 0..=max_redirects {
+            let response = agent.get(&current).call().or_any_status().map_err(|err| {
+                RuntimeError::ManifestInvalid(format!("failed to fetch extends URL '{url}': {err}"))
+            })?;
+            let status = response.status();
+            if (300..400).contains(&status) {
+                let location = response.header("Location").ok_or_else(|| {
+                    RuntimeError::ManifestInvalid(format!(
+                        "extends URL '{current}' returned redirect status {status} without a Location header"
+                    ))
+                })?;
+                // Re validate the redirect target before following it, so a
+                // redirect cannot escape the HTTPS and SSRF guards.
+                current = resolve_redirect_target(&current, location)?;
+                continue;
+            }
+            if status >= 400 {
+                return Err(RuntimeError::ManifestInvalid(format!(
+                    "failed to fetch extends URL '{url}': HTTP {status}"
+                )));
+            }
+            let mut body = Vec::new();
+            let mut reader = response
+                .into_reader()
+                .take(limits.max_manifest_url_bytes as u64 + 1);
+            reader.read_to_end(&mut body).map_err(|err| {
+                RuntimeError::ManifestInvalid(format!(
+                    "failed to read extends URL '{url}' response body: {err}"
+                ))
+            })?;
+            if body.len() > limits.max_manifest_url_bytes {
+                return Err(RuntimeError::ResourceLimitExceeded(format!(
+                    "manifest URL extends body from '{url}' exceeds limit {}",
+                    limits.max_manifest_url_bytes
+                )));
+            }
+            return Ok(body);
         }
-        let mut body = Vec::new();
-        let mut reader = response
-            .into_reader()
-            .take(limits.max_manifest_url_bytes as u64 + 1);
-        reader.read_to_end(&mut body).map_err(|err| {
-            RuntimeError::ManifestInvalid(format!(
-                "failed to read extends URL '{url}' response body: {err}"
-            ))
-        })?;
-        if body.len() > limits.max_manifest_url_bytes {
-            return Err(RuntimeError::ResourceLimitExceeded(format!(
-                "manifest URL extends body from '{url}' exceeds limit {}",
-                limits.max_manifest_url_bytes
-            )));
-        }
-        Ok(body)
+        Err(RuntimeError::ManifestInvalid(format!(
+            "too many redirects (more than {max_redirects}) while fetching extends URL '{url}'"
+        )))
     }
+}
+
+/// Resolve a redirect `Location` against the current URL and re validate it
+/// through the same HTTPS plus SSRF guard as the initial fetch URL, so a
+/// redirect hop cannot downgrade to plain HTTP or target a loopback, link-local,
+/// or cloud metadata destination. A relative `Location` is joined against the
+/// current URL. Returns the normalized HTTPS URL to follow next, or fails closed.
+fn resolve_redirect_target(current: &str, location: &str) -> Result<String, RuntimeError> {
+    let base = url::Url::parse(current).map_err(|err| {
+        RuntimeError::ManifestInvalid(format!(
+            "internal redirect base URL '{current}' is invalid: {err}"
+        ))
+    })?;
+    let joined = base.join(location).map_err(|err| {
+        RuntimeError::ManifestInvalid(format!(
+            "failed to resolve redirect target '{location}' from '{current}': {err}"
+        ))
+    })?;
+    validate_url_components(joined)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -2231,37 +2275,69 @@ intervention_points:
     }
 
     #[test]
+    fn real_http_fetcher_revalidates_redirect_hop() {
+        // A redirect hop is re-run through validate_url_components, so a vetted
+        // public URL cannot bounce to a loopback or cloud metadata HTTPS host,
+        // and cannot downgrade to plain HTTP. Two cases, each a single 302.
+        for (location, expect) in [
+            ("https://127.0.0.1:9/secret.yaml", "loopback or link-local"),
+            ("http://policy.example/next.yaml", "https"),
+        ] {
+            let location_owned = location.to_string();
+            let (base_url, handle) = spawn_http_server(1, move |_base_url, _path| {
+                http_response("302 Found", &[("Location", location_owned.clone())], b"")
+            });
+
+            let error = HttpExtendsFetcher
+                .fetch_with_agent(
+                    &format!("{base_url}/start.yaml"),
+                    Limits::default(),
+                    local_http_agent(0),
+                )
+                .unwrap_err();
+            handle.join().unwrap();
+
+            assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+            assert!(
+                error.detail().contains(expect),
+                "redirect to {location} should be blocked ({expect}), got: {}",
+                error.detail()
+            );
+        }
+    }
+
+    #[test]
     fn real_http_fetcher_enforces_redirect_cap() {
-        let (base_url, handle) = spawn_http_server(1, |base_url, path| {
+        // With per-hop re-validation a redirect chain to a non-loopback HTTPS
+        // host is followed, but the hop count is capped. The local server keeps
+        // redirecting to a fresh HTTPS host; the cap stops the chain before any
+        // are followed beyond the limit.
+        let (base_url, handle) = spawn_http_server(1, |_base_url, path| {
             let next = if path == "/start.yaml" {
-                "/middle.yaml"
+                "https://policy.example/middle.yaml"
             } else {
-                "/end.yaml"
+                "https://policy.example/end.yaml"
             };
-            http_response(
-                "302 Found",
-                &[("Location", format!("{base_url}{next}"))],
-                b"",
-            )
+            http_response("302 Found", &[("Location", next.to_string())], b"")
         });
 
         let error = HttpExtendsFetcher
             .fetch_with_agent(
                 &format!("{base_url}/start.yaml"),
                 Limits {
-                    max_manifest_url_redirects: 1,
+                    max_manifest_url_redirects: 0,
                     ..Limits::default()
                 },
-                local_http_agent(1),
+                local_http_agent(0),
             )
             .unwrap_err();
         handle.join().unwrap();
 
         assert_eq!(error.reason(), "runtime_error:manifest_invalid");
         assert!(
-            error.detail().contains("redirect")
-                || error.detail().contains("TooManyRedirects")
-                || error.detail().contains("too many")
+            error.detail().contains("too many redirects"),
+            "got: {}",
+            error.detail()
         );
     }
 

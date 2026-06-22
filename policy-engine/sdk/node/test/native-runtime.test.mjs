@@ -330,6 +330,25 @@ test("fromUrl threads the optional pin and fails closed on a non-https URL", asy
   );
 });
 
+test("fromUrl threads the optional URL fetch limits and still gates scheme", async () => {
+  // The optional urlFetchLimits override flows through the facade and the napi
+  // fromUrl factory; a non-https URL still fails closed before any network
+  // access, confirming the extra arguments are wired without weakening the gate.
+  assert.throws(
+    () =>
+      AgentControl.fromUrl(
+        "http://policy.example/manifest.yaml",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { maxBytes: 4096, timeoutMs: 1000, maxRedirects: 0 },
+      ),
+    /unsupported URL scheme/,
+  );
+});
+
 test("native runtime returns policy result_labels for IFC propagation", async () => {
   const agentControl = AgentControl.fromNative(
     manifest,
