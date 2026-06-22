@@ -1,5 +1,5 @@
 use crate::{
-    runtime::PolicyDispatcher, JsonValue, PreparedPolicyInvocation, RegoPolicyInvocation,
+    runtime::PolicyDispatcher, JsonValue, Limits, PreparedPolicyInvocation, RegoPolicyInvocation,
     RuntimeError,
 };
 use serde::Deserialize;
@@ -10,6 +10,7 @@ use std::{
     io::{self, Read, Write},
     path::{Path, PathBuf},
     process::{Child, Command, ExitStatus, Output, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     thread,
     time::{Duration, Instant},
 };
@@ -25,6 +26,7 @@ pub struct OpaRegoRunner {
     executable: PathBuf,
     data_paths: Vec<PathBuf>,
     eval_timeout: Duration,
+    limits: Limits,
 }
 
 impl OpaRegoRunner {
@@ -33,7 +35,13 @@ impl OpaRegoRunner {
             executable: PathBuf::from("opa"),
             data_paths: Vec::new(),
             eval_timeout: DEFAULT_OPA_TIMEOUT,
+            limits: Limits::default(),
         }
+    }
+
+    pub fn with_limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self
     }
 
     pub fn from_environment() -> Self {
@@ -129,6 +137,13 @@ impl OpaRegoRunner {
 
     fn run_opa_eval(&self, invocation: &RegoPolicyInvocation) -> Result<Output, RuntimeError> {
         let adapter_data_paths = adapter_data_paths(&invocation.adapter_config)?;
+        // Resolve a pinned remote bundle to a verified local path before
+        // invoking opa. The temp dir is cleaned up when `remote_bundle` drops
+        // at the end of this function, after opa has finished reading it.
+        let remote_bundle = match &invocation.bundle_url {
+            Some(value) => Some(fetch_remote_bundle(value, self.limits)?),
+            None => None,
+        };
         let mut command = Command::new(&self.executable);
         command
             .arg("eval")
@@ -138,6 +153,11 @@ impl OpaRegoRunner {
 
         if let Some(bundle) = &invocation.bundle {
             command.arg("--bundle").arg(opa_command_path_arg(bundle));
+        }
+        if let Some(remote) = &remote_bundle {
+            command
+                .arg("--bundle")
+                .arg(opa_command_path_arg(remote.path()));
         }
         for data_path in &self.data_paths {
             command.arg("--data").arg(opa_command_path_arg(data_path));
@@ -172,10 +192,101 @@ impl OpaRegoRunner {
             }
         }
 
-        wait_with_timeout(child, self.eval_timeout).map_err(|err| {
+        let output = wait_with_timeout(child, self.eval_timeout).map_err(|err| {
             RuntimeError::PolicyInvocationFailed(format!("failed to read OPA output: {err}"))
-        })
+        })?;
+        // `remote_bundle` stays in scope until here so the temp bundle exists
+        // for the full duration of the opa evaluation.
+        drop(remote_bundle);
+        Ok(output)
     }
+}
+
+/// A temp directory that holds a verified remote rego bundle for the lifetime
+/// of one `opa eval` invocation. The directory is removed on drop.
+struct RemoteBundle {
+    dir: PathBuf,
+    bundle: PathBuf,
+}
+
+impl RemoteBundle {
+    fn path(&self) -> &Path {
+        &self.bundle
+    }
+}
+
+impl Drop for RemoteBundle {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+static REMOTE_BUNDLE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn remote_bundle_token() -> String {
+    let count = REMOTE_BUNDLE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    format!("{}-{nanos}-{count}", std::process::id())
+}
+
+/// Fetch a pinned HTTPS rego bundle to a fresh temp directory and return a
+/// guard owning the verified local path. Reuses the extends https-only and
+/// sha256/integrity trust gate, so a non HTTPS URL, a missing pin, a fetch
+/// error, a size breach, or a hash mismatch fails closed before opa runs.
+///
+/// The shared fetch helper reports trust failures as `ManifestInvalid` because
+/// it is also used by manifest construction. At dispatch a `bundle_url` failure
+/// is a runtime policy invocation failure, not a static manifest error, so the
+/// reason is remapped to `PolicyInvocationFailed`. A size breach keeps its
+/// `ResourceLimitExceeded` reason.
+fn fetch_remote_bundle(value: &JsonValue, limits: Limits) -> Result<RemoteBundle, RuntimeError> {
+    let body =
+        crate::manifest::fetch_pinned_https_bytes(value, limits).map_err(|err| match err {
+            RuntimeError::ResourceLimitExceeded(_) => err,
+            other => RuntimeError::PolicyInvocationFailed(format!(
+                "failed to resolve remote rego bundle: {}",
+                other.detail()
+            )),
+        })?;
+    write_remote_bundle(&body)
+}
+
+/// Create a directory accessible only to the current user (mode 0o700 on Unix).
+/// On non-Unix platforms `std::fs::create_dir` is used unchanged because
+/// Windows uses ACLs rather than POSIX permission bits.
+#[cfg(unix)]
+fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().mode(0o700).create(path)
+}
+
+#[cfg(not(unix))]
+fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir(path)
+}
+
+/// Materialize verified bundle bytes into a fresh temp directory. Split from
+/// the network fetch so the temp directory lifecycle is unit testable.
+fn write_remote_bundle(body: &[u8]) -> Result<RemoteBundle, RuntimeError> {
+    let dir = env::temp_dir().join(format!("acs-rego-bundle-{}", remote_bundle_token()));
+    create_private_dir(&dir).map_err(|err| {
+        RuntimeError::PolicyInvocationFailed(format!(
+            "failed to create temp directory '{}' for remote rego bundle: {err}",
+            dir.display()
+        ))
+    })?;
+    let bundle = dir.join("bundle.tar.gz");
+    if let Err(err) = std::fs::write(&bundle, body) {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(RuntimeError::PolicyInvocationFailed(format!(
+            "failed to write remote rego bundle to '{}': {err}",
+            bundle.display()
+        )));
+    }
+    Ok(RemoteBundle { dir, bundle })
 }
 
 fn eval_timeout_from_environment() -> Option<Duration> {
@@ -459,7 +570,7 @@ fn truncate(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::opa_command_path_arg;
+    use super::{opa_command_path_arg, write_remote_bundle};
     use std::path::Path;
 
     #[test]
@@ -476,5 +587,22 @@ mod tests {
             opa_command_path_arg(Path::new(r"\\?\UNC\server\share\policy")).to_string_lossy(),
             r"\\server\share\policy"
         );
+    }
+
+    #[test]
+    fn write_remote_bundle_materializes_and_cleans_up() {
+        let body = b"opa bundle bytes";
+        let dir;
+        {
+            let bundle = write_remote_bundle(body).expect("write temp bundle");
+            dir = bundle.path().parent().unwrap().to_path_buf();
+            assert!(bundle.path().exists(), "bundle file must exist during eval");
+            assert_eq!(std::fs::read(bundle.path()).unwrap(), body);
+            assert_eq!(
+                bundle.path().file_name().unwrap().to_string_lossy(),
+                "bundle.tar.gz"
+            );
+        }
+        assert!(!dir.exists(), "temp dir must be removed when guard drops");
     }
 }

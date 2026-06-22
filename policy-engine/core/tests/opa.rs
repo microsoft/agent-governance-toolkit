@@ -338,6 +338,7 @@ fn rego_invocation(
     PreparedPolicyInvocation::Rego(RegoPolicyInvocation {
         query: query.to_string(),
         bundle,
+        bundle_url: None,
         adapter_config,
         canonical_input: canonical_json(&input).unwrap(),
         input,

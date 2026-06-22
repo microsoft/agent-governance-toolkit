@@ -141,6 +141,9 @@ REGISTERED_PACKAGES = {
     # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
     "azure-identity", "azure_identity",
     "azure-core", "azure_core",
+    # Azure AI Foundry Agents SDK (real PyPI package, used by the
+    # examples/real_packages/foundry_agents.py integration reference)
+    "azure-ai-agents", "azure_ai_agents",
     # SpendGuard SDK (real PyPI package, used in examples)
     "spendguard-sdk", "spendguard_sdk",
     # Cedarling Python bindings (real PyPI package, optional dep)

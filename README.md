@@ -270,9 +270,9 @@ All five language SDKs implement core governance (policy, identity, trust, audit
 See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
-<summary><b>Python distributions (v4.0.0 — consolidated)</b></summary>
+<summary><b>Python distributions (v4.1.0 — consolidated)</b></summary>
 
-As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
+As of v4.1.0, 45 packages have been consolidated into 5 top-level distributions:
 
 | Distribution | PyPI | What's included |
 |--------------|------|-----------------|

@@ -5,7 +5,7 @@ use agent_control_specification_core::ffi::acs_runtime_evaluate;
 use agent_control_specification_core::ffi::{
     acs_builder_build, acs_builder_enable_default_annotator_dispatcher,
     acs_builder_enable_default_policy_dispatcher, acs_builder_free, acs_builder_from_yaml,
-    acs_free_string, acs_runtime_free,
+    acs_builder_set_url_fetch_limits, acs_free_string, acs_runtime_free,
 };
 #[cfg(feature = "opa")]
 use serde_json::{json, Value};
@@ -207,6 +207,63 @@ fn build_without_enabling_defaults_still_requires_a_policy_dispatcher() {
     );
     // builder is consumed by build; nothing to free.
     let _ = acs_builder_free;
+}
+
+#[test]
+fn set_url_fetch_limits_validates_and_threads_through_build() {
+    // The setter mutates the builder limits used for dispatch time fetches. A
+    // null builder fails closed; a live builder accepts the values. The build
+    // then succeeds with the configured limits in place (opa-gated, since the
+    // default policy dispatcher needs the opa binary to evaluate later).
+    let mut err: *mut c_char = ptr::null_mut();
+    assert_eq!(
+        unsafe { acs_builder_set_url_fetch_limits(ptr::null_mut(), 4096, 1000, 0, &mut err) },
+        -1,
+        "null builder must fail closed"
+    );
+    let _ = take_err(err);
+
+    let yaml = CString::new(REGO_MANIFEST).unwrap();
+    let mut err: *mut c_char = ptr::null_mut();
+    let builder = unsafe { acs_builder_from_yaml(yaml.as_ptr(), &mut err) };
+    assert!(!builder.is_null(), "builder construction failed");
+    assert_eq!(
+        unsafe { acs_builder_set_url_fetch_limits(builder, 4096, 1000, 2, &mut err) },
+        0,
+        "setting url fetch limits must succeed"
+    );
+
+    #[cfg(feature = "opa")]
+    {
+        let _guard = opa_env_lock().lock().unwrap();
+        let saved = EnvVarGuard::remove("ACS_OPA_PATH");
+        if !opa_available() {
+            eprintln!("skipping build assertion: opa binary not available");
+            unsafe { acs_builder_free(builder) };
+            drop(saved);
+            return;
+        }
+        assert_eq!(
+            unsafe { acs_builder_enable_default_policy_dispatcher(builder, &mut err) },
+            0
+        );
+        assert_eq!(
+            unsafe { acs_builder_enable_default_annotator_dispatcher(builder, &mut err) },
+            0
+        );
+        let runtime = unsafe { acs_builder_build(builder, &mut err) };
+        assert!(
+            !runtime.is_null(),
+            "build with url fetch limits must succeed, got {:?}",
+            (!err.is_null()).then(|| take_err(err))
+        );
+        unsafe { acs_runtime_free(runtime) };
+        drop(saved);
+    }
+    #[cfg(not(feature = "opa"))]
+    {
+        unsafe { acs_builder_free(builder) };
+    }
 }
 
 #[cfg(feature = "opa")]

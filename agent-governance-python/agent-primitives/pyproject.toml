@@ -8,7 +8,7 @@ version = "4.1.0"
 description = "Deprecated — use agent-governance-toolkit-core instead. Shared primitive data models for Agent OS"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]
@@ -26,9 +26,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
@@ -36,7 +33,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
+    "agent-governance-toolkit-core>=4.1.0,<5.0",
     "pydantic>=2.13.4,<3.0",
 ]
 
@@ -60,10 +57,10 @@ include-package-data = true
 "*" = ["py.typed"]
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py311"
 line-length = 100
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 disallow_untyped_defs = true

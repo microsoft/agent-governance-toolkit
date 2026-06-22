@@ -53,6 +53,36 @@ class NativeRuntimeClient:
         )
 
     @classmethod
+    def from_url(
+        cls,
+        url: str,
+        sha256: str | None = None,
+        annotator_dispatcher: AnnotatorDispatcher | None = None,
+        policy_dispatcher: PolicyDispatcher | None = None,
+        perf_telemetry: int = 0,
+        *,
+        max_url_bytes: int | None = None,
+        url_timeout_ms: int | None = None,
+        max_url_redirects: int | None = None,
+    ) -> "NativeRuntimeClient":
+        return cls(
+            url,
+            annotator_dispatcher,
+            policy_dispatcher,
+            perf_telemetry,
+            loader=lambda native, a, p: native.NativeRuntime.from_url(
+                url,
+                sha256,
+                a,
+                p,
+                perf_telemetry,
+                max_url_bytes,
+                url_timeout_ms,
+                max_url_redirects,
+            ),
+        )
+
+    @classmethod
     def from_manifest_chain(
         cls,
         manifests: list[str],

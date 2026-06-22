@@ -4,7 +4,7 @@ version = "4.1.0"
 description = "Autonomous auditing system for the Voluntary Carbon Market (VCM)"
 license = {text = "MIT"}
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.20.0,<2.0",
     "pydantic>=2.4.0,<3.0",

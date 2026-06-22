@@ -181,8 +181,8 @@ AGT's GitHub Action scans agent code pre-deployment. A365 manages the agent post
 - **Security testing** - `agt red-team` CLI with automated scanning and attack simulation
 - **4-tier execution rings** - hardware-inspired isolation (Ring 0-3)
 - **Kill switch** - deterministic agent termination with audit trail
-- **Framework-agnostic** - works with LangChain, AutoGen, CrewAI, Semantic Kernel, PydanticAI, and 14 more
-- **19 framework integrations** - not limited to the Microsoft agent ecosystem
+- **Framework-agnostic** - works with LangChain, AutoGen, CrewAI, Semantic Kernel, PydanticAI, and 16 more
+- **21 integration packages** - not limited to the Microsoft agent ecosystem
 
 ### Where They Overlap (and How to Reconcile)
 

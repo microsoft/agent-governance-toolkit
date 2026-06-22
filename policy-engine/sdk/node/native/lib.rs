@@ -51,6 +51,27 @@ fn make_string_tsfn(
     Ok(tsfn)
 }
 
+/// Build URL fetch limits from optional overrides, mirroring the FFI setter and
+/// the Python binding. `None` keeps the built in default for each field;
+/// `Some(0)` for `max_url_redirects` forbids redirects.
+fn url_fetch_limits(
+    max_bytes: Option<u32>,
+    timeout_ms: Option<u32>,
+    max_redirects: Option<u32>,
+) -> agent_control_specification_core::Limits {
+    let mut limits = agent_control_specification_core::Limits::default();
+    if let Some(bytes) = max_bytes {
+        limits.max_manifest_url_bytes = bytes as usize;
+    }
+    if let Some(timeout) = timeout_ms {
+        limits.manifest_url_timeout_ms = timeout as u64;
+    }
+    if let Some(redirects) = max_redirects {
+        limits.max_manifest_url_redirects = redirects as usize;
+    }
+    limits
+}
+
 struct JsAnnotatorDispatcher(ThreadsafeFunction<String, ErrorStrategy::CalleeHandled>);
 
 fn js_annotation_error(detail: String) -> RuntimeError {
@@ -214,6 +235,7 @@ impl NativeRuntime {
             annotator_callback,
             policy_callback,
             perf_telemetry,
+            agent_control_specification_core::Limits::default(),
         )
     }
 
@@ -233,6 +255,33 @@ impl NativeRuntime {
             annotator_callback,
             policy_callback,
             perf_telemetry,
+            agent_control_specification_core::Limits::default(),
+        )
+    }
+
+    #[napi(factory)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_url(
+        env: Env,
+        url: String,
+        sha256: Option<String>,
+        annotator_callback: Option<JsFunction>,
+        policy_callback: Option<JsFunction>,
+        perf_telemetry: Option<u8>,
+        max_url_bytes: Option<u32>,
+        url_timeout_ms: Option<u32>,
+        max_url_redirects: Option<u32>,
+    ) -> Result<Self> {
+        let manifest = Manifest::from_url(&url, sha256.as_deref())
+            .map_err(|err| Error::from_reason(err.to_string()))?;
+        let limits = url_fetch_limits(max_url_bytes, url_timeout_ms, max_url_redirects);
+        Self::from_manifest(
+            env,
+            manifest,
+            annotator_callback,
+            policy_callback,
+            perf_telemetry,
+            limits,
         )
     }
 
@@ -253,6 +302,7 @@ impl NativeRuntime {
             annotator_callback,
             policy_callback,
             perf_telemetry,
+            agent_control_specification_core::Limits::default(),
         )
     }
 
@@ -262,16 +312,23 @@ impl NativeRuntime {
         annotator_callback: Option<JsFunction>,
         policy_callback: Option<JsFunction>,
         perf_telemetry: Option<u8>,
+        limits: agent_control_specification_core::Limits,
     ) -> Result<Self> {
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_callback {
             Some(callback) => Arc::new(JsAnnotatorDispatcher(make_string_tsfn(&env, callback)?)),
-            None => agent_control_specification_core::dispatchers::default_annotator_dispatcher(),
+            None => {
+                agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
+                    &manifest, limits,
+                )
+            }
         };
         let policy: Arc<dyn PolicyDispatcher> = match policy_callback {
             Some(callback) => Arc::new(JsPolicyDispatcher(make_string_tsfn(&env, callback)?)),
             None => {
-                agent_control_specification_core::dispatchers::default_policy_dispatcher(&manifest)
-                    .map_err(|err| Error::from_reason(err.to_string()))?
+                agent_control_specification_core::dispatchers::default_policy_dispatcher_with_limits(
+                    &manifest, limits,
+                )
+                .map_err(|err| Error::from_reason(err.to_string()))?
             }
         };
         let perf_telemetry = PerfTelemetry::from_u8(perf_telemetry.unwrap_or(0))

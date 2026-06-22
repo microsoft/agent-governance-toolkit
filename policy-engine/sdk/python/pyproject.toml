@@ -47,6 +47,9 @@ realpkg-tests = [
   "autogen-ext[openai]>=0.4",
   "crewai>=0.60",
   "mcp>=1.0",
+  # Azure AI Foundry Agents SDK, exercised by examples/real_packages/foundry_agents.py
+  # (real Foundry tool definitions + a live Azure OpenAI LLM-judge policy).
+  "azure-ai-agents>=1.1,<2",
   # The proxy extra installs runtime dependencies that plain litellm omits.
   "litellm[proxy]>=1.40",
   "fastapi>=0.100",
