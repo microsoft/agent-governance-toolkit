@@ -1,0 +1,110 @@
+# agt-policies — African Regulatory Pack
+# AI Agent PII Leakage Prevention — Universal Safety Control
+#
+# Regulatory alignment:
+#   OWASP Agentic AI Top 10    — LLM06 (PII Leakage / Sensitive Data Exposure)
+#   NDPA 2023 s.24             — data minimisation (Nigeria)
+#   POPIA Act 4 of 2013 s.19   — security safeguards (South Africa)
+#   Kenya DPA 2019 s.25        — security of personal data
+#   CBN Risk-Based Supervision — customer data protection requirements
+#
+# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
+# Regex patterns are heuristic — they may produce false positives on
+# legitimate numerical data. Test against your domain before production use.
+#
+# Rego reference implementation: rego/agent-pii-leakage.rego
+# The .rego file is NOT loaded by the Agent-OS Python runtime.
+
+version: "1.0"
+name: agent-pii-leakage
+description: >
+  Universal agent safety control — prevents PII leakage in agent output before
+  delivery to callers or downstream systems. Detects BVN/NIN (Nigeria 11-digit),
+  South African ID numbers (13-digit), credit card PANs, email addresses, and
+  Nigerian phone numbers. Deployer-configurable allow-list for verified
+  disclosure flows (OWASP LLM06; NDPA 2023 s.24; POPIA s.19).
+
+metadata:
+  source_regulation: "OWASP Agentic AI Top 10 — LLM06 (PII Leakage); NDPA 2023 s.24; POPIA Act 4 of 2013 s.19; Kenya DPA 2019 s.25"
+  jurisdiction: "universal"
+  enforcing_authority: "OWASP Agentic AI Working Group"
+
+rules:
+
+  # =========================================================================
+  # BVN / NIN — Nigeria (NDPA 2023 + CBN BVN Framework)
+  # Bank Verification Numbers and National Identification Numbers are
+  # 11-digit biometric identifiers. Exposure in agent output is a
+  # data breach under NDPA 2023 and CBN regulations.
+  # =========================================================================
+
+  - name: pii-bvn-nin-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "\\b[0-9]{11}\\b"
+    action: deny
+    priority: 100
+    message: "OWASP LLM06 / NDPA s.24: Potential BVN/NIN (11-digit identifier) detected in agent output — blocked"
+
+  # =========================================================================
+  # Credit Card PAN — PCI-DSS
+  # Primary Account Numbers (Visa, Mastercard, Amex, Discover) must never
+  # appear in agent output regardless of jurisdiction.
+  # =========================================================================
+
+  - name: pii-credit-card-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})\\b"
+    action: deny
+    priority: 100
+    message: "OWASP LLM06 / PCI-DSS: Credit card PAN detected in agent output — blocked"
+
+  # =========================================================================
+  # South African ID Number — POPIA
+  # 13-digit format: YYMMDD + 4 digits + citizenship + checksum.
+  # Exposure is a POPIA s.19 security safeguard failure.
+  # =========================================================================
+
+  - name: pii-sa-id-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "\\b[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])[0-9]{4}[0-1][0-9]{2}\\b"
+    action: deny
+    priority: 100
+    message: "OWASP LLM06 / POPIA s.19: South African ID number (13-digit) detected in agent output — blocked"
+
+  # =========================================================================
+  # Email Address — escalate (may be legitimate in some flows)
+  # =========================================================================
+
+  - name: pii-email-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}"
+    action: block
+    priority: 80
+    message: "OWASP LLM06: Email address detected in agent output — escalated for review before delivery"
+
+  # =========================================================================
+  # Nigerian Phone Number — escalate (NDPA 2023)
+  # MTN / Airtel / Glo / 9mobile format: +234 or 0 + 7/8/9 + 01 + 8 digits
+  # =========================================================================
+
+  - name: pii-phone-ng-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?:\\+234|0)[789][01][0-9]{8}"
+    action: block
+    priority: 80
+    message: "OWASP LLM06 / NDPA: Nigerian phone number detected in agent output — escalated for review"
+
+defaults:
+  action: allow
+  max_tokens: 4096
+  max_tool_calls: 10

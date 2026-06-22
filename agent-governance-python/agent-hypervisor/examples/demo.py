@@ -25,15 +25,12 @@ import sys
 # Add src to path for demo
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent / "src"))
 
+from hypervisor.audit.delta import VFSChange
 from hypervisor.core import Hypervisor
 from hypervisor.models import (
-    ActionDescriptor,
     ConsistencyMode,
-    ExecutionRing,
     SessionConfig,
 )
-from hypervisor.audit.delta import VFSChange
-
 
 CYAN = "\033[96m"
 GREEN = "\033[92m"
@@ -79,17 +76,23 @@ async def demo_session_lifecycle() -> None:
 
     # Join agents with different trust scores
     ring_high = await hv.join_session(
-        session.sso.session_id, "did:mesh:trusted-agent", sigma_raw=0.95,
+        session.sso.session_id,
+        "did:mesh:trusted-agent",
+        sigma_raw=0.95,
     )
     step(f"Trusted agent -> {ring_high.name} (sigma=0.95)")
 
     ring_mid = await hv.join_session(
-        session.sso.session_id, "did:mesh:standard-agent", sigma_raw=0.65,
+        session.sso.session_id,
+        "did:mesh:standard-agent",
+        sigma_raw=0.65,
     )
     step(f"Standard agent -> {ring_mid.name} (sigma=0.65)")
 
     ring_low = await hv.join_session(
-        session.sso.session_id, "did:mesh:sandbox-agent", sigma_raw=0.20,
+        session.sso.session_id,
+        "did:mesh:sandbox-agent",
+        sigma_raw=0.20,
     )
     step(f"Sandbox agent -> {ring_low.name} (sigma=0.20)")
 
@@ -100,13 +103,15 @@ async def demo_session_lifecycle() -> None:
     # Capture some deltas for the audit trail
     session.delta_engine.capture(
         "did:mesh:trusted-agent",
-        [VFSChange(
-            path="/workspace/report.md",
-            operation="create",
-            content_hash="abc123",
-            previous_hash="",
-            agent_did="did:mesh:trusted-agent",
-        )],
+        [
+            VFSChange(
+                path="/workspace/report.md",
+                operation="create",
+                content_hash="abc123",
+                previous_hash="",
+                agent_did="did:mesh:trusted-agent",
+            )
+        ],
     )
     step("Delta captured: /workspace/report.md")
 
@@ -115,9 +120,9 @@ async def demo_session_lifecycle() -> None:
     step(f"Session terminated -- audit log root: {hash_chain_root[:16]}...")
 
     print(f"\n  {BOLD}Ring assignments show trust-based isolation:{RESET}")
-    print(f"    Ring 1 (High Trust):  sigma >= 0.95 + consensus")
-    print(f"    Ring 2 (Standard):    sigma >= 0.60")
-    print(f"    Ring 3 (Sandbox):     sigma < 0.60")
+    print("    Ring 1 (High Trust):  sigma >= 0.95 + consensus")
+    print("    Ring 2 (Standard):    sigma >= 0.60")
+    print("    Ring 3 (Sandbox):     sigma < 0.60")
 
 
 # ── Demo 2: Saga Orchestration ──────────────────────────────────────
@@ -139,10 +144,14 @@ async def demo_saga() -> None:
     step(f"Saga created: {saga.saga_id[:24]}...")
 
     # Add steps
-    s1 = saga_orch.add_step(saga.saga_id, "provision", "did:mesh:worker", "/api/provision", undo_api="/api/deprovision")
-    s2 = saga_orch.add_step(saga.saga_id, "deploy", "did:mesh:worker", "/api/deploy", undo_api="/api/rollback")
+    s1 = saga_orch.add_step(
+        saga.saga_id, "provision", "did:mesh:worker", "/api/provision", undo_api="/api/deprovision"
+    )
+    s2 = saga_orch.add_step(
+        saga.saga_id, "deploy", "did:mesh:worker", "/api/deploy", undo_api="/api/rollback"
+    )
     s3 = saga_orch.add_step(saga.saga_id, "evaluate", "did:mesh:worker", "/api/evaluate")
-    step(f"Steps defined: provision -> deploy -> evaluate")
+    step("Steps defined: provision -> deploy -> evaluate")
 
     # Execute steps (simulating success for first two)
     async def success_exec():
@@ -172,8 +181,8 @@ async def demo_saga() -> None:
         warn(f"  {c.action_id}: <- compensated (rolled back)")
 
     print(f"\n  {BOLD}Saga ensures atomicity:{RESET}")
-    print(f"    Failed steps trigger automatic compensation")
-    print(f"    All-or-nothing semantics for multi-agent workflows")
+    print("    Failed steps trigger automatic compensation")
+    print("    All-or-nothing semantics for multi-agent workflows")
 
 
 # ── Demo 3: Liability & Penalty ────────────────────────────────────
@@ -191,7 +200,9 @@ async def demo_liability() -> None:
         session_id="session-001",
         voucher_sigma=0.9,
     )
-    step(f"Bond posted: {record.voucher_did} -> {record.vouchee_did} ({record.bonded_amount:.2f} tokens)")
+    step(
+        f"Bond posted: {record.voucher_did} -> {record.vouchee_did} ({record.bonded_amount:.2f} tokens)"
+    )
 
     exposure = hv.vouching.get_total_exposure("did:mesh:sponsor", "session-001")
     step(f"Sponsor exposure: {exposure:.2f}/10.0 max")
@@ -205,15 +216,19 @@ async def demo_liability() -> None:
         reason="policy_violation",
         agent_scores={"did:mesh:new-agent": 0.30},
     )
-    fail(f"Agent penalized! sigma: {slash_result.vouchee_sigma_before} -> {slash_result.vouchee_sigma_after}")
+    fail(
+        f"Agent penalized! sigma: {slash_result.vouchee_sigma_before} -> {slash_result.vouchee_sigma_after}"
+    )
     step(f"Penalty reason: {slash_result.reason}")
     for clip in slash_result.voucher_clips:
-        warn(f"Sponsor {clip.voucher_did.split(':')[-1]} clipped: sigma {clip.sigma_before} -> {clip.sigma_after}")
+        warn(
+            f"Sponsor {clip.voucher_did.split(':')[-1]} clipped: sigma {clip.sigma_before} -> {clip.sigma_after}"
+        )
 
     print(f"\n  {BOLD}Liability model:{RESET}")
-    print(f"    Sponsors sponsor for agents with token bonds")
-    print(f"    Misbehavior triggers proportional penalty")
-    print(f"    Maximum exposure limits protect sponsors")
+    print("    Sponsors sponsor for agents with token bonds")
+    print("    Misbehavior triggers proportional penalty")
+    print("    Maximum exposure limits protect sponsors")
 
 
 # ── Demo 4: Audit Trail ────────────────────────────────────────────
@@ -239,13 +254,15 @@ async def demo_audit() -> None:
     for agent, path, op in changes:
         session.delta_engine.capture(
             agent,
-            [VFSChange(
-                path=path,
-                operation=op,
-                content_hash=f"hash-{path.split('/')[-1]}",
-                previous_hash="" if op == "create" else "prev-hash",
-                agent_did=agent,
-            )],
+            [
+                VFSChange(
+                    path=path,
+                    operation=op,
+                    content_hash=f"hash-{path.split('/')[-1]}",
+                    previous_hash="" if op == "create" else "prev-hash",
+                    agent_did=agent,
+                )
+            ],
         )
         step(f"Delta: {agent.split(':')[-1]} -> {op} {path}")
 
@@ -257,15 +274,15 @@ async def demo_audit() -> None:
     # Verify commitment
     commitment = hv.commitment.get_commitment(session.sso.session_id)
     if commitment:
-        step(f"Commitment stored for session")
+        step("Commitment stored for session")
         step(f"  Participants: {len(commitment.participant_dids)}")
         step(f"  Deltas: {commitment.delta_count}")
         step(f"  Verified: {hv.commitment.verify(session.sso.session_id, audit_log)}")
 
     print(f"\n  {BOLD}Audit guarantees:{RESET}")
-    print(f"    Every agent action is delta-captured")
-    print(f"    hash tree provides tamper-evident commitment")
-    print(f"    Commitments are immutable and verifiable")
+    print("    Every agent action is delta-captured")
+    print("    hash tree provides tamper-evident commitment")
+    print("    Commitments are immutable and verifiable")
 
 
 # ── Demo 5: Integration Adapters ────────────────────────────────────
@@ -274,17 +291,25 @@ async def demo_audit() -> None:
 async def demo_integrations() -> None:
     banner("Demo 5: Integration Adapters -- Nexus + Verification + IATP")
 
+    from hypervisor.integrations.iatp_adapter import IATPAdapter
     from hypervisor.integrations.nexus_adapter import NexusAdapter
     from hypervisor.integrations.verification_adapter import VerificationAdapter
-    from hypervisor.integrations.iatp_adapter import IATPAdapter
 
     # Mock reputation engine matching NexusTrustScorer protocol
     class MockReputationEngine:
-        def calculate_trust_score(self, verification_level=None, history=None, capabilities=None, privacy=None):
+        def calculate_trust_score(
+            self, verification_level=None, history=None, capabilities=None, privacy=None
+        ):
             scores = {
-                920: type("Score", (), {"total_score": 920, "successful_tasks": 500, "failed_tasks": 0}),
-                650: type("Score", (), {"total_score": 650, "successful_tasks": 50, "failed_tasks": 2}),
-                200: type("Score", (), {"total_score": 200, "successful_tasks": 5, "failed_tasks": 10}),
+                920: type(
+                    "Score", (), {"total_score": 920, "successful_tasks": 500, "failed_tasks": 0}
+                ),
+                650: type(
+                    "Score", (), {"total_score": 650, "successful_tasks": 50, "failed_tasks": 2}
+                ),
+                200: type(
+                    "Score", (), {"total_score": 200, "successful_tasks": 5, "failed_tasks": 10}
+                ),
             }
             # Use history to differentiate agents
             if history and history.get("tasks_completed", 0) > 100:
@@ -293,7 +318,9 @@ async def demo_integrations() -> None:
                 return scores[650]()
             return scores[200]()
 
-        def slash_reputation(self, agent_did, reason, severity, evidence_hash=None, trace_id=None, broadcast=True):
+        def slash_reputation(
+            self, agent_did, reason, severity, evidence_hash=None, trace_id=None, broadcast=True
+        ):
             pass
 
         def record_task_outcome(self, agent_did, outcome):
@@ -303,6 +330,7 @@ async def demo_integrations() -> None:
     class MockVerificationBackend:
         def check_drift(self, agent_did: str, claimed, observed):
             import random
+
             drift = random.uniform(0.0, 0.3)
             return {"drift_score": drift, "agent_did": agent_did}
 
@@ -351,10 +379,10 @@ async def demo_integrations() -> None:
     step(f"Manifest agent -> {ring_manifest.name} (IATP-parsed)")
 
     print(f"\n  {BOLD}Integration adapters:{RESET}")
-    print(f"    Nexus:  Trust scoring from reputation network")
-    print(f"    Verification:   Behavioral drift detection")
-    print(f"    IATP:   Capability manifest parsing")
-    print(f"    All adapters are protocol-based and pluggable")
+    print("    Nexus:  Trust scoring from reputation network")
+    print("    Verification:   Behavioral drift detection")
+    print("    IATP:   Capability manifest parsing")
+    print("    All adapters are protocol-based and pluggable")
 
 
 # ── Main ────────────────────────────────────────────────────────────
@@ -362,8 +390,8 @@ async def demo_integrations() -> None:
 
 async def main() -> None:
     print(f"\n{BOLD}{'=' * 60}")
-    print(f"  Agent Hypervisor -- Governance Runtime Demo")
-    print(f"  Multi-agent session management with formal safety")
+    print("  Agent Hypervisor -- Governance Runtime Demo")
+    print("  Multi-agent session management with formal safety")
     print(f"{'=' * 60}{RESET}")
 
     await demo_session_lifecycle()
@@ -373,14 +401,14 @@ async def main() -> None:
     await demo_integrations()
 
     banner("Demo Complete!")
-    print(f"  The Agent Hypervisor provides:")
-    print(f"    - Ring-based execution isolation (4 trust tiers)")
-    print(f"    - Saga orchestration with automatic compensation")
-    print(f"    - Economic liability (sponsorship + penalty)")
-    print(f"    - hash-committed audit trails")
-    print(f"    - Pluggable integrations (Nexus, Verification, IATP)")
+    print("  The Agent Hypervisor provides:")
+    print("    - Ring-based execution isolation (4 trust tiers)")
+    print("    - Saga orchestration with automatic compensation")
+    print("    - Economic liability (sponsorship + penalty)")
+    print("    - hash-committed audit trails")
+    print("    - Pluggable integrations (Nexus, Verification, IATP)")
     print(f"\n  {BOLD}184 tests passing | 268us full pipeline | Zero dependencies{RESET}")
-    print(f"\n  Learn more: https://github.com/microsoft/agent-governance-toolkit")
+    print("\n  Learn more: https://github.com/microsoft/agent-governance-toolkit")
     print()
 
 

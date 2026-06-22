@@ -41,9 +41,7 @@ def _write_manifest(directory: Path, name: str, **overrides) -> Path:
         "dependencies": [],
     }
     manifest.update(overrides)
-    (plugin_dir / "agent-plugin.yaml").write_text(
-        yaml.dump(manifest), encoding="utf-8"
-    )
+    (plugin_dir / "agent-plugin.yaml").write_text(yaml.dump(manifest), encoding="utf-8")
     return plugin_dir
 
 
@@ -348,7 +346,9 @@ class TestDiscoverManifestsDedupe:
         # Promote the subdirectory's manifest to root, mimicking a
         # single-plugin layout.
         root_manifest = tmp_path / "agent-plugin.yaml"
-        root_manifest.write_text((tmp_path / "plugin-a" / "agent-plugin.yaml").read_text())
+        root_manifest.write_text(
+            (tmp_path / "plugin-a" / "agent-plugin.yaml").read_text()
+        )
         # Discover at root only.
         single_root = tmp_path / "only-root"
         single_root.mkdir()
@@ -372,7 +372,9 @@ class TestDiscoverManifestsDedupe:
         _write_manifest(tmp_path, "plugin-a")
         # Add a root manifest too (so both root and subdir would be found).
         root_manifest = tmp_path / "agent-plugin.yaml"
-        root_manifest.write_text((tmp_path / "plugin-a" / "agent-plugin.yaml").read_text())
+        root_manifest.write_text(
+            (tmp_path / "plugin-a" / "agent-plugin.yaml").read_text()
+        )
 
         # Create a symlink-to-parent inside the directory; on platforms
         # where symlinks aren't permitted (Windows without dev mode),

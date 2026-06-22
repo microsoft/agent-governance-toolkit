@@ -83,10 +83,10 @@ DEFAULT_TIER_CONFIGS: dict[str, PluginTrustConfig] = {
 
 # Capabilities that require a minimum tier to be enabled
 _TIER_CAPABILITY_REQUIREMENTS: dict[str, int] = {
-    "network": 2,       # standard+
-    "filesystem": 2,    # standard+
-    "execute": 3,       # trusted+
-    "admin": 4,         # verified only
+    "network": 2,  # standard+
+    "filesystem": 2,  # standard+
+    "execute": 3,  # trusted+
+    "admin": 4,  # verified only
 }
 
 # ---------------------------------------------------------------------------

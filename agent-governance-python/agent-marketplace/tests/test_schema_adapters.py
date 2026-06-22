@@ -12,11 +12,9 @@ import pytest
 from agent_marketplace.exceptions import MarketplaceError
 from agent_marketplace.manifest import PluginManifest, PluginType
 from agent_marketplace.schema_adapters import (
-    AgentDef,
     ClaudePluginManifest,
     CopilotPluginManifest,
     MCPServerDef,
-    SkillDef,
     adapt_to_canonical,
     detect_manifest_format,
     extract_capabilities,
@@ -36,7 +34,9 @@ def copilot_data() -> dict:
         "version": "1.0.0",
         "author": "alice@example.com",
         "skills": [{"name": "code-review", "description": "Review code"}],
-        "agents": [{"name": "reviewer", "model": "gpt-4", "instructions": "Be helpful"}],
+        "agents": [
+            {"name": "reviewer", "model": "gpt-4", "instructions": "Be helpful"}
+        ],
         "mcps": [
             {
                 "name": "repo-server",

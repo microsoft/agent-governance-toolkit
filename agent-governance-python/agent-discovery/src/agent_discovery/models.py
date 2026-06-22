@@ -10,7 +10,7 @@ and detection basis so consumers can filter noise and deduplicate.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -62,7 +62,7 @@ class Evidence(BaseModel):
     confidence: float = Field(
         ge=0.0, le=1.0, description="Confidence score (0.0 = guess, 1.0 = certain)"
     )
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DiscoveredAgent(BaseModel):
@@ -99,8 +99,8 @@ class DiscoveredAgent(BaseModel):
     )
 
     # Timestamps
-    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    last_seen_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    first_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_seen_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Tags for filtering
     tags: dict[str, str] = Field(default_factory=dict)
@@ -124,7 +124,7 @@ class ScanResult(BaseModel):
     scanner_name: str
     agents: list[DiscoveredAgent] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     scanned_targets: int = 0
 
@@ -147,4 +147,4 @@ class RiskAssessment(BaseModel):
     level: RiskLevel
     score: float = Field(ge=0.0, le=100.0, description="Numeric risk score 0-100")
     factors: list[str] = Field(default_factory=list, description="Contributing risk factors")
-    assessed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    assessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

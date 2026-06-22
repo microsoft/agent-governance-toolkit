@@ -7,7 +7,7 @@ name = "agent-governance-toolkit-control-plane"
 version = "4.1.0"
 description = "Layer 3: The Framework - A deterministic kernel for zero-violation governance in agentic AI systems with POSIX-style signals, VFS, and kernel/user space separation"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" },
@@ -42,9 +42,6 @@ classifiers = [
     "Topic :: System :: Systems Administration",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Typing :: Typed",
@@ -123,7 +120,7 @@ target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
 include = '\.pyi?$'
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

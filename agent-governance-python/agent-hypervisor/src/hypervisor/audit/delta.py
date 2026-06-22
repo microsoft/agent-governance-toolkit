@@ -13,7 +13,6 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Optional
 
 
 @dataclass
@@ -111,7 +110,7 @@ class DeltaEngine:
             return None
         return self._deltas[-1].delta_hash
 
-    def verify_chain(self) -> tuple[bool, Optional[str]]:
+    def verify_chain(self) -> tuple[bool, str | None]:
         """Verify full chain integrity: hash correctness and parent linkage."""
         if not self._deltas:
             return True, None

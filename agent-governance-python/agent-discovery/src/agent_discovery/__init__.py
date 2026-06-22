@@ -9,6 +9,7 @@ Detect unregistered "shadow" agents that operate outside governance.
 __version__ = "0.1.0"
 __author__ = "Microsoft Corporation"
 
+from .inventory import AgentInventory
 from .models import (
     AgentStatus,
     DetectionBasis,
@@ -19,7 +20,6 @@ from .models import (
     ScanResult,
     ShadowAgent,
 )
-from .inventory import AgentInventory
 from .reconciler import Reconciler, RegistryProvider
 from .risk import RiskScorer
 

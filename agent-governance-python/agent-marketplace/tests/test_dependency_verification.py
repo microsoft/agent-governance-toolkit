@@ -10,7 +10,6 @@ installed when the caller requests ``verify=True``.
 from __future__ import annotations
 
 import functools
-from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -24,6 +23,7 @@ from agent_marketplace.signing import PluginSigner
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_registry_and_keys():
     """Create a registry, signer, and trusted-keys dict for testing."""
@@ -63,6 +63,7 @@ def _unsigned_manifest(name, author="attacker", deps=None):
 # ---------------------------------------------------------------------------
 # MSRC PoC — unsigned dependency must be rejected when verify=True
 # ---------------------------------------------------------------------------
+
 
 class TestDependencyVerificationPropagation:
     """Reproduce the MSRC [112466] PoC and verify the fix."""
@@ -115,14 +116,10 @@ class TestDependencyVerificationPropagation:
         grandchild = _signed_manifest(signer, "grandchild")
         registry.register(grandchild)
 
-        child = _signed_manifest(
-            signer, "child", deps=["grandchild>=1.0.0"]
-        )
+        child = _signed_manifest(signer, "child", deps=["grandchild>=1.0.0"])
         registry.register(child)
 
-        parent = _signed_manifest(
-            signer, "parent", deps=["child>=1.0.0"]
-        )
+        parent = _signed_manifest(signer, "parent", deps=["child>=1.0.0"])
         registry.register(parent)
 
         installer = PluginInstaller(tmp_path, registry, trusted_keys=trusted_keys)
@@ -157,14 +154,16 @@ class TestDependencyVerificationPropagation:
         untrusted_key = ed25519.Ed25519PrivateKey.generate()
         untrusted_signer = PluginSigner(untrusted_key)
 
-        evil_dep = untrusted_signer.sign(PluginManifest(
-            name="evil-dep",
-            version="1.0.0",
-            author="untrusted-author",
-            description="Signed by untrusted author",
-            plugin_type=PluginType.INTEGRATION,
-            dependencies=[],
-        ))
+        evil_dep = untrusted_signer.sign(
+            PluginManifest(
+                name="evil-dep",
+                version="1.0.0",
+                author="untrusted-author",
+                description="Signed by untrusted author",
+                plugin_type=PluginType.INTEGRATION,
+                dependencies=[],
+            )
+        )
         registry.register(evil_dep)
 
         signed_parent = _signed_manifest(
@@ -188,9 +187,7 @@ class TestFailClosedVerification:
         registry = PluginRegistry()
         registry.register(_unsigned_manifest("no-sig-plugin"))
 
-        installer = PluginInstaller(
-            tmp_path, registry, trusted_keys={"other": None}
-        )
+        installer = PluginInstaller(tmp_path, registry, trusted_keys={"other": None})
 
         with pytest.raises(MarketplaceError, match="no signature"):
             installer.install("no-sig-plugin", verify=True)
@@ -199,20 +196,24 @@ class TestFailClosedVerification:
         """A plugin signed by unknown author is rejected when verify=True."""
         private_key = ed25519.Ed25519PrivateKey.generate()
         signer = PluginSigner(private_key)
-        manifest = signer.sign(PluginManifest(
-            name="mystery-plugin",
-            version="1.0.0",
-            author="unknown-author",
-            description="Signed by unknown",
-            plugin_type=PluginType.INTEGRATION,
-            dependencies=[],
-        ))
+        manifest = signer.sign(
+            PluginManifest(
+                name="mystery-plugin",
+                version="1.0.0",
+                author="unknown-author",
+                description="Signed by unknown",
+                plugin_type=PluginType.INTEGRATION,
+                dependencies=[],
+            )
+        )
 
         registry = PluginRegistry()
         registry.register(manifest)
 
         installer = PluginInstaller(
-            tmp_path, registry, trusted_keys={"trusted-author": private_key.public_key()}
+            tmp_path,
+            registry,
+            trusted_keys={"trusted-author": private_key.public_key()},
         )
 
         with pytest.raises(MarketplaceError, match="untrusted"):

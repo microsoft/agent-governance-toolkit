@@ -11,8 +11,6 @@ call and honours ``$AGENTMESH_HOME``.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 
 import pytest
 
@@ -22,6 +20,7 @@ def _reset_home_cache(monkeypatch):
     """Clear the cached home and any env override between tests."""
     monkeypatch.delenv("AGENTMESH_HOME", raising=False)
     from agent_marketplace import cli_commands
+
     monkeypatch.setattr(cli_commands, "_agentmesh_home_cache", None)
     yield
     monkeypatch.setattr(cli_commands, "_agentmesh_home_cache", None)

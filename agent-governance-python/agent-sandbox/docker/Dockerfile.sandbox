@@ -21,7 +21,7 @@
 # and rebuild. See the agent-sandbox README ("Hardened sandbox image
 # (minimal-PATH)") for the documented extension procedure.
 
-FROM python:3.11-slim AS sandbox-base
+FROM python:3.11-slim@sha256:ae52c5bef62a6bdd42cd1e8dffef86b9cd284bde9427da79839de7a4b983e7ca AS sandbox-base
 
 # Explicit PATH. No inherited `:$PATH` segment — anything not under
 # /usr/local/sandbox-bin is unreachable.

@@ -93,6 +93,7 @@ def plugin() -> None:
 def install_plugin(name: str, version: str | None) -> None:
     """Install a plugin from the registry."""
     import sys
+
     try:
         installer = _get_installer()
         dest = installer.install(name, version)
@@ -107,6 +108,7 @@ def install_plugin(name: str, version: str | None) -> None:
 def uninstall_plugin(name: str) -> None:
     """Uninstall a plugin."""
     import sys
+
     try:
         installer = _get_installer()
         installer.uninstall(name)
@@ -234,7 +236,9 @@ def verify_plugin(path: str, manifest_format: str) -> None:
 
 def _print_verify_result(manifest: "PluginManifest") -> None:
     """Print verification summary for a loaded manifest."""
-    console.print(f"[green]✓[/green] Manifest loaded: {manifest.name}@{manifest.version}")
+    console.print(
+        f"[green]✓[/green] Manifest loaded: {manifest.name}@{manifest.version}"
+    )
     if manifest.capabilities:
         console.print(f"[dim]Capabilities:[/dim] {', '.join(manifest.capabilities)}")
     if manifest.signature:
@@ -248,6 +252,7 @@ def _print_verify_result(manifest: "PluginManifest") -> None:
 def publish_plugin(path: str) -> None:
     """Sign and register a plugin with the registry."""
     import sys
+
     try:
         manifest = load_manifest(Path(path))
         registry = _get_registry()
@@ -321,18 +326,12 @@ def evaluate_plugin(manifest_path: str, marketplace_policy: str) -> None:
         console.print(f"[red]Error:[/red] {exc}")
         sys.exit(1)
 
-    result = evaluate_plugin_compliance(
-        manifest, policy, mcp_servers or None
-    )
+    result = evaluate_plugin_compliance(manifest, policy, mcp_servers or None)
 
     if result.compliant:
-        console.print(
-            f"[green]✓[/green] Plugin '{manifest.name}' is compliant"
-        )
+        console.print(f"[green]✓[/green] Plugin '{manifest.name}' is compliant")
     else:
-        console.print(
-            f"[red]✗[/red] Plugin '{manifest.name}' has policy violations:"
-        )
+        console.print(f"[red]✗[/red] Plugin '{manifest.name}' has policy violations:")
         for violation in result.violations:
             console.print(f"  - {violation}")
         sys.exit(1)
@@ -354,7 +353,9 @@ def trust_plugin(plugin_name: str, store_path: str | None) -> None:
         get_trust_tier,
     )
 
-    resolved_store = Path(store_path) if store_path else _agentmesh_home() / "trust.json"
+    resolved_store = (
+        Path(store_path) if store_path else _agentmesh_home() / "trust.json"
+    )
     store = PluginTrustStore(store_path=resolved_store)
     score = store.get_score(plugin_name)
     tier = get_trust_tier(score)
@@ -378,4 +379,3 @@ try:
     plugin.add_command(evaluate_batch_command)
 except ImportError:
     pass
-

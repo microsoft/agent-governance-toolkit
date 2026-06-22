@@ -31,10 +31,6 @@ def test_redacts_full_private_key_blocks_from_process_text():
 
 
 def test_does_not_redact_public_or_malformed_pem_process_text():
-    public_key = (
-        "-----BEGIN PUBLIC KEY-----\n"
-        "ZmFrZSBmb3IgdGVzdGluZw==\n"
-        "-----END PUBLIC KEY-----"
-    )
+    public_key = "-----BEGIN PUBLIC KEY-----\nZmFrZSBmb3IgdGVzdGluZw==\n-----END PUBLIC KEY-----"
 
     assert _redact_secrets(public_key) == public_key

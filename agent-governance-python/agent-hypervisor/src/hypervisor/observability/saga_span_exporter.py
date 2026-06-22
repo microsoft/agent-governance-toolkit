@@ -35,15 +35,17 @@ from typing import Any, Protocol, runtime_checkable
 from hypervisor.observability.event_bus import EventType, HypervisorEvent, HypervisorEventBus
 
 # Saga event types we subscribe to
-_SAGA_LIFECYCLE_EVENTS = frozenset({
-    EventType.SAGA_CREATED,
-    EventType.SAGA_STEP_STARTED,
-    EventType.SAGA_STEP_COMMITTED,
-    EventType.SAGA_STEP_FAILED,
-    EventType.SAGA_COMPENSATING,
-    EventType.SAGA_COMPLETED,
-    EventType.SAGA_ESCALATED,
-})
+_SAGA_LIFECYCLE_EVENTS = frozenset(
+    {
+        EventType.SAGA_CREATED,
+        EventType.SAGA_STEP_STARTED,
+        EventType.SAGA_STEP_COMMITTED,
+        EventType.SAGA_STEP_FAILED,
+        EventType.SAGA_COMPENSATING,
+        EventType.SAGA_COMPLETED,
+        EventType.SAGA_ESCALATED,
+    }
+)
 
 
 # ---------------------------------------------------------------------------

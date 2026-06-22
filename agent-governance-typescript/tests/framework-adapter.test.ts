@@ -206,4 +206,121 @@ describe('GenericFrameworkAdapter', () => {
       event.name === 'trust.score' && event.attributes.agentId === client.identity.did
     )).toBe(true);
   });
+
+  it('attaches trusted skill metadata to audit entries', async () => {
+  const client = AgentMeshClient.create('adapter-agent', {
+    policyRules: [
+      { action: 'framework.tool_call.search', effect: 'allow' },
+    ],
+  });
+
+  const adapter = new GenericFrameworkAdapter(client);
+
+  const result = await adapter.run(
+    {
+      name: 'search',
+      kind: 'tool_call',
+      input: {
+        query: 'status',
+        skillName: 'spoofed-admin',
+      },
+      trustedSkillMetadata: {
+        skillName: 'search',
+        skillOrigin: 'langchain',
+      },
+    },
+    async () => ({ items: 3 }),
+  );
+
+  expect(result.allowed).toBe(true);
+
+  expect(
+    result.governanceResult.auditEntry.skillAuditMetadata,
+  ).toMatchObject({
+    skillName: 'search',
+    skillOrigin: 'langchain',
+    provenanceSourceTrust: 'trusted',
+  });
+  });
+  it('records a context hash before execution', async () => {
+  const client = AgentMeshClient.create('adapter-agent', {
+    policyRules: [
+      { action: 'framework.tool_call.search', effect: 'allow' },
+    ],
+  });
+
+  const adapter = new GenericFrameworkAdapter(client);
+
+  const result = await adapter.run(
+    {
+      name: 'search',
+      kind: 'tool_call',
+      input: {
+        query: 'status',
+      },
+      trustedSkillMetadata: {
+        skillName: 'search',
+        skillOrigin: 'langchain',
+      },
+    },
+    async () => ({ items: 3 }),
+  );
+
+  expect(
+    result.governanceResult.auditEntry.skillAuditMetadata
+      ?.contextHashBefore,
+  ).toBeDefined();
+
+  expect(
+    result.governanceResult.auditEntry.skillAuditMetadata
+      ?.contextHashAfter,
+  ).toBeUndefined();
+  });
+  it('produces identical hashes regardless of object key order', async () => {
+  const client = AgentMeshClient.create('adapter-agent', {
+    policyRules: [
+      { action: 'framework.tool_call.search', effect: 'allow' },
+    ],
+  });
+
+  const adapter = new GenericFrameworkAdapter(client);
+
+  const result1 = await adapter.run(
+    {
+      name: 'search',
+      kind: 'tool_call',
+      input: {
+        a: 1,
+        b: 2,
+      },
+      trustedSkillMetadata: {
+        skillName: 'search',
+      },
+    },
+    async () => 'ok',
+  );
+
+  const result2 = await adapter.run(
+    {
+      name: 'search',
+      kind: 'tool_call',
+      input: {
+        b: 2,
+        a: 1,
+      },
+      trustedSkillMetadata: {
+        skillName: 'search',
+      },
+    },
+    async () => 'ok',
+  );
+
+  expect(
+    result1.governanceResult.auditEntry.skillAuditMetadata
+      ?.contextHashBefore,
+  ).toBe(
+    result2.governanceResult.auditEntry.skillAuditMetadata
+      ?.contextHashBefore,
+  );
+  });
 });

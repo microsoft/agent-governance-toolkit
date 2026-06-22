@@ -36,25 +36,31 @@ class TestStaticRegistryProvider:
 
     @pytest.mark.asyncio
     async def test_match_by_did(self):
-        provider = StaticRegistryProvider([
-            {"did": "did:agent:abc123", "name": "Known Agent"},
-        ])
+        provider = StaticRegistryProvider(
+            [
+                {"did": "did:agent:abc123", "name": "Known Agent"},
+            ]
+        )
         agent = _make_agent("x", "Test", did="did:agent:abc123")
         assert await provider.is_registered(agent)
 
     @pytest.mark.asyncio
     async def test_no_match(self):
-        provider = StaticRegistryProvider([
-            {"did": "did:agent:other", "name": "Other Agent"},
-        ])
+        provider = StaticRegistryProvider(
+            [
+                {"did": "did:agent:other", "name": "Other Agent"},
+            ]
+        )
         agent = _make_agent("x", "Unknown Agent")
         assert not await provider.is_registered(agent)
 
     @pytest.mark.asyncio
     async def test_match_by_fingerprint(self):
-        provider = StaticRegistryProvider([
-            {"fingerprint": "fp123", "name": "Known"},
-        ])
+        provider = StaticRegistryProvider(
+            [
+                {"fingerprint": "fp123", "name": "Known"},
+            ]
+        )
         agent = _make_agent("fp123", "Test Agent")
         assert await provider.is_registered(agent)
 
@@ -63,13 +69,17 @@ class TestReconciler:
     @pytest.mark.asyncio
     async def test_all_registered(self):
         inv = AgentInventory()
-        inv.ingest(ScanResult(
-            scanner_name="test",
-            agents=[_make_agent("a", "Agent A", did="did:agent:a")],
-        ))
-        provider = StaticRegistryProvider([
-            {"did": "did:agent:a", "name": "Agent A"},
-        ])
+        inv.ingest(
+            ScanResult(
+                scanner_name="test",
+                agents=[_make_agent("a", "Agent A", did="did:agent:a")],
+            )
+        )
+        provider = StaticRegistryProvider(
+            [
+                {"did": "did:agent:a", "name": "Agent A"},
+            ]
+        )
         reconciler = Reconciler(inv, provider)
         shadows = await reconciler.reconcile()
         assert len(shadows) == 0
@@ -78,16 +88,20 @@ class TestReconciler:
     @pytest.mark.asyncio
     async def test_shadow_detected(self):
         inv = AgentInventory()
-        inv.ingest(ScanResult(
-            scanner_name="test",
-            agents=[
-                _make_agent("a", "Registered", did="did:agent:a"),
-                _make_agent("b", "Shadow Agent"),
-            ],
-        ))
-        provider = StaticRegistryProvider([
-            {"did": "did:agent:a", "name": "Registered"},
-        ])
+        inv.ingest(
+            ScanResult(
+                scanner_name="test",
+                agents=[
+                    _make_agent("a", "Registered", did="did:agent:a"),
+                    _make_agent("b", "Shadow Agent"),
+                ],
+            )
+        )
+        provider = StaticRegistryProvider(
+            [
+                {"did": "did:agent:a", "name": "Registered"},
+            ]
+        )
         reconciler = Reconciler(inv, provider)
         shadows = await reconciler.reconcile()
         assert len(shadows) == 1
@@ -97,10 +111,12 @@ class TestReconciler:
     @pytest.mark.asyncio
     async def test_recommendations_generated(self):
         inv = AgentInventory()
-        inv.ingest(ScanResult(
-            scanner_name="test",
-            agents=[_make_agent("x", "Unknown Agent")],
-        ))
+        inv.ingest(
+            ScanResult(
+                scanner_name="test",
+                agents=[_make_agent("x", "Unknown Agent")],
+            )
+        )
         provider = StaticRegistryProvider()
         reconciler = Reconciler(inv, provider)
         shadows = await reconciler.reconcile()

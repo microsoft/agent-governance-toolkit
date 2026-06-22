@@ -217,7 +217,11 @@ class TestWeightedAgents:
             "b": [{"action_id": "y", "step_id": "s2", "success": False}],
         }
         result = attributor.attribute(
-            "saga-1", "sess-1", actions, "s2", "b",
+            "saga-1",
+            "sess-1",
+            actions,
+            "s2",
+            "b",
             risk_weights={"x": 0.9, "y": 0.1},
         )
         assert len(result.attributions) == 2
@@ -252,9 +256,7 @@ class TestCascadingAttribution:
         """In a cascade, earlier agents should have higher attribution
         when weighted by position."""
         weights = {"a": 1.0, "b": 0.5, "c": 0.25}
-        values = compute_shapley_values(
-            ["a", "b", "c"], {"a", "b", "c"}, weights
-        )
+        values = compute_shapley_values(["a", "b", "c"], {"a", "b", "c"}, weights)
         assert values["a"] > values["b"] > values["c"]
 
     def test_long_chain_root_cause_dominates(self):
@@ -438,9 +440,7 @@ class TestMarginalContribution:
             for subset in combinations([a for a in agents if a != "b"], r):
                 s = frozenset(subset)
                 s_with = s | {"b"}
-                marginal = characteristic_value(s_with, fault) - characteristic_value(
-                    s, fault
-                )
+                marginal = characteristic_value(s_with, fault) - characteristic_value(s, fault)
                 assert marginal >= 0
 
     def test_marginal_of_non_faulty_is_zero(self):
@@ -451,18 +451,16 @@ class TestMarginalContribution:
             for subset in combinations([a for a in agents if a != "b"], r):
                 s = frozenset(subset)
                 s_with = s | {"b"}
-                marginal = characteristic_value(s_with, fault) - characteristic_value(
-                    s, fault
-                )
+                marginal = characteristic_value(s_with, fault) - characteristic_value(s, fault)
                 assert marginal == 0.0
 
     def test_marginal_equals_weight_for_independent_game(self):
         """In an additive game, marginal contribution equals agent's weight."""
         weights = {"a": 3.0, "b": 5.0}
         fault = {"a", "b"}
-        marginal_a = characteristic_value(
-            frozenset(["a"]), fault, weights
-        ) - characteristic_value(frozenset(), fault, weights)
+        marginal_a = characteristic_value(frozenset(["a"]), fault, weights) - characteristic_value(
+            frozenset(), fault, weights
+        )
         assert abs(marginal_a - 3.0) < 1e-9
 
 
@@ -486,9 +484,7 @@ class TestShapleyAxioms:
 
     def test_symmetry_axiom(self):
         """Symmetry: if i and j are interchangeable, φ_i = φ_j."""
-        values = compute_shapley_values(
-            ["a", "b", "c"], {"a", "b"}, {"a": 1.0, "b": 1.0, "c": 0.5}
-        )
+        values = compute_shapley_values(["a", "b", "c"], {"a", "b"}, {"a": 1.0, "b": 1.0, "c": 0.5})
         assert abs(values["a"] - values["b"]) < 1e-9
 
     def test_null_player_axiom(self):

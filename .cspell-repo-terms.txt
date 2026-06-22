@@ -3,6 +3,11 @@ ATF
 AAIF
 abprs
 abspath
+agentrust
+CBOR
+COSE
+isfile
+reimplementation
 abstractmethod
 Acta
 addinfourl
@@ -820,3 +825,47 @@ unvalidated
 userinfo
 winres
 worktree
+
+# --- African regulatory policy terms ---
+POPIA
+popia
+NDPA
+ndpa
+NFIU
+nfiu
+CBN
+BVN
+NIN
+Anambra
+Kogi
+crossborder
+crossstate
+offence
+authorisation
+authorised
+geofencing
+geofence
+geomatch
+YYMMDDGSSSCAZ
+
+# --- TRACE / identity-chain / advisory terms ---
+agentrust
+contextvars
+miyannishar
+GHSA
+ghsa
+
+# --- ACS / crypto terms ---
+preimage
+
+# --- Flowise integration terms ---
+chatflow
+Chatflows
+
+# --- Test code terms ---
+interp
+ncat
+netcat
+socat
+nmap
+tcpdump

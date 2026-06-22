@@ -16,8 +16,16 @@ import jsonschema
 
 # Valid action type prefixes for step action_ids
 VALID_ACTION_PREFIXES = (
-    "model.", "data.", "deploy.", "validate.", "notify.",
-    "infra.", "security.", "monitor.", "config.", "test.",
+    "model.",
+    "data.",
+    "deploy.",
+    "validate.",
+    "notify.",
+    "infra.",
+    "security.",
+    "monitor.",
+    "config.",
+    "test.",
 )
 
 SAGA_STEP_SCHEMA: dict[str, Any] = {

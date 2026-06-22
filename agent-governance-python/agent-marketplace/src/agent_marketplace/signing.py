@@ -51,7 +51,9 @@ class PluginSigner:
         """
         data = manifest.signable_bytes()
         sig = self._private_key.sign(data)
-        signed = manifest.model_copy(update={"signature": base64.b64encode(sig).decode()})
+        signed = manifest.model_copy(
+            update={"signature": base64.b64encode(sig).decode()}
+        )
         logger.info("Signed plugin %s@%s", manifest.name, manifest.version)
         return signed
 

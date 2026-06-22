@@ -59,11 +59,13 @@ class TestWorkflowBundle:
 
     def test_bundle_version_tracking(self) -> None:
         v1 = WorkflowBundle(
-            "versioned", "1.0.0",
+            "versioned",
+            "1.0.0",
             components=[BundleComponent(ComponentType.SKILL, "s", "1.0.0")],
         )
         v2 = WorkflowBundle(
-            "versioned", "2.0.0",
+            "versioned",
+            "2.0.0",
             components=[BundleComponent(ComponentType.SKILL, "s", "2.0.0")],
         )
         assert v1.version == "1.0.0"
@@ -131,7 +133,8 @@ class TestValidateBundle:
     def test_valid_bundle_passes(self) -> None:
         reg = BundleRegistry()
         bundle = WorkflowBundle(
-            "ok", "1.0.0",
+            "ok",
+            "1.0.0",
             components=[BundleComponent(ComponentType.AGENT, "a", "1.0.0")],
         )
         errors = reg.validate_bundle(bundle)
@@ -140,7 +143,8 @@ class TestValidateBundle:
     def test_duplicate_component_names_rejected(self) -> None:
         reg = BundleRegistry()
         bundle = WorkflowBundle(
-            "dup", "1.0.0",
+            "dup",
+            "1.0.0",
             components=[
                 BundleComponent(ComponentType.AGENT, "same-name", "1.0.0"),
                 BundleComponent(ComponentType.TOOL, "same-name", "1.0.0"),
@@ -161,7 +165,8 @@ class TestValidateBundle:
         """
         reg = BundleRegistry()
         bundle = WorkflowBundle(
-            "dup3", "1.0.0",
+            "dup3",
+            "1.0.0",
             components=[
                 BundleComponent(ComponentType.AGENT, "x", "1.0.0"),
                 BundleComponent(ComponentType.TOOL, "x", "1.0.0"),
@@ -182,7 +187,8 @@ class TestValidateBundle:
         """
         reg = BundleRegistry()
         bundle = WorkflowBundle(
-            "unnamed", "1.0.0",
+            "unnamed",
+            "1.0.0",
             components=[
                 BundleComponent(ComponentType.AGENT, "", "1.0.0"),
                 BundleComponent(ComponentType.TOOL, "", "1.0.0"),
@@ -209,7 +215,8 @@ class TestValidateBundle:
     def test_missing_component_version(self) -> None:
         reg = BundleRegistry()
         bundle = WorkflowBundle(
-            "bad-comp", "1.0.0",
+            "bad-comp",
+            "1.0.0",
             components=[BundleComponent(ComponentType.SKILL, "s", "")],
         )
         errors = reg.validate_bundle(bundle)
@@ -225,11 +232,13 @@ class TestRegistrySearch:
     def test_search_by_component_type(self) -> None:
         reg = BundleRegistry()
         agent_bundle = WorkflowBundle(
-            "agents", "1.0.0",
+            "agents",
+            "1.0.0",
             components=[BundleComponent(ComponentType.AGENT, "a1", "1.0.0")],
         )
         tool_bundle = WorkflowBundle(
-            "tools", "1.0.0",
+            "tools",
+            "1.0.0",
             components=[BundleComponent(ComponentType.TOOL, "t1", "1.0.0")],
         )
         reg.register(agent_bundle)
@@ -242,7 +251,8 @@ class TestRegistrySearch:
         reg = BundleRegistry()
         reg.register(
             WorkflowBundle(
-                "a", "1.0.0",
+                "a",
+                "1.0.0",
                 components=[BundleComponent(ComponentType.AGENT, "x", "1.0.0")],
             ),
         )

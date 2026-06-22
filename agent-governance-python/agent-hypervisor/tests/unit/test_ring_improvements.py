@@ -2,9 +2,9 @@
 # Licensed under the MIT License.
 """Tests for dynamic ring elevation, breach detection, and ring inheritance."""
 
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
 
 from hypervisor.models import ExecutionRing
 from hypervisor.rings.breach_detector import (
@@ -50,7 +50,8 @@ class TestRingElevation:
         mgr = RingElevationManager()
         with pytest.raises(RingElevationError):
             mgr.request_elevation(
-                agent_did="a1", session_id="s1",
+                agent_did="a1",
+                session_id="s1",
                 current_ring=ExecutionRing.RING_2_STANDARD,
                 target_ring=ExecutionRing.RING_3_SANDBOX,
             )
@@ -86,23 +87,17 @@ class TestRingElevation:
 class TestRingInheritance:
     def test_child_inherits_parent_minus_one(self):
         mgr = RingElevationManager()
-        child_ring = mgr.register_child(
-            "parent", "child", ExecutionRing.RING_1_PRIVILEGED
-        )
+        child_ring = mgr.register_child("parent", "child", ExecutionRing.RING_1_PRIVILEGED)
         assert child_ring == ExecutionRing.RING_2_STANDARD
 
     def test_child_of_sandbox_stays_sandbox(self):
         mgr = RingElevationManager()
-        child_ring = mgr.register_child(
-            "parent", "child", ExecutionRing.RING_3_SANDBOX
-        )
+        child_ring = mgr.register_child("parent", "child", ExecutionRing.RING_3_SANDBOX)
         assert child_ring == ExecutionRing.RING_3_SANDBOX
 
     def test_child_of_ring2_gets_ring3(self):
         mgr = RingElevationManager()
-        child_ring = mgr.register_child(
-            "parent", "child", ExecutionRing.RING_2_STANDARD
-        )
+        child_ring = mgr.register_child("parent", "child", ExecutionRing.RING_2_STANDARD)
         assert child_ring == ExecutionRing.RING_3_SANDBOX
 
     @pytest.mark.skip("Feature not available in Public Preview")
@@ -128,7 +123,8 @@ class TestBreachDetector:
             mock_time.monotonic = lambda: next(times)
             for _ in range(10):
                 result = detector.record_call(
-                    "a1", "s1",
+                    "a1",
+                    "s1",
                     ExecutionRing.RING_2_STANDARD,
                     ExecutionRing.RING_2_STANDARD,
                 )
@@ -150,7 +146,8 @@ class TestBreachDetector:
             mock_time.monotonic = lambda: next(times)
             for _ in range(10):
                 detector.record_call(
-                    "a1", "s1",
+                    "a1",
+                    "s1",
                     ExecutionRing.RING_2_STANDARD,
                     ExecutionRing.RING_2_STANDARD,
                 )
@@ -160,7 +157,8 @@ class TestBreachDetector:
         detector = RingBreachDetector()
         for _ in range(10):
             detector.record_call(
-                "a1", "s1",
+                "a1",
+                "s1",
                 ExecutionRing.RING_3_SANDBOX,
                 ExecutionRing.RING_1_PRIVILEGED,
             )
