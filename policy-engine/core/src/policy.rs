@@ -153,7 +153,7 @@ impl PolicyConfig {
     /// executes the bundle's rego with the host process environment and network
     /// access. An untrusted URL sourced manifest that named a `bundle_url` could
     /// therefore ship attacker chosen rego that reads a host secret through
-    /// `opa.runtime` and exfiltrates it through `http.send`. The hash pin does
+    /// `opa.runtime` and sends it out through `http.send`. The hash pin does
     /// not establish trust here because the same untrusted manifest chooses both
     /// the URL and the pin. A URL sourced manifest therefore cannot carry a
     /// remote rego bundle, mirroring how it cannot carry a local `bundle` or read
