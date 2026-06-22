@@ -861,3 +861,11 @@ preimage
 # --- Flowise integration terms ---
 chatflow
 Chatflows
+
+# --- Test code terms ---
+interp
+ncat
+netcat
+socat
+nmap
+tcpdump
