@@ -153,7 +153,7 @@ All types deliver the same governance capabilities — policy enforcement, ident
 
 - **5 language packages/modules** — Python, TypeScript, .NET, Rust, Go
 - **6 production framework integrations** (for AgentMesh specifically) — Dify, LlamaIndex, Agent-Lightning, LangGraph, OpenAI Agents, Haystack
-- **12+ framework integrations** (for the full toolkit) — includes all 6 above plus Microsoft Agent Framework, Semantic Kernel, AutoGen, LangChain, CrewAI, Google ADK, PydanticAI, and more
+- **21 integration packages** (for the full toolkit) — includes all 6 above plus Microsoft Agent Framework, Semantic Kernel, AutoGen, LangChain, CrewAI, Google ADK, PydanticAI, and more
 
 ### Language Packages / Modules (5)
 

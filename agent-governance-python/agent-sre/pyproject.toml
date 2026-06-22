@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-cli>=4.0.0,<5.0"]
+dependencies = ["agent-governance-toolkit-cli>=4.1.0,<5.0"]
 
 # The published wheel is a dep-only deprecation stub (see [project] above), but
 # the agent_sre source tree under src/ (and tests/) is still exercised in CI via
@@ -62,7 +62,7 @@ packages = ["src/agent_sre"]
 # package (adapters, alerts, tracing, ...). Restoring them keeps CI green.
 # ============================================================================
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
 

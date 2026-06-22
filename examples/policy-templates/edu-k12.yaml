@@ -162,7 +162,7 @@ rules:
     condition:
       field: input
       operator: matches
-      value: "(?i)(make|set|grant|promote|give)\\s+(me|this\\s+user|account)\\s+(to\\s+)?(admin|root|superuser|owner|elevated|teacher|instructor)"
+      value: "(?i)(make|set|grant|promote|give)\\s+(me|this\\s+user|account)\\s+(to\\s+|an?\\s+)?(admin|root|superuser|owner|elevated|teacher|instructor)"
     action: deny
     priority: 100
     message: "ASI-03: Identity Abuse — role promotion attempt detected"
@@ -358,7 +358,7 @@ rules:
     condition:
       field: input
       operator: matches
-      value: "(?i)(I\\s+am|I'm)\\s+(the\\s+)?(parent|guardian|mother|father|caregiver).*(consent|allow|approve|authorize|permit)\\s+(data|record|share|access|release)"
+      value: "(?i)(I\\s+am|I'm)\\s+(the\\s+)?(parent|guardian|mother|father|caregiver).*(consent|allow|approve|authorize|permit).*?(data|record|share|access|release|information)"
     action: audit
     priority: 90
     message: "ASI-09: COPPA/FERPA — unverified parental consent claim. Flag for human review before releasing student data."
@@ -445,7 +445,7 @@ rules:
     condition:
       field: output
       operator: matches
-      value: "(?i)(how\\s+to\\s+(make|build|create|assemble)\\s+(a\\s+)?(bomb|weapon|explosive|gun|knife)|step[- ]by[- ]step\\s+(instructions?|guide)\\s+(to\\s+)?(harm|attack|kill))"
+      value: "(?i)(how\\s+to\\s+(make|build|create|assemble)\\s+(a\\s+)?(bomb|weapon|explosive|gun|knife)|step[- ]by[- ]step\\s+(instructions?|guide)\\s+(to\\s+)?(harm|attack|kill|make|build|create|assemble))"
     action: deny
     priority: 100
     message: "ASI-01/06: CIPA: Harmful or violent instructional content is prohibited"

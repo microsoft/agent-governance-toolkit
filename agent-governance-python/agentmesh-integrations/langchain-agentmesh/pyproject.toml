@@ -7,11 +7,11 @@ name = "agentmesh_langchain"
 version = "4.1.0"
 description = "Deprecated. Previously published as agentmesh-langchain. Install agent-governance-toolkit-integrations[langchain] instead."
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-integrations[langchain]>=4.0.0,<5.0"]
+dependencies = ["agent-governance-toolkit-integrations[langchain]>=4.1.0,<5.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

@@ -23,6 +23,7 @@ the claims those issuers vouch for plus the request context.
 
 Run:
     pip install -r requirements.txt
+    pip install -e ../../agent-governance-python/agentmesh-integrations/cedarling-agentmesh
     python multi_issuer_example.py
 
 For the no-JWT path (identity asserted by the caller), see unsigned_example.py.
@@ -44,7 +45,8 @@ except ImportError:
     sys.exit(
         "This example needs the Cedarling bindings. Install them with:\n"
         "    pip install -r requirements.txt\n"
-        "(which pulls in cedarling-python alongside cedarling_agentmesh)."
+        "    pip install -e ../../agent-governance-python/agentmesh-integrations/cedarling-agentmesh\n"
+        "(requirements.txt provides cedarling-python; cedarling_agentmesh installs from source)."
     )
 
 POLICY_STORE = str(Path(__file__).resolve().parent / "policy-stores" / "multi-issuer")
