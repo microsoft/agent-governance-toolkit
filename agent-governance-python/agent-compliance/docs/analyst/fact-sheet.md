@@ -27,7 +27,7 @@
 - **Circuit breakers and cascade protection** — Prevent single-agent failures from cascading across multi-agent systems
 - **DID-based cryptographic agent identity** — Decentralized identifiers for verifiable, non-repudiable agent authentication
 - **OpenTelemetry-native observability** — Export governance telemetry as traces, metrics, and logs to any OTEL-compatible backend
-- **12+ framework adapters** — LangChain, CrewAI, AutoGen, Semantic Kernel, LlamaIndex, Haystack, OpenAI Agents SDK, Google ADK, MCP, A2A, and more
+- **21 integration packages** — LangChain, CrewAI, AutoGen, Semantic Kernel, LlamaIndex, Haystack, OpenAI Agents SDK, Google ADK, MCP, A2A, and more
 - **Behavioral anomaly detection** — ML-based detection of unusual agent behavior patterns
 - **REST API for language-agnostic integration** — Use from any language, not just Python
 

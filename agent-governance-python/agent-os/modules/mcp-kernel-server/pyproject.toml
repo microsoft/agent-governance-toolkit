@@ -8,7 +8,7 @@ version = "4.1.0"
 description = "MCP Server for Claude Desktop - Agent OS kernel primitives including code safety verification, CMVK multi-model review, and IATP trust"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com" }
 ]
@@ -26,7 +26,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -39,9 +38,9 @@ dependencies = [
 
 [project.optional-dependencies]
 full = [
-    "agent-governance-toolkit-control-plane>=4,<5",
-    "agent-governance-toolkit-drift>=0.3.0,<1.0",
-    "agent-governance-toolkit-trust-protocol>=4,<5",
+    "agent-governance-toolkit-control-plane>=4.1.0,<5.0",
+    "agent-governance-toolkit-drift>=4.1.0,<5.0",
+    "agent-governance-toolkit-trust-protocol>=4.1.0,<5.0",
 ]
 dev = [
     "pytest>=7.0.0,<8.0",

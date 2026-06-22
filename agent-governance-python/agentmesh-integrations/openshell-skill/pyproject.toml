@@ -7,11 +7,11 @@ name = "openshell-agentmesh"
 version = "4.1.0"
 description = "Deprecated. Previously published as openshell-agentmesh. Install agent-governance-toolkit-integrations[openshell] instead."
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-integrations[openshell]>=4.0.0,<5.0"]
+dependencies = ["agent-governance-toolkit-integrations[openshell]>=4.1.0,<5.0"]
 
 [project.urls]
 Homepage = "https://github.com/microsoft/agent-governance-toolkit"

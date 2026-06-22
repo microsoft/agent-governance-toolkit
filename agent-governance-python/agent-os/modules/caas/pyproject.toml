@@ -7,7 +7,7 @@ name = "agent-governance-toolkit-context"
 version = "4.1.0"
 description = "A pure, logic-only library for routing context, handling RAG fallacies, and managing context windows. Layer 1 Primitive - no agent dependencies."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "Microsoft Corporation"},
@@ -29,9 +29,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -137,7 +134,7 @@ exclude = '''
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py311"
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -157,7 +154,7 @@ ignore = [
 "__init__.py" = ["F401"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

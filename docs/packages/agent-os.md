@@ -1131,7 +1131,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 Prompt-based guardrails ask the LLM to self-police, which is probabilistic. Agent OS enforces governance at the middleware level using deterministic policy engines and POSIX-inspired access controls. It controls what agents *can* do (capability-based), not just what they *should not* do (filter-based).
 
 **How does Agent OS work with other frameworks?**
-Agent OS integrates with 14+ frameworks via adapters. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `agentmesh-openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
+Agent OS integrates with 21 integration packages. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `agentmesh-openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
 
 **What is the Agent Governance Ecosystem?**
 Agent OS is part of a suite of seven packages: Agent OS (policy engine), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (trust infrastructure), [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (execution supervisor), [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability), [Agent Compliance](https://github.com/microsoft/agent-governance-toolkit) (regulatory compliance), [Agent Marketplace](https://github.com/microsoft/agent-governance-toolkit) (plugin lifecycle), and [Agent Lightning](https://github.com/microsoft/agent-governance-toolkit) (RL training governance). Together they provide 4,310+ tests across 17 modules.

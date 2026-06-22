@@ -267,9 +267,9 @@ Agent ──► Policy Engine ──► Identity ──► Audit Log
 **[언어 패키지 매트릭스](../../docs/PACKAGE-FEATURE-MATRIX.md)**에서 언어별 상세 지원 현황을 확인하세요.
 
 <details>
-<summary><b>Python 배포판 (v4.0.0 — 통합)</b></summary>
+<summary><b>Python 배포판 (v4.1.0 — 통합)</b></summary>
 
-v4.0.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습니다:
+v4.1.0부터 45개 패키지가 5개 최상위 배포판으로 통합되었습니다:
 
 | 배포판 | PyPI | 포함 내용 |
 |--------------|------|-----------------|
