@@ -74,8 +74,8 @@ class TestRealCryptoSignAndVerify:
 
         attestation = v.create_attestation(
             agent_id="agent-001",
-            codebase_hash="aabbccdd",
-            config_hash="11223344",
+            codebase_hash="00112233",
+            config_hash="44556677",
             signing_key_id="test-key",
             private_key=priv_b64,
         )
