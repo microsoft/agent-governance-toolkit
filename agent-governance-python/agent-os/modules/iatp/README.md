@@ -35,6 +35,8 @@ IATP eliminates implicit trust through two key features:
 - Prevents running modified/hacked agent versions
 - No need for complex firewalls—security is in the protocol
 
+> **Note.** Signature verification requires the `cryptography` library (Ed25519). Without it, verification fails closed (an attestation is rejected rather than accepted), so install `cryptography>=42.0.0` for any deployment that relies on attestation.
+
 ### 2. **Reputation Slashing**
 
 **The Problem:** Agents that hallucinate or misbehave continue to be trusted by the network.
