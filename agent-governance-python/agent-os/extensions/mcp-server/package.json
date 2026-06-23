@@ -48,7 +48,7 @@
   "devDependencies": {
     "@types/node": "26.0.0",
     "@types/uuid": "11.0.0",
-    "@typescript-eslint/eslint-plugin": "8.61.1",
+    "@typescript-eslint/eslint-plugin": "8.62.0",
     "@typescript-eslint/parser": "8.62.0",
     "@vitest/coverage-v8": "4.1.9",
     "eslint": "10.5.0",
