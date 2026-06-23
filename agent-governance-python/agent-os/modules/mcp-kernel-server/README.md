@@ -6,7 +6,7 @@
 
 This server exposes Agent OS capabilities through MCP, enabling Claude Desktop and other MCP-compatible clients to use kernel-level AI agent governance.
 
-> **Public Preview status.** The MCP message adapter and governance routing are functional, but the standalone server transport (`MCPServer.start()`) is a placeholder in this preview. Running it against a live Claude Desktop connection needs a real stdio/SSE/HTTP transport, which is not yet implemented.
+> **Implementation status.** The MCP message adapter and governance routing are functional, but the standalone server transport (`MCPServer.start()`) is a placeholder. Running it against a live Claude Desktop connection needs a real stdio/SSE/HTTP transport, which is not yet implemented.
 
 ## The Problem
 
