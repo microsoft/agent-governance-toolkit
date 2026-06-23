@@ -9,7 +9,7 @@ use std::path::Path;
 
 const DATA_PATH_KEYS: [&str; 2] = ["data", "data_paths"];
 
-fn resolve_relative_string(value: &str, base_dir: &Path) -> Option<String> {
+pub(crate) fn resolve_relative_string(value: &str, base_dir: &Path) -> Option<String> {
     if value.is_empty() {
         return None;
     }
@@ -111,6 +111,86 @@ impl PolicyConfig {
             }
         }
     }
+
+    /// Reject filesystem path fields declared on a policy. A URL sourced manifest
+    /// has no file system manifest root, so a rego `bundle`, a cedar
+    /// `policy_path`/`entities_path`/`schema_path`, or adapter `data`/`data_paths`
+    /// would resolve against the process working directory at dispatch. A URL
+    /// sourced manifest MUST use inline policy text, so any such field fails
+    /// closed. The remote rego `bundle_url` form is rejected separately by
+    /// [`PolicyConfig::reject_url_sourced_remote_bundle`].
+    pub fn reject_filesystem_path_fields(&self, context: &str) -> Result<(), RuntimeError> {
+        match self {
+            Self::Rego(config) => {
+                if config.bundle.is_some() {
+                    return Err(filesystem_field_error(
+                        context,
+                        "bundle",
+                        "inline policy text",
+                    ));
+                }
+                reject_adapter_data_paths(&config.adapter_config, context)?;
+            }
+            Self::Cedar(config) => {
+                for (field, value) in [
+                    ("policy_path", &config.policy_path),
+                    ("entities_path", &config.entities_path),
+                    ("schema_path", &config.schema_path),
+                ] {
+                    if value.is_some() {
+                        return Err(filesystem_field_error(context, field, "inline policy text"));
+                    }
+                }
+            }
+            Self::Test(config) => reject_adapter_data_paths(&config.adapter_config, context)?,
+            Self::Custom(config) => reject_adapter_data_paths(&config.adapter_config, context)?,
+        }
+        Ok(())
+    }
+
+    /// Reject a remote rego `bundle_url` declared on a URL sourced manifest. The
+    /// bundled OPA dispatcher runs the fetched bundle through `opa eval`, which
+    /// executes the bundle's rego with the host process environment and network
+    /// access. An untrusted URL sourced manifest that named a `bundle_url` could
+    /// therefore ship attacker chosen rego that reads a host secret through
+    /// `opa.runtime` and sends it out through `http.send`. The hash pin does
+    /// not establish trust here because the same untrusted manifest chooses both
+    /// the URL and the pin. A URL sourced manifest therefore cannot carry a
+    /// remote rego bundle, mirroring how it cannot carry a local `bundle` or read
+    /// host credentials. A file sourced manifest, authored by the host operator,
+    /// keeps full `bundle_url` support.
+    pub fn reject_url_sourced_remote_bundle(&self, context: &str) -> Result<(), RuntimeError> {
+        if let Self::Rego(config) = self {
+            if config.bundle_url.is_some() {
+                return Err(RuntimeError::ManifestInvalid(format!(
+                    "{context} declares a remote rego 'bundle_url' in a URL sourced manifest; a URL sourced manifest cannot execute a remote rego bundle because the bundled rego runs with host environment and network access, load the policy from a file sourced manifest instead"
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn reject_adapter_data_paths(
+    adapter_config: &BTreeMap<String, JsonValue>,
+    context: &str,
+) -> Result<(), RuntimeError> {
+    for key in DATA_PATH_KEYS {
+        if adapter_config.contains_key(key) {
+            return Err(filesystem_field_error(
+                context,
+                key,
+                "an inline or URL form",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn filesystem_field_error(context: &str, field: &str, alternative: &str) -> RuntimeError {
+    RuntimeError::ManifestInvalid(format!(
+        "{context} declares filesystem path field '{field}' in a URL sourced manifest; a URL sourced manifest cannot reference local files, use {alternative} instead"
+    ))
 }
 
 impl PolicyBinding {
@@ -118,6 +198,12 @@ impl PolicyBinding {
     /// against the directory of the manifest file that declared them.
     pub fn resolve_relative_paths(&mut self, base_dir: &Path) {
         resolve_adapter_config_paths(&mut self.adapter_config, base_dir);
+    }
+
+    /// Reject filesystem path fields declared on a policy binding. Used for a
+    /// URL sourced manifest, which has no file system manifest root.
+    pub fn reject_filesystem_path_fields(&self, context: &str) -> Result<(), RuntimeError> {
+        reject_adapter_data_paths(&self.adapter_config, context)
     }
 }
 
@@ -127,6 +213,11 @@ pub struct RegoPolicyConfig {
     pub query: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle: Option<String>,
+    /// AGT addition: a pinned HTTPS object `{url, sha256|integrity}` that the
+    /// bundled OPA dispatcher fetches and verifies before passing the local
+    /// path to `opa eval`. Mutually exclusive with `bundle`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_url: Option<JsonValue>,
     #[serde(default, flatten, skip_serializing_if = "BTreeMap::is_empty")]
     pub adapter_config: BTreeMap<String, JsonValue>,
 }
@@ -201,6 +292,8 @@ pub struct RegoPolicyInvocation {
     pub query: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bundle: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_url: Option<JsonValue>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub adapter_config: BTreeMap<String, JsonValue>,
     pub input: JsonValue,
@@ -252,6 +345,14 @@ pub fn validate_policy_definition(name: &str, config: &PolicyConfig) -> Result<(
         PolicyConfig::Rego(config) => {
             validate_optional_string("rego.query", config.query.as_deref())?;
             validate_optional_string("rego.bundle", config.bundle.as_deref())?;
+            if config.bundle.is_some() && config.bundle_url.is_some() {
+                return Err(RuntimeError::ManifestInvalid(
+                    "rego policies must declare at most one of bundle or bundle_url".to_string(),
+                ));
+            }
+            if let Some(bundle_url) = &config.bundle_url {
+                crate::manifest::validate_pinned_https_url("rego.bundle_url", bundle_url)?;
+            }
             for field in cedar_field::ALL {
                 if config.adapter_config.contains_key(field) {
                     return Err(RuntimeError::ManifestInvalid(format!(
@@ -342,6 +443,7 @@ pub fn prepare_policy_invocation(
                     )
                 })?,
             bundle: config.bundle.clone(),
+            bundle_url: config.bundle_url.clone(),
             adapter_config: merge_adapter_config(&config.adapter_config, &binding.adapter_config),
             input: final_policy_input.clone(),
             canonical_input: canonical_policy_input(final_policy_input)?,
@@ -420,6 +522,7 @@ mod path_resolution_tests {
         PolicyConfig::Rego(RegoPolicyConfig {
             query: Some("data.x.verdict".to_string()),
             bundle: bundle.map(str::to_string),
+            bundle_url: None,
             adapter_config: adapter
                 .as_object()
                 .unwrap()
@@ -656,5 +759,72 @@ intervention_points:
         let error = parse(&yaml).unwrap_err();
         assert_eq!(error.reason(), "runtime_error:manifest_invalid");
         assert!(error.detail().contains("query"));
+    }
+
+    fn rego_bundle_manifest(policy_body: &str) -> String {
+        format!(
+            r#"agent_control_specification_version: 0.3.1-beta
+policies:
+  guard:
+    type: rego
+    query: data.x.verdict
+{policy_body}
+intervention_points:
+  input:
+    policy_target: $snap.input
+    policy:
+      id: guard
+"#
+        )
+    }
+
+    #[test]
+    fn rego_with_pinned_bundle_url_is_accepted() {
+        let yaml = rego_bundle_manifest(
+            "    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        );
+        let manifest = parse(&yaml).expect("pinned bundle_url should parse");
+        assert_eq!(manifest.policies["guard"].engine_type(), "rego");
+    }
+
+    #[test]
+    fn rego_with_bundle_and_bundle_url_is_rejected() {
+        let yaml = rego_bundle_manifest(
+            "    bundle: ./local\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert!(
+            error
+                .detail()
+                .contains("at most one of bundle or bundle_url"),
+            "got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn rego_with_unpinned_bundle_url_is_rejected() {
+        let yaml = rego_bundle_manifest(
+            "    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n",
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert!(
+            error.detail().contains("must declare a 'sha256'"),
+            "got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn rego_with_non_https_bundle_url_is_rejected() {
+        let yaml = rego_bundle_manifest(
+            "    bundle_url:\n      url: http://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+        );
+        let error = parse(&yaml).unwrap_err();
+        assert!(
+            error.detail().contains("only https is allowed"),
+            "got: {}",
+            error.detail()
+        );
     }
 }

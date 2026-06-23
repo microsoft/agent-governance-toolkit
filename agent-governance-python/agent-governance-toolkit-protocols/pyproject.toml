@@ -8,7 +8,7 @@ version = "4.1.0"
 description = "Protocol implementations (MCP governance, trust protocol, A2A, MCP receipts) for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
@@ -26,7 +26,6 @@ classifiers = [
     "Topic :: Security",
     "Topic :: Software Development :: Libraries",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -34,7 +33,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
+    "agent-governance-toolkit-core>=4.1.0,<5.0",
 ]
 
 [project.optional-dependencies]
@@ -65,7 +64,7 @@ packages = ["_placeholder"]
 include = ["README.md", "LICENSE"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]

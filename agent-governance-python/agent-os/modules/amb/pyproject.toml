@@ -11,15 +11,12 @@ readme = "README.md"
 authors = [
     { name = "Microsoft Corporation" }
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
@@ -74,7 +71,7 @@ testpaths = ["tests"]
 addopts = "-v --tb=short"
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]
@@ -99,7 +96,7 @@ ignore = [
 known-first-party = ["amb_core"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

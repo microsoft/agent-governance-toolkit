@@ -76,6 +76,34 @@ class AgentControl:
         )
 
     @classmethod
+    def from_url(
+        cls,
+        url: str,
+        sha256: str | None = None,
+        annotator_dispatcher: AnnotatorDispatcher | None = None,
+        policy_dispatcher: PolicyDispatcher | None = None,
+        *,
+        approval_resolver: ApprovalResolver | None = None,
+        perf_telemetry: int = 0,
+        max_url_bytes: int | None = None,
+        url_timeout_ms: int | None = None,
+        max_url_redirects: int | None = None,
+    ) -> "AgentControl":
+        return cls(
+            NativeRuntimeClient.from_url(
+                url,
+                sha256,
+                annotator_dispatcher,
+                policy_dispatcher,
+                perf_telemetry,
+                max_url_bytes=max_url_bytes,
+                url_timeout_ms=url_timeout_ms,
+                max_url_redirects=max_url_redirects,
+            ),
+            approval_resolver=approval_resolver,
+        )
+
+    @classmethod
     def from_manifest_chain(
         cls,
         manifests: list[str],
