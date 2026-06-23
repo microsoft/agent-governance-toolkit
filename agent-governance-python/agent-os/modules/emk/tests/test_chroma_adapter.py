@@ -40,7 +40,8 @@ def test_update_existing_episode(tmp_path):
     eid = adapter.store(_episode(goal="original"), embedding=np.zeros(8, dtype=np.float32))
 
     updated = _episode(goal="changed", result="new-result", episode_id=eid)
-    assert adapter.update(eid, updated) is True
+    result = adapter.update(eid, updated)
+    assert result is True
 
     got = adapter.get_by_id(eid)
     assert got is not None
@@ -50,17 +51,20 @@ def test_update_existing_episode(tmp_path):
 
 def test_update_missing_returns_false(tmp_path):
     adapter = _adapter(tmp_path)
-    assert adapter.update("does-not-exist", _episode()) is False
+    result = adapter.update("does-not-exist", _episode())
+    assert result is False
 
 
 def test_delete_existing_episode(tmp_path):
     adapter = _adapter(tmp_path)
     eid = adapter.store(_episode(), embedding=np.zeros(8, dtype=np.float32))
 
-    assert adapter.delete(eid) is True
+    deleted = adapter.delete(eid)
+    assert deleted is True
     assert adapter.get_by_id(eid) is None
 
 
 def test_delete_missing_returns_false(tmp_path):
     adapter = _adapter(tmp_path)
-    assert adapter.delete("does-not-exist") is False
+    deleted = adapter.delete("does-not-exist")
+    assert deleted is False
