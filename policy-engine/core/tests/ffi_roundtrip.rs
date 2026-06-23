@@ -1,7 +1,8 @@
 use agent_control_specification_core::ffi::{
-    acs_builder_build, acs_builder_from_path, acs_builder_from_yaml, acs_builder_from_yaml_chain,
-    acs_builder_register_annotator_dispatcher, acs_builder_register_policy_dispatcher,
-    acs_free_string, acs_runtime_evaluate, acs_runtime_free,
+    acs_builder_build, acs_builder_from_path, acs_builder_from_url, acs_builder_from_yaml,
+    acs_builder_from_yaml_chain, acs_builder_register_annotator_dispatcher,
+    acs_builder_register_policy_dispatcher, acs_free_string, acs_runtime_evaluate,
+    acs_runtime_free,
 };
 use serde_json::{json, Value};
 use std::{
@@ -462,6 +463,27 @@ fn ffi_builder_from_path_resolves_extends_and_builds_runtime() {
         assert!(!builder.is_null(), "builder error: {}", take_err(err));
         let runtime = build_runtime_from_builder(builder);
         acs_runtime_free(runtime);
+    }
+}
+
+#[test]
+fn ffi_builder_from_url_threads_pin_and_fails_closed_on_non_https() {
+    // The URL loader requires HTTPS, so a non-https URL fails closed before any
+    // network access. Exercise both the NULL (unpinned) and a supplied pin to
+    // confirm the optional `sha256` argument threads through the FFI boundary.
+    unsafe {
+        let url = CString::new("http://policy.example/manifest.yaml").expect("url contains no NUL");
+        let pin = CString::new("00".repeat(32)).expect("pin contains no NUL");
+        for sha256 in [ptr::null(), pin.as_ptr()] {
+            let mut err = ptr::null_mut();
+            let builder = acs_builder_from_url(url.as_ptr(), sha256, &mut err);
+            assert!(builder.is_null(), "non-https URL must fail closed");
+            let detail = take_err(err);
+            assert!(
+                detail.contains("from_url failed") && detail.contains("unsupported URL scheme"),
+                "unexpected error detail: {detail}"
+            );
+        }
     }
 }
 
