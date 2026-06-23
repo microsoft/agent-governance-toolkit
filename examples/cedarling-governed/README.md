@@ -110,7 +110,6 @@ pass that token alongside the others in the per-request `tokens` dict:
 decision = evaluator.evaluate({
     "tool_name": "write",
     "resource": "infra-config",
-    "device": "laptop",
     "tokens": {
         "AGT::Access_Token": "<jwt-from-issuer-a>",
         # "AGT::Id_Token":   "<jwt-from-issuer-b>",
@@ -162,7 +161,7 @@ policy-stores/
 │       └── forbid-write.cedar
 └── multi-issuer/
     ├── metadata.json
-    ├── schema.cedarschema           # adds Access_Token entity + Context (tokens + device)
+    ├── schema.cedarschema           # Access_Token entity carries role + device claims as tags
     ├── trusted-issuers/
     │   └── janssen.json             # the IdP whose tokens are trusted
     └── policies/

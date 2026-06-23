@@ -3,23 +3,24 @@
 """Capability-based authorization for autonomous agents with Cedarling + AGT.
 
 An operations agent manages infrastructure config. Whether it may *write* is a
-capability that depends on two things together:
+capability that depends on two claims a trusted issuer stamped into its access
+token:
 
-  - **who it is** — a ``role`` claim carried by a verified access token, and
-  - **how it connected** — the device posture, passed as request context.
+  - **who it is**: a ``role`` claim, and
+  - **how it connected**: a ``device`` claim describing the device posture.
 
-An admin agent on a managed laptop may write. The *same admin token* presented
-from an insecure device (a personal mobile) may not — the capability is revoked
-by context. Reading is allowed from any device. A non-admin token never writes.
+An admin token issued on a managed laptop may write. The same admin role on a
+different device (a personal mobile) may not: the capability is revoked by the
+weaker device. Reading is allowed from any device. A non-admin token never writes.
 
-Nothing in the request can assert the role: it comes only from a token a trusted
-issuer vouched for. That verified claim, combined with the request context, is
-the capability — this is what sets Cedarling apart from role-based access
-control, where the caller asserts its own role.
+Nothing in the request asserts these facts: they come only from claims a trusted
+issuer vouched for. That bundle of verified claims is the capability, this is
+what sets Cedarling apart from role-based access control, where the caller
+asserts its own role.
 
 This is Cedarling's *multi-issuer* authorization mode: tokens may come from one
 or more trusted issuers declared in the policy store, and policies reason over
-the claims those issuers vouch for plus the request context.
+the claims those issuers vouch for.
 
 Run:
     pip install -r requirements.txt
@@ -67,8 +68,8 @@ ACCESS_TOKEN_TYPE = "AGT::Access_Token"
 # match the trusted issuer's configuration endpoint host (test.jans.org).
 
 
-def _mint_access_token(*, subject: str, role: str) -> str:
-    """Build an unsigned demo JWT carrying a ``role`` capability claim."""
+def _mint_access_token(*, subject: str, role: str, device: str) -> str:
+    """Build an unsigned demo JWT carrying ``role`` and ``device`` claims."""
 
     def b64(obj: dict) -> str:
         raw = json.dumps(obj, separators=(",", ":")).encode()
@@ -84,18 +85,19 @@ def _mint_access_token(*, subject: str, role: str) -> str:
         "token_type": "Bearer",
         "scope": ["openid", "profile"],
         "role": role,
+        "device": device,
         "iat": now,
         "exp": now + 3600,
-        "jti": f"jti-{subject}",
+        "jti": f"jti-{subject}-{device}",
     }
     # Signature is irrelevant (validation disabled for the demo).
     return f"{b64(header)}.{b64(payload)}.demo-signature"
 
 
-# Admin token grants the write capability — gated on device posture below.
-ADMIN_TOKEN = _mint_access_token(subject="agent-ops", role="admin")
+ADMIN_LAPTOP_TOKEN = _mint_access_token(subject="agent-ops", role="admin", device="laptop")
+ADMIN_MOBILE_TOKEN = _mint_access_token(subject="agent-ops", role="admin", device="mobile")
 # Operator token: same trusted issuer, but not admin — no write capability.
-OPERATOR_TOKEN = _mint_access_token(subject="agent-helpdesk", role="operator")
+OPERATOR_TOKEN = _mint_access_token(subject="agent-helpdesk", role="operator", device="laptop")
 
 
 # ---------------------------------------------------------------------------
@@ -136,54 +138,54 @@ evaluator.add_backend(backend)
 #   tool_name -> action  (snake_case -> PascalCase, e.g. read_data -> ReadData)
 #   resource  -> resource id (AGT::Resource)
 #   tokens    -> JWTs, keyed by the Cedar entity type they map to
-#   device    -> extra context attribute (the connecting device posture)
 #
-# Cedarling validates each token against the trusted issuer, exposes its claims
-# as context.tokens.janssen_access_token, and evaluates the policies in
-# policy-stores/multi-issuer/policies/ against those claims plus the context:
+# Every non-reserved JWT claim (here role and device) is exposed to policies as a
+# tag on context.tokens.janssen_access_token. Cedarling validates each token
+# against the trusted issuer, then evaluates the policies in
+# policy-stores/multi-issuer/policies/ against those claims:
 #   allow-admin-read  : permit Read/ReadData when the token role is "admin"
 #   allow-admin-write : permit Write when the token role is "admin" AND the
-#                       request device is not "mobile" (insecure)
+#                       token device claim is not "mobile" (insecure)
 # Anything not permitted is denied by default.
 
 test_cases = [
-    # admin on a managed laptop -> role + secure device -> ALLOW
+    # admin token issued on a managed laptop -> role + secure device -> ALLOW
     {
         "label": "admin agent on managed laptop writes config",
+        "device": "laptop",
         "request": {
             "tool_name": "write",
             "resource": "infra-config",
-            "device": "laptop",
-            "tokens": {ACCESS_TOKEN_TYPE: ADMIN_TOKEN},
+            "tokens": {ACCESS_TOKEN_TYPE: ADMIN_LAPTOP_TOKEN},
         },
     },
-    # admin on a personal mobile -> right role, insecure device -> DENY
+    # admin token issued on a personal mobile -> right role, insecure device -> DENY
     {
         "label": "admin agent on personal mobile writes config",
+        "device": "mobile",
         "request": {
             "tool_name": "write",
             "resource": "infra-config",
-            "device": "mobile",
-            "tokens": {ACCESS_TOKEN_TYPE: ADMIN_TOKEN},
+            "tokens": {ACCESS_TOKEN_TYPE: ADMIN_MOBILE_TOKEN},
         },
     },
-    # admin reading from that same mobile -> read isn't device-gated -> ALLOW
+    # same mobile admin token reading -> read isn't device-gated -> ALLOW
     {
         "label": "admin agent on personal mobile reads config",
+        "device": "mobile",
         "request": {
             "tool_name": "read_data",
             "resource": "infra-config",
-            "device": "mobile",
-            "tokens": {ACCESS_TOKEN_TYPE: ADMIN_TOKEN},
+            "tokens": {ACCESS_TOKEN_TYPE: ADMIN_MOBILE_TOKEN},
         },
     },
-    # operator on a managed laptop -> not admin -> DENY (default deny)
+    # operator token on a managed laptop -> not admin -> DENY (default deny)
     {
         "label": "operator agent on managed laptop writes config",
+        "device": "laptop",
         "request": {
             "tool_name": "write",
             "resource": "infra-config",
-            "device": "laptop",
             "tokens": {ACCESS_TOKEN_TYPE: OPERATOR_TOKEN},
         },
     },
@@ -200,7 +202,7 @@ for case in test_cases:
     status = "ALLOW" if decision.allowed else "DENY "
     print(
         f"[{status}] {case['label']} → "
-        f"{request['tool_name']} on {request['resource']} (device={request['device']})"
+        f"{request['tool_name']} on {request['resource']} (device={case['device']})"
     )
     print(f"         reason : {decision.reason}")
     print(f"         backend: {audit['backend']}  timing: {audit['evaluation_ms']:.2f}ms")
