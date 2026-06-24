@@ -1,6 +1,10 @@
-# Shows a policy signal when a PR is awaiting named-maintainer approval.
-# AI-only approvals do NOT count. Bot approvals do NOT count.
-# Branch protection rules enforce the merge-blocking code-owner review requirement.
+# Shows a policy signal when a PR is awaiting maintainer approval.
+# "Maintainer" is resolved from native repo RBAC: a collaborator whose
+# effective permission is `maintain` or `admin`. There is no hardcoded
+# name list — granting/revoking the Maintain role is the single source
+# of truth.
+#
+# AI-only approvals, bot approvals, and the author's own approval do NOT count.
 #
 # Context: PRs #357 and #362 were auto-merged without maintainer review,
 # reintroducing shell=True (CWE-78) that was previously fixed.
@@ -29,41 +33,50 @@ jobs:
     permissions:
       contents: read
       pull-requests: read    # github-script calls pulls.listReviews on the PR
-    if: >-
-      github.event.pull_request.author_association != 'MEMBER' &&
-      github.event.pull_request.author_association != 'OWNER'
     steps:
-      - name: Check for named-maintainer review
+      - name: Check for a maintainer (Maintain+) approval
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            // NOTE: only human (type === 'User') maintainers count below, so a
-            // service account such as microsoft-github-policy-service can never
-            // satisfy this gate. Listing it here was dead code, and relaxing the
-            // type filter to admit a Bot would re-open the bot-approval bypass
-            // that this policy exists to prevent (see PRs #357 / #362). The
-            // safer fix is to keep the bot exclusion and list only humans.
-            const MAINTAINERS = ['imran-siddique'];
+            const pr = context.payload.pull_request;
+            const author = pr.user.login;
 
-            const reviews = await github.rest.pulls.listReviews({
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
+              pull_number: pr.number,
+              per_page: 100,
             });
 
-            const maintainerApproval = reviews.data.find(
-              (r) =>
-                r.state === 'APPROVED' &&
-                MAINTAINERS.includes(r.user.login) &&
-                r.user.type === 'User'  // Exclude bot approvals
-            );
+            // Distinct human approvers, excluding the PR author (no self-approval)
+            // and any bot/service account (type !== 'User').
+            const approvers = [...new Set(
+              reviews
+                .filter((r) => r.state === 'APPROVED' && r.user && r.user.type === 'User' && r.user.login !== author)
+                .map((r) => r.user.login)
+            )];
 
-            if (!maintainerApproval) {
+            // A maintainer is anyone whose effective repo permission is maintain or admin.
+            let approvingMaintainer = null;
+            for (const login of approvers) {
+              const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: login,
+              });
+              if (perm.permission === 'admin' || perm.permission === 'maintain') {
+                approvingMaintainer = login;
+                break;
+              }
+            }
+
+            if (!approvingMaintainer) {
               core.setFailed(
-                `Policy: this PR is awaiting a named-maintainer review.\n` +
-                `This is a policy gate, not a CI failure — the PR is mergeable once a named maintainer (see CODEOWNERS or .github/MAINTAINERS) approves.\n` +
-                `For more details, see docs/policies/maintainer-review-gate.md.`
+                `Policy: this PR is awaiting approval from a maintainer ` +
+                `(a collaborator with the Maintain or Admin role).\n` +
+                `Bot/AI approvals and the author's own approval do not count.\n` +
+                `This is a policy gate, not a CI failure. See docs/policies/maintainer-review-gate.md.`
               );
             } else {
-              core.info(`✅ Maintainer @${maintainerApproval.user.login} approved this PR.`);
+              core.info(`✅ Maintainer @${approvingMaintainer} (Maintain+) approved this PR.`);
             }

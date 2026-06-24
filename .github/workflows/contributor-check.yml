@@ -27,19 +27,53 @@ permissions:
   contents: read
 
 jobs:
+  # Decide whether to run the reputation check. Trusted maintainers (resolved
+  # from native RBAC: Maintain+ collaborators) and known automation are exempt,
+  # so there is no hardcoded human allowlist to drift.
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      run_check: ${{ steps.decide.outputs.run_check }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.actor != 'dependabot[bot]' &&
+       github.actor != 'github-actions[bot]' &&
+       github.actor != 'copilot-swe-agent[bot]')
+    steps:
+      - id: decide
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            // workflow_dispatch checks an explicit username input — always run.
+            if (context.eventName === 'workflow_dispatch') {
+              core.setOutput('run_check', 'true');
+              return;
+            }
+            // Exempt maintainers (Maintain or Admin). Fail safe: if permission
+            // cannot be resolved, run the check rather than skip it.
+            try {
+              const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: context.actor,
+              });
+              const isMaintainer = perm.permission === 'admin' || perm.permission === 'maintain';
+              core.setOutput('run_check', isMaintainer ? 'false' : 'true');
+            } catch (e) {
+              core.info(`Could not resolve permission for ${context.actor}: ${e.message}. Running check.`);
+              core.setOutput('run_check', 'true');
+            }
+
   check:
+    needs: gate
+    if: needs.gate.outputs.run_check == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write          # Used by contributor-check action to post comments / labels on issues
       pull-requests: write   # Used by contributor-check action to post comments / labels on PRs
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.actor != 'dependabot[bot]' &&
-       github.actor != 'github-actions[bot]' &&
-       github.actor != 'copilot-swe-agent[bot]' &&
-       github.actor != 'imran-siddique' &&
-       github.actor != 'eltoncarr-ms')
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

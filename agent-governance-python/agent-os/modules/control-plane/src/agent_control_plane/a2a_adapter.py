@@ -32,8 +32,10 @@ Usage:
     
     # Register capabilities
     a2a_agent.register_capability("data_processing", handle_data_processing)
-    
-    # All A2A communications are now governed!
+
+    # Governance wraps each handled message. Note: the transport in `start()`
+    # is a placeholder, so wire the governed handlers into your own A2A
+    # runtime rather than relying on this loop.
     a2a_agent.start()
 """
 

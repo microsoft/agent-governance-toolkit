@@ -103,7 +103,7 @@ mkdocs build       # build static site
 
 ## Decision Escalation
 
-For major design changes, always ask the maintainer (@imran-siddique) before proceeding:
+For major design changes, always ask a maintainer (a collaborator with the Maintain or Admin role) before proceeding:
 - New packages or modules that change the repo structure
 - Cross-cutting changes spanning 3+ packages
 - Security model changes (identity, trust, policy engine)
