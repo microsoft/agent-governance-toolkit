@@ -31,7 +31,7 @@ rules:
     condition:
       field: output
       operator: matches
-      value: "(?i)aadhaar\\D{0,15}\\b\\d{12}\\b"
+      value: "(?i)aadhaar\\D{0,15}\\d{12}\\b"
     action: block
     priority: 100
     message: "Aadhaar Regulations 2021: mask the first 8 of 12 Aadhaar digits (only last 4 may be displayed/stored); full Aadhaar number must not be output, logged, or stored unmasked"
