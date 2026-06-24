@@ -238,7 +238,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | [**Agent Compliance**](agent-governance-python/agent-compliance/) | OWASP verification, policy linting, integrity checks |
 | [**Agent Marketplace**](agent-governance-python/agent-marketplace/) | Plugin governance and trust scoring |
 | [**Agent Lightning**](agent-governance-python/agent-lightning/) | RL training governance with violation penalties |
-| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, commitment anchoring, command denylist enforcement |
+| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, in-memory commitment tracking, command denylist enforcement |
 
 ### Additional Capabilities
 

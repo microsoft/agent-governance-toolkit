@@ -106,7 +106,7 @@ curl -X POST http://localhost:8000/api/v1/sessions \
 | `max_duration_seconds` | int | `3600` | Session timeout in seconds |
 | `min_eff_score` | float | `0.60` | Minimum effective reputation score |
 | `enable_audit` | bool | `true` | Enable hash-chained audit trail |
-| `enable_blockchain_commitment` | bool | `false` | Commit audit root to blockchain |
+| `enable_blockchain_commitment` | bool | `false` | Reserved. Blockchain anchoring is not implemented, so this has no effect (the commitment is stored in memory only). |
 
 **Response** `201 Created`
 

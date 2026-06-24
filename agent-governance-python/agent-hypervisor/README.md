@@ -64,6 +64,8 @@
 | Watchdog timer | **Kill switch** — graceful termination with step handoff | Stop runaway agents without data loss |
 | Audit logs | **Hash-chained delta trail** — tamper-evident forensic trail | Prove exactly what happened |
 
+> **Implementation status.** Some capabilities above ship as documented stubs. The liability ledger always admits (no risk scoring), collateral slashing and quarantine record events but apply no enforcement, sponsorship vouching adds no bonding, the audit commitment is stored in memory only with no blockchain anchoring, and saga checkpoints have no replay. Execution rings, session isolation, saga orchestration, the kill switch, and the in-memory hash-chained delta trail are functional. Each module docstring states its exact scope.
+
 ## Quick Start
 
 ```bash
@@ -185,7 +187,7 @@ config = SessionConfig(
     max_duration_seconds=7200,    # 2-hour session
     min_eff_score=0.70,           # Higher trust threshold
     enable_audit=True,
-    enable_blockchain_commitment=True,
+    enable_blockchain_commitment=False,  # Reserved; not implemented, no effect
 )
 
 session = await hv.create_session(config=config, creator_did="did:mesh:admin")
@@ -412,7 +414,7 @@ services:
 | `max_duration_seconds` | `int` | `3600` | Session timeout (1–604,800) |
 | `min_eff_score` | `float` | `0.60` | Minimum trust score to join (0.0–1.0) |
 | `enable_audit` | `bool` | `True` | Enable hash-chained audit trail |
-| `enable_blockchain_commitment` | `bool` | `False` | Commit audit hashes to blockchain |
+| `enable_blockchain_commitment` | `bool` | `False` | Reserved. Blockchain anchoring is not implemented, so this has no effect and the commitment is stored in memory only. |
 | **Execution Rings** | | | |
 | `RING_0_ROOT` | `int` | `0` | Hypervisor config & penalty (SRE Witness required) |
 | `RING_1_PRIVILEGED` | `int` | `1` | Non-reversible actions (eff_score > 0.95 + consensus) |
