@@ -97,6 +97,39 @@ class TestActionClassifier:
         r2 = classifier.classify(action)
         assert r1 is r2
 
+    def test_classify_shared_id_does_not_mask_privilege_escalation(self):
+        """Two actions sharing an action_id but differing in privilege must be
+        classified independently. Regression for the cache keying on action_id
+        alone, which let an admin/destructive action inherit a prior read-only
+        RING_3_SANDBOX result for the same id.
+        """
+        classifier = ActionClassifier()
+        read_only = ActionDescriptor(
+            action_id="same",
+            name="Read",
+            execute_api="/api/read",
+            reversibility=ReversibilityLevel.FULL,
+            is_read_only=True,
+        )
+        admin = ActionDescriptor(
+            action_id="same",
+            name="Admin",
+            execute_api="/api/admin",
+            is_admin=True,
+        )
+
+        read_result = classifier.classify(read_only)
+        admin_result = classifier.classify(admin)
+
+        assert read_result.ring == ExecutionRing.RING_3_SANDBOX
+        assert read_result.risk_weight == ReversibilityLevel.FULL.default_risk_weight
+        # The admin action is NOT served the cached low-risk entry.
+        assert admin_result.ring == ExecutionRing.RING_0_ROOT
+        assert admin_result.risk_weight == ReversibilityLevel.NONE.default_risk_weight
+        # Re-classifying either action still returns its own correct entry.
+        assert classifier.classify(read_only).ring == ExecutionRing.RING_3_SANDBOX
+        assert classifier.classify(admin).ring == ExecutionRing.RING_0_ROOT
+
     def test_classify_risk_weight_from_reversibility(self):
         classifier = ActionClassifier()
         action = ActionDescriptor(
@@ -149,7 +182,7 @@ class TestActionClassifier:
             is_read_only=True,
         )
         classifier.classify(action)
-        assert "cached-act" in classifier._cache
+        assert any(key[0] == "cached-act" for key in classifier._cache)
         classifier.clear_cache()
         assert classifier._cache == {}
 
