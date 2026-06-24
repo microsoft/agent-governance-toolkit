@@ -216,18 +216,23 @@ export class DockerSandboxProvider implements SandboxProvider {
     }
 
     const cfg = this.sessionConfigs.get(sessionId) ?? defaultSandboxConfig();
-    const timeoutSeconds = cfg.timeoutSeconds;
+    // Validate timeoutSeconds: must be positive. Zero/negative would mean "no limit"
+    // in coreutils timeout, but our outer guard would still enforce a limit.
+    // Clamp to 1 second minimum to avoid confusion.
+    const timeoutSeconds = Math.max(1, Math.floor(cfg.timeoutSeconds));
 
     const executionId = randomUUID();
     const startTime = Date.now();
 
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');
-      // Use 'timeout' command with SIGKILL to enforce execution time limit.
+      // Use 'timeout' command with SIGKILL and kill-after to enforce execution time limit.
       // The default signal (SIGTERM) can be caught/ignored by sandboxed code,
       // allowing it to bypass the timeout. SIGKILL cannot be caught.
+      // --kill-after=5s sends SIGKILL 5 seconds after the initial signal if the process
+      // hasn't exited, providing a hard backstop.
       const execArgs = [
-        'exec', containerId, 'timeout', '--signal=SIGKILL', String(timeoutSeconds),
+        'exec', containerId, 'timeout', '--signal=SIGKILL', '--kill-after=5s', String(timeoutSeconds),
         'python3', '-c',
         `import base64; exec(base64.b64decode('${encoded}').decode())`,
       ];
@@ -248,8 +253,10 @@ export class DockerSandboxProvider implements SandboxProvider {
           : 0;
         const killed = error !== null && 'killed' in error && (error as { killed: boolean }).killed;
 
-        // timeout command exits with 124 when the command times out
-        const timedOut = exitCode === 124;
+        // timeout command exits with 124 when the command times out (SIGTERM sent).
+        // With --signal=SIGKILL, the child gets SIGKILL and exits with 137 (128 + 9).
+        // Treat both 124 and 137 as timeout.
+        const timedOut = exitCode === 124 || exitCode === 137;
 
         const result: SandboxResult = {
           success: exitCode === 0,
