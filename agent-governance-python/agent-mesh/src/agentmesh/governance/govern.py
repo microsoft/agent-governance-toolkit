@@ -34,6 +34,10 @@ from .advisory import AdvisoryCheck, AdvisoryDecision
 from .approval_protocol import ActionBinding, ActionTarget, ApprovalCoordinator
 from .approval_bridge import ApprovalTransport, LegacyHandlerAdapter, submit_vote
 
+# Continuity verification imports (RFC #2873)
+from agent_os.continuity import ContinuityVerifier
+from agentmesh.continuity_helpers import get_execution_context
+
 if TYPE_CHECKING:
     from hypervisor.models import ExecutionRing
 
@@ -110,6 +114,11 @@ class GovernanceConfig:
             injected into the evaluation context as ``ring.*`` fields.
         session_id: Agent session identifier used by RingBreachDetector
             to track per-session violation rates. Defaults to "".
+        enable_continuity: When True, captures pre‑/post‑execution hashes
+            to detect authority drift. Defaults to False.
+        enforcement_mode: Mode for handling continuity drift: "enforce"
+            raises GovernanceDenied on drift; "audit" logs warning only.
+            Defaults to "enforce".
     """
 
     policy: Union[str, Policy]
@@ -136,6 +145,9 @@ class GovernanceConfig:
     # expiry) instead of the legacy handler. Requires a coordinator + chain.
     approval_transport: Optional[ApprovalTransport] = None
     trace: Optional[TraceConfig] = None
+    # Continuity verification (RFC #2873)
+    enable_continuity: bool = False
+    enforcement_mode: str = "enforce"
 
 
 class GovernanceDenied(Exception):
@@ -241,6 +253,13 @@ class GovernedCallable:
         # Build evaluation context from kwargs
         context = self._build_context(args, kwargs)
 
+        # Continuity: capture pre‑state if enabled
+        verifier = None
+        if self._config.enable_continuity:
+            verifier = ContinuityVerifier(execution_id=f"gov-{id(self)}")
+            ctx = get_execution_context()
+            verifier.capture_pre_state(**ctx)
+
         # Ring enforcement — runs before policy evaluation so a denied ring
         # never reaches the policy engine.
         if self._ring_enforcer is not None and self._config.ring is not None:
@@ -295,7 +314,33 @@ class GovernedCallable:
                 raise GovernanceDenied(blocked)
 
         # Allowed — execute the wrapped function
-        return self._fn(*args, **kwargs)
+        try:
+            result = self._fn(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"Tool execution failed: {e}")
+            raise
+
+        # Continuity: capture post‑state and check for drift
+        if verifier is not None:
+            ctx = get_execution_context()   # re‑fetch (may have changed)
+            trace = verifier.capture_post_state(**ctx)
+            if not trace.admissible:
+                msg = f"Continuity drift: {trace.diff}"
+                if self._config.enforcement_mode == "enforce":
+                    raise GovernanceDenied(
+                        PolicyDecision(
+                            allowed=False,
+                            action="deny",
+                            matched_rule="continuity_drift",
+                            reason=msg,
+                        )
+                    )
+                else:
+                    logger.warning(msg)
+
+        return result
+
+    # ... (all existing helper methods remain unchanged) ...
 
     def _check_ring(self, context: dict) -> Optional[PolicyDecision]:
         """Enforce ring-level resource constraints and inject ring context.
@@ -678,6 +723,8 @@ def govern(
     approval_ttl_seconds: float = 300.0,
     approval_transport: Optional[ApprovalTransport] = None,
     trace: Optional[TraceConfig] = None,
+    enable_continuity: bool = False,
+    enforcement_mode: str = "enforce",
 ) -> GovernedCallable:
     """Wrap any callable with AGT governance — 2-line integration.
 
@@ -691,6 +738,10 @@ def govern(
             ``GovernanceDenied``.
         conflict_strategy: Conflict resolution strategy. Default
             ``"deny_overrides"`` (any deny wins).
+        enable_continuity: When True, pre‑/post‑execution hashes are captured
+            to detect authority drift. Defaults to False.
+        enforcement_mode: Mode for handling drift: "enforce" raises
+            GovernanceDenied; "audit" logs warning only. Defaults to "enforce".
 
     Returns:
         A ``GovernedCallable`` that enforces policy before execution.
@@ -720,5 +771,7 @@ def govern(
         approval_ttl_seconds=approval_ttl_seconds,
         approval_transport=approval_transport,
         trace=trace,
+        enable_continuity=enable_continuity,
+        enforcement_mode=enforcement_mode,
     )
     return GovernedCallable(fn, config)
