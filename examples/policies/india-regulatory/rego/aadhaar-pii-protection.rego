@@ -39,6 +39,13 @@ deny contains msg if {
 	msg := "Aadhaar Act s.29(2)/(3): public display or unauthorised disclosure of Aadhaar number and identity information is prohibited"
 }
 
+# Aadhaar policy operates as deny/allow only; no escalate or audit tier conditions apply.
+# Defined as empty sets so the shared decision ladder stays uniform across the pack and
+# passes `opa check --strict` (count() on an undefined rule set is rego_unsafe_var_error).
+escalate := set()
+
+audit := set()
+
 decision := "deny" if count(deny) > 0
 decision := "escalate" if { count(deny) == 0; count(escalate) > 0 }
 decision := "audit" if { count(deny) == 0; count(escalate) == 0; count(audit) > 0 }

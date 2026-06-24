@@ -36,6 +36,10 @@ escalate contains msg if {
 	msg := "CERT-In 2022 Directions (iii): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
 }
 
+# No audit-tier conditions for this policy; defined empty for decision-ladder parity and
+# to pass `opa check --strict` (count() on an undefined rule set is rego_unsafe_var_error).
+audit := set()
+
 decision := "deny" if count(deny) > 0
 decision := "escalate" if { count(deny) == 0; count(escalate) > 0 }
 decision := "audit" if { count(deny) == 0; count(escalate) == 0; count(audit) > 0 }
