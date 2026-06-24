@@ -1,17 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """
-Ephemeral Session Data Garbage Collection — stub implementation.
+Ephemeral Session Data Garbage Collection.
 
-Public Preview: GC is a no-op. Data is retained in-memory for
-session lifetime only.
+At session teardown the GC purges sensitive ephemeral state (VFS file contents,
+snapshots, caches) so it is not retained in memory, while preserving the
+tamper-evident delta hash chain required for audit. Delta retention is governed
+by :class:`RetentionPolicy`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 
@@ -50,7 +51,7 @@ class RetentionPolicy:
 
 class EphemeralGC:
     """
-    GC stub (Public Preview: logs collection requests, no actual purge).
+    Purges ephemeral session data while retaining the audit hash chain.
     """
 
     def __init__(self, policy: RetentionPolicy | None = None) -> None:
@@ -70,17 +71,34 @@ class EphemeralGC:
         estimated_cache_bytes: int = 0,
         estimated_delta_bytes: int = 0,
     ) -> GCResult:
-        """Log a GC request (Public Preview: no actual purge)."""
+        """Purge the session's ephemeral data; retain the delta hash chain.
+
+        When a ``vfs`` object is supplied its contents/snapshots/permissions are
+        irreversibly cleared (see :meth:`SessionVFS.purge`) and the purged counts
+        reflect what was actually dropped. The ``*_count``/``*_bytes`` arguments
+        are storage-accounting estimates used only for reporting savings.
+        """
+        purged_files = vfs_file_count
+        purged_caches = cache_count
+        if vfs is not None and hasattr(vfs, "purge"):
+            purged_files, purged_caches = vfs.purge()
+
+        retained_delta_count = delta_count
+        if delta_engine is not None and hasattr(delta_engine, "turn_count"):
+            retained_delta_count = delta_engine.turn_count
+
+        storage_before = estimated_vfs_bytes + estimated_cache_bytes + estimated_delta_bytes
+        # Only the retained delta hash chain survives; VFS + caches are purged.
+        storage_after = estimated_delta_bytes
+
         result = GCResult(
             session_id=session_id,
-            retained_deltas=delta_count,
+            retained_deltas=retained_delta_count,
             retained_hash=True,
-            purged_vfs_files=0,
-            purged_caches=0,
-            storage_before_bytes=estimated_vfs_bytes
-            + estimated_cache_bytes
-            + estimated_delta_bytes,
-            storage_after_bytes=estimated_vfs_bytes + estimated_cache_bytes + estimated_delta_bytes,
+            purged_vfs_files=purged_files,
+            purged_caches=purged_caches,
+            storage_before_bytes=storage_before,
+            storage_after_bytes=storage_after,
         )
         self._gc_history.append(result)
         self._purged_sessions.add(session_id)
@@ -90,7 +108,9 @@ class EphemeralGC:
         return session_id in self._purged_sessions
 
     def should_expire_deltas(self, delta_timestamp: datetime) -> bool:
-        return False
+        """True if a delta is older than the policy's delta retention window."""
+        cutoff = datetime.now(UTC) - timedelta(days=self.policy.delta_retention_days)
+        return delta_timestamp < cutoff
 
     @property
     def history(self) -> list[GCResult]:

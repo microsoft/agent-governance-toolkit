@@ -1,11 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """
-Liability Matrix — simple event log for sponsor→sponsored agent relationships.
+Liability Matrix — directed graph of sponsor -> sponsored agent bonds.
 
-Public Preview: graph operations are retained for API compatibility
-but sponsorship/penalty/quarantine are stubs.
+Tracks bonded relationships within a session and provides exposure,
+cascade-path, and cycle-detection queries used by the slashing engine.
 """
 
 from __future__ import annotations

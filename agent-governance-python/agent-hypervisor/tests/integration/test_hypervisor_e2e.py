@@ -168,11 +168,10 @@ class TestVouchingSlashingIntegration:
         eff_score = self.hv.vouching.compute_eff_score(
             "did:mesh:low", self.session_id, 0.4, risk_weight=0.5
         )
-        # Public Preview: no sponsor boost, eff_score = vouchee_sigma
-        assert eff_score == 0.4
+        # bonded_amount = 0.9 * 0.3 = 0.27; eff = 0.4 + 0.5 * 0.27 = 0.535
+        assert eff_score == pytest.approx(0.535)
         assert eff_score <= 1.0
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_max_exposure_prevents_over_bonding(self):
         """Agent cannot bond more than max_exposure of their σ."""
         # Default max_exposure = 0.80
@@ -184,16 +183,17 @@ class TestVouchingSlashingIntegration:
             )
 
     def test_slash_cascades_to_voucher(self):
-        """Public Preview: penalty logs but doesn't apply penalties."""
+        """Slashing blacklists the vouchee and clips its voucher's collateral."""
         self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9, bond_pct=0.3)
         agent_scores = {"did:mesh:high": 0.9, "did:mesh:low": 0.5}
         result = self.hv.slashing.slash(
             "did:mesh:low", self.session_id, 0.5, 0.5, "policy_violation", agent_scores
         )
-        # Public Preview: no penalties applied
-        assert agent_scores["did:mesh:low"] == 0.5  # unchanged
-        assert agent_scores["did:mesh:high"] == 0.9  # unchanged
-        assert len(result.voucher_clips) == 0
+        # Vouchee blacklisted; voucher clipped 0.9 * (1 - 0.5) = 0.45
+        assert agent_scores["did:mesh:low"] == 0.0
+        assert agent_scores["did:mesh:high"] == pytest.approx(0.45)
+        assert len(result.voucher_clips) == 1
+        assert result.vouchee_sigma_after == 0.0
 
     def test_release_bonds_on_session_terminate(self):
         self.hv.vouching.vouch("did:mesh:high", "did:mesh:low", self.session_id, 0.9)
@@ -462,6 +462,8 @@ class TestGCIntegration:
         # GC should have purged VFS
         assert self.hv.gc.is_purged(sid)
         assert len(self.hv.gc.history) == 1
+        # Sensitive session contents are actually dropped from memory.
+        assert session.sso.vfs.file_count == 0
 
     def test_gc_tracks_purged_sessions(self):
         gc = self.hv.gc

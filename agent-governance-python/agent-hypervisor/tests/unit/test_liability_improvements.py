@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 """Tests for Shapley-value fault attribution, quarantine, and liability ledger."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from hypervisor.liability.attribution import (
@@ -125,29 +127,62 @@ class TestCausalAttribution:
 
 
 class TestQuarantine:
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_quarantine_agent(self):
-        pass
+        mgr = QuarantineManager()
+        record = mgr.quarantine("a1", "s1", QuarantineReason.RING_BREACH, details="breach")
+        assert mgr.is_quarantined("a1", "s1")
+        assert mgr.get_active_quarantine("a1", "s1") is record
+        assert record.reason == QuarantineReason.RING_BREACH
+        # Isolation is scoped to the session it was issued in.
+        assert not mgr.is_quarantined("a1", "other-session")
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_release_quarantine(self):
-        pass
+        mgr = QuarantineManager()
+        mgr.quarantine("a1", "s1", QuarantineReason.MANUAL)
+        released = mgr.release("a1", "s1")
+        assert released is not None
+        assert released.released_at is not None
+        assert not mgr.is_quarantined("a1", "s1")
+        # Releasing again is a no-op.
+        assert mgr.release("a1", "s1") is None
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_quarantine_escalation(self):
-        pass
+        mgr = QuarantineManager()
+        mgr.quarantine("a1", "s1", QuarantineReason.RATE_LIMIT_EXCEEDED)
+        mgr.quarantine("a1", "s1", QuarantineReason.LIABILITY_VIOLATION)
+        # Re-quarantine supersedes the prior record: only one active, newest reason.
+        assert mgr.quarantine_count == 1
+        active = mgr.get_active_quarantine("a1", "s1")
+        assert active.reason == QuarantineReason.LIABILITY_VIOLATION
+        assert len(mgr.get_history(agent_did="a1")) == 2
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_quarantine_with_forensic_data(self):
-        pass
+        mgr = QuarantineManager()
+        forensic = {"drift_score": 0.82, "action_id": "send-email"}
+        record = mgr.quarantine(
+            "a1", "s1", QuarantineReason.BEHAVIORAL_DRIFT, forensic_data=forensic
+        )
+        assert record.forensic_data == forensic
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_tick_expires_quarantines(self):
-        pass
+        mgr = QuarantineManager()
+        record = mgr.quarantine("a1", "s1", QuarantineReason.MANUAL, duration_seconds=300)
+        assert mgr.is_quarantined("a1", "s1")
+        # Force the record past its expiry, then tick.
+        record.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        expired = mgr.tick()
+        assert record in expired
+        assert not mgr.is_quarantined("a1", "s1")
+        assert mgr.quarantine_count == 0
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_active_quarantines_property(self):
-        pass
+        mgr = QuarantineManager()
+        mgr.quarantine("a1", "s1", QuarantineReason.MANUAL)
+        mgr.quarantine("a2", "s1", QuarantineReason.MANUAL)
+        assert mgr.quarantine_count == 2
+        assert {r.agent_did for r in mgr.active_quarantines} == {"a1", "a2"}
+        mgr.release("a1", "s1")
+        assert mgr.quarantine_count == 1
 
     def test_quarantine_history(self):
         mgr = QuarantineManager()
@@ -207,18 +242,20 @@ class TestLiabilityLedger:
         for i in range(5):
             ledger.record("a1", LedgerEntryType.SLASH_RECEIVED, f"s{i}", severity=0.9)
         profile = ledger.compute_risk_profile("a1")
-        # Public Preview: no risk scoring, always admits
-        assert profile.risk_score == 0.0
-        assert profile.recommendation == "admit"
+        assert profile.slash_count == 5
+        assert profile.risk_score > ledger.DENY_THRESHOLD
+        assert profile.recommendation == "deny"
 
     def test_risk_profile_probation(self):
         ledger = LiabilityLedger()
+        # Two moderate slashes accumulate into the probation band.
         ledger.record("a1", LedgerEntryType.SLASH_RECEIVED, "s1", severity=0.7)
-        ledger.record("a1", LedgerEntryType.CLEAN_SESSION, "s2")
-        ledger.record("a1", LedgerEntryType.CLEAN_SESSION, "s3")
-
+        ledger.record("a1", LedgerEntryType.SLASH_RECEIVED, "s2", severity=0.7)
         profile = ledger.compute_risk_profile("a1")
-        assert profile.recommendation in ("admit", "probation")
+        assert profile.recommendation == "probation"
+        admitted, reason = ledger.should_admit("a1")
+        assert admitted  # probation is admitted-but-flagged
+        assert reason == "probation"
 
     def test_should_admit_clean(self):
         ledger = LiabilityLedger()
@@ -232,9 +269,8 @@ class TestLiabilityLedger:
             ledger.record("a1", LedgerEntryType.SLASH_RECEIVED, f"s{i}", severity=0.9)
 
         admitted, reason = ledger.should_admit("a1")
-        # Public Preview: always admits
-        assert admitted
-        assert reason == "admit"
+        assert not admitted
+        assert reason == "deny"
 
     def test_unknown_agent_admitted(self):
         ledger = LiabilityLedger()
@@ -251,7 +287,5 @@ class TestLiabilityLedger:
         ledger = LiabilityLedger()
         ledger.record("a1", LedgerEntryType.QUARANTINE_ENTERED, "s1", severity=0.5)
         profile = ledger.compute_risk_profile("a1")
-        # Public Preview: no risk scoring, always admits
-        assert profile.quarantine_count == 0
-        assert profile.risk_score == 0.0
-        assert profile.recommendation == "admit"
+        assert profile.quarantine_count == 1
+        assert profile.risk_score > 0.0

@@ -1,6 +1,5 @@
 # Understanding Joint Liability for AI Agents
 
-> **Edition:** Public Preview APIs only.
 > Module path: `src/hypervisor/liability/`
 
 ## Table of Contents
@@ -83,9 +82,9 @@ The `VouchingEngine` enforces several safeguards (configurable via class constan
 - **Default bond percentage** (`DEFAULT_BOND_PCT = 0.20`): 20% of the voucher's σ is bonded by default.
 - **Maximum exposure** (`DEFAULT_MAX_EXPOSURE = 0.80`): A voucher cannot bond more than 80% of its σ across all active vouches.
 
-> **Public Preview note:** The Public Preview approves all vouch requests
-> and does not enforce bonding. The API surface is identical — constraints are
-> enforced in the full edition.
+These constraints are enforced: `vouch()` raises `VouchingError` on self-sponsorship, a
+voucher σ below `MIN_VOUCHER_SCORE`, a sponsorship that would create a cycle in the session's
+liability graph, or a bond that would exceed the voucher's maximum exposure.
 
 ## The Effective Score Formula
 
@@ -122,9 +121,9 @@ eff = engine.compute_eff_score(
 )
 ```
 
-> **Public Preview note:** `compute_eff_score` returns the vouchee's own
-> score (`vouchee_sigma`) without the voucher boost. The formula above is
-> applied in the full edition.
+> **Multiple vouchers:** when several agents sponsor the same vouchee, their bonds add
+> up — `compute_eff_score` returns `σ_L + ω × Σ(bonded_amount)` over all active vouchers,
+> capped at 1.0.
 
 ## Slashing: What Happens When an Agent Misbehaves
 
@@ -154,7 +153,7 @@ result = slasher.slash(
 
 print(result.slash_id)              # "penalize:<uuid>"
 print(result.vouchee_sigma_before)  # 0.72
-print(result.vouchee_sigma_after)   # Reduced (full edition)
+print(result.vouchee_sigma_after)   # 0.0 — vouchee blacklisted
 print(result.voucher_clips)         # List of VoucherClip records
 print(result.reason)                # "behavioral_drift"
 ```
@@ -166,9 +165,10 @@ print(result.reason)                # "behavioral_drift"
 | `MAX_CASCADE_DEPTH` | 2 | Maximum depth for cascade penalties |
 | `SIGMA_FLOOR` | 0.05 | Minimum σ — an agent is never penalized below this |
 
-> **Public Preview note:** `slash` logs the penalty event but does not
-> reduce any scores. `vouchee_sigma_after` equals `vouchee_sigma_before` and
-> `voucher_clips` is empty.
+A slash blacklists the offending vouchee (σ → 0.0) and clips each active voucher's score to
+`max(SIGMA_FLOOR, σ × (1 - ω))`, mutating the supplied `agent_scores` map in place. The penalty
+cascades up the liability graph to vouchers-of-vouchers, bounded by `MAX_CASCADE_DEPTH`. Vouchers
+absent from `agent_scores` are skipped (their score is unknown to the caller).
 
 ## Cascade Effects
 
@@ -240,7 +240,7 @@ ledger.record(
 # Query history
 history = ledger.get_agent_history("did:mesh:agent-b")
 profile = ledger.compute_risk_profile("did:mesh:agent-b")
-print(profile.recommendation)  # "admit" (Public Preview always admits)
+print(profile.recommendation)  # "admit" | "probation" | "deny" (risk-based)
 ```
 
 Ledger entry types include:
@@ -384,7 +384,7 @@ print(f"Has cycle: {matrix.has_cycle()}")  # False
 | `LedgerEntryType` | `liability.ledger` | Enum of event types recorded in the ledger |
 | `AgentRiskProfile` | `liability.ledger` | Risk profile computed from an agent's history |
 | `CausalAttributor` | `liability.attribution` | Assigns fault to the direct-cause agent |
-| `QuarantineManager` | `liability.quarantine` | Manages agent quarantine (no-op in community) |
+| `QuarantineManager` | `liability.quarantine` | Enforces time-bounded agent quarantine |
 
 ---
 

@@ -38,51 +38,51 @@ class TestVouchingEngine:
         assert record.voucher_did == "did:mesh:high"
         assert record.vouchee_did == "did:mesh:low"
         assert record.is_active
-        assert record.bonded_sigma_pct == 0.0  # Public Preview: no bonding
-        assert record.bonded_amount == 0.0  # Public Preview: no bonding
+        # Default bond is DEFAULT_BOND_PCT (0.20) of the voucher's sigma.
+        assert record.bonded_sigma_pct == pytest.approx(0.20)
+        assert record.bonded_amount == pytest.approx(0.16)
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_cannot_vouch_for_self(self):
         with pytest.raises(VouchingError, match="Cannot sponsor for yourself"):
             self.engine.vouch("did:mesh:a", "did:mesh:a", self.session, 0.8)
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_low_score_cannot_vouch(self):
         with pytest.raises(VouchingError, match="below minimum"):
             self.engine.vouch("did:mesh:low", "did:mesh:other", self.session, 0.3)
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_circular_vouching_rejected(self):
         self.engine.vouch("did:mesh:a", "did:mesh:b", self.session, 0.8)
         with pytest.raises(VouchingError, match="Circular"):
             self.engine.vouch("did:mesh:b", "did:mesh:a", self.session, 0.7)
 
     def test_eff_score_formula(self):
-        """Public Preview: eff_score = sponsored agent's own score (no sponsor boost)."""
+        """eff_score = vouchee_sigma + risk_weight * bonded_amount."""
         self.engine.vouch("did:mesh:high", "did:mesh:low", self.session, 0.9, bond_pct=0.5)
+        # bonded_amount = 0.9 * 0.5 = 0.45
         eff_score = self.engine.compute_eff_score(
             vouchee_did="did:mesh:low",
             session_id=self.session,
             vouchee_sigma=0.3,
             risk_weight=0.2,
         )
-        assert abs(eff_score - 0.3) < 1e-9  # Returns vouchee_sigma directly
+        # 0.3 + 0.2 * 0.45 = 0.39
+        assert abs(eff_score - 0.39) < 1e-9
 
     def test_eff_score_capped_at_1(self):
         self.engine.vouch("did:mesh:high", "did:mesh:low", self.session, 0.9, bond_pct=0.8)
         eff_score = self.engine.compute_eff_score(
             "did:mesh:low", self.session, 0.8, risk_weight=1.0
         )
-        assert eff_score <= 1.0
+        assert eff_score == pytest.approx(1.0)
 
     def test_multiple_vouchers(self):
         self.engine.vouch("did:mesh:a", "did:mesh:low", self.session, 0.8, bond_pct=0.5)
         self.engine.vouch("did:mesh:b", "did:mesh:low", self.session, 0.6, bond_pct=0.5)
-        # Public Preview: eff_score = vouchee_sigma (no boost)
+        # bonded amounts: 0.40 + 0.30 = 0.70; eff = 0.1 + 0.5 * 0.70 = 0.45
         eff_score = self.engine.compute_eff_score(
             "did:mesh:low", self.session, 0.1, risk_weight=0.5
         )
-        assert abs(eff_score - 0.1) < 1e-9
+        assert abs(eff_score - 0.45) < 1e-9
 
     def test_release_session_bonds(self):
         self.engine.vouch("did:mesh:a", "did:mesh:b", self.session, 0.8)
@@ -95,7 +95,15 @@ class TestVouchingEngine:
         self.engine.vouch("did:mesh:a", "did:mesh:b", self.session, 0.8, bond_pct=0.3)
         self.engine.vouch("did:mesh:a", "did:mesh:c", self.session, 0.8, bond_pct=0.2)
         exposure = self.engine.get_total_exposure("did:mesh:a", self.session)
-        assert exposure == 0.0  # Public Preview: no bonding
+        # 0.8*0.3 + 0.8*0.2 = 0.24 + 0.16 = 0.40
+        assert exposure == pytest.approx(0.40)
+
+    def test_max_exposure_rejects_over_bonding(self):
+        """A voucher cannot bond more than max_exposure * sigma across vouches."""
+        # Default max_exposure = 0.80; cap for sigma 0.9 is 0.72.
+        self.engine.vouch("did:mesh:high", "did:mesh:a", self.session, 0.9, bond_pct=0.5)
+        with pytest.raises(VouchingError, match="exceed max exposure"):
+            self.engine.vouch("did:mesh:high", "did:mesh:b", self.session, 0.9, bond_pct=0.5)
 
 
 class TestLiabilityMatrix:

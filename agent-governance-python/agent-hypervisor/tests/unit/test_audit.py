@@ -98,30 +98,46 @@ class TestCommitmentEngine:
 
 
 class TestEphemeralGC:
-    def test_collect(self):
+    def test_collect_purges_vfs(self):
+        from hypervisor.session.sso import SessionVFS
+
+        vfs = SessionVFS("session:1")
+        vfs.write("/secret.txt", "sensitive", agent_did="did:a")
+        vfs.write("/notes.txt", "more", agent_did="did:a")
+        vfs.create_snapshot()
+        assert vfs.file_count == 2
+
         gc = EphemeralGC()
         result = gc.collect(
             session_id="session:1",
-            vfs_file_count=100,
-            cache_count=50,
+            vfs=vfs,
             delta_count=20,
             estimated_vfs_bytes=1_000_000,
             estimated_cache_bytes=500_000,
             estimated_delta_bytes=50_000,
         )
-        # Public preview: no actual purge, data retained
-        assert result.purged_vfs_files == 0
+        # Sensitive session data is actually purged from memory.
+        assert vfs.file_count == 0
+        assert vfs.snapshot_count == 0
+        assert result.purged_vfs_files == 2
+        assert result.purged_caches == 1
+        # Delta hash chain is retained for audit; VFS + caches are reclaimed.
         assert result.retained_deltas == 20
-        # No savings since nothing is purged
-        assert result.storage_saved_bytes == 0
-        assert result.savings_pct == 0
+        assert result.retained_hash is True
+        assert result.storage_saved_bytes == 1_500_000
+        assert result.savings_pct > 0
 
-    def test_retention_policy(self):
+    def test_collect_without_vfs_marks_purged(self):
+        gc = EphemeralGC()
+        result = gc.collect(session_id="session:2")
+        assert gc.is_purged("session:2")
+        assert result.retained_hash is True
+
+    def test_retention_policy_expires_old_deltas(self):
         from datetime import datetime, timedelta
 
         gc = EphemeralGC(RetentionPolicy(delta_retention_days=30))
         old = datetime.now(UTC) - timedelta(days=31)
-        # Public preview: never expires deltas
-        assert not gc.should_expire_deltas(old)
+        assert gc.should_expire_deltas(old)
         recent = datetime.now(UTC) - timedelta(days=1)
         assert not gc.should_expire_deltas(recent)

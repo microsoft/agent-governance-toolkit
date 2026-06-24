@@ -1,11 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """
-Fault Logging — stub implementation.
+Fault Attribution — assigns saga-failure liability to the direct-cause agent.
 
-Public Preview: assigns full liability to the direct-cause agent.
-No causal chain analysis.
+Assigns full liability (1.0) to the agent whose action failed the saga and 0.0
+to the others, recording an auditable :class:`AttributionResult` per failure.
 """
 
 from __future__ import annotations

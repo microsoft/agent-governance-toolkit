@@ -167,6 +167,27 @@ class SessionVFS:
     def snapshot_count(self) -> int:
         return len(self._snapshots)
 
+    def purge(self) -> tuple[int, int]:
+        """Irreversibly drop all session data held in memory.
+
+        Clears file contents, snapshots (which hold copied file contents), and
+        path permissions, then records a terminal ``delete`` edit covering the
+        namespace. Used by :class:`~hypervisor.audit.gc.EphemeralGC` at session
+        teardown so sensitive session data is not retained.
+
+        Returns:
+            ``(files_purged, snapshots_purged)``.
+        """
+        files_purged = len(self._files)
+        snapshots_purged = len(self._snapshots)
+        self._files.clear()
+        self._snapshots.clear()
+        self._permissions.clear()
+        self._edit_log.append(
+            VFSEdit(path=self.namespace, operation="delete", agent_did="system:gc")
+        )
+        return files_purged, snapshots_purged
+
     def _resolve(self, path: str) -> str:
         if path.startswith(self.namespace):
             return path

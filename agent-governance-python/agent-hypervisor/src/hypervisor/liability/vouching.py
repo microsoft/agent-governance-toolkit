@@ -1,10 +1,13 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-# Public Preview — basic implementation
 """
-Sponsorship Protocol — stub implementation.
+Sponsorship Protocol — joint-liability bonding between agents.
 
-Public Preview: sponsorship is not enforced. All requests are approved.
+A voucher stakes (bonds) a fraction of its reputation (sigma) to sponsor a
+vouchee into a session. Bonds boost the vouchee's effective score and are the
+collateral clipped by the :mod:`~hypervisor.liability.slashing` engine when the
+vouchee misbehaves. Bonding is enforced: self-vouching, under-qualified
+vouchers, cycles, and over-exposure are rejected.
 """
 
 from __future__ import annotations
@@ -45,7 +48,10 @@ class VouchRecord:
 
 class VouchingEngine:
     """
-    Sponsorship stub (Public Preview: approves all, no bonding).
+    Joint-liability sponsorship engine.
+
+    Enforces voucher qualification, acyclicity, and per-voucher exposure
+    limits, and computes a vouchee's effective score from active bonds.
     """
 
     SCORE_SCALE = VOUCHING_SCORE_SCALE
@@ -71,14 +77,43 @@ class VouchingEngine:
         bond_pct: float | None = None,
         expiry: datetime | None = None,
     ) -> VouchRecord:
-        """Create a sponsorship record (Public Preview: always succeeds, no bonding)."""
+        """Create a sponsorship bond, staking ``bond_pct`` of the voucher's sigma.
+
+        Raises:
+            VouchingError: if the voucher sponsors itself, has a sigma below
+                ``MIN_VOUCHER_SCORE``, would create a cycle in the session's
+                liability graph, or would exceed its maximum bonded exposure.
+        """
+        if voucher_did == vouchee_did:
+            raise VouchingError("Cannot sponsor for yourself")
+        if voucher_sigma < self.MIN_VOUCHER_SCORE:
+            raise VouchingError(
+                f"Voucher sigma {voucher_sigma:.3f} is below minimum {self.MIN_VOUCHER_SCORE:.2f}"
+            )
+        if self._creates_cycle(voucher_did, vouchee_did, session_id):
+            raise VouchingError(
+                f"Circular sponsorship: {vouchee_did} already sponsors {voucher_did}"
+            )
+
+        pct = self.DEFAULT_BOND_PCT if bond_pct is None else bond_pct
+        bonded_amount = voucher_sigma * pct
+
+        max_bondable = self.max_exposure * voucher_sigma
+        projected = self.get_total_exposure(voucher_did, session_id) + bonded_amount
+        if projected > max_bondable + 1e-9:
+            raise VouchingError(
+                f"Bond {bonded_amount:.3f} would exceed max exposure "
+                f"{max_bondable:.3f} for {voucher_did}"
+            )
+
         record = VouchRecord(
             vouch_id=f"sponsor:{uuid.uuid4()}",
             voucher_did=voucher_did,
             vouchee_did=vouchee_did,
             session_id=session_id,
-            bonded_sigma_pct=0.0,
-            bonded_amount=0.0,
+            bonded_sigma_pct=pct,
+            bonded_amount=bonded_amount,
+            expiry=expiry,
         )
         self._vouches[record.vouch_id] = record
         return record
@@ -90,8 +125,15 @@ class VouchingEngine:
         vouchee_sigma: float,
         risk_weight: float,
     ) -> float:
-        """Return sponsored agent's own score (Public Preview: no sponsor boost)."""
-        return vouchee_sigma
+        """Effective score: ``sigma_L + omega * sum(bonded_amount)``, capped at 1.0.
+
+        ``sigma_L`` is the vouchee's own score, ``omega`` the risk weight, and the
+        sum runs over the bonds of all active vouchers for the vouchee.
+        """
+        bonded_total = sum(
+            v.bonded_amount for v in self._active_vouches_for(vouchee_did, session_id)
+        )
+        return min(1.0, vouchee_sigma + risk_weight * bonded_total)
 
     def get_vouchers_for(self, agent_did: str, session_id: str) -> list[VouchRecord]:
         """Get all sponsors for an agent in a session."""
@@ -102,8 +144,12 @@ class VouchingEngine:
         ]
 
     def get_total_exposure(self, voucher_did: str, session_id: str) -> float:
-        """Always zero in Public Preview."""
-        return 0.0
+        """Total sigma a voucher has bonded across all its active vouches in a session."""
+        return sum(
+            v.bonded_amount
+            for v in self._vouches.values()
+            if v.voucher_did == voucher_did and v.session_id == session_id and v.is_active
+        )
 
     def release_bond(self, vouch_id: str) -> None:
         """Release a sponsorship bond."""
@@ -127,6 +173,28 @@ class VouchingEngine:
         return self.get_vouchers_for(agent_did, session_id)
 
     def _creates_cycle(self, voucher_did: str, vouchee_did: str, session_id: str) -> bool:
+        """True if adding ``voucher_did -> vouchee_did`` would close a cycle.
+
+        Walks the existing active sponsor graph (edges point voucher -> vouchee)
+        looking for a path from ``vouchee_did`` back to ``voucher_did``.
+        """
+        if voucher_did == vouchee_did:
+            return True
+        adjacency: dict[str, list[str]] = {}
+        for v in self._vouches.values():
+            if v.session_id == session_id and v.is_active:
+                adjacency.setdefault(v.voucher_did, []).append(v.vouchee_did)
+
+        stack = [vouchee_did]
+        seen: set[str] = set()
+        while stack:
+            node = stack.pop()
+            if node == voucher_did:
+                return True
+            if node in seen:
+                continue
+            seen.add(node)
+            stack.extend(adjacency.get(node, ()))
         return False
 
 

@@ -217,9 +217,9 @@ eff_score = engine.compute_eff_score(
 print(f"Effective score: {eff_score}")
 ```
 
-> **Public Preview:** In the Public Preview, `compute_eff_score` returns
-> the vouchee's own sigma directly — sponsor boost is an enterprise feature.
-> The vouching graph is still tracked for auditing and liability analysis.
+> **Multiple vouchers:** when several agents sponsor the same vouchee, `compute_eff_score`
+> sums their bonds — it returns `σ_L + ω × Σ(bonded_amount)` over all active vouchers, capped
+> at 1.0. The vouching graph is also tracked for auditing and liability analysis.
 
 ### 5.4 Exposure Tracking
 
@@ -332,9 +332,9 @@ for clip in result.voucher_clips:
     print(f"  Vouch ID: {clip.vouch_id}")
 ```
 
-> **Public Preview:** In the Public Preview, slashing is logged but
-> scores are not actually modified. The `SlashResult` records are still created
-> for auditing. Enterprise editions enforce real score deductions.
+> **Score mutation:** `slash()` mutates the supplied `agent_scores` map in place — the
+> vouchee is set to `0.0` and each active voucher is clipped to `max(SIGMA_FLOOR, σ × (1 - ω))`.
+> The `SlashResult` and its `VoucherClip` records capture the before/after values for auditing.
 
 ### 6.4 Cascade Depth
 
@@ -623,9 +623,9 @@ if active:
     print(f"Duration: {active.duration_seconds}s")
 ```
 
-> **Public Preview:** In the Public Preview, `is_quarantined()` always
-> returns `False` and `active_quarantines` is always empty. Quarantine records
-> are still created for auditing. Enterprise editions enforce actual isolation.
+> **Expiry:** `is_quarantined()` and `get_active_quarantine()` honour each record's
+> `expires_at`; lapsed records are expired lazily on read and in bulk via `tick()`. A record
+> stays active until it expires or is released.
 
 ### 9.4 Releasing from Quarantine
 
@@ -780,9 +780,9 @@ print(f"Admit: {should_admit}")  # True/False
 print(f"Reason: {reason}")       # "admit" / "probation" / "deny"
 ```
 
-> **Public Preview:** `should_admit()` always returns `(True, "admit")`.
-> The risk profile is still computed for visibility. Enterprise editions enforce
-> admission gates.
+> **Admission gate:** `should_admit()` denies an agent only when its risk score crosses
+> `DENY_THRESHOLD`. It returns `(False, "deny")` for denied agents and `(True, reason)`
+> otherwise, where `reason` is `"admit"` or `"probation"` (admitted but flagged).
 
 ### 10.6 Thresholds
 

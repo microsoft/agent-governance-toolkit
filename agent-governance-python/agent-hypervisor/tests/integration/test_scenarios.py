@@ -489,7 +489,6 @@ class TestVoucherCascadeWithNexus:
         )
         self.nexus = NexusAdapter(scorer=self.nexus_engine)
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_voucher_cascade_with_nexus_penalty(self):
         """Sponsor → penalize → sponsor clipped → both reported to Nexus."""
         # Create session
