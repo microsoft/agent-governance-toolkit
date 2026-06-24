@@ -106,7 +106,16 @@ class ActionClassifier:
         ring: ExecutionRing | None = None,
         risk_weight: float | None = None,
     ) -> None:
-        """Set a session-level override for action classification."""
+        """Set a session-level override for action classification.
+
+        The override is keyed on ``action_id`` and takes precedence over the
+        fingerprint cache, so it applies to EVERY action sharing this id
+        regardless of attributes. Unspecified ``ring``/``risk_weight`` inherit
+        from the most recent cached classification of this id (or
+        RING_3_SANDBOX/0.5 if none); when an id has multiple privilege variants
+        that inherited value is necessarily one of them. Pass both ``ring`` and
+        ``risk_weight`` to pin a precise result rather than inherit.
+        """
         existing = self._cached_for_id(action_id)
         self._overrides[action_id] = ClassificationResult(
             action_id=action_id,
