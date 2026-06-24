@@ -45,7 +45,9 @@ class ActionClassifier:
     # (e.g. a read-only fetch and a destructive admin op) can legitimately share
     # a stable tool id. Keying on the fields that fully determine the result
     # guarantees a cache hit only when the produced classification is identical,
-    # so a privilege escalation can never be masked by a stale low-risk entry.
+    # so one action's ring/risk_weight label can never leak to a different action
+    # that happens to reuse its id (e.g. a destructive op inheriting a prior
+    # read-only RING_3_SANDBOX/0.2 entry, or the reverse).
     def __init__(self) -> None:
         self._cache: dict[_CacheKey, ClassificationResult] = {}
         self._overrides: dict[str, ClassificationResult] = {}
@@ -108,8 +110,15 @@ class ActionClassifier:
         existing = self._cached_for_id(action_id)
         self._overrides[action_id] = ClassificationResult(
             action_id=action_id,
-            ring=ring or (existing.ring if existing else ExecutionRing.RING_3_SANDBOX),
-            risk_weight=risk_weight or (existing.risk_weight if existing else 0.5),
+            # Guard with `is not None`, not `or`: ExecutionRing.RING_0_ROOT == 0
+            # and risk_weight 0.0 are falsy, so `x or default` would silently
+            # drop a deliberate Ring 0 / zero-risk pin back to the default.
+            ring=ring if ring is not None else (existing.ring if existing else ExecutionRing.RING_3_SANDBOX),
+            risk_weight=(
+                risk_weight
+                if risk_weight is not None
+                else (existing.risk_weight if existing else 0.5)
+            ),
             reversibility=existing.reversibility if existing else ReversibilityLevel.NONE,
             confidence=0.9,  # overrides have slightly lower confidence
         )

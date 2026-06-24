@@ -173,6 +173,35 @@ class TestActionClassifier:
         assert result.ring == ExecutionRing.RING_1_PRIVILEGED
         assert result.confidence == 0.9
 
+    def test_set_override_to_ring_zero_is_respected(self):
+        """RING_0_ROOT == 0 is falsy; the override must still pin Ring 0 instead
+        of falling through to the RING_3_SANDBOX default. Pinning the MOST
+        privileged ring silently downgrading to the LEAST is a security bug.
+        """
+        classifier = ActionClassifier()
+        classifier.set_override("danger", ring=ExecutionRing.RING_0_ROOT)
+        action = ActionDescriptor(
+            action_id="danger",
+            name="Danger",
+            execute_api="/api/danger",
+            is_read_only=True,
+        )
+        assert classifier.classify(action).ring == ExecutionRing.RING_0_ROOT
+
+    def test_set_override_risk_weight_zero_is_respected(self):
+        """risk_weight 0.0 is falsy but must be honoured, not coerced to 0.5."""
+        classifier = ActionClassifier()
+        classifier.set_override(
+            "safe", ring=ExecutionRing.RING_3_SANDBOX, risk_weight=0.0
+        )
+        action = ActionDescriptor(
+            action_id="safe",
+            name="Safe",
+            execute_api="/api/safe",
+            is_read_only=True,
+        )
+        assert classifier.classify(action).risk_weight == 0.0
+
     def test_clear_cache(self):
         classifier = ActionClassifier()
         action = ActionDescriptor(
