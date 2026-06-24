@@ -134,13 +134,24 @@ class CapabilityGrant(BaseModel):
                 return False
             if self.resource != "*" and self.resource != req_resource:
                 return False
-            if req_qualifier and self.qualifier:
-                if self.qualifier != "*" and self.qualifier != req_qualifier:
+            if self.qualifier is not None and self.qualifier != "*":
+                # This grant is scoped to a specific qualifier, so it
+                # only satisfies a request for that exact qualifier. A
+                # request that omits the qualifier (req_qualifier is
+                # None) is broader than the grant and must NOT be
+                # authorized by it. Otherwise a narrow grant (e.g.
+                # "write:database:table_users") would satisfy a broad
+                # check (e.g. "write:database"), a privilege escalation.
+                if req_qualifier != self.qualifier:
                     return False
 
-        # Check resource ID if scoped
-        if self.resource_ids and resource_id:
-            if resource_id not in self.resource_ids:
+        # Check resource ID scope. A grant restricted to specific
+        # resource_ids must not satisfy a check that omits resource_id
+        # (broader than the grant) nor one naming a resource outside the
+        # set. Only an unrestricted grant (empty resource_ids) matches
+        # regardless of resource_id.
+        if self.resource_ids:
+            if resource_id is None or resource_id not in self.resource_ids:
                 return False
 
         return True
