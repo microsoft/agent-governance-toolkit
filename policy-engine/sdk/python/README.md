@@ -59,7 +59,42 @@ Single-tool wrappers accept an optional snapshot-compatible tool call id: pass `
 
 ## Telemetry
 
-The Python SDK accepts the native `PerfTelemetry` level on `from_path`, `from_native`, and `from_manifest_chain`. It does not expose the Rust `TelemetrySink` or an OpenTelemetry exporter hook. Python hosts that need application telemetry should record sanitized decision, effect, duration, and action identity fields from `InterventionPointResult` at the host boundary. The Rust core and `agent_control_specification_otel` crate remain the direct telemetry sink surfaces.
+The Python SDK ships a pure-Python host-side telemetry layer. Pass a `telemetry_sink` to `AgentControl`, `from_native`, `from_path`, or `from_manifest_chain`, and every evaluation emits one redaction-safe `TelemetryEvent` to the sink. `telemetry_sink` accepts a single sink or a list of sinks (a list is fanned out through a `MultiSink`). The default `telemetry_sink=None` preserves the prior behavior with no events and no overhead beyond a `None` check. The native `PerfTelemetry` level is independent and still controls internal timing-detail capture only.
+
+```python
+from agent_control_specification import (
+    AgentControl,
+    JsonStdoutTelemetrySink,
+    OtelMetricsTelemetrySink,
+    MultiSink,
+)
+
+sink = MultiSink([JsonStdoutTelemetrySink(), OtelMetricsTelemetrySink()])
+control = AgentControl.from_path("manifest.yaml", telemetry_sink=sink)
+```
+
+### Event model
+
+`TelemetryEvent` mirrors the Rust `core/src/telemetry.rs` field set. It carries `event_type`, `intervention_point`, `decision`, `reason_code`, `error_class`, `policy_id`, `annotators`, `enforcement_mode`, `duration_ms`, `evidence_artefact`, `evidence_verification_pointer_keys`, `action_identity`, and `metadata`. Redaction is the load-bearing invariant. An event carries decision and reason metadata, the evidence `artefact`, and the sorted evidence pointer keys only. It never carries raw prompts, tool arguments, tool results, transform values, annotator outputs, or pointer URL values. A free-text policy reason is reduced to the constant `policy_reason`, matching the Rust `safe_telemetry_reason_code` helper, so an operator-authored reason string cannot leak through telemetry.
+
+`policy_id` is recovered best effort from the manifest at construction for `from_native` content and `from_path` files. It is `None` for `from_url`, `from_manifest_chain`, `extends`-inherited ids, and the bare `AgentControl(runtime_client, ...)` constructor, because the native result surface does not carry `policy_id`. For the same reason `annotators` is sourced from the manifest config for `from_native` and `from_path` (so a fail-closed event still carries the configured annotator names) and falls back to the result's executed-annotation keys for the other sources, where it reflects only annotators that ran.
+
+This host layer emits exactly one `decision` event per evaluation. It does not replicate the Rust core's second `intervention_point.transformed` event on a `transform` verdict; the transform is observable through `decision == "transform"`. The OTel `acs_intervention_transform_total` counter and `acs_intervention_duration_ms` histogram count one increment per evaluation, consistent across all SDKs (the Rust OTel sink records only the base `decision` event, so a transform counts once everywhere). The Rust event stream additionally carries the `intervention_point.transformed` event for stream consumers; the host SDKs do not.
+
+### Built-in sinks
+
+| Sink | Behavior |
+| --- | --- |
+| `InMemoryTelemetrySink` | Records events in an `events` list for tests and inspection. |
+| `JsonStdoutTelemetrySink` | Writes one JSON object per line. The audit.jsonl use case is built in. |
+| `OtelMetricsTelemetrySink` | Optional OpenTelemetry metrics export. |
+| `MultiSink` | Fans one event out to several sinks. A failing child is logged and isolated. |
+
+Emission is never load-bearing. A sink that raises is caught, logged, and swallowed so it can never change the verdict or fail the evaluation.
+
+### OpenTelemetry metrics
+
+`OtelMetricsTelemetrySink` matches the metric contract of the Rust `agent_control_specification_otel` crate. It emits the per-decision counters `acs_intervention_allow_total`, `acs_intervention_deny_total`, `acs_intervention_warn_total`, `acs_intervention_escalate_total`, and `acs_intervention_transform_total`, plus the duration histogram `acs_intervention_duration_ms`, under the meter name `agent_control_specification` by default. `opentelemetry` is an optional dependency. It is imported lazily, and when it is absent the sink degrades to a safe no-op after a single warning, so a host can wire it unconditionally without making OpenTelemetry a hard dependency. The Rust core and the `agent_control_specification_otel` crate remain the direct sink surfaces for hosts that prefer the in-core path.
 
 Python custom annotator dispatcher exceptions fail closed as `runtime_error:annotation_failed`. Distinct `runtime_error:annotation_timeout` reporting is available when a dispatcher surface explicitly returns that runtime error. Resource limit configuration is exposed by the Rust core surface, not by the Python constructor surface.
 

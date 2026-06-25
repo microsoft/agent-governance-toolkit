@@ -1,4 +1,4 @@
-use agent_control_specification_core::{TelemetryEvent, TelemetrySink};
+use agent_control_specification_core::{TelemetryEvent, TelemetryEventType, TelemetrySink};
 use opentelemetry::global;
 use opentelemetry::metrics::{Counter, Histogram};
 use opentelemetry::{InstrumentationScope, KeyValue};
@@ -54,6 +54,15 @@ impl Default for OtelTelemetrySink {
 
 impl TelemetrySink for OtelTelemetrySink {
     fn emit(&self, event: TelemetryEvent) {
+        // Count exactly one increment and one duration sample per evaluation.
+        // The core emits two decision-bearing events on a Transform verdict
+        // (Decision + intervention_point.transformed) and EvaluationTiming also
+        // carries a decision under perf telemetry, so recording metrics only for
+        // the base Decision event keeps acs_intervention_*_total at one per
+        // evaluation, matching the host SDK sinks and the per-decision contract.
+        if !records_metrics(&event) {
+            return;
+        }
         let attributes = metric_attributes(&event);
         let key_values = to_key_values(&attributes);
         if let Some(decision) = event.decision {
@@ -65,6 +74,14 @@ impl TelemetrySink for OtelTelemetrySink {
             self.duration_histogram.record(duration_ms, &key_values);
         }
     }
+}
+
+/// Whether an event should contribute to the per-decision counters and the
+/// duration histogram. Only the base `Decision` event does, so each evaluation
+/// records exactly one increment and one duration sample even when the core
+/// also emits an `intervention_point.transformed` or `evaluation_timing` event.
+fn records_metrics(event: &TelemetryEvent) -> bool {
+    event.event_type == TelemetryEventType::Decision
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -261,12 +278,13 @@ mod tests {
     }
 
     #[test]
-    fn intervention_point_transformed_event_increments_transform_counter() {
+    fn transformed_event_maps_attributes_but_does_not_record_metrics() {
         // AGT D1 + D2: the runtime emits a dedicated
         // `intervention_point.transformed` event in addition to the base
-        // Decision event when the verdict is Transform. The OTel sink
-        // routes both through the per-decision counter scheme using the
-        // event's `decision` field.
+        // Decision event when the verdict is Transform. metric_attributes still
+        // maps it (redaction-safe), but the OTel sink records metrics only for
+        // the base Decision event so the per-decision counter counts a transform
+        // once per evaluation, not twice.
         let sink = OtelTelemetrySink::new("acs_transform_test");
         let event = TelemetryEvent::new(
             TelemetryEventType::InterventionPointTransformed,
@@ -293,9 +311,35 @@ mod tests {
             key: "evidence_verification_pointer_keys",
             value: "issuer_pubkey".to_string(),
         }));
-        // The transform decision MUST have a counter in the per-decision
-        // map so emit() can record on it.
+        // The transform counter exists, but this event MUST NOT record on it.
         assert!(sink.decision_counters.contains_key("transform"));
+        assert!(!records_metrics(&event));
         sink.emit(event);
+    }
+
+    #[test]
+    fn only_the_base_decision_event_records_metrics() {
+        // One increment and one duration sample per evaluation: the base
+        // Decision event records; the dual intervention_point.transformed event
+        // and the perf evaluation_timing event do not, so a transform counts
+        // once, matching the host SDK sinks.
+        let decision = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+            .with_decision(Decision::Transform);
+        assert!(records_metrics(&decision));
+        for event_type in [
+            TelemetryEventType::InterventionPointTransformed,
+            TelemetryEventType::EvaluationTiming,
+            TelemetryEventType::AnnotatorDispatch,
+            TelemetryEventType::PolicyEvaluation,
+            TelemetryEventType::AnnotatorFailed,
+            TelemetryEventType::PolicyFailed,
+        ] {
+            let event = TelemetryEvent::new(event_type, InterventionPoint::Input)
+                .with_decision(Decision::Transform);
+            assert!(
+                !records_metrics(&event),
+                "{event_type:?} must not record metrics"
+            );
+        }
     }
 }

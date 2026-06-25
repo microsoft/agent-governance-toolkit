@@ -56,6 +56,55 @@ The resolver is consulted only for `escalate` and only in enforce mode. A `deny`
 
 Custom annotator dispatcher throws and rejected promises fail closed as `runtime_error:annotation_failed`. Distinct `runtime_error:annotation_timeout` reporting is available when a dispatcher surface explicitly returns that runtime error. Resource limit configuration is exposed by the Rust core surface, not by the Node constructor surface.
 
+## Telemetry
+
+The Node SDK ships a pure host-side telemetry layer. Pass a `telemetrySink` to `AgentControl`, `fromNative`, `fromPath`, `fromUrl`, or `fromManifestChain`, and each evaluation emits one redaction-safe `TelemetryEvent`. `telemetrySink` accepts one sink or an array of sinks. An array fans out through `MultiSink`. The default `telemetrySink` value preserves prior behavior with no events.
+
+```js
+const {
+  AgentControl,
+  JsonStdoutTelemetrySink,
+  MultiSink,
+  OtelMetricsTelemetrySink,
+} = require("agent-control-specification");
+
+const sink = new MultiSink([
+  new JsonStdoutTelemetrySink(),
+  new OtelMetricsTelemetrySink(),
+]);
+const control = AgentControl.fromPath(
+  "manifest.json",
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  sink,
+);
+```
+
+### Event model
+
+`TelemetryEvent` carries `eventType`, `interventionPoint`, `decision`, `reasonCode`, `errorClass`, `policyId`, `annotators`, `enforcementMode`, `durationMs`, `evidenceArtefact`, `evidenceVerificationPointerKeys`, `actionIdentity`, and `metadata`. The in-memory object and `toObject()` use these camelCase names; the wire serialization (`toJSON()`, which `JSON.stringify` and `JsonStdoutTelemetrySink` use, and the OpenTelemetry metric attributes) uses snake_case keys (`event_type`, `intervention_point`, ...) so a mixed-SDK fleet writes one consistent audit.jsonl shape and one consistent metric attribute set. Redaction is the invariant. Events carry decision metadata, the evidence `artefact`, and sorted evidence pointer keys only. Events never carry raw prompts, tool arguments, tool results, transform values, annotator outputs, or pointer URL values. Free-text policy reasons reduce to `policy_reason`, matching the Rust helper.
+
+`policyId` and configured `annotators` are recovered best effort from JSON manifest objects, JSON manifest strings, and JSON files used with `fromPath`. YAML manifests are still accepted by the native runtime, but this host-side indexer does not parse YAML because the Node SDK has no YAML parser dependency. `fromUrl`, `fromManifestChain`, YAML strings, and non-parseable inputs do not populate construction-time manifest labels. In those cases annotators may still reflect executed annotation keys present on the runtime result.
+
+The host layer emits exactly one `decision` event per evaluation. It does not replicate the Rust core's second `intervention_point.transformed` event for a `transform` verdict. The transform path is observable through `decision === "transform"`.
+
+### Built-in sinks
+
+| Sink | Behavior |
+| --- | --- |
+| `InMemoryTelemetrySink` | Records events in an `events` array for tests and inspection. |
+| `JsonStdoutTelemetrySink` | Writes one JSON object per line. |
+| `OtelMetricsTelemetrySink` | Emits optional OpenTelemetry metrics. |
+| `MultiSink` | Fans one event out to several sinks. A failing child is logged and isolated. |
+
+Emission is never load-bearing. Event construction and sink emission are caught together, logged, and swallowed so telemetry cannot change the verdict.
+
+### OpenTelemetry metrics
+
+`OtelMetricsTelemetrySink` matches the metric contract of the Rust OpenTelemetry crate. It emits `acs_intervention_allow_total`, `acs_intervention_deny_total`, `acs_intervention_warn_total`, `acs_intervention_escalate_total`, and `acs_intervention_transform_total`, plus `acs_intervention_duration_ms`, under the meter name `agent_control_specification` by default. `@opentelemetry/api` is optional and imported lazily. When the package is absent the sink becomes a safe no-op after one warning.
+
 ## Model adapters and streaming
 
 Generic model helpers such as `runModel`, `protectModel`, `wrapModel`, and `createModelMiddleware` are exported from the package root and the `agent-control-specification/adapters` subpath. Use them for direct OpenAI-compatible clients when a dedicated OpenAI client adapter is not present. The Node SDK also exports `wrapAnthropicClient`, `runAnthropicMessage`, and `createAnthropicAdapter` for Anthropic Messages clients.

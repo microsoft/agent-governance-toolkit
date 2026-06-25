@@ -172,6 +172,19 @@ The Rust core emits structured telemetry through `TelemetrySink`. Event kinds in
 
 Telemetry defaults are content redacted. Events include stable fields such as `reason_code`, error class, action identity, policy id, annotator names, decisions, modes, durations, evidence artefacts, and evidence pointer key names. Events omit raw policy targets, tool arguments, model output, annotation payloads, transform values, evidence pointer URLs, secrets, and personal data.
 
+### Built-in sinks and OpenTelemetry export
+
+Every SDK ships pluggable telemetry sinks so a host can route the redaction-safe event without hand-rolling an audit layer. Each emits one `decision` event per evaluation and converges on the same OpenTelemetry contract, the per-decision counters `acs_intervention_{allow,deny,warn,escalate,transform}_total` and the histogram `acs_intervention_duration_ms` under the meter `agent_control_specification`. A sink that raises is caught and swallowed, so telemetry is never load-bearing.
+
+| SDK | How a sink is installed | OpenTelemetry sink |
+| --- | --- | --- |
+| Rust | `AgentControl::with_telemetry(Arc<dyn TelemetrySink>)`; built-in `InMemoryTelemetrySink`, `StdoutJsonTelemetrySink`, `MultiSink` | `OtelTelemetrySink` from the `agent_control_specification_otel` crate, added as a dependency |
+| Python | `telemetry_sink=` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink`, import-optional on `opentelemetry` |
+| Node | `telemetrySink` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink`, import-optional on `@opentelemetry/api` |
+| .NET | `telemetrySink` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink` over the BCL `System.Diagnostics.Metrics` meter that OpenTelemetry .NET collects |
+
+In Rust the core owns emission, so installing a sink is enough and the manifest-sourced policy id and annotator names are always present. The Python, Node, and .NET host-side layers build the event from the returned `InterventionPointResult` and recover policy id and annotator names from the manifest on a best-effort basis.
+
 ## SDK matrix
 
 | SDK | Native binding | Artifact install | Artifact smoke |

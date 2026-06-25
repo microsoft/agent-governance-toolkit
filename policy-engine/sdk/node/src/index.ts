@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import * as native from "../native.js";
 import {
   AgentControlBlockedError,
@@ -7,6 +8,14 @@ import {
   transformedOr,
 } from "./adapter-helpers";
 import { configureOpaPath } from "./integrations/opa-binary";
+import {
+  coerceTelemetrySink,
+  parseTelemetryManifestDocument,
+  readTelemetryManifestDocument,
+  TelemetryEvent,
+  telemetryManifestIndexes,
+  type TelemetrySink,
+} from "./telemetry";
 
 export { AgentControlBlockedError, AgentControlInterruptionError, AgentControlSuspendedError };
 
@@ -278,10 +287,18 @@ export class NativeRuntimeClient implements RuntimeClient {
 export class AgentControl {
   private readonly runtimeClient: RuntimeClient;
   private readonly approvalResolver: ApprovalResolver | undefined;
+  private readonly telemetrySink: TelemetrySink | undefined;
+  private policyIdIndex: Record<string, string> = {};
+  private annotatorIndex: Record<string, string[]> = {};
 
-  constructor(runtimeClient: RuntimeClient, approvalResolver?: ApprovalResolver) {
+  constructor(
+    runtimeClient: RuntimeClient,
+    approvalResolver?: ApprovalResolver,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
+  ) {
     this.runtimeClient = runtimeClient;
     this.approvalResolver = approvalResolver;
+    this.telemetrySink = coerceTelemetrySink(telemetrySink);
   }
 
   static fromNative(
@@ -290,11 +307,15 @@ export class AgentControl {
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
-    return new AgentControl(
+    const control = new AgentControl(
       new NativeRuntimeClient(manifest, annotatorDispatcher, policyDispatcher, perfTelemetry),
       approvalResolver,
+      telemetrySink,
     );
+    control.indexTelemetryManifest(parseTelemetryManifestDocument(manifest));
+    return control;
   }
 
   static fromPath(
@@ -303,13 +324,17 @@ export class AgentControl {
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
-    return new AgentControl(
+    const control = new AgentControl(
       new NativeRuntimeClient(path, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
         NativeRuntimeClass.fromPath(path, annotator, policy, perfTelemetry),
       ),
       approvalResolver,
+      telemetrySink,
     );
+    control.indexTelemetryManifest(readTelemetryManifestDocument(path));
+    return control;
   }
 
   static fromUrl(
@@ -324,6 +349,7 @@ export class AgentControl {
       timeoutMs?: number;
       maxRedirects?: number;
     },
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
     return new AgentControl(
       new NativeRuntimeClient(url, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
@@ -339,6 +365,7 @@ export class AgentControl {
         ),
       ),
       approvalResolver,
+      telemetrySink,
     );
   }
 
@@ -348,12 +375,14 @@ export class AgentControl {
     policyDispatcher?: PolicyDispatcher,
     approvalResolver?: ApprovalResolver,
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
+    telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
     return new AgentControl(
       new NativeRuntimeClient("", annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
         NativeRuntimeClass.fromManifestChain(manifests, annotator, policy, perfTelemetry),
       ),
       approvalResolver,
+      telemetrySink,
     );
   }
 
@@ -362,7 +391,42 @@ export class AgentControl {
     snapshot: Record<string, JsonValue>,
     mode: EnforcementMode = EnforcementMode.Enforce,
   ): Promise<InterventionPointResult> {
-    return this.runtimeClient.evaluateInterventionPoint({ interventionPoint, snapshot, mode });
+    const startedAt = this.telemetrySink === undefined ? 0 : performance.now();
+    const result = await this.runtimeClient.evaluateInterventionPoint({ interventionPoint, snapshot, mode });
+    this.emitTelemetry(interventionPoint, mode, result, startedAt);
+    return result;
+  }
+
+  private indexTelemetryManifest(document: JsonValue | undefined): void {
+    const indexes = telemetryManifestIndexes(document);
+    this.policyIdIndex = indexes.policyIds;
+    this.annotatorIndex = indexes.annotators;
+  }
+
+  private emitTelemetry(
+    interventionPoint: InterventionPoint,
+    mode: EnforcementMode,
+    result: InterventionPointResult,
+    startedAt: number,
+  ): void {
+    const sink = this.telemetrySink;
+    if (sink === undefined) {
+      return;
+    }
+    const pointKey = String(interventionPoint);
+    try {
+      const event = TelemetryEvent.fromResult(
+        interventionPoint,
+        mode,
+        result,
+        performance.now() - startedAt,
+        this.policyIdIndex[pointKey] ?? null,
+        this.annotatorIndex[pointKey],
+      );
+      sink.emit(event);
+    } catch (error) {
+      console.warn(`Telemetry failed while building or emitting a ${pointKey} event. Verdict is unaffected.`, error);
+    }
   }
 
   async enforce(
@@ -728,6 +792,23 @@ function makeToolCall(toolName: string, args: JsonValue, toolCallId: string | un
 
 export * from "./adapters";
 export * from "./streaming";
+export {
+  DEFAULT_OTEL_METER_NAME,
+  InMemoryTelemetrySink,
+  JsonStdoutTelemetrySink,
+  MultiSink,
+  OtelMetricsTelemetrySink,
+  TelemetryEvent,
+  TelemetryEventType,
+  errorClassFor,
+  safeReasonCode,
+} from "./telemetry";
+export type {
+  OtelMetricsTelemetrySinkOptions,
+  TelemetryEventFields,
+  TelemetryEventObject,
+  TelemetrySink,
+} from "./telemetry";
 export * from "./integrations/ghcp";
 export * from "./integrations/opa-binary";
 export * from "./integrations/bootstrap";
