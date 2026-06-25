@@ -118,8 +118,6 @@ class CapabilityGrant(BaseModel):
             # "read" matching "readwrite:secret". Require the granted
             # capability to be a colon-delimited prefix of the requested one.
             pass
-        elif self.capability == requested:
-            pass
         else:
             # Fall back to component matching. parse_capability raises
             # ValueError on inputs that don't contain a colon (e.g.
@@ -365,7 +363,27 @@ class CapabilityRegistry:
 
         if require_grantor_capability:
             grantor_scope = self._scopes.get(from_agent)
-            if grantor_scope is None or not grantor_scope.has_capability(capability):
+            if grantor_scope is None:
+                raise PermissionError(
+                    f"Grantor {from_agent} does not hold capability {capability!r}"
+                )
+            if resource_ids:
+                # The grant is resource-scoped, so the grantor must hold the
+                # capability for each requested resource. Checking without a
+                # resource_id would wrongly reject a grantor whose own grant
+                # is scoped to exactly these resources (the unscoped
+                # has_capability() now fails closed on resource-scoped grants).
+                missing = [
+                    r
+                    for r in resource_ids
+                    if not grantor_scope.has_capability(capability, resource_id=r)
+                ]
+                if missing:
+                    raise PermissionError(
+                        f"Grantor {from_agent} does not hold capability "
+                        f"{capability!r} for resources {missing}"
+                    )
+            elif not grantor_scope.has_capability(capability):
                 raise PermissionError(
                     f"Grantor {from_agent} does not hold capability {capability!r}"
                 )

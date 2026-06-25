@@ -1311,6 +1311,39 @@ class TestCapabilityRegistry:
         assert reg.check("did:mesh:1", "read:db", resource_id="r2") is False
         assert reg.check("did:mesh:1", "read:db") is False
 
+    def test_resource_scoped_grantor_can_delegate_own_scope(self):
+        # A grantor whose own grant is scoped to ["r1"] must be able to
+        # sub-delegate read:db on ["r1"], but not on a resource it does
+        # not hold, and not as an unscoped grant.
+        reg = CapabilityRegistry()
+        reg.grant("read:db", "did:mesh:grantor", "did:mesh:admin", resource_ids=["r1"])
+
+        delegated = reg.grant(
+            "read:db",
+            "did:mesh:child",
+            "did:mesh:grantor",
+            resource_ids=["r1"],
+            require_grantor_capability=True,
+        )
+        assert delegated.resource_ids == ["r1"]
+
+        with pytest.raises(PermissionError):
+            reg.grant(
+                "read:db",
+                "did:mesh:child",
+                "did:mesh:grantor",
+                resource_ids=["r2"],
+                require_grantor_capability=True,
+            )
+
+        with pytest.raises(PermissionError):
+            reg.grant(
+                "read:db",
+                "did:mesh:child",
+                "did:mesh:grantor",
+                require_grantor_capability=True,
+            )
+
 
 # ---------------------------------------------------------------------------
 # trust/handshake.py
