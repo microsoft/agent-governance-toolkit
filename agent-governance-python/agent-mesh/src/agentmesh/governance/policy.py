@@ -567,7 +567,8 @@ class PolicyEngine:
         )
 
         self._policies: dict[str, Policy] = {}
-        self._rate_limits: dict[str, dict] = {}  # rule_name -> {count, reset_at}
+        # (agent_did, policy_name, rule_name) -> {count, reset_at} | None
+        self._rate_limits: dict[tuple[str, str, str], Any] = {}
         self._rego_evaluators: list[tuple[str, Any]] = []  # [(package, OPAEvaluator)]
         self._cedar_evaluators: list[Any] = []  # [CedarEvaluator]
         self._authority_resolver: Any = None  # AuthorityResolver protocol
@@ -640,36 +641,44 @@ class PolicyEngine:
         """
         self._authority_resolver = resolver
 
-    def _is_rate_limited(self, rule: PolicyRule) -> bool:
-        """Check if a rule is rate limited."""
+    @staticmethod
+    def _rate_limit_key(
+        agent_did: str, policy_name: str, rule_name: str
+    ) -> tuple[str, str, str]:
+        """Build the rate-limit counter key.
+
+        Counters are scoped per agent, per policy, and per rule so that one
+        agent cannot exhaust a shared (wildcard) policy limit for another, and
+        so that same-named rules in different policies do not collide. This
+        mirrors the per-agent keying used by the service-layer ``RateLimiter``.
+        """
+        return (agent_did, policy_name, rule_name)
+
+    def _is_rate_limited(self, rule: PolicyRule, limit_key: tuple[str, str, str]) -> bool:
+        """Check whether ``rule`` is currently rate limited for ``limit_key``."""
         if not rule.limit:
             return False
 
-        limit_key = rule.name
         limit_data = self._rate_limits.get(limit_key)
-
         if not limit_data:
             return False
 
-        # Check if reset time passed
+        # Reset the window if it has elapsed.
         if datetime.now(timezone.utc) > limit_data["reset_at"]:
             self._rate_limits[limit_key] = None
             return False
 
-        # Parse limit (e.g., "100/hour")
-        count, period = self._parse_limit(rule.limit)
-
+        count, _period = self._parse_limit(rule.limit)
         return limit_data["count"] >= count
 
-    def _increment_rate_limit(self, rule: PolicyRule) -> None:
-        """Increment rate limit counter."""
+    def _increment_rate_limit(self, rule: PolicyRule, limit_key: tuple[str, str, str]) -> None:
+        """Advance the rate-limit counter for ``limit_key``."""
         if not rule.limit:
             return
 
-        limit_key = rule.name
-        count, period = self._parse_limit(rule.limit)
+        _count, period = self._parse_limit(rule.limit)
 
-        if limit_key not in self._rate_limits or self._rate_limits[limit_key] is None:
+        if self._rate_limits.get(limit_key) is None:
             from datetime import timedelta
             self._rate_limits[limit_key] = {
                 "count": 0,
@@ -848,9 +857,13 @@ class PolicyEngine:
                 winner = result.winning_decision
                 elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
 
-                # Apply rate limiting for the winning rule
+                # Apply rate limiting for the winning rule. Resolve the rule
+                # from the WINNING policy (not just the first name match) so
+                # same-named rules in other policies cannot shadow it.
                 matched_rule = None
                 for policy in applicable:
+                    if policy.name != winner.policy_name:
+                        continue
                     for rule in policy.rules:
                         if rule.name == winner.rule_name:
                             matched_rule = rule
@@ -859,7 +872,10 @@ class PolicyEngine:
                         break
 
                 if matched_rule and matched_rule.limit:
-                    if self._is_rate_limited(matched_rule):
+                    limit_key = self._rate_limit_key(
+                        agent_did, winner.policy_name, matched_rule.name
+                    )
+                    if self._is_rate_limited(matched_rule, limit_key):
                         return PolicyDecision(
                             allowed=False,
                             action="deny",
@@ -872,7 +888,7 @@ class PolicyEngine:
                         )
                     # Not rate limited: count this matching evaluation toward
                     # the window so the (N+1)th matching call trips the limit.
-                    self._increment_rate_limit(matched_rule)
+                    self._increment_rate_limit(matched_rule, limit_key)
 
                 return PolicyDecision(
                     allowed=(winner.action == "allow"),

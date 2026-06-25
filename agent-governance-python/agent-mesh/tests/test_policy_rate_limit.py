@@ -16,25 +16,30 @@ from agentmesh.governance.policy import Policy, PolicyEngine, PolicyRule, parse_
 
 AGENT = "did:mesh:tester"
 CONTEXT = {"action": {"type": "tool"}}
+POLICY_NAME = "rate-limit-policy"
+RULE_NAME = "rate-limited-tool"
 
 
-def _engine_with_limit(limit: str = "2/hour") -> tuple[PolicyEngine, str]:
-    """Build an engine with a single allow rule carrying ``limit``."""
+def _engine_with_limit(limit: str = "2/hour") -> tuple[PolicyEngine, tuple[str, str, str]]:
+    """Build an engine with a single allow rule carrying ``limit``.
+
+    Returns the engine and the composite ``_rate_limits`` key for ``AGENT``.
+    """
     rule = PolicyRule(
-        name="rate-limited-tool",
+        name=RULE_NAME,
         condition="action.type == 'tool'",
         action="allow",
         limit=limit,
     )
     policy = Policy(
-        name="rate-limit-policy",
+        name=POLICY_NAME,
         agents=["*"],
         rules=[rule],
         default_action="deny",
     )
     engine = PolicyEngine()
     engine.load_policy(policy)
-    return engine, rule.name
+    return engine, PolicyEngine._rate_limit_key(AGENT, POLICY_NAME, RULE_NAME)
 
 
 def test_third_matching_call_is_blocked() -> None:
@@ -59,29 +64,29 @@ def test_third_matching_call_is_blocked() -> None:
 
 def test_counter_advances_by_one_per_call() -> None:
     """Each non-limited matching evaluation increments the counter once."""
-    engine, rule_name = _engine_with_limit("5/hour")
+    engine, key = _engine_with_limit("5/hour")
 
     engine.evaluate(AGENT, dict(CONTEXT))
-    assert engine._rate_limits[rule_name]["count"] == 1
+    assert engine._rate_limits[key]["count"] == 1
 
     engine.evaluate(AGENT, dict(CONTEXT))
-    assert engine._rate_limits[rule_name]["count"] == 2
+    assert engine._rate_limits[key]["count"] == 2
 
 
 def test_blocked_call_does_not_over_increment() -> None:
     """Once the limit is hit, blocked calls do not keep incrementing."""
-    engine, rule_name = _engine_with_limit("2/hour")
+    engine, key = _engine_with_limit("2/hour")
 
     for _ in range(5):
         engine.evaluate(AGENT, dict(CONTEXT))
 
     # Counter caps at the limit; blocked calls short-circuit before increment.
-    assert engine._rate_limits[rule_name]["count"] == 2
+    assert engine._rate_limits[key]["count"] == 2
 
 
 def test_window_rollover_resets_counter() -> None:
     """After the window expires the counter resets and calls are allowed."""
-    engine, rule_name = _engine_with_limit("2/hour")
+    engine, key = _engine_with_limit("2/hour")
 
     # Exhaust the window.
     assert engine.evaluate(AGENT, dict(CONTEXT)).allowed is True
@@ -89,13 +94,58 @@ def test_window_rollover_resets_counter() -> None:
     assert engine.evaluate(AGENT, dict(CONTEXT)).rate_limited is True
 
     # Simulate crossing the window boundary by moving reset_at into the past.
-    engine._rate_limits[rule_name]["reset_at"] -= timedelta(hours=2)
+    engine._rate_limits[key]["reset_at"] -= timedelta(hours=2)
 
     rolled_over = engine.evaluate(AGENT, dict(CONTEXT))
     assert rolled_over.allowed is True
     assert rolled_over.rate_limited is False
     # Fresh window started counting from this call.
-    assert engine._rate_limits[rule_name]["count"] == 1
+    assert engine._rate_limits[key]["count"] == 1
+
+
+def test_limit_is_per_agent() -> None:
+    """One agent exhausting a wildcard limit must not block another agent."""
+    engine, _ = _engine_with_limit("2/hour")
+
+    # Agent A consumes its full 2/hour budget.
+    assert engine.evaluate("did:mesh:agentA", dict(CONTEXT)).allowed is True
+    assert engine.evaluate("did:mesh:agentA", dict(CONTEXT)).allowed is True
+    assert engine.evaluate("did:mesh:agentA", dict(CONTEXT)).rate_limited is True
+
+    # Agent B has an independent budget and is unaffected.
+    b1 = engine.evaluate("did:mesh:agentB", dict(CONTEXT))
+    assert b1.allowed is True
+    assert b1.rate_limited is False
+    assert engine.evaluate("did:mesh:agentB", dict(CONTEXT)).allowed is True
+    assert engine.evaluate("did:mesh:agentB", dict(CONTEXT)).rate_limited is True
+
+
+def test_duplicate_rule_name_uses_winning_policy_limit() -> None:
+    """When two policies share a rule name, the winning rule's limit is enforced."""
+    loser = PolicyRule(
+        name="shared",
+        condition="action.type == 'tool'",
+        action="allow",
+        priority=1,
+        limit="1000/hour",
+    )
+    winner = PolicyRule(
+        name="shared",
+        condition="action.type == 'tool'",
+        action="allow",
+        priority=99,
+        limit="1/hour",
+    )
+    engine = PolicyEngine()
+    engine.load_policy(Policy(name="low", agents=["*"], rules=[loser], default_action="deny"))
+    engine.load_policy(Policy(name="high", agents=["*"], rules=[winner], default_action="deny"))
+
+    # The winning ("high") policy's 1/hour limit governs: allow 1, block 2nd.
+    first = engine.evaluate(AGENT, dict(CONTEXT))
+    second = engine.evaluate(AGENT, dict(CONTEXT))
+    assert first.allowed is True
+    assert second.rate_limited is True
+    assert second.policy_name == "high"
 
 
 def test_rule_without_limit_never_rate_limited() -> None:
