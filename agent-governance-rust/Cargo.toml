@@ -10,7 +10,7 @@ repository = "https://github.com/microsoft/agent-governance-toolkit"
 rust-version = "1.89"
 
 [workspace.dependencies]
-agentmesh-mcp = { path = "agentmesh-mcp", version = "4.0.0" }
+agentmesh-mcp = { path = "agentmesh-mcp", version = "5.0.0" }
 aes-gcm = "=0.10.3"
 assert_cmd = "=2.2.2"
 base64 = "=0.22.1"
