@@ -168,8 +168,10 @@ class TestSave:
 
     @pytest.mark.parametrize("bad_id", ["../escape", "nested/child", "../../escape"])
     def test_save_rejects_path_traversal(self, tmp_path, bad_id):
+        # Ids containing separators or leading dots are rejected before any path is built,
+        # so a caller cannot escape the policy directory.
         reg = PolicyRegistry(tmp_path)
-        with pytest.raises(ValueError, match="outside the policy directory"):
+        with pytest.raises(ValueError, match="Invalid policy id"):
             reg.save(bad_id, _YAML_POLICY, "yaml")
 
     def test_save_removes_cross_format_sibling(self, tmp_path):
