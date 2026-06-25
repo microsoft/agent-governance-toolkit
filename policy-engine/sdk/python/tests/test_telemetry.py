@@ -21,7 +21,11 @@ from agent_control_specification import (
     TelemetryEventType,
     Verdict,
 )
-from agent_control_specification._orchestration import _policy_id_index_from_manifest
+from agent_control_specification._orchestration import (
+    _annotator_index_from_document,
+    _parse_manifest_document,
+    _policy_id_index_from_manifest,
+)
 from agent_control_specification._telemetry import error_class_for, safe_reason_code
 
 
@@ -236,6 +240,43 @@ class TelemetryFailureIsolationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(good.events), 1)
 
+    async def test_event_construction_error_does_not_become_load_bearing(self):
+        # A malformed result (non-string reason) makes TelemetryEvent.from_result
+        # raise during construction. That must be caught like a sink error, never
+        # propagate to fail the verdict. Guards the "telemetry is never
+        # load-bearing" invariant for the build step, not just sink.emit.
+        sink = InMemoryTelemetrySink()
+        result = InterventionPointResult(Verdict(Decision.ALLOW, reason=123))
+        control = AgentControl(QueueRuntime([result]), telemetry_sink=sink)
+
+        returned = await control.evaluate_intervention_point(InterventionPoint.INPUT, {"input": 1})
+
+        self.assertIs(returned, result)
+        self.assertEqual(returned.verdict.decision, Decision.ALLOW)
+        self.assertEqual(sink.events, [])
+
+
+class TelemetrySinkCoercionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_list_of_sinks_is_fanned_out(self):
+        a, b = InMemoryTelemetrySink(), InMemoryTelemetrySink()
+        control = AgentControl(
+            QueueRuntime([InterventionPointResult(Verdict(Decision.ALLOW))]),
+            telemetry_sink=[a, b],
+        )
+
+        await control.evaluate_intervention_point(InterventionPoint.INPUT, {"input": 1})
+
+        self.assertEqual(len(a.events), 1)
+        self.assertEqual(len(b.events), 1)
+
+    def test_non_sink_raises_at_construction(self):
+        # A non-sink would otherwise be swallowed by the emit guard, silently
+        # dropping every event. It must fail loudly at construction instead.
+        with self.assertRaises(TypeError):
+            AgentControl(QueueRuntime([]), telemetry_sink="not-a-sink")
+        with self.assertRaises(TypeError):
+            AgentControl(QueueRuntime([]), telemetry_sink=[InMemoryTelemetrySink(), object()])
+
 
 class TelemetryDefaultBehaviorTests(unittest.IsolatedAsyncioTestCase):
     async def test_none_sink_emits_nothing_and_preserves_result(self):
@@ -313,6 +354,13 @@ intervention_points:
         self.assertEqual(_policy_id_index_from_manifest("::: not yaml ["), {})
         self.assertEqual(_policy_id_index_from_manifest({"intervention_points": []}), {})
 
+    def test_index_from_enum_keyed_mapping(self):
+        # A programmatic manifest keyed by the InterventionPoint enum must
+        # normalize to the wire value so emission lookups (which key on .value)
+        # still resolve the policy id.
+        manifest = {"intervention_points": {InterventionPoint.INPUT: {"policy": {"id": "p"}}}}
+        self.assertEqual(_policy_id_index_from_manifest(manifest), {"input": "p"})
+
     async def test_policy_id_lookup_populates_event(self):
         sink = InMemoryTelemetrySink()
         control = AgentControl(
@@ -324,6 +372,38 @@ intervention_points:
         await control.evaluate_intervention_point(InterventionPoint.INPUT, {"input": 1})
 
         self.assertEqual(sink.events[0].policy_id, "content_policy")
+
+    def test_annotator_index_from_manifest(self):
+        manifest = """
+intervention_points:
+  input:
+    annotations:
+      pii_scan:
+        from: $.input
+      prompt_classifier:
+        from: $.input
+  output:
+    policy:
+      id: out
+"""
+        index = _annotator_index_from_document(_parse_manifest_document(manifest))
+        self.assertEqual(index, {"input": ("pii_scan", "prompt_classifier")})
+
+    async def test_annotators_from_index_survive_failure_path(self):
+        # On a fail-closed result the policy_input is absent, so the configured
+        # annotator names must come from the manifest index (mirroring the Rust
+        # annotators_for source), not the empty result annotations.
+        sink = InMemoryTelemetrySink()
+        failed = InterventionPointResult(
+            Verdict(Decision.DENY, reason="runtime_error:annotation_failed"),
+            policy_input=None,
+        )
+        control = AgentControl(QueueRuntime([failed]), telemetry_sink=sink)
+        control._annotator_index = {"input": ("pii_scan", "prompt_classifier")}
+
+        await control.evaluate_intervention_point(InterventionPoint.INPUT, {"input": 1})
+
+        self.assertEqual(list(sink.events[0].annotators), ["pii_scan", "prompt_classifier"])
 
 
 class OtelMetricsSinkTests(unittest.TestCase):
@@ -384,6 +464,9 @@ class OtelMetricsSinkTests(unittest.TestCase):
         points = _collect_metric_points(data)
         self.assertEqual(points.get("acs_intervention_deny_total"), 1.0)
         self.assertIn("acs_intervention_duration_ms", points)
+        # The counter must record a float so its OTLP Sum data point is
+        # double-typed, matching the Rust f64_counter (no mixed int/float series).
+        self.assertIsInstance(_counter_point_value(data, "acs_intervention_deny_total"), float)
 
 
 def _collect_metric_points(metrics_data) -> dict[str, float]:
@@ -397,6 +480,17 @@ def _collect_metric_points(metrics_data) -> dict[str, float]:
                         value = getattr(point, "count", None)
                     totals[metric.name] = float(value) if value is not None else 0.0
     return totals
+
+
+def _counter_point_value(metrics_data, name):
+    for resource_metric in metrics_data.resource_metrics:
+        for scope_metric in resource_metric.scope_metrics:
+            for metric in scope_metric.metrics:
+                if metric.name != name:
+                    continue
+                for point in metric.data.data_points:
+                    return getattr(point, "value", None)
+    return None
 
 
 if __name__ == "__main__":

@@ -59,7 +59,7 @@ Single-tool wrappers accept an optional snapshot-compatible tool call id: pass `
 
 ## Telemetry
 
-The Python SDK ships a pure-Python host-side telemetry layer. Pass a `telemetry_sink` to `AgentControl`, `from_native`, `from_path`, or `from_manifest_chain`, and every evaluation emits one redaction-safe `TelemetryEvent` to the sink. The default `telemetry_sink=None` preserves the prior behavior with no events and no overhead beyond a `None` check. The native `PerfTelemetry` level is independent and still controls internal timing-detail capture only.
+The Python SDK ships a pure-Python host-side telemetry layer. Pass a `telemetry_sink` to `AgentControl`, `from_native`, `from_path`, or `from_manifest_chain`, and every evaluation emits one redaction-safe `TelemetryEvent` to the sink. `telemetry_sink` accepts a single sink or a list of sinks (a list is fanned out through a `MultiSink`). The default `telemetry_sink=None` preserves the prior behavior with no events and no overhead beyond a `None` check. The native `PerfTelemetry` level is independent and still controls internal timing-detail capture only.
 
 ```python
 from agent_control_specification import (
@@ -77,7 +77,9 @@ control = AgentControl.from_path("manifest.yaml", telemetry_sink=sink)
 
 `TelemetryEvent` mirrors the Rust `core/src/telemetry.rs` field set. It carries `event_type`, `intervention_point`, `decision`, `reason_code`, `error_class`, `policy_id`, `annotators`, `enforcement_mode`, `duration_ms`, `evidence_artefact`, `evidence_verification_pointer_keys`, `action_identity`, and `metadata`. Redaction is the load-bearing invariant. An event carries decision and reason metadata, the evidence `artefact`, and the sorted evidence pointer keys only. It never carries raw prompts, tool arguments, tool results, transform values, annotator outputs, or pointer URL values. A free-text policy reason is reduced to the constant `policy_reason`, matching the Rust `safe_telemetry_reason_code` helper, so an operator-authored reason string cannot leak through telemetry.
 
-`policy_id` is recovered best effort from the manifest at construction for `from_native` content and `from_path` files. It is `None` for `from_url`, `from_manifest_chain`, `extends`-inherited ids, and the bare `AgentControl(runtime_client, ...)` constructor, because the native result surface does not yet carry `policy_id`.
+`policy_id` is recovered best effort from the manifest at construction for `from_native` content and `from_path` files. It is `None` for `from_url`, `from_manifest_chain`, `extends`-inherited ids, and the bare `AgentControl(runtime_client, ...)` constructor, because the native result surface does not carry `policy_id`. For the same reason `annotators` is sourced from the manifest config for `from_native` and `from_path` (so a fail-closed event still carries the configured annotator names) and falls back to the result's executed-annotation keys for the other sources, where it reflects only annotators that ran.
+
+This host layer emits exactly one `decision` event per evaluation. It does not replicate the Rust core's second `intervention_point.transformed` event on a `transform` verdict; the transform is observable through `decision == "transform"`. As a consequence the OTel `acs_intervention_transform_total` counter and `acs_intervention_duration_ms` histogram count a transform once per evaluation here, where a Rust host counts it twice. The metric names and shapes match the Rust bridge; the transform count does not.
 
 ### Built-in sinks
 

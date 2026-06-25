@@ -145,13 +145,18 @@ class TelemetryEvent:
         result: InterventionPointResult,
         duration_ms: float | None,
         policy_id: str | None = None,
+        annotators: Sequence[str] | None = None,
     ) -> "TelemetryEvent":
         """Build a redaction-safe decision event from an evaluation result.
 
         Maps the verdict decision, the redaction-safe reason_code and
-        error_class, the configured annotators (sorted keys of the result's
-        ``annotations`` block), the enforced action identity, and the evidence
-        artefact plus sorted pointer keys. No raw payload is read.
+        error_class, the configured annotators, the enforced action identity,
+        and the evidence artefact plus sorted pointer keys. No raw payload is
+        read. ``annotators`` is the manifest-configured annotator set when the
+        caller can supply it (so fail-closed events still carry the label, like
+        the Rust ``annotators_for`` source); when ``None`` it falls back to the
+        sorted keys of the result's ``annotations`` block, which is empty on
+        paths where ``policy_input`` is absent.
         """
 
         verdict = result.verdict
@@ -162,6 +167,9 @@ class TelemetryEvent:
             if evidence is not None
             else ()
         )
+        resolved_annotators = (
+            tuple(annotators) if annotators is not None else _annotator_names(result.policy_input)
+        )
         return cls(
             event_type=TelemetryEventType.DECISION,
             intervention_point=intervention_point,
@@ -169,7 +177,7 @@ class TelemetryEvent:
             reason_code=safe_reason_code(verdict.reason),
             error_class=error_class_for(verdict.reason),
             policy_id=policy_id,
-            annotators=_annotator_names(result.policy_input),
+            annotators=resolved_annotators,
             enforcement_mode=mode,
             duration_ms=duration_ms,
             evidence_artefact=artefact,
@@ -436,7 +444,11 @@ class OtelMetricsTelemetrySink:
         if event.decision is not None:
             counter = self._decision_counters.get(event.decision.value)
             if counter is not None:
-                counter.add(1, attributes)
+                # Add a float so the exported Sum data point is double-typed,
+                # matching the Rust crate's f64_counter (integrations/otel/src/lib.rs).
+                # A mixed int/float series under one metric name is rejected by
+                # some OTLP backends.
+                counter.add(1.0, attributes)
         if event.duration_ms is not None and self._duration_histogram is not None:
             self._duration_histogram.record(event.duration_ms, attributes)
 
@@ -461,15 +473,27 @@ class OtelMetricsTelemetrySink:
 def _coerce_sink(sink: TelemetrySink | Sequence[TelemetrySink] | None) -> TelemetrySink | None:
     """Normalize a sink argument into a single sink or None.
 
-    A sequence of sinks is wrapped in a `MultiSink`; a lone sink is returned as
-    is; `None` stays `None` so the default path stays zero-behavior-change.
+    A list or tuple of sinks is wrapped in a `MultiSink`; a lone sink is
+    returned as is; `None` stays `None` so the default path stays
+    zero-behavior-change. A value that is not a usable sink raises `TypeError`
+    at construction, so a misconfigured sink fails loudly instead of silently
+    dropping every event through the emit guard.
     """
 
     if sink is None:
         return None
     if isinstance(sink, (list, tuple)):
-        return MultiSink(tuple(sink))
-    return sink
+        return MultiSink(tuple(_require_sink(child) for child in sink))
+    return _require_sink(sink)
+
+
+def _require_sink(sink: object) -> TelemetrySink:
+    if not callable(getattr(sink, "emit", None)):
+        raise TypeError(
+            "telemetry_sink must be a TelemetrySink with an emit() method "
+            f"(or a list/tuple of them), got {type(sink).__name__}"
+        )
+    return sink  # type: ignore[return-value]
 
 
 __all__ = [
