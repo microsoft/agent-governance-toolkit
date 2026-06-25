@@ -1,45 +1,53 @@
-# Shows a policy signal when a PR is awaiting maintainer approval.
-# "Maintainer" is resolved from native repo RBAC: a collaborator whose
-# effective permission is `maintain` or `admin`. There is no hardcoded
-# name list — granting/revoking the Maintain role is the single source
-# of truth.
+# Posts a single commit status reflecting whether a PR has an approving
+# review from a maintainer. "Maintainer" is resolved from native repo RBAC:
+# a collaborator whose role is `maintain` or `admin` (read via role_name —
+# the legacy `permission` field collapses maintain -> write).
+#
+# A commit status (not a per-run check) is used on purpose: statuses de-dupe
+# by context, so the `pull_request_review` run on approval OVERWRITES the
+# awaiting status from the `pull_request_target` run at PR-open. That yields
+# a single row that flips to success automatically, instead of a stale red
+# check-run lingering next to the freshly-passed one.
 #
 # AI-only approvals, bot approvals, and the author's own approval do NOT count.
-#
 # Context: PRs #357 and #362 were auto-merged without maintainer review,
 # reintroducing shell=True (CWE-78) that was previously fixed.
 
-name: "Policy: Awaiting maintainer review"
+name: Maintainer approval
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
     branches: [main]
-  # Re-run the gate when a review is submitted or dismissed so an approval
-  # flips the check green immediately instead of waiting for a new push.
-  # github.event.pull_request.number is present for both pull_request_target
-  # and pull_request_review payloads, so PR resolution works for both events.
   pull_request_review:
     types: [submitted, dismissed]
 
 permissions:
   contents: read
 
+# Register `policy/maintainer-approval` (the status context below) as the
+# required status check in branch protection — not this workflow's job name.
+env:
+  STATUS_CONTEXT: policy/maintainer-approval
+
 # SECURITY: pull_request_target runs in BASE context. Never checkout PR head ref.
 jobs:
-  check-approval:
-    name: "Policy: Awaiting maintainer review"
+  maintainer-approval-status:
+    name: maintainer-approval-status
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read    # github-script calls pulls.listReviews on the PR
+      pull-requests: read    # pulls.listReviews
+      statuses: write        # repos.createCommitStatus
     steps:
-      - name: Check for a maintainer (Maintain+) approval
+      - name: Evaluate and post maintainer-approval status
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const pr = context.payload.pull_request;
             const author = pr.user.login;
+            const sha = pr.head.sha;
+            const ctx = process.env.STATUS_CONTEXT;
 
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner: context.repo.owner,
@@ -59,10 +67,9 @@ jobs:
             core.info(`Approving (non-author, human): ${approvers.join(', ') || '(none)'}`);
 
             // A maintainer is anyone whose repo role is maintain or admin.
-            // NOTE: use `role_name`, not `permission`. The legacy `permission`
-            // field only returns admin/write/read — a Maintain-role user shows
-            // up as `permission: "write"`, so checking `permission` would
-            // wrongly reject every maintainer who is not an admin.
+            // NOTE: use `role_name`, not `permission` — the legacy `permission`
+            // field only returns admin/write/read, so a Maintain-role user (and,
+            // under the Actions token, even an admin) shows up as "write".
             let approvingMaintainer = null;
             for (const login of approvers) {
               try {
@@ -81,13 +88,18 @@ jobs:
               }
             }
 
-            if (!approvingMaintainer) {
-              core.setFailed(
-                `Policy: this PR is awaiting approval from a maintainer ` +
-                `(a collaborator with the Maintain or Admin role).\n` +
-                `Bot/AI approvals and the author's own approval do not count.\n` +
-                `This is a policy gate, not a CI failure. See docs/policies/maintainer-review-gate.md.`
-              );
-            } else {
-              core.info(`✅ Maintainer @${approvingMaintainer} (Maintain+) approved this PR.`);
-            }
+            const state = approvingMaintainer ? 'success' : 'failure';
+            const description = approvingMaintainer
+              ? `Approved by @${approvingMaintainer} (Maintain+)`
+              : 'Awaiting approval from a maintainer (Maintain or Admin role)';
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state,
+              context: ctx,
+              description,
+              target_url: `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+            core.info(`Posted status ${ctx}=${state} on ${sha.slice(0, 8)}: ${description}`);
