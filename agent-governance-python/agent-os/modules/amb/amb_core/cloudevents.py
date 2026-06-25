@@ -23,7 +23,7 @@ Example:
 
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Union
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, field_serializer
 import json
 import uuid
 
@@ -134,11 +134,18 @@ class CloudEvent(BaseModel):
     )
     
     model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda v: v.isoformat() if v else None
-        },
         extra="allow",  # Allow additional extension attributes
     )
+
+    @field_serializer('time', when_used='json')
+    def _serialize_time(self, value: Optional[datetime]) -> Optional[str]:
+        """Serialize event time to an ISO 8601 string in JSON output.
+
+        Replaces the deprecated Pydantic v1 ``json_encoders`` config. Scoped to
+        ``when_used='json'`` so ``model_dump()`` (Python mode) keeps the native
+        ``datetime`` object, matching the previous behaviour.
+        """
+        return value.isoformat() if value else None
     
     @field_validator('specversion')
     @classmethod
