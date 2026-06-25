@@ -821,11 +821,19 @@ The `matches()` method MUST evaluate capability matching in order:
    matches. This prevents `read` from matching `readwrite:secret`.
 4. **Component matching fallback:** Parse both capability strings and
    compare action, resource, and qualifier independently. Wildcard
-   `*` in any component matches any value. Malformed requests (no
-   colon) MUST fail closed (return false).
-5. **Resource ID scoping:** If `resource_ids` is non-empty and a
-   `resource_id` is provided, the requested resource ID MUST be
-   present in the grant's `resource_ids`.
+   `*` in any component matches any value. A grant scoped to a
+   specific (non-`*`) qualifier MUST only match a request that names
+   that exact qualifier; a request that omits the qualifier is broader
+   than the grant and MUST NOT match it (otherwise a narrow grant such
+   as `write:database:table_users` would satisfy a broad check such as
+   `write:database`). Malformed requests (no colon) MUST fail closed
+   (return false).
+5. **Resource ID scoping:** If `resource_ids` is non-empty, the grant
+   only matches a request that provides a `resource_id` present in the
+   grant's `resource_ids`. A request that omits `resource_id` is
+   broader than the grant and MUST fail closed (return false). A grant
+   with empty `resource_ids` is unscoped and matches regardless of the
+   requested `resource_id`.
 
 **[Pure Specification]**
 

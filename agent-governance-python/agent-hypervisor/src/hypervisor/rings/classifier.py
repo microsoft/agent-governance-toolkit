@@ -34,28 +34,36 @@ class ActionClassifier:
     - No Undo_API + destructive → non-reversible → Ring 1 minimum
     - Config/admin operations → Ring 0
     - Read-only operations → Ring 3
+
+    Classification is a pure function of the action's attributes, so results
+    are not cached. action_id is not unique to a behaviour: distinct actions
+    (e.g. a read-only fetch and a destructive admin op) can legitimately share
+    a stable tool id, so caching on it risked leaking one action's
+    ring/risk_weight label to a different action that reused its id. Computing
+    the result on each call removes that hazard; session-level overrides are
+    the only retained state.
     """
 
     def __init__(self) -> None:
-        self._cache: dict[str, ClassificationResult] = {}
         self._overrides: dict[str, ClassificationResult] = {}
 
     def classify(self, action: ActionDescriptor) -> ClassificationResult:
-        """Classify an action and cache the result."""
+        """Classify an action.
+
+        A session-level override for the action's id takes precedence;
+        otherwise the result is computed directly from the action's
+        attributes. Two actions sharing an id but differing in privilege are
+        classified independently.
+        """
         if action.action_id in self._overrides:
             return self._overrides[action.action_id]
 
-        if action.action_id in self._cache:
-            return self._cache[action.action_id]
-
-        result = ClassificationResult(
+        return ClassificationResult(
             action_id=action.action_id,
             ring=action.required_ring,
             risk_weight=action.risk_weight,
             reversibility=action.reversibility,
         )
-        self._cache[action.action_id] = result
-        return result
 
     def set_override(
         self,
@@ -63,16 +71,21 @@ class ActionClassifier:
         ring: ExecutionRing | None = None,
         risk_weight: float | None = None,
     ) -> None:
-        """Set a session-level override for action classification."""
-        existing = self._cache.get(action_id)
+        """Set a session-level override for action classification.
+
+        The override is keyed on ``action_id`` and takes precedence over
+        attribute-based classification, so it applies to EVERY action sharing
+        this id. Unspecified ``ring``/``risk_weight`` fall back to
+        RING_3_SANDBOX/0.5 and ``reversibility`` is always ``NONE``; pass both
+        ``ring`` and ``risk_weight`` to pin a precise result.
+        """
         self._overrides[action_id] = ClassificationResult(
             action_id=action_id,
-            ring=ring or (existing.ring if existing else ExecutionRing.RING_3_SANDBOX),
-            risk_weight=risk_weight or (existing.risk_weight if existing else 0.5),
-            reversibility=existing.reversibility if existing else ReversibilityLevel.NONE,
+            # Guard with `is not None`, not `or`: ExecutionRing.RING_0_ROOT == 0
+            # and risk_weight 0.0 are falsy, so `x or default` would silently
+            # drop a deliberate Ring 0 / zero-risk pin back to the default.
+            ring=ring if ring is not None else ExecutionRing.RING_3_SANDBOX,
+            risk_weight=risk_weight if risk_weight is not None else 0.5,
+            reversibility=ReversibilityLevel.NONE,
             confidence=0.9,  # overrides have slightly lower confidence
         )
-
-    def clear_cache(self) -> None:
-        """Clear classification cache (e.g., on manifest update)."""
-        self._cache.clear()

@@ -1151,6 +1151,32 @@ class TestCapabilityGrant:
         assert g.matches("read:data", resource_id="res1") is True
         assert g.matches("read:data", resource_id="res2") is False
 
+    def test_matches_narrow_qualifier_does_not_satisfy_broad_check(self):
+        # BUG-2 regression: a grant scoped to a qualifier must NOT
+        # satisfy a check that omits the qualifier (privilege escalation).
+        g = CapabilityGrant.create(
+            "write:database:table_users", "did:mesh:1", "did:mesh:0"
+        )
+        assert g.matches("write:database:table_users") is True
+        assert g.matches("write:database") is False
+
+    def test_matches_broad_grant_satisfies_narrow_qualifier_check(self):
+        # The correct direction is preserved: a broad grant DOES satisfy
+        # a narrower (more qualified) check.
+        g = CapabilityGrant.create("write:database", "did:mesh:1", "did:mesh:0")
+        assert g.matches("write:database") is True
+        assert g.matches("write:database:table_users") is True
+
+    def test_matches_resource_scoped_requires_resource_id(self):
+        # BUG-2 regression: a resource-scoped grant must NOT satisfy a
+        # check that omits resource_id (the scope is otherwise ignored).
+        g = CapabilityGrant.create(
+            "read:db", "did:mesh:1", "did:mesh:0", resource_ids=["r1"]
+        )
+        assert g.matches("read:db", resource_id="r1") is True
+        assert g.matches("read:db", resource_id="r2") is False
+        assert g.matches("read:db") is False
+
     def test_revoke(self):
         g = CapabilityGrant.create("read:data", "did:mesh:1", "did:mesh:0")
         g.revoke()
@@ -1266,6 +1292,57 @@ class TestCapabilityRegistry:
         reg.grant("read:data", "did:mesh:2", "did:mesh:0")
         agents = reg.get_agents_with_capability("read:data")
         assert len(agents) == 2
+
+    def test_check_narrow_qualifier_grant_rejects_broad_request(self):
+        # BUG-2 regression (privilege escalation): an agent granted
+        # write to one table must NOT pass a check for the whole
+        # database.
+        reg = CapabilityRegistry()
+        reg.grant("write:database:table_users", "did:mesh:1", "did:mesh:0")
+        assert reg.check("did:mesh:1", "write:database:table_users") is True
+        assert reg.check("did:mesh:1", "write:database") is False
+
+    def test_check_resource_scoped_grant_rejects_unscoped_request(self):
+        # BUG-2 regression: a grant scoped to resource_ids must NOT be
+        # authorized when the checker omits the resource_id.
+        reg = CapabilityRegistry()
+        reg.grant("read:db", "did:mesh:1", "did:mesh:0", resource_ids=["r1"])
+        assert reg.check("did:mesh:1", "read:db", resource_id="r1") is True
+        assert reg.check("did:mesh:1", "read:db", resource_id="r2") is False
+        assert reg.check("did:mesh:1", "read:db") is False
+
+    def test_resource_scoped_grantor_can_delegate_own_scope(self):
+        # A grantor whose own grant is scoped to ["r1"] must be able to
+        # sub-delegate read:db on ["r1"], but not on a resource it does
+        # not hold, and not as an unscoped grant.
+        reg = CapabilityRegistry()
+        reg.grant("read:db", "did:mesh:grantor", "did:mesh:admin", resource_ids=["r1"])
+
+        delegated = reg.grant(
+            "read:db",
+            "did:mesh:child",
+            "did:mesh:grantor",
+            resource_ids=["r1"],
+            require_grantor_capability=True,
+        )
+        assert delegated.resource_ids == ["r1"]
+
+        with pytest.raises(PermissionError):
+            reg.grant(
+                "read:db",
+                "did:mesh:child",
+                "did:mesh:grantor",
+                resource_ids=["r2"],
+                require_grantor_capability=True,
+            )
+
+        with pytest.raises(PermissionError):
+            reg.grant(
+                "read:db",
+                "did:mesh:child",
+                "did:mesh:grantor",
+                require_grantor_capability=True,
+            )
 
 
 # ---------------------------------------------------------------------------
