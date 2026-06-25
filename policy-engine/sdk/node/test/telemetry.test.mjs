@@ -19,6 +19,7 @@ const {
   errorClassFor,
   safeReasonCode,
 } = require("../dist/index.js");
+const { guardLangChainTool } = require("../dist/index.js");
 
 class StubRuntimeClient {
   constructor(handler) {
@@ -414,4 +415,26 @@ test("OtelMetricsTelemetrySink increments the decision counter when OpenTelemetr
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].metricName, "acs_intervention_duration_ms");
   assert.equal(recorded[0].value, 3.2);
+});
+
+test("framework adapters emit telemetry through the instrumented evaluate funnel", async () => {
+  // guardLangChainTool routes through control.runTool, which funnels both tool
+  // intervention points through evaluateInterventionPoint, so an adapter call
+  // emits telemetry with no adapter-specific wiring.
+  const sink = new InMemoryTelemetrySink();
+  const control = makeControl(() => ({ verdict: { decision: Decision.Allow } }), sink);
+  const tool = {
+    name: "retriever",
+    async invoke(args) {
+      return { hits: args };
+    },
+  };
+  const guarded = guardLangChainTool(control, tool);
+
+  await guarded.invoke({ q: "x" });
+
+  assert.deepEqual(
+    sink.events.map((event) => event.interventionPoint),
+    [InterventionPoint.PreToolCall, InterventionPoint.PostToolCall],
+  );
 });

@@ -289,6 +289,33 @@ class TelemetryDefaultBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(returned, result)
 
 
+class TelemetryAdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_guard_tool_adapter_emits_telemetry_for_each_point(self):
+        # Adapters route through control.run_tool / evaluate_intervention_point,
+        # the single instrumented funnel, so a sink-configured control emits
+        # telemetry for adapter-driven calls with no adapter changes.
+        from agent_control_specification import guard_tool
+
+        sink = InMemoryTelemetrySink()
+        control = AgentControl(
+            QueueRuntime(
+                [
+                    InterventionPointResult(Verdict(Decision.ALLOW)),
+                    InterventionPointResult(Verdict(Decision.ALLOW)),
+                ]
+            ),
+            telemetry_sink=sink,
+        )
+        guarded = guard_tool(control, "search", lambda args: {"hits": args})
+
+        await guarded({"q": "x"})
+
+        self.assertEqual(
+            [event.intervention_point for event in sink.events],
+            [InterventionPoint.PRE_TOOL_CALL, InterventionPoint.POST_TOOL_CALL],
+        )
+
+
 class JsonStdoutSinkTests(unittest.TestCase):
     def test_writes_one_json_object_per_line(self):
         stream = io.StringIO()

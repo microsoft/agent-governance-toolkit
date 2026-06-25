@@ -16,6 +16,7 @@ internal static class TelemetryHarness
         RecordsOtelCounter();
         await DefaultNullSinkEmitsNothingAsync();
         await IndexesJsonManifestAsync();
+        await AdapterRunFunnelEmitsTelemetryAsync();
         Console.WriteLine("AgentControlSpecification telemetry host-export tests passed.");
     }
 
@@ -236,6 +237,26 @@ internal static class TelemetryHarness
         var telemetryEvent = sink.Events.Single();
         AssertEqual("content_policy", telemetryEvent.PolicyId, "JSON manifest policy id should be indexed.");
         AssertSequence(["alpha", "zeta"], telemetryEvent.Annotators.ToArray(), "JSON manifest annotators should be sorted.");
+    }
+
+    private static async Task AdapterRunFunnelEmitsTelemetryAsync()
+    {
+        // Framework adapters (AutoGen, Agent Framework run middleware) delegate to
+        // control.RunAsync, which funnels the input and output intervention points
+        // through EvaluateInterventionPointAsync, so an adapter-driven call emits
+        // telemetry with no adapter-specific wiring.
+        var sink = new InMemoryTelemetrySink();
+        var control = new AgentControl(
+            new TelemetryRuntime(request => WithIdentity(request, new Verdict(Decision.Allow))),
+            telemetrySink: sink);
+
+        await control.RunAsync<object, object>(
+            new { text = "hi" },
+            (input, _) => new ValueTask<object>(new { answer = input }));
+
+        AssertEqual(2, sink.Events.Count, "an adapter run should emit one event per intervention point.");
+        AssertEqual(InterventionPoint.Input, sink.Events[0].InterventionPoint, "first adapter event should be the input point.");
+        AssertEqual(InterventionPoint.Output, sink.Events[1].InterventionPoint, "second adapter event should be the output point.");
     }
 
     private static InterventionPointResult WithIdentity(InterventionPointRequest request, Verdict verdict)
