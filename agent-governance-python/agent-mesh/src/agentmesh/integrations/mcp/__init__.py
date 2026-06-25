@@ -147,7 +147,10 @@ class TrustGatedMCPServer:
             description: Tool description (max 1000 chars, stripped of control chars)
             input_schema: JSON Schema for inputs
             required_capability: Capability needed to invoke
-            min_trust_score: Minimum trust score (overrides server default)
+            min_trust_score: Minimum trust score (overrides server default).
+                ``None`` uses the server's ``min_trust_score``. An explicit
+                ``0`` means no trust floor (any caller passes this tool's gate)
+                and is honored as given, not coerced to the default.
             require_human_sponsor: Require direct human sponsor
         """
         # P05: Sanitize tool description — truncate and strip control characters

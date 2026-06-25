@@ -123,6 +123,9 @@ class EncryptedTrustBridge:
             peer_did: The peer agent's DID.
             peer_bundle: The peer's published pre-key bundle.
             required_trust_score: Override the default trust threshold.
+                ``None`` uses the bridge's ``_min_trust_score``. An explicit
+                ``0`` means no trust floor (admit any verified peer) and is
+                honored as given, not coerced to the default.
             skip_handshake: If True, skip trust verification (for testing
                 or pre-verified peers only).
 

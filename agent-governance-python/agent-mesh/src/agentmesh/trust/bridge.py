@@ -155,6 +155,12 @@ class TrustBridge(BaseModel):
     ) -> HandshakeResult:
         """
         Verify a peer before communication.
+
+        Args:
+            required_trust_score: Minimum registry trust score the peer must
+                meet. ``None`` uses ``default_trust_threshold``. An explicit
+                ``0`` means no trust floor (admit any verified peer); it is
+                honored as given and is NOT coerced to the default.
         """
         threshold = (
             self.default_trust_threshold
@@ -189,7 +195,12 @@ class TrustBridge(BaseModel):
         peer_did: str,
         required_score: Optional[int] = None,
     ) -> bool:
-        """Check whether a previously verified peer meets the trust threshold."""
+        """Check whether a previously verified peer meets the trust threshold.
+
+        ``required_score=None`` uses ``default_trust_threshold``. An explicit
+        ``0`` means no trust floor (any verified peer passes) and is honored as
+        given, not coerced to the default.
+        """
         peer = self.peers.get(peer_did)
         if not peer or not peer.trust_verified:
             return False
@@ -211,7 +222,12 @@ class TrustBridge(BaseModel):
         return self.peers.get(peer_did)
 
     def get_trusted_peers(self, min_score: Optional[int] = None) -> list[PeerInfo]:
-        """Get all peers that are verified and meet the trust threshold."""
+        """Get all peers that are verified and meet the trust threshold.
+
+        ``min_score=None`` uses ``default_trust_threshold``. An explicit ``0``
+        means no trust floor (return every verified peer) and is honored as
+        given, not coerced to the default.
+        """
         threshold = (
             self.default_trust_threshold if min_score is None else min_score
         )
