@@ -13,7 +13,7 @@ warnings; unknown versions raise ``ValueError``.
 
 from datetime import datetime, timezone
 from typing import Optional, Literal, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import logging
 import os
 import warnings
@@ -29,6 +29,56 @@ SUPPORTED_API_VERSIONS = {
     "governance.toolkit/v1": {"status": "current"},
     "1.0": {"status": "deprecated", "migrate_to": "governance.toolkit/v1"},
 }
+
+# Allowed rate-limit periods, mapped to their length in seconds.
+RATE_LIMIT_PERIODS = {
+    "second": 1,
+    "minute": 60,
+    "hour": 3600,
+    "day": 86400,
+}
+
+
+def parse_rate_limit(limit: str) -> tuple[int, int]:
+    """Parse a rate-limit string into ``(count, period_seconds)``.
+
+    Accepts the form ``"<count>/<period>"`` (e.g. ``"100/hour"``) where
+    ``count`` is a non-negative integer and ``period`` is one of
+    ``second``, ``minute``, ``hour``, ``day``.
+
+    Args:
+        limit: The rate-limit string to parse.
+
+    Returns:
+        A ``(count, period_seconds)`` tuple.
+
+    Raises:
+        ValueError: If ``limit`` is not a well-formed rate-limit string. This
+            is enforced at ``PolicyRule`` construction so malformed limits fail
+            fast at policy load rather than crashing evaluation.
+    """
+    parts = limit.split("/")
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid rate limit {limit!r}: expected '<count>/<period>', e.g. '100/hour'"
+        )
+
+    count_str, period_str = parts[0].strip(), parts[1].strip().lower()
+    try:
+        count = int(count_str)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid rate limit {limit!r}: count must be an integer"
+        ) from exc
+    if count < 0:
+        raise ValueError(f"Invalid rate limit {limit!r}: count must be non-negative")
+    if period_str not in RATE_LIMIT_PERIODS:
+        raise ValueError(
+            f"Invalid rate limit {limit!r}: period must be one of "
+            f"{sorted(RATE_LIMIT_PERIODS)}"
+        )
+
+    return count, RATE_LIMIT_PERIODS[period_str]
 
 
 class PolicyRule(BaseModel):
@@ -60,6 +110,19 @@ class PolicyRule(BaseModel):
 
     # Rate limiting
     limit: Optional[str] = Field(None, description="Rate limit (e.g., '100/hour')")
+
+    @field_validator("limit")
+    @classmethod
+    def _validate_limit(cls, value: Optional[str]) -> Optional[str]:
+        """Reject malformed rate-limit strings at construction.
+
+        Without this, a malformed ``limit`` would raise deep inside
+        ``PolicyEngine.evaluate`` on the first matching call instead of failing
+        at policy load.
+        """
+        if value is not None:
+            parse_rate_limit(value)
+        return value
 
     # Approval workflow
     approvers: list[str] = Field(default_factory=list)
@@ -616,19 +679,13 @@ class PolicyEngine:
         self._rate_limits[limit_key]["count"] += 1
 
     def _parse_limit(self, limit: str) -> tuple[int, int]:
-        """Parse a limit string like '100/hour'."""
-        parts = limit.split("/")
-        count = int(parts[0])
+        """Parse a limit string like '100/hour' into ``(count, period_seconds)``.
 
-        period_map = {
-            "second": 1,
-            "minute": 60,
-            "hour": 3600,
-            "day": 86400,
-        }
-
-        period = period_map.get(parts[1], 3600)
-        return count, period
+        Delegates to the module-level :func:`parse_rate_limit`. Limits are
+        validated at ``PolicyRule`` construction, so this is not expected to
+        raise during evaluation.
+        """
+        return parse_rate_limit(limit)
 
     def get_policy(self, name: str) -> Optional[Policy]:
         """Get a loaded policy by name.

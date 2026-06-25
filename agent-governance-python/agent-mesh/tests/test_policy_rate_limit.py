@@ -10,9 +10,9 @@ but never called ``_increment_rate_limit``, so the per-rule counter stayed at
 from datetime import timedelta
 
 import pytest
+from pydantic import ValidationError
 
-from agentmesh.governance.policy import Policy, PolicyEngine, PolicyRule
-
+from agentmesh.governance.policy import Policy, PolicyEngine, PolicyRule, parse_rate_limit
 
 AGENT = "did:mesh:tester"
 CONTEXT = {"action": {"type": "tool"}}
@@ -113,6 +113,46 @@ def test_rule_without_limit_never_rate_limited() -> None:
         decision = engine.evaluate(AGENT, dict(CONTEXT))
         assert decision.allowed is True
         assert decision.rate_limited is False
+
+
+@pytest.mark.parametrize(
+    "bad_limit",
+    ["100", "abc/hour", "2/", "/hour", "100/week", "-1/hour", "1/2/hour"],
+)
+def test_malformed_limit_rejected_at_construction(bad_limit: str) -> None:
+    """Malformed limit strings fail fast at PolicyRule construction.
+
+    Regression guard: before validation, a malformed limit raised IndexError/
+    ValueError deep inside evaluate on the first matching call instead of at
+    policy load.
+    """
+    with pytest.raises(ValidationError):
+        PolicyRule(
+            name="bad",
+            condition="action.type == 'tool'",
+            action="allow",
+            limit=bad_limit,
+        )
+
+
+@pytest.mark.parametrize(
+    ("good_limit", "expected"),
+    [("100/hour", (100, 3600)), ("1000/day", (1000, 86400)), ("0/second", (0, 1))],
+)
+def test_parse_rate_limit_well_formed(good_limit: str, expected: tuple[int, int]) -> None:
+    """Well-formed limits parse to (count, period_seconds)."""
+    assert parse_rate_limit(good_limit) == expected
+
+
+def test_evaluate_never_crashes_on_loaded_limit() -> None:
+    """Once a policy is loaded, evaluate never raises from limit parsing.
+
+    The crash regression is closed at construction, so by the time a policy is
+    evaluated the limit is guaranteed well-formed.
+    """
+    engine, _ = _engine_with_limit("3/minute")
+    for _ in range(5):
+        engine.evaluate(AGENT, dict(CONTEXT))  # must not raise
 
 
 if __name__ == "__main__":
