@@ -307,6 +307,24 @@ class FoundryAdapterTests(unittest.IsolatedAsyncioTestCase):
         rejection = json.loads(_field(runs.submitted[0][0], "output"))
         self.assertEqual(rejection["agent_control"], "blocked")
 
+    async def test_invalid_json_arguments_are_rejected_without_execution(self):
+        runtime = QueueRuntime([])
+        recorder = ToolRecorder()
+        runs = FakeRuns(_action(_FakeToolCall("call-1", "search_records", "{not json")))
+        guarded = guard_foundry_agent(
+            AgentControl(runtime), FakeAgentsClient(runs), tools={"search_records": recorder.search_records}
+        )
+
+        await guarded.create_thread_and_run("agent-1", content="go", poll_interval=0)
+
+        # Malformed arguments fail closed before the callable runs and before the
+        # policy is consulted, rather than crashing the run loop.
+        self.assertEqual(recorder.calls, [])
+        self.assertEqual(runtime.requests, [])
+        rejection = json.loads(_field(runs.submitted[0][0], "output"))
+        self.assertEqual(rejection["agent_control"], "blocked")
+        self.assertIn("not valid JSON", rejection["reason"])
+
     async def test_dict_tool_output_when_sdk_models_absent(self):
         runtime = QueueRuntime([_result(), _result()])
         recorder = ToolRecorder()
