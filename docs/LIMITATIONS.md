@@ -1,3 +1,9 @@
+---
+title: Known Limitations and Design Boundaries
+last_reviewed: 2026-06-25
+owner: agt-maintainers
+---
+
 # Known Limitations & Design Boundaries
 
 > **Transparency is a feature.** This document describes what AGT does *not* do
@@ -262,35 +268,50 @@ dashboard shows "governed" status, but no rules are enforced.
 ## 10. Physical AI and Embodied Agent Governance
 
 AGT governs **software agents** that call tools via APIs, MCP, or inter-agent
-protocols. It does **not** provide governance primitives specific to **physical
-agents** (robots, drones, autonomous vehicles, industrial actuators).
+protocols. It can govern an embodied agent's software request before that
+request reaches a robot, drone, lab device, building system, or industrial
+controller. It is **not** a robot safety controller, real-time planner,
+functional-safety system, or proof of physical execution.
 
 **What this means in practice:**
 
 - ✅ AGT can govern the *software decision layer* of a robotic agent (e.g.,
   blocking an API call to arm a mechanism)
+- ✅ AGT can require action-bound approval for high-risk embodied requests when
+  paired with [ADR-0030](adr/0030-action-bound-approval-protocol.md)
+- ❌ AGT does **not** prove that a downstream controller accepted, safely
+  executed, or completed the physical action
 - ❌ AGT does **not** provide hardware kill switches, force-limiting, or actuator
   safety interlocks
 - ❌ AGT does **not** model physical world state, collision boundaries, or
   safety zones
+- ❌ AGT does **not** replace safety PLCs, robot controllers, emergency stops,
+  certification evidence, or domain-specific runtime monitors
 - ❌ AGT does **not** address latency requirements for real-time control loops
   (typically <10ms) — policy evaluation at <0.1ms is fast enough, but the
   full governance stack (identity, trust, audit) may not be
 
 **Example gap:** A warehouse robot governed by AGT has its `move_to_location`
 call approved by policy, but the target location is occupied by a human. AGT
-has no spatial awareness to detect this.
+has no spatial awareness to detect this. The AGT decision proves only that the
+software request was governed; the downstream safety layer must reject,
+constrain, or stop unsafe motion.
 
 **Mitigations available today:**
 - Use AGT's policy engine for the *decision layer* — blocking unsafe commands
   before they reach the actuator layer
-- Combine AGT with domain-specific robot safety frameworks (e.g., ROS 2 Safety
-  Controller, ISO 10218 / ISO 15066 compliance layers)
-- Use **execution rings** to isolate physical actuator calls in Ring 0 with
-  human-in-the-loop approval
+- Combine AGT with domain-specific robot safety frameworks, certified
+  controllers, safety PLCs, interlocks, and emergency stops
+- Use action-bound approval for high-risk physical requests and fail closed when
+  current controller or safety-state evidence is missing
+- Use AGT audit and trace records as software governance evidence, not as proof
+  of physical outcome
+- Use the draft [embodied action governance boundary profile](proposals/EMBODIED-ACTION-GOVERNANCE-PROFILE.md)
+  when documenting decision-layer policies for physical systems
 
-**Status:** Physical AI governance is out of scope for AGT's current roadmap.
-We welcome community contributions exploring this space.
+**Status:** Physical safety and real-time physical control remain out of scope
+for AGT's current roadmap. The embodied action profile is a community-facing
+documentation and policy-example path for decision-layer governance only.
 
 ## 11. Streaming Data and Real-Time Assurance
 

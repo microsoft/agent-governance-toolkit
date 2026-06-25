@@ -1,0 +1,77 @@
+# Embodied Action Governance - Sample Configuration
+#
+# IMPORTANT: This is a SAMPLE configuration provided as a starting point.
+# Review, customize, and extend these rules for your deployment before use.
+#
+# This sample governs software action requests before they reach downstream
+# physical controllers. It is not a functional-safety system and does not
+# verify that a physical action was accepted, safely executed, or completed.
+
+version: "1.0"
+name: embodied-action-governance
+description: >
+  Sample governance rules for AI agents that request physically consequential
+  actions such as robot motion, drone navigation, lab automation, building
+  controls, or industrial actuator commands.
+
+disclaimer: >
+  This sample only governs the software action request before it reaches a
+  downstream controller. It does not replace safety PLCs, certified robot
+  controllers, emergency stops, interlocks, runtime monitors, or functional
+  safety reviews.
+
+metadata:
+  related_proposal: docs/proposals/EMBODIED-ACTION-GOVERNANCE-PROFILE.md
+  boundary: decision-layer-only
+
+rules:
+  - name: block-safety-control-bypass
+    condition:
+      field: input
+      operator: matches
+      value: "(?i)(bypass|skip|disable|override).*(safety|interlock|emergency.?stop|controller|human.?approval|approval)"
+    action: deny
+    priority: 100
+    message: "Embodied action request attempts to bypass a safety or approval control"
+
+  - name: block-direct-interlock-control
+    condition:
+      field: action
+      operator: matches
+      value: "^(robot\\.release_emergency_stop|robot\\.override_safety|controller\\.disable_interlock|plc\\.force_output)$"
+    action: deny
+    priority: 100
+    message: "Direct safety interlock override is outside AGT policy authorization"
+
+  - name: require-approval-for-human-proximate-actuation
+    condition:
+      field: action
+      operator: matches
+      value: "^(robot\\.move|robot\\.set_pose|robot\\.gripper\\.close|drone\\.navigate|plc\\.write_output|lab_robot\\.dispense)$"
+    action: require_approval
+    approvers:
+      - safety-operator
+    priority: 90
+    message: "Human-proximate or actuator-changing action requires action-bound approval and downstream safety checks"
+
+  - name: audit-physical-state-reads
+    condition:
+      field: action
+      operator: matches
+      value: "^(robot\\.read_state|cell\\.read_safety_state|sensor\\.read_|controller\\.get_status)$"
+    action: audit
+    priority: 50
+    message: "Physical state read is allowed with audit trail"
+
+  - name: allow-decision-layer-simulation
+    condition:
+      field: action
+      operator: matches
+      value: "^(simulator\\.plan_motion|simulator\\.validate_trajectory)$"
+    action: allow
+    priority: 40
+    message: "Simulation-only planning action is allowed"
+
+defaults:
+  action: deny
+  max_tool_calls: 10

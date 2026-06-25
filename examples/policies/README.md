@@ -4,6 +4,10 @@ Sample YAML governance policy files for AgentMesh.
 
 Each file in this directory is a self-contained policy configuration that demonstrates how to express a particular class of security or compliance control using the policy engine. They are intended as starting points — review and adapt them for your environment before deploying to production.
 
+Notable profiles:
+
+- [`embodied-action-governance.yaml`](embodied-action-governance.yaml) - decision-layer controls for embodied or physical action requests.
+
 ## Using this directory
 
 1. **Browse** the `.yaml` files to find a scenario close to what you need. Each file opens with a comment block describing what it covers and any caveats.
