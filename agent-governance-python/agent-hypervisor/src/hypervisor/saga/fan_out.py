@@ -2,10 +2,12 @@
 # Licensed under the MIT License.
 # Public Preview — basic implementation
 """
-Parallel Saga Fan-Out — stub implementation.
+Parallel Saga Fan-Out.
 
-Public Preview: only sequential ALL_MUST_SUCCEED execution.
-Fan-out groups execute branches one at a time.
+Executes a group of saga branches and resolves it against the group's
+``FanOutPolicy`` (ALL / MAJORITY / ANY must succeed). Branches are run
+sequentially but execution stops as soon as the policy outcome is decided
+(e.g. ANY stops on the first success, ALL on the first failure).
 """
 
 from __future__ import annotations
@@ -58,12 +60,41 @@ class FanOutGroup:
         return len(self.branches)
 
     def check_policy(self) -> bool:
-        """Public Preview: only ALL_MUST_SUCCEED is enforced."""
-        return self.success_count == self.total_branches
+        """True if the branch outcomes satisfy this group's policy.
+
+        ALL: every branch succeeded (vacuously true with no branches).
+        MAJORITY: a strict majority of branches succeeded.
+        ANY: at least one branch succeeded.
+        """
+        total = self.total_branches
+        if self.policy == FanOutPolicy.ALL_MUST_SUCCEED:
+            return self.success_count == total
+        if self.policy == FanOutPolicy.MAJORITY_MUST_SUCCEED:
+            return self.success_count * 2 > total
+        if self.policy == FanOutPolicy.ANY_MUST_SUCCEED:
+            return self.success_count >= 1
+        return False
+
+    def is_decided(self) -> bool:
+        """True once the resolved branches already determine ``check_policy``,
+        so remaining branches need not run.
+
+        ALL is decided on the first failure; ANY on the first success; MAJORITY
+        once a majority has succeeded or become unreachable.
+        """
+        total = self.total_branches
+        succ, fail = self.success_count, self.failure_count
+        if self.policy == FanOutPolicy.ALL_MUST_SUCCEED:
+            return fail >= 1
+        if self.policy == FanOutPolicy.ANY_MUST_SUCCEED:
+            return succ >= 1
+        if self.policy == FanOutPolicy.MAJORITY_MUST_SUCCEED:
+            return succ * 2 > total or fail * 2 >= total
+        return False
 
 
 class FanOutOrchestrator:
-    """Fan-out stub (Public Preview: sequential execution, ALL_MUST_SUCCEED only)."""
+    """Runs fan-out branches and resolves the group against its ``FanOutPolicy``."""
 
     def __init__(self) -> None:
         self._groups: dict[str, FanOutGroup] = {}
@@ -71,7 +102,7 @@ class FanOutOrchestrator:
     def create_group(
         self, saga_id: str, policy: FanOutPolicy = FanOutPolicy.ALL_MUST_SUCCEED
     ) -> FanOutGroup:
-        group = FanOutGroup(saga_id=saga_id, policy=FanOutPolicy.ALL_MUST_SUCCEED)
+        group = FanOutGroup(saga_id=saga_id, policy=policy)
         self._groups[group.group_id] = group
         return group
 
@@ -87,7 +118,13 @@ class FanOutOrchestrator:
         executors: dict[str, Callable[..., Any]],
         timeout_seconds: int = 300,
     ) -> FanOutGroup:
-        """Execute branches sequentially (Public Preview)."""
+        """Run branches until the group's policy outcome is decided.
+
+        Branches run one at a time; after each resolves, execution stops early
+        if ``is_decided`` (the policy can no longer change). Unrun branches stay
+        PENDING. On an unsatisfied policy, every succeeded branch is queued for
+        compensation.
+        """
         group = self._get_group(group_id)
 
         for branch in group.branches:
@@ -109,7 +146,8 @@ class FanOutOrchestrator:
                 branch.error = str(e)
                 branch.step.error = str(e)
                 branch.step.transition(StepState.FAILED)
-                break  # ALL_MUST_SUCCEED: stop on first failure
+            if group.is_decided():
+                break
 
         group.policy_satisfied = group.check_policy()
         group.resolved = True

@@ -71,13 +71,68 @@ class TestFanOut:
         assert result.failure_count == 1
         assert len(result.compensation_needed) > 0
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     async def test_majority_policy_succeeds(self, steps):
-        pass
+        """MAJORITY_MUST_SUCCEED is satisfied when a strict majority succeed.
+        With 3 branches, 2 successes resolve the group (the 3rd need not run)."""
+        fan = FanOutOrchestrator()
+        group = fan.create_group("saga-1", FanOutPolicy.MAJORITY_MUST_SUCCEED)
+        for s in steps:
+            fan.add_branch(group.group_id, s)
 
-    @pytest.mark.skip("Feature not available in Public Preview")
+        async def ok():
+            return "ok"
+
+        async def fail():
+            raise ValueError("nope")
+
+        # s1 ok, s2 ok -> majority (2/3) reached; s3 (would fail) is not needed.
+        executors = {"s1": ok, "s2": ok, "s3": fail}
+        result = await fan.execute(group.group_id, executors)
+        assert result.policy == FanOutPolicy.MAJORITY_MUST_SUCCEED
+        assert result.policy_satisfied
+        assert result.success_count == 2
+        assert len(result.compensation_needed) == 0
+
+    async def test_majority_policy_fails(self, steps):
+        """MAJORITY is not satisfied when a majority cannot be reached."""
+        fan = FanOutOrchestrator()
+        group = fan.create_group("saga-1", FanOutPolicy.MAJORITY_MUST_SUCCEED)
+        for s in steps:
+            fan.add_branch(group.group_id, s)
+
+        async def ok():
+            return "ok"
+
+        async def fail():
+            raise ValueError("nope")
+
+        # s1 ok, s2 fail, s3 fail -> only 1/3, majority impossible.
+        executors = {"s1": ok, "s2": fail, "s3": fail}
+        result = await fan.execute(group.group_id, executors)
+        assert not result.policy_satisfied
+        assert result.success_count == 1
+
     async def test_any_policy_succeeds(self, steps):
-        pass
+        """ANY_MUST_SUCCEED is satisfied by the first success; later branches
+        need not run, and no compensation is required."""
+        fan = FanOutOrchestrator()
+        group = fan.create_group("saga-1", FanOutPolicy.ANY_MUST_SUCCEED)
+        for s in steps:
+            fan.add_branch(group.group_id, s)
+
+        async def ok():
+            return "ok"
+
+        async def fail():
+            raise ValueError("nope")
+
+        # s1 fails, s2 succeeds -> ANY satisfied; s3 not needed.
+        executors = {"s1": fail, "s2": ok, "s3": fail}
+        result = await fan.execute(group.group_id, executors)
+        assert result.policy == FanOutPolicy.ANY_MUST_SUCCEED
+        assert result.policy_satisfied
+        assert result.success_count == 1
+        assert len(result.compensation_needed) == 0
 
     async def test_all_fail_any_policy(self, steps):
         fan = FanOutOrchestrator()
@@ -98,9 +153,15 @@ class TestFanOut:
         # With 0 branches, 0 == 0 is True for ALL_MUST_SUCCEED (vacuously true)
         assert group.check_policy()
 
-    @pytest.mark.skip("Feature not available in Public Preview")
     def test_group_check_policy_any_empty(self):
-        pass
+        # ANY_MUST_SUCCEED with no branches: nothing succeeded -> not satisfied.
+        group = FanOutGroup(policy=FanOutPolicy.ANY_MUST_SUCCEED)
+        assert not group.check_policy()
+
+    def test_create_group_honors_policy(self):
+        fan = FanOutOrchestrator()
+        group = fan.create_group("saga-1", FanOutPolicy.MAJORITY_MUST_SUCCEED)
+        assert group.policy == FanOutPolicy.MAJORITY_MUST_SUCCEED
 
     def test_active_groups(self, steps):
         fan = FanOutOrchestrator()
@@ -291,8 +352,9 @@ class TestSagaDSL:
                 "fan_out": [{"policy": "all_must_succeed", "branches": ["par1", "par2"]}],
             }
         )
-        # Public Preview: all steps are sequential (fan_out ignored)
-        assert len(defn.sequential_steps) == 3
+        # par1/par2 are fan-out branches; only seq1 is sequential.
+        assert defn.fan_out_step_ids == {"par1", "par2"}
+        assert [s.id for s in defn.sequential_steps] == ["seq1"]
 
 
 # ── DSL Fan-Out Parsing (BUG 3 fix) ─────────────────────────────

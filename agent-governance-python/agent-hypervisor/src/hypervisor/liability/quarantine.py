@@ -75,10 +75,16 @@ class QuarantineManager:
         forensic_data: dict | None = None,
     ) -> QuarantineRecord:
         """Quarantine an agent for ``duration_seconds`` (default
-        ``DEFAULT_QUARANTINE_SECONDS``). The record is active and enforced
-        until it expires or is released."""
-        dur = duration_seconds if duration_seconds is not None else self.DEFAULT_QUARANTINE_SECONDS
+        ``DEFAULT_QUARANTINE_SECONDS``). The record is active and enforced until
+        it expires or is released. Any prior active record for the same
+        ``(agent_did, session_id)`` is superseded, so an agent has at most one
+        active quarantine per session (history is retained)."""
         now = datetime.now(UTC)
+        prior = self._find_active(agent_did, session_id)
+        if prior is not None:
+            prior.is_active = False
+            prior.released_at = now
+        dur = duration_seconds if duration_seconds is not None else self.DEFAULT_QUARANTINE_SECONDS
         record = QuarantineRecord(
             agent_did=agent_did,
             session_id=session_id,

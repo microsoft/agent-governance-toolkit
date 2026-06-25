@@ -330,7 +330,21 @@ class TestCausalAttributionDistribution:
         assert result.get_liability("c") == 0.0
         assert result.causal_chain_length == 1
 
-    def test_causal_chain_length_reflects_chain(self):
+    def test_causal_chain_length_counts_failures(self):
+        """causal_chain_length is the number of FAILED actions on the chain (the
+        causal contributors), not the count of all preceding actions."""
+        attributor = CausalAttributor()
+        actions = {
+            "a": [{"action_id": "a1", "step_id": "s1", "success": False}],
+            "b": [{"action_id": "b1", "step_id": "s2", "success": False}],
+            "c": [{"action_id": "c1", "step_id": "s3", "success": True}],
+        }
+        # Chain is s1, s2 (up to the failure at s2); both a and b failed -> 2.
+        result = attributor.attribute("saga-1", "sess-1", actions, "s2", "b")
+        assert result.causal_chain_length == 2
+
+    def test_causal_chain_length_ignores_successful_prep(self):
+        """Successful pre-failure actions do not inflate causal_chain_length."""
         attributor = CausalAttributor()
         actions = {
             "a": [{"action_id": "a1", "step_id": "s1", "success": True}],
@@ -338,8 +352,8 @@ class TestCausalAttributionDistribution:
             "c": [{"action_id": "c1", "step_id": "s3", "success": True}],
         }
         result = attributor.attribute("saga-1", "sess-1", actions, "s2", "b")
-        # Chain is s1, s2 (up to and including the failure); s3 is excluded.
-        assert result.causal_chain_length == 2
+        # Only b failed on the chain -> 1, even though s1 precedes it.
+        assert result.causal_chain_length == 1
 
     def test_attribution_is_insertion_order_independent(self):
         """Regression: liability must not depend on agent_actions dict order.
@@ -471,16 +485,20 @@ class TestQuarantineEnforcement:
         )
         assert record.forensic_data == {"score": 0.9}
 
-    def test_release_clears_all_stacked_quarantines(self):
-        """Regression: re-quarantining the same (agent, session) creates two
-        active records; a single release() must clear ALL of them so the agent
-        is definitively no longer quarantined."""
+    def test_requarantine_supersedes_prior_active(self):
+        """Re-quarantining the same (agent, session) supersedes the prior active
+        record, so there is at most one active quarantine per key; history is
+        retained, and a single release() fully clears it."""
         mgr = QuarantineManager()
-        mgr.quarantine("a1", "s1", QuarantineReason.MANUAL)
-        mgr.quarantine("a1", "s1", QuarantineReason.RING_BREACH)
-        assert mgr.quarantine_count == 2
+        first = mgr.quarantine("a1", "s1", QuarantineReason.MANUAL)
+        second = mgr.quarantine("a1", "s1", QuarantineReason.RING_BREACH)
+        assert mgr.quarantine_count == 1
+        assert not first.is_active
+        assert second.is_active
+        assert mgr.get_active_quarantine("a1", "s1") is second
+        assert len(mgr.get_history(agent_did="a1")) == 2  # both retained
         released = mgr.release("a1", "s1")
-        assert released is not None
+        assert released is second
         assert not mgr.is_quarantined("a1", "s1")
         assert mgr.quarantine_count == 0
 

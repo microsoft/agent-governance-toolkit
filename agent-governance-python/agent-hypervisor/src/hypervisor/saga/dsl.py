@@ -5,8 +5,9 @@
 Declarative Saga DSL.
 
 Parses step definitions and fan-out groups (with their declared policy and
-validated branch references). Execution of fan-out groups remains sequential;
-``sequential_steps`` still returns all steps.
+validated branch references) into a ``SagaDefinition``. ``fan_out_step_ids`` and
+``sequential_steps`` expose which steps run in parallel; fan-out groups are
+executed by ``FanOutOrchestrator``, which enforces the declared policy.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ class SagaDSLStep:
 
 @dataclass
 class SagaDSLFanOut:
-    """A fan-out group (Public Preview: ignored during execution)."""
+    """A fan-out group: branches that run in parallel under ``policy``."""
 
     policy: FanOutPolicy = FanOutPolicy.ALL_MUST_SUCCEED
     branch_step_ids: list[str] = field(default_factory=list)
@@ -59,19 +60,23 @@ class SagaDefinition:
 
     @property
     def fan_out_step_ids(self) -> set[str]:
-        return set()
+        """Step IDs that belong to any fan-out group (run in parallel)."""
+        ids: set[str] = set()
+        for fan_out in self.fan_outs:
+            ids.update(fan_out.branch_step_ids)
+        return ids
 
     @property
     def sequential_steps(self) -> list[SagaDSLStep]:
-        """All steps are sequential in Public Preview."""
-        return list(self.steps)
+        """Steps that are not part of any fan-out group."""
+        parallel = self.fan_out_step_ids
+        return [s for s in self.steps if s.id not in parallel]
 
 
 class SagaDSLParser:
     """
-    Parses saga definitions from dict.
-
-    Public Preview: fan-out groups are parsed but ignored during execution.
+    Parses saga definitions from a dict into a ``SagaDefinition``, including
+    fan-out groups with their declared policy and validated branch step IDs.
     """
 
     def __init__(self, *, schema_validation: bool = False) -> None:

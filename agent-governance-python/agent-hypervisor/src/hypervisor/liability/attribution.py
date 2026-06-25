@@ -103,9 +103,11 @@ class CausalAttributor:
         # weight, so "full liability to the direct cause" emerges naturally when no
         # other agent failed — there is no separate fallback branch.
         causal_raw: dict[str, float] = dict.fromkeys(agents, 0.0)
+        failed_on_chain = 0
         for agent_did, action in chain:
             if not action.get("success", True):
                 causal_raw[agent_did] += 1.0
+                failed_on_chain += 1
         if failure_agent_did in causal_raw:
             causal_raw[failure_agent_did] += self.DIRECT_CAUSE_BONUS
         causal_total = sum(causal_raw.values())
@@ -157,7 +159,7 @@ class CausalAttributor:
             saga_id=saga_id,
             session_id=session_id,
             attributions=attributions,
-            causal_chain_length=len(chain),
+            causal_chain_length=failed_on_chain,
             root_cause_agent=failure_agent_did,
         )
         self._history.append(result)
