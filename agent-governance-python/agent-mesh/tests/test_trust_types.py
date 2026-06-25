@@ -3,6 +3,8 @@
 """Tests for shared trust and identity types (agentmesh.trust_types)."""
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
 from agentmesh.trust_types import (
@@ -162,6 +164,20 @@ class TestTrustTracker:
         a1_history = tracker.get_history("a1")
         assert len(a1_history) == 2
         assert all(r.agent_id == "a1" for r in a1_history)
+
+    def test_recorded_interactions_have_iso_timestamps(self) -> None:
+        # BUG-4 regression: record_interaction must populate timestamp
+        # so history can be ordered, decayed over time, and time-bounded.
+        tracker = TrustTracker()
+        tracker.record_interaction("a1", "a2", "task1", success=True)
+        tracker.record_interaction("a1", "a3", "task2", success=False)
+        tracker.record_interaction("a1", "a4", "task3", success=True)
+        timestamps = [r.timestamp for r in tracker.get_history("a1")]
+        # No empty timestamps, and each parses as ISO-8601.
+        assert all(ts for ts in timestamps)
+        parsed = [datetime.fromisoformat(ts) for ts in timestamps]
+        # Recorded in order, so timestamps are non-decreasing.
+        assert parsed == sorted(parsed)
 
     def test_reset(self) -> None:
         tracker = TrustTracker(initial_score=0.5, reward=0.1)
