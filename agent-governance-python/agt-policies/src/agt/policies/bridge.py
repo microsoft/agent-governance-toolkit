@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import shutil
 import tempfile
 from pathlib import Path
@@ -95,6 +96,55 @@ def _find_stock_rego_root() -> Path:
     )
 
 
+def _glob_to_re2(value: str) -> str:
+    r"""Translate a shell glob to a Go RE2 regex anchored to the whole string.
+
+    Mirrors :func:`fnmatch.translate` semantics (``*`` / ``?`` / ``[seq]`` /
+    ``[!seq]``) but emits only RE2-compatible syntax. ``fnmatch.translate``
+    cannot be used directly: it produces Python-specific constructs — an inline
+    ``(?s:...)`` flag group and the ``\Z`` end-of-string anchor — that Go RE2
+    (the engine behind OPA's ``agt.patterns``) rejects, leaving the generated
+    deny rule undefined so a ``GLOB`` blocked pattern silently fails open.
+
+    The result is a leading ``(?s)`` dot-all flag plus ``^``/``$`` anchors.
+    Whole-string anchoring preserves v4 glob semantics (the pattern matches the
+    entire policy text) under ``agt.patterns``' unanchored ``regex.match``.
+    """
+    import re
+
+    out: list[str] = []
+    i, n = 0, len(value)
+    while i < n:
+        ch = value[i]
+        i += 1
+        if ch == "*":
+            out.append(".*")
+        elif ch == "?":
+            out.append(".")
+        elif ch == "[":
+            j = i
+            if j < n and value[j] == "!":
+                j += 1
+            if j < n and value[j] == "]":
+                j += 1
+            while j < n and value[j] != "]":
+                j += 1
+            if j >= n:
+                # No closing bracket: treat '[' as a literal.
+                out.append(r"\[")
+            else:
+                inner = value[i:j].replace("\\", r"\\")
+                i = j + 1
+                if inner.startswith("!"):
+                    inner = "^" + inner[1:]
+                elif inner.startswith("^"):
+                    inner = "\\" + inner
+                out.append("[" + inner + "]")
+        else:
+            out.append(re.escape(ch))
+    return "(?s)^" + "".join(out) + "$"
+
+
 def _pattern_to_regex(pattern: Any) -> str:
     """Normalise a v4 ``blocked_patterns`` entry to a Go RE2 regex string.
 
@@ -119,9 +169,7 @@ def _pattern_to_regex(pattern: Any) -> str:
         if kind_name == "REGEX":
             return value
         if kind_name == "GLOB":
-            import fnmatch
-
-            return fnmatch.translate(value)
+            return _glob_to_re2(value)
         raise ValueError(f"unsupported PatternType: {kind!r}")
 
     raise ValueError(f"unsupported blocked_patterns entry: {pattern!r}")
@@ -180,12 +228,15 @@ def _render_rego(
     if budget_thresholds:
         branches.append(
             "v := budgets.deny_if_budget_exceeded("
-            f"{json.dumps(budget_thresholds)})"
+            f"{json.dumps(budget_thresholds, allow_nan=False)})"
         )
 
     if confidence_threshold is not None and confidence_threshold > 0.0:
+        # ``allow_nan=False`` is a defensive backstop; the caller
+        # (governance_to_acs_manifest) rejects non-finite thresholds up front.
         branches.append(
-            f"v := confidence.deny_if_low_confidence({json.dumps(confidence_threshold)})"
+            "v := confidence.deny_if_low_confidence("
+            f"{json.dumps(confidence_threshold, allow_nan=False)})"
         )
 
     if require_human_approval:
@@ -301,49 +352,77 @@ def governance_to_acs_manifest(
         ``policy.allowed_tools``. ``approval`` is set when
         ``require_human_approval`` is true.
     """
+    created_bundle_dir = bundle_dir is None
     bundle_dir = (
         Path(bundle_dir).resolve()
-        if bundle_dir is not None
+        if not created_bundle_dir
         else Path(tempfile.mkdtemp(prefix="agt_bridge_")).resolve()
     )
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
-    stock_root = stock_rego_root or _find_stock_rego_root()
-    for rego_file in stock_root.glob("*.rego"):
-        if rego_file.name.endswith("_test.rego"):
-            continue
-        shutil.copy(rego_file, bundle_dir / rego_file.name)
+    try:
+        stock_root = stock_rego_root or _find_stock_rego_root()
+        for rego_file in stock_root.glob("*.rego"):
+            if rego_file.name.endswith("_test.rego"):
+                continue
+            shutil.copy(rego_file, bundle_dir / rego_file.name)
 
-    blocked_pattern_regexes = [_pattern_to_regex(p) for p in policy.blocked_patterns]
+        blocked_pattern_regexes = [
+            _pattern_to_regex(p) for p in policy.blocked_patterns
+        ]
 
-    # AGT-M3 round-2 BLOCK A: ``max_tool_calls=0`` is the v4 sentinel for
-    # "deny every tool call", not "no constraint". Forward 0 through to the
-    # ``budgets.deny_if_budget_exceeded`` helper. The helper compares
-    # ``tool_call_count >= limit`` so with ``limit=0`` and the default
-    # ``tool_call_count=0`` the first call is denied with
-    # ``budget_tool_calls_exceeded``, which preserves the v4 contract end-to-end
-    # for any caller that loads the bridge manifest into AgtRuntime directly
-    # (not just through the AdapterRuntimeBridge host fallback). Previously a
-    # ``GovernancePolicy(max_tool_calls=0, confidence_threshold=0.0)`` slipped
-    # through to the default ``allow`` verdict because the budget rule was
-    # omitted and the fallback ``pre_tool_call`` binding (no ``tool_name_from``)
-    # never tripped any deny rule. Keep ``max_tokens`` at ``> 0`` because the v4
-    # dataclass validation rejects ``max_tokens <= 0`` and there is no v4 wire
-    # value to preserve there.
-    rego_source = _render_rego(
-        package="agt.governance_policy",
-        max_tokens=policy.max_tokens if policy.max_tokens > 0 else None,
-        max_tool_calls=policy.max_tool_calls if policy.max_tool_calls >= 0 else None,
-        confidence_threshold=(
+        # A non-finite confidence_threshold is invalid input. ``inf`` would
+        # otherwise slip past the ``> 0`` guard in _render_rego and render
+        # ``deny_if_low_confidence(Infinity)`` (invalid Rego/JSON that fails to
+        # compile); ``nan`` would be silently dropped, so a caller who set a
+        # threshold would get no confidence deny at all. Fail loudly instead.
+        if policy.confidence_threshold is not None and not math.isfinite(
             policy.confidence_threshold
-            if policy.confidence_threshold and policy.confidence_threshold > 0
-            else None
-        ),
-        blocked_patterns=blocked_pattern_regexes,
-        require_human_approval=policy.require_human_approval,
-    )
-    rego_path = bundle_dir / f"{policy_id}.rego"
-    rego_path.write_text(rego_source, encoding="utf-8")
+        ):
+            raise ValueError(
+                "confidence_threshold must be finite, got "
+                f"{policy.confidence_threshold!r}"
+            )
+
+        # AGT-M3 round-2 BLOCK A: ``max_tool_calls=0`` is the v4 sentinel for
+        # "deny every tool call", not "no constraint". Forward 0 through to the
+        # ``budgets.deny_if_budget_exceeded`` helper. The helper compares
+        # ``tool_call_count >= limit`` so with ``limit=0`` and the default
+        # ``tool_call_count=0`` the first call is denied with
+        # ``budget_tool_calls_exceeded``, which preserves the v4 contract
+        # end-to-end for any caller that loads the bridge manifest into
+        # AgtRuntime directly (not just through the AdapterRuntimeBridge host
+        # fallback). Previously a ``GovernancePolicy(max_tool_calls=0,
+        # confidence_threshold=0.0)`` slipped through to the default ``allow``
+        # verdict because the budget rule was omitted and the fallback
+        # ``pre_tool_call`` binding (no ``tool_name_from``) never tripped any
+        # deny rule. Keep ``max_tokens`` at ``> 0`` because the v4 dataclass
+        # validation rejects ``max_tokens <= 0`` and there is no v4 wire value
+        # to preserve there.
+        rego_source = _render_rego(
+            package="agt.governance_policy",
+            max_tokens=policy.max_tokens if policy.max_tokens > 0 else None,
+            max_tool_calls=(
+                policy.max_tool_calls if policy.max_tool_calls >= 0 else None
+            ),
+            confidence_threshold=(
+                policy.confidence_threshold
+                if policy.confidence_threshold and policy.confidence_threshold > 0
+                else None
+            ),
+            blocked_patterns=blocked_pattern_regexes,
+            require_human_approval=policy.require_human_approval,
+        )
+        rego_path = bundle_dir / f"{policy_id}.rego"
+        rego_path.write_text(rego_source, encoding="utf-8")
+    except Exception:
+        # Do not leave a half-built bundle behind (stock libs copied, generated
+        # module missing) when pattern translation, rendering, or a write fails.
+        # Only clean up a directory we created ourselves; a caller-supplied one
+        # is theirs to manage.
+        if created_bundle_dir:
+            shutil.rmtree(bundle_dir, ignore_errors=True)
+        raise
 
     # bind_tools must also cover the case where the policy has a budget
     # or human-approval requirement but no explicit tool allowlist; without
