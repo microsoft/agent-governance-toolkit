@@ -17,7 +17,42 @@ internal static class TelemetryHarness
         await DefaultNullSinkEmitsNothingAsync();
         await IndexesJsonManifestAsync();
         await AdapterRunFunnelEmitsTelemetryAsync();
+        await FallsBackToResultAnnotatorsAsync();
         Console.WriteLine("AgentControlSpecification telemetry host-export tests passed.");
+    }
+
+    private static async Task FallsBackToResultAnnotatorsAsync()
+    {
+        // With no manifest-configured annotator list (e.g. a from_url or YAML
+        // source) the event recovers the sorted annotator names from the result
+        // policy input, mirroring the Python and Node host layers.
+        var sink = new InMemoryTelemetrySink();
+        var control = new AgentControl(
+            new TelemetryRuntime(request =>
+            {
+                var policyInput = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
+                {
+                    ["annotations"] = new Dictionary<string, object?>
+                    {
+                        ["zeta_scan"] = new { ran = true },
+                        ["alpha_scan"] = new { ran = true },
+                    },
+                });
+                return new InterventionPointResult(
+                    new Verdict(Decision.Allow),
+                    PolicyInput: policyInput,
+                    ActionIdentity: AgentControl.ActionIdentity(policyInput),
+                    InputIdentity: AgentControl.ActionIdentity(policyInput),
+                    EnforcedIdentity: AgentControl.ActionIdentity(policyInput));
+            }),
+            telemetrySink: sink);
+
+        await control.EvaluateInputAsync(new { text = "hi" });
+
+        AssertSequence(
+            ["alpha_scan", "zeta_scan"],
+            sink.Events.Single().Annotators.ToArray(),
+            "annotators should fall back to sorted result annotation keys.");
     }
 
     private static async Task EmitsOneDecisionEventAsync()

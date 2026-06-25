@@ -144,8 +144,26 @@ export class TelemetryEvent {
     };
   }
 
-  toJSON(): TelemetryEventObject {
-    return this.toObject();
+  // Wire serialization with snake_case keys, matching the Rust, Python, and
+  // .NET sinks so a mixed fleet writes one consistent audit.jsonl shape. The
+  // camelCase toObject() stays the idiomatic in-memory view. JSON.stringify of
+  // a TelemetryEvent uses this method.
+  toJSON(): Record<string, JsonValue> {
+    return {
+      event_type: this.eventType,
+      intervention_point: this.interventionPoint,
+      decision: this.decision,
+      reason_code: this.reasonCode,
+      error_class: this.errorClass,
+      policy_id: this.policyId,
+      annotators: [...this.annotators],
+      enforcement_mode: this.enforcementMode,
+      duration_ms: this.durationMs,
+      evidence_artefact: this.evidenceArtefact,
+      evidence_verification_pointer_keys: [...this.evidenceVerificationPointerKeys],
+      action_identity: this.actionIdentity,
+      metadata: { ...this.metadata },
+    };
   }
 }
 
@@ -338,6 +356,12 @@ export class OtelMetricsTelemetrySink implements TelemetrySink {
     if (!this.isAvailable) {
       return;
     }
+    // Record one increment and one duration sample per evaluation. Only the
+    // base decision event records metrics, matching the Rust OTel sink, so a
+    // non-decision event fed in directly cannot double-count.
+    if (event.eventType !== TelemetryEventType.Decision) {
+      return;
+    }
     const attributes = otelAttributes(event);
     if (event.decision !== null) {
       this.decisionCounters.get(event.decision)?.add(1, attributes);
@@ -433,18 +457,18 @@ function requireTelemetrySink(sink: unknown): TelemetrySink {
 
 function otelAttributes(event: TelemetryEvent): Record<string, string> {
   const attributes: Record<string, string> = {
-    eventType: event.eventType,
-    interventionPoint: String(event.interventionPoint),
+    event_type: event.eventType,
+    intervention_point: String(event.interventionPoint),
   };
-  if (event.enforcementMode !== null) attributes.enforcementMode = event.enforcementMode;
+  if (event.enforcementMode !== null) attributes.enforcement_mode = event.enforcementMode;
   if (event.decision !== null) attributes.decision = event.decision;
-  if (event.reasonCode !== null) attributes.reasonCode = event.reasonCode;
-  if (event.errorClass !== null) attributes.errorClass = event.errorClass;
-  if (event.policyId !== null) attributes.policyId = event.policyId;
+  if (event.reasonCode !== null) attributes.reason_code = event.reasonCode;
+  if (event.errorClass !== null) attributes.error_class = event.errorClass;
+  if (event.policyId !== null) attributes.policy_id = event.policyId;
   if (event.annotators.length > 0) attributes.annotators = event.annotators.join(",");
-  if (event.evidenceArtefact !== null) attributes.evidenceArtefact = event.evidenceArtefact;
+  if (event.evidenceArtefact !== null) attributes.evidence_artefact = event.evidenceArtefact;
   if (event.evidenceVerificationPointerKeys.length > 0) {
-    attributes.evidenceVerificationPointerKeys = event.evidenceVerificationPointerKeys.join(",");
+    attributes.evidence_verification_pointer_keys = event.evidenceVerificationPointerKeys.join(",");
   }
   return attributes;
 }

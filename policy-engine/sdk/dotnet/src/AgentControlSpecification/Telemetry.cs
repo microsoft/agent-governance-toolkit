@@ -157,6 +157,7 @@ public sealed record TelemetryEvent
         var pointerKeys = evidence?.VerificationPointers is null
             ? Array.Empty<string>()
             : evidence.VerificationPointers.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
+        var resolvedAnnotators = annotators ?? AnnotatorNamesFromResult(result.PolicyInput);
 
         return new TelemetryEvent(
             TelemetryEventType.Decision,
@@ -165,13 +166,37 @@ public sealed record TelemetryEvent
             TelemetryRedaction.SafeReasonCode(verdict.Reason),
             TelemetryRedaction.ErrorClassFor(verdict.Reason),
             policyId,
-            annotators,
+            resolvedAnnotators,
             mode,
             durationMs,
             evidence?.Artefact,
             pointerKeys,
             result.ActionIdentity,
             new Dictionary<string, string>(StringComparer.Ordinal));
+    }
+
+    // Sorted annotator names from the result policy input, used when the caller
+    // has no manifest-configured annotator list (for example a from_url or YAML
+    // manifest source). Mirrors the Python and Node host layers; reads the
+    // annotation KEYS only, never the annotator output values.
+    private static IReadOnlyList<string> AnnotatorNamesFromResult(JsonElement? policyInput)
+    {
+        if (policyInput is not JsonElement element || element.ValueKind != JsonValueKind.Object)
+        {
+            return Array.Empty<string>();
+        }
+
+        if (!element.TryGetProperty("annotations", out var annotations) ||
+            annotations.ValueKind != JsonValueKind.Object)
+        {
+            return Array.Empty<string>();
+        }
+
+        return annotations
+            .EnumerateObject()
+            .Select(property => property.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
     }
 
     public IReadOnlyDictionary<string, object?> ToDictionary() => new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -334,6 +359,14 @@ public sealed class OtelMetricsTelemetrySink : ITelemetrySink, IDisposable
     public void Emit(TelemetryEvent telemetryEvent)
     {
         if (disposed)
+        {
+            return;
+        }
+
+        // Record one increment and one duration sample per evaluation. Only the
+        // base decision event records metrics, matching the Rust OTel sink, so a
+        // non-decision event fed in directly cannot double-count.
+        if (telemetryEvent.EventType != TelemetryEventType.Decision)
         {
             return;
         }

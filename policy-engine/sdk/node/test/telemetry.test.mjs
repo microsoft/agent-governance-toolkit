@@ -189,6 +189,37 @@ test("TelemetryEvent redacts policy target payloads and pointer URL values", asy
   assert.doesNotMatch(serialized, new RegExp(pointerUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
+test("toJSON wire serialization uses snake_case keys matching the other SDKs", () => {
+  const event = new TelemetryEvent({
+    eventType: TelemetryEventType.Decision,
+    interventionPoint: InterventionPoint.Input,
+    decision: Decision.Allow,
+    reasonCode: "ok",
+    enforcementMode: EnforcementMode.Enforce,
+    durationMs: 1.5,
+    policyId: "content_policy",
+  });
+  const wire = JSON.parse(JSON.stringify(event));
+  assert.deepEqual(Object.keys(wire).sort(), [
+    "action_identity",
+    "annotators",
+    "decision",
+    "duration_ms",
+    "enforcement_mode",
+    "error_class",
+    "event_type",
+    "evidence_artefact",
+    "evidence_verification_pointer_keys",
+    "intervention_point",
+    "metadata",
+    "policy_id",
+    "reason_code",
+  ]);
+  assert.equal(wire.event_type, "decision");
+  assert.equal(wire.intervention_point, "input");
+  assert.equal(wire.policy_id, "content_policy");
+});
+
 test("safeReasonCode and errorClassFor mirror the core redaction rules", () => {
   assert.equal(safeReasonCode("runtime_error:request_invalid"), "runtime_error:request_invalid");
   assert.equal(safeReasonCode("account_number_redacted"), "account_number_redacted");
@@ -407,11 +438,17 @@ test("OtelMetricsTelemetrySink increments the decision counter when OpenTelemetr
   assert.equal(added.length, 1);
   assert.equal(added[0].metricName, "acs_intervention_deny_total");
   assert.equal(added[0].value, 1);
+  // Metric attributes are snake_case, matching the Rust/Python/.NET sinks.
+  assert.equal(added[0].attributes.action_identity, undefined);
   assert.equal(added[0].attributes.actionIdentity, undefined);
+  assert.equal(added[0].attributes.event_type, "decision");
+  assert.equal(added[0].attributes.intervention_point, "pre_tool_call");
   assert.equal(added[0].attributes.decision, "deny");
-  assert.equal(added[0].attributes.reasonCode, "runtime_error:policy_invocation_failed");
+  assert.equal(added[0].attributes.reason_code, "runtime_error:policy_invocation_failed");
+  assert.equal(added[0].attributes.error_class, "runtime_error");
+  assert.equal(added[0].attributes.policy_id, "content_policy");
   assert.equal(added[0].attributes.annotators, "prompt_classifier");
-  assert.equal(added[0].attributes.evidenceVerificationPointerKeys, "issuer_pubkey");
+  assert.equal(added[0].attributes.evidence_verification_pointer_keys, "issuer_pubkey");
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].metricName, "acs_intervention_duration_ms");
   assert.equal(recorded[0].value, 3.2);
