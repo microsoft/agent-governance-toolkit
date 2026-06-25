@@ -8,12 +8,14 @@ from typing import Any, TypeVar
 from .._orchestration import AgentControl
 from .._types import (
     AgentControlBlocked,
+    AgentControlSuspended,
     ApprovalResolver,
     EnforcementMode,
     JsonValue,
 )
 from ._errors import AdapterUnsupportedError
 from ._shared import (
+    SNAPSHOT_KWARG,
     _jsonable,
     _maybe_await,
     _merge_snapshot,
@@ -35,16 +37,22 @@ _ACTIVE_STATUSES = frozenset(
 # poll_interval=0 to disable the delay (the fake-client tests do this).
 _DEFAULT_POLL_INTERVAL = 0.5
 
+# Upper bound on requires_action rounds for a single governed run. It bounds a
+# misbehaving server that keeps a run in requires_action, so the driver fails
+# closed with a clear error instead of looping forever.
+_DEFAULT_MAX_ROUNDS = 100
+
 # The Foundry methods that execute Python tools inside the SDK before any policy
 # can intervene. The governed wrapper blocks them so the auto-function-call
-# bypass is unreachable through the governed handle.
+# bypass is unreachable through the governed handle. Names are filtered against
+# the real client at wrap time, so listing one the installed SDK lacks is inert.
 _BYPASS_MESSAGE = (
     "This method auto-executes agent tools before ACS can gate them. Drive the "
     "governed run loop with create_thread_and_run(...) or "
     "run_until_complete(...) so pre_tool_call and post_tool_call are enforced."
 )
-_BLOCKED_CLIENT_METHODS = ("enable_auto_function_calls",)
-_BLOCKED_RUNS_METHODS = ("create_and_process", "create_and_poll", "stream")
+_BLOCKED_CLIENT_METHODS = ("enable_auto_function_calls", "create_thread_and_process_run")
+_BLOCKED_RUNS_METHODS = ("create_and_process", "stream", "submit_tool_outputs_stream")
 
 
 def guard_foundry_agent(
@@ -69,20 +77,25 @@ def guard_foundry_agent(
 
     The return value is a thin proxy over the real ``AgentsClient`` that adds a
     governed run driver (``create_thread_and_run`` and ``run_until_complete``)
-    and blocks the SDK's auto-function-call path. ``enable_auto_function_calls``
-    and ``runs.create_and_process`` execute Python tools inside the SDK before a
-    policy can run, so they are blocked rather than delegated. ``threads``,
-    ``messages``, and the remaining ``runs`` operations pass through unchanged.
+    and blocks the SDK's auto-function-call paths. ``enable_auto_function_calls``,
+    ``create_thread_and_process_run``, ``runs.create_and_process``, and the
+    streaming run helpers execute or surface Python tool calls outside the gated
+    loop, so they are blocked rather than delegated. ``threads``, ``messages``,
+    and the remaining ``runs`` operations pass through unchanged.
 
     ``tools`` maps a Foundry function tool name to the host callable that
-    implements it. The model picks the tool and supplies JSON arguments. The
-    callable is invoked with those arguments as keywords only after
-    ``pre_tool_call`` allows or transforms them. A deny submits a policy
-    rejection output instead of executing, so the underlying callable never
-    runs. An escalate is routed to ``approval_resolver`` and is never
-    auto-allowed.
+    implements it. The model picks the tool and supplies JSON object arguments.
+    The callable is invoked with those arguments as keywords only after
+    ``pre_tool_call`` allows or transforms them. In enforce mode a deny submits a
+    policy rejection output instead of executing, so the underlying callable
+    never runs. An escalate is routed to ``approval_resolver`` and is never
+    auto-allowed. A suspend approval outcome raises ``AgentControlSuspended`` so
+    the host owns resumption. In evaluate-only mode nothing is enforced, so the
+    callable runs and its real output is submitted.
     """
 
+    if not isinstance(mode, EnforcementMode):
+        EnforcementMode(mode)  # fail eagerly on an invalid mode string
     resolved_control, resolved_client = _resolve_control_and_target(
         control_or_client,
         client,
@@ -161,6 +174,7 @@ class _FoundryRunDriver:
         role: str = "user",
         thread_id: str | None = None,
         poll_interval: float = _DEFAULT_POLL_INTERVAL,
+        max_rounds: int = _DEFAULT_MAX_ROUNDS,
         snapshot: Mapping[str, JsonValue] | None = None,
         approval_resolver: ApprovalResolver | None = None,
         **run_kwargs: Any,
@@ -171,8 +185,15 @@ class _FoundryRunDriver:
         is provided one user message is posted before the run starts. Extra
         keyword arguments flow to ``runs.create`` unchanged so a host can set
         ``model``, ``instructions``, ``temperature``, and similar run options.
+        Pass ambient policy data with ``snapshot=`` rather than the reserved
+        ``agent_control_snapshot`` keyword, which is not forwarded to the SDK.
         """
 
+        if SNAPSHOT_KWARG in run_kwargs:
+            raise TypeError(
+                f"create_thread_and_run() does not accept {SNAPSHOT_KWARG}; "
+                "pass ambient policy data with snapshot=."
+            )
         client = self._client
         if thread_id is None:
             thread = await _maybe_await(client.threads.create())
@@ -187,6 +208,7 @@ class _FoundryRunDriver:
             _identity(run),
             first_run=run,
             poll_interval=poll_interval,
+            max_rounds=max_rounds,
             snapshot=snapshot,
             approval_resolver=approval_resolver,
         )
@@ -197,6 +219,7 @@ class _FoundryRunDriver:
         run_id: str,
         *,
         poll_interval: float = _DEFAULT_POLL_INTERVAL,
+        max_rounds: int = _DEFAULT_MAX_ROUNDS,
         snapshot: Mapping[str, JsonValue] | None = None,
         approval_resolver: ApprovalResolver | None = None,
     ) -> Any:
@@ -207,6 +230,7 @@ class _FoundryRunDriver:
             run_id,
             first_run=None,
             poll_interval=poll_interval,
+            max_rounds=max_rounds,
             snapshot=snapshot,
             approval_resolver=approval_resolver,
         )
@@ -218,6 +242,7 @@ class _FoundryRunDriver:
         *,
         first_run: Any,
         poll_interval: float,
+        max_rounds: int,
         snapshot: Mapping[str, JsonValue] | None,
         approval_resolver: ApprovalResolver | None,
     ) -> Any:
@@ -227,10 +252,30 @@ class _FoundryRunDriver:
         run = first_run
         if run is None:
             run = await _maybe_await(client.runs.get(thread_id=thread_id, run_id=run_id))
+        rounds = 0
         while _run_status(run) in _ACTIVE_STATUSES:
             if _run_status(run) == _REQUIRES_ACTION:
-                outputs = await self._govern_required_calls(
-                    run, thread_id, run_id, merged_snapshot, resolver
+                rounds += 1
+                if rounds > max_rounds:
+                    raise AdapterUnsupportedError(
+                        f"Foundry run {run_id} exceeded {max_rounds} requires_action "
+                        "rounds under guard_foundry_agent; aborting to avoid an "
+                        "unbounded loop."
+                    )
+                tool_calls = _required_tool_calls(run)
+                if not tool_calls:
+                    # A non function-tool required action (for example an MCP or
+                    # OpenAPI tool-approval action) cannot be satisfied by
+                    # submit_tool_outputs. Fail closed instead of POSTing empty
+                    # outputs and spinning forever.
+                    raise AdapterUnsupportedError(
+                        "Foundry run requires an action "
+                        f"({_required_action_type(run)!r}) that guard_foundry_agent "
+                        "does not govern; only function tool calls via "
+                        "submit_tool_outputs are supported."
+                    )
+                outputs = await self._govern_tool_calls(
+                    run, tool_calls, thread_id, run_id, merged_snapshot, resolver
                 )
                 run = await _maybe_await(
                     client.runs.submit_tool_outputs(
@@ -243,9 +288,10 @@ class _FoundryRunDriver:
             run = await _maybe_await(client.runs.get(thread_id=thread_id, run_id=run_id))
         return run
 
-    async def _govern_required_calls(
+    async def _govern_tool_calls(
         self,
         run: Any,
+        tool_calls: list[Any],
         thread_id: str,
         run_id: str,
         merged_snapshot: Mapping[str, JsonValue],
@@ -257,10 +303,12 @@ class _FoundryRunDriver:
             agent_id = _get(run, "assistant_id")
         if isinstance(agent_id, str):
             context["agent_id"] = agent_id
-        # Host snapshot keys win over the run context derived here.
-        call_snapshot = {**context, **dict(merged_snapshot)}
+        # The server-derived run context is authoritative and wins over any
+        # host snapshot key, so a caller cannot feed the policy a spoofed run
+        # identity.
+        call_snapshot = {**dict(merged_snapshot), **context}
         outputs: list[Any] = []
-        for tool_call in _required_tool_calls(run):
+        for tool_call in tool_calls:
             outputs.append(await self._govern_one_call(tool_call, call_snapshot, resolver))
         return outputs
 
@@ -293,11 +341,20 @@ class _FoundryRunDriver:
                 mode=self._mode,
                 approval_resolver=resolver,
             )
+        except AgentControlSuspended:
+            # A suspend approval outcome is the host's deferred-approval signal.
+            # Surface it so the host owns resumption rather than auto-allowing.
+            raise
         except AgentControlBlocked as blocked:
             reason = blocked.result.verdict.reason or "policy blocked the tool call"
             return _build_tool_output(
                 call_id, _rejection_text(blocked.intervention_point.value, reason)
             )
+        except Exception as exc:  # noqa: BLE001 - isolate a single tool failure
+            # A failing or mis-invoked callable (for example transformed args that
+            # do not match the signature) must not abort the whole run. Submit an
+            # error output for this call so the run can proceed.
+            return _build_tool_output(call_id, _error_text(type(exc).__name__))
         return _build_tool_output(call_id, _as_output_text(tool_result.value))
 
 
@@ -349,9 +406,15 @@ def _unsupported_surface_message() -> str:
 
 
 def _foundry_sdk_available() -> bool:
+    # importlib.util.find_spec on a dotted name imports parent packages and
+    # propagates ModuleNotFoundError when a parent (here azure) is absent, so it
+    # is wrapped to report absence as False rather than raising.
     import importlib.util
 
-    return importlib.util.find_spec("azure.ai.agents") is not None
+    try:
+        return importlib.util.find_spec("azure.ai.agents") is not None
+    except ModuleNotFoundError:
+        return False
 
 
 def _tool_output_factory() -> Callable[..., Any] | None:
@@ -391,6 +454,16 @@ def _rejection_text(intervention_point: str, reason: str) -> str:
     )
 
 
+def _error_text(error_kind: str) -> str:
+    # The error kind (an exception class name) is submitted, not the message, so
+    # an exception string carrying sensitive context is not echoed to the model.
+    return json.dumps(
+        {"agent_control": "error", "error": error_kind},
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
 def _as_output_text(value: JsonValue) -> str:
     if isinstance(value, str):
         return value
@@ -416,6 +489,14 @@ def _required_tool_calls(run: Any) -> list[Any]:
     return []
 
 
+def _required_action_type(run: Any) -> str:
+    action = _get(run, "required_action")
+    action_type = _get(action, "type") if action is not None else None
+    if isinstance(action_type, str):
+        return action_type
+    return "unknown"
+
+
 def _parse_tool_call(tool_call: Any) -> tuple[str | None, str | None, JsonValue, str | None]:
     call_id = _get(tool_call, "id")
     call_id = call_id if isinstance(call_id, str) else None
@@ -437,9 +518,15 @@ def _parse_arguments(raw_arguments: Any) -> tuple[JsonValue, str | None]:
         return dict(raw_arguments), None
     if isinstance(raw_arguments, str):
         try:
-            return json.loads(raw_arguments), None
+            parsed = json.loads(raw_arguments)
         except json.JSONDecodeError:
             return {}, "function tool call arguments are not valid JSON"
+        if not isinstance(parsed, Mapping):
+            # Foundry function arguments are a JSON object matching the tool
+            # schema. A non-object (array, scalar) is rejected so it is never
+            # spread into the callable, failing closed instead of crashing.
+            return {}, "function tool call arguments must be a JSON object"
+        return dict(parsed), None
     return {}, "function tool call arguments must be a JSON object string"
 
 

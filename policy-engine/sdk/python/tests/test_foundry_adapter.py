@@ -5,21 +5,35 @@ import json
 import unittest
 from collections import deque
 from collections.abc import Mapping
+from dataclasses import replace
 from unittest.mock import patch
 
 from agent_control_specification import (
     AdapterUnsupportedError,
     AgentControl,
+    AgentControlSuspended,
     ApprovalOutcome,
+    ApprovalResolution,
     Decision,
     InterventionPoint,
     InterventionPointResult,
     Verdict,
+    action_identity,
     guard_azure_ai_agents,
     guard_foundry_agent,
 )
 
-_HAS_AZURE_AI_AGENTS = importlib.util.find_spec("azure.ai.agents") is not None
+def _has_azure_ai_agents() -> bool:
+    # find_spec on a dotted name raises ModuleNotFoundError when the top-level
+    # azure package is absent (as in CI), so absence is reported as False rather
+    # than raising during collection.
+    try:
+        return importlib.util.find_spec("azure.ai.agents") is not None
+    except ModuleNotFoundError:
+        return False
+
+
+_HAS_AZURE_AI_AGENTS = _has_azure_ai_agents()
 
 
 def _result(decision=Decision.ALLOW, transformed=None, applied=False):
@@ -42,6 +56,27 @@ class QueueRuntime:
         return self.results.popleft()
 
 
+class IdentityQueueRuntime(QueueRuntime):
+    """QueueRuntime that synthesizes policy_input and a bound identity.
+
+    The approval path (escalate -> resolver) binds the approved identity to the
+    evaluated policy input, so a suspend resolution only takes effect when the
+    result carries an identity. Mirrors tests/test_escalation.py.
+    """
+
+    async def evaluate_intervention_point(self, request):
+        self.requests.append(request)
+        result = self.results.popleft()
+        policy_input = {
+            "intervention_point": request.intervention_point.value,
+            "snapshot": dict(request.snapshot),
+        }
+        identity = action_identity(policy_input)
+        return replace(
+            result, policy_input=policy_input, input_identity=identity, enforced_identity=identity
+        )
+
+
 # --- Minimal fake Azure AI Foundry AgentsClient (never touches Azure) ---------
 class _FakeFunction:
     def __init__(self, name, arguments):
@@ -54,6 +89,14 @@ class _FakeToolCall:
         self.id = call_id
         self.type = "function"
         self.function = _FakeFunction(name, arguments)
+
+
+class _FakeApprovalAction:
+    """A non submit_tool_outputs required action (e.g. an MCP tool approval)."""
+
+    def __init__(self):
+        self.type = "submit_tool_approval"
+        self.submit_tool_approval = object()
 
 
 class _FakeRequiredAction:
@@ -132,6 +175,9 @@ class FakeRuns:
         self.create_and_process_called += 1
         return self._run
 
+    def submit_tool_outputs_stream(self, *args, **kwargs):
+        return self._run
+
 
 class FakeAgentsClient:
     def __init__(self, runs):
@@ -139,9 +185,14 @@ class FakeAgentsClient:
         self.messages = FakeMessages()
         self.runs = runs
         self.enable_auto_calls_called = 0
+        self.process_run_called = 0
 
     def enable_auto_function_calls(self, *args, **kwargs):
         self.enable_auto_calls_called += 1
+
+    def create_thread_and_process_run(self, *args, **kwargs):
+        self.process_run_called += 1
+        return self.runs._run
 
 
 class ToolRecorder:
@@ -155,6 +206,10 @@ class ToolRecorder:
     def run_sql(self, **kwargs):
         self.calls.append(("run_sql", dict(kwargs)))
         return f"executed {kwargs.get('query')}"
+
+    def boom(self, **kwargs):
+        self.calls.append(("boom", dict(kwargs)))
+        raise ValueError("tool blew up")
 
 
 def _field(output, name):
@@ -272,11 +327,16 @@ class FoundryAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(client.enable_auto_calls_called, 0)
         self.assertEqual(runs.create_and_process_called, 0)
-        # The bypass methods are blocked through the governed handle.
+        self.assertEqual(client.process_run_called, 0)
+        # Every auto-execute / streaming bypass is blocked through the handle.
         with self.assertRaises(AdapterUnsupportedError):
             guarded.enable_auto_function_calls()
         with self.assertRaises(AdapterUnsupportedError):
+            guarded.create_thread_and_process_run(thread_id="thread-1", agent_id="agent-1")
+        with self.assertRaises(AdapterUnsupportedError):
             guarded.runs.create_and_process(thread_id="thread-1", agent_id="agent-1")
+        with self.assertRaises(AdapterUnsupportedError):
+            guarded.runs.submit_tool_outputs_stream(thread_id="thread-1", run_id="run-1")
 
     async def test_run_until_complete_drives_existing_run(self):
         runtime = QueueRuntime([_result(), _result()])
@@ -324,6 +384,155 @@ class FoundryAdapterTests(unittest.IsolatedAsyncioTestCase):
         rejection = json.loads(_field(runs.submitted[0][0], "output"))
         self.assertEqual(rejection["agent_control"], "blocked")
         self.assertIn("not valid JSON", rejection["reason"])
+
+    async def test_non_object_json_arguments_are_rejected_without_execution(self):
+        # Valid JSON that is not an object (array/scalar) must fail closed, not be
+        # spread into the callable positionally (which would crash the run loop).
+        for raw in ('[1, 2, 3]', '42', '"DROP TABLE t"', 'true'):
+            with self.subTest(raw=raw):
+                runtime = QueueRuntime([])
+                recorder = ToolRecorder()
+                runs = FakeRuns(_action(_FakeToolCall("call-1", "search_records", raw)))
+                guarded = guard_foundry_agent(
+                    AgentControl(runtime),
+                    FakeAgentsClient(runs),
+                    tools={"search_records": recorder.search_records},
+                )
+
+                run = await guarded.create_thread_and_run("agent-1", content="go", poll_interval=0)
+
+                self.assertEqual(recorder.calls, [])
+                self.assertEqual(runtime.requests, [])
+                rejection = json.loads(_field(runs.submitted[0][0], "output"))
+                self.assertEqual(rejection["agent_control"], "blocked")
+                self.assertIn("JSON object", rejection["reason"])
+                self.assertEqual(run.status, "completed")
+
+    async def test_non_submit_tool_outputs_action_fails_closed_without_spinning(self):
+        # An approval/MCP required action this adapter does not govern must raise
+        # rather than POST an empty tool_outputs list and busy-loop.
+        runtime = QueueRuntime([])
+        recorder = ToolRecorder()
+        runs = FakeRuns(_FakeApprovalAction())
+        guarded = guard_foundry_agent(
+            AgentControl(runtime), FakeAgentsClient(runs), tools={"search_records": recorder.search_records}
+        )
+
+        with self.assertRaises(AdapterUnsupportedError):
+            await guarded.create_thread_and_run("agent-1", content="go", poll_interval=0)
+
+        self.assertEqual(runs.submit_calls, 0)  # never POSTed empty outputs
+        self.assertEqual(recorder.calls, [])
+
+    async def test_max_rounds_caps_a_run_that_never_terminates(self):
+        # A server that keeps a run in requires_action after every submit must be
+        # bounded, not looped forever.
+        runtime = QueueRuntime([_result() for _ in range(40)])
+        recorder = ToolRecorder()
+
+        class StuckRuns(FakeRuns):
+            def submit_tool_outputs(self, thread_id, run_id, *, tool_outputs, **kwargs):
+                self.submit_calls += 1
+                self.submitted.append(list(tool_outputs))
+                return self._run  # status stays requires_action
+
+        runs = StuckRuns(_action(_FakeToolCall("call-1", "search_records", '{"query": "q"}')))
+        guarded = guard_foundry_agent(
+            AgentControl(runtime), FakeAgentsClient(runs), tools={"search_records": recorder.search_records}
+        )
+
+        with self.assertRaises(AdapterUnsupportedError):
+            await guarded.create_thread_and_run("agent-1", content="go", poll_interval=0, max_rounds=5)
+        self.assertLessEqual(runs.submit_calls, 5)
+
+    async def test_suspend_outcome_propagates_and_does_not_execute(self):
+        # A suspend approval outcome surfaces AgentControlSuspended to the host
+        # (deferred approval), never auto-allowing the tool.
+        runtime = IdentityQueueRuntime([_result(Decision.ESCALATE)])
+        recorder = ToolRecorder()
+        runs = FakeRuns(_action(_FakeToolCall("call-1", "run_sql", '{"query": "DELETE FROM t"}')))
+
+        async def resolver(intervention_point, result):
+            return ApprovalResolution.suspend(handle="ticket-1", action_identity=result.action_identity)
+
+        guarded = guard_foundry_agent(
+            AgentControl(runtime), FakeAgentsClient(runs), tools={"run_sql": recorder.run_sql}
+        )
+
+        with self.assertRaises(AgentControlSuspended):
+            await guarded.create_thread_and_run(
+                "agent-1", content="go", poll_interval=0, approval_resolver=resolver
+            )
+        self.assertEqual(recorder.calls, [])
+        self.assertEqual(runs.submit_calls, 0)
+
+    async def test_tool_execution_error_is_isolated_as_error_output(self):
+        # A callable that raises must not abort the run; it yields an error output
+        # carrying only the exception kind, not its message.
+        runtime = QueueRuntime([_result(), _result(), _result()])
+        recorder = ToolRecorder()
+        runs = FakeRuns(
+            _action(
+                _FakeToolCall("call-boom", "boom", "{}"),
+                _FakeToolCall("call-ok", "search_records", '{"query": "q"}'),
+            )
+        )
+        guarded = guard_foundry_agent(
+            AgentControl(runtime),
+            FakeAgentsClient(runs),
+            tools={"boom": recorder.boom, "search_records": recorder.search_records},
+        )
+
+        run = await guarded.create_thread_and_run("agent-1", content="go", poll_interval=0)
+
+        self.assertEqual(run.status, "completed")
+        outputs = runs.submitted[0]
+        err = json.loads(_field(outputs[0], "output"))
+        self.assertEqual(err["agent_control"], "error")
+        self.assertEqual(err["error"], "ValueError")
+        self.assertNotIn("blew up", _field(outputs[0], "output"))
+        # The sibling call still ran and its output was submitted.
+        self.assertEqual(_field(outputs[1], "output"), "rows for q")
+
+    async def test_authoritative_run_context_wins_over_host_snapshot(self):
+        runtime = QueueRuntime([_result(), _result()])
+        recorder = ToolRecorder()
+        runs = FakeRuns(_action(_FakeToolCall("call-1", "search_records", '{"query": "q"}')))
+        guarded = guard_foundry_agent(
+            AgentControl(runtime),
+            FakeAgentsClient(runs),
+            tools={"search_records": recorder.search_records},
+            snapshot={"thread_id": "SPOOFED", "tenant": "acme"},
+        )
+
+        await guarded.create_thread_and_run("agent-1", content="go", poll_interval=0)
+
+        snap = runtime.requests[0].snapshot
+        self.assertEqual(snap["thread_id"], "thread-1")  # server value wins
+        self.assertEqual(snap["tenant"], "acme")  # unrelated host keys pass through
+
+    async def test_reserved_snapshot_kwarg_is_rejected_not_forwarded(self):
+        runtime = QueueRuntime([_result(), _result()])
+        recorder = ToolRecorder()
+        runs = FakeRuns(_action(_FakeToolCall("call-1", "search_records", '{"query": "q"}')))
+        guarded = guard_foundry_agent(
+            AgentControl(runtime), FakeAgentsClient(runs), tools={"search_records": recorder.search_records}
+        )
+
+        with self.assertRaises(TypeError):
+            await guarded.create_thread_and_run(
+                "agent-1", content="go", poll_interval=0, agent_control_snapshot={"x": 1}
+            )
+
+    def test_invalid_mode_fails_eagerly_at_construction(self):
+        runs = FakeRuns(_action())
+        with self.assertRaises(ValueError):
+            guard_foundry_agent(
+                AgentControl(QueueRuntime([])),
+                FakeAgentsClient(runs),
+                tools={"x": lambda: None},
+                mode="not-a-mode",
+            )
 
     async def test_dict_tool_output_when_sdk_models_absent(self):
         runtime = QueueRuntime([_result(), _result()])

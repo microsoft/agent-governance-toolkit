@@ -26,7 +26,7 @@ project variables below)::
     pip install "agent-control-specification" azure-ai-agents azure-identity
     python foundry_agent_guarded.py
 
-Security invariant: a destructive tool call is never executed. The judge policy
+Security invariant. A destructive tool call is never executed. The judge policy
 fails closed, so a destructive label, an unexpected label, a missing label, or a
 fail-closed transient all deny, and the adapter submits a rejection output for the
 denied call so the agent learns it was blocked.
