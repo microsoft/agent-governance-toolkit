@@ -222,8 +222,9 @@ class PolicyRegistry:
             # Atomic write: write to a temp file in the same directory, then ``os.replace``,
             # so a crash or signal mid-write can never leave a partially written policy file.
             # The temp name carries a ``.tmp`` suffix so a concurrent reload scan skips it.
+            # Use a constant prefix to avoid any user-controlled data in temp path generation.
             fd, tmp_path = tempfile.mkstemp(
-                dir=self._policy_dir, prefix=f".{safe_policy_id}.", suffix=f"{suffix}.tmp"
+                dir=self._policy_dir, prefix=".policy-write.", suffix=f"{suffix}.tmp"
             )
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
