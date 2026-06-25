@@ -25,15 +25,15 @@ deny contains msg if {
 }
 
 deny contains msg if {
-	input.params.log_storage_region != null
-	input.params.log_storage_region != "IN"
-	msg := sprintf("CERT-In 2022 Directions (iv): logs must be retained within India, configured region: '%v'", [input.params.log_storage_region])
+	not input.params.log_storage_region == "IN"
+	region := object.get(input.params, "log_storage_region", "unset")
+	msg := sprintf("CERT-In 2022 Directions (iv): logs must be retained within India, configured region: '%v'", [region])
 }
 
-# Direction (iii): NTP clock sync - escalate if not synced
+# Direction (i): NTP clock sync - escalate if not synced
 escalate contains msg if {
-	input.params.ntp_synced == false
-	msg := "CERT-In 2022 Directions (iii): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
+	not input.params.ntp_synced == true
+	msg := "CERT-In 2022 Directions (i): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
 }
 
 # No audit-tier conditions for this policy; defined empty for decision-ladder parity and

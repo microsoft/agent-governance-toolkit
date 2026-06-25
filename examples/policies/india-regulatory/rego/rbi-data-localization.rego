@@ -19,9 +19,9 @@ third_party_actions := {"route_to_third_party", "use_cloud_service", "invoke_ext
 # 2018: payment system data stored only in India
 deny contains msg if {
 	input.params.data_class in payment_classes
-	input.params.storage_region != null
-	input.params.storage_region != "IN"
-	msg := sprintf("RBI 2018 (Storage of Payment System Data): payment data must be stored only in India, configured region: '%v'", [input.params.storage_region])
+	not input.params.storage_region == "IN"
+	region := object.get(input.params, "storage_region", "unset")
+	msg := sprintf("RBI 2018 (Storage of Payment System Data): payment data must be stored only in India, configured region: '%v'", [region])
 }
 
 # 2018: foreign-processed payment data purged and returned within 24h

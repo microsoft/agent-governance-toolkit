@@ -10,7 +10,7 @@
 #
 # Key obligations enforced:
 #   s.6        Consent (free, specific, informed, unambiguous)
-#   s.8(3)     Purpose limitation / erasure when purpose served
+#   s.8(7)     Erasure when consent withdrawn or purpose served
 #   s.8(5)     Reasonable security safeguards
 #   s.8(6)+R7  Breach notification (Board + Data Principals; 72h detailed report)
 #   s.10+R13   Significant Data Fiduciary: algorithmic due diligence, DPIA, annual audit
@@ -47,7 +47,7 @@ rules:
       value: "(?i)(reuse|repurpose|secondary\\s+use).{0,40}(personal\\s+data|pii)"
     action: block
     priority: 90
-    message: "DPDP s.6(1) and s.8(3): personal data may be used only for the consented purpose; erase when purpose is served"
+    message: "DPDP s.6(1) and s.8(7): personal data may be used only for the consented purpose; erase when consent is withdrawn or the purpose is served"
 
   - name: dpdp-security-safeguards-block
     condition:

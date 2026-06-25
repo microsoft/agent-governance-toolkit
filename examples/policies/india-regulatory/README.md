@@ -21,6 +21,21 @@ Encoded as advisory/draft (never block): RBI FREE-AI (Aug 2025 committee report)
 AI/ML guidelines (consultation). DPDP Rules are notified but phased. The DPDP s.16 restriction list is
 currently empty, so no country is hardcoded as blocked.
 
+## What these rules detect (and what they do not)
+The output-side rules match intent phrases (for example "store PII unencrypted", "keep payment data
+abroad", "don't report the breach"). They catch an agent that narrates or proposes a violation in its
+output; they do not observe the underlying system action, so they are detection heuristics for an
+examples pack, not compliance controls. Treat them as a starting point, pair them with real
+action-level enforcement, and run your own compliance assessment.
+
+## Not covered (known gaps)
+Material obligations the pack does not represent yet, listed so the example is honest about its scope:
+- DPDP: s.5 notice; s.9 children's data (verifiable parental consent, no behavioural monitoring of minors); ss.11-14 Data Principal rights.
+- CERT-In: Direction (v) cloud/VPS/VPN-provider five-year subscriber-record retention; Annexure-I 20-incident reporting schedule.
+- RBI: System Audit Report (SAR) by a CERT-In-empanelled auditor; Outsourcing Master Direction exit-strategy and concentration-risk clauses.
+- SEBI: CSCRF six-hour reporting window (currently encoded only as "mandated timelines"); SBOM; Cyber Capability Index; Reg 16A disclosure of AI/ML use to SEBI.
+- Aadhaar: Aadhaar Data Vault (mandatory reference-key tokenisation and HSM encryption for stored Aadhaar numbers); Virtual ID; AUA/KUA licensing gate.
+
 ## Two layers
 Universal agent-safety controls (prompt_injection, pii_leakage, tool_permissions, human_approval,
 model_routing) apply to all agents and are evaluated via the shared jurisdiction router. These India

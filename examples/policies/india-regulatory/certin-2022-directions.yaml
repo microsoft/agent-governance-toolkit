@@ -9,7 +9,7 @@
 #
 # Key obligations enforced:
 #   Direction (ii)   6-hour cyber incident reporting to CERT-In
-#   Direction (iii)  NTP clock synchronisation (NIC/NPL)
+#   Direction (i)    NTP clock synchronisation (NIC/NPL)
 #   Direction (iv)   180-day ICT log retention within India
 #
 # Rego reference implementation: rego/certin-2022-directions.rego (NOT loaded at runtime)
@@ -52,7 +52,7 @@ rules:
       value: "^(disable_ntp|set_external_untrusted_ntp)$"
     action: audit
     priority: 70
-    message: "CERT-In 2022 Directions (iii): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
+    message: "CERT-In 2022 Directions (i): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
 
 defaults:
   action: audit

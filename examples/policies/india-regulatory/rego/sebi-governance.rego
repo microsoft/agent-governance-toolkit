@@ -18,7 +18,7 @@ log_tamper_actions := {"disable_audit_log", "delete_audit_log", "make_log_mutabl
 # Feb 2025 amendment: RE solely responsible for AI/ML output; cannot disclaim
 deny contains msg if {
 	input.action in ai_action_targets
-	input.params.human_accountable == false
+	not input.params.human_accountable == true
 	msg := "SEBI Amendment 10 Feb 2025: regulated entity is solely responsible for AI/ML output; liability cannot be disclaimed and human accountability is required"
 }
 
@@ -34,9 +34,9 @@ deny contains msg if {
 }
 
 deny contains msg if {
-	input.params.log_storage_region != null
-	input.params.log_storage_region != "IN"
-	msg := sprintf("SEBI CSCRF 2024: audit logs must be retained within India, configured region: '%v'", [input.params.log_storage_region])
+	not input.params.log_storage_region == "IN"
+	region := object.get(input.params, "log_storage_region", "unset")
+	msg := sprintf("SEBI CSCRF 2024: audit logs must be retained within India, configured region: '%v'", [region])
 }
 
 # CSCRF 2024: incident reporting - cannot suppress

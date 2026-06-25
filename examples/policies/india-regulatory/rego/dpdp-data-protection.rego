@@ -27,7 +27,7 @@ deny contains msg if {
 # s.8(5): security safeguards - block unencrypted personal-data handling
 deny contains msg if {
 	input.action in processing_actions
-	input.params.encrypted == false
+	not input.params.encrypted == true
 	msg := "DPDP s.8(5): personal data must be processed with reasonable security safeguards (encryption, access control)"
 }
 
