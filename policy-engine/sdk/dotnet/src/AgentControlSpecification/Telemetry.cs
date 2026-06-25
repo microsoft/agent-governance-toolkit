@@ -334,8 +334,8 @@ public sealed class MultiSink : ITelemetrySink
 // Fatal CLR exceptions must propagate even from the best-effort telemetry and
 // manifest-indexing paths that are otherwise designed never to be load-bearing.
 // Everything else is caught so a sink or a malformed manifest cannot break the
-// host. This mirrors the Python `except Exception` (which excludes BaseException
-// fatals) and the Rust catch_unwind isolation.
+// host. This mirrors the Python `except Exception` (which excludes the
+// fatal `BaseException` interrupts) and the Rust catch_unwind isolation.
 internal static class TelemetryExceptions
 {
     public static bool IsFatal(Exception exception) =>

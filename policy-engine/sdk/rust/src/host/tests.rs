@@ -969,21 +969,3 @@ fn with_telemetry_emits_one_decision_event_per_evaluation() {
     // Free-text reason is reduced to a safe code by the core redaction helper.
     assert_eq!(events[0].reason_code.as_deref(), Some("blocked"));
 }
-
-#[cfg(feature = "otel")]
-#[test]
-fn otel_sink_installs_and_evaluates_panic_free() {
-    use crate::OtelTelemetrySink;
-
-    let policy = Arc::new(QueuePolicy::with_responses([json!({"decision": "allow"})]));
-    let control = AgentControl::new(runtime(run_manifest(), policy))
-        .with_telemetry(Arc::new(OtelTelemetrySink::default()));
-
-    let result = control.evaluate_intervention_point(
-        InterventionPoint::Input,
-        json!({"input": {"text": "hi"}}),
-        EnforcementMode::Enforce,
-    );
-
-    assert_eq!(result.verdict.decision, Decision::Allow);
-}

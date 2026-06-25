@@ -178,7 +178,7 @@ Every SDK ships pluggable telemetry sinks so a host can route the redaction-safe
 
 | SDK | How a sink is installed | OpenTelemetry sink |
 | --- | --- | --- |
-| Rust | `AgentControl::with_telemetry(Arc<dyn TelemetrySink>)`; built-in `InMemoryTelemetrySink`, `StdoutJsonTelemetrySink`, `MultiSink` | `OtelTelemetrySink` from the `agent_control_specification_otel` crate, re-exported by the SDK under the `otel` feature |
+| Rust | `AgentControl::with_telemetry(Arc<dyn TelemetrySink>)`; built-in `InMemoryTelemetrySink`, `StdoutJsonTelemetrySink`, `MultiSink` | `OtelTelemetrySink` from the `agent_control_specification_otel` crate, added as a dependency |
 | Python | `telemetry_sink=` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink`, import-optional on `opentelemetry` |
 | Node | `telemetrySink` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink`, import-optional on `@opentelemetry/api` |
 | .NET | `telemetrySink` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink` over the BCL `System.Diagnostics.Metrics` meter that OpenTelemetry .NET collects |

@@ -181,7 +181,8 @@ impl AgentControl {
     /// `TelemetryEvent` to it. The core runtime owns the emission, so installing
     /// a sink built through any constructor is enough. Combine with the built-in
     /// `InMemoryTelemetrySink`, `StdoutJsonTelemetrySink`, or `MultiSink`, or the
-    /// `OtelTelemetrySink` from the `otel` feature, for OpenTelemetry metrics.
+    /// `OtelTelemetrySink` from the `agent_control_specification_otel` crate
+    /// (added as a dependency) for OpenTelemetry metrics.
     pub fn with_telemetry(mut self, telemetry: Arc<dyn crate::TelemetrySink>) -> Self {
         self.runtime.set_telemetry(telemetry);
         self

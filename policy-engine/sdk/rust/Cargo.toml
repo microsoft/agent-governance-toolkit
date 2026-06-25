@@ -11,13 +11,6 @@ readme = "../../README.md"
 agent_control_specification_core = { version = "0.3.1-beta.0", path = "../../core", features = ["opa", "cedar", "default-dispatchers", "aacs", "openai_moderation", "perspective", "llama_guard", "lakera_guard", "auto"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-agent_control_specification_otel = { version = "0.3.1-beta.0", path = "../../integrations/otel", optional = true }
-
-[features]
-# Re-export the OpenTelemetry metrics bridge (OtelTelemetrySink) so a host can
-# install it with AgentControl::with_telemetry. Off by default so the SDK does
-# not pull opentelemetry unless OTel metrics export is wanted.
-otel = ["dep:agent_control_specification_otel"]
 
 [[example]]
 name = "basic_host"

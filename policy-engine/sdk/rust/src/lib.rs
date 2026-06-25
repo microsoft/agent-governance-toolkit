@@ -18,11 +18,3 @@ pub use streaming::{
     ModelStreamRunResult, StreamingLimits, StreamingUnsupportedError, DEFAULT_MAX_STREAM_BYTES,
     DEFAULT_MAX_STREAM_EVENTS,
 };
-
-/// OpenTelemetry metrics bridge, available with the `otel` feature. Install it
-/// with [`AgentControl::with_telemetry`] to export the
-/// `acs_intervention_{allow,deny,warn,escalate,transform}_total` counters and
-/// the `acs_intervention_duration_ms` histogram under the
-/// `agent_control_specification` meter.
-#[cfg(feature = "otel")]
-pub use agent_control_specification_otel::{OtelTelemetrySink, DEFAULT_OTEL_METER_NAME};
