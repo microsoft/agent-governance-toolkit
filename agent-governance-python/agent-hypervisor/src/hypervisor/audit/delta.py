@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -110,32 +109,6 @@ class DeltaEngine:
         if not self._deltas:
             return None
         return self._deltas[-1].delta_hash
-
-    def prune_expired(self, is_expired: Callable[[datetime], bool]) -> int:
-        """Remove deltas whose timestamp is expired and re-anchor the chain.
-
-        ``is_expired(timestamp)`` decides per-delta expiry (typically a
-        retention-policy check). Retained deltas are re-linked into a fresh
-        valid chain — the new head's ``parent_hash`` is set to ``None`` and
-        every retained ``delta_hash`` is recomputed in order — so
-        :meth:`verify_chain` continues to pass after pruning. Returns the
-        number of deltas removed.
-
-        Note: re-anchoring changes the live chain root. Callers that need the
-        pre-prune root for liability (e.g. commitment anchoring) must capture
-        it before calling this.
-        """
-        retained = [d for d in self._deltas if not is_expired(d.timestamp)]
-        removed = len(self._deltas) - len(retained)
-        if removed == 0:
-            return 0
-        parent_hash: str | None = None
-        for delta in retained:
-            delta.parent_hash = parent_hash
-            delta.compute_hash()
-            parent_hash = delta.delta_hash
-        self._deltas = retained
-        return removed
 
     def verify_chain(self) -> tuple[bool, str | None]:
         """Verify full chain integrity: hash correctness and parent linkage."""

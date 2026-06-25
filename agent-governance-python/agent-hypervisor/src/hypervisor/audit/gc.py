@@ -3,11 +3,13 @@
 """
 Ephemeral Session Data Garbage Collection.
 
-Purges ephemeral session state (VFS files, cached snapshots) on collection
-and expires audit deltas that fall outside the configured retention window.
+Purges ephemeral session state (VFS files, cached snapshots) on collection.
 The reported ``GCResult`` and ``is_purged`` flag reflect what was actually
-removed — a host that calls :meth:`EphemeralGC.collect` to delete sensitive
-session data can trust the confirmation.
+removed — when a host hands ``collect`` a live VFS, ``is_purged`` is True only
+once that VFS is empty, so the confirmation can be trusted for the data it was
+given. The tamper-evident audit ``delta`` chain is durable forensic evidence
+and is retained intact; ``should_expire_deltas`` only judges, per policy,
+whether a delta falls outside the retention window.
 """
 
 from __future__ import annotations
@@ -52,7 +54,8 @@ class RetentionPolicy:
 
 class EphemeralGC:
     """
-    Purges ephemeral session data and expires audit deltas per retention policy.
+    Purges ephemeral session data (VFS files and cached snapshots) while
+    preserving the durable tamper-evident audit chain.
     """
 
     def __init__(self, policy: RetentionPolicy | None = None) -> None:
@@ -73,16 +76,20 @@ class EphemeralGC:
         estimated_delta_bytes: int = 0,
         gc_agent_did: str = "did:agt:hypervisor:gc",
     ) -> GCResult:
-        """Purge ephemeral session data and expire out-of-retention deltas.
+        """Purge ephemeral session data; preserve the durable audit chain.
 
         When a real ``vfs`` is supplied its files and cached snapshots are
-        physically removed; when a real ``delta_engine`` is supplied, deltas
-        older than ``policy.delta_retention_days`` are pruned. The
-        ``estimated_*`` / ``*_count`` parameters are only used for storage
-        accounting when the corresponding live object is absent — they never
-        cause the result to report a purge that did not happen.
+        physically removed. The audit ``delta_engine`` is the tamper-evident
+        forensic log (``policy.hash_retention == "permanent"``) and is
+        deliberately NOT mutated here: rewriting it to "expire" entries would
+        break the committed hash-chain root and let deletions go undetected,
+        so the chain is retained intact and ``should_expire_deltas`` is exposed
+        only as a retention-policy predicate for callers that archive the log
+        out of band. The ``estimated_*`` / ``*_count`` parameters are only used
+        for storage accounting when the corresponding live object is absent —
+        they never cause the result to report a purge that did not happen.
         """
-        # --- VFS files + cached snapshots ---
+        # --- VFS files + cached snapshots (the ephemeral, sensitive data) ---
         if vfs is not None:
             vfs_bytes_before = self._vfs_storage_bytes(vfs)
             purged_vfs_files, purged_caches = vfs.purge_all(gc_agent_did)
@@ -90,35 +97,22 @@ class EphemeralGC:
             vfs_fully_purged = vfs.file_count == 0
         else:
             # No live handle: nothing is physically removed, so report no
-            # purge (reporting vfs_file_count here would be a lie).
+            # purge and do not claim the session was purged.
             vfs_bytes_before = estimated_vfs_bytes
             vfs_bytes_after = estimated_vfs_bytes
             purged_vfs_files = 0
             purged_caches = 0
-            vfs_fully_purged = True
+            vfs_fully_purged = False
 
-        # --- audit deltas (retain within window, expire the rest) ---
+        # --- audit deltas: retained intact (durable tamper-evident evidence) ---
         if delta_engine is not None:
-            total_deltas = len(delta_engine.deltas)
-            delta_engine.prune_expired(self.should_expire_deltas)
             retained_deltas = len(delta_engine.deltas)
         else:
-            total_deltas = delta_count
             retained_deltas = delta_count
+        delta_bytes_after = estimated_delta_bytes
 
-        if total_deltas > 0:
-            delta_bytes_before = estimated_delta_bytes
-            delta_bytes_after = round(estimated_delta_bytes * retained_deltas / total_deltas)
-        else:
-            delta_bytes_before = estimated_delta_bytes
-            delta_bytes_after = estimated_delta_bytes
-
-        # Caches are physically purged only via the live VFS snapshots above;
-        # estimated_cache_bytes is reclaimed proportionally to that purge.
-        if purged_caches > 0 or vfs is None:
-            cache_bytes_after = estimated_cache_bytes if vfs is None else 0
-        else:
-            cache_bytes_after = estimated_cache_bytes
+        # Caches (VFS snapshots) are reclaimed only via the live purge above.
+        cache_bytes_after = 0 if purged_caches > 0 else estimated_cache_bytes
 
         result = GCResult(
             session_id=session_id,
@@ -126,12 +120,14 @@ class EphemeralGC:
             retained_hash=self.policy.hash_retention == "permanent",
             purged_vfs_files=purged_vfs_files,
             purged_caches=purged_caches,
-            storage_before_bytes=vfs_bytes_before + estimated_cache_bytes + delta_bytes_before,
+            storage_before_bytes=vfs_bytes_before + estimated_cache_bytes + estimated_delta_bytes,
             storage_after_bytes=vfs_bytes_after + cache_bytes_after + delta_bytes_after,
         )
         self._gc_history.append(result)
 
-        # Honest flag: mark purged only when no live retained data remains.
+        # Honest flag: mark purged only with positive evidence of removal —
+        # a live vfs was supplied AND is empty afterwards. With no vfs handle
+        # the GC inspected nothing and must not claim the session was purged.
         if vfs_fully_purged:
             self._purged_sessions.add(session_id)
         return result

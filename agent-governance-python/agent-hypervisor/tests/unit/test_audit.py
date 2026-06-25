@@ -139,24 +139,27 @@ class TestEphemeralGC:
         assert result.storage_saved_bytes > 0
         assert gc.is_purged("s") is True
 
-    def test_collect_expires_old_deltas_keeps_fresh(self):
-        # A real delta_engine: deltas outside the window are pruned, fresh
-        # ones retained, and the retained chain stays verifiable.
+    def test_collect_preserves_audit_chain_intact(self):
+        # BUG-fix regression guard: collect() must NOT rewrite the tamper-evident
+        # delta chain. Even under a zero-day retention window (every delta is
+        # outside retention per should_expire_deltas), the chain is retained
+        # unchanged and its committed root stays reproducible.
         engine = DeltaEngine("s")
         engine.capture("did:a", [VFSChange(path="/old.txt", operation="add")])
         engine.capture("did:a", [VFSChange(path="/fresh.txt", operation="add")])
-        # Age the first delta past the 30-day window.
-        engine._deltas[0].timestamp = datetime.now(UTC) - timedelta(days=40)
+        committed_root = engine.compute_hash_chain_root()
 
-        gc = EphemeralGC(RetentionPolicy(delta_retention_days=30))
+        gc = EphemeralGC(RetentionPolicy(delta_retention_days=0))
+        assert gc.should_expire_deltas(engine.deltas[0].timestamp)  # outside retention
         result = gc.collect(session_id="s", delta_engine=engine)
 
-        assert result.retained_deltas == 1
-        assert len(engine.deltas) == 1
-        assert engine.deltas[0].changes[0].path.endswith("fresh.txt")
+        # Chain untouched: same length, still verifiable, same root.
+        assert len(engine.deltas) == 2
+        assert result.retained_deltas == 2
         valid, error = engine.verify_chain()
-        assert valid is True
-        assert error is None
+        assert valid is True and error is None
+        assert engine.compute_hash_chain_root() == committed_root
+        assert result.retained_hash is True
 
     def test_retention_policy_expires_outside_window(self):
         gc = EphemeralGC(RetentionPolicy(delta_retention_days=30))
@@ -164,3 +167,12 @@ class TestEphemeralGC:
         assert gc.should_expire_deltas(old)
         recent = datetime.now(UTC) - timedelta(days=1)
         assert not gc.should_expire_deltas(recent)
+
+    def test_collect_without_vfs_does_not_claim_purged(self):
+        # Honest flag guard: with no live VFS handle, GC inspected nothing and
+        # must not report the session as purged.
+        gc = EphemeralGC()
+        result = gc.collect(session_id="s1", vfs_file_count=3, estimated_vfs_bytes=999)
+        assert result.purged_vfs_files == 0
+        assert gc.is_purged("s1") is False
+        assert gc.purged_session_count == 0

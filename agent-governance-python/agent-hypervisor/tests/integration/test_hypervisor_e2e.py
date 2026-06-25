@@ -464,9 +464,14 @@ class TestGCIntegration:
         assert len(self.hv.gc.history) == 1
 
     def test_gc_tracks_purged_sessions(self):
+        from hypervisor.session.sso import SessionVFS
+
         gc = self.hv.gc
-        gc.collect(session_id="s1")
-        gc.collect(session_id="s2")
+        # GC marks a session purged only with positive evidence of removal, so
+        # hand it a real (empty) VFS per session — mirrors core._cleanup_session,
+        # which always passes the live VFS.
+        gc.collect(session_id="s1", vfs=SessionVFS("s1"))
+        gc.collect(session_id="s2", vfs=SessionVFS("s2"))
         assert gc.purged_session_count == 2
         assert gc.is_purged("s1")
         assert gc.is_purged("s2")
