@@ -22,6 +22,13 @@ PolicyFormat = Literal["yaml", "json"]
 Verdict = Literal["allow", "deny", "warn", "require_approval"]
 TrustLevel = Literal["untrusted", "probationary", "standard", "trusted", "verified_partner"]
 
+# Payload bounds. Policy documents are small text files in practice (the 70+ shipped
+# examples are all well under 100 KiB); 1 MiB is a generous ceiling that still rejects
+# pathological inputs before any parsing or filesystem work runs. ``fixtures`` is bounded by
+# item count because each inline fixture drives a replay run.
+_MAX_POLICY_CONTENT = 1_048_576
+_MAX_FIXTURES = 1000
+
 
 # ── Health (section 7.1) ─────────────────────────────────────────────────────
 class HealthResponse(BaseModel):
@@ -53,7 +60,9 @@ class PolicyValidationError(BaseModel):
 
 
 class ValidateRequest(BaseModel):
-    content: str = Field(..., description="Raw policy content to validate")
+    content: str = Field(
+        ..., max_length=_MAX_POLICY_CONTENT, description="Raw policy content to validate"
+    )
     format: PolicyFormat = Field(..., description="Format of the content")
 
 
@@ -73,7 +82,9 @@ class FixtureInput(BaseModel):
 
 
 class TestRequest(BaseModel):
-    fixtures: list[FixtureInput] = Field(..., description="Inline fixtures to execute")
+    fixtures: list[FixtureInput] = Field(
+        ..., max_length=_MAX_FIXTURES, description="Inline fixtures to execute"
+    )
     policy_dir: str | None = Field(
         None,
         max_length=1024,
@@ -106,7 +117,9 @@ class SaveRequest(BaseModel):
         pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$",
         description="Policy identifier (becomes filename)",
     )
-    content: str = Field(..., description="Policy content to persist")
+    content: str = Field(
+        ..., max_length=_MAX_POLICY_CONTENT, description="Policy content to persist"
+    )
     format: PolicyFormat = Field(..., description="File format to write")
     commit_message: str | None = Field(
         None, max_length=512, description="Human description for the audit log"

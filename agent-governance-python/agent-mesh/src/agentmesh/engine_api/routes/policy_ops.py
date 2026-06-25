@@ -209,8 +209,21 @@ async def save_policy(request: Request, body: SaveRequest) -> SaveResponse:
     """Persist a policy to the engine policy directory, then reload.
 
     This is the single write endpoint in the Studio surface. Persisting triggers a registry
-    reload (contract section 8.1), which is why no standalone reload route exists.
+    reload (contract section 8.1), which is why no standalone reload route exists. Content is
+    schema-validated before any write so a malformed document cannot overwrite a valid policy
+    and then surface with ``rules_count: 0``.
     """
+    # JSON is a subset of YAML, so the YAML-based schema validator accepts both formats.
+    from agentmesh.governance.policy import validate_policy_schema
+
+    schema_errors = validate_policy_schema(body.content)
+    if schema_errors:
+        raise ApiError(
+            422,
+            POLICY_PARSE_ERROR,
+            "Policy content failed schema validation; nothing was saved",
+            {"errors": schema_errors},
+        )
     registry = _registry(request)
     version = registry.save(body.id, body.content, body.format)
     return SaveResponse(

@@ -171,3 +171,31 @@ class TestSave:
         reg = PolicyRegistry(tmp_path)
         with pytest.raises(ValueError, match="outside the policy directory"):
             reg.save(bad_id, _YAML_POLICY, "yaml")
+
+    def test_save_removes_cross_format_sibling(self, tmp_path):
+        reg = PolicyRegistry(tmp_path)
+        reg.save("alpha", _YAML_POLICY, "yaml")
+        assert (tmp_path / "alpha.yaml").exists()
+        reg.save("alpha", json.dumps(_JSON_POLICY), "json")
+        # The YAML sibling is gone so reload cannot silently shadow the JSON file.
+        assert not (tmp_path / "alpha.yaml").exists()
+        assert (tmp_path / "alpha.json").exists()
+        assert [s.id for s in reg.list_summaries()] == ["alpha"]
+        assert reg.get_detail("alpha").format == "json"
+
+    def test_save_leaves_no_temp_residue(self, tmp_path):
+        reg = PolicyRegistry(tmp_path)
+        reg.save("alpha", _YAML_POLICY, "yaml")
+        leftovers = [p.name for p in tmp_path.iterdir() if p.suffix == ".tmp"]
+        assert leftovers == []
+        assert (tmp_path / "alpha.yaml").read_text(encoding="utf-8") == _YAML_POLICY
+
+    def test_duplicate_id_across_formats_warns_on_load(self, tmp_path, caplog):
+        # Pre-existing files in two formats for the same id (e.g. created out of band) must
+        # not crash the scan; the registry keeps one and warns about the shadow.
+        (tmp_path / "alpha.yaml").write_text(_YAML_POLICY, encoding="utf-8")
+        (tmp_path / "alpha.json").write_text(json.dumps(_JSON_POLICY), encoding="utf-8")
+        with caplog.at_level("WARNING"):
+            reg = PolicyRegistry(tmp_path)
+        assert [s.id for s in reg.list_summaries()] == ["alpha"]
+        assert any("Duplicate policy id 'alpha'" in r.message for r in caplog.records)

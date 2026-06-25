@@ -134,6 +134,12 @@ class TestTestPolicyWithFakeEngine:
         assert resp.status_code == 422
         assert resp.json()["code"] == "FIXTURE_LOAD_ERROR"
 
+    def test_oversized_fixture_list_is_validation_error(self, client):
+        one = {"id": "f", "input": {"action": "read"}, "expected_verdict": "allow"}
+        resp = client.post("/api/v1/policy/test", json={"fixtures": [one] * 1001})
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "VALIDATION_ERROR"
+
     def test_uses_policy_dir_override(self, client, monkeypatch, policy_dir):
         captured = {}
 
@@ -266,3 +272,48 @@ class TestSavePolicy:
         )
         assert resp.status_code == 200
         assert (missing / "epsilon.yaml").exists()
+
+    def test_invalid_content_is_422_and_not_written(self, client, policy_dir):
+        # A bare scalar parses but is not a policy mapping, so schema validation fails and the
+        # file must never be written (a malformed doc cannot shadow a valid policy on reload).
+        resp = client.post(
+            "/api/v1/policy/save",
+            json={"id": "zeta", "content": "just a string", "format": "yaml"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "POLICY_PARSE_ERROR"
+        assert not (policy_dir / "zeta.yaml").exists()
+
+    def test_unparseable_content_is_422_and_not_written(self, client, policy_dir):
+        resp = client.post(
+            "/api/v1/policy/save",
+            json={"id": "eta", "content": "foo: [1, 2", "format": "yaml"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "POLICY_PARSE_ERROR"
+        assert not (policy_dir / "eta.yaml").exists()
+
+    def test_oversized_content_is_validation_error(self, client):
+        oversized = "name: x\n" + ("#" * (1_048_576 + 1))
+        resp = client.post(
+            "/api/v1/policy/save",
+            json={"id": "theta", "content": oversized, "format": "yaml"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "VALIDATION_ERROR"
+
+    def test_save_replaces_cross_format_sibling(self, client, policy_dir):
+        # Saving "iota" as YAML then re-saving as JSON must leave exactly one file so the
+        # listing never shows a shadowed duplicate.
+        client.post(
+            "/api/v1/policy/save",
+            json={"id": "iota", "content": _VALID_POLICY_YAML, "format": "yaml"},
+        )
+        client.post(
+            "/api/v1/policy/save",
+            json={"id": "iota", "content": _VALID_POLICY_JSON, "format": "json"},
+        )
+        assert not (policy_dir / "iota.yaml").exists()
+        assert (policy_dir / "iota.json").exists()
+        items = client.get("/api/v1/policies").json()["items"]
+        assert [i["id"] for i in items].count("iota") == 1

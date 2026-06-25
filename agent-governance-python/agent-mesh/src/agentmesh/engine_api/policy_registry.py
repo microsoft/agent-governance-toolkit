@@ -20,9 +20,13 @@ is the intended reload side effect of saving (contract section 8.1); the standal
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
+import os
+import tempfile
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -112,6 +116,9 @@ class PolicyRegistry:
     def __init__(self, policy_dir: str | Path) -> None:
         self._policy_dir = Path(policy_dir)
         self._records: dict[str, _PolicyRecord] = {}
+        # Re-entrant so ``save`` can hold the lock across its own ``reload`` call. Serializes
+        # the read-modify-write in ``save`` against concurrent ``load``/``reload`` scans.
+        self._lock = threading.RLock()
         self.load()
 
     @property
@@ -120,40 +127,49 @@ class PolicyRegistry:
 
     def load(self) -> None:
         """Scan the policy directory and rebuild the in-memory record map."""
-        records: dict[str, _PolicyRecord] = {}
-        if not self._policy_dir.exists():
-            logger.warning("Policy directory %s does not exist", self._policy_dir)
+        with self._lock:
+            records: dict[str, _PolicyRecord] = {}
+            if not self._policy_dir.exists():
+                logger.warning("Policy directory %s does not exist", self._policy_dir)
+                self._records = records
+                return
+
+            for path in sorted(self._policy_dir.iterdir()):
+                if not path.is_file():
+                    continue
+                fmt = _format_for_suffix(path.suffix)
+                if fmt is None:
+                    continue
+                try:
+                    content = path.read_text(encoding="utf-8")
+                except OSError as exc:
+                    logger.warning("Could not read policy %s: %s", path.name, exc)
+                    continue
+
+                policy_id = path.stem
+                if policy_id in records:
+                    logger.warning(
+                        "Duplicate policy id '%s' across formats: '%s' shadows '%s'. "
+                        "Keep one file per id to avoid ambiguity.",
+                        policy_id,
+                        path.name,
+                        records[policy_id].source,
+                    )
+                name, description, rules_count = _extract_meta(content, fmt)
+                last_modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+                records[policy_id] = _PolicyRecord(
+                    id=policy_id,
+                    name=name or policy_id,
+                    format=fmt,
+                    source=path.name,
+                    description=description,
+                    content=content,
+                    rules_count=rules_count,
+                    last_modified=last_modified,
+                )
+
             self._records = records
-            return
-
-        for path in sorted(self._policy_dir.iterdir()):
-            if not path.is_file():
-                continue
-            fmt = _format_for_suffix(path.suffix)
-            if fmt is None:
-                continue
-            try:
-                content = path.read_text(encoding="utf-8")
-            except OSError as exc:
-                logger.warning("Could not read policy %s: %s", path.name, exc)
-                continue
-
-            policy_id = path.stem
-            name, description, rules_count = _extract_meta(content, fmt)
-            last_modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-            records[policy_id] = _PolicyRecord(
-                id=policy_id,
-                name=name or policy_id,
-                format=fmt,
-                source=path.name,
-                description=description,
-                content=content,
-                rules_count=rules_count,
-                last_modified=last_modified,
-            )
-
-        self._records = records
-        logger.info("Loaded %d policies from %s", len(records), self._policy_dir)
+            logger.info("Loaded %d policies from %s", len(records), self._policy_dir)
 
     def reload(self) -> None:
         """Re-scan the policy directory. Alias of :meth:`load`."""
@@ -179,16 +195,38 @@ class PolicyRegistry:
         Returns:
             An opaque version token (a content hash) for optimistic concurrency.
         """
-        self._policy_dir.mkdir(parents=True, exist_ok=True)
         suffix = ".yaml" if fmt == "yaml" else ".json"
-        target = self._policy_dir / f"{policy_id}{suffix}"
-        # Defense in depth: the HTTP layer validates ``policy_id`` against a strict
-        # pattern, but guard the primitive too so a future caller cannot escape the
-        # policy directory via separators or ``..`` segments.
-        if target.resolve().parent != self._policy_dir.resolve():
-            raise ValueError(
-                f"Invalid policy id '{policy_id}': resolves outside the policy directory"
+        with self._lock:
+            self._policy_dir.mkdir(parents=True, exist_ok=True)
+            target = self._policy_dir / f"{policy_id}{suffix}"
+            # Defense in depth: the HTTP layer validates ``policy_id`` against a strict
+            # pattern, but guard the primitive too so a future caller cannot escape the
+            # policy directory via separators or ``..`` segments.
+            if target.resolve().parent != self._policy_dir.resolve():
+                raise ValueError(
+                    f"Invalid policy id '{policy_id}': resolves outside the policy directory"
+                )
+            # One file per id: drop any sibling stored in another recognized format so saving
+            # ``alpha`` as JSON does not leave a stale ``alpha.yaml`` that silently shadows it
+            # on the next reload (sorted ``iterdir`` order is otherwise the only tiebreaker).
+            for other_suffix in (*_YAML_SUFFIXES, *_JSON_SUFFIXES):
+                sibling = self._policy_dir / f"{policy_id}{other_suffix}"
+                if sibling != target and sibling.exists():
+                    with contextlib.suppress(OSError):
+                        sibling.unlink()
+            # Atomic write: write to a temp file in the same directory, then ``os.replace``,
+            # so a crash or signal mid-write can never leave a partially written policy file.
+            # The temp name carries a ``.tmp`` suffix so a concurrent reload scan skips it.
+            fd, tmp_path = tempfile.mkstemp(
+                dir=self._policy_dir, prefix=f".{policy_id}.", suffix=f"{suffix}.tmp"
             )
-        target.write_text(content, encoding="utf-8")
-        self.reload()
-        return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+                os.replace(tmp_path, target)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
+            self.reload()
+            return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
