@@ -465,7 +465,6 @@ class TestCedarIntegration:
         from agent_os.integrations._v5_runtime_bridge import BridgeResult
 
         evaluation = EvaluationResult(
-            allowed=allowed,
             verdict="allow" if allowed else "deny",
             reason=reason,
         )

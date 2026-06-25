@@ -266,7 +266,7 @@ class TestBeforeToolCall:
         hook_fn = _registered_hooks["before_tool_call"][0]
 
         evaluation = EvaluationResult(
-            allowed=False, verdict="deny", reason="cedar_denied"
+            verdict="deny", reason="cedar_denied"
         )
         deny = BridgeResult(
             evaluation=evaluation,
@@ -435,7 +435,7 @@ class TestBeforeLLMCall:
         hook_fn = _registered_hooks["before_llm_call"][0]
 
         evaluation = EvaluationResult(
-            allowed=False, verdict="deny", reason="cedar_denied"
+            verdict="deny", reason="cedar_denied"
         )
         deny = BridgeResult(
             evaluation=evaluation,

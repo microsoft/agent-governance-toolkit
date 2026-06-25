@@ -166,7 +166,6 @@ def _result_from_intervention(
     if ip_result.enforced_identity is not None:
         audit["enforced_identity"] = ip_result.enforced_identity
     return EvaluationResult(
-        allowed=decision in ("allow", "warn", "transform"),
         category=None,
         matched_rule=None,
         public_message=message,
@@ -352,16 +351,13 @@ class AgtRuntime:
                 # An ``escalate`` that returned cleanly means the resolver
                 # approved the action; reflect that in the EvaluationResult
                 # so callers see ``allow`` like the ACS ``run`` helper does.
-                result = result.model_copy(
-                    update={"verdict": "allow", "allowed": True}
-                )
+                result = result.model_copy(update={"verdict": "allow"})
             return result
 
         if isinstance(exc, AgentControlSuspended):
             return result.model_copy(
                 update={
                     "verdict": "escalate",
-                    "allowed": False,
                     "audit_entry": {**result.audit_entry, "suspend_handle": exc.handle},
                 }
             )
@@ -384,7 +380,6 @@ class AgtRuntime:
             }
             if mapped.verdict == "escalate":
                 update["verdict"] = "deny"
-                update["allowed"] = False
             return mapped.model_copy(update=update)
 
         raise exc  # pragma: no cover - exhaustive control flow
@@ -495,7 +490,6 @@ def _approval_timeout_result(
         return result.model_copy(
             update={
                 "verdict": "allow",
-                "allowed": True,
                 "audit_entry": {
                     **result.audit_entry,
                     "approval_outcome": "allow",
@@ -506,7 +500,6 @@ def _approval_timeout_result(
     return result.model_copy(
         update={
             "verdict": "deny",
-            "allowed": False,
             "reason": "runtime_error:approval_timeout",
             "message": "Approval resolver timed out and failed closed.",
             "audit_entry": {
@@ -527,7 +520,6 @@ def _approval_error_result(
     return result.model_copy(
         update={
             "verdict": "deny",
-            "allowed": False,
             "reason": "runtime_error:approval_resolver_error",
             "message": f"Approval resolver failed closed: {type(exc).__name__}",
             "audit_entry": {
