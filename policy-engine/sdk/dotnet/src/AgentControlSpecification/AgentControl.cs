@@ -195,7 +195,7 @@ public sealed class AgentControl
                 annotators);
             sink.Emit(telemetryEvent);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
         {
             Trace.TraceWarning(
                 $"ACS telemetry sink {sink.GetType().Name} raised while building or emitting an event: {exception}");
@@ -281,7 +281,7 @@ public sealed class AgentControl
                 _ => NormalizeManifestRoot(JsonSerializer.SerializeToElement(manifest, JsonOptions)),
             };
         }
-        catch
+        catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
         {
             return null;
         }
@@ -293,7 +293,7 @@ public sealed class AgentControl
         {
             return ParseJsonManifestText(File.ReadAllText(path, Encoding.UTF8));
         }
-        catch
+        catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
         {
             return null;
         }
@@ -326,17 +326,19 @@ public sealed class AgentControl
 
     private static string NormalizeInterventionPointKey(string key)
     {
-        try
+        // Accept either a canonical wire name (input) or an enum name (Input) and
+        // normalize both to the wire value; unknown keys pass through unchanged.
+        // Avoids exception-driven control flow over FromWireName.
+        foreach (var point in Enum.GetValues<InterventionPoint>())
         {
-            return InterventionPointExtensions.FromWireName(key).ToWireName();
-        }
-        catch (ArgumentOutOfRangeException)
-        {
+            if (string.Equals(point.ToWireName(), key, StringComparison.Ordinal) ||
+                string.Equals(point.ToString(), key, StringComparison.OrdinalIgnoreCase))
+            {
+                return point.ToWireName();
+            }
         }
 
-        return Enum.TryParse<InterventionPoint>(key, ignoreCase: true, out var interventionPoint)
-            ? interventionPoint.ToWireName()
-            : key;
+        return key;
     }
 
     public ValueTask<InterventionPointResult> EvaluateAgentStartupAsync<TAgent>(

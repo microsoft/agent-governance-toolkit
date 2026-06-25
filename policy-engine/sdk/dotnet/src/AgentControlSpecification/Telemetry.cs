@@ -293,7 +293,7 @@ public sealed class MultiSink : ITelemetrySink
             {
                 sink.Emit(telemetryEvent);
             }
-            catch (Exception exception)
+            catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
             {
                 Trace.TraceWarning($"ACS telemetry sink {sink.GetType().Name} raised during emit: {exception}");
             }
@@ -308,7 +308,7 @@ public sealed class MultiSink : ITelemetrySink
             {
                 sink.ForceFlush();
             }
-            catch (Exception exception)
+            catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
             {
                 Trace.TraceWarning($"ACS telemetry sink {sink.GetType().Name} raised during force flush: {exception}");
             }
@@ -323,12 +323,23 @@ public sealed class MultiSink : ITelemetrySink
             {
                 sink.Shutdown();
             }
-            catch (Exception exception)
+            catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
             {
                 Trace.TraceWarning($"ACS telemetry sink {sink.GetType().Name} raised during shutdown: {exception}");
             }
         }
     }
+}
+
+// Fatal CLR exceptions must propagate even from the best-effort telemetry and
+// manifest-indexing paths that are otherwise designed never to be load-bearing.
+// Everything else is caught so a sink or a malformed manifest cannot break the
+// host. This mirrors the Python `except Exception` (which excludes BaseException
+// fatals) and the Rust catch_unwind isolation.
+internal static class TelemetryExceptions
+{
+    public static bool IsFatal(Exception exception) =>
+        exception is OutOfMemoryException or StackOverflowException;
 }
 
 public sealed class OtelMetricsTelemetrySink : ITelemetrySink, IDisposable
