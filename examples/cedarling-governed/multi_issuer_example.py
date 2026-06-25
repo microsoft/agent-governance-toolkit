@@ -85,7 +85,7 @@ def _mint_access_token(*, subject: str, role: str, device: str) -> str:
         "token_type": "Bearer",
         "scope": ["openid", "profile"],
         "role": role,
-        "device": device,
+        "device": device.strip().lower(),
         "iat": now,
         "exp": now + 3600,
         "jti": f"jti-{subject}-{device}",
@@ -96,6 +96,7 @@ def _mint_access_token(*, subject: str, role: str, device: str) -> str:
 
 ADMIN_LAPTOP_TOKEN = _mint_access_token(subject="agent-ops", role="admin", device="laptop")
 ADMIN_MOBILE_TOKEN = _mint_access_token(subject="agent-ops", role="admin", device="mobile")
+ADMIN_TABLET_TOKEN = _mint_access_token(subject="agent-ops", role="admin", device="tablet")
 # Operator token: same trusted issuer, but not admin — no write capability.
 OPERATOR_TOKEN = _mint_access_token(subject="agent-helpdesk", role="operator", device="laptop")
 
@@ -167,6 +168,15 @@ test_cases = [
             "tool_name": "write",
             "resource": "infra-config",
             "tokens": {ACCESS_TOKEN_TYPE: ADMIN_MOBILE_TOKEN},
+        },
+    },
+    {
+        "label": "admin agent on an unidentified device writes config",
+        "device": "tablet",
+        "request": {
+            "tool_name": "write",
+            "resource": "infra-config",
+            "tokens": {ACCESS_TOKEN_TYPE: ADMIN_TABLET_TOKEN},
         },
     },
     # same mobile admin token reading -> read isn't device-gated -> ALLOW
