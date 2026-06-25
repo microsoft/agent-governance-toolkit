@@ -59,7 +59,9 @@ jobs:
                 repo: context.repo.repo,
                 username: context.actor,
               });
-              const isMaintainer = perm.permission === 'admin' || perm.permission === 'maintain';
+              // Use role_name, not the legacy `permission` field (which collapses
+              // maintain -> write and would never match a Maintain-role maintainer).
+              const isMaintainer = perm.role_name === 'admin' || perm.role_name === 'maintain';
               core.setOutput('run_check', isMaintainer ? 'false' : 'true');
             } catch (e) {
               core.info(`Could not resolve permission for ${context.actor}: ${e.message}. Running check.`);

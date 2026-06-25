@@ -5,7 +5,7 @@
 from enum import Enum, IntEnum
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, field_serializer
 
 
 class MessagePriority(IntEnum):
@@ -84,11 +84,18 @@ class Message(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     
     model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        },
         populate_by_name=True,  # Allow both 'ttl' and 'ttl_seconds'
     )
+
+    @field_serializer('timestamp', when_used='json')
+    def _serialize_timestamp(self, value: datetime) -> str:
+        """Serialize timestamp to an ISO 8601 string in JSON output.
+
+        Replaces the deprecated Pydantic v1 ``json_encoders`` config. Scoped to
+        ``when_used='json'`` so ``model_dump()`` (Python mode) keeps the native
+        ``datetime`` object, matching the previous behaviour.
+        """
+        return value.isoformat()
     
     @field_validator('priority', mode='before')
     @classmethod

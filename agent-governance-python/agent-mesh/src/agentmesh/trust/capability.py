@@ -118,8 +118,6 @@ class CapabilityGrant(BaseModel):
             # "read" matching "readwrite:secret". Require the granted
             # capability to be a colon-delimited prefix of the requested one.
             pass
-        elif self.capability == requested:
-            pass
         else:
             # Fall back to component matching. parse_capability raises
             # ValueError on inputs that don't contain a colon (e.g.
@@ -134,13 +132,24 @@ class CapabilityGrant(BaseModel):
                 return False
             if self.resource != "*" and self.resource != req_resource:
                 return False
-            if req_qualifier and self.qualifier:
-                if self.qualifier != "*" and self.qualifier != req_qualifier:
+            if self.qualifier is not None and self.qualifier != "*":
+                # This grant is scoped to a specific qualifier, so it
+                # only satisfies a request for that exact qualifier. A
+                # request that omits the qualifier (req_qualifier is
+                # None) is broader than the grant and must NOT be
+                # authorized by it. Otherwise a narrow grant (e.g.
+                # "write:database:table_users") would satisfy a broad
+                # check (e.g. "write:database"), a privilege escalation.
+                if req_qualifier != self.qualifier:
                     return False
 
-        # Check resource ID if scoped
-        if self.resource_ids and resource_id:
-            if resource_id not in self.resource_ids:
+        # Check resource ID scope. A grant restricted to specific
+        # resource_ids must not satisfy a check that omits resource_id
+        # (broader than the grant) nor one naming a resource outside the
+        # set. Only an unrestricted grant (empty resource_ids) matches
+        # regardless of resource_id.
+        if self.resource_ids:
+            if resource_id is None or resource_id not in self.resource_ids:
                 return False
 
         return True
@@ -354,7 +363,27 @@ class CapabilityRegistry:
 
         if require_grantor_capability:
             grantor_scope = self._scopes.get(from_agent)
-            if grantor_scope is None or not grantor_scope.has_capability(capability):
+            if grantor_scope is None:
+                raise PermissionError(
+                    f"Grantor {from_agent} does not hold capability {capability!r}"
+                )
+            if resource_ids:
+                # The grant is resource-scoped, so the grantor must hold the
+                # capability for each requested resource. Checking without a
+                # resource_id would wrongly reject a grantor whose own grant
+                # is scoped to exactly these resources (the unscoped
+                # has_capability() now fails closed on resource-scoped grants).
+                missing = [
+                    r
+                    for r in resource_ids
+                    if not grantor_scope.has_capability(capability, resource_id=r)
+                ]
+                if missing:
+                    raise PermissionError(
+                        f"Grantor {from_agent} does not hold capability "
+                        f"{capability!r} for resources {missing}"
+                    )
+            elif not grantor_scope.has_capability(capability):
                 raise PermissionError(
                     f"Grantor {from_agent} does not hold capability {capability!r}"
                 )
