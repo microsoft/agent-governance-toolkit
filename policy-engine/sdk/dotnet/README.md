@@ -43,7 +43,35 @@ Available today:
 
 The base `AgentControlSpecification` package has no framework package dependencies. It exposes generic `IAgentControlChatClient<TRequest,TResponse>` and `AgentControlDelegatingChatClient<TRequest,TResponse>` shapes for dependency-light hosts. Install the companion `AgentControlSpecification.AI` package when the host needs wrappers over concrete `Microsoft.Extensions.AI.IChatClient` objects.
 
-`PerfTelemetry` controls timing detail in native runtime evaluation. It is not a telemetry exporter sink. Hosts that need OpenTelemetry export should use the Rust `agent_control_specification_otel` bridge or provide their own host-side exporter around SDK results and logs.
+`PerfTelemetry` controls timing detail in native runtime evaluation. It is independent from host telemetry export.
+
+## Telemetry
+
+The .NET SDK ships a pure host-side telemetry layer. Pass an `ITelemetrySink` to `AgentControl`, `FromNative`, `FromPath`, `FromPathAsync`, or `FromManifestChain`, and every evaluation emits one redaction-safe `TelemetryEvent` to the sink. Pass `new MultiSink(...)` or the overloads that accept sink collections to fan out to multiple sinks. The default null telemetry sink preserves the prior behavior with no events and no overhead beyond a null check.
+
+```csharp
+var sink = new MultiSink(
+    new JsonStdoutTelemetrySink(),
+    new OtelMetricsTelemetrySink());
+var control = AgentControl.FromPath("manifest.yaml", telemetrySink: sink);
+```
+
+`TelemetryEvent` mirrors the Rust `core/src/telemetry.rs` field set. It carries `event_type`, `intervention_point`, `decision`, `reason_code`, `error_class`, `policy_id`, `annotators`, `enforcement_mode`, `duration_ms`, `evidence_artefact`, `evidence_verification_pointer_keys`, `action_identity`, and `metadata`. Redaction is the load-bearing invariant. Events never carry raw prompts, tool arguments, tool results, transform values, annotator outputs, policy target payloads, or pointer URL values. A free-text reason is reduced to `policy_reason`, matching the Rust redaction helper.
+
+`policy_id` and `annotators` are indexed only when construction receives a JSON manifest object, JSON manifest string, or JSON file through `FromPath`. YAML strings, `FromManifestChain`, and unparseable manifest content leave `policy_id` null and `annotators` empty. The SDK does not add a YAML parser.
+
+This host layer emits exactly one `decision` event per evaluation. It does not replicate the Rust core's second `intervention_point.transformed` event on a `transform` verdict. The transform is observable through `decision == "transform"`.
+
+| Sink | Behavior |
+| --- | --- |
+| `InMemoryTelemetrySink` | Records events in an `Events` list for tests and inspection. |
+| `JsonStdoutTelemetrySink` | Writes one JSON object per line to a `TextWriter`, defaulting to `Console.Out`. |
+| `OtelMetricsTelemetrySink` | Emits BCL `System.Diagnostics.Metrics` instruments under meter `agent_control_specification`. |
+| `MultiSink` | Fans one event out to several sinks. A failing child is logged and isolated. |
+
+`OtelMetricsTelemetrySink` emits `acs_intervention_allow_total`, `acs_intervention_deny_total`, `acs_intervention_warn_total`, `acs_intervention_escalate_total`, `acs_intervention_transform_total`, and `acs_intervention_duration_ms`. OpenTelemetry .NET collects these BCL metrics natively, so the base SDK does not add an OpenTelemetry NuGet dependency.
+
+Telemetry is never load-bearing. Event construction and sink emission are wrapped together so a failing sink cannot change the verdict or fail evaluation.
 
 ## Escalation and approval
 

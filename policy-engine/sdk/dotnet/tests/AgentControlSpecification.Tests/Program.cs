@@ -844,6 +844,7 @@ await PaymentEscalationHarness.RunAsync();
 await StreamingHarness.RunAsync();
 await Agt5SurfaceHarness.RunAsync();
 await Agt1TransformGateHarness.RunAsync();
+await TelemetryHarness.RunAsync();
 
 Console.WriteLine("AgentControlSpecification native round-trip test passed.");
 Console.WriteLine("AgentControlSpecification callback exception-safety test passed.");
@@ -858,6 +859,7 @@ Console.WriteLine("AgentControlSpecification adapter approval-resolver parity te
 Console.WriteLine("AgentControlSpecification fail-closed error parity tests passed.");
 Console.WriteLine("AgentControlSpecification zero-config FromPath test passed.");
 Console.WriteLine("AgentControlSpecification AGT D1 transform-gate parity tests passed.");
+Console.WriteLine("AgentControlSpecification telemetry tests passed.");
 Console.WriteLine($"Native library: {nativeLibraryPath}");
 
 static void Assert(bool condition, string message)

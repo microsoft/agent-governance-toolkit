@@ -144,6 +144,19 @@ impl Runtime {
         self
     }
 
+    /// Swap the telemetry sink in place. Lets a host install a sink on a
+    /// runtime built through a convenience constructor that defaulted to the
+    /// `NoopTelemetrySink`.
+    pub fn set_telemetry(&mut self, telemetry: Arc<dyn TelemetrySink>) {
+        self.telemetry = telemetry;
+    }
+
+    /// Builder form of [`Runtime::set_telemetry`].
+    pub fn with_telemetry_sink(mut self, telemetry: Arc<dyn TelemetrySink>) -> Self {
+        self.telemetry = telemetry;
+        self
+    }
+
     pub fn evaluate_intervention_point(
         &self,
         request: InterventionPointRequest,

@@ -942,3 +942,48 @@ fn post_tool_escalate_runs_tool_but_blocks_result() {
     );
     assert!(*executed.lock().unwrap());
 }
+
+#[test]
+fn with_telemetry_emits_one_decision_event_per_evaluation() {
+    use crate::InMemoryTelemetrySink;
+
+    let policy = Arc::new(QueuePolicy::with_responses([
+        json!({"decision": "deny", "reason": "blocked"}),
+    ]));
+    let sink = Arc::new(InMemoryTelemetrySink::new());
+    let control = AgentControl::new(runtime(run_manifest(), policy)).with_telemetry(sink.clone());
+
+    let result = control.evaluate_intervention_point(
+        InterventionPoint::Input,
+        json!({"input": {"text": "hi"}}),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(result.verdict.decision, Decision::Deny);
+    let events = sink.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].decision, Some(Decision::Deny));
+    assert_eq!(events[0].intervention_point, InterventionPoint::Input);
+    // The manifest binds policy "test_policy" on input; the core sources it.
+    assert_eq!(events[0].policy_id.as_deref(), Some("test_policy"));
+    // Free-text reason is reduced to a safe code by the core redaction helper.
+    assert_eq!(events[0].reason_code.as_deref(), Some("blocked"));
+}
+
+#[cfg(feature = "otel")]
+#[test]
+fn otel_sink_installs_and_evaluates_panic_free() {
+    use crate::OtelTelemetrySink;
+
+    let policy = Arc::new(QueuePolicy::with_responses([json!({"decision": "allow"})]));
+    let control = AgentControl::new(runtime(run_manifest(), policy))
+        .with_telemetry(Arc::new(OtelTelemetrySink::default()));
+
+    let result = control.evaluate_intervention_point(
+        InterventionPoint::Input,
+        json!({"input": {"text": "hi"}}),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(result.verdict.decision, Decision::Allow);
+}

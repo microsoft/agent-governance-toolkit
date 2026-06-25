@@ -1,5 +1,8 @@
 use crate::{Decision, EnforcementMode, InterventionPoint};
 use std::collections::BTreeMap;
+use std::io::Write;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TelemetryEventType {
@@ -152,10 +155,38 @@ impl TelemetryEvent {
         self.evidence_verification_pointer_keys = pointer_keys;
         self
     }
+
+    /// Serialize to a redaction-safe JSON object carrying only the structural
+    /// telemetry fields. Every field here is a stable id, name, decision, mode,
+    /// reason code, count, duration, evidence artefact, or sorted pointer key.
+    /// No policy-target payload, snapshot, annotator output, transform value, or
+    /// pointer URL is present, so the serialized form is safe to ship to a sink.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "event_type": self.event_type.as_str(),
+            "intervention_point": self.intervention_point.as_str(),
+            "decision": self.decision.map(|decision| decision.as_str()),
+            "reason_code": self.reason_code,
+            "error_class": self.error_class,
+            "policy_id": self.policy_id,
+            "annotators": self.annotators,
+            "enforcement_mode": self.enforcement_mode.map(|mode| mode.as_str()),
+            "duration_ms": self.duration_ms,
+            "evidence_artefact": self.evidence_artefact,
+            "evidence_verification_pointer_keys": self.evidence_verification_pointer_keys,
+            "action_identity": self.action_identity,
+            "metadata": self.metadata,
+        })
+    }
 }
 
 pub trait TelemetrySink: Send + Sync {
     fn emit(&self, event: TelemetryEvent);
+
+    /// Flush any buffered telemetry. A no-op by default; sinks that batch (for
+    /// example an OpenTelemetry exporter) override it. Mirrors the host-side
+    /// SDK sink shape across languages.
+    fn force_flush(&self) {}
 
     fn shutdown(&self) {}
 }
@@ -165,6 +196,136 @@ pub struct NoopTelemetrySink;
 
 impl TelemetrySink for NoopTelemetrySink {
     fn emit(&self, _event: TelemetryEvent) {}
+}
+
+/// Records every emitted event in order. For tests and local inspection.
+#[derive(Debug, Default)]
+pub struct InMemoryTelemetrySink {
+    events: Mutex<Vec<TelemetryEvent>>,
+}
+
+impl InMemoryTelemetrySink {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Snapshot of the events recorded so far, in emission order.
+    pub fn events(&self) -> Vec<TelemetryEvent> {
+        self.events
+            .lock()
+            .expect("telemetry mutex poisoned")
+            .clone()
+    }
+
+    pub fn len(&self) -> usize {
+        self.events.lock().expect("telemetry mutex poisoned").len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.events
+            .lock()
+            .expect("telemetry mutex poisoned")
+            .is_empty()
+    }
+
+    pub fn clear(&self) {
+        self.events
+            .lock()
+            .expect("telemetry mutex poisoned")
+            .clear();
+    }
+}
+
+impl TelemetrySink for InMemoryTelemetrySink {
+    fn emit(&self, event: TelemetryEvent) {
+        self.events
+            .lock()
+            .expect("telemetry mutex poisoned")
+            .push(event);
+    }
+}
+
+/// Writes one redaction-safe JSON object per line to a `Write` target,
+/// defaulting to stdout. The audit.jsonl use case becomes built in.
+pub struct StdoutJsonTelemetrySink {
+    writer: Mutex<Box<dyn Write + Send>>,
+}
+
+impl StdoutJsonTelemetrySink {
+    pub fn new() -> Self {
+        Self {
+            writer: Mutex::new(Box::new(std::io::stdout())),
+        }
+    }
+
+    /// Write JSON lines to an arbitrary target, for example a file handle.
+    pub fn to_writer(writer: impl Write + Send + 'static) -> Self {
+        Self {
+            writer: Mutex::new(Box::new(writer)),
+        }
+    }
+}
+
+impl Default for StdoutJsonTelemetrySink {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TelemetrySink for StdoutJsonTelemetrySink {
+    fn emit(&self, event: TelemetryEvent) {
+        let line = event.to_json().to_string();
+        if let Ok(mut writer) = self.writer.lock() {
+            let _ = writeln!(writer, "{line}");
+        }
+    }
+
+    fn force_flush(&self) {
+        if let Ok(mut writer) = self.writer.lock() {
+            let _ = writer.flush();
+        }
+    }
+
+    fn shutdown(&self) {
+        self.force_flush();
+    }
+}
+
+/// Fans one event out to several sinks. A panicking child is isolated so it
+/// cannot starve the others or reach the evaluation path. Telemetry is never
+/// load-bearing.
+pub struct MultiSink {
+    sinks: Vec<Arc<dyn TelemetrySink>>,
+}
+
+impl MultiSink {
+    pub fn new(sinks: Vec<Arc<dyn TelemetrySink>>) -> Self {
+        Self { sinks }
+    }
+}
+
+impl TelemetrySink for MultiSink {
+    fn emit(&self, event: TelemetryEvent) {
+        for sink in &self.sinks {
+            let sink = Arc::clone(sink);
+            let event = event.clone();
+            let _ = catch_unwind(AssertUnwindSafe(move || sink.emit(event)));
+        }
+    }
+
+    fn force_flush(&self) {
+        for sink in &self.sinks {
+            let sink = Arc::clone(sink);
+            let _ = catch_unwind(AssertUnwindSafe(move || sink.force_flush()));
+        }
+    }
+
+    fn shutdown(&self) {
+        for sink in &self.sinks {
+            let sink = Arc::clone(sink);
+            let _ = catch_unwind(AssertUnwindSafe(move || sink.shutdown()));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -200,5 +361,105 @@ mod tests {
             InterventionPoint::Output,
         );
         assert_eq!(event.event_type.as_str(), "intervention_point.transformed");
+    }
+
+    #[test]
+    fn in_memory_sink_records_events_in_order() {
+        let sink = InMemoryTelemetrySink::new();
+        sink.emit(
+            TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+                .with_decision(Decision::Allow),
+        );
+        sink.emit(
+            TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Output)
+                .with_decision(Decision::Deny),
+        );
+        let events = sink.events();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].decision, Some(Decision::Allow));
+        assert_eq!(events[1].decision, Some(Decision::Deny));
+    }
+
+    #[test]
+    fn to_json_emits_only_safe_fields_and_withholds_pointer_urls() {
+        let event = TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+            .with_decision(Decision::Deny)
+            .with_reason_code("policy_reason")
+            .with_evidence(
+                Some("sha256:proofblob"),
+                vec!["issuer_pubkey".to_string(), "policy_registry".to_string()],
+            )
+            .with_action_identity("sha256:abc");
+        let value = event.to_json();
+        let object = value.as_object().expect("json object");
+        let expected: std::collections::BTreeSet<&str> = [
+            "event_type",
+            "intervention_point",
+            "decision",
+            "reason_code",
+            "error_class",
+            "policy_id",
+            "annotators",
+            "enforcement_mode",
+            "duration_ms",
+            "evidence_artefact",
+            "evidence_verification_pointer_keys",
+            "action_identity",
+            "metadata",
+        ]
+        .into_iter()
+        .collect();
+        let actual: std::collections::BTreeSet<&str> = object.keys().map(String::as_str).collect();
+        assert_eq!(actual, expected);
+        // Sorted pointer keys only; no URL value can appear.
+        let serialized = value.to_string();
+        assert!(serialized.contains("issuer_pubkey"));
+        assert!(!serialized.contains("https://"));
+    }
+
+    #[test]
+    fn stdout_json_sink_writes_one_object_per_line() {
+        let buffer = Arc::new(Mutex::new(Vec::<u8>::new()));
+        struct SharedWriter(Arc<Mutex<Vec<u8>>>);
+        impl Write for SharedWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let sink = StdoutJsonTelemetrySink::to_writer(SharedWriter(Arc::clone(&buffer)));
+        sink.emit(
+            TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+                .with_decision(Decision::Allow),
+        );
+        sink.emit(
+            TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Output)
+                .with_decision(Decision::Warn),
+        );
+        let written = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        let lines: Vec<&str> = written.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("\"decision\":\"allow\""));
+        assert!(lines[1].contains("\"decision\":\"warn\""));
+    }
+
+    #[test]
+    fn multi_sink_fans_out_and_isolates_a_panicking_child() {
+        struct PanicSink;
+        impl TelemetrySink for PanicSink {
+            fn emit(&self, _event: TelemetryEvent) {
+                panic!("child sink boom");
+            }
+        }
+        let good = Arc::new(InMemoryTelemetrySink::new());
+        let multi = MultiSink::new(vec![Arc::new(PanicSink), good.clone()]);
+        multi.emit(
+            TelemetryEvent::new(TelemetryEventType::Decision, InterventionPoint::Input)
+                .with_decision(Decision::Allow),
+        );
+        assert_eq!(good.len(), 1);
     }
 }

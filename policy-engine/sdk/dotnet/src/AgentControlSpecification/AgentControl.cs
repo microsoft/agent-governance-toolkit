@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -10,11 +11,22 @@ public sealed class AgentControl
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IAgentControlRuntime runtime;
     private readonly ApprovalResolver? approvalResolver;
+    private readonly ITelemetrySink? telemetrySink;
+    private IReadOnlyDictionary<string, string> policyIdIndex;
+    private IReadOnlyDictionary<string, IReadOnlyList<string>> annotatorIndex;
 
-    public AgentControl(IAgentControlRuntime runtime, ApprovalResolver? approvalResolver = null)
+    public AgentControl(IAgentControlRuntime runtime, ApprovalResolver? approvalResolver = null, ITelemetrySink? telemetrySink = null)
     {
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         this.approvalResolver = approvalResolver;
+        this.telemetrySink = telemetrySink;
+        policyIdIndex = new Dictionary<string, string>(StringComparer.Ordinal);
+        annotatorIndex = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+    }
+
+    public AgentControl(IAgentControlRuntime runtime, IEnumerable<ITelemetrySink> telemetrySinks, ApprovalResolver? approvalResolver = null)
+        : this(runtime, approvalResolver, CoerceTelemetrySink(telemetrySinks))
+    {
     }
 
     public static AgentControl FromNative(
@@ -22,16 +34,62 @@ public sealed class AgentControl
         IAnnotatorDispatcher? annotatorDispatcher = null,
         IPolicyDispatcher? policyDispatcher = null,
         ApprovalResolver? approvalResolver = null,
+        PerfTelemetry perfTelemetry = PerfTelemetry.Off,
+        ITelemetrySink? telemetrySink = null)
+    {
+        var control = new AgentControl(
+            new NativeAgentControlRuntime(manifest, annotatorDispatcher, policyDispatcher, perfTelemetry),
+            approvalResolver,
+            telemetrySink);
+        control.IndexManifest(ParseManifestDocument(manifest));
+        return control;
+    }
+
+    public static AgentControl FromNative(
+        object manifest,
+        IEnumerable<ITelemetrySink> telemetrySinks,
+        IAnnotatorDispatcher? annotatorDispatcher = null,
+        IPolicyDispatcher? policyDispatcher = null,
+        ApprovalResolver? approvalResolver = null,
         PerfTelemetry perfTelemetry = PerfTelemetry.Off) =>
-        new(new NativeAgentControlRuntime(manifest, annotatorDispatcher, policyDispatcher, perfTelemetry), approvalResolver);
+        FromNative(
+            manifest,
+            annotatorDispatcher,
+            policyDispatcher,
+            approvalResolver,
+            perfTelemetry,
+            CoerceTelemetrySink(telemetrySinks));
 
     public static AgentControl FromPath(
         string path,
         IAnnotatorDispatcher? annotatorDispatcher = null,
         IPolicyDispatcher? policyDispatcher = null,
         ApprovalResolver? approvalResolver = null,
+        PerfTelemetry perfTelemetry = PerfTelemetry.Off,
+        ITelemetrySink? telemetrySink = null)
+    {
+        var control = new AgentControl(
+            NativeAgentControlRuntime.FromPath(path, annotatorDispatcher, policyDispatcher, perfTelemetry),
+            approvalResolver,
+            telemetrySink);
+        control.IndexManifest(ReadJsonManifestDocument(path));
+        return control;
+    }
+
+    public static AgentControl FromPath(
+        string path,
+        IEnumerable<ITelemetrySink> telemetrySinks,
+        IAnnotatorDispatcher? annotatorDispatcher = null,
+        IPolicyDispatcher? policyDispatcher = null,
+        ApprovalResolver? approvalResolver = null,
         PerfTelemetry perfTelemetry = PerfTelemetry.Off) =>
-        new(NativeAgentControlRuntime.FromPath(path, annotatorDispatcher, policyDispatcher, perfTelemetry), approvalResolver);
+        FromPath(
+            path,
+            annotatorDispatcher,
+            policyDispatcher,
+            approvalResolver,
+            perfTelemetry,
+            CoerceTelemetrySink(telemetrySinks));
 
     /// <summary>
     /// Async counterpart to <see cref="FromPath"/>. Native runtime construction
@@ -45,29 +103,241 @@ public sealed class AgentControl
         IPolicyDispatcher? policyDispatcher = null,
         ApprovalResolver? approvalResolver = null,
         PerfTelemetry perfTelemetry = PerfTelemetry.Off,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ITelemetrySink? telemetrySink = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         cancellationToken.ThrowIfCancellationRequested();
         return new ValueTask<AgentControl>(Task.Run(
-            () => FromPath(path, annotatorDispatcher, policyDispatcher, approvalResolver, perfTelemetry),
+            () => FromPath(path, annotatorDispatcher, policyDispatcher, approvalResolver, perfTelemetry, telemetrySink),
             cancellationToken));
     }
+
+    public static ValueTask<AgentControl> FromPathAsync(
+        string path,
+        IEnumerable<ITelemetrySink> telemetrySinks,
+        IAnnotatorDispatcher? annotatorDispatcher = null,
+        IPolicyDispatcher? policyDispatcher = null,
+        ApprovalResolver? approvalResolver = null,
+        PerfTelemetry perfTelemetry = PerfTelemetry.Off,
+        CancellationToken cancellationToken = default) =>
+        FromPathAsync(
+            path,
+            annotatorDispatcher,
+            policyDispatcher,
+            approvalResolver,
+            perfTelemetry,
+            cancellationToken,
+            CoerceTelemetrySink(telemetrySinks));
 
     public static AgentControl FromManifestChain(
         IReadOnlyList<string> manifests,
         IAnnotatorDispatcher? annotatorDispatcher = null,
         IPolicyDispatcher? policyDispatcher = null,
         ApprovalResolver? approvalResolver = null,
-        PerfTelemetry perfTelemetry = PerfTelemetry.Off) =>
-        new(NativeAgentControlRuntime.FromManifestChain(manifests, annotatorDispatcher, policyDispatcher, perfTelemetry), approvalResolver);
+        PerfTelemetry perfTelemetry = PerfTelemetry.Off,
+        ITelemetrySink? telemetrySink = null) =>
+        new(NativeAgentControlRuntime.FromManifestChain(manifests, annotatorDispatcher, policyDispatcher, perfTelemetry), approvalResolver, telemetrySink);
 
-    public ValueTask<InterventionPointResult> EvaluateInterventionPointAsync(
+    public static AgentControl FromManifestChain(
+        IReadOnlyList<string> manifests,
+        IEnumerable<ITelemetrySink> telemetrySinks,
+        IAnnotatorDispatcher? annotatorDispatcher = null,
+        IPolicyDispatcher? policyDispatcher = null,
+        ApprovalResolver? approvalResolver = null,
+        PerfTelemetry perfTelemetry = PerfTelemetry.Off) =>
+        FromManifestChain(
+            manifests,
+            annotatorDispatcher,
+            policyDispatcher,
+            approvalResolver,
+            perfTelemetry,
+            CoerceTelemetrySink(telemetrySinks));
+
+    public async ValueTask<InterventionPointResult> EvaluateInterventionPointAsync(
         InterventionPoint interventionPoint,
         JsonElement snapshot,
         EnforcementMode mode = EnforcementMode.Enforce,
-        CancellationToken cancellationToken = default) =>
-        runtime.EvaluateInterventionPointAsync(new InterventionPointRequest(interventionPoint, snapshot, mode), cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var sink = telemetrySink;
+        var stopwatch = sink is null ? null : Stopwatch.StartNew();
+        var result = await runtime.EvaluateInterventionPointAsync(
+            new InterventionPointRequest(interventionPoint, snapshot, mode),
+            cancellationToken).ConfigureAwait(false);
+        EmitTelemetry(sink, interventionPoint, mode, result, stopwatch);
+        return result;
+    }
+
+    private void EmitTelemetry(
+        ITelemetrySink? sink,
+        InterventionPoint interventionPoint,
+        EnforcementMode mode,
+        InterventionPointResult result,
+        Stopwatch? stopwatch)
+    {
+        if (sink is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var pointKey = interventionPoint.ToWireName();
+            policyIdIndex.TryGetValue(pointKey, out var policyId);
+            annotatorIndex.TryGetValue(pointKey, out var annotators);
+            var telemetryEvent = TelemetryEvent.FromResult(
+                interventionPoint,
+                mode,
+                result,
+                stopwatch?.Elapsed.TotalMilliseconds,
+                policyId,
+                annotators);
+            sink.Emit(telemetryEvent);
+        }
+        catch (Exception exception)
+        {
+            Trace.TraceWarning(
+                $"ACS telemetry sink {sink.GetType().Name} raised while building or emitting an event: {exception}");
+        }
+    }
+
+    private void IndexManifest(JsonElement? document)
+    {
+        var policyIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var annotators = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        if (!document.HasValue
+            || document.Value.ValueKind != JsonValueKind.Object
+            || !document.Value.TryGetProperty("intervention_points", out var interventionPoints)
+            || interventionPoints.ValueKind != JsonValueKind.Object)
+        {
+            policyIdIndex = policyIds;
+            annotatorIndex = annotators;
+            return;
+        }
+
+        foreach (var point in interventionPoints.EnumerateObject())
+        {
+            if (point.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var pointKey = NormalizeInterventionPointKey(point.Name);
+            if (point.Value.TryGetProperty("policy", out var policy)
+                && policy.ValueKind == JsonValueKind.Object
+                && policy.TryGetProperty("id", out var id)
+                && id.ValueKind == JsonValueKind.String)
+            {
+                policyIds[pointKey] = id.GetString() ?? string.Empty;
+            }
+
+            if (point.Value.TryGetProperty("annotations", out var annotationConfig)
+                && annotationConfig.ValueKind == JsonValueKind.Object)
+            {
+                var names = annotationConfig
+                    .EnumerateObject()
+                    .Select(annotation => annotation.Name)
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToArray();
+                if (names.Length > 0)
+                {
+                    annotators[pointKey] = names;
+                }
+            }
+        }
+
+        policyIdIndex = policyIds;
+        annotatorIndex = annotators;
+    }
+
+    private static ITelemetrySink? CoerceTelemetrySink(IEnumerable<ITelemetrySink> telemetrySinks)
+    {
+        ArgumentNullException.ThrowIfNull(telemetrySinks);
+        var sinks = telemetrySinks.Select(sink => sink ?? throw new ArgumentException("Telemetry sink collection must not contain null.", nameof(telemetrySinks))).ToArray();
+        return sinks.Length switch
+        {
+            0 => null,
+            1 => sinks[0],
+            _ => new MultiSink(sinks),
+        };
+    }
+
+    private static JsonElement? ParseManifestDocument(object? manifest)
+    {
+        if (manifest is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return manifest switch
+            {
+                JsonElement element => NormalizeManifestRoot(element),
+                JsonNode node => ParseJsonManifestText(node.ToJsonString(JsonOptions)),
+                string text => ParseJsonManifestText(text),
+                byte[] bytes => ParseJsonManifestText(Encoding.UTF8.GetString(bytes)),
+                _ => NormalizeManifestRoot(JsonSerializer.SerializeToElement(manifest, JsonOptions)),
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static JsonElement? ReadJsonManifestDocument(string path)
+    {
+        try
+        {
+            return ParseJsonManifestText(File.ReadAllText(path, Encoding.UTF8));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static JsonElement? ParseJsonManifestText(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        return NormalizeManifestRoot(document.RootElement);
+    }
+
+    private static JsonElement? NormalizeManifestRoot(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            return element.Clone();
+        }
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var inner = element.GetString();
+            if (!string.IsNullOrWhiteSpace(inner))
+            {
+                return ParseJsonManifestText(inner);
+            }
+        }
+
+        return null;
+    }
+
+    private static string NormalizeInterventionPointKey(string key)
+    {
+        try
+        {
+            return InterventionPointExtensions.FromWireName(key).ToWireName();
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+        }
+
+        return Enum.TryParse<InterventionPoint>(key, ignoreCase: true, out var interventionPoint)
+            ? interventionPoint.ToWireName()
+            : key;
+    }
 
     public ValueTask<InterventionPointResult> EvaluateAgentStartupAsync<TAgent>(
         TAgent agent,
