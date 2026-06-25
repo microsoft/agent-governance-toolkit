@@ -329,16 +329,12 @@ public sealed class AgentControl
         // Accept either a canonical wire name (input) or an enum name (Input) and
         // normalize both to the wire value; unknown keys pass through unchanged.
         // Avoids exception-driven control flow over FromWireName.
-        foreach (var point in Enum.GetValues<InterventionPoint>())
-        {
-            if (string.Equals(point.ToWireName(), key, StringComparison.Ordinal) ||
+        return Enum.GetValues<InterventionPoint>()
+            .Where(point =>
+                string.Equals(point.ToWireName(), key, StringComparison.Ordinal) ||
                 string.Equals(point.ToString(), key, StringComparison.OrdinalIgnoreCase))
-            {
-                return point.ToWireName();
-            }
-        }
-
-        return key;
+            .Select(point => point.ToWireName())
+            .FirstOrDefault(key);
     }
 
     public ValueTask<InterventionPointResult> EvaluateAgentStartupAsync<TAgent>(
