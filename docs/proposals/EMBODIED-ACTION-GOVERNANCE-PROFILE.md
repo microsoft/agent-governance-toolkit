@@ -121,6 +121,22 @@ state is missing or stale.
   for training-time or reinforcement-learning governance concerns. Runtime
   physical safety still belongs to the downstream safety layer.
 
+## Future Evidence Integration
+
+This profile can provide the decision-layer inputs for external evidence
+systems without making AGT responsible for controller verification. A deployment
+can record the AGT decision, action digest, policy version, approval status, and
+selected physical-action context, then bind those fields to downstream
+controller receipts in a separate evidence layer.
+
+Such an evidence layer could prove that a controller or gateway issued a signed
+receipt for the same action request AGT evaluated. That binding would complement
+AGT audit records, but it would remain outside this proposal unless a future
+integration explicitly defines the verifier, receipt schema, trust anchors, and
+failure behavior. In particular, controller receipts still would not prove
+physical completion, physical non-harm, or sensor truth unless those claims are
+separately validated by the downstream safety system.
+
 ## Example Policy
 
 The sample fixture in
