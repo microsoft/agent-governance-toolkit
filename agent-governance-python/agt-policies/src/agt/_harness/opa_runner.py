@@ -119,7 +119,10 @@ def _resolve_path(snapshot: dict[str, Any], path: str) -> Any:
     elif path == "$snap" or path == "$":
         return snapshot
     else:
-        raise ValueError(f"unsupported policy_target path root: {path!r}")
+        # Unrecognised root (e.g. "x.tool_call" instead of "$snap.tool_call").
+        # Fail closed via RuntimeError per the documented contract rather than
+        # leaking a bare ValueError to run_scenario's two unguarded call sites.
+        raise RuntimeError(f"unsupported policy_target path root: {path!r}")
 
     obj: Any = snapshot
     parts: list[str] = []
@@ -137,7 +140,11 @@ def _resolve_path(snapshot: dict[str, Any], path: str) -> Any:
             if cur:
                 parts.append(cur)
                 cur = ""
-            j = rest.index("]", i)
+            j = rest.find("]", i)
+            if j == -1:
+                raise RuntimeError(
+                    f"malformed policy_target path {path!r}: unclosed '['"
+                )
             parts.append(rest[i : j + 1])
             i = j + 1
             continue
@@ -147,12 +154,83 @@ def _resolve_path(snapshot: dict[str, Any], path: str) -> Any:
         parts.append(cur)
 
     for part in parts:
-        if part.startswith("[") and part.endswith("]"):
-            idx = int(part[1:-1])
-            obj = obj[idx]
-        else:
-            obj = obj[part]
+        try:
+            if part.startswith("[") and part.endswith("]"):
+                obj = obj[int(part[1:-1])]
+            else:
+                obj = obj[part]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                f"policy_target path {path!r} does not resolve against the snapshot"
+            ) from exc
     return obj
+
+
+# The verdict decisions the engine may return (SPECIFICATION.md §13/§14 and
+# ``agt.policies.result.Verdict``). Anything else is an anomaly.
+_VALID_DECISIONS = frozenset({"allow", "warn", "deny", "escalate", "transform"})
+
+
+def _decode_verdict(stdout: str) -> ScenarioResult:
+    """Decode ``opa eval --format json`` stdout into a :class:`ScenarioResult`.
+
+    Fails closed: malformed OPA output raises ``RuntimeError`` (per the
+    documented contract), and a verdict object that lacks a recognized
+    ``decision`` resolves to a ``deny`` rather than silently defaulting to
+    ``allow`` — a missing ``decision`` is an engine anomaly, and defaulting a
+    governance verdict to permit is exactly the wrong direction.
+    """
+    if not isinstance(stdout, str):
+        # ``run_scenario`` always passes ``proc.stdout`` (a str), but guard the
+        # contract so a None/bytes slip-through fails closed rather than raising
+        # a bare ``TypeError`` out of ``json.loads``.
+        raise RuntimeError(f"opa produced no decodable stdout: {stdout!r}")
+    try:
+        response = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"opa produced non-JSON output: {stdout[:200]!r}"
+        ) from exc
+
+    if not isinstance(response, dict):
+        # A top-level list/scalar (valid JSON, wrong shape) would otherwise
+        # raise AttributeError at response.get(...). Fail closed instead.
+        raise RuntimeError(
+            f"opa returned a non-object top-level response: {response!r}"
+        )
+
+    results = response.get("result") or []
+    if not results:
+        raise RuntimeError("opa eval produced no result")
+    expressions = results[0].get("expressions") or []
+    value = expressions[0].get("value") if expressions else None
+    if not isinstance(value, dict):
+        raise RuntimeError(f"opa returned non-object verdict: {value!r}")
+
+    decision = value.get("decision")
+    if decision not in _VALID_DECISIONS:
+        return ScenarioResult(
+            decision="deny",
+            reason="runtime_error:engine_invalid_verdict",
+            message=f"opa returned a verdict without a recognized decision: {value!r}",
+            raw=value,
+        )
+
+    labels = value.get("result_labels")
+    if labels is not None and not (
+        isinstance(labels, list) and all(isinstance(x, str) for x in labels)
+    ):
+        raise RuntimeError(f"opa returned non-list[str] result_labels: {labels!r}")
+
+    return ScenarioResult(
+        decision=decision,
+        reason=value.get("reason"),
+        message=value.get("message"),
+        transform=value.get("transform"),
+        evidence=value.get("evidence"),
+        result_labels=labels,
+        raw=value,
+    )
 
 
 def run_scenario(
@@ -182,7 +260,11 @@ def run_scenario(
 
     Raises:
         FileNotFoundError: When the OPA binary is not on PATH.
-        RuntimeError: When opa eval fails or produces no result.
+        RuntimeError: When opa eval fails, produces no/malformed result,
+            the intervention-point binding is malformed, or a
+            ``policy_target`` path does not resolve against the snapshot.
+            A verdict lacking a recognized ``decision`` is *not* raised —
+            it fails closed to a ``deny`` ScenarioResult.
     """
     if shutil.which("opa") is None:
         raise FileNotFoundError(
@@ -223,7 +305,13 @@ def run_scenario(
 
     tool: dict[str, Any] | None = None
     if intervention_point in {"pre_tool_call", "post_tool_call"}:
-        tool_name = _resolve_path(snapshot, ip_config["tool_name_from"])
+        tool_name_from = ip_config.get("tool_name_from")
+        if not isinstance(tool_name_from, str):
+            raise RuntimeError(
+                f"intervention point {intervention_point!r} binding is missing a "
+                "string 'tool_name_from'"
+            )
+        tool_name = _resolve_path(snapshot, tool_name_from)
         if not isinstance(tool_name, str):
             raise RuntimeError("tool_name_from did not resolve to a string")
         tool = _project_tool_from_manifest(manifest, tool_name)
@@ -260,18 +348,4 @@ def run_scenario(
     if proc.returncode != 0:
         raise RuntimeError(f"opa eval failed: {proc.stderr.strip()}")
 
-    response = json.loads(proc.stdout)
-    expressions = response.get("result", [{}])[0].get("expressions", [{}])
-    value = expressions[0].get("value") if expressions else None
-    if not isinstance(value, dict):
-        raise RuntimeError(f"opa returned non-object verdict: {value!r}")
-
-    return ScenarioResult(
-        decision=str(value.get("decision", "allow")),
-        reason=value.get("reason"),
-        message=value.get("message"),
-        transform=value.get("transform"),
-        evidence=value.get("evidence"),
-        result_labels=value.get("result_labels"),
-        raw=value,
-    )
+    return _decode_verdict(proc.stdout)
