@@ -14,7 +14,7 @@ publisher configuration and npm/NuGet GitHub credentials are completed.
 
 | Authority | Current target |
 |---|---|
-| Release approval | Maintainers and CODEOWNERS for release workflows |
+| Release approval | Maintainers for release workflows |
 | Build and attest | `.github/workflows/publish.yml` and `.github/workflows/sbom.yml` |
 | Package registries | Temporary ESRP ADO pipeline; registry-native GitHub publishing after credentials are ready |
 | Containers | Foundation or repository-owner GHCR namespace |

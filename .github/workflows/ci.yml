@@ -1052,7 +1052,10 @@ jobs:
         shell: bash
         run: |
           if node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)"; then
-            if find . -type f \( -name "*.test.ts" -o -name "*.spec.ts" -o -name "*.test.tsx" -o -name "*.spec.tsx" -o -name "*.test.js" -o -name "*.spec.js" -o -name "*.test.mjs" -o -name "*.spec.mjs" -o -name "*.test.cjs" -o -name "*.spec.cjs" \) | grep -q .; then
+            # `-print -quit` makes find exit cleanly after the first match. Without it,
+            # under `bash -o pipefail` the early-exit of `grep -q` SIGPIPEs find (exit 141)
+            # and the pipeline is treated as false, so npm test was being skipped.
+            if find . -type f \( -name "*.test.ts" -o -name "*.spec.ts" -o -name "*.test.tsx" -o -name "*.spec.tsx" -o -name "*.test.js" -o -name "*.spec.js" -o -name "*.test.mjs" -o -name "*.spec.mjs" -o -name "*.test.cjs" -o -name "*.spec.cjs" \) -print -quit | grep -q .; then
               npm test
             else
               echo "No test files found"

@@ -240,7 +240,16 @@ impl Manifest {
     /// dispatcher's provider default credential fallback (which reads a host env
     /// var with no manifest field, so a field scan cannot see it) is closed
     /// separately at dispatch through the `url_sourced` flag.
-    fn reject_url_sourced_local_access(&self) -> Result<(), RuntimeError> {
+    ///
+    /// `fully_pinned` is true only when the top level URL load and every URL
+    /// `extends` entry in the chain carried a verified hash pin. A fully pinned
+    /// chain is content addressed end to end, so the host that chose the top pin
+    /// transitively vouches for every merged byte, including a rego `bundle_url`
+    /// and its own pin. The remote rego `bundle_url` rejection is therefore
+    /// skipped for a fully pinned chain, matching the file sourced trust model.
+    /// The local filesystem path fields and the host environment secret fields
+    /// stay rejected regardless, because their content is not part of the pin.
+    fn reject_url_sourced_local_access(&self, fully_pinned: bool) -> Result<(), RuntimeError> {
         for (name, annotator) in &self.annotators {
             reject_url_sourced_annotator_fields(&format!("annotator '{name}'"), &annotator.fields)?;
         }
@@ -258,7 +267,9 @@ impl Manifest {
         }
         for (id, policy) in &self.policies {
             policy.reject_filesystem_path_fields(&format!("policy '{id}'"))?;
-            policy.reject_url_sourced_remote_bundle(&format!("policy '{id}'"))?;
+            if !fully_pinned {
+                policy.reject_url_sourced_remote_bundle(&format!("policy '{id}'"))?;
+            }
         }
         for (point, config) in &self.intervention_points {
             config.policy.reject_filesystem_path_fields(&format!(
@@ -286,7 +297,10 @@ impl Manifest {
     /// error, or a body size breach MUST fail closed. A URL sourced manifest
     /// cannot reference local files, so a rego `bundle`, an annotator
     /// `system_prompt_file`, a cedar path, or adapter `data` field fails closed;
-    /// use the `*_url` forms or inline text instead.
+    /// use the `*_url` forms or inline text instead. A rego `bundle_url` is
+    /// allowed only when the whole load chain is fully pinned, that is the top
+    /// level pin is present and every URL `extends` entry carries a pin, because
+    /// the pin chain makes the bundle host vouched as in a file sourced manifest.
     pub fn from_url(url: &str, sha256: Option<&str>) -> Result<Self, RuntimeError> {
         Self::from_url_with_limits(url, sha256, Limits::default())
     }
@@ -591,6 +605,14 @@ struct ManifestLoader {
     limits: Limits,
     url_bodies: BTreeMap<String, Vec<u8>>,
     fetcher: Box<dyn ExtendsFetcher>,
+    /// Tracks whether every fetch in a URL load chain carried a verified hash
+    /// pin. Set by `load_url` from the top level pin and cleared whenever an
+    /// unpinned URL `extends` entry is resolved. Only meaningful for a URL
+    /// sourced load. A fully pinned chain is content addressed end to end, so
+    /// the host that chose the top pin transitively vouches for every merged
+    /// byte, which lets a fully pinned URL sourced manifest carry a remote rego
+    /// `bundle_url`.
+    chain_fully_pinned: bool,
 }
 
 impl Default for ManifestLoader {
@@ -607,6 +629,7 @@ impl ManifestLoader {
             limits,
             url_bodies: BTreeMap::new(),
             fetcher: Box::new(HttpExtendsFetcher),
+            chain_fully_pinned: false,
         }
     }
 
@@ -618,6 +641,7 @@ impl ManifestLoader {
             limits,
             url_bodies: BTreeMap::new(),
             fetcher,
+            chain_fully_pinned: false,
         }
     }
 
@@ -653,13 +677,17 @@ impl ManifestLoader {
         let normalized = validate_https_url(url)?;
         let body = self.fetch_url_body(&normalized)?;
         verify_extends_hash(&extends, &normalized, &body)?;
+        // The top level node is pinned when a hash was supplied and verified
+        // above. An unpinned URL extends entry resolved during the load below
+        // clears this, so it stays true only for a fully pinned chain.
+        self.chain_fully_pinned = sha256.is_some();
         let location = ManifestLocation::Url(normalized);
         let previous_root = self.trust_root.take();
         let result = self.load_location_with_body(location.clone(), Some(body), &location);
         self.trust_root = previous_root;
         let mut manifest = result?;
         manifest.url_sourced = true;
-        manifest.reject_url_sourced_local_access()?;
+        manifest.reject_url_sourced_local_access(self.chain_fully_pinned)?;
         manifest.validate()?;
         Ok(manifest)
     }
@@ -693,6 +721,13 @@ impl ManifestLoader {
         including: &ManifestLocation,
         extends: &ManifestExtends,
     ) -> Result<Manifest, RuntimeError> {
+        // An unpinned URL extends entry leaves its bytes mutable at the source,
+        // so the merged chain is no longer content addressed from the top pin.
+        // Clear the chain pin flag so a remote rego bundle merged in anywhere is
+        // still rejected.
+        if !extends_is_pinned(extends) {
+            self.chain_fully_pinned = false;
+        }
         let normalized = validate_https_url(&url)?;
         let body = self.fetch_url_body(&normalized)?;
         verify_extends_hash(extends, &normalized, &body)?;
@@ -925,6 +960,16 @@ fn validate_chain_extends(manifest: &Manifest, index: usize) -> Result<(), Runti
         validate_extends_trust(extends)?;
     }
     Ok(())
+}
+
+/// True when a URL `extends` entry carries a verified hash pin. A path
+/// reference is never pinned. Used to track whether a URL load chain is
+/// content addressed end to end.
+fn extends_is_pinned(extends: &ManifestExtends) -> bool {
+    matches!(
+        extends,
+        ManifestExtends::Url(url) if url.integrity.is_some() || url.sha256.is_some()
+    )
 }
 
 fn validate_extends_trust(extends: &ManifestExtends) -> Result<(), RuntimeError> {
@@ -2582,12 +2627,13 @@ intervention_points:
 
     #[test]
     fn from_url_rejects_remote_rego_bundle_url() {
-        // Security regression: a URL sourced (untrusted) manifest must not carry
-        // a remote rego bundle_url, because the bundled OPA dispatcher would run
-        // the fetched rego with the host environment and network, so attacker
-        // chosen rego could read a host secret via opa.runtime and exfiltrate it
-        // via http.send. The hash pin does not establish trust because the same
-        // untrusted manifest chooses both the URL and the pin.
+        // Security regression: an unpinned URL sourced (untrusted) manifest must
+        // not carry a remote rego bundle_url, because the bundled OPA dispatcher
+        // would run the fetched rego with the host environment and network, so
+        // attacker chosen rego could read a host secret via opa.runtime and
+        // exfiltrate it via http.send. The hash pin on the bundle does not
+        // establish trust because the same unpinned manifest chooses both the
+        // bundle URL and the pin. This test loads the top with no pin.
         let url = "https://policy.example/top.yaml";
         let body = "agent_control_specification_version: 0.3.1-beta\npolicies:\n  guard:\n    type: rego\n    query: data.x.verdict\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: guard\n".to_string();
         let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body.into_bytes())]));
@@ -2603,6 +2649,65 @@ intervention_points:
             "agent_control_specification_version: 0.3.1-beta\npolicies:\n  guard:\n    type: rego\n    query: data.x.verdict\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: guard\n",
         );
         assert!(file_manifest.is_ok(), "file sourced bundle_url stays valid");
+    }
+
+    #[test]
+    fn from_url_pinned_allows_remote_rego_bundle_url() {
+        // A fully pinned URL sourced manifest is content addressed end to end, so
+        // the host that chose the top level pin transitively vouches for the
+        // bundle URL and its pin. The remote rego bundle_url is therefore allowed,
+        // matching the file sourced trust model.
+        let url = "https://policy.example/top.yaml";
+        let body = "agent_control_specification_version: 0.3.1-beta\npolicies:\n  guard:\n    type: rego\n    query: data.x.verdict\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: guard\n".as_bytes().to_vec();
+        let pin = hex_sha256(&body);
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body)]));
+        let manifest = load_url_with_fetcher(url, Some(&pin), fetcher, Limits::default()).unwrap();
+        assert!(manifest.url_sourced);
+        assert!(manifest.policies.contains_key("guard"));
+    }
+
+    #[test]
+    fn from_url_pinned_with_unpinned_url_extends_rejects_bundle_url() {
+        // A pinned top that pulls in an unpinned URL extends is not fully pinned,
+        // because the child bytes stay mutable at the source. A remote rego
+        // bundle_url merged in from that child must still be rejected.
+        let top_url = "https://policy.example/top.yaml";
+        let child_url = "https://policy.example/child.yaml";
+        let child_body = "agent_control_specification_version: 0.3.1-beta\npolicies:\n  guard:\n    type: rego\n    query: data.x.verdict\n    bundle_url:\n      url: https://policy.example/bundle.tar.gz\n      sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: guard\n".as_bytes().to_vec();
+        let top_body =
+            format!("agent_control_specification_version: 0.3.1-beta\nextends:\n  - {child_url}\n")
+                .into_bytes();
+        let pin = hex_sha256(&top_body);
+        let fetcher = MockFetcher::new(BTreeMap::from([
+            (top_url.to_string(), top_body),
+            (child_url.to_string(), child_body),
+        ]));
+        let error =
+            load_url_with_fetcher(top_url, Some(&pin), fetcher, Limits::default()).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("remote rego 'bundle_url'"),
+            "got: {}",
+            error.detail()
+        );
+    }
+
+    #[test]
+    fn from_url_pinned_still_rejects_local_bundle() {
+        // Even a fully pinned chain pins the path string, not the file content at
+        // dispatch, so a local rego bundle path stays rejected for a URL sourced
+        // manifest regardless of the pin.
+        let url = "https://policy.example/top.yaml";
+        let body = "agent_control_specification_version: 0.3.1-beta\npolicies:\n  guard:\n    type: rego\n    query: data.x.verdict\n    bundle: ./policy\nintervention_points:\n  input:\n    policy_target: $snap.input\n    policy:\n      id: guard\n".as_bytes().to_vec();
+        let pin = hex_sha256(&body);
+        let fetcher = MockFetcher::new(BTreeMap::from([(url.to_string(), body)]));
+        let error = load_url_with_fetcher(url, Some(&pin), fetcher, Limits::default()).unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(
+            error.detail().contains("filesystem path field 'bundle'"),
+            "got: {}",
+            error.detail()
+        );
     }
 
     #[test]
