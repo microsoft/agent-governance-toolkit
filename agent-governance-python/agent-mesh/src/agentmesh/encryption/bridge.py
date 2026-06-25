@@ -132,7 +132,11 @@ class EncryptedTrustBridge:
         Raises:
             PermissionError: If the peer fails trust verification.
         """
-        threshold = required_trust_score or self._min_trust_score
+        threshold = (
+            self._min_trust_score
+            if required_trust_score is None
+            else required_trust_score
+        )
 
         # Step 1: Trust verification
         if not skip_handshake:

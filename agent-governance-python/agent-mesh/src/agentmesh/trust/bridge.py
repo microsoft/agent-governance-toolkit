@@ -156,7 +156,11 @@ class TrustBridge(BaseModel):
         """
         Verify a peer before communication.
         """
-        threshold = required_trust_score or self.default_trust_threshold
+        threshold = (
+            self.default_trust_threshold
+            if required_trust_score is None
+            else required_trust_score
+        )
 
         result = await self._handshake.initiate(
             peer_did=peer_did,
@@ -197,7 +201,9 @@ class TrustBridge(BaseModel):
             self._peer_signatures.pop(peer_did, None)
             return False
 
-        threshold = required_score or self.default_trust_threshold
+        threshold = (
+            self.default_trust_threshold if required_score is None else required_score
+        )
         return peer.trust_score >= threshold
 
     def get_peer(self, peer_did: str) -> Optional[PeerInfo]:
@@ -206,7 +212,9 @@ class TrustBridge(BaseModel):
 
     def get_trusted_peers(self, min_score: Optional[int] = None) -> list[PeerInfo]:
         """Get all peers that are verified and meet the trust threshold."""
-        threshold = min_score or self.default_trust_threshold
+        threshold = (
+            self.default_trust_threshold if min_score is None else min_score
+        )
         return [
             peer for peer in self.peers.values()
             if peer.trust_verified and peer.trust_score >= threshold

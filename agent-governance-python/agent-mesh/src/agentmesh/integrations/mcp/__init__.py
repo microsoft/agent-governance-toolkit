@@ -166,7 +166,7 @@ class TrustGatedMCPServer:
             handler=handler,
             input_schema=input_schema or {},
             required_capability=required_capability,
-            min_trust_score=min_trust_score or self.min_trust_score,
+            min_trust_score=self.min_trust_score if min_trust_score is None else min_trust_score,
             require_human_sponsor=require_human_sponsor,
         )
         logger.info(f"Registered tool '{name}' with capability requirement: {required_capability}")
