@@ -167,7 +167,7 @@ class TestTrustTracker:
 
     def test_recorded_interactions_have_iso_timestamps(self) -> None:
         # BUG-4 regression: record_interaction must populate timestamp
-        # so history is orderable, decayable, and time-boundable.
+        # so history can be ordered, decayed over time, and time-bounded.
         tracker = TrustTracker()
         tracker.record_interaction("a1", "a2", "task1", success=True)
         tracker.record_interaction("a1", "a3", "task2", success=False)
