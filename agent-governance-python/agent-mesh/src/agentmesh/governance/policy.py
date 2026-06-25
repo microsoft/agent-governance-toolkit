@@ -577,75 +577,6 @@ class PolicyEngine:
         """
         self._authority_resolver = resolver
 
-    def _apply_rule(self, rule: PolicyRule, policy: Policy, context: Optional[dict] = None) -> PolicyDecision:
-        """Apply a matched rule and generate actionable error messages."""
-        # Check rate limit if applicable
-        if rule.limit:
-            if self._is_rate_limited(rule):
-                return PolicyDecision(
-                    allowed=False,
-                    action="deny",
-                    matched_rule=rule.name,
-                    policy_name=policy.name,
-                    reason=f"Rate limit exceeded for rule '{rule.name}': {rule.limit}. Wait for rate limit to reset.",
-                    rate_limited=True,
-                )
-            self._increment_rate_limit(rule)
-
-        # Build actionable error message
-        if rule.action == "deny":
-            # Build detailed, actionable message
-            action_type = context.get("action", {}).get("type", "action") if context else "action"
-            suggestion = self._get_suggestion(rule, context)
-            reason = (
-                f"Policy '{policy.name}' blocked {action_type}. "
-                f"Rule: '{rule.name}'. "
-                f"Reason: {rule.description or 'Policy condition matched'}. "
-                f"{suggestion}"
-            )
-        elif rule.action == "require_approval":
-            approver_list = ", ".join(rule.approvers) if rule.approvers else "designated approvers"
-            reason = (
-                f"Action requires approval from {approver_list}. "
-                f"Policy: '{policy.name}', Rule: '{rule.name}'."
-            )
-        elif rule.action == "warn":
-            reason = (
-                f"Warning from policy '{policy.name}': {rule.description or rule.name}. "
-                f"Action allowed but logged for review."
-            )
-        else:
-            reason = rule.description or f"Matched rule: {rule.name}"
-
-        return PolicyDecision(
-            allowed=(rule.action == "allow"),
-            action=rule.action,
-            matched_rule=rule.name,
-            policy_name=policy.name,
-            reason=reason,
-            approvers=rule.approvers if rule.action == "require_approval" else [],
-        )
-
-    def _get_suggestion(self, rule: PolicyRule, context: Optional[dict] = None) -> str:
-        """Generate actionable suggestions based on the rule condition."""
-        condition = rule.condition.lower()
-
-        # Pattern-based suggestions
-        if "pii" in condition or "contains_pii" in condition:
-            return "Suggestion: Remove PII fields or request approval from data privacy team."
-        elif "export" in condition:
-            return "Suggestion: Use internal data only or request export approval."
-        elif "admin" in condition or "role" in condition:
-            return "Suggestion: Request elevated permissions or contact your administrator."
-        elif "external" in condition or "domain" in condition:
-            return "Suggestion: Use approved internal services or request external access."
-        elif "budget" in condition or "cost" in condition:
-            return "Suggestion: Reduce request scope or request budget increase."
-        elif "time" in condition or "hour" in condition:
-            return "Suggestion: Retry during allowed hours or request exception."
-        else:
-            return "Suggestion: Review policy requirements or contact administrator."
-
     def _is_rate_limited(self, rule: PolicyRule) -> bool:
         """Check if a rule is rate limited."""
         if not rule.limit:
@@ -878,9 +809,13 @@ class PolicyEngine:
                             matched_rule=matched_rule.name,
                             policy_name=winner.policy_name,
                             reason=f"Rate limited: {matched_rule.limit}",
+                            rate_limited=True,
                             evaluated_at=start,
                             evaluation_ms=elapsed,
                         )
+                    # Not rate limited: count this matching evaluation toward
+                    # the window so the (N+1)th matching call trips the limit.
+                    self._increment_rate_limit(matched_rule)
 
                 return PolicyDecision(
                     allowed=(winner.action == "allow"),
