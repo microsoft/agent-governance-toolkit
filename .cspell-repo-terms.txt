@@ -221,6 +221,8 @@ healthz
 héllo
 helpdesk
 hexdigest
+HKDF
+hkdf
 HMAC
 HMACSHA
 htek
@@ -861,3 +863,11 @@ preimage
 # --- Flowise integration terms ---
 chatflow
 Chatflows
+
+# --- Test code terms ---
+interp
+ncat
+netcat
+socat
+nmap
+tcpdump

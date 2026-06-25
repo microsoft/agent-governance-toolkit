@@ -3,6 +3,9 @@
 Starter template for building an AgentMesh trust layer for any agent framework.
 Copy this package and rename it for your target framework.
 
+> **Status.** This is a scaffold, not a published package. `template-agentmesh` is intentionally
+> not on PyPI. Copy this directory, rename it, and publish under your own integration name.
+
 See [Tutorial 28 — Building Custom Governance Integrations](../../../docs/tutorials/28-build-custom-integration.md) for the full walkthrough.
 
 ## Quick Start

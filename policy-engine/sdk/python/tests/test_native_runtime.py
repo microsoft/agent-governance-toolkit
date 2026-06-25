@@ -292,6 +292,44 @@ class ZeroConfigDefaultsTests(unittest.TestCase):
         control = AgentControl.from_path(str(_SUPPORT_MANIFEST))
         self.assertIsNotNone(control._runtime_client._native)
 
+    def test_from_url_rejects_non_https_and_fails_closed(self):
+        # The top level manifest URL loader reuses the extends trust gate, so a
+        # non HTTPS URL is refused before any network access, with or without a
+        # pin.
+        with self.assertRaises(RuntimeError) as ctx:
+            AgentControl.from_url("http://policy.example/manifest.yaml")
+        self.assertIn("runtime_error:manifest_invalid", str(ctx.exception))
+
+    def test_from_url_pin_is_optional(self):
+        # The pin is optional, mirroring URL extends. Omitting it still reaches
+        # the loader; here a non HTTPS URL surfaces the loader error, confirming
+        # the unpinned call path is wired.
+        with self.assertRaises(RuntimeError) as ctx:
+            AgentControl.from_url("http://policy.example/manifest.yaml", sha256=None)
+        self.assertIn("unsupported URL scheme", str(ctx.exception))
+
+    def test_from_url_malformed_pin_fails_closed_before_fetch(self):
+        # A supplied pin is validated for format before any network access, which
+        # confirms the sha256 argument threads through the Python wrapper, the
+        # native binding, and the core loader. "zz" is not 64 hex characters.
+        with self.assertRaises(RuntimeError) as ctx:
+            AgentControl.from_url("https://policy.example/manifest.yaml", sha256="zz")
+        self.assertIn("runtime_error:manifest_invalid", str(ctx.exception))
+
+    def test_from_url_threads_url_fetch_limits(self):
+        # The optional URL fetch limit overrides thread through the wrapper, the
+        # client, and the native binding. A non HTTPS URL still fails closed
+        # before any network access, confirming the extra arguments are wired
+        # without changing the trust gate.
+        with self.assertRaises(RuntimeError) as ctx:
+            AgentControl.from_url(
+                "http://policy.example/manifest.yaml",
+                max_url_bytes=4096,
+                url_timeout_ms=1000,
+                max_url_redirects=0,
+            )
+        self.assertIn("unsupported URL scheme", str(ctx.exception))
+
     def test_from_path_bad_explicit_opa_path_fails_closed_on_evaluation(self):
         import os
         import tempfile

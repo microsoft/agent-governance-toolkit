@@ -7,7 +7,7 @@ name = "agent-governance-toolkit-protocols"
 version = "4.1.0"
 description = "Protocol implementations for the Agent Governance Toolkit."
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]

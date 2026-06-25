@@ -7,7 +7,7 @@
 
 use crate::{
     AnnotatorDispatcher, AnnotatorInvocation, Decision, EnforcementMode, InterventionPoint,
-    InterventionPointRequest, JsonValue, Manifest, PerfTelemetry, PolicyDispatcher,
+    InterventionPointRequest, JsonValue, Limits, Manifest, PerfTelemetry, PolicyDispatcher,
     PreparedPolicyInvocation, Runtime, RuntimeError, Verdict,
 };
 use serde_json::json;
@@ -55,6 +55,7 @@ pub struct AcsBuilder {
     perf_telemetry: PerfTelemetry,
     enable_default_annotations: bool,
     enable_default_policy: bool,
+    limits: Limits,
 }
 
 pub struct AcsRuntime {
@@ -168,6 +169,7 @@ fn builder_from_manifest(manifest: Manifest) -> *mut AcsBuilder {
         perf_telemetry: PerfTelemetry::default(),
         enable_default_annotations: false,
         enable_default_policy: false,
+        limits: Limits::default(),
     }))
 }
 
@@ -194,6 +196,52 @@ pub unsafe extern "C" fn acs_builder_from_path(
             Ok(manifest) => builder_from_manifest(manifest),
             Err(error) => {
                 unsafe { write_err(err, &format!("from_path failed: {error}")) };
+                std::ptr::null_mut()
+            }
+        }
+    })
+}
+
+/// Construct an ACS builder from a top level manifest fetched from an HTTPS
+/// URL. `sha256` is optional and MAY be null. When supplied it MUST be a 64
+/// character hexadecimal SHA-256 digest over the fetched bytes. A non HTTPS
+/// URL, a malformed pin, a fetch error, a body size breach, or a hash mismatch
+/// fails closed.
+///
+/// # Safety
+/// `url` must be a valid pointer to a NUL-terminated UTF-8 string. `sha256` may
+/// be null or a valid pointer to a NUL-terminated UTF-8 string. If `err` is
+/// non-null, it must point to writable storage for a `char*`; populated errors
+/// must be freed with `acs_free_string`.
+#[no_mangle]
+pub unsafe extern "C" fn acs_builder_from_url(
+    url: *const c_char,
+    sha256: *const c_char,
+    err: *mut *mut c_char,
+) -> *mut AcsBuilder {
+    ffi_guard!(ptr_with_err, err, {
+        let url = match unsafe { cstr_to_str(url) } {
+            Some(value) => value,
+            None => {
+                unsafe { write_err(err, "null or non-UTF8 url") };
+                return std::ptr::null_mut();
+            }
+        };
+        let sha256 = if sha256.is_null() {
+            None
+        } else {
+            match unsafe { cstr_to_str(sha256) } {
+                Some(value) => Some(value),
+                None => {
+                    unsafe { write_err(err, "non-UTF8 sha256") };
+                    return std::ptr::null_mut();
+                }
+            }
+        };
+        match Manifest::from_url(url, sha256) {
+            Ok(manifest) => builder_from_manifest(manifest),
+            Err(error) => {
+                unsafe { write_err(err, &format!("from_url failed: {error}")) };
                 std::ptr::null_mut()
             }
         }
@@ -456,6 +504,41 @@ pub unsafe extern "C" fn acs_builder_set_perf_telemetry(
     })
 }
 
+/// Set the URL fetch limits the bundled default dispatchers use for dispatch
+/// time fetches of a `system_prompt_url` prompt and a file sourced `bundle_url`
+/// rego bundle. `max_bytes` caps the fetched body, `timeout_ms` bounds each
+/// request, and `max_redirects` caps the validated redirect chain. A `max_bytes`
+/// or `timeout_ms` of 0 keeps the built in default for that field; `max_redirects`
+/// is applied as given so 0 forbids redirects. Has no effect unless a bundled
+/// default dispatcher is also enabled.
+///
+/// # Safety
+/// `b` must be a live builder returned by ACS and not concurrently mutated. If
+/// `err` is non-null it must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn acs_builder_set_url_fetch_limits(
+    b: *mut AcsBuilder,
+    max_bytes: u64,
+    timeout_ms: u64,
+    max_redirects: u32,
+    err: *mut *mut c_char,
+) -> i32 {
+    ffi_guard!(code_with_err, err, -1, {
+        let Some(builder) = (unsafe { b.as_mut() }) else {
+            unsafe { write_err(err, "null builder") };
+            return -1;
+        };
+        if max_bytes != 0 {
+            builder.limits.max_manifest_url_bytes = max_bytes as usize;
+        }
+        if timeout_ms != 0 {
+            builder.limits.manifest_url_timeout_ms = timeout_ms;
+        }
+        builder.limits.max_manifest_url_redirects = max_redirects as usize;
+        0
+    })
+}
+
 fn resolve_default_annotator_dispatcher(
     builder: &AcsBuilder,
     _manifest: &Manifest,
@@ -465,8 +548,10 @@ fn resolve_default_annotator_dispatcher(
     }
     #[cfg(feature = "default-dispatchers")]
     {
-        let _ = _manifest;
-        Ok(Some(crate::dispatchers::default_annotator_dispatcher()))
+        Ok(Some(crate::dispatchers::default_annotator_dispatcher_for(
+            _manifest,
+            builder.limits,
+        )))
     }
     #[cfg(not(feature = "default-dispatchers"))]
     {
@@ -483,7 +568,7 @@ fn resolve_default_policy_dispatcher(
     }
     #[cfg(all(feature = "default-dispatchers", feature = "opa"))]
     {
-        crate::dispatchers::default_policy_dispatcher(manifest)
+        crate::dispatchers::default_policy_dispatcher_with_limits(manifest, builder.limits)
             .map(Some)
             .map_err(|error| error.to_string())
     }

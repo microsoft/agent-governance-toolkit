@@ -7,7 +7,7 @@ name = "pharma_compliance_demo"
 version = "4.1.0"
 description = "Pharma Compliance demo using Agent OS"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.4.0,<3.0",
 ]

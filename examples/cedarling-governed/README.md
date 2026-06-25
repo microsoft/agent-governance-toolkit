@@ -14,12 +14,16 @@ Two examples, one per authorization mode:
 
 ```bash
 pip install -r requirements.txt
+# cedarling-agentmesh is not yet on PyPI; install it from source:
+pip install -e ../../agent-governance-python/agentmesh-integrations/cedarling-agentmesh
 python unsigned_example.py
 python multi_issuer_example.py
 ```
 
 `cedarling-python` (pulled in by `requirements.txt`) evaluates the policies
-in-process against the bundled stores in [`policy-stores/`](policy-stores).
+in-process against the bundled stores in [`policy-stores/`](policy-stores). The
+`cedarling_agentmesh` backend is installed separately from source per the step
+above.
 
 ---
 

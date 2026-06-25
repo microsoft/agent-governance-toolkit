@@ -27,18 +27,37 @@ pub use endpoint::EndpointAnnotator;
 pub use llm::LlmAnnotator;
 
 use crate::AnnotatorDispatcher;
+use crate::{Limits, Manifest};
 #[cfg(feature = "opa")]
-use crate::{Manifest, OpaPolicyDispatcher, OpaRegoRunner, PolicyDispatcher, RuntimeError};
+use crate::{OpaPolicyDispatcher, OpaRegoRunner, PolicyDispatcher, RuntimeError};
 use std::sync::Arc;
 
 /// The bundled native annotator dispatcher used as the zero-config default. It
 /// routes each annotator to the matching reference dispatcher based on its
-/// declared `type`, reading endpoint configuration from the manifest.
-pub fn default_annotator_dispatcher() -> Arc<dyn AnnotatorDispatcher> {
-    Arc::new(DefaultAnnotatorDispatcher::new())
+/// declared `type`, reading endpoint configuration from the manifest. It is
+/// bound to the `limits` the caller passes, used for dispatch time fetches, and
+/// to the manifest `url_sourced` provenance, so a bundled `llm` annotator on an
+/// untrusted URL sourced manifest never falls back to a host environment
+/// credential, including a provider default credential variable. Credentials
+/// must be supplied inline. A file sourced manifest keeps the historical
+/// behavior. Every host surface MUST build the annotator dispatcher through this
+/// function so the provenance is never dropped. The FFI builder
+/// (`acs_builder_set_url_fetch_limits`) and the Rust SDK
+/// (`from_url_with_limits`) let a host pass tightened URL fetch limits here.
+pub fn default_annotator_dispatcher_for(
+    manifest: &Manifest,
+    limits: Limits,
+) -> Arc<dyn AnnotatorDispatcher> {
+    Arc::new(DefaultAnnotatorDispatcher::with_limits_and_source(
+        limits,
+        manifest.url_sourced,
+    ))
 }
 
-/// The bundled native OPA policy dispatcher used as the zero-config default.
+/// The bundled native OPA policy dispatcher used as the zero-config default. The
+/// dispatch time `bundle_url` fetch uses `Limits::default()`; a host that
+/// tightened its URL fetch limits builds through `default_policy_dispatcher_with_limits`
+/// instead, which the FFI builder and Rust SDK wire from the host configured limits.
 ///
 /// Fails closed if the manifest declares a non-Rego policy because the default
 /// dispatcher only evaluates Rego. OPA process failures happen during
@@ -51,6 +70,19 @@ pub fn default_annotator_dispatcher() -> Arc<dyn AnnotatorDispatcher> {
 pub fn default_policy_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
+    default_policy_dispatcher_with_limits(manifest, Limits::default())
+}
+
+/// The bundled native OPA policy dispatcher bound to the host effective `limits`,
+/// so a `bundle_url` fetch on a file sourced manifest honors the configured body
+/// size, timeout, and redirect caps. `default_policy_dispatcher` passes
+/// `Limits::default()`; a host that tightened its limits builds the dispatcher
+/// through this function instead. Fails closed on a non-Rego policy, as above.
+#[cfg(feature = "opa")]
+pub fn default_policy_dispatcher_with_limits(
+    manifest: &Manifest,
+    limits: Limits,
+) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
     for (name, policy) in &manifest.policies {
         let engine = policy.engine_type();
         if engine != "rego" {
@@ -60,6 +92,6 @@ pub fn default_policy_dispatcher(
         }
     }
     Ok(Arc::new(OpaPolicyDispatcher::with_runner(
-        OpaRegoRunner::from_environment(),
+        OpaRegoRunner::from_environment().with_limits(limits),
     )))
 }

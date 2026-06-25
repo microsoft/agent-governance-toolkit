@@ -234,10 +234,16 @@ All key derivation uses HKDF-SHA256 (RFC 5869) with domain-specific info strings
 
 | Usage | Salt | Info | Output length |
 |-------|------|------|---------------|
-| X3DH shared secret | `0xFF * 32` | `"AgentMesh_X3DH_v1"` | 32 bytes |
+| X3DH shared secret | `0x00 * 32` (zero block) | `"AgentMesh_X3DH_v1"` | 32 bytes |
 | Root key ratchet | Current root key | `"AgentMesh_Ratchet_v1"` | 64 bytes (32 root + 32 chain) |
 | Chain key → message key | — | HMAC-SHA256 with `0x01` | 32 bytes |
 | Chain key → next chain | — | HMAC-SHA256 with `0x02` | 32 bytes |
+
+> **X3DH HKDF inputs (Signal-spec):** the `0xFF * 32` byte string `F`
+> **prefixes the IKM** (`IKM = F || DH1 || DH2 || DH3 [|| DH4]`), and the
+> HKDF **salt is the zero block** (`0x00 * 32`) — *not* `F`. (Earlier drafts
+> incorrectly used `F` as the salt; see
+> [`docs/security/audits/2026-06-22-x3dh-kdf-spec-fix.md`](../security/audits/2026-06-22-x3dh-kdf-spec-fix.md).)
 
 ### 5.3 AEAD Construction
 
@@ -317,7 +323,7 @@ info  = "AgentMesh_X3DH_v1"
    - `DH2 = DH(EK_sender, IK_recipient)`
    - `DH3 = DH(EK_sender, SPK_recipient)`
    - `DH4 = DH(EK_sender, OPK_recipient)` (if OPK available)
-5. Derive shared secret: `SK = HKDF(0xFF*32, DH1||DH2||DH3[||DH4], "AgentMesh_X3DH_v1", 32)`
+5. Derive shared secret: `SK = HKDF(salt = 0x00*32, IKM = 0xFF*32 || DH1||DH2||DH3[||DH4], info = "AgentMesh_X3DH_v1", 32)` — per X3DH, the `0xFF*32` byte string `F` prefixes the IKM and the HKDF salt is the zero block
 6. Initialize Double Ratchet as sender with SK
 
 ### 7.2 Responder Flow

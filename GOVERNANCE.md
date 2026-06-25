@@ -35,7 +35,7 @@ The project lead sets overall technical direction, resolves disputes when consen
 
 See [MAINTAINERS.md](MAINTAINERS.md) for the full list of current maintainers, their areas of ownership, and affiliation details.
 
-We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Code ownership areas are defined in [CODEOWNERS](.github/CODEOWNERS).
+We are actively working to grow the maintainer group to include contributors from other organizations. If you are interested in becoming a maintainer, start by contributing and engaging with the project. Maintainership is granted via the repository `Maintain` role; a maintainer's approval is required on every pull request before merge.
 
 ## Decision-Making
 

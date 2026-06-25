@@ -8,8 +8,11 @@ to AGT's `ExternalPolicyBackend` contract without modifying AGT core.
 
 ## Installation
 
+> **Status.** `cedarling-agentmesh` is not yet published to PyPI. Install it from source
+> until a release is available. `cedarling-python` is published and pulled separately.
+
 ```bash
-pip install cedarling_agentmesh
+pip install -e .          # cedarling-agentmesh, from source (not yet on PyPI)
 pip install cedarling-python
 ```
 

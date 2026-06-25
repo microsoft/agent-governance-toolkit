@@ -238,7 +238,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | [**Agent Compliance**](agent-governance-python/agent-compliance/) | OWASP verification, policy linting, integrity checks |
 | [**Agent Marketplace**](agent-governance-python/agent-marketplace/) | Plugin governance and trust scoring |
 | [**Agent Lightning**](agent-governance-python/agent-lightning/) | RL training governance with violation penalties |
-| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, commitment anchoring, command denylist enforcement |
+| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, in-memory commitment tracking, command denylist enforcement |
 
 ### Additional Capabilities
 
@@ -270,9 +270,9 @@ All five language SDKs implement core governance (policy, identity, trust, audit
 See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
-<summary><b>Python distributions (v4.0.0 — consolidated)</b></summary>
+<summary><b>Python distributions (v4.1.0 — consolidated)</b></summary>
 
-As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
+As of v4.1.0, 45 packages have been consolidated into 5 top-level distributions:
 
 | Distribution | PyPI | What's included |
 |--------------|------|-----------------|

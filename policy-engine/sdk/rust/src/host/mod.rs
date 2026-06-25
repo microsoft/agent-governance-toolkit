@@ -1,6 +1,6 @@
 use crate::{
     AnnotatorDispatcher, EnforcementMode, InterventionPoint, InterventionPointRequest,
-    InterventionPointResult, JsonValue, Manifest, PolicyDispatcher, Runtime, RuntimeError,
+    InterventionPointResult, JsonValue, Limits, Manifest, PolicyDispatcher, Runtime, RuntimeError,
 };
 use std::{convert::Infallible, fmt, path::Path, sync::Arc};
 
@@ -81,6 +81,40 @@ impl AgentControl {
         Self::from_manifest_with_dispatchers(manifest, annotations, policy)
     }
 
+    /// Load a top level manifest from an HTTPS URL. The URL MUST be HTTPS. The
+    /// `sha256` pin is optional, mirroring URL `extends`, and when supplied MUST
+    /// be a 64 character hexadecimal digest over the fetched bytes. See
+    /// [`agent_control_specification_core::Manifest::from_url`] for the trust
+    /// gate, which fails closed on a non HTTPS URL, a malformed pin, a fetch
+    /// error, a body size breach, or a hash mismatch.
+    pub fn from_url(url: &str, sha256: Option<&str>) -> Result<Self, RuntimeError> {
+        Self::from_url_with_dispatchers(url, sha256, None, None)
+    }
+
+    /// Load a top level manifest from an HTTPS URL with explicit URL fetch
+    /// `limits`, so a host that tightened `max_manifest_url_bytes`,
+    /// `manifest_url_timeout_ms`, or `max_manifest_url_redirects` has those
+    /// honored by the bundled default dispatchers for a dispatch time
+    /// `system_prompt_url` fetch. `from_url` uses the default limits.
+    pub fn from_url_with_limits(
+        url: &str,
+        sha256: Option<&str>,
+        limits: Limits,
+    ) -> Result<Self, RuntimeError> {
+        let manifest = Manifest::from_url(url, sha256)?;
+        Self::from_manifest_with_dispatchers_and_limits(manifest, None, None, limits)
+    }
+
+    pub fn from_url_with_dispatchers(
+        url: &str,
+        sha256: Option<&str>,
+        annotations: Option<Arc<dyn AnnotatorDispatcher>>,
+        policy: Option<Arc<dyn PolicyDispatcher>>,
+    ) -> Result<Self, RuntimeError> {
+        let manifest = Manifest::from_url(url, sha256)?;
+        Self::from_manifest_with_dispatchers(manifest, annotations, policy)
+    }
+
     pub fn from_manifest(manifest: Manifest) -> Result<Self, RuntimeError> {
         Self::from_manifest_with_dispatchers(manifest, None, None)
     }
@@ -90,13 +124,35 @@ impl AgentControl {
         annotations: Option<Arc<dyn AnnotatorDispatcher>>,
         policy: Option<Arc<dyn PolicyDispatcher>>,
     ) -> Result<Self, RuntimeError> {
+        Self::from_manifest_with_dispatchers_and_limits(
+            manifest,
+            annotations,
+            policy,
+            Limits::default(),
+        )
+    }
+
+    /// Build from a manifest with explicit URL fetch `limits` threaded to the
+    /// bundled default dispatchers, so a tightened body size, timeout, or
+    /// redirect cap is honored for a dispatch time `system_prompt_url` or file
+    /// sourced `bundle_url` fetch. The other constructors pass the default limits.
+    pub fn from_manifest_with_dispatchers_and_limits(
+        manifest: Manifest,
+        annotations: Option<Arc<dyn AnnotatorDispatcher>>,
+        policy: Option<Arc<dyn PolicyDispatcher>>,
+        limits: Limits,
+    ) -> Result<Self, RuntimeError> {
         let annotations = annotations.unwrap_or_else(|| {
-            agent_control_specification_core::dispatchers::default_annotator_dispatcher()
+            agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
+                &manifest, limits,
+            )
         });
         let policy = match policy {
             Some(policy) => policy,
             None => {
-                agent_control_specification_core::dispatchers::default_policy_dispatcher(&manifest)?
+                agent_control_specification_core::dispatchers::default_policy_dispatcher_with_limits(
+                    &manifest, limits,
+                )?
             }
         };
         let runtime = Runtime::new(manifest, annotations, policy)?;
