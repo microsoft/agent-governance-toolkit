@@ -93,8 +93,6 @@ jobs:
             "@microsoft/agentmesh-copilot-governance",
             "agentmesh-mastra",
             "@microsoft/agentmesh-mastra",
-            "agentmesh-api",
-            "@microsoft/agentmesh-api",
             "agent-governance-copilot-cli",
             "@microsoft/agent-governance-copilot-cli",
             "agent-governance-claude-code",
@@ -106,8 +104,6 @@ jobs:
             "agentmesh-sdk",
             "agent-governance-sdk",
             "@microsoft/agent-governance-sdk",
-            "agent-os-copilot-extension",
-            "@microsoft/agent-os-copilot-extension",
             "agentos-mcp-server",
             "@microsoft/agentos-mcp-server",
             "npm-agentmesh-mcp-proxy",
@@ -260,14 +256,12 @@ jobs:
           ALL='[
             {"name":"agentmesh-copilot-governance","path":"agent-governance-python/agentmesh-integrations/copilot-governance","nodeVersion":"20","selectors":["agentmesh-copilot-governance","@microsoft/agentmesh-copilot-governance"]},
             {"name":"agentmesh-mastra","path":"agent-governance-python/agentmesh-integrations/mastra-agentmesh","nodeVersion":"20","selectors":["agentmesh-mastra","@microsoft/agentmesh-mastra"]},
-            {"name":"agentmesh-api","path":"agent-governance-python/agent-mesh/services/api","nodeVersion":"20","selectors":["agentmesh-api","@microsoft/agentmesh-api"]},
             {"name":"npm-agentmesh-mcp-proxy","path":"agent-governance-python/agent-mesh/packages/mcp-proxy","nodeVersion":"20","selectors":["npm-agentmesh-mcp-proxy","@microsoft/agentmesh-mcp-proxy"]},
             {"name":"agent-governance-copilot-cli","path":"agent-governance-copilot-cli","nodeVersion":"22","selectors":["agent-governance-copilot-cli","@microsoft/agent-governance-copilot-cli"]},
             {"name":"agent-governance-claude-code","path":"agent-governance-claude-code","nodeVersion":"22","selectors":["agent-governance-claude-code","@microsoft/agent-governance-claude-code"]},
             {"name":"agent-governance-opencode","path":"agent-governance-opencode","nodeVersion":"22","selectors":["agent-governance-opencode","@microsoft/agent-governance-opencode"]},
             {"name":"agent-governance-antigravity-cli","path":"agent-governance-antigravity-cli","nodeVersion":"22","selectors":["agent-governance-antigravity-cli","@microsoft/agent-governance-antigravity-cli"]},
             {"name":"agentmesh-sdk","path":"agent-governance-typescript","nodeVersion":"20","selectors":["agentmesh-sdk","agent-governance-sdk","@microsoft/agent-governance-sdk"]},
-            {"name":"agent-os-copilot-extension","path":"agent-governance-python/agent-os/extensions/copilot","nodeVersion":"20","selectors":["agent-os-copilot-extension","@microsoft/agent-os-copilot-extension"]},
             {"name":"agentos-mcp-server","path":"agent-governance-python/agent-os/extensions/mcp-server","nodeVersion":"20","selectors":["agentos-mcp-server","@microsoft/agentos-mcp-server"]}
           ]'
           ALL=$(echo "$ALL" | jq -c '.')
