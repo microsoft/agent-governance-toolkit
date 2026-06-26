@@ -16,6 +16,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
+import re
+import shutil
 from pathlib import Path
 import tempfile
 from typing import Any, Optional
@@ -36,9 +39,13 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
+        # OSError (file removed mid-resolve, permission, dangling symlink) and
+        # UnicodeDecodeError must map to ResolutionError too, so the host's
+        # fail-closed translation applies instead of a raw exception escaping
+        # the documented ``Raises: ResolutionError`` contract.
         raise ResolutionError.invalid_governance(
-            f"failed to parse {path}: {exc}"
+            f"failed to read or parse {path}: {exc}"
         ) from exc
     if data is None:
         return {}
@@ -80,7 +87,8 @@ def resolve_manifest(
         Rego bundle.
 
     Raises:
-        ResolutionError: When discovery, parsing, or merging fails.
+        ResolutionError: When discovery, reading/parsing, merging, or Rego
+            bundle materialization fails.
     """
     chain_paths = discover_policies(action_path, root)
 
@@ -106,14 +114,22 @@ def resolve_manifest(
 
     merged_rules = merge_documents(docs_only)
 
+    created_bundle = bundle_dir is None
     bundle_path = bundle_dir or Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
-    rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
+    try:
+        rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
 
-    intervention_points = _collect_intervention_points(docs_only)
-    if merged_rules and not _binds_legacy_rules(intervention_points):
-        raise ResolutionError.invalid_governance(
-            "governance rules must bind policy id 'agt_legacy_rules' at one or more intervention points"
-        )
+        intervention_points = _collect_intervention_points(docs_only)
+        if merged_rules and not _binds_legacy_rules(intervention_points):
+            raise ResolutionError.invalid_governance(
+                "governance rules must bind policy id 'agt_legacy_rules' at one or more intervention points"
+            )
+    except Exception:
+        # Don't orphan a temp bundle dir we created when materialization or the
+        # binding check fails. A caller-supplied bundle_dir is theirs to manage.
+        if created_bundle:
+            shutil.rmtree(bundle_path, ignore_errors=True)
+        raise
 
     manifest: dict[str, Any] = {
         "agent_control_specification_version": ACS_VERSION,
@@ -187,16 +203,37 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
     """
     bundle_root = bundle_root.resolve()
     policy_dir = bundle_root / "policy"
-    policy_dir.mkdir(parents=True, exist_ok=True)
 
     body = _render_rego(rules)
-    rego_file = policy_dir / "agt_legacy.rego"
-    rego_file.write_text(body, encoding="utf-8")
-
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    (policy_dir / "agt_legacy.rego.sha256").write_text(digest, encoding="utf-8")
+    try:
+        policy_dir.mkdir(parents=True, exist_ok=True)
+        # Write atomically (temp sibling + os.replace) so a crash/ENOSPC never
+        # leaves a truncated agt_legacy.rego or an integrity sidecar that
+        # disagrees with it. The .rego lands first; if the sidecar write then
+        # fails, the OSError is raised (and resolve_manifest discards the
+        # bundle) rather than returning a rego with a stale/missing checksum.
+        _atomic_write_text(policy_dir / "agt_legacy.rego", body)
+        _atomic_write_text(policy_dir / "agt_legacy.rego.sha256", digest)
+    except OSError as exc:
+        raise ResolutionError.invalid_governance(
+            f"failed to materialize Rego bundle in {policy_dir}: {exc}"
+        ) from exc
 
     return policy_dir
+
+
+def _atomic_write_text(target: Path, text: str) -> None:
+    """Write ``text`` to ``target`` atomically via a temp sibling + os.replace."""
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    try:
+        os.replace(tmp, target)
+    except OSError:
+        # Don't leak the temp sibling in a caller-supplied bundle_dir if the
+        # rename fails (e.g. cross-device, permission).
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _render_rego(rules: list[dict[str, Any]]) -> str:
@@ -236,11 +273,17 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
             # never silently falls through to default-allow. The merge
             # layer should ideally catch this at validation, but this is
             # the last line of defense.
-            invalid_detail = (
-                f"invalid field {field!r}"
-                if accessor is None
-                else f"unsupported operator {operator!r}"
-            )
+            if accessor is None:
+                invalid_detail = f"invalid field {field!r}"
+            elif operator in {"matches", "regex"}:
+                # Operator is supported; the pattern value was rejected as
+                # invalid / RE2-incompatible by _is_re2_compatible_regex.
+                invalid_detail = (
+                    f"invalid or RE2-incompatible regex value for "
+                    f"operator {operator!r}"
+                )
+            else:
+                invalid_detail = f"unsupported operator {operator!r}"
             unsupported_drops.append(name)
             matchers.append(
                 f"_match_{idx} if {{\n"
@@ -280,8 +323,7 @@ def _render_rego(rules: list[dict[str, Any]]) -> str:
         )
 
     if unsupported_drops:
-        import logging
-        logging.getLogger(__name__).warning(
+        logger.warning(
             "agt.manifest_resolution: %d invalid rule(s) now fail-closed: %s",
             len(unsupported_drops),
             unsupported_drops,
@@ -318,12 +360,48 @@ def _rego_field_accessor(field: str) -> str | None:
     return expr
 
 
+# RE2 (the Go engine OPA uses) rejects constructs that Python's ``re`` accepts.
+# Each would make ``regex.match`` raise at eval time, leaving the match rule
+# undefined and the verdict falling through to default-allow — a fail-open — so
+# reject them up front. Covered:
+#   ``\1``                   numeric backreference
+#   ``(?=`` ``(?!``          look-ahead
+#   ``(?<=`` ``(?<!``        look-behind
+#   ``(?P=name)``            named backreference
+#   ``(?>...)``              atomic group
+#   ``(?(1)a|b)``            conditional
+_RE2_INCOMPATIBLE = re.compile(r"\\[1-9]|\(\?<?[=!]|\(\?P=|\(\?>|\(\?\(")
+
+
+def _is_re2_compatible_regex(value: Any) -> bool:
+    """True if ``value`` is a string that is safe to feed to OPA ``regex.match``.
+
+    Catches the dominant fail-open triggers: a non-string value, a pattern that
+    is not even valid Python ``re`` syntax (typos / unbalanced groups), and the
+    common RE2-incompatible constructs. Not a full RE2 parser, but it converts
+    the realistic invalid-regex cases from a silent fail-open into a
+    fail-closed deny.
+    """
+    if not isinstance(value, str):
+        return False
+    try:
+        re.compile(value)
+    except re.error:
+        return False
+    return _RE2_INCOMPATIBLE.search(value) is None
+
+
 def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     """Render the body of a `_match[i]` rule for a given operator.
 
-    Returns None for unsupported operators; the caller turns the rule into a fail-closed deny.
+    Returns None for unsupported operators (and for an invalid ``matches`` /
+    ``regex`` pattern); the caller turns the rule into a fail-closed deny.
     """
-    literal = json.dumps(value)
+    # ``default=str`` keeps YAML-native scalars that aren't JSON-serializable
+    # (``datetime.date`` from ``value: 2026-06-23``, ``bytes`` from ``!!binary``)
+    # from raising a raw ``TypeError`` out of resolve_manifest; they render as
+    # their string form instead of crashing the whole resolution.
+    literal = json.dumps(value, default=str)
     indent = "    "
     if operator == "eq":
         return f"{indent}{accessor} == {literal}"
@@ -362,6 +440,11 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
             f"{indent}endswith(_v, {literal})"
         )
     if operator in {"matches", "regex"}:
+        if not _is_re2_compatible_regex(value):
+            # Invalid / RE2-incompatible pattern: fall through to the caller's
+            # fail-closed deny instead of emitting a regex.match that errors at
+            # eval time and silently fails open.
+            return None
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
