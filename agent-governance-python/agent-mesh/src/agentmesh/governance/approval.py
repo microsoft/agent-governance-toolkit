@@ -140,7 +140,11 @@ class CallbackApproval(ApprovalHandler):
         callback: Function that receives an ``ApprovalRequest`` and
             returns an ``ApprovalDecision``.
         timeout_seconds: Max time to wait for callback. Default 300 (5 min).
-        on_timeout: Action when timeout expires. Default: deny.
+        on_timeout: Deprecated. Timeouts always deny regardless of this value.
+            Passing any value other than ``"deny"`` emits ``FutureWarning`` and
+            raises ``ValueError`` when strict mode is enabled.
+        strict: Optional opt-in to strict approval handling. When enabled,
+            deprecated unsafe values are rejected at construction time.
     """
 
     def __init__(
