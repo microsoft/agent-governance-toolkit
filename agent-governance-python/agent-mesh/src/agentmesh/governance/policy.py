@@ -13,7 +13,7 @@ warnings; unknown versions raise ``ValueError``.
 
 from datetime import datetime, timezone
 from typing import Optional, Literal, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import logging
 import os
 import warnings
@@ -29,6 +29,56 @@ SUPPORTED_API_VERSIONS = {
     "governance.toolkit/v1": {"status": "current"},
     "1.0": {"status": "deprecated", "migrate_to": "governance.toolkit/v1"},
 }
+
+# Allowed rate-limit periods, mapped to their length in seconds.
+RATE_LIMIT_PERIODS = {
+    "second": 1,
+    "minute": 60,
+    "hour": 3600,
+    "day": 86400,
+}
+
+
+def parse_rate_limit(limit: str) -> tuple[int, int]:
+    """Parse a rate-limit string into ``(count, period_seconds)``.
+
+    Accepts the form ``"<count>/<period>"`` (e.g. ``"100/hour"``) where
+    ``count`` is a non-negative integer and ``period`` is one of
+    ``second``, ``minute``, ``hour``, ``day``.
+
+    Args:
+        limit: The rate-limit string to parse.
+
+    Returns:
+        A ``(count, period_seconds)`` tuple.
+
+    Raises:
+        ValueError: If ``limit`` is not a well-formed rate-limit string. This
+            is enforced at ``PolicyRule`` construction so malformed limits fail
+            fast at policy load rather than crashing evaluation.
+    """
+    parts = limit.split("/")
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid rate limit {limit!r}: expected '<count>/<period>', e.g. '100/hour'"
+        )
+
+    count_str, period_str = parts[0].strip(), parts[1].strip().lower()
+    try:
+        count = int(count_str)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid rate limit {limit!r}: count must be an integer"
+        ) from exc
+    if count < 0:
+        raise ValueError(f"Invalid rate limit {limit!r}: count must be non-negative")
+    if period_str not in RATE_LIMIT_PERIODS:
+        raise ValueError(
+            f"Invalid rate limit {limit!r}: period must be one of "
+            f"{sorted(RATE_LIMIT_PERIODS)}"
+        )
+
+    return count, RATE_LIMIT_PERIODS[period_str]
 
 
 class PolicyRule(BaseModel):
@@ -60,6 +110,19 @@ class PolicyRule(BaseModel):
 
     # Rate limiting
     limit: Optional[str] = Field(None, description="Rate limit (e.g., '100/hour')")
+
+    @field_validator("limit")
+    @classmethod
+    def _validate_limit(cls, value: Optional[str]) -> Optional[str]:
+        """Reject malformed rate-limit strings at construction.
+
+        Without this, a malformed ``limit`` would raise deep inside
+        ``PolicyEngine.evaluate`` on the first matching call instead of failing
+        at policy load.
+        """
+        if value is not None:
+            parse_rate_limit(value)
+        return value
 
     # Approval workflow
     approvers: list[str] = Field(default_factory=list)
@@ -504,7 +567,8 @@ class PolicyEngine:
         )
 
         self._policies: dict[str, Policy] = {}
-        self._rate_limits: dict[str, dict] = {}  # rule_name -> {count, reset_at}
+        # (agent_did, policy_name, rule_name) -> {count, reset_at} | None
+        self._rate_limits: dict[tuple[str, str, str], Any] = {}
         self._rego_evaluators: list[tuple[str, Any]] = []  # [(package, OPAEvaluator)]
         self._cedar_evaluators: list[Any] = []  # [CedarEvaluator]
         self._authority_resolver: Any = None  # AuthorityResolver protocol
@@ -577,105 +641,44 @@ class PolicyEngine:
         """
         self._authority_resolver = resolver
 
-    def _apply_rule(self, rule: PolicyRule, policy: Policy, context: Optional[dict] = None) -> PolicyDecision:
-        """Apply a matched rule and generate actionable error messages."""
-        # Check rate limit if applicable
-        if rule.limit:
-            if self._is_rate_limited(rule):
-                return PolicyDecision(
-                    allowed=False,
-                    action="deny",
-                    matched_rule=rule.name,
-                    policy_name=policy.name,
-                    reason=f"Rate limit exceeded for rule '{rule.name}': {rule.limit}. Wait for rate limit to reset.",
-                    rate_limited=True,
-                )
-            self._increment_rate_limit(rule)
+    @staticmethod
+    def _rate_limit_key(
+        agent_did: str, policy_name: str, rule_name: str
+    ) -> tuple[str, str, str]:
+        """Build the rate-limit counter key.
 
-        # Build actionable error message
-        if rule.action == "deny":
-            # Build detailed, actionable message
-            action_type = context.get("action", {}).get("type", "action") if context else "action"
-            suggestion = self._get_suggestion(rule, context)
-            reason = (
-                f"Policy '{policy.name}' blocked {action_type}. "
-                f"Rule: '{rule.name}'. "
-                f"Reason: {rule.description or 'Policy condition matched'}. "
-                f"{suggestion}"
-            )
-        elif rule.action == "require_approval":
-            approver_list = ", ".join(rule.approvers) if rule.approvers else "designated approvers"
-            reason = (
-                f"Action requires approval from {approver_list}. "
-                f"Policy: '{policy.name}', Rule: '{rule.name}'."
-            )
-        elif rule.action == "warn":
-            reason = (
-                f"Warning from policy '{policy.name}': {rule.description or rule.name}. "
-                f"Action allowed but logged for review."
-            )
-        else:
-            reason = rule.description or f"Matched rule: {rule.name}"
+        Counters are scoped per agent, per policy, and per rule so that one
+        agent cannot exhaust a shared (wildcard) policy limit for another, and
+        so that same-named rules in different policies do not collide. This
+        mirrors the per-agent keying used by the service-layer ``RateLimiter``.
+        """
+        return (agent_did, policy_name, rule_name)
 
-        return PolicyDecision(
-            allowed=(rule.action == "allow"),
-            action=rule.action,
-            matched_rule=rule.name,
-            policy_name=policy.name,
-            reason=reason,
-            approvers=rule.approvers if rule.action == "require_approval" else [],
-        )
-
-    def _get_suggestion(self, rule: PolicyRule, context: Optional[dict] = None) -> str:
-        """Generate actionable suggestions based on the rule condition."""
-        condition = rule.condition.lower()
-
-        # Pattern-based suggestions
-        if "pii" in condition or "contains_pii" in condition:
-            return "Suggestion: Remove PII fields or request approval from data privacy team."
-        elif "export" in condition:
-            return "Suggestion: Use internal data only or request export approval."
-        elif "admin" in condition or "role" in condition:
-            return "Suggestion: Request elevated permissions or contact your administrator."
-        elif "external" in condition or "domain" in condition:
-            return "Suggestion: Use approved internal services or request external access."
-        elif "budget" in condition or "cost" in condition:
-            return "Suggestion: Reduce request scope or request budget increase."
-        elif "time" in condition or "hour" in condition:
-            return "Suggestion: Retry during allowed hours or request exception."
-        else:
-            return "Suggestion: Review policy requirements or contact administrator."
-
-    def _is_rate_limited(self, rule: PolicyRule) -> bool:
-        """Check if a rule is rate limited."""
+    def _is_rate_limited(self, rule: PolicyRule, limit_key: tuple[str, str, str]) -> bool:
+        """Check whether ``rule`` is currently rate limited for ``limit_key``."""
         if not rule.limit:
             return False
 
-        limit_key = rule.name
         limit_data = self._rate_limits.get(limit_key)
-
         if not limit_data:
             return False
 
-        # Check if reset time passed
+        # Reset the window if it has elapsed.
         if datetime.now(timezone.utc) > limit_data["reset_at"]:
             self._rate_limits[limit_key] = None
             return False
 
-        # Parse limit (e.g., "100/hour")
-        count, period = self._parse_limit(rule.limit)
-
+        count, _period = self._parse_limit(rule.limit)
         return limit_data["count"] >= count
 
-    def _increment_rate_limit(self, rule: PolicyRule) -> None:
-        """Increment rate limit counter."""
+    def _increment_rate_limit(self, rule: PolicyRule, limit_key: tuple[str, str, str]) -> None:
+        """Advance the rate-limit counter for ``limit_key``."""
         if not rule.limit:
             return
 
-        limit_key = rule.name
-        count, period = self._parse_limit(rule.limit)
+        _count, period = self._parse_limit(rule.limit)
 
-        if limit_key not in self._rate_limits or self._rate_limits[limit_key] is None:
+        if self._rate_limits.get(limit_key) is None:
             from datetime import timedelta
             self._rate_limits[limit_key] = {
                 "count": 0,
@@ -685,19 +688,13 @@ class PolicyEngine:
         self._rate_limits[limit_key]["count"] += 1
 
     def _parse_limit(self, limit: str) -> tuple[int, int]:
-        """Parse a limit string like '100/hour'."""
-        parts = limit.split("/")
-        count = int(parts[0])
+        """Parse a limit string like '100/hour' into ``(count, period_seconds)``.
 
-        period_map = {
-            "second": 1,
-            "minute": 60,
-            "hour": 3600,
-            "day": 86400,
-        }
-
-        period = period_map.get(parts[1], 3600)
-        return count, period
+        Delegates to the module-level :func:`parse_rate_limit`. Limits are
+        validated at ``PolicyRule`` construction, so this is not expected to
+        raise during evaluation.
+        """
+        return parse_rate_limit(limit)
 
     def get_policy(self, name: str) -> Optional[Policy]:
         """Get a loaded policy by name.
@@ -860,9 +857,13 @@ class PolicyEngine:
                 winner = result.winning_decision
                 elapsed = (datetime.now(timezone.utc) - start).total_seconds() * 1000
 
-                # Apply rate limiting for the winning rule
+                # Apply rate limiting for the winning rule. Resolve the rule
+                # from the WINNING policy (not just the first name match) so
+                # same-named rules in other policies cannot shadow it.
                 matched_rule = None
                 for policy in applicable:
+                    if policy.name != winner.policy_name:
+                        continue
                     for rule in policy.rules:
                         if rule.name == winner.rule_name:
                             matched_rule = rule
@@ -871,16 +872,23 @@ class PolicyEngine:
                         break
 
                 if matched_rule and matched_rule.limit:
-                    if self._is_rate_limited(matched_rule):
+                    limit_key = self._rate_limit_key(
+                        agent_did, winner.policy_name, matched_rule.name
+                    )
+                    if self._is_rate_limited(matched_rule, limit_key):
                         return PolicyDecision(
                             allowed=False,
                             action="deny",
                             matched_rule=matched_rule.name,
                             policy_name=winner.policy_name,
                             reason=f"Rate limited: {matched_rule.limit}",
+                            rate_limited=True,
                             evaluated_at=start,
                             evaluation_ms=elapsed,
                         )
+                    # Not rate limited: count this matching evaluation toward
+                    # the window so the (N+1)th matching call trips the limit.
+                    self._increment_rate_limit(matched_rule, limit_key)
 
                 return PolicyDecision(
                     allowed=(winner.action == "allow"),
