@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 Verdict = Literal["allow", "warn", "deny", "escalate", "transform"]
 
@@ -86,7 +86,8 @@ class EvaluationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # ── v4 back-compat surface ────────────────────────────────────
-    allowed: bool = True
+    # ``allowed`` lives below as a computed view of ``verdict`` so it can
+    # never drift from the v5 decision (see the ``allowed`` property).
     category: str | None = None
     matched_rule: str | None = None
     public_message: str = ""
@@ -102,14 +103,26 @@ class EvaluationResult(BaseModel):
     enforced_identity: str | None = None
     message: str = ""
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def allowed(self) -> bool:
+        """v4 back-compat view of ``verdict``.
+
+        Derived from ``verdict`` rather than stored, so it can never
+        drift from the v5 decision regardless of how the result is
+        constructed. Permitting verdicts are ``allow`` / ``warn`` /
+        ``transform`` (see ``_PERMITTING_VERDICTS``). Included in
+        ``model_dump()`` for v4 wire compatibility.
+        """
+        return self.verdict in _PERMITTING_VERDICTS
+
     def is_allowed(self) -> bool:
         """True for verdicts that permit the action (``allow``/``warn``/``transform``).
 
-        Mirrors the v4 ``PolicyCheckResult.allowed`` boolean but reads
-        the v5 ``verdict`` field so the two stay in sync even when a
-        caller constructs the result with only the v5 verdict set.
+        Kept as an explicit method for v4 call sites; delegates to the
+        derived :attr:`allowed` view so the two never disagree.
         """
-        return self.verdict in _PERMITTING_VERDICTS
+        return self.allowed
 
     def to_v4_check_result(self) -> Any:
         """Return a v4 ``PolicyCheckResult`` populated from this result.
