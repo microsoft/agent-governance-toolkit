@@ -72,7 +72,9 @@ describe("RegistryClient", () => {
   it("register treats 409 as success (idempotent)", async () => {
     const { fetchImpl } = makeFakeFetch(() => ({ status: 409, body: '{"detail":"already"}' }));
     const c = new RegistryClient({ baseUrl: "http://reg:8082", fetchImpl, maxRetries: 0 });
-    await expect(c.register("did:x", new Uint8Array(32))).resolves.toBeUndefined();
+    // A 409 (already registered) resolves rather than throwing; register()
+    // returns the canonical DID so the caller can use it for lookups.
+    await expect(c.register("did:x", new Uint8Array(32))).resolves.toEqual({ did: "did:x" });
   });
 
   it("register throws RegistryError on 4xx other than 409", async () => {
@@ -246,7 +248,11 @@ describe("MeshClient auto-register on connect", () => {
     expect(puts).toHaveLength(1);
 
     const reg = JSON.parse(posts[0].body!);
-    expect(reg.did).toBe("did:agent:alice");
+    // POP registration (AGT #2533+): the body carries the public_key and a
+    // proof-of-possession; the DID is derived server-side, not client-supplied.
+    expect(typeof reg.public_key).toBe("string");
+    expect(typeof reg.proof).toBe("string");
+    expect(typeof reg.proof_timestamp).toBe("string");
     // displayName is auto-included in capabilities so peers can find Alice
     // via discover("Alice").
     expect(reg.capabilities).toEqual(["Alice", "echo"]);
