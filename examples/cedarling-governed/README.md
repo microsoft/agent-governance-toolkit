@@ -79,15 +79,17 @@ Expected output of `multi_issuer_example.py`:
          reason : Cedarling: allowed (multi-issuer)
 [DENY ] admin agent on personal mobile writes config → write on infra-config (device=mobile)
          reason : Cedarling: denied (multi-issuer)
+[DENY ] admin agent on an unidentified device writes config → write on infra-config (device=tablet)
+         reason : Cedarling: denied (multi-issuer)
 [ALLOW] admin agent on personal mobile reads config → read_data on infra-config (device=mobile)
          reason : Cedarling: allowed (multi-issuer)
 [DENY ] operator agent on managed laptop writes config → write on infra-config (device=laptop)
          reason : Cedarling: denied (multi-issuer)
 ```
 
-The first two requests carry the *same admin token* and differ only in the
-device context — write follows the capability, so a weaker device drops it. The
-fourth request shows the role gate: an operator token never writes. Policies in
+The first three requests carry admin tokens with different device-posture
+claims and write follows the capability, so only the insecure devices are denied.
+The fifth request shows the role gate: an operator token never writes. Policies in
 [`policy-stores/multi-issuer/`](policy-stores/multi-issuer):
 
 ```
@@ -110,7 +112,6 @@ pass that token alongside the others in the per-request `tokens` dict:
 decision = evaluator.evaluate({
     "tool_name": "write",
     "resource": "infra-config",
-    "device": "laptop",
     "tokens": {
         "AGT::Access_Token": "<jwt-from-issuer-a>",
         # "AGT::Id_Token":   "<jwt-from-issuer-b>",
@@ -162,7 +163,7 @@ policy-stores/
 │       └── forbid-write.cedar
 └── multi-issuer/
     ├── metadata.json
-    ├── schema.cedarschema           # adds Access_Token entity + Context (tokens + device)
+    ├── schema.cedarschema           # Access_Token entity carries role + device claims as tags
     ├── trusted-issuers/
     │   └── janssen.json             # the IdP whose tokens are trusted
     └── policies/
