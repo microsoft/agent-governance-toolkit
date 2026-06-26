@@ -10,30 +10,30 @@ from pydantic import ValidationError
 from agentmesh.identity.attestation import (
     AttestationClaims,
     AttestationEvidence,
+    AttestationRequest,
     ConfidentialLevel,
     KeyOrigin,
     ReferenceValues,
+    compute_binding_hash,
     compute_report_data_hash_hex,
+    compute_startup_binding,
+    compute_startup_binding_hash,
     public_key_hash_hex,
 )
 
 
 def _valid_evidence(**overrides: object) -> AttestationEvidence:
     public_key_hash = public_key_hash_hex(b"\x01" * 32)
+    binding = compute_startup_binding("did:mesh:agent-1", public_key_hash)
+    binding_hash = compute_binding_hash(binding)
     values: dict[str, object] = {
-        "platform": "azure-sev-snp",
+        "platform": "mock-tee",
         "evidence": "base64-attestation-report",
         "agent_did": "did:mesh:agent-1",
-        "challenge_id": "challenge_123",
-        "nonce": "nonce-abc",
         "public_key_hash": public_key_hash,
-        "report_data_hash": compute_report_data_hash_hex(
-            "did:mesh:agent-1",
-            "challenge_123",
-            "nonce-abc",
-            public_key_hash,
-        ),
-        "key_origin": KeyOrigin.SKR,
+        "report_data_hash": binding_hash,
+        "binding_hash": binding_hash,
+        "key_origin": KeyOrigin.TEE_GENERATED,
         "runtime_measurements": {"measurement": "abc123"},
         "secure_boot_verified": True,
     }
@@ -47,8 +47,8 @@ class TestAttestationEvidence:
     def test_valid_evidence(self) -> None:
         evidence = _valid_evidence()
 
-        assert evidence.platform == "azure-sev-snp"
-        assert evidence.key_origin is KeyOrigin.SKR
+        assert evidence.platform == "mock-tee"
+        assert evidence.key_origin is KeyOrigin.TEE_GENERATED
         assert evidence.key_bound_to_tee is True
         assert evidence.runtime_measurements["measurement"] == "abc123"
         assert evidence.is_expired() is False
@@ -58,12 +58,8 @@ class TestAttestationEvidence:
         evidence = _valid_evidence(
             public_key_hash=public_key_hash,
             key_origin=KeyOrigin.LOCAL,
-            report_data_hash=compute_report_data_hash_hex(
-                "did:mesh:agent-1",
-                "challenge_123",
-                "nonce-abc",
-                public_key_hash,
-            ),
+            report_data_hash=compute_startup_binding_hash("did:mesh:agent-1", public_key_hash),
+            binding_hash=compute_startup_binding_hash("did:mesh:agent-1", public_key_hash),
         )
 
         assert evidence.key_bound_to_tee is False
@@ -86,8 +82,33 @@ class TestAttestationEvidence:
             _valid_evidence(report_data_hash="f" * 63)
 
     def test_rejects_mismatched_report_data_hash(self) -> None:
-        with pytest.raises(ValidationError, match="report_data_hash does not match"):
-            _valid_evidence(report_data_hash="0" * 64)
+        with pytest.raises(ValidationError, match="binding_hash"):
+            _valid_evidence(binding_hash=None)
+
+    def test_legacy_handshake_binding_remains_supported(self) -> None:
+        public_key_hash = public_key_hash_hex(b"\x04" * 32)
+        evidence = AttestationEvidence(
+            platform="legacy-tee",
+            evidence="legacy-report",
+            agent_did="did:mesh:agent-1",
+            challenge_id="challenge_123",
+            nonce="nonce-abc",
+            public_key_hash=public_key_hash,
+            report_data_hash=compute_report_data_hash_hex(
+                "did:mesh:agent-1",
+                "challenge_123",
+                "nonce-abc",
+                public_key_hash,
+            ),
+            key_origin=KeyOrigin.TEE_GENERATED,
+        )
+
+        assert evidence.matches_binding(
+            agent_did="did:mesh:agent-1",
+            challenge_id="challenge_123",
+            nonce="nonce-abc",
+            public_key_hash=public_key_hash,
+        )
 
     def test_rejects_expiry_before_timestamp(self) -> None:
         timestamp = datetime.now(UTC)
@@ -159,6 +180,26 @@ class TestReferenceValues:
         assert values.required_claims == {}
         assert values.allowed_tcb_statuses == ["up_to_date"]
         assert values.require_debug_disabled is True
+
+
+class TestAttestationRequest:
+    """Tests for provider-neutral collection requests."""
+
+    def test_request_carries_opaque_binding_bytes(self) -> None:
+        request = AttestationRequest(
+            binding=b"opaque-provider-binding",
+            agent_did="did:mesh:agent-1",
+            public_key_hash=public_key_hash_hex(b"\x05" * 32),
+            metadata={"purpose": "unit-test"},
+            provider_context={"provider": "mock"},
+        )
+
+        assert request.binding == b"opaque-provider-binding"
+        assert request.purpose == "startup_identity"
+
+    def test_rejects_empty_binding(self) -> None:
+        with pytest.raises(ValidationError, match="binding must not be empty"):
+            AttestationRequest(binding=b"")
 
 
 class TestPublicKeyHash:

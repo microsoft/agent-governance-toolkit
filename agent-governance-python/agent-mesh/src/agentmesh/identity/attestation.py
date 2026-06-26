@@ -7,11 +7,12 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 REPORT_DATA_CONTEXT: Final[bytes] = b"agentmesh-attest-v1"
+STARTUP_BINDING_CONTEXT: Final[bytes] = b"agentmesh-attest-v1-startup"
 ED25519_PUBLIC_KEY_SIZE: Final[int] = 32
 SHA256_DIGEST_SIZE: Final[int] = 32
 SHA256_HEX_SIZE: Final[int] = 64
@@ -50,11 +51,67 @@ class ImageMatchPolicy(StrEnum):
     STABLE_CLAIMS = "stable_claims"
 
 
+class AttestationRequest(BaseModel):
+    """Provider-neutral request for collecting attestation evidence."""
+
+    binding: bytes = Field(..., description="Opaque caller-supplied bytes to bind into evidence")
+    purpose: Literal["startup_identity", "handshake_freshness"] = "startup_identity"
+    agent_did: str | None = None
+    public_key_hash: str | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+    provider_context: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("binding")
+    @classmethod
+    def _validate_binding(cls, value: bytes) -> bytes:
+        if not value:
+            raise ValueError("binding must not be empty")
+        return value
+
+    @field_validator("agent_did")
+    @classmethod
+    def _validate_optional_agent_did(cls, value: str | None) -> str | None:
+        if value is not None and not value:
+            raise ValueError("agent_did must not be empty when provided")
+        return value
+
+    @field_validator("public_key_hash")
+    @classmethod
+    def _validate_optional_public_key_hash(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _digest_hex(value)
+
+
 def public_key_hash_hex(public_key: bytes) -> str:
     """Return the SHA-256 hash of a raw Ed25519 public key as lowercase hex."""
     if len(public_key) != ED25519_PUBLIC_KEY_SIZE:
         raise ValueError("Ed25519 public keys must be exactly 32 bytes")
     return hashlib.sha256(public_key).hexdigest()
+
+
+def compute_binding_hash(binding: bytes) -> str:
+    """Return the SHA-256 hash of opaque provider binding bytes."""
+    if not binding:
+        raise ValueError("binding must not be empty")
+    return hashlib.sha256(binding).hexdigest()
+
+
+def compute_startup_binding(agent_did: str, public_key_hash: bytes | str) -> bytes:
+    """Compute provider-neutral startup identity binding bytes."""
+    public_key_hash_bytes = _digest_bytes(public_key_hash, field_name="public_key_hash")
+    return b"".join(
+        (
+            STARTUP_BINDING_CONTEXT,
+            _length_prefixed_utf8(agent_did, field_name="agent_did"),
+            public_key_hash_bytes,
+        )
+    )
+
+
+def compute_startup_binding_hash(agent_did: str, public_key_hash: bytes | str) -> str:
+    """Compute the startup identity binding hash as lowercase hex."""
+    return compute_binding_hash(compute_startup_binding(agent_did, public_key_hash))
 
 
 def compute_report_data_hash(
@@ -114,20 +171,24 @@ def matches_report_data_binding(
 
 
 class AttestationEvidence(BaseModel):
-    """Raw provider evidence bound to an agent identity and handshake challenge."""
+    """Raw provider evidence bound to caller-supplied attestation bytes."""
 
     platform: str = Field(..., description="Attestation platform identifier")
     evidence: str = Field(..., description="Provider-specific evidence blob")
-    agent_did: str = Field(..., description="Agent DID bound into report data")
-    challenge_id: str = Field(..., description="Handshake challenge identifier")
-    nonce: str = Field(..., description="Handshake nonce bound into report data")
-    public_key_hash: str = Field(
-        ...,
+    agent_did: str | None = Field(None, description="Agent DID bound into evidence")
+    challenge_id: str | None = Field(None, description="Legacy handshake challenge identifier")
+    nonce: str | None = Field(None, description="Legacy handshake nonce bound into report data")
+    public_key_hash: str | None = Field(
+        None,
         description="Lowercase hex SHA-256 hash of the agent Ed25519 public key",
     )
     report_data_hash: str = Field(
         ...,
         description="Lowercase hex ADR 0010 canonical report-data hash",
+    )
+    binding_hash: str | None = Field(
+        None,
+        description="Lowercase hex hash of provider-neutral caller-supplied binding bytes",
     )
     key_origin: KeyOrigin = KeyOrigin.LOCAL
     runtime_measurements: dict[str, str] = Field(default_factory=dict)
@@ -137,16 +198,25 @@ class AttestationEvidence(BaseModel):
         default_factory=lambda: datetime.now(UTC) + timedelta(seconds=DEFAULT_EVIDENCE_TTL_SECONDS)
     )
 
-    @field_validator("platform", "evidence", "agent_did", "challenge_id", "nonce")
+    @field_validator("platform", "evidence")
     @classmethod
     def _validate_required_text(cls, value: str, info: Any) -> str:
         if not value:
             raise ValueError(f"{info.field_name} must not be empty")
         return value
 
-    @field_validator("public_key_hash", "report_data_hash")
+    @field_validator("agent_did", "challenge_id", "nonce")
     @classmethod
-    def _validate_digest_hex(cls, value: str) -> str:
+    def _validate_optional_text(cls, value: str | None, info: Any) -> str | None:
+        if value is not None and not value:
+            raise ValueError(f"{info.field_name} must not be empty when provided")
+        return value
+
+    @field_validator("public_key_hash", "report_data_hash", "binding_hash")
+    @classmethod
+    def _validate_digest_hex(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return _digest_hex(value)
 
     @field_validator("timestamp", "expires_at")
@@ -160,13 +230,27 @@ class AttestationEvidence(BaseModel):
     def _validate_evidence_window_and_binding(self) -> AttestationEvidence:
         if self.expires_at <= self.timestamp:
             raise ValueError("expires_at must be later than timestamp")
-        if not self.matches_binding(
-            agent_did=self.agent_did,
-            challenge_id=self.challenge_id,
-            nonce=self.nonce,
-            public_key_hash=self.public_key_hash,
-        ):
-            raise ValueError("report_data_hash does not match ADR 0010 binding")
+        has_legacy_binding = self.challenge_id is not None or self.nonce is not None
+        if has_legacy_binding:
+            if (
+                self.agent_did is None
+                or self.challenge_id is None
+                or self.nonce is None
+                or self.public_key_hash is None
+            ):
+                raise ValueError(
+                    "legacy attestation binding requires agent_did, challenge_id, "
+                    "nonce, and public_key_hash"
+                )
+            if not self.matches_binding(
+                agent_did=self.agent_did,
+                challenge_id=self.challenge_id,
+                nonce=self.nonce,
+                public_key_hash=self.public_key_hash,
+            ):
+                raise ValueError("report_data_hash does not match ADR 0010 binding")
+        elif self.binding_hash is None:
+            raise ValueError("binding_hash is required when challenge_id and nonce are absent")
         return self
 
     @property
@@ -181,12 +265,27 @@ class AttestationEvidence(BaseModel):
 
     def matches_binding(
         self,
-        agent_did: str,
-        challenge_id: str,
-        nonce: str,
-        public_key_hash: bytes | str,
+        agent_did: str | None = None,
+        challenge_id: str | None = None,
+        nonce: str | None = None,
+        public_key_hash: bytes | str | None = None,
+        binding: bytes | None = None,
     ) -> bool:
-        """Return whether this evidence matches the expected binding inputs."""
+        """Return whether this evidence matches provider-neutral or legacy binding inputs."""
+        if binding is not None:
+            if self.binding_hash is None:
+                return False
+            return self.binding_hash == compute_binding_hash(binding)
+        if (
+            agent_did is None
+            or challenge_id is None
+            or nonce is None
+            or public_key_hash is None
+        ):
+            raise ValueError(
+                "legacy binding match requires agent_did, challenge_id, nonce, "
+                "and public_key_hash"
+            )
         return matches_report_data_binding(
             report_data_hash=self.report_data_hash,
             agent_did=agent_did,

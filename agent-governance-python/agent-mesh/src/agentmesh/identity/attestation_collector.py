@@ -14,8 +14,9 @@ from agentmesh.exceptions import AttestationCollectionError
 from .attestation import (
     DEFAULT_EVIDENCE_TTL_SECONDS,
     AttestationEvidence,
+    AttestationRequest,
     KeyOrigin,
-    compute_report_data_hash_hex,
+    compute_binding_hash,
 )
 
 
@@ -23,14 +24,8 @@ class AttestationCollector(ABC):
     """Collects attestation evidence from the current runtime environment."""
 
     @abstractmethod
-    async def collect(
-        self,
-        agent_did: str,
-        challenge_id: str,
-        nonce: str,
-        public_key_hash: str,
-    ) -> AttestationEvidence | None:
-        """Gather platform evidence bound to the agent identity and challenge."""
+    async def collect(self, request: AttestationRequest) -> AttestationEvidence | None:
+        """Gather platform evidence bound to caller-supplied bytes."""
 
     @abstractmethod
     def platform(self) -> str:
@@ -40,13 +35,7 @@ class AttestationCollector(ABC):
 class NoopAttestationCollector(AttestationCollector):
     """Collector used when attestation is disabled."""
 
-    async def collect(
-        self,
-        agent_did: str,
-        challenge_id: str,
-        nonce: str,
-        public_key_hash: str,
-    ) -> None:
+    async def collect(self, request: AttestationRequest) -> None:
         """Return no evidence without touching a platform attestation provider."""
         return None
 
@@ -88,33 +77,22 @@ class MockAttestationCollector(AttestationCollector):
         self._latency_seconds = latency_seconds
         self._error = error
 
-    async def collect(
-        self,
-        agent_did: str,
-        challenge_id: str,
-        nonce: str,
-        public_key_hash: str,
-    ) -> AttestationEvidence:
-        """Return synthetic evidence with a deterministic ADR 0010 binding."""
+    async def collect(self, request: AttestationRequest) -> AttestationEvidence:
+        """Return synthetic evidence with deterministic provider-neutral binding."""
         if self._latency_seconds:
             await asyncio.sleep(self._latency_seconds)
         if self._error is not None:
             raise AttestationCollectionError(str(self._error)) from self._error
 
         timestamp = datetime.now(UTC)
+        binding_hash = compute_binding_hash(request.binding)
         return AttestationEvidence(
             platform=self._platform,
             evidence=self._evidence,
-            agent_did=agent_did,
-            challenge_id=challenge_id,
-            nonce=nonce,
-            public_key_hash=public_key_hash,
-            report_data_hash=compute_report_data_hash_hex(
-                agent_did=agent_did,
-                challenge_id=challenge_id,
-                nonce=nonce,
-                public_key_hash=public_key_hash,
-            ),
+            agent_did=request.agent_did,
+            public_key_hash=request.public_key_hash,
+            report_data_hash=binding_hash,
+            binding_hash=binding_hash,
             key_origin=self._key_origin,
             runtime_measurements=self._runtime_measurements,
             secure_boot_verified=self._secure_boot_verified,
@@ -125,4 +103,3 @@ class MockAttestationCollector(AttestationCollector):
     def platform(self) -> str:
         """Return the configured mock platform identifier."""
         return self._platform
-
