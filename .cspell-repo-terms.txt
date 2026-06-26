@@ -827,6 +827,10 @@ unvalidated
 userinfo
 winres
 worktree
+commonpath
+mktemp
+mkstemp
+fdopen
 
 # --- African regulatory policy terms ---
 POPIA
