@@ -84,7 +84,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
       registryUrl: "http://localhost:8081",
       autoRegister: false,
       keyManager: km,
-      agentDid: "did:agentmesh:alice",
+      agentDid: "did:mesh:alice",
       autoReconnect: false,
       wsFactory: mockWsFactory,
     });
@@ -93,7 +93,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     const peerKm = makeKeyManager();
     const bundle = peerKm.getPublicBundle();
 
-    await sender.establishSession("did:agentmesh:bob", bundle);
+    await sender.establishSession("did:mesh:bob", bundle);
 
     const aliceWs = lastMockWs!;
     const knockFrame = aliceWs.sent.find((f) => f.type === "knock");
@@ -112,7 +112,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     const [, establishment] = SecureChannel.createSender(
       senderKm,
       peerBundle,
-      new TextEncoder().encode("did:agentmesh:alice|did:agentmesh:bob"),
+      new TextEncoder().encode("did:mesh:alice|did:mesh:bob"),
     );
 
     const receiver = new MeshClient({
@@ -120,21 +120,21 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
       registryUrl: "http://localhost:8081",
       autoRegister: false,
       keyManager: receiverKm,
-      agentDid: "did:agentmesh:bob",
+      agentDid: "did:mesh:bob",
       autoReconnect: false,
       wsFactory: mockWsFactory,
     });
     receiver.onKnock(async () => true);
     await receiver.connect();
 
-    expect(receiver.getSession("did:agentmesh:alice")).toBeUndefined();
+    expect(receiver.getSession("did:mesh:alice")).toBeUndefined();
 
     // Simulate the relay pushing the knock with establishment.
     lastMockWs!.simulateFrame({
       v: 1,
       type: "knock",
-      from: "did:agentmesh:alice",
-      to: "did:agentmesh:bob",
+      from: "did:mesh:alice",
+      to: "did:mesh:bob",
       id: "knock-1",
       ts: new Date().toISOString(),
       intent: { action: "establish_session" },
@@ -150,22 +150,22 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     // Yield so the async knock handler runs.
     await new Promise((r) => setTimeout(r, 10));
 
-    const session = receiver.getSession("did:agentmesh:alice");
+    const session = receiver.getSession("did:mesh:alice");
     expect(session).toBeDefined();
     expect(session!.channel).not.toBeNull();
     expect(session!.isPlaintext).toBe(false);
   });
 
   test("knock without establishment keeps legacy behavior (no auto-session)", async () => {
-    const receiver = makeClient("did:agentmesh:bob");
+    const receiver = makeClient("did:mesh:bob");
     receiver.onKnock(async () => true);
     await receiver.connect();
 
     lastMockWs!.simulateFrame({
       v: 1,
       type: "knock",
-      from: "did:agentmesh:legacy-peer",
-      to: "did:agentmesh:bob",
+      from: "did:mesh:legacy-peer",
+      to: "did:mesh:bob",
       id: "knock-2",
       ts: new Date().toISOString(),
       intent: { action: "establish_session" },
@@ -174,13 +174,13 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     // No auto-session because no establishment was provided.
-    expect(receiver.getSession("did:agentmesh:legacy-peer")).toBeUndefined();
+    expect(receiver.getSession("did:mesh:legacy-peer")).toBeUndefined();
     // But the knock was still accepted (knock_accept frame was sent).
     expect(lastMockWs!.sent.find((f) => f.type === "knock_accept")).toBeDefined();
   });
 
   test("malformed establishment fires onError and rejects knock", async () => {
-    const receiver = makeClient("did:agentmesh:bob");
+    const receiver = makeClient("did:mesh:bob");
     receiver.onKnock(async () => true);
     const errors: Array<{ kind: string; detail: string }> = [];
     receiver.onError((kind, _from, detail) => errors.push({ kind, detail }));
@@ -189,8 +189,8 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     lastMockWs!.simulateFrame({
       v: 1,
       type: "knock",
-      from: "did:agentmesh:attacker",
-      to: "did:agentmesh:bob",
+      from: "did:mesh:attacker",
+      to: "did:mesh:bob",
       id: "knock-3",
       ts: new Date().toISOString(),
       intent: { action: "establish_session" },
@@ -203,7 +203,7 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     expect(errors[0].kind).toBe("knock");
     // Should have rejected the knock since bootstrap failed.
     expect(lastMockWs!.sent.find((f) => f.type === "knock_reject")).toBeDefined();
-    expect(receiver.getSession("did:agentmesh:attacker")).toBeUndefined();
+    expect(receiver.getSession("did:mesh:attacker")).toBeUndefined();
   });
 
   test("end-to-end: KNOCK auto-bootstrap → first encrypted message decrypts", async () => {
@@ -219,20 +219,20 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
       registryUrl: "http://localhost:8081",
       autoRegister: false,
       keyManager: aliceKm,
-      agentDid: "did:agentmesh:alice",
+      agentDid: "did:mesh:alice",
       autoReconnect: false,
       wsFactory: mockWsFactory,
     });
     await alice.connect();
     const aliceWs = lastMockWs!;
-    await alice.establishSession("did:agentmesh:bob", bobBundle);
+    await alice.establishSession("did:mesh:bob", bobBundle);
 
     const bob = new MeshClient({
       relayUrl: "http://localhost:8080",
       registryUrl: "http://localhost:8081",
       autoRegister: false,
       keyManager: bobKm,
-      agentDid: "did:agentmesh:bob",
+      agentDid: "did:mesh:bob",
       autoReconnect: false,
       wsFactory: mockWsFactory,
     });
@@ -249,19 +249,19 @@ describe("MeshClient KNOCK auto-bootstrap (G1)", () => {
     await new Promise((r) => setTimeout(r, 10));
 
     // Bob should have a session now without ever calling acceptSession().
-    const bobSession = bob.getSession("did:agentmesh:alice");
+    const bobSession = bob.getSession("did:mesh:alice");
     expect(bobSession).toBeDefined();
     expect(bobSession!.channel).not.toBeNull();
 
     // Alice sends an encrypted message; replay it into bob.
-    await alice.send("did:agentmesh:bob", { hello: "from alice" });
+    await alice.send("did:mesh:bob", { hello: "from alice" });
     const messageFrame = aliceWs.sent.find((f) => f.type === "message");
     expect(messageFrame).toBeDefined();
     bobWs.simulateFrame(messageFrame!);
     await new Promise((r) => setTimeout(r, 10));
 
     expect(decoded).toEqual([
-      { from: "did:agentmesh:alice", payload: { hello: "from alice" } },
+      { from: "did:mesh:alice", payload: { hello: "from alice" } },
     ]);
   });
 });

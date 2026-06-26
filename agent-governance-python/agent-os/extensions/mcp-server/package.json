@@ -12,7 +12,7 @@
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "start:stdio": "node dist/cli.js --stdio",
-    "test": "vitest",
+    "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
