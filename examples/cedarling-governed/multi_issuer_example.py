@@ -88,7 +88,7 @@ def _mint_access_token(*, subject: str, role: str, device: str) -> str:
         "device": device.strip().lower(),
         "iat": now,
         "exp": now + 3600,
-        "jti": f"jti-{subject}-{device}",
+        "jti": f"jti-{subject}-{device.strip().lower()}",
     }
     # Signature is irrelevant (validation disabled for the demo).
     return f"{b64(header)}.{b64(payload)}.demo-signature"
