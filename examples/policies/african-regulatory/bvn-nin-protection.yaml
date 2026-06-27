@@ -3,9 +3,12 @@
 #
 # Regulatory references:
 #   CBN BVN Policy Framework (2014, updated 2023) — BVN as sensitive identifier
-#   National Identity Management Commission (NIMC) Act — NIN protection
-#   NDPA 2023 Schedule 1                            — biometric data as sensitive personal data
-#   CBN Circular on BVN Operations                  — controls on BVN usage and sharing
+#   NIMC Act 2026 (signed 26 June 2026)           — repeals NIMC Act Cap N99 LFN 2004
+#     Purpose limitation, illegal data persistence prohibition,
+#     mandatory NIN prerequisite for regulated services,
+#     penalties: ₦20M (corporate) / 5 years min. imprisonment (individual)
+#   NDPA 2023 Schedule 1                          — biometric data as sensitive personal data
+#   CBN Circular on BVN Operations                — controls on BVN usage and sharing
 #
 # ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
 # BVN and NIN are the two most sensitive personal identifiers in Nigeria.
@@ -17,18 +20,22 @@
 #   NIN  — 11-digit number issued by NIMC, biometrically linked
 #   vNIN — 16-character virtual NIN (alphanumeric), tokenised form of NIN
 
-version: "1.0"
+version: "1.1"
 name: bvn-nin-protection
 description: >
   Protects Nigeria's two most sensitive personal identifiers — BVN and NIN —
   from exposure, logging, or unauthorised transmission by AI agents.
+  Updated for NIMC Act 2026: adds purpose limitation, illegal data persistence
+  prohibition, mandatory NIN gate for regulated services, and bulk export ban.
   Enforces NDPA 2023 Schedule 1 (biometric data as sensitive personal data)
   and CBN BVN operational guidelines. Deny-by-default on exposure.
 
 metadata:
-  source_regulation: "CBN BVN Framework (2014); NIBSS BVN Scheme Rules; NDPA 2023 s.30"
+  source_regulation: "CBN BVN Framework (2014); NIBSS BVN Scheme Rules; NIMC Act 2026; NDPA 2023 s.30"
   jurisdiction: "NG"
-  enforcing_authority: "Central Bank of Nigeria (CBN) / NIBSS"
+  enforcing_authority: "Central Bank of Nigeria (CBN) / NIBSS / NIMC"
+  last_updated: "2026-06-27"
+  regulatory_change: "NIMC Act 2026 signed 26 June 2026 — replaces NIMC Act Cap N99 LFN 2004"
 
 rules:
 
@@ -177,6 +184,61 @@ rules:
     action: audit
     priority: 75
     message: "BVN/NIN Audit: Identity verification action logged — NDPA s.30 and CBN BVN audit trail requirement"
+
+  # =========================================================================
+  # NIMC Act 2026 — New Obligations (signed 26 June 2026)
+  # The NIMC Act 2026 repeals the NIMC Act Cap N99 LFN 2004 and introduces
+  # four new categories of obligation directly applicable to AI agents:
+  #   1. Illegal data persistence prohibition
+  #   2. Bulk NIN data extraction/export ban
+  #   3. Purpose limitation for NIN use
+  #   4. NIN as mandatory prerequisite for regulated services
+  # Penalties: ₦20 million (corporate) / minimum 5 years imprisonment (individual)
+  # =========================================================================
+
+  - name: nimc-2026-illegal-data-persistence-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(store_nin|save_nin_data|persist_identity|cache_nin|log_nin|record_nin|write_nin_record|store_bvn|save_bvn_data|cache_bvn)$"
+    action: deny
+    priority: 100
+    message: "NIMC Act 2026: Storing NIN/BVN data after verification is prohibited — illegal data persistence (₦20M corporate / 5yr individual penalty)"
+
+  - name: nimc-2026-bulk-nin-export-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(export_nin_data|bulk_nin_export|download_nin_records|extract_identity_records|bulk_identity_export)$"
+    action: deny
+    priority: 100
+    message: "NIMC Act 2026: Bulk NIN/identity data export is prohibited — only individual authorised verifications are permitted"
+
+  - name: nimc-2026-purpose-limitation-gate
+    condition:
+      all:
+        - field: action
+          operator: matches
+          value: "^(verify_nin|check_nin|validate_nin|nin_lookup|nimc_nin_verify|verify_bvn|check_bvn|validate_bvn|bvn_lookup|nibss_bvn_verify)$"
+        - field: context.nin_purpose
+          operator: equals
+          value: ""
+    action: block
+    priority: 95
+    message: "NIMC Act 2026: NIN/BVN lookup attempted without a declared purpose — purpose limitation requires stating the reason before each verification"
+
+  - name: nimc-2026-mandatory-nin-service-gate
+    condition:
+      all:
+        - field: action
+          operator: matches
+          value: "^(open_account|create_account|register_voter|apply_passport|sim_registration|land_registration|pension_enrollment|insurance_enrollment|apply_credit|tax_registration|apply_government_service)$"
+        - field: context.nin_verified
+          operator: not_equals
+          value: true
+    action: audit
+    priority: 80
+    message: "NIMC Act 2026: This service requires verified NIN — bank accounts, SIM, passports, land transactions, pension, insurance, and consumer credit are mandatory-NIN services"
 
 defaults:
   action: deny
