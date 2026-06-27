@@ -141,6 +141,34 @@ def has_iptables() -> bool:
     return shutil.which("iptables") is not None
 
 
+def _apparmor_profile_loaded(name: str) -> bool:
+    """Return ``True`` if the named AppArmor profile is loaded on this host.
+
+    Reads ``/sys/kernel/security/apparmor/profiles`` which lists one loaded
+    profile per line in the form ``<name> (enforce|complain)``.  Returns
+    ``False`` on any OS error (e.g. the file doesn't exist on macOS / Docker
+    Desktop hosts where AppArmor is not available).
+    """
+    try:
+        with open("/sys/kernel/security/apparmor/profiles") as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == name and parts[1] == "(enforce)":
+                    return True
+    except OSError:
+        pass
+    return False
+
+
+def _fallback_apparmor_profile() -> str:
+    logger.warning(
+        "agt-sandbox AppArmor profile not loaded in enforce mode; "
+        "falling back to docker-default. Run "
+        "'sudo apparmor_parser -r -W agt-sandbox' to enable kernel-level enforcement."
+    )
+    return "docker-default"
+
+
 def docker_config_from_policy(
     policy: Any, base: SandboxConfig
 ) -> SandboxConfig:
@@ -213,6 +241,10 @@ class DockerSandboxProvider(SandboxProvider):
     # Legacy fallback used when the hardened image is not on the local
     # daemon. Kept stable so existing deployments do not break.
     _LEGACY_DEFAULT_IMAGE: str = "python:3.11-slim"
+
+    # Custom AppArmor profile (docker/apparmor/agt-sandbox). Applied when
+    # loaded on the host; falls back to docker-default otherwise.
+    _APPARMOR_PROFILE_NAME: str = "agt-sandbox"
 
     def __init__(
         self,
@@ -1106,10 +1138,21 @@ class DockerSandboxProvider(SandboxProvider):
             # have customized the Docker daemon defaults to weaker policies
             # do not silently weaken the sandbox. `default` resolves to
             # Docker's built-in profile on hosts that ship one.
+            #
+            # Prefer the custom agt-sandbox AppArmor profile (option 3 of
+            # the command-denylist stack, #3068) when it is loaded on the
+            # host. Fall back to docker-default on hosts where AppArmor is
+            # unavailable (e.g. macOS / Docker Desktop) or the profile has
+            # not yet been installed via `apparmor_parser -r -W agt-sandbox`.
             "security_opt": [
                 "no-new-privileges",
                 "seccomp=default",
-                "apparmor=docker-default",
+                "apparmor="
+                + (
+                    self._APPARMOR_PROFILE_NAME
+                    if _apparmor_profile_loaded(self._APPARMOR_PROFILE_NAME)
+                    else _fallback_apparmor_profile()
+                ),
             ],
             "cap_drop": ["ALL"],
             "user": "65534:65534",
