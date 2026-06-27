@@ -153,12 +153,20 @@ def _apparmor_profile_loaded(name: str) -> bool:
         with open("/sys/kernel/security/apparmor/profiles") as fh:
             for line in fh:
                 parts = line.split()
-                profile_name = parts[0] if parts else ""
-                if profile_name == name:
+                if len(parts) >= 2 and parts[0] == name and parts[1] == "(enforce)":
                     return True
     except OSError:
         pass
     return False
+
+
+def _fallback_apparmor_profile() -> str:
+    logger.warning(
+        "agt-sandbox AppArmor profile not loaded in enforce mode; "
+        "falling back to docker-default. Run "
+        "'sudo apparmor_parser -r -W agt-sandbox' to enable kernel-level enforcement."
+    )
+    return "docker-default"
 
 
 def docker_config_from_policy(
@@ -1143,7 +1151,7 @@ class DockerSandboxProvider(SandboxProvider):
                 + (
                     self._APPARMOR_PROFILE_NAME
                     if _apparmor_profile_loaded(self._APPARMOR_PROFILE_NAME)
-                    else "docker-default"
+                    else _fallback_apparmor_profile()
                 ),
             ],
             "cap_drop": ["ALL"],

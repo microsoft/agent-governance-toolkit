@@ -2519,6 +2519,18 @@ class TestAppArmorProfileLoaded:
         with self._patch_apparmor_profiles(tmp_path, "agt-sandbox-extra (enforce)\n"):
             assert _apparmor_profile_loaded("agt-sandbox") is False
 
+    def test_returns_false_when_profile_in_complain_mode(self, tmp_path):
+        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
+
+        with self._patch_apparmor_profiles(tmp_path, "agt-sandbox (complain)\n"):
+            assert _apparmor_profile_loaded("agt-sandbox") is False
+
+    def test_returns_false_when_mode_token_missing(self, tmp_path):
+        from agent_sandbox.docker_provider.provider import _apparmor_profile_loaded
+
+        with self._patch_apparmor_profiles(tmp_path, "agt-sandbox\n"):
+            assert _apparmor_profile_loaded("agt-sandbox") is False
+
 
 class TestAppArmorProfileSelection:
     """_create_container picks agt-sandbox when loaded, docker-default otherwise."""
@@ -2558,6 +2570,17 @@ class TestAppArmorProfileSelection:
         kw = client.containers.run.call_args[1]
         assert "apparmor=docker-default" in kw["security_opt"]
         assert not any(o == "apparmor=agt-sandbox" for o in kw["security_opt"])
+
+    def test_fallback_emits_warning(self, caplog):
+        import logging
+        p, _ = self._make_raw_provider()
+        with patch(
+            "agent_sandbox.docker_provider.provider._apparmor_profile_loaded",
+            return_value=False,
+        ):
+            with caplog.at_level(logging.WARNING, logger="agent_sandbox.docker_provider.provider"):
+                p._create_container("a1", "s1", SandboxConfig())
+        assert any("agt-sandbox" in r.message and "falling back" in r.message for r in caplog.records)
 
     def test_apparmor_profile_name_constant(self):
         assert DockerSandboxProvider._APPARMOR_PROFILE_NAME == "agt-sandbox"
