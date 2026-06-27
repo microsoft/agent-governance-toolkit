@@ -956,6 +956,58 @@ workflows
 workiq
 workstream
 worktree
+
+# --- African regulatory policy terms ---
+POPIA
+popia
+NDPA
+ndpa
+NFIU
+nfiu
+CBN
+BVN
+NIN
+NIMC
+nimc
+vnin
+NIBSS
+nibss
+tokenised
+Anambra
+Kogi
+crossborder
+crossstate
+offence
+authorisation
+authorised
+geofencing
+geofence
+geomatch
+YYMMDDGSSSCAZ
+
+# --- TRACE / identity-chain / advisory terms ---
+agentrust
+contextvars
+miyannishar
+GHSA
+ghsa
+
+# --- ACS / crypto terms ---
+preimage
+
+# --- Flowise integration terms ---
+chatflow
+Chatflows
+
+# --- Test code terms ---
+interp
+ncat
+netcat
+socat
+nmap
+tcpdump
+isascii
+multisink
 writeln
 # --- West/North Africa regulatory policy terms ---
 # British spellings used in GDPR-modelled African data protection laws
