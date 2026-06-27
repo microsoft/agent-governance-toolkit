@@ -216,23 +216,22 @@ export class DockerSandboxProvider implements SandboxProvider {
     }
 
     const cfg = this.sessionConfigs.get(sessionId) ?? defaultSandboxConfig();
-    // Validate timeoutSeconds: must be positive. Zero/negative would mean "no limit"
-    // in coreutils timeout, but our outer guard would still enforce a limit.
-    // Clamp to 1 second minimum to avoid confusion.
-    const timeoutSeconds = Math.max(1, Math.floor(cfg.timeoutSeconds));
+    // Validate timeoutSeconds: must be a finite number >= 1.
+    // NaN/Infinity would slip through Math.max(1, Math.floor(NaN)) -> NaN.
+    // Zero/negative means "no limit" in coreutils timeout.
+    const raw = cfg.timeoutSeconds;
+    const timeoutSeconds = Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 1;
 
     const executionId = randomUUID();
     const startTime = Date.now();
 
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');
-      // Use 'timeout' command with SIGKILL and kill-after to enforce execution time limit.
+      // Use 'timeout' command with SIGKILL to enforce execution time limit.
       // The default signal (SIGTERM) can be caught/ignored by sandboxed code,
       // allowing it to bypass the timeout. SIGKILL cannot be caught.
-      // --kill-after=5s sends SIGKILL 5 seconds after the initial signal if the process
-      // hasn't exited, providing a hard backstop.
       const execArgs = [
-        'exec', containerId, 'timeout', '--signal=SIGKILL', '--kill-after=5s', String(timeoutSeconds),
+        'exec', containerId, 'timeout', '--signal=SIGKILL', String(timeoutSeconds),
         'python3', '-c',
         `import base64; exec(base64.b64decode('${encoded}').decode())`,
       ];
