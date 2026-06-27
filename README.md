@@ -254,6 +254,17 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 
 ## Install
 
+### Quick CI Install
+
+To make the `agt` CLI available in CI environments, install the top-level Python meta-package:
+
+```bash
+pip install "agent-governance-toolkit>=4.1"
+agt verify --evidence agt-evidence.json
+```
+
+The `agt` CLI is distributed as part of `agent-governance-toolkit`. Internal repository directories (for example, `agent-governance-python/agent-compliance`) and internal package names (for example, `agent-governance-toolkit-compliance`) are not published independently on PyPI.
+
 | Language | Package | Command |
 |----------|---------|---------|
 | **Python** | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | `pip install agent-governance-toolkit[full]` |
