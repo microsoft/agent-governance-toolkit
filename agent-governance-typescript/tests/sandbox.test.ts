@@ -133,4 +133,34 @@ describe('DockerSandboxProvider lifecycle', () => {
       provider.executeCode('testAgent', 'nonexistent-id', 'print("hi")'),
     ).rejects.toThrow(/No active session/);
   });
+
+  it('uses custom timeoutSeconds from session config', async () => {
+    if (!dockerAvailable) {
+      console.log('Skipping timeout test — Docker not available');
+      return;
+    }
+
+    // Create session with 2 second timeout
+    const session = await provider.createSession('testAgent', {
+      ...defaultSandboxConfig(),
+      timeoutSeconds: 2,
+    });
+    expect(session.status).toBe(SessionStatus.Ready);
+
+    try {
+      // Execute code that sleeps for 3 seconds — should be killed by timeout
+      const handle = await provider.executeCode(
+        'testAgent',
+        session.sessionId,
+        'import time; time.sleep(3); print("done")',
+      );
+      expect(handle.status).toBe(ExecutionStatus.Failed);
+      expect(handle.result).toBeDefined();
+      expect(handle.result!.killed).toBe(true);
+      expect(handle.result!.killReason).toBe('timeout');
+      expect(handle.result!.durationSeconds).toBeLessThan(2.5); // Should timeout around 2s
+    } finally {
+      await provider.destroySession('testAgent', session.sessionId);
+    }
+  }, 15_000);
 });
