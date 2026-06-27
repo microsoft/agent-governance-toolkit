@@ -206,7 +206,13 @@ impl NativeRuntime {
         perf_telemetry: u8,
     ) -> PyResult<Self> {
         let manifest = Manifest::from_yaml_str(&manifest).map_err(runtime_error)?;
-        Self::from_manifest(manifest, annotator_cb, policy_cb, perf_telemetry)
+        Self::from_manifest(
+            manifest,
+            annotator_cb,
+            policy_cb,
+            perf_telemetry,
+            agent_control_specification_core::Limits::default(),
+        )
     }
 
     #[staticmethod]
@@ -218,7 +224,31 @@ impl NativeRuntime {
         perf_telemetry: u8,
     ) -> PyResult<Self> {
         let manifest = Manifest::from_path(Path::new(&path)).map_err(runtime_error)?;
-        Self::from_manifest(manifest, annotator_cb, policy_cb, perf_telemetry)
+        Self::from_manifest(
+            manifest,
+            annotator_cb,
+            policy_cb,
+            perf_telemetry,
+            agent_control_specification_core::Limits::default(),
+        )
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (url, sha256 = None, annotator_cb = None, policy_cb = None, perf_telemetry = 0, max_url_bytes = None, url_timeout_ms = None, max_url_redirects = None))]
+    #[allow(clippy::too_many_arguments)]
+    fn from_url(
+        url: String,
+        sha256: Option<String>,
+        annotator_cb: Option<Py<PyAny>>,
+        policy_cb: Option<Py<PyAny>>,
+        perf_telemetry: u8,
+        max_url_bytes: Option<u64>,
+        url_timeout_ms: Option<u64>,
+        max_url_redirects: Option<u32>,
+    ) -> PyResult<Self> {
+        let manifest = Manifest::from_url(&url, sha256.as_deref()).map_err(runtime_error)?;
+        let limits = url_fetch_limits(max_url_bytes, url_timeout_ms, max_url_redirects);
+        Self::from_manifest(manifest, annotator_cb, policy_cb, perf_telemetry, limits)
     }
 
     #[staticmethod]
@@ -231,7 +261,13 @@ impl NativeRuntime {
     ) -> PyResult<Self> {
         let refs: Vec<&str> = manifests.iter().map(String::as_str).collect();
         let manifest = Manifest::from_yaml_chain(&refs).map_err(runtime_error)?;
-        Self::from_manifest(manifest, annotator_cb, policy_cb, perf_telemetry)
+        Self::from_manifest(
+            manifest,
+            annotator_cb,
+            policy_cb,
+            perf_telemetry,
+            agent_control_specification_core::Limits::default(),
+        )
     }
 
     fn evaluate(&self, py: Python<'_>, request: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
@@ -292,24 +328,53 @@ impl NativeRuntime {
         annotator_cb: Option<Py<PyAny>>,
         policy_cb: Option<Py<PyAny>>,
         perf_telemetry: u8,
+        limits: agent_control_specification_core::Limits,
     ) -> PyResult<Self> {
         let perf_telemetry = PerfTelemetry::from_u8(perf_telemetry)
             .ok_or_else(|| PyValueError::new_err("perf_telemetry must be 0, 1, or 2"))?;
         let annotations: Arc<dyn AnnotatorDispatcher> = match annotator_cb {
             Some(cb) => Arc::new(PyAnnotatorDispatcher { cb }),
-            None => agent_control_specification_core::dispatchers::default_annotator_dispatcher(),
+            None => {
+                agent_control_specification_core::dispatchers::default_annotator_dispatcher_for(
+                    &manifest, limits,
+                )
+            }
         };
         let policy: Arc<dyn PolicyDispatcher> = match policy_cb {
             Some(cb) => Arc::new(PyPolicyDispatcher { cb }),
             None => {
-                agent_control_specification_core::dispatchers::default_policy_dispatcher(&manifest)
-                    .map_err(runtime_error)?
+                agent_control_specification_core::dispatchers::default_policy_dispatcher_with_limits(
+                    &manifest, limits,
+                )
+                .map_err(runtime_error)?
             }
         };
         let runtime = Runtime::with_perf_telemetry(manifest, annotations, policy, perf_telemetry)
             .map_err(runtime_error)?;
         Ok(Self { runtime })
     }
+}
+
+/// Build URL fetch limits from optional overrides, mirroring the FFI setter.
+/// `None` keeps the built in default for `max_bytes` and `timeout_ms`;
+/// `max_redirects` defaults to the built in value when `None` and is applied as
+/// given otherwise, so `Some(0)` forbids redirects.
+fn url_fetch_limits(
+    max_bytes: Option<u64>,
+    timeout_ms: Option<u64>,
+    max_redirects: Option<u32>,
+) -> agent_control_specification_core::Limits {
+    let mut limits = agent_control_specification_core::Limits::default();
+    if let Some(bytes) = max_bytes {
+        limits.max_manifest_url_bytes = bytes as usize;
+    }
+    if let Some(timeout) = timeout_ms {
+        limits.manifest_url_timeout_ms = timeout;
+    }
+    if let Some(redirects) = max_redirects {
+        limits.max_manifest_url_redirects = redirects as usize;
+    }
+    limits
 }
 
 #[pymodule]

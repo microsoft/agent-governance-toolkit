@@ -114,16 +114,16 @@ class TestActionClassifier:
         assert result.ring == ExecutionRing.RING_1_PRIVILEGED
         assert result.risk_weight == 0.95
 
-    def test_cache_hit(self):
+    def test_classify_is_deterministic(self):
         action = ActionDescriptor(
-            action_id="cached",
-            name="Cached",
-            execute_api="/cached",
+            action_id="stable",
+            name="Stable",
+            execute_api="/stable",
             reversibility=ReversibilityLevel.PARTIAL,
         )
         r1 = self.classifier.classify(action)
         r2 = self.classifier.classify(action)
-        assert r1 is r2  # same object from cache
+        assert r1 == r2  # pure function of attributes; no cached state
 
     def test_override(self):
         action = ActionDescriptor(

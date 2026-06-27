@@ -24,7 +24,21 @@ const randomBytes = (n: number): Uint8Array => {
 
 const X3DH_INFO = new TextEncoder().encode("AgentMesh_X3DH_v1");
 const KEY_LEN = 32;
-const FF_SALT = new Uint8Array(32).fill(0xff);
+// Spec-compliant X3DH KDF inputs per Signal §2.2:
+//   IKM  = F (0xFF × 32) || concat(DH outputs)
+//   salt = 0x00 × 32   (HKDF salt is the empty/zero block, NOT the F prefix)
+//   info = "AgentMesh_X3DH_v1"
+// An earlier implementation passed F (0xFF × 32) as the HKDF *salt* while
+// feeding the bare DH concat as IKM. That derives a different key than the
+// spec, which silently broke interop with any spec-compliant peer — in
+// particular the AGT Python SDK, whose KDF was already corrected upstream in
+// agent-governance-python/.../encryption/x3dh.py (PR #1926). Until now the
+// TypeScript SDK was never aligned, so a Python initiator and a TypeScript
+// responder (or vice-versa) completed X3DH/KNOCK but then failed to decrypt
+// the first message with "invalid tag". Aligning the salt/IKM here restores
+// Python↔TypeScript cross-runtime parity.
+const F_PREFIX = new Uint8Array(32).fill(0xff);
+const ZERO_SALT = new Uint8Array(32);
 
 export interface X25519KeyPair {
   privateKey: Uint8Array;
@@ -76,8 +90,22 @@ export function ed25519ToX25519(
   return { privateKey, publicKey };
 }
 
-function kdf(ikm: Uint8Array): Uint8Array {
-  return hkdf(sha256, ikm, FF_SALT, X3DH_INFO, KEY_LEN);
+/**
+ * X3DH key-derivation function.
+ *
+ * Computes `HKDF-SHA256(salt = 0x00 × 32, IKM = F ‖ dhConcat,
+ * info = "AgentMesh_X3DH_v1", L = 32)` where `F` is `0xFF × 32`, per the
+ * Signal X3DH spec (§2.2). Callers pass `dhConcat` (the concatenation of the
+ * DH outputs) as `ikm`; the F prefix is prepended here so every code path
+ * (initiator + responder) applies it exactly once.
+ *
+ * Exported so the test suite can pin the exact derived key against a
+ * cross-runtime known-answer vector shared with the AGT Python SDK, which
+ * guards against silent salt/IKM regressions that pass intra-runtime
+ * consistency checks but break Python↔TypeScript interop.
+ */
+export function kdf(ikm: Uint8Array): Uint8Array {
+  return hkdf(sha256, concat(F_PREFIX, ikm), ZERO_SALT, X3DH_INFO, KEY_LEN);
 }
 
 function concat(...arrays: Uint8Array[]): Uint8Array {

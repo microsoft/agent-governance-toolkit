@@ -19,7 +19,7 @@ warnings.warn(
 )
 
 # Keep in sync with the ``version`` field in pyproject.toml.
-__version__ = "4.1.0"
+__version__ = "5.0.0"
 
 # Centralized constants
 from hypervisor import constants  # noqa: F401,E402
