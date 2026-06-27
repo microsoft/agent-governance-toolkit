@@ -131,8 +131,10 @@ class AttestationValidator:
             return False
 
         if not _CRYPTO_AVAILABLE:
-            # Graceful fallback: accept if public key exists but library missing
-            return True
+            # Fail closed: an Ed25519 signature cannot be verified without the
+            # cryptography library, so it MUST NOT be treated as valid. Accepting
+            # it here would let any unsigned or forged attestation pass.
+            return False
 
         try:
             key_bytes = base64.b64decode(raw_key)
