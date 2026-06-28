@@ -130,7 +130,7 @@ function validateResourceName(value: string, label: string): void {
 
 export class DockerSandboxProvider implements SandboxProvider {
   private readonly image: string;
-  private readonly containers = new Map<string, string>(); // sessionId -> containerId
+  private readonly containers = new Map<string, { containerId: string; config: SandboxConfig }>(); // sessionId -> { containerId, config }
 
   constructor(image: string = 'python:3.11-slim') {
     this.image = image;
@@ -188,7 +188,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         .toString()
         .trim();
 
-      this.containers.set(sessionId, containerId);
+      this.containers.set(sessionId, { containerId, config: cfg });
 
       return {
         agentId,
@@ -208,13 +208,17 @@ export class DockerSandboxProvider implements SandboxProvider {
   ): Promise<ExecutionHandle> {
     validateResourceName(agentId, 'agentId');
 
-    const containerId = this.containers.get(sessionId);
-    if (!containerId) {
+    const sessionData = this.containers.get(sessionId);
+    if (!sessionData) {
       throw new Error(`No active session '${sessionId}' for agent '${agentId}'`);
     }
 
+    const { containerId, config } = sessionData;
     const executionId = randomUUID();
     const startTime = Date.now();
+
+    // Use the configured timeoutSeconds from the session config
+    const timeoutMs = config.timeoutSeconds * 1000;
 
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');
@@ -223,7 +227,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         `import base64; exec(base64.b64decode('${encoded}').decode())`,
       ];
 
-      execFile('docker', execArgs, { timeout: 60_000 }, (error, stdout, stderr) => {
+      execFile('docker', execArgs, { timeout: timeoutMs }, (error, stdout, stderr) => {
         const durationSeconds = (Date.now() - startTime) / 1000.0;
         // Node's ExecException.code can be: a numeric exit code (child exited
         // non-zero), `null` (child killed by a signal — `error.signal` is set
@@ -263,10 +267,12 @@ export class DockerSandboxProvider implements SandboxProvider {
   async destroySession(agentId: string, sessionId: string): Promise<void> {
     validateResourceName(agentId, 'agentId');
 
-    const containerId = this.containers.get(sessionId);
-    if (!containerId) {
+    const sessionData = this.containers.get(sessionId);
+    if (!sessionData) {
       return; // already destroyed or never existed
     }
+
+    const { containerId } = sessionData;
 
     try {
       execFileSync('docker', ['rm', '-f', containerId], {
