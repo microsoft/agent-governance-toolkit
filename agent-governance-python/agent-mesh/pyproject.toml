@@ -59,7 +59,7 @@ dev = [
     # `pip install agent-mesh[dev]` brings everything needed for tests.
     "agent_hypervisor>=3.7.0,<6.0",
     # TRACE Trust Record emission (ADR-0032)
-    "agentrust-trace>=0.2.0",
+    "agentrust-trace>=0.2.0,<0.3.0",
 ]
 
 [project.urls]
