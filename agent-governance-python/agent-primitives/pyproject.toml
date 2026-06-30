@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_primitives"
-version = "4.1.0"
+version = "5.0.0"
 description = "Deprecated — use agent-governance-toolkit-core instead. Shared primitive data models for Agent OS"
 readme = "README.md"
 license = {text = "MIT"}
@@ -33,7 +33,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "agent-governance-toolkit-core>=4.1.0,<5.0",
+    "agent-governance-toolkit-core>=4.1.0,<6.0",
     "pydantic>=2.13.4,<3.0",
 ]
 
@@ -41,7 +41,7 @@ dependencies = [
 dev = [
     "pytest>=9.1.1,<10.0",
     "mypy>=2.1.0,<3.0",
-    "ruff>=0.15.18,<1.0",
+    "ruff>=0.15.20,<1.0",
 ]
 
 [project.urls]
