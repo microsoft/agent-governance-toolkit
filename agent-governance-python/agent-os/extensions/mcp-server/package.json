@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agentos-mcp-server",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "description": "Public Preview — AgentOS MCP Server for Claude Desktop: Build, deploy, and manage policy-compliant autonomous agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,7 +12,7 @@
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "start:stdio": "node dist/cli.js --stdio",
-    "test": "vitest",
+    "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest --coverage",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",

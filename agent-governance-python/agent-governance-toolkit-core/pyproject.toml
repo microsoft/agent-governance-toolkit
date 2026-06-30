@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-governance-toolkit-core"
-version = "4.1.0"
+version = "5.0.0"
 description = "Core runtime, kernel, and trust layer for the Agent Governance Toolkit"
 readme = "README.md"
 license = {text = "MIT"}
