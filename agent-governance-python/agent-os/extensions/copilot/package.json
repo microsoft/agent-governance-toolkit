@@ -51,7 +51,7 @@
     "@types/jest": "30.0.0",
     "@types/node": "26.0.0",
     "@typescript-eslint/eslint-plugin": "8.62.1",
-    "@typescript-eslint/parser": "8.62.0",
+    "@typescript-eslint/parser": "8.62.1",
     "eslint": "10.6.0",
     "jest": "30.4.2",
     "ts-jest": "29.4.11",
