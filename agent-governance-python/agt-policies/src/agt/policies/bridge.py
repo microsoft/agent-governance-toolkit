@@ -122,6 +122,7 @@ def _glob_to_re2(value: str) -> str:
         elif ch == "?":
             out.append(".")
         elif ch == "[":
+            bracket_start = i - 1
             j = i
             if j < n and value[j] == "!":
                 j += 1
@@ -139,6 +140,17 @@ def _glob_to_re2(value: str) -> str:
                     inner = "^" + inner[1:]
                 elif inner.startswith("^"):
                     inner = "\\" + inner
+                # Validate that the bracket expression is RE2-compatible.
+                # Python's re catches descending ranges (e.g. [a-Z]) with
+                # re.error; those same patterns are rejected by OPA/RE2 and
+                # would leave the deny rule undefined → fail-open.
+                try:
+                    re.compile(f"[{inner}]")
+                except re.error as exc:
+                    raise ValueError(
+                        f"glob char-class {value[bracket_start:j+1]!r} is not"
+                        f" RE2-compatible and cannot be used in a blocked pattern: {exc}"
+                    ) from exc
                 out.append("[" + inner + "]")
         else:
             out.append(re.escape(ch))
@@ -360,12 +372,18 @@ def governance_to_acs_manifest(
     )
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
+    # Track files we write into a caller-supplied bundle_dir so we can
+    # remove just those on failure without touching other caller content.
+    files_written: list[Path] = []
     try:
         stock_root = stock_rego_root or _find_stock_rego_root()
         for rego_file in stock_root.glob("*.rego"):
             if rego_file.name.endswith("_test.rego"):
                 continue
-            shutil.copy(rego_file, bundle_dir / rego_file.name)
+            dest = bundle_dir / rego_file.name
+            shutil.copy(rego_file, dest)
+            if not created_bundle_dir:
+                files_written.append(dest)
 
         blocked_pattern_regexes = [
             _pattern_to_regex(p) for p in policy.blocked_patterns
@@ -415,13 +433,18 @@ def governance_to_acs_manifest(
         )
         rego_path = bundle_dir / f"{policy_id}.rego"
         rego_path.write_text(rego_source, encoding="utf-8")
+        if not created_bundle_dir:
+            files_written.append(rego_path)
     except Exception:
-        # Do not leave a half-built bundle behind (stock libs copied, generated
-        # module missing) when pattern translation, rendering, or a write fails.
-        # Only clean up a directory we created ourselves; a caller-supplied one
-        # is theirs to manage.
+        # Do not leave a half-built bundle behind on failure.
+        # Self-created dir: remove the whole tree.
+        # Caller-supplied dir: remove only the files we wrote so we don't
+        # clobber other caller content.
         if created_bundle_dir:
             shutil.rmtree(bundle_dir, ignore_errors=True)
+        else:
+            for f in files_written:
+                f.unlink(missing_ok=True)
         raise
 
     # bind_tools must also cover the case where the policy has a budget

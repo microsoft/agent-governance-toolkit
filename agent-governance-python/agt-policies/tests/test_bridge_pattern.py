@@ -161,6 +161,23 @@ def test_non_finite_confidence_threshold_rejected(tmp_path: Path, bad: float) ->
         )
 
 
+@pytest.mark.parametrize(
+    "bad_class",
+    [
+        "[a-Z]",   # descending range — RE2 rejects, OPA → undefined → fail-open
+        "[z-a]",   # another descending range
+    ],
+)
+def test_glob_invalid_char_class_raises_value_error(bad_class: str) -> None:
+    with pytest.raises(ValueError, match="RE2-compatible"):
+        _glob_to_re2(bad_class)
+
+
+def test_glob_invalid_char_class_rejected_in_pattern_to_regex() -> None:
+    with pytest.raises(ValueError, match="RE2-compatible"):
+        _pattern_to_regex(("[a-Z]*.exe", types.SimpleNamespace(name="GLOB")))
+
+
 def test_created_bundle_dir_cleaned_up_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -175,3 +192,26 @@ def test_created_bundle_dir_cleaned_up_on_failure(
     with pytest.raises(ValueError):
         governance_to_acs_manifest(pol, stock_rego_root=tmp_path / "stock")
     assert not target.exists(), "self-created bundle dir must be removed on failure"
+
+
+def test_caller_supplied_bundle_dir_files_cleaned_up_on_failure(
+    tmp_path: Path,
+) -> None:
+    caller_dir = tmp_path / "caller_bundle"
+    caller_dir.mkdir()
+    sentinel = caller_dir / "caller_owned.txt"
+    sentinel.write_text("keep me", encoding="utf-8")
+
+    pol = _Policy()
+    pol.blocked_patterns = [(123, types.SimpleNamespace(name="GLOB"))]
+    stock_dir = tmp_path / "stock"
+    stock_dir.mkdir()
+    # Write a fake stock .rego file so we exercise the copy path before failure.
+    (stock_dir / "fake_lib.rego").write_text("package fake", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        governance_to_acs_manifest(pol, bundle_dir=caller_dir, stock_rego_root=stock_dir)
+
+    # Our copy must be gone; the caller's pre-existing file must remain.
+    assert not (caller_dir / "fake_lib.rego").exists(), "bridge-written file must be removed on failure"
+    assert sentinel.exists(), "caller-owned file must not be touched"
