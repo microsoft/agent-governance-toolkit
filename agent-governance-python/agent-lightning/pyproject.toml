@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentmesh_lightning"
-version = "4.1.0"
+version = "5.0.0"
 description = "Public Preview — Agent-Lightning RL integration for the Agent Governance Toolkit: governed training with policy enforcement"
 readme = "README.md"
 license = {text = "MIT"}
@@ -30,7 +30,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-agent-os = ["agent-governance-toolkit-core>=4.1.0,<5.0"]
+agent-os = ["agent-governance-toolkit-core>=4.1.0,<6.0"]
 dev = ["pytest>=7.0,<10.0", "pytest-cov"]
 
 [project.urls]
