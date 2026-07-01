@@ -1,0 +1,170 @@
+# agt-policies-africa
+# Ghana Data Protection — Governance Policy
+#
+# Regulatory reference: Ghana Data Protection Act, 2012 (Act 843)
+#                       Ghana Data Protection Bill, 2025 (amendment pending — monitor DPC)
+# Enforcing authority: Data Protection Commission (DPC)
+#                      https://dataprotection.org.gh
+#
+# Key obligations covered:
+#   s.17     — Eight data protection principles (accountability, lawfulness, purpose
+#              limitation, data minimisation, accuracy, security, openness, participation)
+#   s.17-33  — Data protection principles (full range)
+#   s.33     — Data subject participation: right to access, correct, delete
+#   s.37     — Special personal data (sensitive categories) — restricted processing
+#   s.38     — Cross-border transfer restrictions (adequacy requirement)
+#   s.40     — Data security obligations on controllers
+#   NIA Act 707 — Ghana Card (GHA-XXXXXXXXX-X) national ID protection
+#
+# ⚠️  Ghana Data Protection Bill 2025 is pending enactment. Monitor DPC for updates
+#     that may expand breach notification timelines and cross-border transfer rules.
+# ⚠️  This is a community-maintained governance starter policy.
+#     Not a certified legal compliance instrument. Perform your own compliance
+#     assessment with qualified advisors before production deployment.
+
+version: "1.0"
+name: ghana-dpa
+description: >
+  Ghana data protection governance policy for AI agents processing Ghanaian
+  personal data. Based on the Data Protection Act 2012 (Act 843) enforced by
+  the Data Protection Commission (DPC). Covers cross-border transfer restrictions
+  (s.38), special personal data controls (s.37), data subject participation (s.33),
+  security obligations (s.40), and Ghana Card national ID protection (NIA Act 707).
+
+rules:
+
+  # =========================================================================
+  # Breach / Security Notification — s.40
+  # Act 843 requires data controllers to notify the DPC and affected individuals
+  # promptly on becoming aware of a breach. AI agents must not suppress alerts.
+  # =========================================================================
+
+  - name: ghana-breach-suppression
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+(report|notification))"
+    action: deny
+    priority: 1
+    message: "Ghana DPA Act 843 s.40: Agent cannot suppress breach notifications — DPC and affected data subjects must be notified promptly"
+
+  # =========================================================================
+  # Special Personal Data — s.37
+  # Special (sensitive) personal data: race/ethnic origin, political opinion,
+  # religious/other belief, trade union membership, health/mental health,
+  # sexual life, criminal offences, court proceedings.
+  # Processing requires explicit consent or specific lawful basis.
+  # =========================================================================
+
+  - name: ghana-health-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription|clinical\\s+data)"
+    action: escalate
+    priority: 1
+    message: "Ghana DPA Act 843 s.37: Health/medical special personal data detected — requires explicit consent or documented lawful basis (DPC)"
+
+  - name: ghana-special-category-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(ethnic\\s+origin|race|tribe|political\\s+opinion|religious\\s+belief|trade\\s+union|sexual\\s+(life|orientation)|criminal\\s+(offence|conviction|record)|court\\s+proceedings)"
+    action: escalate
+    priority: 1
+    message: "Ghana DPA Act 843 s.37: Special personal data detected — requires explicit consent and restricted processing under Act 843"
+
+  - name: ghana-biometric-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data))"
+    action: deny
+    priority: 1
+    message: "Ghana DPA Act 843 s.37: Biometric data detected — must not be transmitted without explicit consent and DPC notification"
+
+  # =========================================================================
+  # Cross-Border Data Transfers — s.38
+  # Transfer of personal data outside Ghana is prohibited unless the destination
+  # country ensures an adequate level of protection for data subjects' rights.
+  # Special personal data: only with consent or medical necessity (s.37(6-7)).
+  # =========================================================================
+
+  - name: ghana-cross-border-language-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+ghana|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
+    action: escalate
+    priority: 1
+    message: "Ghana DPA Act 843 s.38: Cross-border data transfer language detected — destination country adequacy must be verified with DPC"
+
+  - name: ghana-cross-border-action
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: escalate
+    priority: 2
+    message: "Ghana DPA Act 843 s.38: Cross-border data transfer action requires adequacy verification — destination must ensure equivalent protection"
+
+  # =========================================================================
+  # Ghana Card / National ID — NIA Act 707 (2006)
+  # Format: GHA-XXXXXXXXX-X (GHA prefix + 9 digits + check digit)
+  # Exposure of Ghana Card numbers constitutes a data breach under Act 843.
+  # =========================================================================
+
+  - name: ghana-card-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(ghana\\s+(card|id|national\\s+id)|GHA-[0-9]{9}-[0-9]|GHA[0-9]{10})"
+    action: deny
+    priority: 1
+    message: "Ghana DPA Act 843 / NIA Act 707: Ghana Card national ID detected in agent output — blocked to prevent identity data exposure"
+
+  # =========================================================================
+  # Data Minimisation / Bulk Export — s.17 (data minimisation principle)
+  # =========================================================================
+
+  - name: ghana-bulk-data-export
+    condition:
+      field: action
+      operator: matches
+      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
+    action: escalate
+    priority: 2
+    message: "Ghana DPA Act 843 s.17: Bulk personal data export — data minimisation principle requires documented purpose and DPC accountability"
+
+  - name: ghana-large-record-export
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: escalate
+    priority: 2
+    message: "Ghana DPA Act 843 s.17/s.38: Large-volume personal data transfer requires documented lawful purpose and adequacy verification"
+
+  # =========================================================================
+  # Data Subject Participation — s.33
+  # Data subjects have the right to access, correct, and delete personal data.
+  # Agent actions that modify personal data must be logged for accountability.
+  # =========================================================================
+
+  - name: ghana-pii-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii"
+    action: audit
+    priority: 3
+    message: "Ghana DPA Act 843 s.33: Personal data access logged — data subject participation and DPC accountability requirement"
+
+  - name: ghana-pii-modification-audit
+    condition:
+      field: action
+      operator: matches
+      value: "update_user|modify_profile|patch_account|edit_customer|change_personal|delete_user|erase_data"
+    action: audit
+    priority: 3
+    message: "Ghana DPA Act 843 s.33: Personal data modification/deletion logged — data subject participation and DPC accountability requirement"

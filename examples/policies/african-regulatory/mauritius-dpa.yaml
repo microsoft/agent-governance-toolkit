@@ -1,0 +1,247 @@
+# agt-policies-africa
+# Mauritius Data Protection — Governance Policy
+#
+# Regulatory reference: Data Protection Act 2017 (Act No. 20 of 2017)
+#                       Proclaimed through Proclamation No. 3 of 2018
+#                       Effective: January 15, 2018
+#                       Replaces Data Protection Act 2004
+# Enforcing authority: Data Protection Office (DPO) / Data Protection Commissioner
+#                      Independent public authority
+#                      https://dataprotection.govmu.org
+#
+# Key obligations covered:
+#   Special Categories — Sensitive data: racial/ethnic origin, political opinion,
+#                        religious/philosophical beliefs, trade union membership,
+#                        physical/mental health, sexual orientation/practices,
+#                        genetic/biometric data, criminal proceedings
+#   Registration       — Mandatory registration of all controllers and processors
+#                        with the Commissioner (penalty: up to MUR 200,000 / 5 years)
+#   DPO (mandatory)    — All controllers and processors must appoint a DPO;
+#                        no conflict of interest (not CEO/CFO/CMO/CTO)
+#   Breach Notification — 72 hours to Commissioner; without undue delay to subjects
+#                        where high risk (unless data encrypted or risk resolved)
+#   Six Principles     — Lawfulness/fairness/transparency, purpose limitation,
+#                        minimisation, accuracy, storage limitation, data subject rights
+#   Transfer           — Proof of appropriate safeguards to Commissioner required;
+#                        derogations: consent, contract, public interest, legal claims,
+#                        vital interests, compelling legitimate interests (limited scope)
+#   Security           — Pseudonymisation, encryption, resilience, recovery, testing
+#   Automated Decisions — Transparency obligation: data subjects must be informed
+#                         of automated decision-making including profiling
+#   Electronic Marketing — Data subjects may object at any time to direct marketing
+#
+# Mauritius National Identity Card (NIC): Letter + 6 digits (e.g., A123456)
+#   Sometimes with trailing check digit (e.g., A123456/8)
+#   Format: [A-Z][0-9]{6,7}
+#
+# Penalties:
+#   Failure to register / false registration: MUR 200,000 or 5 years imprisonment
+#   Enforcement notice violation: MUR 50,000 + 2 years imprisonment
+#
+# ⚠️  Mauritius DPA 2017 is the most GDPR-aligned data protection law in Africa.
+#     Directly modeled on EU GDPR 2016/679. DPO mandatory for ALL controllers
+#     (not just large organisations — stricter than GDPR which has size thresholds).
+# ⚠️  This is a community-maintained governance starter policy.
+#     Not a certified legal compliance instrument.
+
+version: "1.0"
+name: mauritius-dpa
+description: >
+  Mauritius data protection governance policy for AI agents processing personal data
+  in Mauritius. Based on the Data Protection Act 2017 (Act No. 20 of 2017), the most
+  GDPR-aligned data protection law in Africa, enforced by the Data Protection
+  Commissioner. Covers mandatory DPO (all controllers), mandatory registration,
+  sensitive/special category data controls, 72-hour breach notification, cross-border
+  transfer safeguards, automated decision-making transparency, and Mauritius National
+  ID Card (NIC letter + digits) protection.
+
+rules:
+
+  # =========================================================================
+  # Breach Notification — DPA 2017 (Breach Notification)
+  # 72 hours to Commissioner; without undue delay to data subjects if high risk.
+  # Exceptions: encrypted data, risk resolved, disproportionate effort.
+  # AI agents must not suppress, delay or advise against breach reporting.
+  # =========================================================================
+
+  - name: mauritius-breach-suppression
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+(report|notification))"
+    action: deny
+    priority: 1
+    message: "Mauritius DPA 2017 (Breach Notification): Agent cannot suppress breach notifications — Commissioner must be notified within 72 hours; data subjects notified without undue delay where high risk"
+
+  # =========================================================================
+  # Special Categories of Personal Data — DPA 2017 (Special Categories)
+  # Racial/ethnic origin, political opinion/adherence, religious/philosophical
+  # beliefs, trade union membership, physical/mental health, sexual orientation/
+  # practices/preferences, genetic/biometric data, criminal proceedings.
+  # Processing requires lawful basis + legitimate controller activities + safeguards.
+  # =========================================================================
+
+  - name: mauritius-health-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription|clinical\\s+data|psychological\\s+(report|assessment))"
+    action: escalate
+    priority: 1
+    message: "Mauritius DPA 2017 (Special Categories): Health/genetic sensitive data detected — requires lawful basis + legitimate activities + appropriate safeguards (Data Protection Commissioner)"
+
+  - name: mauritius-biometric-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data))"
+    action: deny
+    priority: 1
+    message: "Mauritius DPA 2017 (Special Categories): Biometric data detected — must not be transmitted; uniquely identifying biometrics are a special category requiring explicit lawful basis"
+
+  - name: mauritius-special-category-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(racial\\s+origin|ethnic\\s+origin|political\\s+opinion|political\\s+adherence|religious\\s+belief|philosophical\\s+belief|trade\\s+union|sexual\\s+(orientation|practice|preference)|criminal\\s+(proceeding|offence|conviction|record))"
+    action: escalate
+    priority: 1
+    message: "Mauritius DPA 2017 (Special Categories): Special category personal data detected — requires lawful basis + controller's legitimate activities + appropriate safeguards"
+
+  # =========================================================================
+  # Mauritius National Identity Card (NIC)
+  # Format: Single letter + 6 digits (e.g., A123456), sometimes with check digit
+  # Issued by the National Identity Card Unit.
+  # Exposure triggers breach notification obligations.
+  # =========================================================================
+
+  - name: mauritius-nic-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(mauritius\\s+(national\\s+)?(id|identity|nic|card)|national\\s+(identity\\s+)?card\\s+(no|number|#)|NIC\\s+(no|number|#))[\\s:=]{0,5}[A-Z][0-9]{6,7}"
+    action: deny
+    priority: 1
+    message: "Mauritius DPA 2017 (Breach Notification / Security): Mauritius National ID Card (NIC) detected in agent output — blocked; triggers Commissioner breach notification within 72 hours"
+
+  # =========================================================================
+  # Registration — DPA 2017 (Registration)
+  # ALL controllers and processors must register with the Commissioner.
+  # Registration valid 3 years; must renew 3 months before expiry.
+  # Failure to register: MUR 200,000 or 5 years imprisonment.
+  # Agents must not advise bypassing registration.
+  # =========================================================================
+
+  - name: mauritius-unregistered-processing
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(process(ing)?\\s+(without|skip|bypass|ignore).{0,30}(register|registration|Commissioner|permit)|no\\s+need\\s+(to\\s+)?(register|notify\\s+(the\\s+)?Commissioner))"
+    action: deny
+    priority: 1
+    message: "Mauritius DPA 2017 (Registration): Agent cannot advise bypassing Commissioner registration — all controllers and processors must register (penalty: MUR 200,000 or 5 years imprisonment)"
+
+  # =========================================================================
+  # Cross-Border Data Transfers — DPA 2017 (Transfer of Personal Data)
+  # Requires proof of appropriate safeguards to Commissioner.
+  # Derogations: explicit consent, contract, public interest, legal claims,
+  # vital interests, compelling legitimate interests (non-repetitive, limited scope).
+  # Commissioner may prohibit, suspend or condition transfers.
+  # =========================================================================
+
+  - name: mauritius-cross-border-language-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+mauritius|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
+    action: escalate
+    priority: 1
+    message: "Mauritius DPA 2017 (Transfer): Cross-border data transfer detected — proof of appropriate safeguards must be provided to the Commissioner before transfer"
+
+  - name: mauritius-cross-border-action
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: escalate
+    priority: 2
+    message: "Mauritius DPA 2017 (Transfer): Cross-border data transfer action requires documented safeguards filed with the Commissioner or a valid derogation (consent, contract, public interest)"
+
+  # =========================================================================
+  # Large Record Exports — DPA 2017 (Transfer + Security)
+  # =========================================================================
+
+  - name: mauritius-bulk-data-export
+    condition:
+      field: action
+      operator: matches
+      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
+    action: escalate
+    priority: 2
+    message: "Mauritius DPA 2017 (Transfer / Security): Bulk personal data export requires appropriate safeguards filed with Commissioner and documented lawful basis"
+
+  - name: mauritius-large-record-export
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: escalate
+    priority: 2
+    message: "Mauritius DPA 2017 (Transfer): Large-volume transfer requires proof of appropriate safeguards filed with Commissioner"
+
+  # =========================================================================
+  # Automated Decision-Making — DPA 2017 (Collection and Processing)
+  # Data subjects must be informed of automated decision-making including profiling,
+  # the logic involved, significance, and envisaged consequences.
+  # Agents executing automated decisions must surface this transparency obligation.
+  # =========================================================================
+
+  - name: mauritius-automated-decision-making
+    condition:
+      field: action
+      operator: matches
+      value: "auto_approve|auto_reject|automated_credit|algorithmic_decision|auto_score|auto_deny"
+    action: escalate
+    priority: 1
+    message: "Mauritius DPA 2017 (Collection / Automated Decisions): Automated decision-making including profiling — data subject must be informed of logic, significance and consequences; escalate for transparency compliance"
+
+  # =========================================================================
+  # Data Protection Officer — DPA 2017 (Data Protection Officers)
+  # Mandatory for ALL controllers and processors (stricter than GDPR).
+  # Cannot be CEO, COO, CFO, CMO, Head of HR, Head of IT (conflict of interest).
+  # Agents must not advise bypassing or skipping DPO appointment.
+  # =========================================================================
+
+  - name: mauritius-skip-dpo
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(no\\s+need\\s+(for\\s+)?(a\\s+)?dpo|skip(ping)?\\s+(the\\s+)?dpo|don'?t\\s+need\\s+(a\\s+)?data\\s+protection\\s+officer|dpo\\s+(is\\s+)?(optional|not\\s+required))"
+    action: deny
+    priority: 1
+    message: "Mauritius DPA 2017 (DPO): DPO appointment is mandatory for ALL controllers and processors — stricter than GDPR; no size threshold exemption applies in Mauritius"
+
+  # =========================================================================
+  # Data Subject Rights — DPA 2017 (Collection and Processing)
+  # Rights: access, rectification, restriction, erasure, objection,
+  #         complaint to Commissioner, automated decision-making information.
+  # All agent actions touching personal data must be logged for accountability.
+  # =========================================================================
+
+  - name: mauritius-pii-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii"
+    action: audit
+    priority: 3
+    message: "Mauritius DPA 2017 (Collection / Data Subject Rights): Personal data access logged — data subject rights (access, information) and Commissioner accountability requirement"
+
+  - name: mauritius-pii-modification-audit
+    condition:
+      field: action
+      operator: matches
+      value: "update_user|modify_profile|patch_account|edit_customer|change_personal|delete_user|erase_data"
+    action: audit
+    priority: 3
+    message: "Mauritius DPA 2017 (Collection / Data Subject Rights): Personal data modification/erasure logged — data subject rights (rectification, restriction, erasure) and Commissioner accountability"

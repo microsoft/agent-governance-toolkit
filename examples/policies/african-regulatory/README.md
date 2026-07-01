@@ -1,8 +1,8 @@
 # African Regulatory Policy Pack
 
 Agent-OS governance policies for AI agents operating in Nigeria, Kenya, South
-Africa, Uganda, Tanzania, and Ethiopia — plus five universal agent safety
-controls aligned to the OWASP Agentic AI Top 10.
+Africa, Uganda, Tanzania, Ethiopia, Ghana, Rwanda, Egypt, and Mauritius — plus
+five universal agent safety controls aligned to the OWASP Agentic AI Top 10.
 
 Maintained by the [agt-policies-nigeria](https://github.com/kingztech2019/agt-policies-nigeria)
 open-source project. Contributions welcome.
@@ -25,6 +25,10 @@ open-source project. Contributions welcome.
 │  UG: uganda-dppa                                                    │
 │  TZ: tanzania-pdpa                                                  │
 │  ET: ethiopia-pdp                                                   │
+│  GH: ghana-dpa                                                      │
+│  RW: rwanda-dpa                                                     │
+│  EG: egypt-pdpl                                                     │
+│  MU: mauritius-dpa                                                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,6 +65,10 @@ are selected per jurisdiction.
 | `uganda-dppa.yaml` | Uganda Data Protection and Privacy Act 2019 | 🇺🇬 UG |
 | `tanzania-pdpa.yaml` | Tanzania Personal Data Protection Act 2022 | 🇹🇿 TZ |
 | `ethiopia-pdp.yaml` | Ethiopia Proclamation 958/2016 + draft PDPP *(draft)* | 🇪🇹 ET |
+| `ghana-dpa.yaml` | Ghana Data Protection Act 2012 (Act 843) | 🇬🇭 GH |
+| `rwanda-dpa.yaml` | Rwanda Law No. 058/2021 on Personal Data Protection | 🇷🇼 RW |
+| `egypt-pdpl.yaml` | Egypt Personal Data Protection Law No. 151/2020 | 🇪🇬 EG |
+| `mauritius-dpa.yaml` | Mauritius Data Protection Act 2017 (Act 20/2017) | 🇲🇺 MU |
 
 ---
 
@@ -85,7 +93,7 @@ To run the Rego policies with OPA:
 curl -L -o /tmp/opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
 chmod +x /tmp/opa
 
-# Run all tests (384 tests)
+# Run all tests (140 tests)
 /tmp/opa test rego/ -v
 
 # Evaluate a single policy
