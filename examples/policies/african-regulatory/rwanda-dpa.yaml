@@ -1,0 +1,193 @@
+# agt-policies-africa
+# Rwanda Personal Data Protection — Governance Policy
+#
+# Regulatory reference: Law No. 058/2021 of 13/10/2021 Relating to the
+#                       Protection of Personal Data and Privacy
+#                       (Gazetted: Official Gazette No. Special of 15/10/2021)
+# Enforcing authority: National Cyber Security Authority (NCSA)
+#                      Rwanda Information Society Authority (RISA)
+#                      https://dpo.gov.rw
+#
+# Key obligations covered:
+#   Art. 3(2)  — Sensitive personal data definition (race, health, criminal,
+#                medical, social origin, religious/political, genetic/biometric,
+#                sexual life, family details)
+#   Art. 10    — Grounds for processing sensitive personal data
+#   Art. 18-25 — Data subject rights (access, object, portability, automated
+#                decisions, restrict, erasure, rectification, designate heir)
+#   Art. 43    — Breach notification to NCSA within 48 hours of awareness
+#   Art. 44    — Breach report submission (72 hours)
+#   Art. 45    — Communication of breach to data subjects
+#   Art. 46    — Eight lawful processing conditions
+#   Art. 48    — Cross-border data transfer restrictions
+#   Art. 49    — Contractual requirements for international transfers
+#   Art. 50    — Data storage location requirements
+#   NIDA       — Rwanda National ID (16-digit format) issued by NIDA
+#
+# ⚠️  Rwanda has no separate DPA — NCSA serves as supervisory authority.
+#     Rwanda is one of Africa's fastest-growing AI markets (Kigali AI hub).
+#     Criminal penalties: up to 10 years + 25M RWF for sensitive data violations.
+# ⚠️  This is a community-maintained governance starter policy.
+#     Not a certified legal compliance instrument.
+
+version: "1.0"
+name: rwanda-dpa
+description: >
+  Rwanda personal data protection governance policy for AI agents processing
+  Rwandan personal data. Based on Law No. 058/2021 enforced by the National
+  Cyber Security Authority (NCSA). Covers sensitive data controls (Art. 3/10),
+  cross-border transfer restrictions (Art. 48-50), 48-hour breach notification
+  to NCSA (Art. 43), data subject rights (Art. 18-25), and Rwanda National ID
+  (16-digit NIDA format) protection.
+
+rules:
+
+  # =========================================================================
+  # Breach Notification — Art. 43: 48 hours to NCSA (strictest in Africa)
+  # Art. 44: Full breach report within 72 hours
+  # Art. 45: Communicate breach to affected data subjects
+  # AI agents must not suppress or delay breach notifications.
+  # =========================================================================
+
+  - name: rwanda-breach-suppression
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+(report|notification))"
+    action: deny
+    priority: 1
+    message: "Rwanda Law 058/2021 Art. 43: Agent cannot suppress breach notifications — NCSA must be notified within 48 hours of awareness (strictest timeline in Africa)"
+
+  # =========================================================================
+  # Sensitive Personal Data — Art. 3(2) + Art. 10
+  # Sensitive categories: race, health status, criminal records, medical records,
+  # social origin, religious/philosophical beliefs, political opinion,
+  # genetic/biometric information, sexual life, family details.
+  # Processing requires explicit consent or specific grounds under Art. 10.
+  # =========================================================================
+
+  - name: rwanda-health-data-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|HIV|genetic\\s+(data|test)|mental\\s+health|disability|prescription|clinical\\s+data)"
+    action: escalate
+    priority: 1
+    message: "Rwanda Law 058/2021 Art. 3(2)/10: Health/medical sensitive data detected — requires explicit consent or documented lawful basis (NCSA)"
+
+  - name: rwanda-special-category-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(race|ethnic\\s+origin|social\\s+origin|political\\s+opinion|religious\\s+belief|philosophical\\s+belief|sexual\\s+(life|orientation)|family\\s+(detail|data)|criminal\\s+(record|conviction))"
+    action: escalate
+    priority: 1
+    message: "Rwanda Law 058/2021 Art. 3(2)/10: Special category personal data detected — requires specific grounds under Art. 10 (NCSA)"
+
+  - name: rwanda-biometric-data
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(fingerprint|facial\\s+recognition|retina|iris\\s+scan|voice\\s+print|biometric\\s+(template|hash|data))"
+    action: deny
+    priority: 1
+    message: "Rwanda Law 058/2021 Art. 3(2)/10: Biometric data detected — must not be transmitted without documented lawful basis and NCSA notification"
+
+  # =========================================================================
+  # Cross-Border Data Transfers — Art. 48, 49, 50
+  # Art. 48: Transfer requires adequate protection in destination country
+  # Art. 49: International transfers require binding contractual safeguards
+  # Art. 50: Data storage location restrictions for critical data
+  # =========================================================================
+
+  - name: rwanda-cross-border-language-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+rwanda|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
+    action: escalate
+    priority: 1
+    message: "Rwanda Law 058/2021 Art. 48: Cross-border data transfer language detected — destination country adequacy and contractual safeguards (Art. 49) required"
+
+  - name: rwanda-cross-border-action
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: escalate
+    priority: 2
+    message: "Rwanda Law 058/2021 Art. 48/49: Cross-border data transfer requires adequacy verification and contractual safeguards with NCSA"
+
+  # =========================================================================
+  # Rwanda National ID — NIDA 16-digit format
+  # Rwanda National ID is a 16-digit number issued by the National
+  # Identification Agency (NIDA). Format: XXXXXXXXXXXXXXXX (16 digits).
+  # Segment 1 (1 digit): status; Seg 2 (4 digits): birth year;
+  # Seg 3 (1 digit): gender; Seg 4 (7 digits): sequence; Seg 5-6: check.
+  # Exposure constitutes a data breach under Art. 43/44.
+  # =========================================================================
+
+  - name: rwanda-nid-in-output
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(rwanda\\s+(national\\s+)?id|nida\\s+(id|number|no)|rwandan\\s+id)[\\s:=]{0,5}[0-9]{16}"
+    action: deny
+    priority: 1
+    message: "Rwanda Law 058/2021 Art. 43: Rwanda National ID (NIDA 16-digit) detected in agent output — blocked to prevent identity data breach"
+
+  # =========================================================================
+  # Data Minimisation / Storage — Art. 50
+  # =========================================================================
+
+  - name: rwanda-bulk-data-export
+    condition:
+      field: action
+      operator: matches
+      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
+    action: escalate
+    priority: 2
+    message: "Rwanda Law 058/2021 Art. 50: Bulk personal data export — storage location restrictions and minimisation principles require documented lawful basis"
+
+  - name: rwanda-large-record-export
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
+    action: escalate
+    priority: 2
+    message: "Rwanda Law 058/2021 Art. 48/50: Large-volume transfer requires adequacy verification and NCSA contractual safeguard documentation"
+
+  # =========================================================================
+  # Data Subject Rights — Art. 18-25
+  # Art. 18: Right to access; Art. 23: Right to erasure; Art. 24: Rectification
+  # Art. 21: Right against automated decisions — critical for AI agents
+  # All personal data access and modification must be logged.
+  # =========================================================================
+
+  - name: rwanda-automated-decision-making
+    condition:
+      field: action
+      operator: matches
+      value: "auto_approve|auto_reject|automated_credit|algorithmic_decision|auto_score|auto_deny"
+    action: escalate
+    priority: 1
+    message: "Rwanda Law 058/2021 Art. 21: Automated individual decision-making detected — data subject has right to human review; escalate for oversight"
+
+  - name: rwanda-pii-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii"
+    action: audit
+    priority: 3
+    message: "Rwanda Law 058/2021 Art. 18: Personal data access logged — data subject access rights and NCSA accountability requirement"
+
+  - name: rwanda-pii-modification-audit
+    condition:
+      field: action
+      operator: matches
+      value: "update_user|modify_profile|patch_account|edit_customer|change_personal|delete_user|erase_data"
+    action: audit
+    priority: 3
+    message: "Rwanda Law 058/2021 Art. 23/24: Personal data modification/erasure logged — data subject rights and NCSA accountability requirement"
