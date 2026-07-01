@@ -221,7 +221,7 @@ before merge.
 ### §2.1 Dependency Review
 
 AGT's dependency review workflow blocks PRs that introduce dependencies with
-known CVEs or disallowed licences:
+known CVEs or disallowed licenses:
 
 ```yaml
 # From .github/workflows/dependency-review.yml
@@ -237,7 +237,7 @@ known CVEs or disallowed licences:
 
 This runs on every PR that touches dependency manifests and flags:
 - Dependencies with moderate+ CVEs
-- Dependencies with licences not on the allow list
+- Dependencies with licenses not on the allow list
 
 ### §2.2 Secret Scanning
 
@@ -444,7 +444,7 @@ Developer Machine          GitHub PR              CI Pipeline              Relea
 ─────────────────          ─────────              ───────────              ───────
 pre-commit hooks           Dependency review      Main CI                  SBOM
 ├─ validate-policy         ├─ CVE check           ├─ lint (ruff, ESLint)   ├─ SPDX
-├─ validate-plugin         ├─ licence check       ├─ build (.NET, TS,      ├─ CycloneDX
+├─ validate-plugin         ├─ license check       ├─ build (.NET, TS,      ├─ CycloneDX
 │  -manifest               │                      │  Rust, Go, Python)     │
 ├─ evaluate-plugin         Secret scanning        ├─ test (all SDKs)       Signing
 │  -policy                 ├─ Gitleaks            ├─ governance-verify     ├─ Sigstore
@@ -522,7 +522,7 @@ enforcing that nothing that ran has failed.
   [rollout template](../operations/pre-commit-hook-template.md)
 - **Add the Governance Verify action** to your CI pipeline for automated
   compliance checks
-- **Enable dependency review** to catch CVE and licence issues at PR time
+- **Enable dependency review** to catch CVE and license issues at PR time
 - **Read Tutorial 25** ([Security Hardening](25-security-hardening.md)) for
   deeper coverage of CodeQL, fuzzing, and Scorecard
 - **Read Tutorial 26** ([SBOM & Signing](26-sbom-and-signing.md)) for

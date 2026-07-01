@@ -55,7 +55,7 @@ primitives that solve all of these:
 ┌────────────────────────────────────────────────────────────┐
 │                    HypervisorEventBus                      │
 │   Append-only structured event store with pub/sub          │
-│   40+ typed events · session/agent/time indexes            │
+│   30 typed events · session/agent/time indexes             │
 ├──────────────────────┬─────────────────────────────────────┤
 │  RingMetricsCollector│       SagaSpanExporter              │
 │  Subscribes to ring  │       Subscribes to saga            │
@@ -263,16 +263,16 @@ transitions, saga steps, security incidents, audit records, and more.
 
 ### Event types
 
-The bus supports 40+ typed events organized into categories:
+The bus supports 30 typed events organized into categories:
 
 | Category | Event Types | Examples |
 |---|---|---|
 | **Session** | 5 | `SESSION_CREATED`, `SESSION_TERMINATED`, `SESSION_ARCHIVED` |
 | **Ring** | 5 | `RING_ASSIGNED`, `RING_ELEVATED`, `RING_BREACH_DETECTED` |
-| **Saga** | 10 | `SAGA_CREATED`, `SAGA_STEP_COMMITTED`, `SAGA_ESCALATED` |
+| **Saga** | 7 | `SAGA_CREATED`, `SAGA_STEP_COMMITTED`, `SAGA_ESCALATED` |
 | **VFS** | 5 | `VFS_WRITE`, `VFS_SNAPSHOT`, `VFS_CONFLICT` |
 | **Security** | 4 | `RATE_LIMITED`, `AGENT_KILLED`, `IDENTITY_VERIFIED` |
-| **Audit** | 3 | `AUDIT_DELTA_CAPTURED`, `AUDIT_COMMITTED` |
+| **Audit** | 2 | `AUDIT_DELTA_CAPTURED`, `AUDIT_COMMITTED` |
 | **Verification** | 2 | `BEHAVIOR_DRIFT`, `HISTORY_VERIFIED` |
 
 ### The HypervisorEvent dataclass

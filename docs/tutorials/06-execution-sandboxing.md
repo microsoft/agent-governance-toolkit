@@ -1,4 +1,4 @@
-# Tutorial 06 — Execution Sandboxing
+# Tutorial 06 Execution Sandboxing
 
 > **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
 
@@ -36,10 +36,10 @@ See also: [Deployment Guide](../deployment/README.md) | [Agent Runtime README](.
 AI agents that can read files, call APIs, and execute code need strict boundaries.
 Without sandboxing, a misbehaving agent can:
 
-- **Exfiltrate data** — read secrets and send them to external endpoints.
-- **Corrupt state** — write to databases or files it should never touch.
-- **Consume resources** — spin up infinite loops that exhaust CPU and memory.
-- **Cascade failures** — a failed step in a multi-agent workflow leaves the system in a broken half-finished state.
+- **Exfiltrate data.** Read secrets and send them to external endpoints.
+- **Corrupt state.** Write to databases or files it should never touch.
+- **Consume resources.** Spin up infinite loops that exhaust CPU and memory.
+- **Cascade failures.** A failed step in a multi-agent workflow leaves the system in a broken half-finished state.
 
 The **Agent Runtime** (`pip install agentmesh-runtime`) solves this with four
 layers of defense:
@@ -79,19 +79,21 @@ Get sandboxing running in under 20 lines:
 from hypervisor import Hypervisor, ExecutionRing
 from hypervisor.rings.classifier import ActionClassifier
 from hypervisor.rings.enforcer import RingEnforcer
+from hypervisor.models import ActionDescriptor
 
 # 1. Create the runtime
 hv = Hypervisor()
 
 # 2. Classify an action — the classifier maps actions to rings
 classifier = ActionClassifier()
-result = classifier.classify_action_id("file.read")
-print(result.ring)        # ExecutionRing.RING_3_SANDBOX
-print(result.risk_weight) # 0.1
 
-result = classifier.classify_action_id("deploy.k8s")
-print(result.ring)        # ExecutionRing.RING_1_PRIVILEGED
-print(result.risk_weight) # 0.9
+read = ActionDescriptor(action_id="read_dataset", name="Read Dataset",
+                        execute_api="/data/read", is_read_only=True)
+print(classifier.classify(read).ring)      # ExecutionRing.RING_3_SANDBOX
+
+delete = ActionDescriptor(action_id="delete_database", name="Delete Database",
+                          execute_api="/db/drop")
+print(classifier.classify(delete).ring)    # ExecutionRing.RING_1_PRIVILEGED
 
 # 3. Enforce the ring — block agents that lack privilege
 enforcer = RingEnforcer()
@@ -152,7 +154,7 @@ ring = ExecutionRing.from_eff_score(eff_score=0.40)
 assert ring == ExecutionRing.RING_3_SANDBOX
 ```
 
-> **Note:** Ring 0 is never assigned by score alone — it requires an SRE
+> **Note:** Ring 0 is never assigned by score alone. It requires an SRE
 > Witness attestation and is reserved for runtime-level configuration.
 
 ### 3.2 Action Classification
@@ -161,27 +163,34 @@ Every action is classified by **risk weight** and **reversibility** to determine
 which ring it requires:
 
 ```python
-from hypervisor.rings.classifier import ActionClassifier, ClassificationResult
-from hypervisor.models import ReversibilityLevel
+from hypervisor import ExecutionRing
+from hypervisor.rings.classifier import ActionClassifier
+from hypervisor.models import ActionDescriptor, ReversibilityLevel
 
 classifier = ActionClassifier()
 
-# Read operations → Ring 3 (low risk, fully reversible)
-result = classifier.classify_action_id("file.read")
-assert result.ring == ExecutionRing.RING_3_SANDBOX
-assert result.reversibility == ReversibilityLevel.REVERSIBLE
+# Read-only operations → Ring 3 (sandbox)
+read = ActionDescriptor(action_id="read_dataset", name="Read Dataset",
+                        execute_api="/data/read", is_read_only=True)
+assert classifier.classify(read).ring == ExecutionRing.RING_3_SANDBOX
 
-# Write operations → Ring 2 (medium risk, reversible with effort)
-result = classifier.classify_action_id("file.write")
+# Reversible writes (with an undo endpoint) → Ring 2 (standard)
+write = ActionDescriptor(action_id="write_file", name="Write File",
+                         execute_api="/files/write", undo_api="/files/restore",
+                         reversibility=ReversibilityLevel.FULL)
+result = classifier.classify(write)
 assert result.ring == ExecutionRing.RING_2_STANDARD
+assert result.reversibility == ReversibilityLevel.FULL
 
-# Deployments → Ring 1 (high risk, non-reversible)
-result = classifier.classify_action_id("deploy.k8s")
+# Destructive, non-reversible operations → Ring 1 (privileged)
+delete = ActionDescriptor(action_id="delete_database", name="Delete Database",
+                          execute_api="/db/drop")
+result = classifier.classify(delete)
 assert result.ring == ExecutionRing.RING_1_PRIVILEGED
-assert result.reversibility == ReversibilityLevel.NON_REVERSIBLE
+assert result.reversibility == ReversibilityLevel.NONE
 
 # Override classification for custom actions
-classifier.set_override("my_custom.action", ring=ExecutionRing.RING_2_STANDARD, risk_weight=0.5)
+classifier.set_override("my_custom_action", ring=ExecutionRing.RING_2_STANDARD, risk_weight=0.5)
 ```
 
 ### 3.3 Ring Elevation (Privilege Escalation)
@@ -521,6 +530,7 @@ from hypervisor.session.isolation import IsolationLevel
 
 # Snapshot gives each agent a stable view for the operation.
 level = IsolationLevel.SNAPSHOT
+assert not level.requires_vector_clocks
 assert level.allows_concurrent_writes
 assert level.coordination_cost == "low"
 
@@ -582,7 +592,7 @@ session = SharedSessionObject(
 
 ## 7. Emergency Controls
 
-When an agent goes rogue, you need to stop it *immediately* — not after the
+When an agent goes rogue, you need to stop it *immediately*, not after the
 next polling interval.
 
 ### 7.1 Kill Switch

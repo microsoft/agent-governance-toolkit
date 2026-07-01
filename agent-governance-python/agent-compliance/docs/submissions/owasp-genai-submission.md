@@ -123,7 +123,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **GitHub (Agent SRE)**: https://github.com/microsoft/agent-governance-toolkit
 - **GitHub (Agent Runtime)**: https://github.com/microsoft/agent-governance-toolkit
 - **Governance Docs**: https://github.com/microsoft/agent-governance-toolkit
-- **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/owasp-agentic-top10-mapping.md
+- **OWASP Mapping**: https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/docs/owasp-agentic-top10-mapping.md
 
 ## Maintainers
 

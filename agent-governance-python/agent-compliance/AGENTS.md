@@ -1,4 +1,4 @@
-# Agent Compliance — Coding Agent Instructions
+# Agent Compliance - Coding Agent Instructions
 
 ## Project Overview
 

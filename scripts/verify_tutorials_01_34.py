@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Verify tutorials 01-34 code examples."""
 import sys, os
 PASS = FAIL = 0
