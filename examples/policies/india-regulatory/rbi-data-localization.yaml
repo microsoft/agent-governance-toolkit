@@ -1,0 +1,80 @@
+# agt-policies - India Regulatory Pack
+# RBI - Payment Data Localization, KYC and IT-Governance Policy
+#
+# Regulatory reference: RBI/2017-18/153 DPSS.CO.OD No.2785/06.08.005/2017-18 (6 Apr 2018);
+#   RBI Master Direction KYC 2016; RBI Master Directions IT Governance and Outsourcing of IT Services 2023
+# Enforcing authority: Reserve Bank of India (RBI)
+# Status: Localization/KYC/IT MDs are binding. RBI FREE-AI (Aug 2025) is ADVISORY only.
+#
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+#
+# Key obligations enforced:
+#   2018 circular  Payment system data stored only in India (purge offshore within 24h)
+#   KYC MD 2016    Customer due diligence before onboarding
+#   IT/Outsourcing MDs 2023  Due diligence and audit rights for third-party/cloud/AI
+#   FREE-AI 2025   ADVISORY (non-binding) AI governance recommendations
+#
+# Rego reference implementation: rego/rbi-data-localization.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: rbi-data-localization
+description: >
+  RBI compliance policy for AI agents handling Indian payment data and customer onboarding.
+  Enforces payment-data localization and KYC; flags third-party/cloud/AI data flows for
+  due diligence. RBI FREE-AI items are advisory and logged as such.
+
+metadata:
+  source_regulation: "RBI Storage of Payment System Data 2018; RBI Master Direction KYC 2016; RBI Master Directions IT Governance and Outsourcing of IT Services 2023"
+  jurisdiction: "IN"
+  enforcing_authority: "Reserve Bank of India (RBI)"
+
+rules:
+  - name: rbi-payment-data-offshore-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(store_payment_data_offshore|replicate_payment_data_foreign|persist_card_data_foreign)$"
+    action: block
+    priority: 95
+    message: "RBI 2018 (Storage of Payment System Data): the entire payment system data must be stored only in India; persistent offshore storage is prohibited"
+
+  - name: rbi-offshore-processing-purge-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(retain|keep|cache).{0,30}(payment|transaction|card)\\s+data.{0,30}(abroad|foreign|overseas)"
+    action: block
+    priority: 90
+    message: "RBI 2018: payment data processed abroad must be purged from foreign systems and returned to India within 24 hours / 1 business day"
+
+  - name: rbi-kyc-required-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(onboard_customer|open_account|activate_customer)$"
+    action: block
+    priority: 90
+    message: "RBI Master Direction KYC 2016: customer due diligence (KYC) is mandatory before onboarding; Aadhaar e-KYC only with masking (last 4 digits)"
+
+  - name: rbi-third-party-data-flow-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(route_to_third_party|use_cloud_service|invoke_external_ai)$"
+    action: audit
+    priority: 70
+    message: "RBI Master Directions Outsourcing of IT Services / IT Governance 2023: due diligence, audit rights, data confidentiality and locality required for third-party/cloud/AI handling customer or payment data"
+
+  - name: rbi-free-ai-advisory-audit
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(ai|ml)\\s+model.{0,30}(credit|loan|fraud|financial)\\s+decision"
+    action: audit
+    priority: 40
+    message: "ADVISORY (non-binding, RBI FREE-AI 2025): board-approved AI policy, AI incident reporting, and human oversight are recommended for AI in financial services; recommendation only, not a regulation"
+
+defaults:
+  action: audit
+  max_tokens: 8000
+  max_tool_calls: 25

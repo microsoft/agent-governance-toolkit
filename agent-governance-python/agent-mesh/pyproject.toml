@@ -35,18 +35,18 @@ dev = [
     "pytest-cov>=7.1.0,<8.0",
     "hypothesis>=6.155.7,<7.0",
     "black>=26.5.1,<27.0",
-    "ruff>=0.15.18,<1.0",
+    "ruff>=0.15.20,<1.0",
     "mypy>=2.1.0,<3.0",
     "fakeredis>=2.36.2,<3.0",
     "prometheus-client>=0.25.0,<1.0",
     "websockets>=16.0,<17.0",
-    "fastapi>=0.138.0,<1.0",
+    "fastapi>=0.138.2,<1.0",
     "httpx>=0.27.0,<1.0",
     "uvicorn[standard]>=0.27.0,<1.0",
     "opentelemetry-api>=1.42.1,<2.0",
     "opentelemetry-sdk>=1.42.1,<2.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.42.1,<2.0",
-    "PyJWT[crypto]>=2.8.0,<3.0",
+    "PyJWT[crypto]>=2.13.0,<3.0",
     "pydantic[email]>=2.5.0,<3.0",
     "cryptography>=49.0.0,<50.0",
     "pynacl>=1.6.2,<2.0",
@@ -59,7 +59,7 @@ dev = [
     # `pip install agent-mesh[dev]` brings everything needed for tests.
     "agent_hypervisor>=3.7.0,<6.0",
     # TRACE Trust Record emission (ADR-0032)
-    "agentrust-trace>=0.2.0",
+    "agentrust-trace>=0.2.0,<0.3.0",
 ]
 
 [project.urls]
