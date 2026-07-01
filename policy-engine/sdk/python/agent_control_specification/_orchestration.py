@@ -7,8 +7,6 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 
-import yaml
-
 from ._client import AnnotatorDispatcher, NativeRuntimeClient, PolicyDispatcher, RuntimeClient
 from ._telemetry import TelemetryEvent, TelemetrySink, _coerce_sink
 from ._types import (
@@ -50,13 +48,14 @@ class AgentControl:
         # A list/tuple of sinks is fanned out via MultiSink; a non-sink raises
         # TypeError here rather than silently dropping every event later.
         self._telemetry_sink = _coerce_sink(telemetry_sink)
-        # Best-effort maps of intervention-point value to its manifest policy id
-        # and configured annotator names. The native result surface carries
-        # neither, so they are resolved here from the manifest when one is
-        # available to the factory. Empty for the bare constructor and for
-        # url/chain/extends sources (see README).
-        self._policy_id_index: dict[str, str] = {}
-        self._annotator_index: dict[str, tuple[str, ...]] = {}
+        # Maps of intervention-point value to its manifest policy id and sorted
+        # configured annotator names, resolved from the runtime client's merged
+        # manifest (see NativeRuntimeClient.policy_labels). Populated for every
+        # native-backed constructor, including from_url and from_manifest_chain.
+        # Empty for a custom RuntimeClient that does not expose policy_labels, in
+        # which case policy_id is None and annotators fall back to the executed
+        # annotation keys on the result.
+        self._policy_id_index, self._annotator_index = _labels_from_client(runtime_client)
 
     @classmethod
     def from_native(
@@ -69,7 +68,7 @@ class AgentControl:
         perf_telemetry: int = 0,
         telemetry_sink: TelemetrySink | Sequence[TelemetrySink] | None = None,
     ) -> "AgentControl":
-        control = cls(
+        return cls(
             NativeRuntimeClient(
                 manifest,
                 annotator_dispatcher,
@@ -79,8 +78,6 @@ class AgentControl:
             approval_resolver=approval_resolver,
             telemetry_sink=telemetry_sink,
         )
-        control._index_manifest(_parse_manifest_document(manifest))
-        return control
 
     @classmethod
     def from_path(
@@ -93,13 +90,11 @@ class AgentControl:
         perf_telemetry: int = 0,
         telemetry_sink: TelemetrySink | Sequence[TelemetrySink] | None = None,
     ) -> "AgentControl":
-        control = cls(
+        return cls(
             NativeRuntimeClient.from_path(path, annotator_dispatcher, policy_dispatcher, perf_telemetry),
             approval_resolver=approval_resolver,
             telemetry_sink=telemetry_sink,
         )
-        control._index_manifest(_read_manifest_document(path))
-        return control
 
     @classmethod
     def from_url(
@@ -147,14 +142,6 @@ class AgentControl:
             approval_resolver=approval_resolver,
             telemetry_sink=telemetry_sink,
         )
-
-    def _index_manifest(self, document: JsonValue | None) -> None:
-        """Populate the best-effort policy-id and annotator indexes from a
-        parsed manifest document. A None document leaves both empty.
-        """
-
-        self._policy_id_index = _policy_id_index_from_document(document)
-        self._annotator_index = _annotator_index_from_document(document)
 
     async def evaluate_intervention_point(
         self,
@@ -688,109 +675,42 @@ def _tool_call(tool_name: str, args: JsonValue, tool_call_id: str | None) -> dic
     return tool_call
 
 
-def _policy_id_index_from_manifest(
-    manifest: Mapping[str, JsonValue] | str | bytes,
-) -> dict[str, str]:
-    """Map each intervention point to its declared policy id, best effort.
+def _labels_from_client(
+    runtime_client: RuntimeClient,
+) -> tuple[dict[str, str], dict[str, tuple[str, ...]]]:
+    """Build the policy-id and annotator indexes from a runtime client.
 
-    Tested entry point over the parse + extract path; the factories index a
-    manifest via :func:`AgentControl._index_manifest`. See
-    :func:`_policy_id_index_from_document` for the resolution rules and limits.
+    Reads the client's ``policy_labels`` map, which the native client sources
+    from the merged manifest, so the labels are populated on every native-backed
+    constructor including ``from_url`` and ``from_manifest_chain`` and for
+    ``extends``-inherited bindings. A client that does not expose
+    ``policy_labels`` (a custom or pure-Python test client) yields empty indexes,
+    so ``policy_id`` is ``None`` and annotators fall back to the executed
+    annotation keys on the result. Never raises, since telemetry labels are best
+    effort and must not block construction.
     """
 
-    return _policy_id_index_from_document(_parse_manifest_document(manifest))
-
-
-def _parse_manifest_document(
-    manifest: Mapping[str, JsonValue] | str | bytes,
-) -> JsonValue | None:
-    """Parse a manifest into a document, best effort, never raising.
-
-    A Mapping is returned directly; a str or bytes manifest is parsed with
-    ``yaml.safe_load`` (JSON is a YAML subset, so JSON manifests parse too).
-    Any decode or parse failure yields ``None`` so a malformed manifest never
-    blocks construction. Telemetry indexes derived from this are best effort
-    and must not be load-bearing. Policy ids and annotators inherited through
-    ``extends`` are not resolved here.
-    """
-
-    if isinstance(manifest, Mapping):
-        return manifest
-    if isinstance(manifest, bytes):
-        try:
-            text = manifest.decode("utf-8")
-        except UnicodeDecodeError:
-            return None
-    else:
-        text = manifest
+    policy_ids: dict[str, str] = {}
+    annotators: dict[str, tuple[str, ...]] = {}
+    getter = getattr(runtime_client, "policy_labels", None)
+    if not callable(getter):
+        return policy_ids, annotators
     try:
-        return yaml.safe_load(text)
-    except yaml.YAMLError:
-        return None
-
-
-def _read_manifest_document(path: str) -> JsonValue | None:
-    """Read and parse a manifest file, best effort, never raising.
-
-    Returns ``None`` when the file is unreadable, not UTF-8, or unparseable so a
-    missing or malformed manifest never blocks construction.
-    """
-
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return yaml.safe_load(handle)
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
-        return None
-
-
-def _policy_id_index_from_document(document: JsonValue | None) -> dict[str, str]:
-    index: dict[str, str] = {}
-    for point_key, config in _intervention_point_configs(document):
-        policy = config.get("policy")
-        if not isinstance(policy, Mapping):
-            continue
-        policy_id = policy.get("id")
-        if isinstance(policy_id, str):
-            index[point_key] = policy_id
-    return index
-
-
-def _annotator_index_from_document(document: JsonValue | None) -> dict[str, tuple[str, ...]]:
-    """Map each intervention point to its sorted configured annotator names.
-
-    Mirrors the Rust ``annotators_for`` source (the manifest config keys) so a
-    fail-closed event still carries the annotator label, which the result's
-    ``annotations`` block does not when ``policy_input`` is absent. Only points
-    with a non-empty ``annotations`` block are indexed.
-    """
-
-    index: dict[str, tuple[str, ...]] = {}
-    for point_key, config in _intervention_point_configs(document):
-        annotations = config.get("annotations")
-        if isinstance(annotations, Mapping) and annotations:
-            index[point_key] = tuple(sorted(str(name) for name in annotations))
-    return index
-
-
-def _intervention_point_configs(
-    document: JsonValue | None,
-) -> list[tuple[str, Mapping[str, JsonValue]]]:
-    """Yield (normalized point key, config) pairs from a manifest document.
-
-    The point key is normalized to its wire value so an ``InterventionPoint``
-    enum key (in a programmatic Mapping manifest) matches the emission lookup,
-    which keys on the wire value.
-    """
-
-    if not isinstance(document, Mapping):
-        return []
-    intervention_points = document.get("intervention_points")
-    if not isinstance(intervention_points, Mapping):
-        return []
-    pairs: list[tuple[str, Mapping[str, JsonValue]]] = []
-    for point, config in intervention_points.items():
-        if not isinstance(config, Mapping):
+        labels = getter()
+    except Exception:  # noqa: BLE001 - label lookup must never break construction
+        return policy_ids, annotators
+    if not isinstance(labels, Mapping):
+        return policy_ids, annotators
+    for point, entry in labels.items():
+        if not isinstance(entry, Mapping):
             continue
         point_key = point.value if isinstance(point, InterventionPoint) else str(point)
-        pairs.append((point_key, config))
-    return pairs
+        policy_id = entry.get("policy_id")
+        if isinstance(policy_id, str):
+            policy_ids[point_key] = policy_id
+        names = entry.get("annotators")
+        if isinstance(names, Sequence) and not isinstance(names, (str, bytes)):
+            sorted_names = tuple(sorted(str(name) for name in names))
+            if sorted_names:
+                annotators[point_key] = sorted_names
+    return policy_ids, annotators

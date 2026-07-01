@@ -183,7 +183,7 @@ Every SDK ships pluggable telemetry sinks so a host can route the redaction-safe
 | Node | `telemetrySink` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink`, import-optional on `@opentelemetry/api` |
 | .NET | `telemetrySink` on `AgentControl` and every factory; `InMemoryTelemetrySink`, `JsonStdoutTelemetrySink`, `MultiSink` | `OtelMetricsTelemetrySink` over the BCL `System.Diagnostics.Metrics` meter that OpenTelemetry .NET collects |
 
-In Rust the core owns emission, so installing a sink is enough and the manifest-sourced policy id and annotator names are always present. The Python, Node, and .NET host-side layers build the event from the returned `InterventionPointResult` and recover policy id and annotator names from the manifest on a best-effort basis.
+In Rust the core owns emission, so installing a sink is enough and the manifest-sourced policy id and annotator names are always present. The Python, Node, and .NET host-side layers build the event from the returned `InterventionPointResult` and read the policy id and annotator names from the fully merged manifest through a native `policy_labels` accessor at construction, so those labels are present for every constructor, including remote and manifest-chain sources.
 
 ## SDK matrix
 

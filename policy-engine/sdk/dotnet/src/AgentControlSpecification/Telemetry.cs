@@ -233,6 +233,78 @@ public interface ITelemetrySink
     void Shutdown();
 }
 
+/// <summary>
+/// Per intervention point telemetry labels resolved from the fully merged
+/// manifest by the native core. Keys are intervention point wire names.
+/// </summary>
+public sealed record PolicyLabelMap(
+    IReadOnlyDictionary<string, string> PolicyIds,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> Annotators)
+{
+    public static PolicyLabelMap Empty { get; } = new(
+        new Dictionary<string, string>(StringComparer.Ordinal),
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal));
+
+    /// <summary>
+    /// Parse the native <c>acs_runtime_policy_labels</c> JSON payload of shape
+    /// <c>{ "&lt;point&gt;": { "policy_id": string|null, "annotators": [string] } }</c>
+    /// into the two lookup indexes the telemetry funnel reads.
+    /// </summary>
+    public static PolicyLabelMap FromJson(string json)
+    {
+        var policyIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var annotators = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return Empty;
+        }
+
+        foreach (var point in document.RootElement.EnumerateObject())
+        {
+            if (point.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            if (point.Value.TryGetProperty("policy_id", out var policyId)
+                && policyId.ValueKind == JsonValueKind.String)
+            {
+                policyIds[point.Name] = policyId.GetString() ?? string.Empty;
+            }
+
+            if (point.Value.TryGetProperty("annotators", out var annotatorNames)
+                && annotatorNames.ValueKind == JsonValueKind.Array)
+            {
+                var names = annotatorNames
+                    .EnumerateArray()
+                    .Where(name => name.ValueKind == JsonValueKind.String)
+                    .Select(name => name.GetString() ?? string.Empty)
+                    .Where(name => name.Length > 0)
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .ToArray();
+                if (names.Length > 0)
+                {
+                    annotators[point.Name] = names;
+                }
+            }
+        }
+
+        return new PolicyLabelMap(policyIds, annotators);
+    }
+}
+
+/// <summary>
+/// Implemented by a runtime that can expose the merged manifest's telemetry
+/// labels. The host telemetry index is populated from this on construction so
+/// <c>policy_id</c> and <c>annotators</c> are present for every constructor,
+/// including <c>FromManifestChain</c> where the host never parses manifest text.
+/// </summary>
+public interface IPolicyLabelSource
+{
+    PolicyLabelMap PolicyLabels();
+}
+
 public sealed class InMemoryTelemetrySink : ITelemetrySink
 {
     public List<TelemetryEvent> Events { get; } = [];

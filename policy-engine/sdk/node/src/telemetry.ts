@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { readFileSync } from "node:fs";
 import type {
   Decision,
   EnforcementMode,
@@ -398,49 +397,42 @@ export function coerceTelemetrySink(
   return requireTelemetrySink(sink);
 }
 
-export function parseTelemetryManifestDocument(manifest: JsonValue | string): JsonValue | undefined {
-  if (isRecord(manifest)) {
-    return manifest;
-  }
-  if (typeof manifest !== "string") {
-    return undefined;
-  }
-  try {
-    return JSON.parse(manifest) as JsonValue;
-  } catch {
-    return undefined;
-  }
-}
-
-export function readTelemetryManifestDocument(path: string): JsonValue | undefined {
-  try {
-    return parseTelemetryManifestDocument(readFileSync(path, "utf8"));
-  } catch {
-    return undefined;
-  }
-}
-
-export function telemetryManifestIndexes(document: JsonValue | undefined): {
+export function labelsFromClient(runtimeClient: unknown): {
   policyIds: Record<string, string>;
   annotators: Record<string, string[]>;
 } {
+  // Read the runtime client's policyLabels map, which the native client sources
+  // from the merged manifest, so labels are populated on every native-backed
+  // constructor including fromUrl and fromManifestChain and for extends-inherited
+  // bindings. A client without policyLabels yields empty indexes, so policyId is
+  // null and annotators fall back to executed annotation keys on the result.
+  // Never throws, since telemetry labels are best effort.
   const policyIds: Record<string, string> = {};
   const annotators: Record<string, string[]> = {};
-  if (!isRecord(document) || !isRecord(document.intervention_points)) {
+  const getter = (runtimeClient as { policyLabels?: unknown } | null)?.policyLabels;
+  if (typeof getter !== "function") {
     return { policyIds, annotators };
   }
-  for (const [point, configValue] of Object.entries(document.intervention_points)) {
-    if (!isRecord(configValue)) {
+  let labels: unknown;
+  try {
+    labels = (getter as () => unknown).call(runtimeClient);
+  } catch {
+    return { policyIds, annotators };
+  }
+  if (!isRecord(labels)) {
+    return { policyIds, annotators };
+  }
+  for (const [point, entry] of Object.entries(labels)) {
+    if (!isRecord(entry)) {
       continue;
     }
     const pointKey = normalizeInterventionPointKey(point);
-    const policy = configValue.policy;
-    if (isRecord(policy) && typeof policy.id === "string") {
-      policyIds[pointKey] = policy.id;
+    if (typeof entry.policy_id === "string") {
+      policyIds[pointKey] = entry.policy_id;
     }
-    const annotations = configValue.annotations;
-    if (isRecord(annotations) && Object.keys(annotations).length > 0) {
-      annotators[pointKey] = Object.keys(annotations).sort(compareUnicodeScalarKeys);
+    const names = entry.annotators;
+    if (Array.isArray(names) && names.length > 0) {
+      annotators[pointKey] = names.map((name) => String(name)).sort(compareUnicodeScalarKeys);
     }
   }
   return { policyIds, annotators };

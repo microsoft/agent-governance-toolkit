@@ -310,7 +310,7 @@ test("the default no-sink path emits nothing and preserves the result", async ()
   assert.equal(warned, false);
 });
 
-test("fromNative indexes JSON manifest policy id and annotators", async () => {
+test("fromNative labels events with native-resolved policy id and annotators", async () => {
   const manifest = {
     agent_control_specification_version: "0.3.1-beta",
     policies: {
@@ -359,6 +359,57 @@ test("fromNative indexes JSON manifest policy id and annotators", async () => {
 
   assert.equal(sink.events[0].policyId, "input_policy");
   assert.deepEqual(sink.events[0].annotators, ["pii_scan", "prompt_classifier"]);
+});
+
+test("fromManifestChain labels events (previously null policy id)", async () => {
+  // Regression: fromManifestChain emitted policyId null because the host parsed
+  // manifest text it never had for merged sources. Labels now come from the
+  // native merged manifest via policyLabels.
+  const base = [
+    "agent_control_specification_version: 0.3.1-beta",
+    "metadata:",
+    "  name: base",
+    "policies:",
+    "  content_policy:",
+    "    type: custom",
+    "    adapter: unit_test",
+    "annotators:",
+    "  prompt_classifier:",
+    "    type: classifier",
+    "intervention_points:",
+    "  input:",
+    "    policy_target: $.input",
+    "    policy:",
+    "      id: content_policy",
+    "    annotations:",
+    "      prompt_classifier:",
+    "        from: $policy_target.text",
+    "",
+  ].join("\n");
+  const overlay = [
+    "agent_control_specification_version: 0.3.1-beta",
+    "intervention_points:",
+    "  output:",
+    "    policy_target: $.output",
+    "    policy:",
+    "      id: content_policy",
+    "",
+  ].join("\n");
+
+  const sink = new InMemoryTelemetrySink();
+  const control = AgentControl.fromManifestChain(
+    [base, overlay],
+    { dispatch() { return { ok: true }; } },
+    { evaluate() { return { decision: Decision.Allow }; } },
+    undefined,
+    PerfTelemetry.Off,
+    sink,
+  );
+
+  await control.evaluateInterventionPoint(InterventionPoint.Input, { input: { text: "hi" } });
+
+  assert.equal(sink.events[0].policyId, "content_policy");
+  assert.deepEqual(sink.events[0].annotators, ["prompt_classifier"]);
 });
 
 test("OtelMetricsTelemetrySink no-ops when @opentelemetry/api is absent", (t) => {

@@ -21,11 +21,7 @@ from agent_control_specification import (
     TelemetryEventType,
     Verdict,
 )
-from agent_control_specification._orchestration import (
-    _annotator_index_from_document,
-    _parse_manifest_document,
-    _policy_id_index_from_manifest,
-)
+from agent_control_specification._orchestration import _labels_from_client
 from agent_control_specification._telemetry import error_class_for, safe_reason_code
 
 
@@ -348,45 +344,37 @@ class JsonStdoutSinkTests(unittest.TestCase):
         self.assertEqual(second["error_class"], "runtime_error")
 
 
-class PolicyIdIndexTests(unittest.IsolatedAsyncioTestCase):
-    def test_index_from_yaml_manifest(self):
-        manifest = """
-agent_control_specification_version: "0.3.1-beta"
-intervention_points:
-  input:
-    policy_target: "$.input"
-    policy:
-      id: input_policy
-  output:
-    policy_target: "$.output"
-    policy:
-      id: output_policy
-"""
-        index = _policy_id_index_from_manifest(manifest)
-        self.assertEqual(index, {"input": "input_policy", "output": "output_policy"})
+class PolicyLabelIndexTests(unittest.IsolatedAsyncioTestCase):
+    def test_labels_from_client_builds_both_indexes(self):
+        class LabeledClient:
+            async def evaluate_intervention_point(self, request):
+                raise NotImplementedError
 
-    def test_index_from_mapping_manifest(self):
-        manifest = {
-            "intervention_points": {
-                "input": {"policy": {"id": "p1"}},
-                "pre_tool_call": {"policy": {"id": "p2"}},
-            }
-        }
-        self.assertEqual(
-            _policy_id_index_from_manifest(manifest),
-            {"input": "p1", "pre_tool_call": "p2"},
-        )
+            def policy_labels(self):
+                return {
+                    "input": {"policy_id": "content_policy", "annotators": ["prompt_classifier", "pii_scan"]},
+                    "output": {"policy_id": "out_policy", "annotators": []},
+                }
 
-    def test_malformed_manifest_yields_empty_index(self):
-        self.assertEqual(_policy_id_index_from_manifest("::: not yaml ["), {})
-        self.assertEqual(_policy_id_index_from_manifest({"intervention_points": []}), {})
+        policy_ids, annotators = _labels_from_client(LabeledClient())
+        self.assertEqual(policy_ids, {"input": "content_policy", "output": "out_policy"})
+        # Sorted; points with no annotators are omitted.
+        self.assertEqual(annotators, {"input": ("pii_scan", "prompt_classifier")})
 
-    def test_index_from_enum_keyed_mapping(self):
-        # A programmatic manifest keyed by the InterventionPoint enum must
-        # normalize to the wire value so emission lookups (which key on .value)
-        # still resolve the policy id.
-        manifest = {"intervention_points": {InterventionPoint.INPUT: {"policy": {"id": "p"}}}}
-        self.assertEqual(_policy_id_index_from_manifest(manifest), {"input": "p"})
+    def test_labels_from_client_without_method_is_empty(self):
+        policy_ids, annotators = _labels_from_client(QueueRuntime([]))
+        self.assertEqual(policy_ids, {})
+        self.assertEqual(annotators, {})
+
+    def test_labels_from_client_never_raises(self):
+        class BadClient:
+            async def evaluate_intervention_point(self, request):
+                raise NotImplementedError
+
+            def policy_labels(self):
+                raise RuntimeError("native boom")
+
+        self.assertEqual(_labels_from_client(BadClient()), ({}, {}))
 
     async def test_policy_id_lookup_populates_event(self):
         sink = InMemoryTelemetrySink()
@@ -399,22 +387,6 @@ intervention_points:
         await control.evaluate_intervention_point(InterventionPoint.INPUT, {"input": 1})
 
         self.assertEqual(sink.events[0].policy_id, "content_policy")
-
-    def test_annotator_index_from_manifest(self):
-        manifest = """
-intervention_points:
-  input:
-    annotations:
-      pii_scan:
-        from: $.input
-      prompt_classifier:
-        from: $.input
-  output:
-    policy:
-      id: out
-"""
-        index = _annotator_index_from_document(_parse_manifest_document(manifest))
-        self.assertEqual(index, {"input": ("pii_scan", "prompt_classifier")})
 
     async def test_annotators_from_index_survive_failure_path(self):
         # On a fail-closed result the policy_input is absent, so the configured
@@ -518,6 +490,88 @@ def _counter_point_value(metrics_data, name):
                 for point in metric.data.data_points:
                     return getattr(point, "value", None)
     return None
+
+
+try:
+    from agent_control_specification import _native  # noqa: F401
+except ImportError:
+    _NATIVE_AVAILABLE = False
+else:
+    _NATIVE_AVAILABLE = True
+
+
+_CHAIN_BASE = """agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: base
+policies:
+  content_policy:
+    type: custom
+    adapter: test
+annotators:
+  prompt_classifier:
+    type: classifier
+intervention_points:
+  input:
+    policy_target: $.input
+    policy:
+      id: content_policy
+    annotations:
+      prompt_classifier:
+        from: $policy_target.text
+"""
+
+_CHAIN_OVERLAY = """agent_control_specification_version: 0.3.1-beta
+intervention_points:
+  output:
+    policy_target: $.output
+    policy:
+      id: content_policy
+"""
+
+
+@unittest.skipUnless(_NATIVE_AVAILABLE, "native extension not built")
+class NativePolicyLabelTests(unittest.IsolatedAsyncioTestCase):
+    async def test_from_manifest_chain_populates_policy_id_and_annotators(self):
+        # Regression: policy_id and annotators were None/empty on
+        # from_manifest_chain because the host parsed manifest text it never had
+        # for merged sources. They are now sourced from the native merged
+        # manifest via policy_labels, so the label is present.
+        class AllowPolicy:
+            def evaluate(self, invocation):
+                return {"decision": "allow"}
+
+        sink = InMemoryTelemetrySink()
+        control = AgentControl.from_manifest_chain(
+            [_CHAIN_BASE, _CHAIN_OVERLAY],
+            policy_dispatcher=AllowPolicy(),
+            telemetry_sink=sink,
+        )
+
+        await control.evaluate_intervention_point(
+            InterventionPoint.INPUT, {"input": {"text": "hi"}}
+        )
+
+        self.assertEqual(sink.events[0].policy_id, "content_policy")
+        self.assertEqual(list(sink.events[0].annotators), ["prompt_classifier"])
+
+    async def test_from_native_yaml_populates_labels(self):
+        # A YAML manifest string through from_native now labels events, where the
+        # old host-side JSON-only parse would have left policy_id None.
+        class AllowPolicy:
+            def evaluate(self, invocation):
+                return {"decision": "allow"}
+
+        sink = InMemoryTelemetrySink()
+        control = AgentControl.from_native(
+            _CHAIN_BASE, policy_dispatcher=AllowPolicy(), telemetry_sink=sink
+        )
+
+        await control.evaluate_intervention_point(
+            InterventionPoint.INPUT, {"input": {"text": "hi"}}
+        )
+
+        self.assertEqual(sink.events[0].policy_id, "content_policy")
+        self.assertEqual(list(sink.events[0].annotators), ["prompt_classifier"])
 
 
 if __name__ == "__main__":

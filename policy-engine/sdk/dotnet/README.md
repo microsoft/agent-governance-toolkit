@@ -58,7 +58,7 @@ var control = AgentControl.FromPath("manifest.yaml", telemetrySink: sink);
 
 `TelemetryEvent` mirrors the Rust `core/src/telemetry.rs` field set. It carries `event_type`, `intervention_point`, `decision`, `reason_code`, `error_class`, `policy_id`, `annotators`, `enforcement_mode`, `duration_ms`, `evidence_artefact`, `evidence_verification_pointer_keys`, `action_identity`, and `metadata`. Redaction is the load-bearing invariant. Events never carry raw prompts, tool arguments, tool results, transform values, annotator outputs, policy target payloads, or pointer URL values. A free-text reason is reduced to `policy_reason`, matching the Rust redaction helper.
 
-`policy_id` and `annotators` are indexed only when construction receives a JSON manifest object, JSON manifest string, or JSON file through `FromPath`. YAML strings, `FromManifestChain`, and unparseable manifest content leave `policy_id` null and `annotators` empty. The SDK does not add a YAML parser.
+`policy_id` and `annotators` are resolved from the fully merged manifest by the native core at construction, through the native `PolicyLabels` accessor, so they are populated for every constructor, including `FromManifestChain` and YAML manifests. No host-side manifest parsing is involved, so the SDK needs no YAML parser. A custom `IAgentControlRuntime` that does not implement `IPolicyLabelSource` leaves `policy_id` null, and in that case `annotators` falls back to the executed annotation keys on the result.
 
 This host layer emits exactly one `decision` event per evaluation. It does not replicate the Rust core's second `intervention_point.transformed` event on a `transform` verdict. The transform is observable through `decision == "transform"`.
 

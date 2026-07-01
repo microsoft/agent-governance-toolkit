@@ -12,16 +12,17 @@ public sealed class AgentControl
     private readonly IAgentControlRuntime runtime;
     private readonly ApprovalResolver? approvalResolver;
     private readonly ITelemetrySink? telemetrySink;
-    private IReadOnlyDictionary<string, string> policyIdIndex;
-    private IReadOnlyDictionary<string, IReadOnlyList<string>> annotatorIndex;
+    private readonly IReadOnlyDictionary<string, string> policyIdIndex;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> annotatorIndex;
 
     public AgentControl(IAgentControlRuntime runtime, ApprovalResolver? approvalResolver = null, ITelemetrySink? telemetrySink = null)
     {
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         this.approvalResolver = approvalResolver;
         this.telemetrySink = telemetrySink;
-        policyIdIndex = new Dictionary<string, string>(StringComparer.Ordinal);
-        annotatorIndex = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        var labels = ResolvePolicyLabels(this.runtime);
+        policyIdIndex = labels.PolicyIds;
+        annotatorIndex = labels.Annotators;
     }
 
     public AgentControl(IAgentControlRuntime runtime, IEnumerable<ITelemetrySink> telemetrySinks, ApprovalResolver? approvalResolver = null)
@@ -41,7 +42,6 @@ public sealed class AgentControl
             new NativeAgentControlRuntime(manifest, annotatorDispatcher, policyDispatcher, perfTelemetry),
             approvalResolver,
             telemetrySink);
-        control.IndexManifest(ParseManifestDocument(manifest));
         return control;
     }
 
@@ -72,7 +72,6 @@ public sealed class AgentControl
             NativeAgentControlRuntime.FromPath(path, annotatorDispatcher, policyDispatcher, perfTelemetry),
             approvalResolver,
             telemetrySink);
-        control.IndexManifest(ReadJsonManifestDocument(path));
         return control;
     }
 
@@ -202,53 +201,21 @@ public sealed class AgentControl
         }
     }
 
-    private void IndexManifest(JsonElement? document)
+    private static PolicyLabelMap ResolvePolicyLabels(IAgentControlRuntime runtime)
     {
-        var policyIds = new Dictionary<string, string>(StringComparer.Ordinal);
-        var annotators = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
-        if (!document.HasValue
-            || document.Value.ValueKind != JsonValueKind.Object
-            || !document.Value.TryGetProperty("intervention_points", out var interventionPoints)
-            || interventionPoints.ValueKind != JsonValueKind.Object)
+        if (runtime is not IPolicyLabelSource source)
         {
-            policyIdIndex = policyIds;
-            annotatorIndex = annotators;
-            return;
+            return PolicyLabelMap.Empty;
         }
 
-        foreach (var point in interventionPoints.EnumerateObject())
+        try
         {
-            if (point.Value.ValueKind != JsonValueKind.Object)
-            {
-                continue;
-            }
-
-            var pointKey = NormalizeInterventionPointKey(point.Name);
-            if (point.Value.TryGetProperty("policy", out var policy)
-                && policy.ValueKind == JsonValueKind.Object
-                && policy.TryGetProperty("id", out var id)
-                && id.ValueKind == JsonValueKind.String)
-            {
-                policyIds[pointKey] = id.GetString() ?? string.Empty;
-            }
-
-            if (point.Value.TryGetProperty("annotations", out var annotationConfig)
-                && annotationConfig.ValueKind == JsonValueKind.Object)
-            {
-                var names = annotationConfig
-                    .EnumerateObject()
-                    .Select(annotation => annotation.Name)
-                    .OrderBy(name => name, StringComparer.Ordinal)
-                    .ToArray();
-                if (names.Length > 0)
-                {
-                    annotators[pointKey] = names;
-                }
-            }
+            return source.PolicyLabels();
         }
-
-        policyIdIndex = policyIds;
-        annotatorIndex = annotators;
+        catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
+        {
+            return PolicyLabelMap.Empty;
+        }
     }
 
     private static ITelemetrySink? CoerceTelemetrySink(IEnumerable<ITelemetrySink> telemetrySinks)
@@ -261,80 +228,6 @@ public sealed class AgentControl
             1 => sinks[0],
             _ => new MultiSink(sinks),
         };
-    }
-
-    private static JsonElement? ParseManifestDocument(object? manifest)
-    {
-        if (manifest is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            return manifest switch
-            {
-                JsonElement element => NormalizeManifestRoot(element),
-                JsonNode node => ParseJsonManifestText(node.ToJsonString(JsonOptions)),
-                string text => ParseJsonManifestText(text),
-                byte[] bytes => ParseJsonManifestText(Encoding.UTF8.GetString(bytes)),
-                _ => NormalizeManifestRoot(JsonSerializer.SerializeToElement(manifest, JsonOptions)),
-            };
-        }
-        catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
-        {
-            return null;
-        }
-    }
-
-    private static JsonElement? ReadJsonManifestDocument(string path)
-    {
-        try
-        {
-            return ParseJsonManifestText(File.ReadAllText(path, Encoding.UTF8));
-        }
-        catch (Exception exception) when (!TelemetryExceptions.IsFatal(exception))
-        {
-            return null;
-        }
-    }
-
-    private static JsonElement? ParseJsonManifestText(string text)
-    {
-        using var document = JsonDocument.Parse(text);
-        return NormalizeManifestRoot(document.RootElement);
-    }
-
-    private static JsonElement? NormalizeManifestRoot(JsonElement element)
-    {
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            return element.Clone();
-        }
-
-        if (element.ValueKind == JsonValueKind.String)
-        {
-            var inner = element.GetString();
-            if (!string.IsNullOrWhiteSpace(inner))
-            {
-                return ParseJsonManifestText(inner);
-            }
-        }
-
-        return null;
-    }
-
-    private static string NormalizeInterventionPointKey(string key)
-    {
-        // Accept either a canonical wire name (input) or an enum name (Input) and
-        // normalize both to the wire value; unknown keys pass through unchanged.
-        // Avoids exception-driven control flow over FromWireName.
-        return Enum.GetValues<InterventionPoint>()
-            .Where(point =>
-                string.Equals(point.ToWireName(), key, StringComparison.Ordinal) ||
-                string.Equals(point.ToString(), key, StringComparison.OrdinalIgnoreCase))
-            .Select(point => point.ToWireName())
-            .FirstOrDefault(key);
     }
 
     public ValueTask<InterventionPointResult> EvaluateAgentStartupAsync<TAgent>(

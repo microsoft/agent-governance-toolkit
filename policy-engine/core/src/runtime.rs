@@ -707,6 +707,31 @@ impl Runtime {
             .map(|config| config.annotations.keys().cloned().collect())
             .unwrap_or_default()
     }
+
+    /// Resolved `policy_id` and configured annotator names per intervention
+    /// point, taken from the fully merged manifest. Host-side SDK telemetry
+    /// layers read this once at construction to label events with `policy_id`
+    /// and `annotators` on every constructor, including `from_url` and
+    /// `from_manifest_chain` where the SDK never holds the manifest text and
+    /// `extends`-inherited bindings where a host-side text parse would miss the
+    /// merged value. The shape is
+    /// `{ "<intervention_point>": { "policy_id": <string|null>, "annotators": [<string>] } }`
+    /// with annotator names sorted for determinism.
+    pub fn policy_labels(&self) -> JsonValue {
+        let mut points = serde_json::Map::new();
+        for (intervention_point, config) in &self.manifest.intervention_points {
+            let mut annotators: Vec<String> = config.annotations.keys().cloned().collect();
+            annotators.sort();
+            points.insert(
+                intervention_point.as_str().to_string(),
+                serde_json::json!({
+                    "policy_id": config.policy.id,
+                    "annotators": annotators,
+                }),
+            );
+        }
+        JsonValue::Object(points)
+    }
 }
 
 fn safe_telemetry_reason_code(reason: Option<&str>) -> Option<String> {
@@ -980,6 +1005,77 @@ intervention_points:
     }
 
     // ── AGT D1 transform application in evaluate_intervention_point ───────
+
+    #[test]
+    fn policy_labels_expose_merged_policy_id_and_sorted_annotators() {
+        // Host SDK telemetry layers read policy_labels at construction to label
+        // events with policy_id and annotators on every constructor. The map is
+        // sourced from the merged manifest, so it carries the real policy id
+        // even where a host-side manifest text parse would miss it.
+        let manifest = Manifest::from_yaml_str(
+            r#"agent_control_specification_version: 0.3.0-alpha
+policies:
+  content_policy:
+    type: test
+annotators:
+  prompt_classifier:
+    type: classifier
+  pii_scan:
+    type: classifier
+intervention_points:
+  input:
+    policy_target_kind: user_input
+    policy:
+      id: content_policy
+    policy_target: $snap.input
+    annotations:
+      prompt_classifier:
+        from: $policy_target.text
+      pii_scan:
+        from: $policy_target.text"#,
+        )
+        .unwrap();
+        let runtime = Runtime::new(
+            manifest,
+            Arc::new(StaticAnnotator),
+            Arc::new(StaticPolicy::new(json!({"decision": "allow"}))),
+        )
+        .unwrap();
+
+        let labels = runtime.policy_labels();
+        let input = labels
+            .get("input")
+            .expect("input point should be present in policy_labels");
+        assert_eq!(
+            input.get("policy_id").and_then(JsonValue::as_str),
+            Some("content_policy")
+        );
+        let annotators: Vec<&str> = input
+            .get("annotators")
+            .and_then(JsonValue::as_array)
+            .expect("annotators array")
+            .iter()
+            .map(|value| value.as_str().unwrap())
+            .collect();
+        // Sorted for determinism regardless of manifest declaration order.
+        assert_eq!(annotators, vec!["pii_scan", "prompt_classifier"]);
+    }
+
+    #[test]
+    fn policy_labels_omit_annotators_when_none_configured() {
+        let runtime = runtime(json!({"decision": "allow"}));
+        let labels = runtime.policy_labels();
+        let output = labels.get("output").expect("output point present");
+        assert_eq!(
+            output.get("policy_id").and_then(JsonValue::as_str),
+            Some("test_policy")
+        );
+        assert!(output
+            .get("annotators")
+            .and_then(JsonValue::as_array)
+            .expect("annotators array")
+            .is_empty());
+    }
 
     #[test]
     fn transform_decision_applied_in_enforce_mode() {

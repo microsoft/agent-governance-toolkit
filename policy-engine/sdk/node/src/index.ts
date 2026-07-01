@@ -10,10 +10,8 @@ import {
 import { configureOpaPath } from "./integrations/opa-binary";
 import {
   coerceTelemetrySink,
-  parseTelemetryManifestDocument,
-  readTelemetryManifestDocument,
+  labelsFromClient,
   TelemetryEvent,
-  telemetryManifestIndexes,
   type TelemetrySink,
 } from "./telemetry";
 
@@ -185,6 +183,7 @@ export interface RuntimeClient {
 
 type NativeRuntime = {
   evaluate(request: Record<string, JsonValue>): Promise<Record<string, JsonValue>>;
+  policyLabels(): Record<string, JsonValue>;
 };
 
 type NativeRuntimeCallback = (err: Error | null, argsJson: string) => Promise<string>;
@@ -282,6 +281,16 @@ export class NativeRuntimeClient implements RuntimeClient {
     });
     return mapResult(raw);
   }
+
+  /**
+   * Resolved policyId and configured annotator names per intervention point,
+   * from the native runtime's merged manifest. The host telemetry layer reads
+   * this once at construction so events are labelled on every constructor,
+   * including fromUrl and fromManifestChain.
+   */
+  policyLabels(): Record<string, JsonValue> {
+    return this.runtime.policyLabels();
+  }
 }
 
 export class AgentControl {
@@ -299,6 +308,14 @@ export class AgentControl {
     this.runtimeClient = runtimeClient;
     this.approvalResolver = approvalResolver;
     this.telemetrySink = coerceTelemetrySink(telemetrySink);
+    // policyId and annotators come from the runtime client's merged manifest via
+    // policyLabels, so they are populated on every native-backed constructor,
+    // including fromUrl and fromManifestChain. A custom client without
+    // policyLabels yields empty indexes (policyId null, annotators fall back to
+    // executed annotation keys on the result).
+    const indexes = labelsFromClient(runtimeClient);
+    this.policyIdIndex = indexes.policyIds;
+    this.annotatorIndex = indexes.annotators;
   }
 
   static fromNative(
@@ -309,13 +326,11 @@ export class AgentControl {
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
     telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
-    const control = new AgentControl(
+    return new AgentControl(
       new NativeRuntimeClient(manifest, annotatorDispatcher, policyDispatcher, perfTelemetry),
       approvalResolver,
       telemetrySink,
     );
-    control.indexTelemetryManifest(parseTelemetryManifestDocument(manifest));
-    return control;
   }
 
   static fromPath(
@@ -326,15 +341,13 @@ export class AgentControl {
     perfTelemetry: PerfTelemetry = PerfTelemetry.Off,
     telemetrySink?: TelemetrySink | readonly TelemetrySink[] | null,
   ): AgentControl {
-    const control = new AgentControl(
+    return new AgentControl(
       new NativeRuntimeClient(path, annotatorDispatcher, policyDispatcher, perfTelemetry, (NativeRuntimeClass, annotator, policy) =>
         NativeRuntimeClass.fromPath(path, annotator, policy, perfTelemetry),
       ),
       approvalResolver,
       telemetrySink,
     );
-    control.indexTelemetryManifest(readTelemetryManifestDocument(path));
-    return control;
   }
 
   static fromUrl(
@@ -395,12 +408,6 @@ export class AgentControl {
     const result = await this.runtimeClient.evaluateInterventionPoint({ interventionPoint, snapshot, mode });
     this.emitTelemetry(interventionPoint, mode, result, startedAt);
     return result;
-  }
-
-  private indexTelemetryManifest(document: JsonValue | undefined): void {
-    const indexes = telemetryManifestIndexes(document);
-    this.policyIdIndex = indexes.policyIds;
-    this.annotatorIndex = indexes.annotators;
   }
 
   private emitTelemetry(

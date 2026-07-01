@@ -16,6 +16,7 @@ internal static class TelemetryHarness
         RecordsOtelCounter();
         await DefaultNullSinkEmitsNothingAsync();
         await IndexesJsonManifestAsync();
+        await LabelsManifestChainAsync();
         await AdapterRunFunnelEmitsTelemetryAsync();
         await FallsBackToResultAnnotatorsAsync();
         Console.WriteLine("AgentControlSpecification telemetry host-export tests passed.");
@@ -272,6 +273,55 @@ internal static class TelemetryHarness
         var telemetryEvent = sink.Events.Single();
         AssertEqual("content_policy", telemetryEvent.PolicyId, "JSON manifest policy id should be indexed.");
         AssertSequence(["alpha", "zeta"], telemetryEvent.Annotators.ToArray(), "JSON manifest annotators should be sorted.");
+    }
+
+    private static async Task LabelsManifestChainAsync()
+    {
+        // Regression: FromManifestChain never indexed labels because the host
+        // parsed manifest text it does not have for a merged chain, so policy_id
+        // and annotators were empty. Labels now come from the native merged
+        // manifest via PolicyLabels on every constructor.
+        var baseManifest = """
+            agent_control_specification_version: 0.3.1-beta
+            metadata:
+              name: base
+            policies:
+              content_policy:
+                type: custom
+                adapter: unit_test
+            annotators:
+              prompt_classifier:
+                type: classifier
+            intervention_points:
+              input:
+                policy_target: $.input
+                policy:
+                  id: content_policy
+                annotations:
+                  prompt_classifier:
+                    from: $policy_target.text
+            """;
+        var overlay = """
+            agent_control_specification_version: 0.3.1-beta
+            intervention_points:
+              output:
+                policy_target: $.output
+                policy:
+                  id: content_policy
+            """;
+
+        var sink = new InMemoryTelemetrySink();
+        var control = AgentControl.FromManifestChain(
+            [baseManifest, overlay],
+            new JsonManifestAnnotator(),
+            new JsonManifestPolicy(),
+            telemetrySink: sink);
+
+        await control.EvaluateInputAsync(new { input = new { text = "hi" } });
+
+        var telemetryEvent = sink.Events.Single();
+        AssertEqual("content_policy", telemetryEvent.PolicyId, "manifest-chain policy id should be resolved from the merged manifest.");
+        AssertSequence(["prompt_classifier"], telemetryEvent.Annotators.ToArray(), "manifest-chain annotators should come from the merged manifest.");
     }
 
     private static async Task AdapterRunFunnelEmitsTelemetryAsync()
