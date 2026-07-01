@@ -1086,7 +1086,7 @@ class TestDecisionBOM(unittest.TestCase):
 
 
 # ===================================================================
-# S18 -- Hypervisor Audit (Delta + Commitment)
+# S18 -- Hypervisor Audit (Delta)
 # ===================================================================
 class TestHypervisorAudit(unittest.TestCase):
     """Conformance tests for hypervisor audit delta and commitment (spec S18)."""

@@ -6,8 +6,8 @@
 >
 > This specification defines the execution control model for the Agent
 > Hypervisor, including execution rings, privilege elevation, resource
-> constraints, rate limiting, session isolation, kill switch, audit
-> integrity, and quarantine. All SDK implementations MUST conform to
+> constraints, rate limiting, session isolation, kill switch, and audit
+> integrity. All SDK implementations MUST conform to
 > this specification.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
@@ -494,7 +494,6 @@ A SessionConfig MUST contain:
 | `max_duration_seconds` | int | 3600 | [1, 604800] (7 days) |
 | `min_eff_score` | float | 0.60 | [0.0, 1.0] |
 | `enable_audit` | bool | true | |
-| `enable_blockchain_commitment` | bool | false | |
 
 ### 10.3 Session Participant
 

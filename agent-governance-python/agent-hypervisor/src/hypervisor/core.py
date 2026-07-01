@@ -190,7 +190,7 @@ class Hypervisor:
 
     async def terminate_session(self, session_id: str) -> str | None:
         """
-        Terminate a session and commit audit trail.
+        Terminate a session and finalize the audit hash chain.
 
         Returns:
             audit log root summary hash, or None if audit disabled
@@ -247,6 +247,11 @@ class Hypervisor:
         )
 
         if result.should_slash:
+            # Validate the session and agent before reporting drift externally,
+            # matching the pre-existing guard: an unknown session or a
+            # non-participant agent is an error, not a silent external report.
+            managed = self._get_session(session_id)
+            managed.sso.get_participant(agent_did)
             # Propagate the drift signal to Nexus (external trust backend).
             if self.nexus:
                 severity = "critical" if result.drift_score >= 0.75 else "high"
