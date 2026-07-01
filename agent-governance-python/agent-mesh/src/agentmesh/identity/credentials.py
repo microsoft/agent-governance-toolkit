@@ -284,7 +284,7 @@ class CredentialManager:
             agent_did=agent_did,
             capabilities=capabilities,
             resources=resources,
-            ttl_seconds=ttl_seconds or self.default_ttl,
+            ttl_seconds=self.default_ttl if ttl_seconds is None else ttl_seconds,
             issued_for=issued_for,
         )
 
