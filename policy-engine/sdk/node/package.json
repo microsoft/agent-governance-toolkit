@@ -65,6 +65,7 @@
     "@langchain/core": "^1.1.48",
     "@napi-rs/cli": "^2.18.4",
     "@openai/agents": "^0.11.6",
+    "@opentelemetry/api": "1.9.1",
     "@types/node": "^25.6.0",
     "langchain": "^1.4.2",
     "typescript": "^5.4.0"
