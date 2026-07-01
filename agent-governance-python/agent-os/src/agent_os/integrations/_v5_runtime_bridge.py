@@ -472,7 +472,6 @@ def _host_human_approval_deny() -> BridgeResult:
     from agt.policies.result import EvaluationResult
 
     evaluation = EvaluationResult(
-        allowed=False,
         verdict="deny",
         reason="human_approval_required",
         message="action requires human approval",
@@ -511,7 +510,6 @@ def _host_budget_check(
 
     if policy.max_tool_calls >= 0 and ctx.call_count >= policy.max_tool_calls:
         evaluation = EvaluationResult(
-            allowed=False,
             verdict="deny",
             reason="max_tool_calls",
             message=(
@@ -530,7 +528,6 @@ def _host_budget_check(
         )
     if policy.max_tokens > 0 and ctx.total_tokens >= policy.max_tokens:
         evaluation = EvaluationResult(
-            allowed=False,
             verdict="deny",
             reason="max_tokens",
             message=(
