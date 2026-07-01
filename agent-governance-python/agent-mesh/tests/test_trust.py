@@ -15,6 +15,7 @@ from agentmesh.trust import (
     CapabilityGrant,
     CapabilityRegistry,
 )
+from agentmesh.trust.bridge import PeerInfo
 
 
 def _make_identity(name: str, capabilities: list[str] | None = None) -> AgentIdentity:
@@ -54,6 +55,48 @@ class TestTrustBridge:
         
         peers = bridge.get_trusted_peers()
         assert len(peers) == 0
+
+    def test_get_trusted_peers_zero_threshold_includes_all_verified(self):
+        """An explicit min_score=0 must allow any verified peer (no trust floor).
+
+        Regression for the falsy-default bug: ``min_score or default`` replaced an
+        explicit 0 with default_trust_threshold (700), so a verified peer below the
+        default was silently excluded even when the caller asked for no floor.
+        """
+        bridge = TrustBridge(agent_did="did:mesh:test")  # default threshold 700
+        peer = PeerInfo(
+            peer_did="did:mesh:peer",
+            protocol="iatp",
+            trust_score=699,
+            trust_verified=True,
+        )
+        bridge.peers[peer.peer_did] = peer
+
+        # Default floor (700) excludes the 699-score peer.
+        assert bridge.get_trusted_peers() == []
+        # Explicit 0 floor must include it (the bug returned []).
+        assert bridge.get_trusted_peers(0) == [peer]
+        # Sanity: an explicit non-zero floor at/below the score also includes it.
+        assert bridge.get_trusted_peers(699) == [peer]
+
+    @pytest.mark.asyncio
+    async def test_is_peer_trusted_zero_required_score(self):
+        """is_peer_trusted(required_score=0) honors a 0 floor for any verified peer."""
+        bridge = TrustBridge(agent_did="did:mesh:test")  # default threshold 700
+        peer = PeerInfo(
+            peer_did="did:mesh:peer",
+            protocol="iatp",
+            trust_score=699,
+            trust_verified=True,
+        )
+        bridge.peers[peer.peer_did] = peer
+        # Satisfy the in-process integrity check on the injected record.
+        bridge._peer_signatures[peer.peer_did] = bridge._sign_peer(peer)
+
+        # Default floor (700) rejects the 699-score peer.
+        assert await bridge.is_peer_trusted(peer.peer_did) is False
+        # Explicit 0 floor accepts it (the bug fell back to default and rejected).
+        assert await bridge.is_peer_trusted(peer.peer_did, required_score=0) is True
     
     @pytest.mark.asyncio
     async def test_verify_peer(self):

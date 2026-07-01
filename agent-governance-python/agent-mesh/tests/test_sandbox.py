@@ -228,6 +228,21 @@ def run(data):
         with pytest.raises(PluginSandboxError, match="timeout"):
             sandbox.execute("slow-plugin", "run", {}, timeout=2)
 
+    def test_zero_timeout_passed_through(self, plugins_dir: Path):
+        """An explicit timeout=0 must be passed to subprocess, not replaced by default.
+
+        Regression for the falsy-default bug: ``timeout or self._timeout`` replaced an
+        explicit 0 with the default (30s). A 0s budget times out immediately; the error
+        message names the effective timeout, so "0s timeout" proves passthrough.
+        """
+        _create_plugin(plugins_dir, "fast-plugin", """
+def run(data):
+    return "ok"
+""")
+        sandbox = PluginSandbox(plugins_dir, timeout_seconds=30)
+        with pytest.raises(PluginSandboxError, match=r"exceeded 0s timeout"):
+            sandbox.execute("fast-plugin", "run", {}, timeout=0)
+
 
 # ===========================================================================
 # Error handling
