@@ -7,6 +7,8 @@ Cross-references every rule in the ASI starter policy packs
 (`examples/policy-templates/`) to the OWASP Agentic Security Initiative
 (ASI) Top 10 risk it mitigates. Use this table during security audits.
 
+**Packs:** `healthcare` · `financial-services` · `general-saas` · `edu-k12`
+
 **References:** 
 - [OWASP Top 10 for Agentic Applications (2026)](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
 - [Arcanum-Sec: Prompt Injection Taxonomy](https://github.com/Arcanum-Sec/arc_pi_taxonomy)
@@ -67,23 +69,38 @@ Cross-references every rule in the ASI starter policy packs
 | `healthcare-enforce-deidentification` | healthcare | ASI-02, ASI-06 | Agent OS — Data Pipeline Security |
 | `financial-block-pii-credit-card` | financial-services | ASI-01, ASI-06 | Agent OS — PII Protection |
 | `saas-block-pii-email-bulk` | general-saas | ASI-02, ASI-06 | Agent OS — PII Protection |
+| `edu-asi01-homework-bypass` | edu-k12 | ASI-01 | Agent OS — Policy Engine |
+| `edu-asi01-content-filter-bypass` | edu-k12 | ASI-01 | Agent OS — Policy Engine |
+| `edu-asi02-block-grade-mutation` | edu-k12 | ASI-02 | Agent OS — Capability Sandboxing |
+| `edu-asi02-block-record-write` | edu-k12 | ASI-02 | Agent OS — Capability Sandboxing |
+| `edu-asi03-block-student-impersonation` | edu-k12 | ASI-03 | AgentMesh — DID Identity & Trust |
+| `edu-asi06-block-curriculum-poisoning` | edu-k12 | ASI-06 | Agent OS — Context Integrity Firewall |
+| `edu-asi09-parental-impersonation` | edu-k12 | ASI-09 | Business Continuity — Trust Firewall |
+| `edu-asi09-block-minor-contact-info` | edu-k12 | ASI-09 | Agent OS — PII Protection |
+| `edu-block-student-id` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `edu-block-phi-iep` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `edu-block-disciplinary-record` | edu-k12 | ASI-01, ASI-06 | Agent OS — PII Protection |
+| `edu-cipa-block-adult-content` | edu-k12 | ASI-01, ASI-06 | Agent OS — Policy Engine |
+| `edu-cipa-block-violence-content` | edu-k12 | ASI-01, ASI-06 | Agent OS — Policy Engine |
+| `edu-block-credentials-in-output` | edu-k12 | ASI-02, ASI-03 | Agent OS — Policy Engine |
+| `edu-ferpa-audit-record-access` | edu-k12 | ASI-01, ASI-06 | Agent OS — Audit Trail |
 
 ---
 
 ## ASI Risk Coverage Matrix
 
-| ASI Risk | healthcare | financial-services | general-saas |
-|----------|:----------:|:-----------------:|:------------:|
-| ASI-01 Agent Goal Hijack | ✅ | ✅ | ✅ |
-| ASI-02 Tool Misuse & Exploitation | ✅ | ✅ | ✅ |
-| ASI-03 Identity & Privilege Abuse | ✅ | ✅ | ✅ |
-| ASI-04 Agentic Supply Chain | 🔗 | 🔗 | 🔗 |
-| ASI-05 Unexpected Code Execution | ✅ | ✅ | ✅ |
-| ASI-06 Memory & Context Poisoning | ✅ | ✅ | ✅ |
-| ASI-07 Insecure Inter-Agent Communication | 🔗 | 🔗 | 🔗 |
-| ASI-08 Cascading Agent Failures | ✅ | ✅ | ✅ |
-| ASI-09 Human-Agent Trust Exploitation | 🔗 | 🔗 | 🔗 |
-| ASI-10 Rogue Agents | 🔗 | 🔗 | 🔗 |
+| ASI Risk | healthcare | financial-services | general-saas | edu-k12 |
+|----------|:----------:|:-----------------:|:------------:|:-------:|
+| ASI-01 Agent Goal Hijack | ✅ | ✅ | ✅ | ✅ |
+| ASI-02 Tool Misuse & Exploitation | ✅ | ✅ | ✅ | ✅ |
+| ASI-03 Identity & Privilege Abuse | ✅ | ✅ | ✅ | ✅ |
+| ASI-04 Agentic Supply Chain | 🔗 | 🔗 | 🔗 | 🔗 |
+| ASI-05 Unexpected Code Execution | ✅ | ✅ | ✅ | ✅ |
+| ASI-06 Memory & Context Poisoning | ✅ | ✅ | ✅ | ✅ |
+| ASI-07 Insecure Inter-Agent Communication | 🔗 | 🔗 | 🔗 | 🔗 |
+| ASI-08 Cascading Agent Failures | ✅ | ✅ | ✅ | ✅ |
+| ASI-09 Human-Agent Trust Exploitation | 🔗 | 🔗 | 🔗 | ✅ |
+| ASI-10 Rogue Agents | 🔗 | 🔗 | 🔗 | 🔗 |
 
 **Legend:**
 - ✅ Direct policy rule(s) in this starter pack mitigate this risk
@@ -93,6 +110,11 @@ Cross-references every rule in the ASI starter policy packs
 > layer (AgentMesh IATP, approval workflows, execution ring isolation). Policy-level
 > controls for those risks require runtime context fields not universally available.
 > These are tracked for future starter pack versions.
+>
+> **edu-k12 exception:** ASI-09 has direct policy-level rules in this pack
+> (`edu-asi09-parental-impersonation`, `edu-asi09-block-minor-contact-info`) because
+> the elevated duty of care owed to minors warrants inline guardrails even without
+> full runtime context.
 
 ---
 
@@ -103,6 +125,7 @@ Cross-references every rule in the ASI starter policy packs
 | `healthcare` | `deny` | 8,192 | 15 | 0.95 |
 | `financial-services` | `deny` | 6,000 | 20 | 0.95 |
 | `general-saas` | `deny` | 12,000 | 30 | 0.85 |
+| `edu-k12` | `deny` | 4,096 | 10 | 0.90 |
 
 All packs implement **deny-all by default**, enforcing the
 [Least Agency principle](owasp-agentic-top10-architecture.md).
@@ -120,6 +143,10 @@ All packs implement **deny-all by default**, enforcing the
 | SOX §302/906 (Financial Reporting) | financial-services | Transaction action audit trail |
 | AML / BSA (Structuring Detection) | financial-services | Bulk transaction blocking |
 | GDPR / CCPA (PII Minimization) | general-saas | SSN, bulk email blocking |
+| FERPA 20 U.S.C. § 1232g (Education Records) | edu-k12 | Student ID, IEP, disciplinary record blocking; read-access audit logging |
+| COPPA 15 U.S.C. § 6501 (Children's Privacy) | edu-k12 | Minor contact info blocking, parental consent audit, SSN/PII deny |
+| CIPA 47 U.S.C. § 254(h) (Internet Content) | edu-k12 | Adult content blocking, violence/harmful content blocking |
+| PPRA 20 U.S.C. § 1232h (Pupil Rights) | edu-k12 | Academic integrity guardrail, homework-bypass deny |
 
 ---
 
@@ -137,6 +164,6 @@ These packs extend existing patterns from this repository:
 
 ---
 
-*Last updated: May 2026*
+*Last updated: June 2026*
 
 **[⬅ Back to Compliance index](index.md)** · **[🛡️ Full OWASP ASI Coverage](owasp-agentic-top10-architecture.md)**

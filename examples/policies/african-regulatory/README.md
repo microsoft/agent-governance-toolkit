@@ -1,8 +1,8 @@
 # African Regulatory Policy Pack
 
-Agent-OS governance policies for AI agents operating in Nigeria, Kenya, and
-South Africa — plus five universal agent safety controls aligned to the OWASP
-Agentic AI Top 10.
+Agent-OS governance policies for AI agents operating in Nigeria, Kenya, South
+Africa, Uganda, Tanzania, and Ethiopia — plus five universal agent safety
+controls aligned to the OWASP Agentic AI Top 10.
 
 Maintained by the [agt-policies-nigeria](https://github.com/kingztech2019/agt-policies-nigeria)
 open-source project. Contributions welcome.
@@ -22,6 +22,9 @@ open-source project. Contributions welcome.
 │      nfiu-aml-str  pos-geofencing                                   │
 │  KE: kenya-dpa                                                      │
 │  ZA: popia-south-africa                                             │
+│  UG: uganda-dppa                                                    │
+│  TZ: tanzania-pdpa                                                  │
+│  ET: ethiopia-pdp                                                   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -55,13 +58,16 @@ are selected per jurisdiction.
 | `pos-geofencing.yaml` | CBN Agent Banking Guidelines 2020 | 🇳🇬 NG |
 | `kenya-dpa.yaml` | Kenya Data Protection Act 2019 | 🇰🇪 KE |
 | `popia-south-africa.yaml` | POPIA Act 4 of 2013 | 🇿🇦 ZA |
+| `uganda-dppa.yaml` | Uganda Data Protection and Privacy Act 2019 | 🇺🇬 UG |
+| `tanzania-pdpa.yaml` | Tanzania Personal Data Protection Act 2022 | 🇹🇿 TZ |
+| `ethiopia-pdp.yaml` | Ethiopia Proclamation 958/2016 + draft PDPP *(draft)* | 🇪🇹 ET |
 
 ---
 
 ## Rego Reference Implementations
 
 The `rego/` subdirectory contains [OPA](https://www.openpolicyagent.org/) Rego
-implementations of all 12 policies, plus a jurisdiction router.
+implementations of all 15 policies, plus a jurisdiction router.
 
 > **⚠️ Important:** The `.rego` files are **reference implementations only**.
 > They are **not loaded by the Agent-OS Python runtime**, which uses the YAML
@@ -79,7 +85,7 @@ To run the Rego policies with OPA:
 curl -L -o /tmp/opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
 chmod +x /tmp/opa
 
-# Run all tests (306 tests)
+# Run all tests (384 tests)
 /tmp/opa test rego/ -v
 
 # Evaluate a single policy

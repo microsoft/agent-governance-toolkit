@@ -9,6 +9,7 @@ Import from here instead of duplicating in each integration package.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -103,6 +104,7 @@ class TrustTracker:
             action=action,
             success=success,
             trust_delta=delta,
+            timestamp=datetime.now(timezone.utc).isoformat(),
         ))
         return new_score
 

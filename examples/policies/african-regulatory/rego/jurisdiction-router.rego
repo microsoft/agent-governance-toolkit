@@ -47,6 +47,9 @@ jurisdiction_policies := {
 	"NG": {"cbn", "bvn_nin", "ndpa", "nfiu"},
 	"KE": {"kdpa"},
 	"ZA": {"popia"},
+	"UG": {"uganda_dppa"},
+	"TZ": {"tanzania_pdpa"},
+	"ET": {"ethiopia_pdp"},
 }
 
 # ── Policy pack → OPA query path ─────────────────────────────────
@@ -58,6 +61,9 @@ policy_queries := {
 	"nfiu": "data.agt_policies_nigeria.nfiu.decision",
 	"kdpa": "data.agt_policies_africa.kdpa.decision",
 	"popia": "data.agt_policies_africa.popia.decision",
+	"uganda_dppa": "data.agt_policies_africa.uganda_dppa.decision",
+	"tanzania_pdpa": "data.agt_policies_africa.tanzania_pdpa.decision",
+	"ethiopia_pdp": "data.agt_policies_africa.ethiopia_pdp.decision",
 	"prompt_injection": "data.agt_policies_agent.prompt_injection.decision",
 	"pii_leakage": "data.agt_policies_agent.pii_leakage.decision",
 	"tool_permissions": "data.agt_policies_agent.tool_permissions.decision",

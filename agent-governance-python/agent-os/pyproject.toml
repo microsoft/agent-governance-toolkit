@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent_os_kernel"
-version = "4.1.0"
+version = "5.0.0"
 description = "Deprecated. Previously published as agent-os-kernel. Install agent-governance-toolkit-core instead."
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
     {name = "Microsoft Corporation", email = "agentgovtoolkit@microsoft.com"},
 ]
-dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
+dependencies = ["agent-governance-toolkit-core>=4.1.0,<6.0"]
 
 # The published wheel is a dep-only deprecation stub (see [project] above), but
 # the agent_os source tree under src/ (and tests/) is still exercised in CI via
@@ -33,22 +33,22 @@ dependencies = ["agent-governance-toolkit-core>=4.0.0,<5.0"]
 # aiohttp:      modules/nexus.client (same transitive import path as above).
 # pyyaml:       tests/test_cmd_sign.py and several others (import yaml).
 dev = [
-    "pytest>=8.4.2,<10.0",
-    "pytest-asyncio>=1.2.0,<2.0",
+    "pytest>=9.1.1,<10.0",
+    "pytest-asyncio>=1.4.0,<2.0",
     "pytest-cov>=7.1.0,<8.0",
-    "mypy>=1.19.1,<3.0",
-    "ruff>=0.15.17,<1.0",
+    "mypy>=2.1.0,<3.0",
+    "ruff>=0.15.20,<1.0",
     "import-linter>=2.0,<3.0",
     "pyyaml>=6.0.0,<7.0",
     "typer>=0.9.0,<1.0",
     "rich>=15.0.0,<16.0",
     "numpy>=1.20.0,<3.0",
     "httpx>=0.27.0,<1.0",
-    "fastapi>=0.128.8,<1.0",
+    "fastapi>=0.138.2,<1.0",
     "uvicorn>=0.27.0,<1.0",
     "anyio>=4.12.1,<5.0",
     "aiohttp>=3.13.4,<4.0",
-    "structlog>=25.5.0,<27.0",
+    "structlog>=26.1.0,<27.0",
     "redis>=4.0.0,<8.0",
     "cryptography>=49.0.0,<50.0",
     "pynacl>=1.6.2,<2.0",
@@ -79,7 +79,7 @@ packages = ["src/agent_os"]
 # such as agent_os/integrations/__init__.py. Restoring them keeps CI green.
 # ============================================================================
 [tool.ruff]
-target-version = "py39"
+target-version = "py311"
 line-length = 100
 src = ["src", "modules"]
 

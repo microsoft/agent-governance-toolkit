@@ -106,6 +106,77 @@ fn from_path_zero_config_evaluates_rego_manifest() {
 }
 
 #[test]
+fn from_url_rejects_non_https_without_network() {
+    // The HTTPS requirement holds with or without a pin, and is checked before
+    // any network access.
+    let error = AgentControl::from_url("http://policy.example/manifest.yaml", None).unwrap_err();
+    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    assert!(error.detail().contains("unsupported URL scheme"));
+}
+
+#[test]
+fn from_url_accepts_optional_pin_argument() {
+    // The pin is optional; a supplied but malformed pin still fails closed once
+    // the (here non-https) URL is rejected, confirming the argument threads
+    // through to the core loader.
+    let error = AgentControl::from_url(
+        "http://policy.example/manifest.yaml",
+        Some(&"00".repeat(32)),
+    )
+    .unwrap_err();
+    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+}
+
+#[test]
+fn from_url_with_limits_threads_limits_argument() {
+    // The limits-aware constructor still applies the HTTPS gate before any
+    // network access, confirming the new public argument threads through.
+    let limits = crate::Limits {
+        max_manifest_url_bytes: 4096,
+        max_manifest_url_redirects: 0,
+        ..crate::Limits::default()
+    };
+    let error =
+        AgentControl::from_url_with_limits("http://policy.example/manifest.yaml", None, limits)
+            .unwrap_err();
+    assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+    assert!(error.detail().contains("unsupported URL scheme"));
+}
+
+#[test]
+fn from_manifest_with_dispatchers_and_limits_builds_and_evaluates() {
+    // The limits-threading constructor is reachable with a non-default value and
+    // builds a working runtime; a host policy still overrides the default
+    // dispatcher, so the limits path does not change verdict behavior here.
+    let limits = crate::Limits {
+        max_manifest_url_bytes: 2048,
+        manifest_url_timeout_ms: 5000,
+        max_manifest_url_redirects: 1,
+        ..crate::Limits::default()
+    };
+    let policy = Arc::new(QueuePolicy::with_responses([json!({
+        "decision": "deny",
+        "reason": "host_policy"
+    })]));
+    let control = AgentControl::from_manifest_with_dispatchers_and_limits(
+        Manifest::from_yaml_str(run_manifest()).unwrap(),
+        Some(Arc::new(NoopAnnotator)),
+        Some(policy.clone()),
+        limits,
+    )
+    .unwrap();
+
+    let result = control.evaluate_intervention_point(
+        InterventionPoint::Input,
+        json!({ "input": { "text": "blocked" } }),
+        EnforcementMode::Enforce,
+    );
+
+    assert_eq!(result.verdict.decision, Decision::Deny);
+    assert_eq!(result.verdict.reason.as_deref(), Some("host_policy"));
+}
+
+#[test]
 fn from_manifest_with_dispatchers_prefers_host_policy() {
     let policy = Arc::new(QueuePolicy::with_responses([json!({
         "decision": "deny",
