@@ -43,7 +43,14 @@ except Exception:  # pragma: no cover - defensive fallback
 console = Console() if Console else None
 
 MCP_PROTOCOL_VERSION = "2025-11-25"
-_SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", MCP_PROTOCOL_VERSION}
+MCP_PROTOCOL_VERSION_STATELESS = "2026-07-28"
+_SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_STATELESS}
+
+# Streamable HTTP header names from the MCP dual-stack migration spec
+# (RFC #2597, issue #3130).
+MCP_METHOD_HEADER = "Mcp-Method"
+MCP_NAME_HEADER = "Mcp-Name"
+_METHODS_REQUIRING_NAME: frozenset[str] = frozenset({"server/discover"})
 
 # Module-level SSL context; set via _configure_tls(verify=False).
 _SSL_CONTEXT: ssl.SSLContext | None = None
@@ -1035,8 +1042,16 @@ def _next_request_id() -> int:
     return next(_REQUEST_ID_COUNTER)
 
 
-def _jsonrpc_request(method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": _next_request_id(), "method": method, "params": params or {}}
+def _jsonrpc_request(
+    method: str,
+    params: dict[str, Any] | None = None,
+    *,
+    meta: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"jsonrpc": "2.0", "id": _next_request_id(), "method": method, "params": params or {}}
+    if meta:
+        payload["_meta"] = dict(meta)
+    return payload
 
 
 def _jsonrpc_notification(method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1195,13 +1210,20 @@ def _streamable_http_call(
     *,
     timeout: float,
     session_id: str | None = None,
+    protocol_version: str = MCP_PROTOCOL_VERSION,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    headers = {
+    method = payload.get("method", "")
+    headers: dict[str, str] = {
         **server.headers,
         "Accept": "application/json, text/event-stream",
-        "Mcp-Protocol-Version": MCP_PROTOCOL_VERSION,
+        "Mcp-Protocol-Version": protocol_version,
+        MCP_METHOD_HEADER: str(method),
     }
-    if session_id:
+    if method in _METHODS_REQUIRING_NAME:
+        headers[MCP_NAME_HEADER] = _client_info()["name"]  # Single source of truth with ``_meta.clientInfo.name``.
+    is_stateless = protocol_version == MCP_PROTOCOL_VERSION_STATELESS
+    if session_id and not is_stateless:
+        # Issue #3130: the stateless flow MUST NOT set Mcp-Session-Id.
         headers["Mcp-Session-Id"] = session_id
     expected_id = payload.get("id") if isinstance(payload.get("id"), int) else None
     _, response_headers, response_message = _streamable_http_request(
@@ -1211,6 +1233,10 @@ def _streamable_http_call(
         timeout=timeout,
         expected_id=expected_id,
     )
+    if is_stateless:
+        # Defensive: the stateless flow must not surface a server-issued
+        # session id even if the peer returns one in response headers.
+        return response_message, None
     return response_message, _extract_session_id(response_headers) or session_id
 
 
@@ -1249,6 +1275,44 @@ def _list_remote_primitives(
 
 
 def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: float, max_pages: int) -> StdioMCPInspection:
+    # Issue #3130: prefer stateless ``server/discover`` so the scanner can
+    # interop with ``2026-07-28`` peers without a session. Any error,
+    # non-stateless negotiated version, or transport-level HTTP failure
+    # falls through to the legacy ``initialize`` handshake below.
+    stateless_discover = _streamable_http_call(
+        server,
+        _jsonrpc_request(
+            "server/discover",
+            {},
+            meta={"clientInfo": _client_info(), "capabilities": {}},
+        ),
+        timeout=timeout,
+        protocol_version=MCP_PROTOCOL_VERSION_STATELESS,
+    )[0]
+    if stateless_discover and "error" not in stateless_discover:
+        discover_result = stateless_discover.get("result", {})
+        if isinstance(discover_result, Mapping):
+            discover_protocol = str(discover_result.get("protocolVersion", "")) or None
+            if discover_protocol == MCP_PROTOCOL_VERSION_STATELESS:
+                stateless_meta = {"clientInfo": _client_info(), "capabilities": {}}
+
+                def call(payload: dict[str, Any]) -> dict[str, Any] | None:
+                    payload_with_meta = payload if "_meta" in payload else {**payload, "_meta": stateless_meta}
+                    response, _ = _streamable_http_call(server, payload_with_meta, timeout=timeout, protocol_version=MCP_PROTOCOL_VERSION_STATELESS)
+                    return response
+
+                tools = _list_remote_primitives(call, "tools/list", "tools", normalize_mcp_tool, max_pages) if _capability_enabled(discover_result, "tools") else []
+                resources = _list_remote_primitives(call, "resources/list", "resources", normalize_mcp_resource, max_pages) if _capability_enabled(discover_result, "resources") else []
+                resource_templates = _list_remote_primitives(call, "resources/templates/list", "resourceTemplates", normalize_mcp_resource_template, max_pages, optional=True) if _capability_enabled(discover_result, "resources") else []
+                prompts = _list_remote_primitives(call, "prompts/list", "prompts", normalize_mcp_prompt, max_pages) if _capability_enabled(discover_result, "prompts") else []
+                return StdioMCPInspection(
+                    server_name=server.name, ok=True, tools=tools, resources=resources,
+                    resource_templates=resource_templates, prompts=prompts,
+                    initialize_result=dict(discover_result), transport=server.transport, protocol_version=discover_protocol,
+                )
+
+    # Legacy 2025-11-25 handshake: ``initialize`` -> ``notifications/initialized``
+    # -> session-bound ``tools/list`` / ``resources/list`` / ``prompts/list``.
     session_id: str | None = None
     initialize, session_id = _streamable_http_call(
         server,
