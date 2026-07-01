@@ -194,7 +194,7 @@ class PluginSandbox:
             raise PluginSandboxError(f"Plugin not installed: {plugin_name}")
 
         mod_name = module_name or plugin_name.replace("-", "_")
-        effective_timeout = timeout or self._timeout
+        effective_timeout = self._timeout if timeout is None else timeout
 
         # Build the payload sent via stdin
         envelope = {

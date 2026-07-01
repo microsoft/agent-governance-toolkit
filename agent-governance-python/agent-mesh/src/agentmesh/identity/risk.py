@@ -342,7 +342,7 @@ class RiskScorer:
         Returns:
             List of RiskScore objects for agents below the threshold.
         """
-        thresh = threshold or self.HIGH_THRESHOLD
+        thresh = self.HIGH_THRESHOLD if threshold is None else threshold
         return [
             score for score in self._scores.values()
             if score.total_score < thresh
