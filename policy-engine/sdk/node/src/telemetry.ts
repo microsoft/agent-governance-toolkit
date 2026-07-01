@@ -409,12 +409,12 @@ export function labelsFromClient(runtimeClient: unknown): {
   // Never throws, since telemetry labels are best effort.
   const policyIds: Record<string, string> = {};
   const annotators: Record<string, string[]> = {};
-  const getter = (runtimeClient as { policyLabels?: unknown } | null)?.policyLabels;
-  if (typeof getter !== "function") {
-    return { policyIds, annotators };
-  }
   let labels: unknown;
   try {
+    const getter = (runtimeClient as { policyLabels?: unknown } | null)?.policyLabels;
+    if (typeof getter !== "function") {
+      return { policyIds, annotators };
+    }
     labels = (getter as () => unknown).call(runtimeClient);
   } catch {
     return { policyIds, annotators };

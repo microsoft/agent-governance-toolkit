@@ -692,10 +692,10 @@ def _labels_from_client(
 
     policy_ids: dict[str, str] = {}
     annotators: dict[str, tuple[str, ...]] = {}
-    getter = getattr(runtime_client, "policy_labels", None)
-    if not callable(getter):
-        return policy_ids, annotators
     try:
+        getter = getattr(runtime_client, "policy_labels", None)
+        if not callable(getter):
+            return policy_ids, annotators
         labels = getter()
     except Exception:  # noqa: BLE001 - label lookup must never break construction
         return policy_ids, annotators

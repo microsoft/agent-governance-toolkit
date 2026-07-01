@@ -376,6 +376,32 @@ class PolicyLabelIndexTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(_labels_from_client(BadClient()), ({}, {}))
 
+    def test_labels_from_client_survives_throwing_property(self):
+        # A custom client may expose policy_labels as a property (not a method).
+        # Reading it must not escape the best-effort guard, or telemetry labels
+        # become load-bearing and crash construction.
+        class ThrowingPropertyClient:
+            async def evaluate_intervention_point(self, request):
+                raise NotImplementedError
+
+            @property
+            def policy_labels(self):
+                raise RuntimeError("label getter boom")
+
+        self.assertEqual(_labels_from_client(ThrowingPropertyClient()), ({}, {}))
+
+    def test_construction_survives_throwing_label_property(self):
+        class ThrowingPropertyRuntime(QueueRuntime):
+            @property
+            def policy_labels(self):
+                raise RuntimeError("label getter boom")
+
+        sink = InMemoryTelemetrySink()
+        # Must not raise; labels stay empty and telemetry is still best effort.
+        control = AgentControl(ThrowingPropertyRuntime([]), telemetry_sink=sink)
+        self.assertEqual(control._policy_id_index, {})
+        self.assertEqual(control._annotator_index, {})
+
     async def test_policy_id_lookup_populates_event(self):
         sink = InMemoryTelemetrySink()
         control = AgentControl(
@@ -466,6 +492,42 @@ class OtelMetricsSinkTests(unittest.TestCase):
         # The counter must record a float so its OTLP Sum data point is
         # double-typed, matching the Rust f64_counter (no mixed int/float series).
         self.assertIsInstance(_counter_point_value(data, "acs_intervention_deny_total"), float)
+
+    def test_ignores_non_decision_events(self):
+        # Only the base decision event records metrics. A non-decision event
+        # (e.g. the core's second intervention_point.transformed stream event)
+        # must not record, matching the Rust/Node/.NET sinks, so a transform is
+        # never double-counted.
+        try:
+            from opentelemetry.sdk.metrics import MeterProvider
+            from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+        except ImportError:
+            self.skipTest("opentelemetry-sdk is not installed")
+
+        previous_disabled = os.environ.pop("OTEL_SDK_DISABLED", None)
+        try:
+            reader = InMemoryMetricReader()
+            provider = MeterProvider(metric_readers=[reader])
+            sink = OtelMetricsTelemetrySink("agent_control_specification", meter_provider=provider)
+            self.assertTrue(sink.available)
+
+            sink.emit(
+                TelemetryEvent(
+                    event_type=TelemetryEventType.INTERVENTION_POINT_TRANSFORMED,
+                    intervention_point=InterventionPoint.INPUT,
+                    decision=Decision.TRANSFORM,
+                    enforcement_mode=EnforcementMode.ENFORCE,
+                    duration_ms=1.0,
+                )
+            )
+
+            data = reader.get_metrics_data()
+        finally:
+            if previous_disabled is not None:
+                os.environ["OTEL_SDK_DISABLED"] = previous_disabled
+
+        points = _collect_metric_points(data) if data is not None else {}
+        self.assertEqual(points, {}, "a non-decision event must not record any metric")
 
 
 def _collect_metric_points(metrics_data) -> dict[str, float]:

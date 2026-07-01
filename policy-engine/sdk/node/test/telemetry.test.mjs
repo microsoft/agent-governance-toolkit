@@ -412,6 +412,27 @@ test("fromManifestChain labels events (previously null policy id)", async () => 
   assert.deepEqual(sink.events[0].annotators, ["prompt_classifier"]);
 });
 
+test("construction survives a throwing policyLabels getter (labels never load-bearing)", () => {
+  // A custom client may expose policyLabels as a getter (not a method). Reading
+  // it must not escape the best-effort guard, or telemetry labels become
+  // load-bearing and crash construction.
+  class ThrowingLabelClient extends StubRuntimeClient {
+    get policyLabels() {
+      throw new Error("label getter boom");
+    }
+  }
+  const sink = new InMemoryTelemetrySink();
+  let control;
+  assert.doesNotThrow(() => {
+    control = new AgentControl(
+      new ThrowingLabelClient(() => ({ verdict: { decision: Decision.Allow } })),
+      undefined,
+      sink,
+    );
+  });
+  assert.ok(control);
+});
+
 test("OtelMetricsTelemetrySink no-ops when @opentelemetry/api is absent", (t) => {
   try {
     require.resolve("@opentelemetry/api");

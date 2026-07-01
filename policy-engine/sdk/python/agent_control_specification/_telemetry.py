@@ -440,6 +440,11 @@ class OtelMetricsTelemetrySink:
     def emit(self, event: TelemetryEvent) -> None:
         if not self._available:
             return
+        # Only the base decision event records metrics, matching the Rust OTel
+        # sink (integrations/otel/src/lib.rs records_metrics) and the Node/.NET
+        # sinks, so a non-decision event fed in directly cannot double-count.
+        if event.event_type is not TelemetryEventType.DECISION:
+            return
         attributes = _otel_attributes(event)
         if event.decision is not None:
             counter = self._decision_counters.get(event.decision.value)
