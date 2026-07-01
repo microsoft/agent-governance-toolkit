@@ -155,6 +155,7 @@ elif
 embedders
 endswith
 ENOENT
+ENOSPC
 ensurepip
 Entra
 eprintln
@@ -171,6 +172,7 @@ exfiltrated
 exfiltration
 expanduser
 FAKEFORTESTING
+failclosed
 fastapi
 Fatalf
 Fernet
