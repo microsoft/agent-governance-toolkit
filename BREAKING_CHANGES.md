@@ -55,15 +55,13 @@ a default action.
 
 ---
 
-## Composite actions: `toolkit-version` is now **required**
+## Composite action: `toolkit-version` is now **required**
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
 
 **Affected:**
 
 - `microsoft/agent-governance-toolkit/action`
-- `microsoft/agent-governance-toolkit/action/security-scan`
-- `microsoft/agent-governance-toolkit/action/governance-attestation`
 
 **What changed:**
 

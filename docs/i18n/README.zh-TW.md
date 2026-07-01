@@ -102,8 +102,8 @@ pip install agentmesh-lightning        # 強化學習訓練治理
   - [框架快速入門](../../examples/quickstart/) | [整合方案](../../docs/proposals/)
 - **完整 OWASP 覆蓋**：針對 Agentic Top 10 風險實現 10/10 覆蓋，每個 ASI 類別均有專屬控制措施
   - [OWASP 合規](../../docs/compliance/owasp-agentic-top10-architecture.md) | [競品比較](../../docs/COMPARISON.md)
-- **GitHub Actions 支援 CI/CD**：為 PR 工作流提供自動化安全掃描與治理證明
-  - [安全掃描 Action](../../action/security-scan/) | [治理證明 Action](../../action/governance-attestation/)
+- **GitHub Actions 支援 CI/CD**：透過 Agent Governance Verify 在 CI/CD 中執行治理驗證
+  - [Agent Governance Verify Action](../../action/)
 
 ### 💬 **我們期待您的意見回饋！**
 
