@@ -16,12 +16,17 @@ from .agent_id import AgentDID, AgentIdentity
 from .attestation import (
     AttestationClaims,
     AttestationEvidence,
+    AttestationRequest,
     ConfidentialLevel,
     ImageMatchPolicy,
     KeyOrigin,
     ReferenceValues,
+    canonical_attestation_evidence_bytes,
+    compute_binding_hash,
     compute_report_data_hash,
     compute_report_data_hash_hex,
+    compute_startup_binding,
+    compute_startup_binding_hash,
     matches_report_data_binding,
     public_key_hash_hex,
 )
@@ -42,13 +47,6 @@ from .external_jwks import (
     FederationPolicy,
     TrustedEndpoint,
 )
-from .provider_chain import (
-    IdentityProvider,
-    IdentityProviderChain,
-    IdentityResult,
-    LocalRegistryProvider,
-    ExternalJWKSProviderAdapter,
-)
 from .jwk import from_jwk, from_jwks, to_jwk, to_jwks
 from .keystore import KeyStore, PKCS11KeyStore, SoftwareKeyStore
 from .managed_identity import (
@@ -60,6 +58,13 @@ from .managed_identity import (
 from .mtls import MTLSConfig, MTLSIdentityVerifier
 from .namespace import AgentNamespace, NamespaceRule
 from .namespace_manager import NamespaceManager
+from .provider_chain import (
+    ExternalJWKSProviderAdapter,
+    IdentityProvider,
+    IdentityProviderChain,
+    IdentityResult,
+    LocalRegistryProvider,
+)
 from .revocation import RevocationEntry, RevocationList
 from .risk import RiskScore, RiskScorer
 from .rotation import KeyRotationManager
@@ -106,21 +111,23 @@ __all__ = [
     "TEEKeyHandle",
     "SoftwareKeyHandle",
     "LocalTEEKeyStore",
-    "MockSKRKeyStore",
     "require_tee_bound_key",
     "AttestationClaims",
     "AttestationEvidence",
+    "AttestationRequest",
     "ConfidentialLevel",
     "ImageMatchPolicy",
     "KeyOrigin",
     "ReferenceValues",
     "AttestationCollector",
-    "MockAttestationCollector",
     "NoopAttestationCollector",
     "AttestationVerifier",
-    "MockAttestationVerifier",
+    "canonical_attestation_evidence_bytes",
+    "compute_binding_hash",
     "compute_report_data_hash",
     "compute_report_data_hash_hex",
+    "compute_startup_binding",
+    "compute_startup_binding_hash",
     "matches_report_data_binding",
     "public_key_hash_hex",
     "EntraAgentIdentity",

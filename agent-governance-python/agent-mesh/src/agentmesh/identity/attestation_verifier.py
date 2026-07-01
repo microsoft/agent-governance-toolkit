@@ -17,6 +17,7 @@ from .attestation import (
     AttestationEvidence,
     ConfidentialLevel,
     ImageMatchPolicy,
+    KeyOrigin,
     ReferenceValues,
 )
 
@@ -48,6 +49,7 @@ class MockAttestationVerifier(AttestationVerifier):
         tcb_status: str = "up_to_date",
         runtime_measurements: Mapping[str, str] | None = None,
         claims: Mapping[str, str] | None = None,
+        key_origin: KeyOrigin = KeyOrigin.SKR,
         ttl_seconds: int = DEFAULT_EVIDENCE_TTL_SECONDS,
         latency_seconds: float = 0.0,
         error: Exception | None = None,
@@ -65,6 +67,7 @@ class MockAttestationVerifier(AttestationVerifier):
         self._tcb_status = tcb_status
         self._runtime_measurements = dict(runtime_measurements or {})
         self._claims = dict(claims or {})
+        self._key_origin = key_origin
         self._ttl_seconds = ttl_seconds
         self._latency_seconds = latency_seconds
         self._error = error
@@ -79,8 +82,15 @@ class MockAttestationVerifier(AttestationVerifier):
             await asyncio.sleep(self._latency_seconds)
         if self._error is not None:
             raise AttestationVerificationError(str(self._error)) from self._error
-        if evidence.is_expired():
+        now = datetime.now(UTC)
+        max_age_seconds = min(reference_values.max_evidence_age_seconds, self._ttl_seconds)
+        max_age = timedelta(seconds=max_age_seconds)
+        if evidence.is_expired(now):
             raise AttestationVerificationError("attestation evidence is expired")
+        if now - evidence.timestamp > max_age:
+            raise AttestationVerificationError(
+                "attestation evidence is older than the allowed maximum"
+            )
         if not self._platform_verified:
             raise AttestationVerificationError("attestation platform was not verified")
         if not self._report_data_match:
@@ -97,16 +107,17 @@ class MockAttestationVerifier(AttestationVerifier):
         )
 
         verified_at = datetime.now(UTC)
+        effective_expires_at = min(evidence.expires_at, evidence.timestamp + max_age)
         return AttestationClaims(
             platform=evidence.platform,
             confidential_level=self._confidential_level,
-            key_origin=evidence.key_origin,
+            key_origin=self._key_origin,
             platform_verified=True,
             report_data_match=True,
             tcb_status=self._tcb_status,
             runtime_measurements=runtime_measurements,
             verified_at=verified_at,
-            expires_at=verified_at + timedelta(seconds=self._ttl_seconds),
+            expires_at=effective_expires_at,
             claims=claims,
         )
 
@@ -168,4 +179,3 @@ class MockAttestationVerifier(AttestationVerifier):
                 "attestation image signer mismatch: "
                 f"expected one of {reference_values.allowed_image_signers!r}, got {signer!r}"
             )
-
