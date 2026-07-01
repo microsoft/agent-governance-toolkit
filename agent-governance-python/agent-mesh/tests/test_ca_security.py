@@ -351,6 +351,24 @@ class TestRegistrationLifecycle:
         resp = self._register(ca, sponsor_private, "s@corp.com")
         assert resp.token_ttl_seconds == 5 * 60
 
+    def test_zero_ttl_minutes_honored(self):
+        """An explicit ttl_minutes=0 must yield a 0-minute (immediately expiring) cert.
+
+        Regression for the falsy-default bug: ``ttl_minutes or default_ttl_minutes``
+        replaced an explicit 0 with the default lifetime (15 min).
+        """
+        ca, _sponsor_key, _email = _make_ca_with_sponsor()
+        before = datetime.now(timezone.utc)
+        _der, _key_id, expires_at = ca._issue_svid_certificate(
+            agent_did="did:mesh:zero-ttl",
+            public_key=_make_agent_public_key(),
+            ttl_minutes=0,
+        )
+        after = datetime.now(timezone.utc)
+        # expires_at == now + 0 minutes, i.e. within the call window — NOT now + 15 min.
+        assert before <= expires_at <= after
+        assert expires_at < before + timedelta(minutes=1)
+
     def test_each_registration_gets_unique_did(self):
         ca, sponsor_key, email = _make_ca_with_sponsor()
         r1 = self._register(ca, sponsor_key, email, name="agent-1")
