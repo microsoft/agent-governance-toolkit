@@ -128,6 +128,18 @@ class TestTTLExpiry:
         cred = Credential.issue(agent_did="did:mesh:default-ttl")
         assert cred.ttl_seconds == 900
 
+    def test_manager_issue_zero_ttl_honored(self):
+        """CredentialManager.issue(ttl_seconds=0) must honor the explicit 0.
+
+        Regression for the falsy-default bug: ``ttl_seconds or self.default_ttl``
+        replaced an explicit 0 with the default (900s). A 0 TTL must yield an
+        immediately-invalid credential (fails closed), not a 15-minute one.
+        """
+        mgr = CredentialManager(default_ttl=900)
+        cred = mgr.issue(agent_did="did:mesh:zero-ttl", ttl_seconds=0)
+        assert cred.ttl_seconds == 0
+        assert cred.is_valid() is False
+
 
 # ===================================================================
 # 3. ROTATION

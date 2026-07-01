@@ -74,7 +74,7 @@ function makeClient(overrides?: Partial<MeshClientOptions>): MeshClient {
     registryUrl: "http://localhost:8081",
     autoRegister: false,
     keyManager: makeKeyManager(),
-    agentDid: "did:agentmesh:test-agent",
+    agentDid: "did:mesh:test-agent",
     wsFactory: mockWsFactory,
     ...overrides,
   });
@@ -155,7 +155,7 @@ describe("MeshClient.onError", () => {
 
     expect(events.length).toBe(1);
     expect(events[0].kind).toBe("ws");
-    expect(events[0].from).toBe("did:agentmesh:test-agent");
+    expect(events[0].from).toBe("did:mesh:test-agent");
     expect(events[0].detail).toContain("connection reset");
   });
 
