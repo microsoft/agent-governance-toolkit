@@ -235,6 +235,21 @@ class TestSQLPolicy:
         request = self.make_sql_request("SELECT 1; DROP TABLE users;")
         assert sql_policy.validator(request) is False
 
+    @pytest.mark.skipif(not SQLGLOT_AVAILABLE, reason="Requires sqlglot for AST parsing")
+    def test_no_attributeerror_on_installed_sqlglot(self, sql_policy):
+        """Regression: the validator must not reference sqlglot expression
+        symbols that are absent on the installed version.
+
+        sqlglot renamed ``AlterTable`` -> ``Alter`` and added ``Grant`` in
+        later releases, so referencing both ``exp.AlterTable`` and ``exp.Grant``
+        in one function raised AttributeError for every query on any single
+        pinned version. This guards the version-robust getattr resolution.
+        """
+        # A plain SELECT exercises every isinstance branch without matching
+        # any of them, so it fails on the missing-symbol AttributeError.
+        request = self.make_sql_request("SELECT * FROM users")
+        assert sql_policy.validator(request) is True
+
 
 class TestSQLPolicyFallback:
     """Test the fallback SQL check when sqlglot is not available."""

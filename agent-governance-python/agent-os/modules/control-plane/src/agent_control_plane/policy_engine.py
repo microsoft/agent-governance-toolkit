@@ -898,6 +898,31 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
             import sqlglot
             from sqlglot import exp
 
+            # Resolve destructive-statement expression classes in a
+            # version-robust way. sqlglot renamed ``AlterTable`` -> ``Alter``
+            # and added ``Grant`` only in later releases, so no single
+            # installable version exposes every symbol. Referencing a missing
+            # attribute (e.g. ``exp.Grant``) directly would raise
+            # AttributeError for every query on the pinned version. Resolve the
+            # available aliases here and skip any that are absent.
+            alter_types = tuple(
+                cls for cls in (
+                    getattr(exp, "Alter", None),
+                    getattr(exp, "AlterTable", None),
+                )
+                if cls is not None
+            )
+            grant_types = tuple(
+                cls for cls in (getattr(exp, "Grant", None),)
+                if cls is not None
+            )
+            # TRUNCATE parses as ``TruncateTable`` in current sqlglot and as a
+            # generic ``Command`` in some versions; handle whichever exists.
+            truncate_types = tuple(
+                cls for cls in (getattr(exp, "TruncateTable", None),)
+                if cls is not None
+            )
+
             # Parse the SQL query into AST
             try:
                 statements = sqlglot.parse(query)
@@ -914,8 +939,15 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
                 if isinstance(statement, exp.Drop):
                     return False
 
-                # Check for TRUNCATE statements
-                if isinstance(statement, exp.Command) and statement.this.upper() == "TRUNCATE":
+                # Check for TRUNCATE statements (dedicated TruncateTable node
+                # in current sqlglot; a Command node in older versions)
+                if truncate_types and isinstance(statement, truncate_types):
+                    return False
+                if (
+                    isinstance(statement, exp.Command)
+                    and statement.this
+                    and statement.this.upper() == "TRUNCATE"
+                ):
                     return False
 
                 # Check for DELETE without WHERE clause
@@ -928,12 +960,15 @@ def _build_policy_rules(sql_config: SQLPolicyConfig) -> List[PolicyRule]:
                     if statement.find(exp.Where) is None:
                         return False
 
-                # Check for ALTER statements
-                if isinstance(statement, exp.AlterTable):
+                # Check for ALTER statements (exp.Alter / exp.AlterTable
+                # depending on the installed sqlglot version)
+                if alter_types and isinstance(statement, alter_types):
                     return False
 
-                # Check for GRANT / REVOKE statements
-                if isinstance(statement, exp.Grant):
+                # Check for GRANT statements when sqlglot parses them as a
+                # dedicated ``Grant`` node. Older versions lack this class and
+                # parse GRANT as a Command, which is handled below.
+                if grant_types and isinstance(statement, grant_types):
                     return False
 
                 # Check for MERGE statements (can do INSERT/UPDATE/DELETE)
