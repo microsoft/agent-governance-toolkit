@@ -50,6 +50,10 @@ jurisdiction_policies := {
 	"UG": {"uganda_dppa"},
 	"TZ": {"tanzania_pdpa"},
 	"ET": {"ethiopia_pdp"},
+	"GH": {"ghana_dpa"},
+	"RW": {"rwanda_dpa"},
+	"EG": {"egypt_pdpl"},
+	"MU": {"mauritius_dpa"},
 	"IN": {"dpdp", "certin", "rbi", "sebi", "aadhaar"},
 }
 
@@ -64,7 +68,11 @@ policy_queries := {
 	"popia": "data.agt_policies_africa.popia.decision",
 	"uganda_dppa": "data.agt_policies_africa.uganda_dppa.decision",
 	"tanzania_pdpa": "data.agt_policies_africa.tanzania_pdpa.decision",
-	"ethiopia_pdp": "data.agt_policies_africa.ethiopia_pdp.decision",
+	"ethiopia_pdp":  "data.agt_policies_africa.ethiopia_pdp.decision",
+	"ghana_dpa":     "data.agt_policies_africa.ghana_dpa.decision",
+	"rwanda_dpa":    "data.agt_policies_africa.rwanda_dpa.decision",
+	"egypt_pdpl":    "data.agt_policies_africa.egypt_pdpl.decision",
+	"mauritius_dpa": "data.agt_policies_africa.mauritius_dpa.decision",
 	"dpdp": "data.agt_policies_india.dpdp.decision",
 	"certin": "data.agt_policies_india.certin.decision",
 	"rbi": "data.agt_policies_india.rbi.decision",
