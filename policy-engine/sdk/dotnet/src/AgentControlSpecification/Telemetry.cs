@@ -307,9 +307,31 @@ public interface IPolicyLabelSource
 
 public sealed class InMemoryTelemetrySink : ITelemetrySink
 {
-    public List<TelemetryEvent> Events { get; } = [];
+    private readonly object gate = new();
+    private readonly List<TelemetryEvent> events = [];
 
-    public void Emit(TelemetryEvent telemetryEvent) => Events.Add(telemetryEvent);
+    // Returns a snapshot under the lock so concurrent Emit calls (evaluations
+    // funnel through Task.Run, so post-await emits can land on different
+    // thread-pool threads) cannot tear a read. Mirrors the Rust core
+    // InMemoryTelemetrySink, whose events() clones under a Mutex.
+    public IReadOnlyList<TelemetryEvent> Events
+    {
+        get
+        {
+            lock (gate)
+            {
+                return events.ToArray();
+            }
+        }
+    }
+
+    public void Emit(TelemetryEvent telemetryEvent)
+    {
+        lock (gate)
+        {
+            events.Add(telemetryEvent);
+        }
+    }
 
     public void ForceFlush()
     {
@@ -319,12 +341,19 @@ public sealed class InMemoryTelemetrySink : ITelemetrySink
     {
     }
 
-    public void Clear() => Events.Clear();
+    public void Clear()
+    {
+        lock (gate)
+        {
+            events.Clear();
+        }
+    }
 }
 
 public sealed class JsonStdoutTelemetrySink : ITelemetrySink
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly object gate = new();
     private readonly TextWriter writer;
 
     public JsonStdoutTelemetrySink(TextWriter? writer = null)
@@ -332,10 +361,26 @@ public sealed class JsonStdoutTelemetrySink : ITelemetrySink
         this.writer = writer ?? Console.Out;
     }
 
-    public void Emit(TelemetryEvent telemetryEvent) =>
-        writer.WriteLine(JsonSerializer.Serialize(telemetryEvent.ToDictionary(), JsonOptions));
+    // Serialize outside the lock (no shared state), then guard the write and
+    // flush so concurrent emits cannot interleave partial lines on the shared
+    // writer. Mirrors the Rust core StdoutJsonTelemetrySink, whose writer is a
+    // Mutex.
+    public void Emit(TelemetryEvent telemetryEvent)
+    {
+        var line = JsonSerializer.Serialize(telemetryEvent.ToDictionary(), JsonOptions);
+        lock (gate)
+        {
+            writer.WriteLine(line);
+        }
+    }
 
-    public void ForceFlush() => writer.Flush();
+    public void ForceFlush()
+    {
+        lock (gate)
+        {
+            writer.Flush();
+        }
+    }
 
     public void Shutdown() => ForceFlush();
 }

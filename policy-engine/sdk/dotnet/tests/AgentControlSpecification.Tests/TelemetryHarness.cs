@@ -19,6 +19,7 @@ internal static class TelemetryHarness
         await LabelsManifestChainAsync();
         await AdapterRunFunnelEmitsTelemetryAsync();
         await FallsBackToResultAnnotatorsAsync();
+        ConcurrentInMemorySinkEmitsAreNotLost();
         Console.WriteLine("AgentControlSpecification telemetry host-export tests passed.");
     }
 
@@ -322,6 +323,32 @@ internal static class TelemetryHarness
         var telemetryEvent = sink.Events.Single();
         AssertEqual("content_policy", telemetryEvent.PolicyId, "manifest-chain policy id should be resolved from the merged manifest.");
         AssertSequence(["prompt_classifier"], telemetryEvent.Annotators.ToArray(), "manifest-chain annotators should come from the merged manifest.");
+    }
+
+    private static void ConcurrentInMemorySinkEmitsAreNotLost()
+    {
+        // EvaluateInterventionPointAsync funnels through Task.Run, so a sink
+        // shared across concurrent evaluations is emitted to from multiple
+        // thread-pool threads. A bare List<T> would tear or drop under that
+        // race; the sink must guard like the Rust core's Mutex-backed sink.
+        const int workers = 16;
+        const int perWorker = 500;
+        var sink = new InMemoryTelemetrySink();
+        var result = new InterventionPointResult(new Verdict(Decision.Allow));
+
+        Parallel.For(0, workers, _ =>
+        {
+            for (var i = 0; i < perWorker; i++)
+            {
+                sink.Emit(TelemetryEvent.FromResult(
+                    InterventionPoint.Input,
+                    EnforcementMode.Enforce,
+                    result,
+                    1.0));
+            }
+        });
+
+        AssertEqual(workers * perWorker, sink.Events.Count, "concurrent emits must not be lost from the in-memory sink.");
     }
 
     private static async Task AdapterRunFunnelEmitsTelemetryAsync()
