@@ -131,6 +131,7 @@ function validateResourceName(value: string, label: string): void {
 export class DockerSandboxProvider implements SandboxProvider {
   private readonly image: string;
   private readonly containers = new Map<string, string>(); // sessionId -> containerId
+  private readonly sessionConfigs = new Map<string, SandboxConfig>(); // sessionId -> config
 
   constructor(image: string = 'python:3.11-slim') {
     this.image = image;
@@ -189,6 +190,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         .trim();
 
       this.containers.set(sessionId, containerId);
+      this.sessionConfigs.set(sessionId, cfg);
 
       return {
         agentId,
@@ -213,17 +215,27 @@ export class DockerSandboxProvider implements SandboxProvider {
       throw new Error(`No active session '${sessionId}' for agent '${agentId}'`);
     }
 
+    const cfg = this.sessionConfigs.get(sessionId) ?? defaultSandboxConfig();
+    const rawTimeout = cfg.timeoutSeconds;
+    // NaN slips through Math.max(1, NaN) -> NaN. Validate with Number.isFinite.
+    const timeoutSeconds = Number.isFinite(rawTimeout) && rawTimeout >= 1 ? Math.floor(rawTimeout) : 1;
+
     const executionId = randomUUID();
     const startTime = Date.now();
 
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');
+      // Use 'timeout' command with SIGKILL to enforce execution time limit.
+      // The default signal (SIGTERM) can be caught/ignored by sandboxed code,
+      // allowing it to bypass the timeout. SIGKILL cannot be caught.
+      // --kill-after is inert when --signal=SIGKILL (SIGKILL cannot be deferred), so omit it.
       const execArgs = [
-        'exec', containerId, 'python3', '-c',
+        'exec', containerId, 'timeout', '--signal=SIGKILL', String(timeoutSeconds),
+        'python3', '-c',
         `import base64; exec(base64.b64decode('${encoded}').decode())`,
       ];
 
-      execFile('docker', execArgs, { timeout: 60_000 }, (error, stdout, stderr) => {
+      execFile('docker', execArgs, { timeout: (timeoutSeconds + 5) * 1000 }, (error, stdout, stderr) => {
         const durationSeconds = (Date.now() - startTime) / 1000.0;
         // Node's ExecException.code can be: a numeric exit code (child exited
         // non-zero), `null` (child killed by a signal — `error.signal` is set
@@ -239,14 +251,28 @@ export class DockerSandboxProvider implements SandboxProvider {
           : 0;
         const killed = error !== null && 'killed' in error && (error as { killed: boolean }).killed;
 
+        // timeout command exits with 124 when the command times out
+        const timedOut = exitCode === 124 || exitCode === 137; // 137 = 128 + SIGKILL (9)
+
+        // If the outer execFile timeout fired (killed=true but not timedOut by timeout command),
+        // the docker exec client was killed but the container process may still be running.
+        // Force-kill the container to ensure cleanup.
+        if (killed && !timedOut && containerId) {
+          try {
+            execSync(`docker kill ${containerId}`, { stdio: 'pipe', timeout: 5_000 });
+          } catch {
+            // Best effort; container may already be gone
+          }
+        }
+
         const result: SandboxResult = {
           success: exitCode === 0,
           exitCode,
           stdout: stdout ?? '',
           stderr: stderr ?? '',
           durationSeconds,
-          killed,
-          killReason: killed ? 'timeout' : '',
+          killed: timedOut || killed,
+          killReason: timedOut ? 'timeout' : (killed ? 'signal' : ''),
         };
 
         resolve({
@@ -275,6 +301,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       });
     } finally {
       this.containers.delete(sessionId);
+      this.sessionConfigs.delete(sessionId);
     }
   }
 }
