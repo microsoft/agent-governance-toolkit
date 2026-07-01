@@ -131,6 +131,7 @@ function validateResourceName(value: string, label: string): void {
 export class DockerSandboxProvider implements SandboxProvider {
   private readonly image: string;
   private readonly containers = new Map<string, string>(); // sessionId -> containerId
+  private readonly configs = new Map<string, SandboxConfig>(); // sessionId -> config
 
   constructor(image: string = 'python:3.11-slim') {
     this.image = image;
@@ -189,6 +190,8 @@ export class DockerSandboxProvider implements SandboxProvider {
         .trim();
 
       this.containers.set(sessionId, containerId);
+      // Store the config for use in executeCode
+      this.configs.set(sessionId, cfg);
 
       return {
         agentId,
@@ -213,31 +216,28 @@ export class DockerSandboxProvider implements SandboxProvider {
       throw new Error(`No active session '${sessionId}' for agent '${agentId}'`);
     }
 
+    const cfg = this.configs.get(sessionId) ?? defaultSandboxConfig();
+    const timeoutMs = Math.max(1, Math.floor(cfg.timeoutSeconds)) * 1000;
+
     const executionId = randomUUID();
     const startTime = Date.now();
 
     return new Promise<ExecutionHandle>((resolve) => {
       const encoded = Buffer.from(code).toString('base64');
       const execArgs = [
-        'exec', containerId, 'python3', '-c',
+        'exec', containerId,
+        'timeout', '--signal=SIGKILL', '--kill-after=5s', String(timeoutMs / 1000),
+        'python3', '-c',
         `import base64; exec(base64.b64decode('${encoded}').decode())`,
       ];
 
-      execFile('docker', execArgs, { timeout: 60_000 }, (error, stdout, stderr) => {
+      execFile('docker', execArgs, { timeout: timeoutMs }, (error, stdout, stderr) => {
         const durationSeconds = (Date.now() - startTime) / 1000.0;
-        // Node's ExecException.code can be: a numeric exit code (child exited
-        // non-zero), `null` (child killed by a signal — `error.signal` is set
-        // instead), or a string like 'ENOENT' (the spawn itself failed). The
-        // previous `error.code as number ?? 1` cast handled the `null` case
-        // by accident — `null ?? 1` is `1` — but on the spawn-failure path it
-        // let the string ('ENOENT') flow through as a `number`-typed exit
-        // code, and downstream consumers treating `exitCode` as numeric saw
-        // a string. Narrow explicitly: only accept a numeric code; otherwise
-        // synthesise 1 for any error (signal kill, spawn failure, etc.).
         const exitCode = error
           ? typeof error.code === 'number' ? error.code : 1
           : 0;
         const killed = error !== null && 'killed' in error && (error as { killed: boolean }).killed;
+        const timedOut = exitCode === 124 || exitCode === 137; // SIGTERM timeout (124) or SIGKILL (137)
 
         const result: SandboxResult = {
           success: exitCode === 0,
@@ -245,8 +245,8 @@ export class DockerSandboxProvider implements SandboxProvider {
           stdout: stdout ?? '',
           stderr: stderr ?? '',
           durationSeconds,
-          killed,
-          killReason: killed ? 'timeout' : '',
+          killed: killed || timedOut,
+          killReason: timedOut ? 'timeout' : killed ? 'signal' : '',
         };
 
         resolve({
@@ -275,6 +275,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       });
     } finally {
       this.containers.delete(sessionId);
+      this.configs.delete(sessionId);
     }
   }
 }
