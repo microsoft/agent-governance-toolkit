@@ -7,7 +7,6 @@
 | Operation | Mean | P50 | P95 | P99 | Throughput |
 |-----------|------|-----|-----|-----|------------|
 | ring_computation | 0.3μs | 0.2μs | 0.3μs | 0.4μs | 3,750,319/s |
-| sponsorship_eff_score | 1448.9μs | 666.2μs | 3968.9μs | 5195.1μs | 690/s |
 | delta_capture | 37.4μs | 27.3μs | 79.3μs | 192.7μs | 26,719/s |
 | hash_chain_root_10_deltas | 416.5μs | 352.9μs | 830.6μs | 1352.9μs | 2,401/s |
 | hash_chain_root_100_deltas | 3811.7μs | 3381.4μs | 7879.2μs | 11262.3μs | 262/s |
@@ -19,7 +18,6 @@
 ## Key Takeaways
 
 - **Ring computation**: Sub-microsecond — zero overhead for privilege checks
-- **Sponsorship + eff_score**: Single-digit microseconds — real-time trust scoring
 - **Delta audit**: Microsecond-level — forensic logging adds negligible latency
 - **Audit log verification**: Scales linearly with delta count, remains sub-millisecond
 - **Full pipeline**: Session + audit + saga + terminate in < 1ms

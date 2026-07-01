@@ -644,6 +644,10 @@ substitute MUST be unregistered from the kill switch.
 
 ## 13. Quarantine
 
+> **Not implemented in this release.** Agent quarantine was a Public Preview stub and has
+> been removed from the implementation. This section is retained for historical spec
+> reference and does not describe shipped behavior.
+
 ### 13.1 Quarantine Reasons
 
 | Reason | Description |
@@ -856,7 +860,6 @@ Implementations SHOULD support pluggable providers for:
 | Provider | Fallback |
 | --- | --- |
 | `ring_engine` | `RingEnforcer` |
-| `liability` | `LiabilityMatrix` |
 | `saga_engine` | `SagaOrchestrator` |
 | `breach_detector` | `RingBreachDetector` |
 | `session_manager` | (implementation-specific) |

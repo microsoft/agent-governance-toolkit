@@ -73,7 +73,7 @@ class TestHypervisorEventBus:
         )
         bus.emit(
             HypervisorEvent(
-                event_type=EventType.SLASH_EXECUTED,
+                event_type=EventType.AGENT_KILLED,
                 session_id="s1",
                 agent_did="a1",
             )
@@ -89,13 +89,13 @@ class TestHypervisorEventBus:
     def test_subscriber_notification(self):
         bus = HypervisorEventBus()
         received = []
-        bus.subscribe(EventType.SLASH_EXECUTED, handler=lambda e: received.append(e))
+        bus.subscribe(EventType.AGENT_KILLED, handler=lambda e: received.append(e))
 
         bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))
-        bus.emit(HypervisorEvent(event_type=EventType.SLASH_EXECUTED))
+        bus.emit(HypervisorEvent(event_type=EventType.AGENT_KILLED))
 
         assert len(received) == 1
-        assert received[0].event_type == EventType.SLASH_EXECUTED
+        assert received[0].event_type == EventType.AGENT_KILLED
 
     def test_wildcard_subscriber(self):
         bus = HypervisorEventBus()
@@ -103,7 +103,7 @@ class TestHypervisorEventBus:
         bus.subscribe(event_type=None, handler=lambda e: received.append(e))
 
         bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))
-        bus.emit(HypervisorEvent(event_type=EventType.SLASH_EXECUTED))
+        bus.emit(HypervisorEvent(event_type=EventType.AGENT_KILLED))
 
         assert len(received) == 2
 
@@ -119,13 +119,13 @@ class TestHypervisorEventBus:
 
     def test_event_to_dict(self):
         event = HypervisorEvent(
-            event_type=EventType.SLASH_EXECUTED,
+            event_type=EventType.AGENT_KILLED,
             session_id="s1",
             agent_did="a1",
             payload={"severity": "high"},
         )
         d = event.to_dict()
-        assert d["event_type"] == "liability.slash_executed"
+        assert d["event_type"] == "security.agent_killed"
         assert d["session_id"] == "s1"
         assert d["payload"]["severity"] == "high"
 

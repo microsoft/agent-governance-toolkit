@@ -128,7 +128,7 @@ The AGT Audit and Compliance system MUST provide:
 |                  |     |                  |     |                     |
 | - AuditEntry     |     | - MerkleChain    |     | - EventBus          |
 | - AuditBackend   |     | - Compliance     |     | - DeltaEngine       |
-| - EventSink SPI  |     | - DecisionBOM    |     | - CommitmentEngine  |
+| - EventSink SPI  |     | - DecisionBOM    |     | - DeltaEngine       |
 | - EventProcessor |     | - AuditCollector |     |                     |
 | - OTel Backend   |     |                  |     |                     |
 +--------+---------+     +--------+---------+     +---------+-----------+
@@ -1131,6 +1131,10 @@ The delta hash MUST be computed as:
 ---
 
 ## 14. Commitment Engine
+
+> **Not implemented in this release.** The Commitment Engine was a Public Preview stub and
+> has been removed from the implementation. This section is retained for historical spec
+> reference and does not describe shipped behavior.
 
 ### 14.1 Purpose [Pure Specification]
 

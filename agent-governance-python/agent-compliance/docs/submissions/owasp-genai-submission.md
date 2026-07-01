@@ -95,7 +95,7 @@ Sub-millisecond policy enforcement (<0.1ms p99), 1,680+ tests, integrations with
 - **SLO engine**: Continuous compliance monitoring with error budget tracking
 - **OpenTelemetry export**: TraceExporter + MetricsExporter for full observability
 - **Agent Runtime RingEnforcer**: Trust-score-based demotion; automatic sandbox for untrusted agents
-- **QuarantineManager**: Agent isolation with forensic data preservation
+- **KillSwitch**: Agent termination with audit evidence and saga handoff support
 - **CostGuard**: Budget enforcement (throttle at 85%, kill at 95%)
 
 ## Architecture

@@ -493,7 +493,7 @@ Key controls:
 | **Session Isolation** | Multi-agent sessions with VFS namespacing and DID-bound identity. |
 | **Saga Orchestration** | Multi-step transactions with automatic compensation (rollback). |
 | **Kill Switch** | Immediate or graceful termination of runaway agents with audit trail. |
-| **Joint Liability** | Attribution tracking across multi-agent collaborations. Bonded reputation with collateral slashing. |
+| **Saga Compensation** | Multi-step workflow rollback with hash-chained audit evidence. |
 | **Rate Limiting** | Per-agent rate limits to prevent resource exhaustion. |
 | **Hash-Chained Audit Trail** | Tamper-evident, append-only execution logs. |
 | **Temporary Ring Elevation (Sudo)** | Agents can request temporary privilege escalation with a TTL that auto-expires. |
@@ -684,7 +684,7 @@ See [Tutorial 40 — OTel Observability](tutorials/40-otel-observability.md) for
 | Agent OS | `agent-os-kernel` | Stateless policy engine — YAML, OPA/Rego, Cedar policies |
 | AgentMesh | `agentmesh-platform` | Trust, identity, governance — DID, Ed25519, trust scoring, protocol bridges |
 | Agent Runtime | `agentmesh-runtime` | Execution rings, saga orchestration, kill switch (re-exports from agent-hypervisor) |
-| Agent Hypervisor | `agent-hypervisor` | Canonical runtime — session isolation, privilege rings, joint liability |
+| Agent Hypervisor | `agent-hypervisor` | Canonical runtime — session isolation, privilege rings, saga compensation |
 | Agent SRE | `agent-sre` | SLOs, error budgets, circuit breakers, chaos engineering, replay debugging |
 | Agent Marketplace | `agentmesh-marketplace` | Plugin lifecycle — Ed25519 signing, trust-tiered capability gating |
 | Agent Lightning | `agentmesh-lightning` | RL training governance — policy-enforced runners, reward shaping |

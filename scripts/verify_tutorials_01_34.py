@@ -178,8 +178,8 @@ def t11():
     from agent_os import supervisor
 check("T11 supervisor import", t11)
 
-# === T12: Liability & Attribution ===
-print("\n=== T12: Liability ===")
+# === T12: Removed tutorial slot ===
+print("\n=== T12: Removed tutorial slot ===")
 
 def t12():
     from agentmesh.governance import AuditLog, AuditEntry
