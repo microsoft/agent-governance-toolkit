@@ -71,7 +71,7 @@ pip install agent-governance-toolkit[full]
 > Install with:
 >
 > ```bash
-> pip install "agent-governance-toolkit>=4.1"
+> pip install "agent-governance-toolkit>=5.0"
 > ```
 >
 > Do **not** install using the repository subdirectory name (`agent-compliance`) or the internal package name (`agent-governance-toolkit-compliance`), as those are not published independently on PyPI.

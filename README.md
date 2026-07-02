@@ -259,7 +259,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 To make the `agt` CLI available in CI environments, install the top-level Python meta-package:
 
 ```bash
-pip install "agent-governance-toolkit>=4.1"
+pip install "agent-governance-toolkit>=5.0"
 agt verify --evidence agt-evidence.json
 ```
 
