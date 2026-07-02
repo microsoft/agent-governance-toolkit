@@ -182,7 +182,7 @@ _DESTRUCTIVE_COMMAND_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\brm\s+-[a-z]*r[a-z]*\b", re.IGNORECASE),   # rm -rf / -fr / -r (recursive)
     re.compile(r"\bmkfs\.[a-z0-9]+\b", re.IGNORECASE),
     re.compile(r"\bdd\s+if=", re.IGNORECASE),
-    re.compile(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:"),  # fork bomb
+    re.compile(r":\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:"),  # fork bomb
     re.compile(r"\bchmod\s+-?[a-z]*\s*777\b", re.IGNORECASE),
     re.compile(r">\s*/dev/sd[a-z]\b", re.IGNORECASE),
 ]
@@ -408,14 +408,12 @@ class MemoryGuard:
             ))
 
         if markup is not None:
-            # A hidden-instruction tag is suspicious on its own (MEDIUM) but a
-            # blatant tool-poisoning payload when it wraps a destructive command,
-            # an exfil/RCE command, or an outbound network fetch (HIGH).
-            paired = (
-                destructive is not None
-                or exfil_exec is not None
-                or network_fetch is not None
-            )
+            # A hidden-instruction tag is escalated to HIGH (blocking) only when
+            # it wraps a destructive command or an exfil/RCE command. A tag next
+            # to a BARE network fetch (e.g. `<tool>` docs alongside a plain
+            # `curl https://api...`) is common in legitimate tooling runbooks, so
+            # that pairing stays MEDIUM to avoid false-positive blocks.
+            paired = destructive is not None or exfil_exec is not None
             alerts.append(Alert(
                 alert_type=AlertType.TOOL_POISONING,
                 severity=AlertSeverity.HIGH if paired else AlertSeverity.MEDIUM,

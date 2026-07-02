@@ -125,7 +125,10 @@ class InMemoryNonceStore:
             expires_at = self._nonces.get(nonce)
             if expires_at is None:
                 return False
-            if expires_at <= self._clock():
+            # Expire strictly AFTER expires_at. The verifier accepts a message
+            # whose age == replay_window (inclusive), so the nonce must remain
+            # tracked at that exact boundary or a replay slips through.
+            if expires_at < self._clock():
                 self._nonces.pop(nonce, None)
                 return False
             self._nonces.move_to_end(nonce)
@@ -135,9 +138,9 @@ class InMemoryNonceStore:
         with self._lock:
             if nonce not in self._nonces and len(self._nonces) >= self._max_entries:
                 # Expired-first eviction: reclaim room only from nonces whose
-                # replay window has already elapsed.
+                # replay window has strictly elapsed (matches has()/cleanup()).
                 now = self._clock()
-                for expired in [n for n, exp in self._nonces.items() if exp <= now]:
+                for expired in [n for n, exp in self._nonces.items() if exp < now]:
                     self._nonces.pop(expired, None)
                 # Fail closed: never evict an in-window nonce to make room.
                 if len(self._nonces) >= self._max_entries:
@@ -153,7 +156,7 @@ class InMemoryNonceStore:
         removed = 0
         now = self._clock()
         with self._lock:
-            expired = [nonce for nonce, expires_at in self._nonces.items() if expires_at <= now]
+            expired = [nonce for nonce, expires_at in self._nonces.items() if expires_at < now]
             for nonce in expired:
                 self._nonces.pop(nonce, None)
             removed = len(expired)

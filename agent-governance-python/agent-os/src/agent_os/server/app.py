@@ -124,6 +124,11 @@ class GovServer:
         self._version = version or __version__
         self._detector = PromptInjectionDetector(DetectionConfig(sensitivity="balanced"))
         self._metrics = GovernanceMetrics()
+        # No durable audit backend is wired into the server yet, so the built-in
+        # `audit_backend` health check reports DEGRADED ("no audit backend
+        # configured") and /health is degraded-but-ready (200 on /ready). This is
+        # the honest fail-safe state; wiring a durable audit sink here is a
+        # follow-up that will flip /health back to healthy.
         self._health_checker = HealthChecker(version=self._version)
         self._execute_authenticator: MCPSessionAuthenticator | None = (
             execute_authenticator or _build_execute_authenticator_from_env()

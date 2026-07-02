@@ -249,6 +249,25 @@ class TestGovernanceEventProcessor:
             == proc.delivered_count + proc.failed_count + proc.dropped_count
         )
 
+    def test_dropped_sink_result_counted_as_dropped_not_failed(self):
+        """A sink that intentionally DROPS a batch is bucketed as dropped, not failed."""
+        sink = RecordingSink(result=SinkExportResult.DROPPED)
+        proc = GovernanceEventProcessor(schedule_delay_ms=5000)
+        proc.add_sink(sink)
+        for _ in range(10):
+            proc.on_event(GovernanceEvent())
+        proc.force_flush(timeout_ms=2000)
+        proc.shutdown(timeout_ms=2000)
+
+        assert proc.submitted_count == 10
+        assert proc.delivered_count == 0
+        assert proc.failed_count == 0
+        assert proc.dropped_count == 10
+        assert (
+            proc.submitted_count
+            == proc.delivered_count + proc.failed_count + proc.dropped_count
+        )
+
     def test_post_shutdown_submissions_counted_as_dropped(self):
         sink = RecordingSink()
         proc = GovernanceEventProcessor(schedule_delay_ms=50)
@@ -322,14 +341,36 @@ class TestCloudEventExport:
         assert ce["specversion"] == "1.0"
         assert ce["id"] == event.event_id
         assert ce["source"] == "/agent-os/test"
-        assert ce["type"] == "ai.agentmesh.policy.violation"
+        # Agent OS uses its own producer namespace, not ai.agentmesh.* (ADR-0021
+        # reserves that for the mesh producer).
+        assert ce["type"] == "ai.agentos.policy.violation"
+        assert ce["type"].startswith("ai.agentos.")
         assert ce["datacontenttype"] == "application/json"
         assert ce["data"]["action"] == "db_query"
+
+    def test_attributes_cannot_shadow_authoritative_fields(self):
+        # A free-form attribute key must NOT override the real event field in a
+        # signed CloudEvent — otherwise a valid signature covers a forged record.
+        event = GovernanceEvent(
+            kind=GovernanceEventKind.POLICY_VIOLATION,
+            agent_id="real-agent",
+            action="delete",
+            decision="deny",
+            attributes={"decision": "allow", "agent_id": "forged", "note": "keep"},
+        )
+        ce = event.to_cloudevent(source="/s")
+        assert ce["data"]["decision"] == "deny"
+        assert ce["data"]["agent_id"] == "real-agent"
+        # Non-colliding custom attributes are still carried.
+        assert ce["data"]["note"] == "keep"
 
     def test_source_defaults_and_requires_non_empty(self):
         # Derived from agent_id when no explicit source is given.
         ce = GovernanceEvent(agent_id="a7").to_cloudevent()
         assert ce["source"] == "/agent-os/agent/a7"
+        # Unsafe URI characters in agent_id are percent-encoded in the source.
+        ce2 = GovernanceEvent(agent_id="a b/c").to_cloudevent()
+        assert " " not in ce2["source"]
         # Fail closed when nothing can be resolved.
         with pytest.raises(ValueError):
             GovernanceEvent().to_cloudevent()
@@ -384,25 +425,42 @@ class TestStdoutGovernanceSink:
         assert ce["specversion"] == "1.0"
         assert signer.verify(ce) is True
 
+    def test_non_serializable_attribute_does_not_abort_batch(self):
+        # A non-JSON-native attribute value (e.g. datetime) must not fail the
+        # whole batch — json serialization uses default=str, matching the repo's
+        # AuditEntry.to_json convention.
+        import io
+        from datetime import datetime, timezone
+
+        stream = io.StringIO()
+        sink = StdoutGovernanceSink(source="/agent-os/x", stream=stream)
+        result = sink.emit([
+            GovernanceEvent(agent_id="a1", attributes={"ts": datetime.now(timezone.utc)}),
+            GovernanceEvent(agent_id="a2"),
+        ])
+        assert result == SinkExportResult.SUCCESS
+        assert len([ln for ln in stream.getvalue().splitlines() if ln]) == 2
+
 
 class TestOTLPGovernanceSink:
-    def test_no_op_safe_when_otel_absent(self):
-        # When the OTel backend is disabled (opentelemetry missing) the sink is
-        # a safe no-op that still reports SUCCESS.
+    def test_disabled_backend_reports_dropped_not_delivered(self):
+        # When the OTel backend is a no-op (opentelemetry absent), nothing is
+        # exported, so emit reports DROPPED (not SUCCESS) — the processor must not
+        # credit un-exported events as delivered.
         class _DisabledBackend:
             enabled = False
 
             def write(self, entry):
-                pass
+                raise AssertionError("write must not be called when disabled")
 
             def flush(self):
                 pass
 
         sink = OTLPGovernanceSink(source="/agent-os/x", backend=_DisabledBackend())
         result = sink.emit([GovernanceEvent(agent_id="a1")])
-        assert result == SinkExportResult.SUCCESS
+        assert result == SinkExportResult.DROPPED
 
-    def test_forwards_cloudevent_to_backend(self):
+    def test_forwards_cloudevent_and_searchable_metadata(self):
         written = []
 
         class _CapturingBackend:
@@ -415,7 +473,14 @@ class TestOTLPGovernanceSink:
                 pass
 
         sink = OTLPGovernanceSink(source="/agent-os/x", backend=_CapturingBackend())
-        result = sink.emit([GovernanceEvent(agent_id="a1", action="run")])
+        result = sink.emit([
+            GovernanceEvent(agent_id="a1", action="run", severity="warning", resource="db")
+        ])
         assert result == SinkExportResult.SUCCESS
         assert len(written) == 1
-        assert "cloudevent" in written[0].metadata
+        md = written[0].metadata
+        assert "cloudevent" in md
+        # Searchable fields promoted alongside the envelope (OTelLogsBackend turns
+        # each into an agt.audit.meta.* attribute).
+        assert md["severity"] == "warning"
+        assert md["resource"] == "db"

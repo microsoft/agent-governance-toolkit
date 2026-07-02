@@ -107,6 +107,23 @@ def test_nonce_store_fail_closed_and_expired_reclaim():
     assert store.count() == 1
 
 
+def test_nonce_retained_at_exact_expiry_boundary():
+    """At now == expires_at the nonce is still tracked (replay window is inclusive).
+
+    The verifier accepts a message whose age == replay_window, so the store must
+    not treat the nonce as expired at that exact instant or a replay slips through.
+    """
+    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    store = InMemoryNonceStore(clock=lambda: now[0])
+    store.add("n1", now[0] + timedelta(seconds=5))
+
+    now[0] += timedelta(seconds=5)  # now == expires_at (boundary)
+    assert store.has("n1") is True  # still present -> replay would be rejected
+
+    now[0] += timedelta(microseconds=1)  # strictly past expiry
+    assert store.has("n1") is False
+
+
 def test_factory_and_validation():
     key = MCPMessageSigner.generate_key()
     signer = MCPMessageSigner.from_base64_key(base64.b64encode(key).decode("ascii"))

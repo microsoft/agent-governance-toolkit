@@ -30,6 +30,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, Sequence, runtime_checkable
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -65,22 +66,25 @@ class GovernanceEventKind(str, Enum):
     CONTENT_VIOLATION = "content_violation"
 
 
-# CloudEvents 1.0 `type` mapping (reverse-DNS), mirroring the documented
-# contract in ADR-0021 / AUDIT-COMPLIANCE-1.0 §20.4 and the agent-mesh
-# `AuditEntry.to_cloudevent()` `ai.agentmesh.*` namespace.
+# CloudEvents 1.0 `type` mapping (reverse-DNS). Agent OS is a distinct event
+# PRODUCER from Agent Mesh, so it uses its own `ai.agentos.*` namespace rather
+# than the `ai.agentmesh.*` namespace ADR-0021 reserves for mesh audit entries
+# (to avoid producer collisions). The envelope shape follows CloudEvents 1.0 /
+# AUDIT-COMPLIANCE-1.0 §20.4; the `type` strings are Agent OS-specific because
+# GovernanceEventKind is finer-grained than the mesh audit-entry taxonomy.
 _GOVERNANCE_CE_TYPE_MAP: dict[GovernanceEventKind, str] = {
-    GovernanceEventKind.POLICY_CHECK: "ai.agentmesh.policy.check",
-    GovernanceEventKind.POLICY_VIOLATION: "ai.agentmesh.policy.violation",
-    GovernanceEventKind.TOOL_CALL_BLOCKED: "ai.agentmesh.tool.blocked",
-    GovernanceEventKind.PROMPT_INJECTION_DETECTED: "ai.agentmesh.prompt_injection.detected",
-    GovernanceEventKind.IDENTITY_VERIFIED: "ai.agentmesh.identity.verified",
-    GovernanceEventKind.IDENTITY_REJECTED: "ai.agentmesh.identity.rejected",
-    GovernanceEventKind.RESOURCE_ACCESS: "ai.agentmesh.resource.access",
-    GovernanceEventKind.ESCALATION_REQUESTED: "ai.agentmesh.escalation.requested",
-    GovernanceEventKind.CHECKPOINT_CREATED: "ai.agentmesh.checkpoint.created",
-    GovernanceEventKind.ANOMALY_DETECTED: "ai.agentmesh.anomaly.detected",
-    GovernanceEventKind.MCP_TOOL_POISONING: "ai.agentmesh.mcp.tool_poisoning",
-    GovernanceEventKind.CONTENT_VIOLATION: "ai.agentmesh.content.violation",
+    GovernanceEventKind.POLICY_CHECK: "ai.agentos.policy.check",
+    GovernanceEventKind.POLICY_VIOLATION: "ai.agentos.policy.violation",
+    GovernanceEventKind.TOOL_CALL_BLOCKED: "ai.agentos.tool.blocked",
+    GovernanceEventKind.PROMPT_INJECTION_DETECTED: "ai.agentos.prompt_injection.detected",
+    GovernanceEventKind.IDENTITY_VERIFIED: "ai.agentos.identity.verified",
+    GovernanceEventKind.IDENTITY_REJECTED: "ai.agentos.identity.rejected",
+    GovernanceEventKind.RESOURCE_ACCESS: "ai.agentos.resource.access",
+    GovernanceEventKind.ESCALATION_REQUESTED: "ai.agentos.escalation.requested",
+    GovernanceEventKind.CHECKPOINT_CREATED: "ai.agentos.checkpoint.created",
+    GovernanceEventKind.ANOMALY_DETECTED: "ai.agentos.anomaly.detected",
+    GovernanceEventKind.MCP_TOOL_POISONING: "ai.agentos.mcp.tool_poisoning",
+    GovernanceEventKind.CONTENT_VIOLATION: "ai.agentos.content.violation",
 }
 
 
@@ -161,10 +165,10 @@ class GovernanceEvent:
         Raises:
             ValueError: If no non-empty ``source`` can be resolved.
         """
-        resolved_source = (
-            source
-            or self.agent_did
-            or (f"/agent-os/agent/{self.agent_id}" if self.agent_id else "")
+        resolved_source = source or self.agent_did or (
+            f"/agent-os/agent/{quote(self.agent_id, safe='')}"
+            if self.agent_id
+            else ""
         )
         if not resolved_source:
             raise ValueError(
@@ -173,10 +177,16 @@ class GovernanceEvent:
             )
 
         ce_type = _GOVERNANCE_CE_TYPE_MAP.get(
-            self.kind, f"ai.agentmesh.governance.{self.kind.value}"
+            self.kind, f"ai.agentos.governance.{self.kind.value}"
         )
 
+        # Custom attributes are spread FIRST so the authoritative event fields
+        # (action/decision/agent_id/...) always win. A signed CloudEvent must not
+        # let a free-form attribute key shadow the real, immutable event field —
+        # otherwise a valid signature could cover a record that misrepresents the
+        # decision or actor.
         data: dict[str, Any] = {
+            **self.attributes,
             "action": self.action,
             "decision": self.decision,
             "reason": self.reason,
@@ -186,7 +196,6 @@ class GovernanceEvent:
             **({"policy_name": self.policy_name} if self.policy_name else {}),
             **({"agent_id": self.agent_id} if self.agent_id else {}),
             **({"agent_did": self.agent_did} if self.agent_did else {}),
-            **self.attributes,
         }
 
         cloudevent: dict[str, Any] = {
@@ -259,6 +268,7 @@ class GovernanceEventSigner:
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
+            default=str,
         )
         digest = hmac.new(
             self._signing_key, canonical.encode("utf-8"), hashlib.sha256
@@ -497,21 +507,30 @@ class GovernanceEventProcessor:
     def _dispatch_batch(self, events: list[GovernanceEvent]) -> None:
         """Fan out a batch to all registered sinks with error isolation.
 
-        A batch is counted as delivered if at least one sink emitted it
-        successfully; otherwise (all sinks failed, were circuit-broken, or no
-        sinks are registered) it is counted as failed. Either way the events are
-        accounted, never silently lost.
+        Terminal accounting for the batch (each event counted exactly once):
+          - delivered: at least one sink emitted the batch successfully;
+          - failed:    no success, but at least one sink FAILED, raised, or was
+                       skipped by an open circuit breaker (non-delivery);
+          - dropped:   no success and no failure — every sink that ran returned
+                       DROPPED (an intentional sink-side drop, e.g. sampling), or
+                       there were no sinks. This keeps DROPPED out of the failure
+                       count so an operator can distinguish intentional drops from
+                       real delivery failures.
         """
         now = time.monotonic()
         any_success = False
+        any_failure = False
         for sink in self._sinks:
             state = self._sink_states.get(id(sink))
             if state is None:
                 state = _SinkState()
                 self._sink_states[id(sink)] = state
 
-            # Circuit breaker: skip if open
+            # Circuit breaker: skip if open. A skipped sink means the batch was
+            # not delivered to it, so it counts toward failure (not an intentional
+            # drop) unless another sink succeeds.
             if state.circuit_open_until > now:
+                any_failure = True
                 continue
 
             try:
@@ -520,12 +539,17 @@ class GovernanceEventProcessor:
                     any_success = True
                     state.consecutive_failures = 0
                 elif result == SinkExportResult.FAILURE:
+                    any_failure = True
                     state.consecutive_failures += 1
                     logger.warning(
                         "Sink %r returned FAILURE for %d events", sink, len(events)
                     )
-                # DROPPED is intentional, no failure count
+                elif result == SinkExportResult.DROPPED:
+                    logger.info(
+                        "Sink %r intentionally DROPPED %d events", sink, len(events)
+                    )
             except Exception:
+                any_failure = True
                 state.consecutive_failures += 1
                 logger.exception(
                     "Sink %r raised unexpectedly for %d events", sink, len(events)
@@ -544,13 +568,16 @@ class GovernanceEventProcessor:
                 state.consecutive_failures = 0
 
         # Account every dispatched event exactly once. "delivered if any sink
-        # succeeds" hides partial fan-out failures across multiple sinks; those
-        # remain observable via the per-sink FAILURE / circuit-breaker logs above.
+        # succeeds" still hides a partial fan-out failure when a DIFFERENT sink
+        # fails alongside a success; that remains observable via the per-sink
+        # FAILURE / circuit-breaker logs above.
         with self._lock:
             if any_success:
                 self._delivered_count += len(events)
-            else:
+            elif any_failure:
                 self._failed_count += len(events)
+            else:
+                self._dropped_count += len(events)
 
 
 class AuditBackendSinkAdapter(GovernanceEventSinkBase):
@@ -637,7 +664,7 @@ class StdoutGovernanceSink(GovernanceEventSinkBase):
         try:
             for event in events:
                 cloudevent = event.to_cloudevent(self._source, signer=self._signer)
-                stream.write(json.dumps(cloudevent, sort_keys=True) + "\n")
+                stream.write(json.dumps(cloudevent, sort_keys=True, default=str) + "\n")
             stream.flush()
             return SinkExportResult.SUCCESS
         except Exception:
@@ -651,7 +678,8 @@ class OTLPGovernanceSink(GovernanceEventSinkBase):
     Thin wrapper over :class:`agent_os.otel_audit_backend.OTelLogsBackend`, which
     routes structured records to any OTLP-compatible collector. It follows the
     same opt-in pattern: when ``opentelemetry`` is not installed the backend is a
-    safe no-op and ``emit`` still returns SUCCESS (nothing to deliver).
+    safe no-op, and ``emit`` returns ``DROPPED`` (not ``SUCCESS``) so the
+    processor does not count un-exported events as delivered.
     """
 
     def __init__(
@@ -684,9 +712,32 @@ class OTLPGovernanceSink(GovernanceEventSinkBase):
     def emit(self, events: Sequence[GovernanceEvent]) -> SinkExportResult:
         from agent_os.audit_logger import AuditEntry
 
+        # Honest accounting: if the OTel backend is a no-op (opentelemetry not
+        # installed / not initialised), nothing is exported — report DROPPED so
+        # the processor does not credit these events as delivered.
+        if not self.enabled:
+            return SinkExportResult.DROPPED
+
         try:
             for event in events:
                 cloudevent = event.to_cloudevent(self._source, signer=self._signer)
+                # Promote the same searchable metadata keys the
+                # AuditBackendSinkAdapter exposes (OTelLogsBackend turns each into
+                # an `agt.audit.meta.*` attribute) IN ADDITION to the full signed
+                # CloudEvent envelope, so severity/resource/policy_name/session_id
+                # stay individually queryable in the collector.
+                metadata: dict[str, Any] = {
+                    "event_id": event.event_id,
+                    "schema_version": event.schema_version,
+                    "severity": event.severity,
+                    "cloudevent": json.dumps(cloudevent, sort_keys=True, default=str),
+                }
+                if event.resource:
+                    metadata["resource"] = event.resource
+                if event.policy_name:
+                    metadata["policy_name"] = event.policy_name
+                if event.session_id:
+                    metadata["session_id"] = event.session_id
                 entry = AuditEntry(
                     timestamp=event.occurred_at,
                     event_type=event.kind.value,
@@ -695,10 +746,7 @@ class OTLPGovernanceSink(GovernanceEventSinkBase):
                     decision=event.decision,
                     reason=event.reason,
                     latency_ms=event.latency_ms,
-                    metadata={
-                        "event_id": event.event_id,
-                        "cloudevent": json.dumps(cloudevent, sort_keys=True),
-                    },
+                    metadata=metadata,
                 )
                 self._backend.write(entry)
             self._backend.flush()

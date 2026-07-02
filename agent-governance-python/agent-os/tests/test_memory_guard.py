@@ -179,6 +179,27 @@ class TestToolPoisoning:
         result = guard.validate_write(":(){ :|:& };:", source="rag")
         assert result.allowed is False
 
+    def test_fork_bomb_with_whitespace_blocked(self):
+        """Fork bomb with spaces after the function name must still block."""
+        guard = MemoryGuard()
+        result = guard.validate_write(": () { : | : & } ; :", source="rag")
+        assert result.allowed is False
+        assert any(a.alert_type == AlertType.TOOL_POISONING for a in result.alerts)
+
+    def test_tool_tag_with_benign_curl_not_blocked(self):
+        """A <tool> tag next to a benign curl example (common in runbooks) stays allowed."""
+        guard = MemoryGuard()
+        content = (
+            'Edit the <tool name="search"> block, then run: '
+            "curl https://api.example.com/v1/schema.json to fetch the schema."
+        )
+        result = guard.validate_write(content, source="docs")
+        assert result.allowed is True
+        assert not any(
+            a.severity in (AlertSeverity.HIGH, AlertSeverity.CRITICAL)
+            for a in result.alerts
+        )
+
     def test_bare_markup_tag_flags_but_does_not_block(self):
         """A hidden-instruction tag alone is MEDIUM (surfaced, not blocked)."""
         guard = MemoryGuard()

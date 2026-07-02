@@ -79,7 +79,6 @@ class HealthChecker:
         register_builtins: When True (default) the ``policy_engine`` and
             ``audit_backend`` built-in checks are registered so a fresh checker
             verifies real components instead of returning an empty HEALTHY report.
-        policy_engine: Optional policy-engine reference (reserved for probes).
         audit_backend: Optional audit backend probed by the built-in
             ``audit_backend`` check. When ``None`` that check reports DEGRADED.
     """
@@ -89,14 +88,12 @@ class HealthChecker:
         version: str = "1.0.0",
         *,
         register_builtins: bool = True,
-        policy_engine: object | None = None,
         audit_backend: object | None = None,
     ) -> None:
         self._checks: dict[str, Callable[[], ComponentHealth]] = {}
         self._start_time = datetime.now(timezone.utc)
         self._version = version
         self._lock = threading.Lock()
-        self._policy_engine = policy_engine
         self._audit_backend = audit_backend
         if register_builtins:
             self.register_check("policy_engine", self._check_policy_engine)
