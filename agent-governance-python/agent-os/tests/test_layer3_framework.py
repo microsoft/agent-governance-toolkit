@@ -257,7 +257,9 @@ class TestKernelSpace:
         """Test syscall read/write operations."""
         from agent_control_plane.kernel_space import KernelSpace
         
-        kernel = KernelSpace()
+        # No policy engine: opt into permissive mode so read/write plumbing is
+        # exercised (a non-permissive no-engine kernel fails closed).
+        kernel = KernelSpace(permissive=True)
         ctx = kernel.create_agent_context("test-agent")
         
         # Write via syscall

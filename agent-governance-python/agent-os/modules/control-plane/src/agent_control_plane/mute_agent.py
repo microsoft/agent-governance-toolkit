@@ -29,6 +29,7 @@ DEPRECATION NOTICE:
 """
 
 import warnings
+import logging
 from typing import Any, Dict, Optional, List, Callable, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -41,6 +42,9 @@ from .interfaces.plugin_interface import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class AgentCapability:
     """Defines a specific capability an agent has"""
@@ -49,6 +53,24 @@ class AgentCapability:
     action_types: List[ActionType]
     parameter_schema: Dict[str, Any]  # JSON schema for parameters
     validator: Optional[Callable[[ExecutionRequest], bool]] = None
+
+
+@dataclass
+class _NormalizedRequest:
+    """Shape-independent view of a request used to drive capability validators.
+
+    Both ``ExecutionRequest`` objects and dict-based requests are normalized to
+    this type so that validation strength never depends on the in-memory shape
+    of the request. Existing validators only read ``parameters``/``action_type``;
+    other ``ExecutionRequest`` fields are passed through when available.
+    """
+    action_type: Optional[ActionType]
+    parameters: Dict[str, Any]
+    request_id: str
+    timestamp: Any
+    agent_context: Any = None
+    status: Any = None
+    risk_score: float = 0.0
 
 
 @dataclass
@@ -125,14 +147,26 @@ class MuteAgentValidator(CapabilityValidatorInterface):
             ValidationResult with approval/denial and details
         """
         # Support both ExecutionRequest and dict-based requests
-        if hasattr(request, 'action_type'):
-            action_type = request.action_type
-            request_id = getattr(request, 'request_id', 'unknown')
-            timestamp = getattr(request, 'timestamp', datetime.now())
-        else:
-            action_type = request.get('action_type')
-            request_id = request.get('request_id', 'unknown')
-            timestamp = request.get('timestamp', datetime.now())
+        # Normalize to a shape-independent view so validation does not depend
+        # on whether the request is an ExecutionRequest object or a dict.
+        normalized = self._normalize_request(request)
+        action_type = normalized.action_type
+        request_id = normalized.request_id
+        timestamp = normalized.timestamp
+
+        # Fail closed on missing/unrecognized action types, regardless of
+        # strict_mode: a malformed request is never silently approved.
+        if action_type is None:
+            reason = self._format_rejection_reason(
+                "unknown",
+                "Missing or unrecognized action_type"
+            )
+            self._log_rejection(request_id, "unknown", reason, timestamp)
+            return ValidationResult(
+                is_valid=False,
+                reason=reason,
+                details={"action_type": None}
+            )
         
         # Check if action type is within any capability
         matching_capabilities = [
@@ -141,6 +175,10 @@ class MuteAgentValidator(CapabilityValidatorInterface):
         ]
         
         if not matching_capabilities:
+            # strict_mode governs out-of-capability actions. When disabled, a
+            # well-formed action outside the agent's capabilities is allowed.
+            if not self.config.strict_mode:
+                return ValidationResult(is_valid=True)
             reason = self._format_rejection_reason(
                 action_type,
                 "Action type not in agent capabilities"
@@ -152,10 +190,11 @@ class MuteAgentValidator(CapabilityValidatorInterface):
                 details={"action_type": str(action_type), "available_capabilities": [c.name for c in self.config.capabilities]}
             )
         
-        # Validate parameters against capability schema
+        # Validate parameters against each matching capability's validator,
+        # shape-independently. A validator that raises fails closed.
         for capability in matching_capabilities:
-            if capability.validator and hasattr(request, 'action_type'):
-                if not capability.validator(request):
+            if capability.validator:
+                if not self._run_validator(capability.validator, normalized):
                     reason = self._format_rejection_reason(
                         action_type,
                         f"Parameters do not match capability: {capability.name}"
@@ -198,6 +237,14 @@ class MuteAgentValidator(CapabilityValidatorInterface):
         Returns:
             (is_valid, reason_if_invalid)
         """
+        # Coerce/validate the action type; fail closed on malformed input
+        # regardless of strict_mode.
+        action_type = self._coerce_action_type(action_type)
+        if action_type is None:
+            return False, self._format_rejection_reason(
+                "unknown", "Missing or unrecognized action_type"
+            )
+
         # Check if action type is within any capability
         matching_capabilities = [
             cap for cap in self.config.capabilities
@@ -205,16 +252,85 @@ class MuteAgentValidator(CapabilityValidatorInterface):
         ]
         
         if not matching_capabilities:
+            # strict_mode governs out-of-capability actions.
+            if not self.config.strict_mode:
+                return True, None
             reason = self._format_rejection_reason(
                 action_type,
                 "Action type not in agent capabilities"
             )
             return False, reason
         
-        # Note: Cannot validate with validator since it expects ExecutionRequest
-        # This is a tradeoff for performance - full validation requires ExecutionRequest
+        # Run each matching capability's validator against the supplied
+        # parameters via a normalized shim. A validator that raises fails closed.
+        shim = _NormalizedRequest(
+            action_type=action_type,
+            parameters=parameters or {},
+            request_id="validate_action",
+            timestamp=datetime.now(),
+        )
+        for capability in matching_capabilities:
+            if capability.validator:
+                if not self._run_validator(capability.validator, shim):
+                    return False, self._format_rejection_reason(
+                        action_type,
+                        f"Parameters do not match capability: {capability.name}"
+                    )
+
         return True, None
     
+    @staticmethod
+    def _coerce_action_type(value: Any) -> Optional[ActionType]:
+        """Coerce a raw action_type (enum or string) to ActionType, or None."""
+        if isinstance(value, ActionType):
+            return value
+        try:
+            return ActionType(value)
+        except (ValueError, KeyError):
+            return None
+
+    def _normalize_request(self, request: Any) -> _NormalizedRequest:
+        """Build a shape-independent view from an object or dict request."""
+        if hasattr(request, 'action_type'):
+            raw_action = request.action_type
+            parameters = getattr(request, 'parameters', None) or {}
+            request_id = getattr(request, 'request_id', 'unknown')
+            timestamp = getattr(request, 'timestamp', datetime.now())
+            agent_context = getattr(request, 'agent_context', None)
+            status = getattr(request, 'status', None)
+            risk_score = getattr(request, 'risk_score', 0.0)
+        else:
+            raw_action = request.get('action_type')
+            parameters = request.get('parameters') or {}
+            request_id = request.get('request_id', 'unknown')
+            timestamp = request.get('timestamp', datetime.now())
+            agent_context = request.get('agent_context')
+            status = request.get('status')
+            risk_score = request.get('risk_score', 0.0)
+        return _NormalizedRequest(
+            action_type=self._coerce_action_type(raw_action),
+            parameters=parameters,
+            request_id=request_id,
+            timestamp=timestamp,
+            agent_context=agent_context,
+            status=status,
+            risk_score=risk_score,
+        )
+
+    @staticmethod
+    def _run_validator(
+        validator: Callable[[Any], bool],
+        request: _NormalizedRequest,
+    ) -> bool:
+        """Invoke a capability validator, failing closed on any exception."""
+        try:
+            return bool(validator(request))
+        except Exception as e:  # noqa: BLE001 - fail closed on validator error
+            logger.debug(
+                "Capability validator raised (%s); failing closed", e
+            )
+            return False
+
     # =========================================================================
     # CapabilityValidatorInterface implementation
     # =========================================================================

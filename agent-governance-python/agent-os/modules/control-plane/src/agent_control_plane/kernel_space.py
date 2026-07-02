@@ -151,7 +151,7 @@ class KernelMetrics:
             "syscall_count": self.syscall_count,
             "policy_checks": self.policy_checks,
             "policy_violations": self.policy_violations,
-            "agent_crashes": int,
+            "agent_crashes": self.agent_crashes,
             "kernel_panics": self.kernel_panics,
             "uptime_seconds": self.uptime_seconds,
             "active_agents": self.active_agents,
@@ -183,10 +183,14 @@ class KernelSpace:
 
     Args:
         policy_engine: Optional policy engine for syscall authorization.
-            When ``None``, the kernel runs in permissive mode (all syscalls
-            allowed).
+            When ``None``, the kernel **fails closed**: every syscall is denied
+            unless ``permissive=True`` is set explicitly.
         flight_recorder: Optional ``FlightRecorder`` instance for audit
             logging. When ``None``, audit logging is disabled.
+        permissive: Opt-in escape hatch. When ``True`` and no ``policy_engine``
+            is configured, syscalls are allowed (the legacy permissive mode).
+            Defaults to ``False`` so a misconfigured kernel governs rather than
+            silently allowing everything.
 
     Example:
         Basic kernel lifecycle::
@@ -212,6 +216,7 @@ class KernelSpace:
         self,
         policy_engine: Optional[Any] = None,
         flight_recorder: Optional[Any] = None,
+        permissive: bool = False,
     ):
         self._state = KernelState.BOOTING
         self._metrics = KernelMetrics()
@@ -220,6 +225,9 @@ class KernelSpace:
         # Kernel components (Ring 0)
         self._policy_engine = policy_engine
         self._flight_recorder = flight_recorder
+        # Fail-closed by default: without a policy engine, deny syscalls unless
+        # the operator explicitly opts into permissive mode.
+        self._permissive = permissive
         
         # Agent registry
         self._agents: Dict[str, "AgentContext"] = {}
@@ -378,19 +386,27 @@ class KernelSpace:
                 error_message="Agent has been terminated",
             )
         
-        # Policy check (if policy engine available)
-        if self._policy_engine:
-            self._metrics.policy_checks += 1
+        # Policy check — ALWAYS enforced. _check_policy fails closed when no
+        # policy engine is configured (unless the kernel is permissive), so an
+        # unconfigured kernel denies rather than silently allowing syscalls.
+        # SYS_CHECKPOLICY is a read-only "would this be allowed?" query: when a
+        # policy engine is present it is still gated here (an unauthorized query
+        # escalates like any violation); when NO engine is configured we skip
+        # the outer check so its handler owns the fail-closed advisory
+        # ({"allowed": False}) rather than returning a hard denial.
+        skip_outer_check = (
+            request.syscall == SyscallType.SYS_CHECKPOLICY and not self._policy_engine
+        )
+        if not skip_outer_check:
             try:
                 allowed, policy_error = await self._check_policy(request, ctx)
                 if not allowed:
-                    self._metrics.policy_violations += 1
-                    
                     # Build actionable error message
                     error_msg = f"Policy '{request.syscall.name}' blocked: {policy_error or 'Access denied'}"
                     
-                    # This is a policy violation - trigger signal
-                    if dispatcher:
+                    # Only a real engine violation (not an infra fail-closed
+                    # denial) escalates via the violation signal.
+                    if self._policy_engine and dispatcher:
                         policy_violation(
                             dispatcher,
                             policy_name="syscall_policy",
@@ -403,7 +419,7 @@ class KernelSpace:
                         error_code=-2,
                         error_message=error_msg,
                     )
-            except AgentKernelPanic as e:
+            except AgentKernelPanic:
                 # Re-raise kernel panics
                 self._metrics.kernel_panics += 1
                 raise
@@ -447,10 +463,18 @@ class KernelSpace:
         """
         self._metrics.policy_checks += 1
         
-        # If no policy engine, allow (permissive mode)
+        # No policy engine: fail closed by default. Denying here is an
+        # infrastructure/misconfiguration denial, NOT an agent policy
+        # violation, so it does not increment policy_violations or raise a
+        # signal. Permissive mode is an explicit opt-in.
         if not self._policy_engine:
-            logger.debug(f"[Kernel] No policy engine - allowing {request.syscall.name}")
-            return (True, None)
+            if self._permissive:
+                logger.debug(f"[Kernel] Permissive mode, no policy engine - allowing {request.syscall.name}")
+                return (True, None)
+            logger.warning(
+                f"[Kernel] No policy engine configured - denying {request.syscall.name} (fail closed)"
+            )
+            return (False, "No policy engine configured; denying by default (fail closed)")
         
         # For SYS_EXEC, check the actual tool name (not "code_execute")
         # This avoids double-checking at both syscall and tool level
@@ -628,9 +652,20 @@ class KernelSpace:
                 error_message="No action specified",
             )
         
-        # If no policy engine, allow all
+        # No policy engine: fail closed by default. The advisory reports the
+        # action as NOT allowed unless the kernel is explicitly permissive.
         if not self._policy_engine:
-            return SyscallResult(success=True, return_value={"allowed": True})
+            if self._permissive:
+                return SyscallResult(success=True, return_value={"allowed": True})
+            return SyscallResult(
+                success=True,  # The check itself succeeded...
+                return_value={
+                    "allowed": False,  # ...but with no policy engine we deny (fail closed)
+                    "reason": "No policy engine configured; denying by default (fail closed)",
+                    "action": action,
+                    "agent_id": ctx.agent_id,
+                },
+            )
         
         # Check violation using policy engine (positional args)
         args_to_check = {**tool_args, "target": target} if target else tool_args
@@ -1001,9 +1036,11 @@ async def user_space_execution(kernel: KernelSpace, agent_id: str):
 def create_kernel(
     policy_engine: Optional[Any] = None,
     flight_recorder: Optional[Any] = None,
+    permissive: bool = False,
 ) -> KernelSpace:
     """Create a new kernel instance."""
     return KernelSpace(
         policy_engine=policy_engine,
         flight_recorder=flight_recorder,
+        permissive=permissive,
     )
