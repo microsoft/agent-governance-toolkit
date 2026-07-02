@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import re
@@ -209,9 +210,8 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
         digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
         rego_file = policy_dir / "agt_legacy.rego"
         sidecar_file = policy_dir / "agt_legacy.rego.sha256"
-        rego_file.unlink(missing_ok=True)
-        _atomic_write_text(sidecar_file, digest)
         _atomic_write_text(rego_file, body)
+        _atomic_write_text(sidecar_file, digest)
     except OSError as exc:
         raise ResolutionError.invalid_governance(
             f"failed to materialize bundle in {policy_dir}: {exc}"
@@ -302,28 +302,27 @@ def _rego_field_accessor(field: str) -> str | None:
             ``envelope.budgets.tool_call_count``.
 
     Returns:
-        Rego source like ``input.snapshot.tool_call.args.amount_usd``.
-        Each segment is checked with ``object.get`` so missing fields
-        evaluate to undefined (matches §5.2 of the ACS spec on missing
-        fields).
+        Rego source like ``object.get(input.snapshot, ["tool_call",
+        "args", "amount_usd"], null)``. OPA's path-aware
+        ``object.get`` returns ``null`` when any path segment is absent
+        or has the wrong container type, which keeps missing fields as
+        normal non-matches under ``--strict-builtin-errors``.
     """
     parts = [p for p in field.split(".") if p]
     if not parts:
         return "input.snapshot"
-    # Use chained object.get with a sentinel undefined value so each
-    # level fails closed when the field is absent.
-    expr = "input.snapshot"
     for part in parts:
         # Validate the part is a simple identifier; reject anything
         # weird to avoid Rego injection from policy authors.
         if not part.replace("_", "").isalnum():
             return None
-        expr = f"object.get({expr}, {json.dumps(part)}, null)"
-    return expr
+    return f"object.get(input.snapshot, {json.dumps(parts)}, null)"
 
 
 def _is_json_literal(value: Any) -> bool:
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if value is None or isinstance(value, (str, int, bool)):
         return True
     if isinstance(value, list):
         return all(_is_json_literal(item) for item in value)
@@ -374,12 +373,28 @@ def _has_unsupported_re2_escape(pattern: str, marker: str) -> bool:
     return False
 
 
+def _has_possessive_quantifier(pattern: str) -> bool:
+    in_class = False
+    for index, char in enumerate(pattern[:-1]):
+        if char == "[" and not in_class and not _is_escaped(pattern, index):
+            in_class = True
+            continue
+        if char == "]" and in_class and not _is_escaped(pattern, index):
+            in_class = False
+            continue
+        if in_class or _is_escaped(pattern, index):
+            continue
+        if char in {"*", "+", "?", "}"} and pattern[index + 1] == "+":
+            return True
+    return False
+
+
 def _validate_re2_regex(pattern: str) -> None:
     try:
         re.compile(pattern)
     except re.error as exc:
         raise ResolutionError.invalid_governance(
-            f"regex pattern {pattern!r} is invalid: {exc}"
+            f"regex pattern is invalid: {exc}"
         ) from exc
 
     for marker, label in (
@@ -388,23 +403,30 @@ def _validate_re2_regex(pattern: str) -> None:
         ("(?<=", "lookbehind"),
         ("(?<!", "lookbehind"),
         ("(?>", "atomic group"),
+        ("(?(", "conditional group"),
+        ("(?P=", "named backreference"),
     ):
         if _has_unsupported_re2_group(pattern, marker):
             raise ResolutionError.invalid_governance(
-                f"regex pattern {pattern!r} uses unsupported RE2 construct {label}"
+                f"regex pattern uses unsupported RE2 construct {label}"
             )
 
     for digit in "123456789":
         if _has_unsupported_re2_escape(pattern, digit):
             raise ResolutionError.invalid_governance(
-                f"regex pattern {pattern!r} uses unsupported RE2 construct backreference"
+                "regex pattern uses unsupported RE2 construct backreference"
             )
 
     for marker, label in (("k<", "named backreference"), ("Z", r"\Z anchor")):
         if _has_unsupported_re2_escape(pattern, marker):
             raise ResolutionError.invalid_governance(
-                f"regex pattern {pattern!r} uses unsupported RE2 construct {label}"
+                f"regex pattern uses unsupported RE2 construct {label}"
             )
+
+    if _has_possessive_quantifier(pattern):
+        raise ResolutionError.invalid_governance(
+            "regex pattern uses unsupported RE2 construct possessive quantifier"
+        )
 
 
 def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
@@ -414,7 +436,7 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     """
     if not _is_json_literal(value):
         raise ResolutionError.invalid_governance(
-            f"condition value {value!r} is not a JSON primitive"
+            "condition value is not a finite JSON primitive"
         )
     literal = json.dumps(value)
     indent = "    "
@@ -440,29 +462,33 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}contains(_v, {literal})"
         )
     if operator == "startswith":
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}startswith(_v, {literal})"
         )
     if operator == "endswith":
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}endswith(_v, {literal})"
         )
     if operator in {"matches", "regex"}:
         if not isinstance(value, str):
             raise ResolutionError.invalid_governance(
-                f"regex condition value {value!r} must be a string"
+                "regex condition value must be a string"
             )
         _validate_re2_regex(value)
         return (
             f"{indent}_v := {accessor}\n"
             f"{indent}_v != null\n"
+            f"{indent}is_string(_v)\n"
             f"{indent}regex.match({literal}, _v)"
         )
     return None

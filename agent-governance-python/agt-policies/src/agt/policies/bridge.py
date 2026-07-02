@@ -52,6 +52,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterable, Protocol, runtime_checkable
 
+from agt.manifest_resolution.build import _validate_re2_regex
+
 logger = logging.getLogger(__name__)
 
 ACS_VERSION = "0.3.0-alpha-agt"
@@ -113,6 +115,34 @@ def _pattern_to_regex(pattern: Any) -> str:
     """
     import re
 
+    def _is_glob_escaped(value: str, index: int) -> bool:
+        backslashes = 0
+        cursor = index - 1
+        while cursor >= 0 and value[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        return backslashes % 2 == 1
+
+    def _append_glob_class(value: str, start: int, out: list[str]) -> int | None:
+        end = start + 1
+        while end < len(value):
+            if value[end] == "]" and not _is_glob_escaped(value, end):
+                break
+            end += 1
+        if end >= len(value):
+            return None
+
+        body = value[start + 1 : end]
+        if body.startswith("!"):
+            out.append("[^")
+            out.append(body[1:])
+            out.append("]")
+        else:
+            out.append("[")
+            out.append(body)
+            out.append("]")
+        return end
+
     if isinstance(pattern, str):
         return re.escape(pattern)
 
@@ -124,18 +154,30 @@ def _pattern_to_regex(pattern: Any) -> str:
         if kind_name == "SUBSTRING":
             return re.escape(value)
         if kind_name == "REGEX":
+            _validate_re2_regex(value)
             return value
         if kind_name == "GLOB":
             out = ["^"]
-            for ch in value:
+            index = 0
+            while index < len(value):
+                ch = value[index]
                 if ch == "*":
                     out.append(".*")
                 elif ch == "?":
                     out.append(".")
+                elif ch == "[" and not _is_glob_escaped(value, index):
+                    end = _append_glob_class(value, index, out)
+                    if end is not None:
+                        index = end
+                    else:
+                        out.append(re.escape(ch))
                 else:
                     out.append(re.escape(ch))
+                index += 1
             out.append("$")
-            return "".join(out)
+            regex = "".join(out)
+            _validate_re2_regex(regex)
+            return regex
         raise ValueError(f"unsupported PatternType: {kind!r}")
 
     raise ValueError(f"unsupported blocked_patterns entry: {pattern!r}")

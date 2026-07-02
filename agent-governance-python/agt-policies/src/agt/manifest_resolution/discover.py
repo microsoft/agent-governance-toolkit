@@ -34,7 +34,8 @@ def discover_policies(action_path: Path, root: Path) -> list[Path]:
 
     Args:
         action_path: Path where the agent action originates. If it is a
-            file, walking starts from its parent directory.
+            file, or a to-be-created file with an existing parent,
+            walking starts from its parent directory.
         root: Workspace root that bounds the walk.
 
     Returns:
@@ -47,6 +48,7 @@ def discover_policies(action_path: Path, root: Path) -> list[Path]:
             path fields). The previous v4 behaviour of returning an empty
             list defaulted to allow; v5 fails closed.
     """
+    original_action_path = action_path
     try:
         root = root.resolve()
         action_path = action_path.resolve()
@@ -56,11 +58,21 @@ def discover_policies(action_path: Path, root: Path) -> list[Path]:
         ) from exc
 
     try:
-        if not action_path.exists():
-            raise ResolutionError.path_traversal(f"action_path {action_path} does not exist")
         if action_path.is_file():
             action_path = action_path.parent
-        elif not action_path.is_dir():
+        elif action_path.is_dir():
+            pass
+        elif not action_path.exists():
+            if original_action_path.is_symlink():
+                raise ResolutionError.path_traversal(
+                    f"action_path {action_path} is not a file or directory"
+                )
+            action_path = action_path.parent
+            if not action_path.is_dir():
+                raise ResolutionError.path_traversal(
+                    f"action_path parent {action_path} is not a directory"
+                )
+        else:
             raise ResolutionError.path_traversal(
                 f"action_path {action_path} is not a file or directory"
             )

@@ -477,10 +477,12 @@ def _migrate_governance_chain(
 
     if write:
         target_bundle_dir = chain_root / "policy"
+        target_bundle_preexisting = target_bundle_dir.exists()
     else:
         target_bundle_dir = Path(
             tempfile.mkdtemp(prefix="agt_migrate_dryrun_")
         )
+        target_bundle_preexisting = False
 
     try:
         manifest = resolve_manifest(
@@ -505,12 +507,19 @@ def _migrate_governance_chain(
     if write:
         moved: list[tuple[Path, Path]] = []
         tmp_manifest_path = manifest_path.with_name(f".{manifest_path.name}.tmp")
+        manifest_existed = False
+        manifest_original: bytes | None = None
+        manifest_replaced = False
         try:
+            manifest_existed = manifest_path.exists()
+            if manifest_existed:
+                manifest_original = manifest_path.read_bytes()
             tmp_manifest_path.write_text(
                 yaml.safe_dump(manifest, sort_keys=False),
                 encoding="utf-8",
             )
             os.replace(tmp_manifest_path, manifest_path)
+            manifest_replaced = True
             chain_root_resolved = chain_root.resolve()
             for gov_file in discovered:
                 if gov_file.parent.resolve() != chain_root_resolved:
@@ -535,6 +544,25 @@ def _migrate_governance_chain(
                         original,
                         rollback_exc,
                     )
+            if manifest_replaced:
+                try:
+                    if manifest_existed and manifest_original is not None:
+                        tmp_manifest_path.write_bytes(manifest_original)
+                        os.replace(tmp_manifest_path, manifest_path)
+                    else:
+                        manifest_path.unlink(missing_ok=True)
+                except OSError as rollback_exc:
+                    logger.warning(
+                        "failed to restore %s after migration write failure: %s",
+                        manifest_path,
+                        rollback_exc,
+                    )
+                    try:
+                        tmp_manifest_path.unlink()
+                    except OSError:
+                        pass
+            if not target_bundle_preexisting:
+                _rmtree_silent(target_bundle_dir)
             finding.error = f"write failed: {exc}"
     else:
         _rmtree_silent(target_bundle_dir)

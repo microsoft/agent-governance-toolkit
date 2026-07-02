@@ -58,6 +58,34 @@ def _validate_budget_counter(name: str, value: Any) -> None:
         raise ValueError(f"{name} must be a non-negative finite number, got {value!r}")
 
 
+def _validate_non_negative_integer(name: str, value: Any) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer, got {value!r}")
+
+
+def _validate_non_negative_finite_number(name: str, value: Any) -> None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be a non-negative finite number, got {value!r}")
+
+
+def _validate_no_non_finite_numbers(name: str, value: Any) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{name} contains a non-finite number, got {value!r}")
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _validate_no_non_finite_numbers(f"{name} key", key)
+            _validate_no_non_finite_numbers(f"{name}.{key!r}", item)
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        for index, item in enumerate(value):
+            _validate_no_non_finite_numbers(f"{name}[{index}]", item)
+
+
+def _snapshot_copy(name: str, value: Any) -> Any:
+    copied = copy.deepcopy(value)
+    _validate_no_non_finite_numbers(name, copied)
+    return copied
+
+
 def _envelope(
     *,
     agent_id: str,
@@ -137,10 +165,10 @@ def input_snapshot(
     return {
         "envelope": _envelope(agent_id=agent_id, intervention_point="input", **envelope_kwargs),
         "input": {
-            "body": copy.deepcopy(body),
+            "body": _snapshot_copy("body", body),
             "source": source,
-            "headers": dict(headers or {}),
-            "ifc": {"source_labels": list(source_labels)},
+            "headers": _snapshot_copy("headers", headers or {}),
+            "ifc": {"source_labels": _snapshot_copy("source_labels", list(source_labels))},
         },
     }
 
@@ -161,9 +189,13 @@ def pre_model_call_snapshot(
         "envelope": _envelope(
             agent_id=agent_id, intervention_point="pre_model_call", **envelope_kwargs
         ),
-        "model": {"name": model_name, "vendor": model_vendor, "params": dict(model_params or {})},
-        "messages": copy.deepcopy(messages),
-        "tools": copy.deepcopy(tools or []),
+        "model": {
+            "name": model_name,
+            "vendor": model_vendor,
+            "params": _snapshot_copy("model_params", model_params or {}),
+        },
+        "messages": _snapshot_copy("messages", messages),
+        "tools": _snapshot_copy("tools", tools or []),
         "request_id": request_id,
     }
 
@@ -185,8 +217,8 @@ def post_model_call_snapshot(
         ),
         "model": {"name": model_name, "vendor": model_vendor},
         "request_id": request_id,
-        "response": copy.deepcopy(response),
-        "usage": copy.deepcopy(usage) if usage else {"prompt_tokens": 0, "completion_tokens": 0},
+        "response": _snapshot_copy("response", response),
+        "usage": _snapshot_copy("usage", usage) if usage else {"prompt_tokens": 0, "completion_tokens": 0},
     }
 
 
@@ -200,7 +232,7 @@ def pre_tool_call_snapshot(
     **envelope_kwargs: Any,
 ) -> dict[str, Any]:
     """Snapshot for the ``pre_tool_call`` intervention point (§2.5)."""
-    tool_call: dict[str, Any] = {"name": tool_name, "args": copy.deepcopy(args), "id": call_id}
+    tool_call: dict[str, Any] = {"name": tool_name, "args": _snapshot_copy("args", args), "id": call_id}
     if content_hash is not None:
         tool_call["content_hash"] = content_hash
     return {
@@ -223,12 +255,17 @@ def post_tool_call_snapshot(
     **envelope_kwargs: Any,
 ) -> dict[str, Any]:
     """Snapshot for the ``post_tool_call`` intervention point (§2.6)."""
+    _validate_non_negative_finite_number("duration_ms", duration_ms)
     return {
         "envelope": _envelope(
             agent_id=agent_id, intervention_point="post_tool_call", **envelope_kwargs
         ),
-        "tool_call": {"name": tool_name, "args": copy.deepcopy(args), "id": call_id},
-        "tool_result": {"value": copy.deepcopy(result), "error": error, "duration_ms": duration_ms},
+        "tool_call": {"name": tool_name, "args": _snapshot_copy("args", args), "id": call_id},
+        "tool_result": {
+            "value": _snapshot_copy("result", result),
+            "error": _snapshot_copy("error", error),
+            "duration_ms": duration_ms,
+        },
     }
 
 
@@ -244,10 +281,10 @@ def output_snapshot(
     return {
         "envelope": _envelope(agent_id=agent_id, intervention_point="output", **envelope_kwargs),
         "response": {
-            "content": copy.deepcopy(content),
-            "ifc": {"result_labels": list(result_labels)},
+            "content": _snapshot_copy("content", content),
+            "ifc": {"result_labels": _snapshot_copy("result_labels", list(result_labels))},
         },
-        "message_chain": copy.deepcopy(message_chain or []),
+        "message_chain": _snapshot_copy("message_chain", message_chain or []),
     }
 
 
@@ -266,9 +303,9 @@ def agent_startup_snapshot(
             agent_id=agent_id, intervention_point="agent_startup", **envelope_kwargs
         ),
         "agent_init": {
-            "capabilities": list(capabilities),
+            "capabilities": _snapshot_copy("capabilities", list(capabilities)),
             "model": {"name": model_name, "vendor": model_vendor},
-            "tools_registered": list(tools_registered),
+            "tools_registered": _snapshot_copy("tools_registered", list(tools_registered)),
         },
     }
 
@@ -283,6 +320,10 @@ def agent_shutdown_snapshot(
     **envelope_kwargs: Any,
 ) -> dict[str, Any]:
     """Snapshot for the ``agent_shutdown`` intervention point (§2.8)."""
+    _validate_non_negative_integer("tool_calls", tool_calls)
+    _validate_non_negative_integer("tokens", tokens)
+    _validate_non_negative_integer("errors", errors)
+    _validate_non_negative_finite_number("duration_seconds", duration_seconds)
     return {
         "envelope": _envelope(
             agent_id=agent_id, intervention_point="agent_shutdown", **envelope_kwargs

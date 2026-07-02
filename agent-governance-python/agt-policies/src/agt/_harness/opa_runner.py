@@ -297,6 +297,7 @@ def run_scenario(
         "eval",
         "--format",
         "json",
+        "--strict-builtin-errors",
         "--stdin-input",
         "--data",
         str(bundle_policy_dir),
