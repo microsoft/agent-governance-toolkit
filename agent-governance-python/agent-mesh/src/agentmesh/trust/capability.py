@@ -8,7 +8,7 @@ Simple string-based capability scope checking.
 
 from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 import uuid
 
 
@@ -32,12 +32,22 @@ class CapabilityGrant(BaseModel):
     its parent or its siblings.
     """
 
+    # validate_assignment re-runs validators when a field is mutated
+    # after construction, so reassigning ``capability`` re-derives
+    # action/resource/qualifier and cannot leave a stale (truncated)
+    # qualifier that matches() would trust (#3180 defense-in-depth).
+    model_config = ConfigDict(validate_assignment=True)
+
     grant_id: str = Field(default_factory=lambda: f"grant_{uuid.uuid4().hex[:12]}")
 
     # Capability specification
     capability: str = Field(..., description="Capability string (e.g., 'read:data')")
-    action: str = Field(..., description="Action part (e.g., 'read')")
-    resource: str = Field(..., description="Resource part (e.g., 'data')")
+    # action/resource/qualifier are derived from ``capability`` by the
+    # ``_derive_components`` model validator; any values passed at
+    # construction are overwritten, so they carry defaults rather than
+    # being required (the validator runs after field validation).
+    action: str = Field(default="", description="Action part (e.g., 'read')")
+    resource: str = Field(default="", description="Resource part (e.g., 'data')")
     qualifier: Optional[str] = Field(None, description="Optional qualifier")
 
     # Grant metadata
@@ -82,26 +92,33 @@ class CapabilityGrant(BaseModel):
 
         return action, resource, qualifier
 
-    @model_validator(mode="before")
-    @classmethod
-    def _derive_components(cls, data):
+    @model_validator(mode="after")
+    def _derive_components(self):
         """Re-derive action/resource/qualifier from ``capability``.
 
-        Runs on every construction and revalidation (including
-        ``model_validate``/deserialization), so the parsed components
-        can never disagree with the source ``capability`` string.
-        Without this, a grant built as
+        Runs after every construction, ``model_validate``, and (because
+        ``validate_assignment`` is enabled) every field reassignment, so
+        the parsed components can never disagree with the source
+        ``capability`` string regardless of input type (dict, mapping,
+        model instance). Without this, a grant built or mutated as
         ``CapabilityGrant(capability="a:b:c:d", qualifier="c")`` would
-        keep a truncated ``qualifier`` and re-open the #3180
-        escalation, because ``matches()`` trusts the stored qualifier.
+        keep a truncated ``qualifier`` and re-open the #3180 escalation,
+        because ``matches()`` trusts the stored qualifier.
+
+        Known residual: ``model_copy(update={"capability": ...})`` does
+        NOT run validators (a documented Pydantic behavior), so a copy
+        that rewrites ``capability`` without also updating the derived
+        fields keeps stale components. Callers needing a re-scoped grant
+        MUST use ``CapabilityGrant.create()`` (or re-validate), not
+        ``model_copy``.
         """
-        if isinstance(data, dict) and data.get("capability") is not None:
-            action, resource, qualifier = cls.parse_capability(data["capability"])
-            data = dict(data)
-            data["action"] = action
-            data["resource"] = resource
-            data["qualifier"] = qualifier
-        return data
+        action, resource, qualifier = self.parse_capability(self.capability)
+        # object.__setattr__ avoids re-triggering validate_assignment
+        # (which would recurse through this validator).
+        object.__setattr__(self, "action", action)
+        object.__setattr__(self, "resource", resource)
+        object.__setattr__(self, "qualifier", qualifier)
+        return self
 
     @classmethod
     def create(
