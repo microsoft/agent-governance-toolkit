@@ -326,49 +326,60 @@ def governance_to_acs_manifest(
     _validate_finite_threshold("max_tool_calls", policy.max_tool_calls)
     _validate_finite_threshold("confidence_threshold", policy.confidence_threshold)
 
+    created = bundle_dir is None
     bundle_dir = (
         Path(bundle_dir).resolve()
-        if bundle_dir is not None
+        if not created
         else Path(tempfile.mkdtemp(prefix="agt_bridge_")).resolve()
     )
-    bundle_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        bundle_dir.mkdir(parents=True, exist_ok=True)
 
-    stock_root = stock_rego_root or _find_stock_rego_root()
-    for rego_file in stock_root.glob("*.rego"):
-        if rego_file.name.endswith("_test.rego"):
-            continue
-        shutil.copy(rego_file, bundle_dir / rego_file.name)
+        stock_root = stock_rego_root or _find_stock_rego_root()
+        for rego_file in stock_root.glob("*.rego"):
+            if rego_file.name.endswith("_test.rego"):
+                continue
+            shutil.copy(rego_file, bundle_dir / rego_file.name)
 
-    blocked_pattern_regexes = [_pattern_to_regex(p) for p in policy.blocked_patterns]
+        blocked_pattern_regexes = [
+            _pattern_to_regex(p) for p in policy.blocked_patterns
+        ]
 
-    # AGT-M3 round-2 BLOCK A: ``max_tool_calls=0`` is the v4 sentinel for
-    # "deny every tool call", not "no constraint". Forward 0 through to the
-    # ``budgets.deny_if_budget_exceeded`` helper. The helper compares
-    # ``tool_call_count >= limit`` so with ``limit=0`` and the default
-    # ``tool_call_count=0`` the first call is denied with
-    # ``budget_tool_calls_exceeded``, which preserves the v4 contract end-to-end
-    # for any caller that loads the bridge manifest into AgtRuntime directly
-    # (not just through the AdapterRuntimeBridge host fallback). Previously a
-    # ``GovernancePolicy(max_tool_calls=0, confidence_threshold=0.0)`` slipped
-    # through to the default ``allow`` verdict because the budget rule was
-    # omitted and the fallback ``pre_tool_call`` binding (no ``tool_name_from``)
-    # never tripped any deny rule. Keep ``max_tokens`` at ``> 0`` because the v4
-    # dataclass validation rejects ``max_tokens <= 0`` and there is no v4 wire
-    # value to preserve there.
-    rego_source = _render_rego(
-        package="agt.governance_policy",
-        max_tokens=policy.max_tokens if policy.max_tokens > 0 else None,
-        max_tool_calls=policy.max_tool_calls if policy.max_tool_calls >= 0 else None,
-        confidence_threshold=(
-            policy.confidence_threshold
-            if policy.confidence_threshold and policy.confidence_threshold > 0
-            else None
-        ),
-        blocked_patterns=blocked_pattern_regexes,
-        require_human_approval=policy.require_human_approval,
-    )
-    rego_path = bundle_dir / f"{policy_id}.rego"
-    rego_path.write_text(rego_source, encoding="utf-8")
+        # AGT-M3 round-2 BLOCK A: ``max_tool_calls=0`` is the v4 sentinel for
+        # "deny every tool call", not "no constraint". Forward 0 through to the
+        # ``budgets.deny_if_budget_exceeded`` helper. The helper compares
+        # ``tool_call_count >= limit`` so with ``limit=0`` and the default
+        # ``tool_call_count=0`` the first call is denied with
+        # ``budget_tool_calls_exceeded``, which preserves the v4 contract
+        # end-to-end for any caller that loads the bridge manifest into
+        # AgtRuntime directly (not just through the AdapterRuntimeBridge host
+        # fallback). Previously a ``GovernancePolicy(max_tool_calls=0,
+        # confidence_threshold=0.0)`` slipped through to the default ``allow``
+        # verdict because the budget rule was omitted and the fallback
+        # ``pre_tool_call`` binding (no ``tool_name_from``) never tripped any
+        # deny rule. Keep ``max_tokens`` at ``> 0`` because the v4 dataclass
+        # validation rejects ``max_tokens <= 0`` and there is no v4 wire value
+        # to preserve there.
+        rego_source = _render_rego(
+            package="agt.governance_policy",
+            max_tokens=policy.max_tokens if policy.max_tokens > 0 else None,
+            max_tool_calls=(
+                policy.max_tool_calls if policy.max_tool_calls >= 0 else None
+            ),
+            confidence_threshold=(
+                policy.confidence_threshold
+                if policy.confidence_threshold and policy.confidence_threshold > 0
+                else None
+            ),
+            blocked_patterns=blocked_pattern_regexes,
+            require_human_approval=policy.require_human_approval,
+        )
+        rego_path = bundle_dir / f"{policy_id}.rego"
+        rego_path.write_text(rego_source, encoding="utf-8")
+    except Exception:
+        if created:
+            shutil.rmtree(bundle_dir, ignore_errors=True)
+        raise
 
     # bind_tools must also cover the case where the policy has a budget
     # or human-approval requirement but no explicit tool allowlist; without

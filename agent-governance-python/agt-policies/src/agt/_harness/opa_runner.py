@@ -87,13 +87,19 @@ def _decode_opa_verdict(response: dict) -> ScenarioResult:
             raw=value,
         )
 
+    labels = value.get("result_labels")
+    if labels is not None and not (
+        isinstance(labels, list) and all(isinstance(label, str) for label in labels)
+    ):
+        raise RuntimeError(f"opa returned non-list[str] result_labels: {labels!r}")
+
     return ScenarioResult(
         decision=str(decision),
         reason=value.get("reason"),
         message=value.get("message"),
         transform=value.get("transform"),
         evidence=value.get("evidence"),
-        result_labels=value.get("result_labels"),
+        result_labels=labels,
         raw=value,
     )
 
@@ -146,6 +152,10 @@ def _resolve_path(snapshot: dict[str, Any], path: str) -> Any:
     Supports `$snap` / `$` roots and `.name` / `[n]` segments. Matches
     what the engine does for ``policy_target`` resolution.
     """
+    error_message = f"policy_target path {path!r} does not resolve in snapshot"
+    if not isinstance(path, str):
+        raise RuntimeError(error_message)
+
     if path.startswith("$snap."):
         rest = path[len("$snap.") :]
     elif path.startswith("$."):
@@ -153,39 +163,42 @@ def _resolve_path(snapshot: dict[str, Any], path: str) -> Any:
     elif path == "$snap" or path == "$":
         return snapshot
     else:
-        raise ValueError(f"unsupported policy_target path root: {path!r}")
+        raise RuntimeError(error_message)
 
     obj: Any = snapshot
     parts: list[str] = []
     cur = ""
     i = 0
-    while i < len(rest):
-        ch = rest[i]
-        if ch == ".":
-            if cur:
-                parts.append(cur)
-                cur = ""
+    try:
+        while i < len(rest):
+            ch = rest[i]
+            if ch == ".":
+                if cur:
+                    parts.append(cur)
+                    cur = ""
+                i += 1
+                continue
+            if ch == "[":
+                if cur:
+                    parts.append(cur)
+                    cur = ""
+                j = rest.index("]", i)
+                parts.append(rest[i : j + 1])
+                i = j + 1
+                continue
+            cur += ch
             i += 1
-            continue
-        if ch == "[":
-            if cur:
-                parts.append(cur)
-                cur = ""
-            j = rest.index("]", i)
-            parts.append(rest[i : j + 1])
-            i = j + 1
-            continue
-        cur += ch
-        i += 1
-    if cur:
-        parts.append(cur)
+        if cur:
+            parts.append(cur)
 
-    for part in parts:
-        if part.startswith("[") and part.endswith("]"):
-            idx = int(part[1:-1])
-            obj = obj[idx]
-        else:
-            obj = obj[part]
+        for part in parts:
+            if part.startswith("[") and part.endswith("]"):
+                idx = int(part[1:-1])
+                obj = obj[idx]
+            else:
+                obj = obj[part]
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise RuntimeError(error_message) from exc
     return obj
 
 
@@ -257,7 +270,13 @@ def run_scenario(
 
     tool: dict[str, Any] | None = None
     if intervention_point in {"pre_tool_call", "post_tool_call"}:
-        tool_name = _resolve_path(snapshot, ip_config["tool_name_from"])
+        tool_name_from = ip_config.get("tool_name_from")
+        if not isinstance(tool_name_from, str):
+            raise RuntimeError(
+                f"intervention point {intervention_point!r} is missing a string "
+                "'tool_name_from'"
+            )
+        tool_name = _resolve_path(snapshot, tool_name_from)
         if not isinstance(tool_name, str):
             raise RuntimeError("tool_name_from did not resolve to a string")
         tool = _project_tool_from_manifest(manifest, tool_name)
@@ -294,5 +313,8 @@ def run_scenario(
     if proc.returncode != 0:
         raise RuntimeError(f"opa eval failed: {proc.stderr.strip()}")
 
-    response = json.loads(proc.stdout)
+    try:
+        response = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"opa produced non-JSON output: {proc.stdout[:200]!r}") from exc
     return _decode_opa_verdict(response)

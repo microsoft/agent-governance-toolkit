@@ -76,6 +76,13 @@ def _envelope(
     span_id: str | None = None,
 ) -> dict[str, Any]:
     for name, value in (
+        ("agent_id", agent_id),
+        ("session_id", session_id),
+        ("intervention_point", intervention_point),
+    ):
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"{name} must be a non-empty string")
+    for name, value in (
         ("tool_call_count", tool_call_count),
         ("token_count", token_count),
         ("elapsed_seconds", elapsed_seconds),
@@ -351,26 +358,22 @@ class SnapshotBuilder:
         AGT-SNAPSHOT §1 specifies budgets are read at the start of each
         evaluation.
         """
-        if not isinstance(count, int) or count < 0:
-            raise ValueError(f"count must be a non-negative integer, got {count!r}")
+        _validate_budget_counter("tool_call_count", count)
         self.tool_call_count += count
 
     def record_tokens(self, tokens: int) -> None:
         """Add ``tokens`` to the running ``token_count`` budget."""
-        if not isinstance(tokens, int) or tokens < 0:
-            raise ValueError(f"tokens must be a non-negative integer, got {tokens!r}")
+        _validate_budget_counter("token_count", tokens)
         self.token_count += tokens
 
     def record_cost(self, usd: float) -> None:
         """Add ``usd`` to the running ``cost_usd`` budget."""
-        if isinstance(usd, bool) or not isinstance(usd, (int, float)) or not math.isfinite(usd) or usd < 0:
-            raise ValueError(f"usd must be a non-negative finite number, got {usd!r}")
+        _validate_budget_counter("cost_usd", usd)
         self.cost_usd += float(usd)
 
     def record_elapsed(self, seconds: float) -> None:
         """Add ``seconds`` to the running ``elapsed_seconds`` budget."""
-        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not math.isfinite(seconds) or seconds < 0:
-            raise ValueError(f"seconds must be a non-negative finite number, got {seconds!r}")
+        _validate_budget_counter("elapsed_seconds", seconds)
         self.elapsed_seconds += float(seconds)
 
     def reset_budgets(self) -> None:

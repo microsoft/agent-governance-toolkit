@@ -426,6 +426,8 @@ def _coerce_bridge_inputs(kwargs: dict[str, Any]) -> _BridgeInputs:
         value = kwargs[source_key]
         if isinstance(value, str) and value.startswith("<expr:"):
             continue
+        if isinstance(value, bool) and expected_type is not bool:
+            continue
         if not isinstance(value, expected_type):
             continue
         setattr(out, source_key, value)
@@ -501,18 +503,39 @@ def _migrate_governance_chain(
     rego_bundle = chain_root / "policy"
 
     if write:
-        manifest_path.write_text(
-            yaml.safe_dump(manifest, sort_keys=False),
-            encoding="utf-8",
-        )
-        chain_root_resolved = chain_root.resolve()
-        for gov_file in discovered:
-            if gov_file.parent.resolve() != chain_root_resolved:
-                continue
-            backup = gov_file.with_name(f".{gov_file.name}.v4-backup")
-            if gov_file.exists():
-                gov_file.replace(backup)
-                finding.backups.append(backup)
+        moved: list[tuple[Path, Path]] = []
+        tmp_manifest_path = manifest_path.with_name(f".{manifest_path.name}.tmp")
+        try:
+            tmp_manifest_path.write_text(
+                yaml.safe_dump(manifest, sort_keys=False),
+                encoding="utf-8",
+            )
+            os.replace(tmp_manifest_path, manifest_path)
+            chain_root_resolved = chain_root.resolve()
+            for gov_file in discovered:
+                if gov_file.parent.resolve() != chain_root_resolved:
+                    continue
+                backup = gov_file.with_name(f".{gov_file.name}.v4-backup")
+                if gov_file.exists():
+                    gov_file.replace(backup)
+                    moved.append((backup, gov_file))
+            finding.backups.extend(backup for backup, _original in moved)
+        except OSError as exc:
+            try:
+                tmp_manifest_path.unlink()
+            except OSError:
+                pass
+            for backup, original in reversed(moved):
+                try:
+                    backup.replace(original)
+                except OSError as rollback_exc:
+                    logger.warning(
+                        "failed to roll back %s to %s after migration write failure: %s",
+                        backup,
+                        original,
+                        rollback_exc,
+                    )
+            finding.error = f"write failed: {exc}"
     else:
         _rmtree_silent(target_bundle_dir)
 
@@ -543,7 +566,7 @@ def _migrate_governance_policy(
     finding: GovernancePolicyFinding,
     *,
     write: bool,
-) -> None:
+) -> str | None:
     """Materialise a v5 manifest for a single GovernancePolicy() call."""
     inputs = _coerce_bridge_inputs(finding.kwargs)
     source_dir = finding.location.path.parent
@@ -560,26 +583,30 @@ def _migrate_governance_policy(
 
     if not write:
         finding.manifest_path = manifest_path
-        return
+        return None
 
     try:
         from agt.policies.bridge import governance_to_acs_manifest
     except Exception as exc:  # pragma: no cover - import error path
         logger.warning("agt.policies.bridge unavailable: %s", exc)
-        return
+        return f"policy migration failed for {base_name}: {exc}"
 
-    policies_dir.mkdir(parents=True, exist_ok=True)
-    bundle_dir = policies_dir / f"{base_name}_bundle"
-    manifest = governance_to_acs_manifest(
-        dataclasses.replace(inputs),
-        bundle_dir=bundle_dir,
-        policy_id=base_name or "agt_governance_policy",
-    )
-    manifest_path.write_text(
-        yaml.safe_dump(manifest, sort_keys=False),
-        encoding="utf-8",
-    )
+    try:
+        policies_dir.mkdir(parents=True, exist_ok=True)
+        bundle_dir = policies_dir / f"{base_name}_bundle"
+        manifest = governance_to_acs_manifest(
+            dataclasses.replace(inputs),
+            bundle_dir=bundle_dir,
+            policy_id=base_name or "agt_governance_policy",
+        )
+        manifest_path.write_text(
+            yaml.safe_dump(manifest, sort_keys=False),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        return f"policy migration failed for {base_name}: {exc}"
     finding.manifest_path = manifest_path
+    return None
 
 
 def _render_governance_rewrite_snippet(
@@ -833,7 +860,9 @@ def migrate_project(
         if visitor is None:
             continue
         for gp in visitor.governance_policies:
-            _migrate_governance_policy(gp, write=write)
+            error = _migrate_governance_policy(gp, write=write)
+            if error:
+                report.errors.append(error)
             report.governance_policies.append(gp)
         report.policy_action_blocks.extend(visitor.policy_action_blocks)
         report.cedar_backends.extend(visitor.cedar_backends)
@@ -923,7 +952,14 @@ def run_from_args(args: argparse.Namespace) -> int:
 
     if args.write_report:
         out_path = Path(args.write_report)
-        out_path.write_text(text, encoding="utf-8")
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            print(
+                f"warning: failed to write report to {out_path}: {exc}",
+                file=sys.stderr,
+            )
 
     # Exit zero even when findings exist — the CLI is informational by
     # default. We only fail when a per-chain resolution error blocks a

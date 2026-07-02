@@ -16,8 +16,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 import re
+import shutil
 import tempfile
 from typing import Any, Optional
 
@@ -37,9 +39,9 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
         raise ResolutionError.invalid_governance(
-            f"failed to parse {path}: {exc}"
+            f"failed to read/parse {path}: {exc}"
         ) from exc
     if data is None:
         return {}
@@ -107,42 +109,53 @@ def resolve_manifest(
 
     merged_rules = merge_documents(docs_only)
 
-    bundle_path = bundle_dir or Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
-    rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
-
     intervention_points = _collect_intervention_points(docs_only)
     if merged_rules and not _binds_legacy_rules(intervention_points):
         raise ResolutionError.invalid_governance(
             "governance rules must bind policy id 'agt_legacy_rules' at one or more intervention points"
         )
 
-    manifest: dict[str, Any] = {
-        "agent_control_specification_version": ACS_VERSION,
-        "metadata": {
-            "name": "agt_resolved",
-            "resolved_from": {
-                "root": str(root),
-                "action_path": str(action_path),
-                "chain": [str(p) for p in chain_paths],
-            },
-        },
-        "extends": [],
-        "policies": {
-            "agt_legacy_rules": {
-                "type": "rego",
-                "bundle": str(rego_path),
-                "query": "data.agt.legacy.verdict",
-            },
-        },
-        "intervention_points": intervention_points,
-    }
+    created_bundle = bundle_dir is None
+    bundle_path: Path | None = None
+    try:
+        bundle_path = (
+            Path(tempfile.mkdtemp(prefix="agt_resolved_bundle_"))
+            if created_bundle
+            else Path(bundle_dir)
+        )
+        rego_path = _materialize_rego_bundle(bundle_path, merged_rules)
 
-    for section in ("tools", "annotators", "limits", "approval"):
-        value = merge_top_level_section(section, docs_only)
-        if value is not None:
-            manifest[section] = value
+        manifest: dict[str, Any] = {
+            "agent_control_specification_version": ACS_VERSION,
+            "metadata": {
+                "name": "agt_resolved",
+                "resolved_from": {
+                    "root": str(root),
+                    "action_path": str(action_path),
+                    "chain": [str(p) for p in chain_paths],
+                },
+            },
+            "extends": [],
+            "policies": {
+                "agt_legacy_rules": {
+                    "type": "rego",
+                    "bundle": str(rego_path),
+                    "query": "data.agt.legacy.verdict",
+                },
+            },
+            "intervention_points": intervention_points,
+        }
 
-    return manifest
+        for section in ("tools", "annotators", "limits", "approval"):
+            value = merge_top_level_section(section, docs_only)
+            if value is not None:
+                manifest[section] = value
+
+        return manifest
+    except Exception:
+        if created_bundle and bundle_path is not None:
+            shutil.rmtree(bundle_path, ignore_errors=True)
+        raise
 
 
 def _binds_legacy_rules(intervention_points: dict[str, Any]) -> bool:
@@ -186,18 +199,36 @@ def _materialize_rego_bundle(bundle_root: Path, rules: list[dict[str, Any]]) -> 
     returns the first matching verdict shape. Per AGT-RESOLUTION §2.5
     the AGT host points the engine at this bundle, not at inline rego.
     """
-    bundle_root = bundle_root.resolve()
     policy_dir = bundle_root / "policy"
-    policy_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        bundle_root = bundle_root.resolve()
+        policy_dir = bundle_root / "policy"
+        policy_dir.mkdir(parents=True, exist_ok=True)
 
-    body = _render_rego(rules)
-    rego_file = policy_dir / "agt_legacy.rego"
-    rego_file.write_text(body, encoding="utf-8")
-
-    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    (policy_dir / "agt_legacy.rego.sha256").write_text(digest, encoding="utf-8")
+        body = _render_rego(rules)
+        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+        rego_file = policy_dir / "agt_legacy.rego"
+        sidecar_file = policy_dir / "agt_legacy.rego.sha256"
+        rego_file.unlink(missing_ok=True)
+        _atomic_write_text(sidecar_file, digest)
+        _atomic_write_text(rego_file, body)
+    except OSError as exc:
+        raise ResolutionError.invalid_governance(
+            f"failed to materialize bundle in {policy_dir}: {exc}"
+        ) from exc
 
     return policy_dir
+
+
+def _atomic_write_text(path: Path, body: str) -> None:
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temp_path.write_text(body, encoding="utf-8")
+        os.replace(temp_path, path)
+    except OSError:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
 
 
 def _render_rego(rules: list[dict[str, Any]]) -> str:

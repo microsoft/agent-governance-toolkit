@@ -39,6 +39,7 @@ from pathlib import Path
 import tempfile
 import threading
 from typing import Any, Awaitable, Callable, Mapping, Optional, Union
+import weakref
 
 import yaml
 
@@ -67,6 +68,7 @@ except ImportError as exc:  # pragma: no cover - exercised only without the SDK
 
 
 _DEFAULT_APPROVAL_TIMEOUT_SECONDS = 300.0
+_DEFAULT_INLOOP_TIMEOUT_SECONDS = _DEFAULT_APPROVAL_TIMEOUT_SECONDS
 _IMMEDIATE_APPROVAL_TIMEOUT_SECONDS = 0.0
 _TIMED_RUN_SYNC_MAX_WORKERS = 16
 _TIMED_RUN_SYNC_CANCEL_GRACE_SECONDS = 0.05
@@ -226,12 +228,16 @@ class AgtRuntime:
         self._resolution_root = resolution_root
         self._approval_resolver = approval_resolver
         self._resolution_bundle_dir: Any | None = None
+        self._resolution_bundle_finalizer: weakref.finalize | None = None
 
         if resolution_root is not None:
             from agt.manifest_resolution import resolve_manifest
 
             bundle_dir = tempfile.TemporaryDirectory(prefix="agt_runtime_bundle_")
             self._resolution_bundle_dir = bundle_dir
+            self._resolution_bundle_finalizer = weakref.finalize(
+                self, bundle_dir.cleanup
+            )
             try:
                 resolved = resolve_manifest(
                     Path(resolution_root),
@@ -250,6 +256,9 @@ class AgtRuntime:
                 )
             except Exception:
                 bundle_dir.cleanup()
+                if self._resolution_bundle_finalizer is not None:
+                    self._resolution_bundle_finalizer.detach()
+                    self._resolution_bundle_finalizer = None
                 self._resolution_bundle_dir = None
                 raise
         elif policy_dispatcher is not None or annotator_dispatcher is not None:
@@ -313,15 +322,16 @@ class AgtRuntime:
             enforcement_mode == EnforcementMode.ENFORCE
             and raw_result.verdict.decision.value == "escalate"
         ):
+            approval_resolver = _make_acs_resolver(
+                self._approval_resolver, snapshot
+            )
 
             async def _enforce() -> None:
                 await self._control.enforce(
                     intervention_point,
                     raw_result,
                     enforcement_mode,
-                    approval_resolver=_make_acs_resolver(
-                        self._approval_resolver, snapshot
-                    ),
+                    approval_resolver=approval_resolver,
                 )
 
             try:
@@ -367,6 +377,8 @@ class AgtRuntime:
             )
 
         if isinstance(exc, AgentControlBlocked):
+            if getattr(approval_resolver, "_agt_event_loop_binding_error", False):
+                return _approval_timeout_result(raw_result, snapshot, "deny")
             blocked_result = exc.result
             mapped = _result_from_intervention(blocked_result, snapshot)
             # An escalate that resolves into a block (no resolver, resolver
@@ -391,29 +403,34 @@ class AgtRuntime:
 
     # ── lifecycle helpers ─────────────────────────────────────────
 
+    def __enter__(self) -> "AgtRuntime":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        self.close()
+
     def close(self) -> None:
         """Release the underlying ACS runtime (best effort)."""
         self._control = None  # type: ignore[assignment]
         if self._resolution_bundle_dir is not None:
             self._resolution_bundle_dir.cleanup()
             self._resolution_bundle_dir = None
+        if self._resolution_bundle_finalizer is not None:
+            self._resolution_bundle_finalizer.detach()
+            self._resolution_bundle_finalizer = None
 
 
 def _parse_and_sanitize_manifest_text(manifest_text: str) -> tuple[Mapping[str, Any], str]:
-    parsed = yaml.safe_load(manifest_text) or {}
+    try:
+        parsed = yaml.safe_load(manifest_text) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid manifest YAML: {exc}") from exc
     if not isinstance(parsed, Mapping):
         return {}, manifest_text
     sanitized, changed = _sanitize_manifest_for_acs(parsed)
     if not changed:
         return parsed, manifest_text
     return parsed, yaml.safe_dump(sanitized, sort_keys=False)
-
-
-def _approval_settings_from_manifest_text(manifest_text: str) -> tuple[float, str]:
-    parsed = yaml.safe_load(manifest_text) or {}
-    if not isinstance(parsed, Mapping):
-        return _DEFAULT_APPROVAL_TIMEOUT_SECONDS, "deny"
-    return _approval_settings_from_manifest(parsed)
 
 
 def _valid_approval_timeout(raw_timeout: Any) -> bool:
@@ -570,7 +587,8 @@ def _make_acs_resolver(
                 outcome = await outcome  # type: ignore[assignment]
         except RuntimeError as exc:
             if _is_event_loop_binding_error(exc):
-                await asyncio.Event().wait()
+                setattr(_resolve, "_agt_event_loop_binding_error", True)
+                raise
             raise
         if not isinstance(outcome, ApprovalDecision):
             raise TypeError(
@@ -623,16 +641,16 @@ def _run_sync(coro: Awaitable[Any], *, timeout: float | None = None) -> Any:
             asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(coro)  # type: ignore[arg-type]
+        timeout = _DEFAULT_INLOOP_TIMEOUT_SECONDS
 
     slot_acquired = False
-    if timeout is not None:
-        if timeout <= 0:
-            _close_unstarted_awaitable(coro)
-            raise TimeoutError("approval resolver timed out")
-        if not _TIMED_RUN_SYNC_SLOTS.acquire(blocking=False):
-            _close_unstarted_awaitable(coro)
-            raise TimeoutError("approval resolver timed out")
-        slot_acquired = True
+    if timeout <= 0:
+        _close_unstarted_awaitable(coro)
+        raise TimeoutError("approval resolver timed out")
+    if not _TIMED_RUN_SYNC_SLOTS.acquire(blocking=False):
+        _close_unstarted_awaitable(coro)
+        raise TimeoutError("approval resolver timed out")
+    slot_acquired = True
 
     holder: dict[str, Any] = {}
 
