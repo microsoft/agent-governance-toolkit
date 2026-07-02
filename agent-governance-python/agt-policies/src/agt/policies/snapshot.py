@@ -37,6 +37,7 @@ for callers that want to assemble custom intervention points.
 
 from __future__ import annotations
 
+import copy
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -129,7 +130,7 @@ def input_snapshot(
     return {
         "envelope": _envelope(agent_id=agent_id, intervention_point="input", **envelope_kwargs),
         "input": {
-            "body": body,
+            "body": copy.deepcopy(body),
             "source": source,
             "headers": dict(headers or {}),
             "ifc": {"source_labels": list(source_labels)},
@@ -154,8 +155,8 @@ def pre_model_call_snapshot(
             agent_id=agent_id, intervention_point="pre_model_call", **envelope_kwargs
         ),
         "model": {"name": model_name, "vendor": model_vendor, "params": dict(model_params or {})},
-        "messages": messages,
-        "tools": tools or [],
+        "messages": copy.deepcopy(messages),
+        "tools": copy.deepcopy(tools or []),
         "request_id": request_id,
     }
 
@@ -177,8 +178,8 @@ def post_model_call_snapshot(
         ),
         "model": {"name": model_name, "vendor": model_vendor},
         "request_id": request_id,
-        "response": response,
-        "usage": usage or {"prompt_tokens": 0, "completion_tokens": 0},
+        "response": copy.deepcopy(response),
+        "usage": copy.deepcopy(usage) if usage else {"prompt_tokens": 0, "completion_tokens": 0},
     }
 
 
@@ -192,7 +193,7 @@ def pre_tool_call_snapshot(
     **envelope_kwargs: Any,
 ) -> dict[str, Any]:
     """Snapshot for the ``pre_tool_call`` intervention point (§2.5)."""
-    tool_call: dict[str, Any] = {"name": tool_name, "args": args, "id": call_id}
+    tool_call: dict[str, Any] = {"name": tool_name, "args": copy.deepcopy(args), "id": call_id}
     if content_hash is not None:
         tool_call["content_hash"] = content_hash
     return {
@@ -219,8 +220,8 @@ def post_tool_call_snapshot(
         "envelope": _envelope(
             agent_id=agent_id, intervention_point="post_tool_call", **envelope_kwargs
         ),
-        "tool_call": {"name": tool_name, "args": args, "id": call_id},
-        "tool_result": {"value": result, "error": error, "duration_ms": duration_ms},
+        "tool_call": {"name": tool_name, "args": copy.deepcopy(args), "id": call_id},
+        "tool_result": {"value": copy.deepcopy(result), "error": error, "duration_ms": duration_ms},
     }
 
 
@@ -236,10 +237,10 @@ def output_snapshot(
     return {
         "envelope": _envelope(agent_id=agent_id, intervention_point="output", **envelope_kwargs),
         "response": {
-            "content": content,
+            "content": copy.deepcopy(content),
             "ifc": {"result_labels": list(result_labels)},
         },
-        "message_chain": message_chain or [],
+        "message_chain": copy.deepcopy(message_chain or []),
     }
 
 

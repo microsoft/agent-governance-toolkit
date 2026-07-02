@@ -329,6 +329,11 @@ def merge_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 raise ResolutionError.invalid_governance(
                     f"rule at level {level} is missing name"
                 )
+            prio = rule.get("priority", 0)
+            if isinstance(prio, bool) or not isinstance(prio, (int, float)):
+                raise ResolutionError.invalid_governance(
+                    f"rule {rule.get('name')!r} has non-numeric priority {prio!r}"
+                )
 
     if len(documents) == 1:
         rules = list(documents[0].get("rules", []))
