@@ -16,11 +16,25 @@ code imports:
 - :mod:`agt.policies.bridge` translates a v4
   ``agent_os.integrations.base.GovernancePolicy`` into an AGT manifest
   so callers can ride the v4 dataclass into the v5 engine.
+- :mod:`agt.policies.kernel` wires one ACS decision into the AGT kernel
+  (trust, audit, rings) through :class:`KernelBridge`, a dependency
+  injected fail closed governance gate.
 
 The module is structured as a thin re-export layer so external callers
 only need ``from agt.policies import ...``.
 """
 
+from .kernel import (
+    ActionClassifierLike,
+    AuditEmissionResult,
+    EmitEvent,
+    GovernanceEventSpec,
+    KernelBridge,
+    KernelDecision,
+    KernelOutcome,
+    RingEnforcerLike,
+    TrustTrackerLike,
+)
 from .result import EvaluationResult
 from .snapshot import (
     SnapshotBuilder,
@@ -35,8 +49,17 @@ from .snapshot import (
 )
 
 __all__ = [
+    "ActionClassifierLike",
+    "AuditEmissionResult",
+    "EmitEvent",
     "EvaluationResult",
+    "GovernanceEventSpec",
+    "KernelBridge",
+    "KernelDecision",
+    "KernelOutcome",
+    "RingEnforcerLike",
     "SnapshotBuilder",
+    "TrustTrackerLike",
     "agent_shutdown_snapshot",
     "agent_startup_snapshot",
     "input_snapshot",

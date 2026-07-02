@@ -58,6 +58,9 @@ AGT adapters enforce.
 - `agt.policies.runtime` — Python wrapper over the ACS Python SDK that
   loads a resolved manifest, runs intervention points, applies the
   transform verdict, enforces approval, and emits AGT telemetry events.
+- `agt.policies.kernel` — `KernelBridge`, a dependency-injected
+  fail-closed gate that wires one ACS decision into the AGT kernel
+  (trust, audit, rings) and returns a single `KernelOutcome`.
 
 ## Runtime flow
 
