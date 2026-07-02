@@ -8,7 +8,7 @@ Simple string-based capability scope checking.
 
 from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 import uuid
 
 
@@ -22,6 +22,14 @@ class CapabilityGrant(BaseModel):
     - write:reports
     - execute:tools:calculator
     - admin:*
+
+    ``qualifier`` captures the *entire* sub-resource path after
+    ``action:resource``, including any further colon-separated
+    segments. For example ``write:database:table_users:row_1`` parses
+    to ``action='write'``, ``resource='database'``,
+    ``qualifier='table_users:row_1'``. It is compared as an opaque
+    exact-match token, so a grant scoped to a leaf does not authorize
+    its parent or its siblings.
     """
 
     grant_id: str = Field(default_factory=lambda: f"grant_{uuid.uuid4().hex[:12]}")
@@ -56,16 +64,44 @@ class CapabilityGrant(BaseModel):
 
     @classmethod
     def parse_capability(cls, capability: str) -> tuple[str, str, Optional[str]]:
-        """Parse a capability string into (action, resource, qualifier)."""
+        """Parse a capability string into (action, resource, qualifier).
+
+        ``qualifier`` is the full remainder after ``action:resource``:
+        every colon-separated segment from index 2 onward is preserved
+        and re-joined with ``":"``. Dropping segments past index 2
+        (the historical behavior) collapsed a leaf grant onto its
+        parent/siblings and caused a privilege escalation (#3180).
+        """
         parts = capability.split(":")
         if len(parts) < 2:
             raise ValueError(f"Invalid capability format: {capability}")
 
         action = parts[0]
         resource = parts[1]
-        qualifier = parts[2] if len(parts) > 2 else None
+        qualifier = ":".join(parts[2:]) if len(parts) > 2 else None
 
         return action, resource, qualifier
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_components(cls, data):
+        """Re-derive action/resource/qualifier from ``capability``.
+
+        Runs on every construction and revalidation (including
+        ``model_validate``/deserialization), so the parsed components
+        can never disagree with the source ``capability`` string.
+        Without this, a grant built as
+        ``CapabilityGrant(capability="a:b:c:d", qualifier="c")`` would
+        keep a truncated ``qualifier`` and re-open the #3180
+        escalation, because ``matches()`` trusts the stored qualifier.
+        """
+        if isinstance(data, dict) and data.get("capability") is not None:
+            action, resource, qualifier = cls.parse_capability(data["capability"])
+            data = dict(data)
+            data["action"] = action
+            data["resource"] = resource
+            data["qualifier"] = qualifier
+        return data
 
     @classmethod
     def create(
@@ -76,14 +112,14 @@ class CapabilityGrant(BaseModel):
         resource_ids: Optional[list[str]] = None,
         expires_at: Optional[datetime] = None,
     ) -> "CapabilityGrant":
-        """Create a new capability grant from a capability string."""
-        action, resource, qualifier = cls.parse_capability(capability)
+        """Create a new capability grant from a capability string.
 
+        ``action``/``resource``/``qualifier`` are derived from
+        ``capability`` by the ``_derive_components`` validator, so they
+        are not passed explicitly here.
+        """
         return cls(
             capability=capability,
-            action=action,
-            resource=resource,
-            qualifier=qualifier,
             granted_to=granted_to,
             granted_by=granted_by,
             resource_ids=resource_ids or [],

@@ -1345,6 +1345,222 @@ class TestCapabilityRegistry:
             )
 
 
+class TestCapabilityFourSegmentEscalation:
+    """#3180 regression matrix: a leaf grant with 4+ colon-separated
+    segments must authorize ONLY that exact leaf, not its parent or
+    its siblings. The defect was in parse_capability truncating the
+    qualifier to a single segment; these tests pin the parser, the
+    matcher composition, and the model_validator self-heal.
+    """
+
+    # --- parser preserves the full sub-resource path ---
+
+    def test_parse_preserves_full_remainder(self):
+        a, r, q = CapabilityGrant.parse_capability("write:database:table_users:row_1")
+        assert (a, r, q) == ("write", "database", "table_users:row_1")
+
+    def test_parse_three_segment_unchanged(self):
+        # #3176 shape: qualifier is still a single segment here.
+        a, r, q = CapabilityGrant.parse_capability("write:database:table_users")
+        assert (a, r, q) == ("write", "database", "table_users")
+
+    def test_parse_two_segment_qualifier_none(self):
+        a, r, q = CapabilityGrant.parse_capability("write:database")
+        assert (a, r, q) == ("write", "database", None)
+
+    # --- leaf grant: exact allowed, parent + siblings denied ---
+
+    def test_leaf_grant_authorizes_only_exact_leaf(self):
+        g = CapabilityGrant.create(
+            "write:database:table_users:row_1", "did:mesh:1", "did:mesh:0"
+        )
+        assert g.matches("write:database:table_users:row_1") is True   # exact leaf
+        assert g.matches("write:database:table_users") is False        # parent
+        assert g.matches("write:database:table_users:row_2") is False  # sibling
+        assert g.matches("write:database:table_users:row_10") is False # sibling
+        assert g.matches("write:database") is False                    # grandparent
+
+    def test_registry_check_leaf_grant_flips_escalation(self):
+        # The exact escalation reported in #3180, at registry level.
+        reg = CapabilityRegistry()
+        reg.grant("write:database:table_users:row_1", "did:mesh:child", "did:mesh:admin")
+        assert reg.check("did:mesh:child", "write:database:table_users:row_1") is True
+        assert reg.check("did:mesh:child", "write:database:table_users") is False
+        assert reg.check("did:mesh:child", "write:database:table_users:row_2") is False
+
+    # --- deeper nesting behaves as hierarchy (narrowing, not escalation) ---
+
+    def test_leaf_grant_authorizes_deeper_narrowing(self):
+        # A grant on row_1 is BROADER than row_1:col_1, so it authorizes
+        # the deeper request (correct narrowing via the colon-prefix
+        # branch), but still not the parent or a sibling.
+        g = CapabilityGrant.create(
+            "write:database:table_users:row_1", "did:mesh:1", "did:mesh:0"
+        )
+        assert g.matches("write:database:table_users:row_1:col_1") is True
+        assert g.matches("write:database:table_users:row_1:col_2") is True
+
+    def test_deep_leaf_grant_denies_parent_and_sibling(self):
+        g = CapabilityGrant.create(
+            "write:database:table_users:row_1:col_1", "did:mesh:1", "did:mesh:0"
+        )
+        assert g.matches("write:database:table_users:row_1:col_1") is True   # exact
+        assert g.matches("write:database:table_users:row_1") is False        # parent
+        assert g.matches("write:database:table_users:row_1:col_2") is False  # sibling
+
+    # --- broad grant still satisfies a narrower check (#3176 direction) ---
+
+    def test_broad_grant_satisfies_narrower_leaf(self):
+        g = CapabilityGrant.create("write:database", "did:mesh:1", "did:mesh:0")
+        assert g.matches("write:database") is True
+        assert g.matches("write:database:table_users:row_1") is True
+
+    def test_three_segment_broad_grant_satisfies_four_segment_leaf(self):
+        g = CapabilityGrant.create(
+            "write:database:table_users", "did:mesh:1", "did:mesh:0"
+        )
+        assert g.matches("write:database:table_users") is True
+        assert g.matches("write:database:table_users:row_1") is True
+        # but a narrow 3-seg grant still must NOT satisfy its parent (#3176)
+        assert g.matches("write:database") is False
+
+    # --- resource_ids compose with the 4-segment scope ---
+
+    def test_resource_scoped_leaf_grant(self):
+        g = CapabilityGrant.create(
+            "write:database:table_users:row_1",
+            "did:mesh:1",
+            "did:mesh:0",
+            resource_ids=["shard-a"],
+        )
+        assert g.matches("write:database:table_users:row_1", resource_id="shard-a") is True
+        assert g.matches("write:database:table_users:row_1", resource_id="shard-b") is False
+        assert g.matches("write:database:table_users:row_1") is False   # omitted resource_id
+        assert g.matches("write:database:table_users", resource_id="shard-a") is False  # parent
+
+    # --- delegation: leaf grantor cannot delegate parent/sibling ---
+
+    def test_leaf_grantor_cannot_delegate_parent_or_sibling(self):
+        reg = CapabilityRegistry()
+        reg.grant("write:database:table_users:row_1", "did:mesh:grantor", "did:mesh:admin")
+
+        delegated = reg.grant(
+            "write:database:table_users:row_1",
+            "did:mesh:child",
+            "did:mesh:grantor",
+            require_grantor_capability=True,
+        )
+        assert delegated.capability == "write:database:table_users:row_1"
+
+        with pytest.raises(PermissionError):
+            reg.grant(
+                "write:database:table_users",   # parent
+                "did:mesh:child",
+                "did:mesh:grantor",
+                require_grantor_capability=True,
+            )
+        with pytest.raises(PermissionError):
+            reg.grant(
+                "write:database:table_users:row_2",  # sibling
+                "did:mesh:child",
+                "did:mesh:grantor",
+                require_grantor_capability=True,
+            )
+
+    def test_parent_grantor_can_delegate_child(self):
+        reg = CapabilityRegistry()
+        reg.grant("write:database:table_users", "did:mesh:grantor", "did:mesh:admin")
+        delegated = reg.grant(
+            "write:database:table_users:row_1",
+            "did:mesh:child",
+            "did:mesh:grantor",
+            require_grantor_capability=True,
+        )
+        assert delegated.capability == "write:database:table_users:row_1"
+
+    # --- scope-level surfaces stay consistent ---
+
+    def test_get_capabilities_returns_full_leaf_string(self):
+        scope = CapabilityScope(agent_did="did:mesh:1")
+        scope.add_grant(
+            CapabilityGrant.create(
+                "write:database:table_users:row_1", "did:mesh:1", "did:mesh:0"
+            )
+        )
+        assert "write:database:table_users:row_1" in scope.get_capabilities()
+
+    def test_deny_exact_leaf_only(self):
+        scope = CapabilityScope(agent_did="did:mesh:1")
+        scope.add_grant(
+            CapabilityGrant.create(
+                "write:database:table_users:row_1", "did:mesh:1", "did:mesh:0"
+            )
+        )
+        scope.deny("write:database:table_users:row_1")
+        assert scope.has_capability("write:database:table_users:row_1") is False
+
+    # --- model_validator self-heals stale/inconsistent derived fields ---
+
+    def test_validator_reheals_truncated_qualifier(self):
+        # A grant constructed (or deserialized) with a truncated
+        # qualifier must be corrected from `capability`, otherwise the
+        # #3180 escalation re-opens because matches() trusts qualifier.
+        g = CapabilityGrant(
+            capability="write:database:table_users:row_1",
+            action="write",
+            resource="database",
+            qualifier="table_users",   # deliberately stale (truncated)
+            granted_to="did:mesh:1",
+            granted_by="did:mesh:0",
+        )
+        assert g.qualifier == "table_users:row_1"
+        assert g.matches("write:database:table_users") is False   # parent denied
+        assert g.matches("write:database:table_users:row_1") is True
+
+    def test_model_validate_derives_components(self):
+        g = CapabilityGrant.model_validate(
+            {
+                "capability": "write:database:table_users:row_1",
+                "granted_to": "did:mesh:1",
+                "granted_by": "did:mesh:0",
+            }
+        )
+        assert (g.action, g.resource, g.qualifier) == (
+            "write",
+            "database",
+            "table_users:row_1",
+        )
+
+    # --- grammar pins for wildcard / empty-segment shapes ---
+
+    def test_trailing_wildcard_still_matches_prefix(self):
+        g = CapabilityGrant.create(
+            "write:database:table_users:*", "did:mesh:1", "did:mesh:0"
+        )
+        assert g.matches("write:database:table_users:row_1") is True
+        assert g.matches("write:database:table_users:row_2") is True
+
+    def test_mid_remainder_wildcard_is_literal_fail_closed(self):
+        # A `*` in the MIDDLE of the remainder is NOT a wildcard; the
+        # qualifier `*:row` is compared literally (stricter/fail-closed),
+        # so it does not authorize a concrete table.
+        g = CapabilityGrant.create(
+            "write:database:*:row", "did:mesh:1", "did:mesh:0"
+        )
+        assert g.qualifier == "*:row"
+        assert g.matches("write:database:table_users:row") is False
+        assert g.matches("write:database:*:row") is True
+
+    def test_empty_trailing_segment_behavior_pinned(self):
+        # Pin current behavior for an empty trailing segment; it is a
+        # distinct qualifier ("") and does not authorize the 3-segment
+        # parent.
+        g = CapabilityGrant.create("write:database:", "did:mesh:1", "did:mesh:0")
+        assert g.qualifier == ""
+        assert g.matches("write:database:") is True
+        assert g.matches("write:database") is False
+
+
 # ---------------------------------------------------------------------------
 # trust/handshake.py
 # ---------------------------------------------------------------------------
