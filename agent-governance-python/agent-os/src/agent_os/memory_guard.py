@@ -52,6 +52,7 @@ class AlertType(Enum):
     """Classification of a memory poisoning alert."""
     INJECTION_PATTERN = "injection_pattern"
     CODE_INJECTION = "code_injection"
+    TOOL_POISONING = "tool_poisoning"
     INTEGRITY_VIOLATION = "integrity_violation"
     UNICODE_MANIPULATION = "unicode_manipulation"
     EXCESSIVE_SPECIAL_CHARS = "excessive_special_chars"
@@ -164,6 +165,45 @@ _SPECIAL_CHAR_THRESHOLD = 0.3
 
 
 # ---------------------------------------------------------------------------
+# Tool-poisoning patterns (OWASP ASI06 / instruction-bearing markup)
+# ---------------------------------------------------------------------------
+
+# Hidden-instruction markup tags. Suspicious on their own (MEDIUM); escalated to
+# HIGH when they wrap a destructive command or exfiltration payload.
+_MARKUP_INSTRUCTION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(
+        r"<\s*(important|system|instructions?|secret|admin|tool|tool_call|assistant)\b[^>]*>",
+        re.IGNORECASE,
+    ),
+]
+
+# Destructive shell commands. Unambiguously dangerous -> HIGH.
+_DESTRUCTIVE_COMMAND_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\brm\s+-[a-z]*r[a-z]*\b", re.IGNORECASE),   # rm -rf / -fr / -r (recursive)
+    re.compile(r"\bmkfs\.[a-z0-9]+\b", re.IGNORECASE),
+    re.compile(r"\bdd\s+if=", re.IGNORECASE),
+    re.compile(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:"),  # fork bomb
+    re.compile(r"\bchmod\s+-?[a-z]*\s*777\b", re.IGNORECASE),
+    re.compile(r">\s*/dev/sd[a-z]\b", re.IGNORECASE),
+]
+
+# Pipe-to-shell / upload flags: remote code execution or exfiltration -> HIGH.
+_EXFIL_EXEC_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|z|k)?sh\b", re.IGNORECASE),
+    re.compile(r"\b(curl|wget)\b[^\n|]*\|\s*(python[0-9.]*|perl|ruby|node)\b", re.IGNORECASE),
+    re.compile(r"\bcurl\b[^\n]*\s(-d|--data|-T|--upload-file|-F|--form)\b", re.IGNORECASE),
+    re.compile(r"\bwget\b[^\n]*\s(--post-data|--post-file)\b", re.IGNORECASE),
+]
+
+# Bare network fetch (curl/wget to a host or URL). Ambiguous in isolation
+# (MEDIUM, non-blocking) but a strong signal when paired with a hidden tag.
+_NETWORK_FETCH_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\b(curl|wget)\s+\S*https?://", re.IGNORECASE),
+    re.compile(r"\b(curl|wget)\s+[a-z0-9.-]+\.[a-z]{2,}\b", re.IGNORECASE),
+]
+
+
+# ---------------------------------------------------------------------------
 # MemoryGuard
 # ---------------------------------------------------------------------------
 
@@ -194,6 +234,7 @@ class MemoryGuard:
         try:
             alerts.extend(self._check_injection_patterns(content, source))
             alerts.extend(self._check_code_injection(content, source))
+            alerts.extend(self._check_tool_poisoning(content, source))
             alerts.extend(self._check_special_characters(content, source))
             alerts.extend(self._check_unicode_manipulation(content, source))
         except Exception:
@@ -278,6 +319,7 @@ class MemoryGuard:
                 # Content checks (reuse validate_write logic)
                 all_alerts.extend(self._check_injection_patterns(entry.content, entry.source))
                 all_alerts.extend(self._check_code_injection(entry.content, entry.source))
+                all_alerts.extend(self._check_tool_poisoning(entry.content, entry.source))
                 all_alerts.extend(self._check_special_characters(entry.content, entry.source))
                 all_alerts.extend(self._check_unicode_manipulation(entry.content, entry.source))
             except Exception:
@@ -330,6 +372,82 @@ class MemoryGuard:
                     matched_pattern=pattern.pattern,
                 ))
         return alerts
+
+    def _check_tool_poisoning(
+        self, content: str, source: str
+    ) -> list[Alert]:
+        """Detect tool-poisoning: hidden-instruction markup, destructive commands, exfil.
+
+        Widens coverage beyond prompt-injection prose to catch instruction-bearing
+        markup tags wrapping destructive shell commands or exfiltration payloads —
+        the blatant memory-poisoning pattern that plain prose detectors miss.
+        """
+        alerts: list[Alert] = []
+
+        markup = self._first_match(content, _MARKUP_INSTRUCTION_PATTERNS)
+        destructive = self._first_match(content, _DESTRUCTIVE_COMMAND_PATTERNS)
+        exfil_exec = self._first_match(content, _EXFIL_EXEC_PATTERNS)
+        network_fetch = self._first_match(content, _NETWORK_FETCH_PATTERNS)
+
+        if destructive is not None:
+            alerts.append(Alert(
+                alert_type=AlertType.TOOL_POISONING,
+                severity=AlertSeverity.HIGH,
+                message="Destructive shell command detected in memory content",
+                entry_source=source,
+                matched_pattern=destructive,
+            ))
+
+        if exfil_exec is not None:
+            alerts.append(Alert(
+                alert_type=AlertType.TOOL_POISONING,
+                severity=AlertSeverity.HIGH,
+                message="Remote-code-execution or exfiltration command detected",
+                entry_source=source,
+                matched_pattern=exfil_exec,
+            ))
+
+        if markup is not None:
+            # A hidden-instruction tag is suspicious on its own (MEDIUM) but a
+            # blatant tool-poisoning payload when it wraps a destructive command,
+            # an exfil/RCE command, or an outbound network fetch (HIGH).
+            paired = (
+                destructive is not None
+                or exfil_exec is not None
+                or network_fetch is not None
+            )
+            alerts.append(Alert(
+                alert_type=AlertType.TOOL_POISONING,
+                severity=AlertSeverity.HIGH if paired else AlertSeverity.MEDIUM,
+                message=(
+                    "Instruction-bearing markup tag wrapping a dangerous payload"
+                    if paired else
+                    "Hidden-instruction markup tag in memory content"
+                ),
+                entry_source=source,
+                matched_pattern=markup,
+            ))
+        elif network_fetch is not None:
+            # Bare curl/wget without a hidden tag or destructive command is
+            # ambiguous (could be benign docs): surface it, do not block.
+            alerts.append(Alert(
+                alert_type=AlertType.TOOL_POISONING,
+                severity=AlertSeverity.MEDIUM,
+                message="Outbound network-fetch command in memory content",
+                entry_source=source,
+                matched_pattern=network_fetch,
+            ))
+
+        return alerts
+
+    @staticmethod
+    def _first_match(
+        content: str, patterns: list[re.Pattern[str]]
+    ) -> str | None:
+        for pattern in patterns:
+            if pattern.search(content):
+                return pattern.pattern
+        return None
 
     def _check_special_characters(
         self, content: str, source: str

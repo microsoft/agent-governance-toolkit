@@ -15,8 +15,13 @@ typing (Protocol) without importing agent-os as a dependency.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import logging
 import os
+import secrets
 import threading
 import time
 import uuid
@@ -29,6 +34,11 @@ from typing import Any, Protocol, Sequence, runtime_checkable
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "1"
+
+# CloudEvents 1.0 signature extension attributes (lowercase per CE naming rules).
+_CE_SIGNATURE_ATTR = "agtsignature"
+_CE_SIGNATURE_ALG_ATTR = "agtsignaturealg"
+_CE_SIGNATURE_ALG = "HMAC-SHA256"
 
 _DEFAULT_MAX_QUEUE_SIZE = 1024
 _DEFAULT_SCHEDULE_DELAY_MS = 2000
@@ -53,6 +63,25 @@ class GovernanceEventKind(str, Enum):
     ANOMALY_DETECTED = "anomaly_detected"
     MCP_TOOL_POISONING = "mcp_tool_poisoning"
     CONTENT_VIOLATION = "content_violation"
+
+
+# CloudEvents 1.0 `type` mapping (reverse-DNS), mirroring the documented
+# contract in ADR-0021 / AUDIT-COMPLIANCE-1.0 §20.4 and the agent-mesh
+# `AuditEntry.to_cloudevent()` `ai.agentmesh.*` namespace.
+_GOVERNANCE_CE_TYPE_MAP: dict[GovernanceEventKind, str] = {
+    GovernanceEventKind.POLICY_CHECK: "ai.agentmesh.policy.check",
+    GovernanceEventKind.POLICY_VIOLATION: "ai.agentmesh.policy.violation",
+    GovernanceEventKind.TOOL_CALL_BLOCKED: "ai.agentmesh.tool.blocked",
+    GovernanceEventKind.PROMPT_INJECTION_DETECTED: "ai.agentmesh.prompt_injection.detected",
+    GovernanceEventKind.IDENTITY_VERIFIED: "ai.agentmesh.identity.verified",
+    GovernanceEventKind.IDENTITY_REJECTED: "ai.agentmesh.identity.rejected",
+    GovernanceEventKind.RESOURCE_ACCESS: "ai.agentmesh.resource.access",
+    GovernanceEventKind.ESCALATION_REQUESTED: "ai.agentmesh.escalation.requested",
+    GovernanceEventKind.CHECKPOINT_CREATED: "ai.agentmesh.checkpoint.created",
+    GovernanceEventKind.ANOMALY_DETECTED: "ai.agentmesh.anomaly.detected",
+    GovernanceEventKind.MCP_TOOL_POISONING: "ai.agentmesh.mcp.tool_poisoning",
+    GovernanceEventKind.CONTENT_VIOLATION: "ai.agentmesh.content.violation",
+}
 
 
 class SinkExportResult(Enum):
@@ -105,6 +134,136 @@ class GovernanceEvent:
             for k, v in asdict(self).items()
             if v is not None
         }
+
+    def to_cloudevent(
+        self,
+        source: str | None = None,
+        *,
+        signer: "GovernanceEventSigner | None" = None,
+    ) -> dict[str, Any]:
+        """Serialize as a CloudEvents 1.0 envelope, optionally HMAC-signed.
+
+        Implements the documented export contract (ADR-0021, AUDIT-COMPLIANCE-1.0
+        §20.4): the required attributes ``specversion``/``id``/``source``/``type``
+        plus ``time``/``datacontenttype``/``data``. When a ``signer`` is provided
+        the returned envelope is tamper-evident, carrying the ``agtsignaturealg``
+        and ``agtsignature`` extension attributes.
+
+        Args:
+            source: CloudEvents ``source`` URI-reference identifying the emitter.
+                When omitted it is derived from ``agent_did`` or ``agent_id``.
+            signer: Optional :class:`GovernanceEventSigner`; when present the
+                envelope is signed.
+
+        Returns:
+            A CloudEvents 1.0 envelope as a JSON-serializable dict.
+
+        Raises:
+            ValueError: If no non-empty ``source`` can be resolved.
+        """
+        resolved_source = (
+            source
+            or self.agent_did
+            or (f"/agent-os/agent/{self.agent_id}" if self.agent_id else "")
+        )
+        if not resolved_source:
+            raise ValueError(
+                "CloudEvents 'source' must be a non-empty URI-reference; pass "
+                "source= or set agent_did/agent_id on the event"
+            )
+
+        ce_type = _GOVERNANCE_CE_TYPE_MAP.get(
+            self.kind, f"ai.agentmesh.governance.{self.kind.value}"
+        )
+
+        data: dict[str, Any] = {
+            "action": self.action,
+            "decision": self.decision,
+            "reason": self.reason,
+            "severity": self.severity,
+            "latency_ms": self.latency_ms,
+            **({"resource": self.resource} if self.resource else {}),
+            **({"policy_name": self.policy_name} if self.policy_name else {}),
+            **({"agent_id": self.agent_id} if self.agent_id else {}),
+            **({"agent_did": self.agent_did} if self.agent_did else {}),
+            **self.attributes,
+        }
+
+        cloudevent: dict[str, Any] = {
+            "specversion": "1.0",
+            "id": self.event_id,
+            "type": ce_type,
+            "source": resolved_source,
+            "time": self.occurred_at,
+            "datacontenttype": "application/json",
+            "data": data,
+            "schemaversion": self.schema_version,
+        }
+        if self.session_id:
+            cloudevent["sessionid"] = self.session_id
+        if self.trace_id:
+            cloudevent["traceid"] = self.trace_id
+        if self.span_id:
+            cloudevent["spanid"] = self.span_id
+        if self.parent_span_id:
+            cloudevent["parentspanid"] = self.parent_span_id
+
+        if signer is not None:
+            cloudevent = signer.sign(cloudevent)
+        return cloudevent
+
+
+class GovernanceEventSigner:
+    """HMAC-SHA256 signer/verifier for CloudEvents governance envelopes.
+
+    Produces tamper-evident audit records: the signature covers the canonical
+    (sorted-key) CloudEvent including the algorithm attribute, so both payload
+    and algorithm tampering are detected. The signing key is never logged.
+    """
+
+    def __init__(self, signing_key: bytes) -> None:
+        """Initialize the signer.
+
+        Args:
+            signing_key: Shared secret used for HMAC. Must be at least 32 bytes.
+        """
+        if not signing_key or len(signing_key) < 32:
+            raise ValueError("signing_key must be at least 32 bytes")
+        self._signing_key = signing_key
+
+    @staticmethod
+    def generate_key() -> bytes:
+        """Return a new cryptographically random 32-byte signing key."""
+        return secrets.token_bytes(32)
+
+    def sign(self, cloudevent: dict[str, Any]) -> dict[str, Any]:
+        """Return a copy of *cloudevent* with signature extension attributes."""
+        signed = {k: v for k, v in cloudevent.items() if k != _CE_SIGNATURE_ATTR}
+        signed[_CE_SIGNATURE_ALG_ATTR] = _CE_SIGNATURE_ALG
+        signed[_CE_SIGNATURE_ATTR] = self._compute(signed)
+        return signed
+
+    def verify(self, cloudevent: dict[str, Any]) -> bool:
+        """Return True when *cloudevent*'s signature is present and valid."""
+        signature = cloudevent.get(_CE_SIGNATURE_ATTR)
+        if not isinstance(signature, str):
+            return False
+        if cloudevent.get(_CE_SIGNATURE_ALG_ATTR) != _CE_SIGNATURE_ALG:
+            return False
+        payload = {k: v for k, v in cloudevent.items() if k != _CE_SIGNATURE_ATTR}
+        return hmac.compare_digest(self._compute(payload), signature)
+
+    def _compute(self, cloudevent_without_signature: dict[str, Any]) -> str:
+        canonical = json.dumps(
+            cloudevent_without_signature,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        digest = hmac.new(
+            self._signing_key, canonical.encode("utf-8"), hashlib.sha256
+        ).digest()
+        return base64.b64encode(digest).decode("ascii")
 
 
 @runtime_checkable
@@ -209,6 +368,9 @@ class GovernanceEventProcessor:
         self._lock = threading.Lock()
         self._condition = threading.Condition(self._lock)
         self._stopped = False
+        self._submitted_count = 0
+        self._delivered_count = 0
+        self._failed_count = 0
         self._dropped_count = 0
         self._worker: threading.Thread | None = None
 
@@ -231,11 +393,16 @@ class GovernanceEventProcessor:
     def on_event(self, event: GovernanceEvent) -> None:
         """Enqueue a governance event for async delivery.
 
-        Non-blocking. If the queue is full, the oldest event is dropped
-        (DROP_OLDEST policy: recent events are more valuable for SIEM).
+        Non-blocking. Every event is accounted: if the queue is full the oldest
+        event is dropped (DROP_OLDEST policy) and counted; if the processor has
+        already stopped the event is counted as dropped rather than silently
+        discarded, so ``submitted == delivered + failed + dropped``.
         """
         with self._condition:
+            self._submitted_count += 1
             if self._stopped:
+                # Fail-closed accounting: do not silently swallow post-shutdown events.
+                self._dropped_count += 1
                 return
             if len(self._queue) >= self._max_queue_size:
                 self._queue.popleft()
@@ -276,9 +443,28 @@ class GovernanceEventProcessor:
         return all(results)
 
     @property
+    def submitted_count(self) -> int:
+        """Total events accepted by ``on_event`` (before queueing decisions)."""
+        with self._lock:
+            return self._submitted_count
+
+    @property
+    def delivered_count(self) -> int:
+        """Events in a batch that at least one sink emitted successfully."""
+        with self._lock:
+            return self._delivered_count
+
+    @property
+    def failed_count(self) -> int:
+        """Events dispatched to sinks where no sink succeeded (all failed/skipped)."""
+        with self._lock:
+            return self._failed_count
+
+    @property
     def dropped_count(self) -> int:
-        """Number of events dropped due to queue overflow."""
-        return self._dropped_count
+        """Events never dispatched: queue overflow or discarded after shutdown."""
+        with self._lock:
+            return self._dropped_count
 
     def _run(self) -> None:
         """Background worker loop."""
@@ -309,8 +495,15 @@ class GovernanceEventProcessor:
             return batch
 
     def _dispatch_batch(self, events: list[GovernanceEvent]) -> None:
-        """Fan out a batch to all registered sinks with error isolation."""
+        """Fan out a batch to all registered sinks with error isolation.
+
+        A batch is counted as delivered if at least one sink emitted it
+        successfully; otherwise (all sinks failed, were circuit-broken, or no
+        sinks are registered) it is counted as failed. Either way the events are
+        accounted, never silently lost.
+        """
         now = time.monotonic()
+        any_success = False
         for sink in self._sinks:
             state = self._sink_states.get(id(sink))
             if state is None:
@@ -324,6 +517,7 @@ class GovernanceEventProcessor:
             try:
                 result = sink.emit(events)
                 if result == SinkExportResult.SUCCESS:
+                    any_success = True
                     state.consecutive_failures = 0
                 elif result == SinkExportResult.FAILURE:
                     state.consecutive_failures += 1
@@ -348,6 +542,15 @@ class GovernanceEventProcessor:
                     self._cb_cooldown_s,
                 )
                 state.consecutive_failures = 0
+
+        # Account every dispatched event exactly once. "delivered if any sink
+        # succeeds" hides partial fan-out failures across multiple sinks; those
+        # remain observable via the per-sink FAILURE / circuit-breaker logs above.
+        with self._lock:
+            if any_success:
+                self._delivered_count += len(events)
+            else:
+                self._failed_count += len(events)
 
 
 class AuditBackendSinkAdapter(GovernanceEventSinkBase):
@@ -398,4 +601,115 @@ class AuditBackendSinkAdapter(GovernanceEventSinkBase):
             self._backend.flush()
         except Exception:
             logger.exception("AuditBackendSinkAdapter flush failed during shutdown")
+        return True
+
+
+class StdoutGovernanceSink(GovernanceEventSinkBase):
+    """Sink that writes signed CloudEvents as JSON lines to a stream.
+
+    Emits one CloudEvents 1.0 envelope per line (newline-delimited JSON), the
+    common shape ingested by SIEM/log collectors. When a signer is provided the
+    envelopes are tamper-evident.
+    """
+
+    def __init__(
+        self,
+        source: str = "/agent-os",
+        *,
+        signer: GovernanceEventSigner | None = None,
+        stream: Any = None,
+    ) -> None:
+        """Initialize the sink.
+
+        Args:
+            source: CloudEvents ``source`` URI-reference for emitted events.
+            signer: Optional signer; when present envelopes are signed.
+            stream: Writable text stream. Defaults to ``sys.stdout`` at emit time.
+        """
+        self._source = source
+        self._signer = signer
+        self._stream = stream
+
+    def emit(self, events: Sequence[GovernanceEvent]) -> SinkExportResult:
+        import sys
+
+        stream = self._stream if self._stream is not None else sys.stdout
+        try:
+            for event in events:
+                cloudevent = event.to_cloudevent(self._source, signer=self._signer)
+                stream.write(json.dumps(cloudevent, sort_keys=True) + "\n")
+            stream.flush()
+            return SinkExportResult.SUCCESS
+        except Exception:
+            logger.exception("StdoutGovernanceSink failed")
+            return SinkExportResult.FAILURE
+
+
+class OTLPGovernanceSink(GovernanceEventSinkBase):
+    """Sink that exports signed CloudEvents via OpenTelemetry (OTLP).
+
+    Thin wrapper over :class:`agent_os.otel_audit_backend.OTelLogsBackend`, which
+    routes structured records to any OTLP-compatible collector. It follows the
+    same opt-in pattern: when ``opentelemetry`` is not installed the backend is a
+    safe no-op and ``emit`` still returns SUCCESS (nothing to deliver).
+    """
+
+    def __init__(
+        self,
+        source: str = "/agent-os",
+        *,
+        signer: GovernanceEventSigner | None = None,
+        backend: Any = None,
+    ) -> None:
+        """Initialize the sink.
+
+        Args:
+            source: CloudEvents ``source`` URI-reference for emitted events.
+            signer: Optional signer; when present the embedded CloudEvent is signed.
+            backend: Optional ``OTelLogsBackend``; one is created when omitted.
+        """
+        self._source = source
+        self._signer = signer
+        if backend is None:
+            from agent_os.otel_audit_backend import OTelLogsBackend
+
+            backend = OTelLogsBackend()
+        self._backend = backend
+
+    @property
+    def enabled(self) -> bool:
+        """Return True when the underlying OTel backend is active."""
+        return bool(getattr(self._backend, "enabled", False))
+
+    def emit(self, events: Sequence[GovernanceEvent]) -> SinkExportResult:
+        from agent_os.audit_logger import AuditEntry
+
+        try:
+            for event in events:
+                cloudevent = event.to_cloudevent(self._source, signer=self._signer)
+                entry = AuditEntry(
+                    timestamp=event.occurred_at,
+                    event_type=event.kind.value,
+                    agent_id=event.agent_id,
+                    action=event.action,
+                    decision=event.decision,
+                    reason=event.reason,
+                    latency_ms=event.latency_ms,
+                    metadata={
+                        "event_id": event.event_id,
+                        "cloudevent": json.dumps(cloudevent, sort_keys=True),
+                    },
+                )
+                self._backend.write(entry)
+            self._backend.flush()
+            return SinkExportResult.SUCCESS
+        except Exception:
+            logger.exception("OTLPGovernanceSink failed")
+            return SinkExportResult.FAILURE
+
+    def shutdown(self, timeout_ms: int = 5000) -> bool:
+        try:
+            self._backend.flush()
+        except Exception:
+            logger.exception("OTLPGovernanceSink flush failed during shutdown")
         return True

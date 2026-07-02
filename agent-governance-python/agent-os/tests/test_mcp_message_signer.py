@@ -5,12 +5,11 @@
 from __future__ import annotations
 
 import base64
-import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from agent_os.mcp_protocols import InMemoryNonceStore
+from agent_os.mcp_protocols import InMemoryNonceStore, NonceStoreCapacityError
 from agent_os.mcp_message_signer import MCPMessageSigner, MCPSignedEnvelope
 
 
@@ -81,20 +80,31 @@ def test_verify_rejects_expired_timestamp():
     assert "replay window" in result.failure_reason
 
 
-def test_nonce_cache_cleanup_and_eviction():
-    signer = MCPMessageSigner(
-        MCPMessageSigner.generate_key(),
-        replay_window=timedelta(milliseconds=10),
-        max_nonce_cache_size=2,
-    )
+def test_nonce_store_fail_closed_and_expired_reclaim():
+    """In-window nonces are never evicted; only expired entries free capacity.
 
-    for payload in ('{"id":1}', '{"id":2}', '{"id":3}'):
-        assert signer.verify_message(signer.sign_message(payload)).is_valid is True
+    Replaces the previous test that asserted count-based eviction of an
+    in-window nonce (which was the replay vulnerability).
+    """
+    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    store = InMemoryNonceStore(clock=lambda: now[0], max_entries=2)
 
-    assert signer.cached_nonce_count == 2
+    store.add("n1", now[0] + timedelta(seconds=1))
+    store.add("n2", now[0] + timedelta(seconds=1))
+    assert store.count() == 2
 
-    time.sleep(0.05)
-    assert signer.cleanup_nonce_cache() >= 1
+    # Full of in-window nonces: fail closed instead of evicting a live nonce.
+    with pytest.raises(NonceStoreCapacityError):
+        store.add("n3", now[0] + timedelta(seconds=1))
+    assert store.has("n1") is True
+    assert store.has("n2") is True
+    assert store.has("n3") is False
+
+    # After the window elapses, expired nonces are reclaimed on the next add.
+    now[0] += timedelta(seconds=2)
+    store.add("n3", now[0] + timedelta(seconds=1))
+    assert store.has("n3") is True
+    assert store.count() == 1
 
 
 def test_factory_and_validation():
@@ -124,25 +134,29 @@ def test_nonce_generator_and_store_injection():
     assert store.has("fixed-nonce") is True
 
 
-def test_nonce_cache_uses_lru_eviction_when_full():
-    store = InMemoryNonceStore(max_entries=2)
-    nonces = iter(["nonce-1", "nonce-2", "nonce-3"])
+def test_replay_within_window_rejected_under_capacity_pressure():
+    """TASK repro, flipped: a small nonce cache must not re-open the replay window.
+
+    Previously (LRU count-eviction) verifying more messages than the cache size
+    evicted the earliest nonce, so re-verifying msg0 returned is_valid=True. Now
+    in-window nonces are retained and overflow messages fail closed, so msg0's
+    nonce is still tracked and the replay is rejected.
+    """
+    nonces = iter([f"nonce-{i}" for i in range(4)])
     signer = MCPMessageSigner(
         MCPMessageSigner.generate_key(),
         max_nonce_cache_size=2,
-        nonce_store=store,
         nonce_generator=lambda: next(nonces),
     )
 
-    first = signer.sign_message('{"id":1}')
-    second = signer.sign_message('{"id":2}')
-    third = signer.sign_message('{"id":3}')
+    envelopes = [signer.sign_message(f'{{"id":{i}}}') for i in range(4)]
+    for env in envelopes:
+        signer.verify_message(env)
 
-    assert signer.verify_message(first).is_valid is True
-    assert signer.verify_message(second).is_valid is True
-    assert store.has("nonce-1") is True
-    assert signer.verify_message(third).is_valid is True
+    # Overflow messages beyond the cache size fail closed rather than evicting.
+    assert signer.verify_message(envelopes[2]).is_valid is False
 
-    assert store.has("nonce-1") is True
-    assert store.has("nonce-2") is False
-    assert store.has("nonce-3") is True
+    # msg0's nonce was never evicted, so replaying it is caught as a duplicate.
+    replay = signer.verify_message(envelopes[0])
+    assert replay.is_valid is False
+    assert replay.failure_reason is not None
