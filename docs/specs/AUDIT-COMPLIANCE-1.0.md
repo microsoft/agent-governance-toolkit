@@ -128,7 +128,7 @@ The AGT Audit and Compliance system MUST provide:
 |                  |     |                  |     |                     |
 | - AuditEntry     |     | - MerkleChain    |     | - EventBus          |
 | - AuditBackend   |     | - Compliance     |     | - DeltaEngine       |
-| - EventSink SPI  |     | - DecisionBOM    |     | - DeltaEngine       |
+| - EventSink SPI  |     | - DecisionBOM    |     |                     |
 | - EventProcessor |     | - AuditCollector |     |                     |
 | - OTel Backend   |     |                  |     |                     |
 +--------+---------+     +--------+---------+     +---------+-----------+

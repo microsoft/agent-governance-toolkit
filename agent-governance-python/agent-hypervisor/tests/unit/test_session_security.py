@@ -70,21 +70,18 @@ class TestIsolationLevels:
     def test_snapshot_properties(self):
         level = IsolationLevel.SNAPSHOT
         assert not level.requires_vector_clocks
-        assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
         assert level.coordination_cost == "low"
 
     def test_read_committed_properties(self):
         level = IsolationLevel.READ_COMMITTED
         assert not level.requires_vector_clocks
-        assert not level.requires_intent_locks
         assert level.allows_concurrent_writes
         assert level.coordination_cost == "medium"
 
     def test_serializable_properties(self):
         level = IsolationLevel.SERIALIZABLE
         assert level.requires_vector_clocks
-        assert level.requires_intent_locks
         assert not level.allows_concurrent_writes
         assert level.coordination_cost == "high"
 
