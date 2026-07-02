@@ -156,7 +156,7 @@ integrity to `trusted`.
 | Proof | Location |
 | --- | --- |
 | Native IFC model and metadata parsing | `agent-governance-python/agent-os/src/agent_os/policies/information_flow.py` |
-| Runtime context, precheck, postcheck | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` |
+| Runtime context, pre-execution check, post-execution check | `agent-governance-python/agent-os/src/agent_os/integrations/base.py` |
 | Structured policy denial | `agent-governance-python/agent-os/src/agent_os/policies/decision.py` and `decision_factory.py` |
 | Unit tests for label parsing and sink decisions | `agent-governance-python/agent-os/tests/policies/test_information_flow.py` |
 | Runtime regression tests | `agent-governance-python/agent-os/tests/test_integrations.py` |
