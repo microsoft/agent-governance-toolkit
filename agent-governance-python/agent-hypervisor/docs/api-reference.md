@@ -574,15 +574,15 @@ curl "http://localhost:8000/api/v1/events?event_type=session.created&limit=10"
 | `session.terminated` | Session terminated |
 | `ring.assigned` | Ring assigned to agent |
 | `ring.demoted` | Agent demoted to lower ring |
-| `ring.breach` | Ring breach detected |
+| `ring.breach_detected` | Ring breach detected |
 | `saga.created` | Saga created |
 | `saga.step_committed` | Saga step committed |
 | `saga.step_failed` | Saga step failed |
 | `saga.compensating` | Saga compensation started |
 | `saga.completed` | Saga completed |
-| `security.kill` | Agent killed via kill switch |
+| `security.agent_killed` | Agent killed via kill switch |
 | `security.rate_limited` | Agent rate-limited |
-| `audit.commitment` | Audit trail committed |
+| `audit.committed` | Audit trail committed |
 
 ---
 
@@ -794,7 +794,7 @@ print(action.required_ring)  # Minimum ring needed
 Manages multi-step transactions with automatic compensation on failure.
 
 ```python
-from hypervisor.saga import SagaOrchestrator
+from hypervisor import SagaOrchestrator
 
 orch = SagaOrchestrator()
 
@@ -853,7 +853,8 @@ Gracefully terminate an agent. Hands off in-flight work to substitutes and
 triggers saga compensation.
 
 ```python
-from hypervisor.security import KillSwitch, KillReason
+from hypervisor import KillSwitch
+from hypervisor.security.kill_switch import KillReason
 
 ks = KillSwitch()
 
@@ -1058,7 +1059,7 @@ restored = CausalTraceId.from_string(s)
 Classifies actions into ring levels and risk weights based on their properties.
 
 ```python
-from hypervisor.rings import ActionClassifier
+from hypervisor import ActionClassifier
 
 classifier = ActionClassifier()
 

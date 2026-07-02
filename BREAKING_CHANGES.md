@@ -73,9 +73,11 @@ the commitment engine stored in memory with no anchoring, and the saga DSL,
 fan-out, and checkpoint modules had no runtime), so the removal is behavior
 preserving:
 
-- Joint liability: `VouchingEngine`, `SlashingEngine`, `LiabilityLedger`,
-  `LiabilityMatrix`, `QuarantineManager`, `QuarantineReason`, `CausalAttributor`
-- Session intent locks: `IntentLockManager`, `LockIntent`
+- Joint liability: `VouchingEngine`, `VouchRecord`, `SlashingEngine`,
+  `LiabilityLedger`, `LedgerEntryType`, `LiabilityMatrix`, `QuarantineManager`,
+  `QuarantineReason`, `CausalAttributor`, `AttributionResult`
+- Session intent locks: `IntentLockManager`, `LockIntent`,
+  `LockContentionError`, `DeadlockError`
 - Advanced saga: `FanOutOrchestrator`, `FanOutPolicy`, `SagaDSLParser`,
   `SagaDefinition`, `CheckpointManager`, `SemanticCheckpoint`
 - Audit and clock internals: `CommitmentEngine`, `EphemeralGC`,

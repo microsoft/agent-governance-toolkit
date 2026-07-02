@@ -1089,7 +1089,7 @@ class TestDecisionBOM(unittest.TestCase):
 # S18 -- Hypervisor Audit (Delta)
 # ===================================================================
 class TestHypervisorAudit(unittest.TestCase):
-    """Conformance tests for hypervisor audit delta and commitment (spec S18)."""
+    """Conformance tests for hypervisor audit delta (spec S18)."""
 
     def test_vfs_change_fields(self):
         """S18.1 -- VFSChange must have path, operation, content_hash fields."""
