@@ -31,7 +31,7 @@
 #                                    significance and consequences of automated decisions
 #   DPA 2017 (Electronic Marketing) — Right to object at any time
 #
-# Mauritius NIC: [A-Z][0-9]{6,7}  (letter + 6-7 digits, e.g. A123456 or A1234567)
+# Mauritius NIC: [A-Z][0-9]{13}  (1 letter + 13 digits, 14 chars, e.g. A1234567890123)
 # Penalties: MUR 200,000 / 5 years (registration); MUR 50,000 / 2 years (notice)
 #
 # ⚠️  Mauritius DPA 2017 is the most GDPR-aligned data protection law in Africa.
@@ -114,11 +114,11 @@ deny contains msg if {
 }
 
 # DPA 2017 (Breach Notification / Security): Mauritius National ID Card (NIC)
-# Format: [A-Z][0-9]{6,7} (letter + 6-7 digits, e.g. A123456)
+# Format: [A-Z][0-9]{13} (1 letter + 13 digits, 14 chars total, e.g. A1234567890123)
 # Exposure triggers 72-hour Commissioner breach notification obligation.
 deny contains msg if {
 	regex.match(
-		`(?i)(mauritius\s+(national\s+)?(id|identity|nic|card)|national\s+(identity\s+)?card\s+(no|number|#)|NIC\s+(no|number|#))[\s:=]{0,5}[A-Z][0-9]{6,7}`,
+		`(?i)(mauritius\s+(national\s+)?(id|identity|nic|card)|national\s+(identity\s+)?card\s+(no|number|#)|NIC\s+(no|number|#))[\s:=]{0,5}[A-Z][0-9]{13}`,
 		input.output,
 	)
 	msg := "Mauritius DPA 2017 (Breach Notification / Security): Mauritius National ID Card (NIC) detected in agent output — blocked; triggers Commissioner breach notification within 72 hours"
@@ -179,13 +179,13 @@ escalate contains msg if {
 	msg := "Mauritius DPA 2017 (Special Categories): Special category personal data detected — requires lawful basis + controller's legitimate activities + appropriate safeguards"
 }
 
-# DPA 2017 (DPO): Mandatory for ALL controllers/processors — escalate if advised against.
-escalate contains msg if {
+# DPA 2017 (DPO): Mandatory for ALL controllers/processors — deny if advised against.
+deny contains msg if {
 	regex.match(
 		`(?i)(no\s+need\s+(for\s+)?(a\s+)?dpo|skip(ping)?\s+(the\s+)?dpo|don'?t\s+need\s+(a\s+)?data\s+protection\s+officer|dpo\s+(is\s+)?(optional|not\s+required))`,
 		input.output,
 	)
-	msg := "Mauritius DPA 2017 (DPO): DPO appointment is mandatory for ALL controllers and processors — no size threshold in Mauritius (stricter than EU GDPR); escalate for compliance review"
+	msg := "Mauritius DPA 2017 (DPO): DPO appointment is mandatory for ALL controllers and processors — stricter than GDPR; no size threshold exemption applies in Mauritius"
 }
 
 # DPA 2017 (Transfer): Cross-border language in agent output

@@ -2,7 +2,7 @@
 # Egypt Personal Data Protection Law No. 151/2020 — OPA Rego Policy
 #
 # Regulatory reference: Personal Data Protection Law No. 151 of 2020
-#                       Executive Regulations: PM Decree No. 1699/2021
+#                       Executive Regulations: Ministerial Decree No. 816/2025
 # Enforcing authority: Personal Data Protection Centre (PDPC / MCIT)
 #                      https://pdp.mcit.gov.eg
 #

@@ -9,11 +9,12 @@
 # Key obligations covered:
 #   s.17     — Eight data protection principles (accountability, lawfulness, purpose
 #              limitation, data minimisation, accuracy, security, openness, participation)
-#   s.17-33  — Data protection principles (full range)
+#   s.17-26  — Data protection principles (full range)
+#   s.28-30  — Data security obligations on controllers (safeguards)
+#   s.31     — Breach notification to DPC and affected data subjects
 #   s.33     — Data subject participation: right to access, correct, delete
 #   s.37     — Special personal data (sensitive categories) — restricted processing
-#   s.38     — Cross-border transfer restrictions (adequacy requirement)
-#   s.40     — Data security obligations on controllers
+#   s.18(2)  — Cross-border transfer restrictions (adequacy requirement)
 #   NIA Act 707 — Ghana Card (GHA-XXXXXXXXX-X) national ID protection
 #
 # ⚠️  Ghana Data Protection Bill 2025 is pending enactment. Monitor DPC for updates
@@ -28,14 +29,15 @@ description: >
   Ghana data protection governance policy for AI agents processing Ghanaian
   personal data. Based on the Data Protection Act 2012 (Act 843) enforced by
   the Data Protection Commission (DPC). Covers cross-border transfer restrictions
-  (s.38), special personal data controls (s.37), data subject participation (s.33),
-  security obligations (s.40), and Ghana Card national ID protection (NIA Act 707).
+  (s.18(2)), special personal data controls (s.37), data subject participation (s.33),
+  security/safeguard obligations (s.28-30), breach notification (s.31), and Ghana
+  Card national ID protection (NIA Act 707).
 
 rules:
 
   # =========================================================================
-  # Breach / Security Notification — s.40
-  # Act 843 requires data controllers to notify the DPC and affected individuals
+  # Breach / Security Notification — s.31 (breach notification), s.28-30 (safeguards)
+  # Act 843 s.31 requires data controllers to notify the DPC and affected individuals
   # promptly on becoming aware of a breach. AI agents must not suppress alerts.
   # =========================================================================
 
@@ -46,7 +48,7 @@ rules:
       value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(alert|notification)|delay\\s+(breach|incident)\\s+(report|notification))"
     action: deny
     priority: 1
-    message: "Ghana DPA Act 843 s.40: Agent cannot suppress breach notifications — DPC and affected data subjects must be notified promptly"
+    message: "Ghana DPA Act 843 s.31: Agent cannot suppress breach notifications — DPC and affected data subjects must be notified promptly"
 
   # =========================================================================
   # Special Personal Data — s.37
@@ -84,7 +86,7 @@ rules:
     message: "Ghana DPA Act 843 s.37: Biometric data detected — must not be transmitted without explicit consent and DPC notification"
 
   # =========================================================================
-  # Cross-Border Data Transfers — s.38
+  # Cross-Border Data Transfers — s.18(2)
   # Transfer of personal data outside Ghana is prohibited unless the destination
   # country ensures an adequate level of protection for data subjects' rights.
   # Special personal data: only with consent or medical necessity (s.37(6-7)).
@@ -97,7 +99,7 @@ rules:
       value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+ghana|cross.?border|international\\s+transfer|offshore|foreign\\s+server)"
     action: escalate
     priority: 1
-    message: "Ghana DPA Act 843 s.38: Cross-border data transfer language detected — destination country adequacy must be verified with DPC"
+    message: "Ghana DPA Act 843 s.18(2): Cross-border data transfer language detected — destination country adequacy must be verified with DPC"
 
   - name: ghana-cross-border-action
     condition:
@@ -106,7 +108,7 @@ rules:
       value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
     action: escalate
     priority: 2
-    message: "Ghana DPA Act 843 s.38: Cross-border data transfer action requires adequacy verification — destination must ensure equivalent protection"
+    message: "Ghana DPA Act 843 s.18(2): Cross-border data transfer action requires adequacy verification — destination must ensure equivalent protection"
 
   # =========================================================================
   # Ghana Card / National ID — NIA Act 707 (2006)
@@ -143,7 +145,7 @@ rules:
       value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote"
     action: escalate
     priority: 2
-    message: "Ghana DPA Act 843 s.17/s.38: Large-volume personal data transfer requires documented lawful purpose and adequacy verification"
+    message: "Ghana DPA Act 843 s.17/s.18(2): Large-volume personal data transfer requires documented lawful purpose and adequacy verification"
 
   # =========================================================================
   # Data Subject Participation — s.33
