@@ -5,11 +5,13 @@
 # Enforcing authority: Data Protection Commission (DPC) — dataprotection.org.gh
 #
 # Key articles enforced:
-#   s.17   — Eight data protection principles
-#   s.33   — Data subject participation (access, correction, deletion)
-#   s.37   — Special personal data (sensitive categories)
-#   s.38   — Cross-border transfer (adequacy requirement)
-#   s.40   — Data security obligations
+#   s.17     — Eight data protection principles
+#   s.17-26  — Data protection principles (full range)
+#   s.28-30  — Data security obligations / safeguards on controllers
+#   s.31     — Breach notification to DPC and affected data subjects
+#   s.33     — Data subject participation (access, correction, deletion)
+#   s.37     — Special personal data (sensitive categories)
+#   s.18(2)  — Cross-border transfer (adequacy requirement)
 #   NIA Act 707 — Ghana Card national ID (GHA-XXXXXXXXX-X)
 #
 # Input schema expected:
@@ -51,10 +53,10 @@ bulk_export_actions := {
 
 # ── Deny rules ────────────────────────────────────────────────────
 
-# s.40: Block breach suppression — DPC must be notified promptly
+# s.31: Block breach suppression — DPC must be notified promptly
 deny contains msg if {
 	regex.match(`(?i)(don'?t\s+(report|notify|disclose)|hide\s+(the\s+)?(breach|incident)|suppress\s+(alert|notification)|delay\s+(breach|incident)\s+(report|notification))`, input.output)
-	msg := "Ghana DPA Act 843 s.40: Agent cannot suppress breach notifications — DPC and affected data subjects must be notified promptly"
+	msg := "Ghana DPA Act 843 s.31: Agent cannot suppress breach notifications — DPC and affected data subjects must be notified promptly"
 }
 
 # s.37: Block biometric data transmission
@@ -63,25 +65,25 @@ deny contains msg if {
 	msg := "Ghana DPA Act 843 s.37: Biometric data detected — must not be transmitted without explicit consent and DPC notification"
 }
 
-# s.38: Block cross-border transfer to non-permitted region
+# s.18(2): Block cross-border transfer to non-permitted region
 deny contains msg if {
 	input.action in transfer_actions
 	input.params.destination_region != null
 	not input.params.destination_region in permitted_regions
 	msg := sprintf(
-		"Ghana DPA Act 843 s.38: Cross-border transfer to region '%v' blocked — destination country adequacy not verified with DPC",
+		"Ghana DPA Act 843 s.18(2): Cross-border transfer to region '%v' blocked — destination country adequacy not verified with DPC",
 		[input.params.destination_region],
 	)
 }
 
-# s.38: Block transfer to non-GH country without documented consent
+# s.18(2): Block transfer to non-GH country without documented consent
 deny contains msg if {
 	input.action in transfer_actions
 	input.params.destination_country != null
 	input.params.destination_country != "GH"
 	not input.context.consent_documented == true
 	msg := sprintf(
-		"Ghana DPA Act 843 s.38: Transfer to '%v' blocked — no documented consent or adequacy basis on file",
+		"Ghana DPA Act 843 s.18(2): Transfer to '%v' blocked — no documented consent or adequacy basis on file",
 		[input.params.destination_country],
 	)
 }
@@ -117,18 +119,18 @@ escalate contains msg if {
 	msg := "Ghana DPA Act 843 s.37: Special personal data detected — requires explicit consent and restricted processing"
 }
 
-# s.38: Cross-border language in agent output
+# s.18(2): Cross-border language in agent output
 escalate contains msg if {
 	regex.match(`(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\s+ghana|cross.?border|international\s+transfer|offshore|foreign\s+server)`, input.output)
-	msg := "Ghana DPA Act 843 s.38: Cross-border data transfer language detected — destination country adequacy must be verified with DPC"
+	msg := "Ghana DPA Act 843 s.18(2): Cross-border data transfer language detected — destination country adequacy must be verified with DPC"
 }
 
-# s.38: Transfer action with missing destination metadata
+# s.18(2): Transfer action with missing destination metadata
 escalate contains msg if {
 	input.action in transfer_actions
 	not input.params.destination_region
 	not input.params.destination_country
-	msg := "Ghana DPA Act 843 s.38: Cross-border transfer with no destination metadata — cannot verify adequacy, requires human review"
+	msg := "Ghana DPA Act 843 s.18(2): Cross-border transfer with no destination metadata — cannot verify adequacy, requires human review"
 }
 
 # s.17: Moderate record exports (data minimisation principle)

@@ -59,12 +59,13 @@ test_deny_registration_bypass if {
 }
 
 # ── Deny: Mauritius National ID Card (NIC) ────────────────────────
+# NIC format: 1 letter + 13 digits (14 chars total), e.g. A1234567890123
 
 test_deny_mauritius_nic_in_output if {
 	count(mauritius_dpa.deny) > 0 with input as {
 		"action": "respond",
 		"params": {},
-		"output": "Customer NIC No: A123456 — account verified.",
+		"output": "Customer NIC No: A1234567890123 — account verified.",
 		"context": {},
 	}
 }
@@ -73,7 +74,25 @@ test_deny_mauritius_national_identity_card if {
 	count(mauritius_dpa.deny) > 0 with input as {
 		"action": "respond",
 		"params": {},
-		"output": "Mauritius National ID: B9876543",
+		"output": "Mauritius National ID: B9876543012345",
+		"context": {},
+	}
+}
+
+test_deny_mauritius_nic_14_char_format if {
+	count(mauritius_dpa.deny) > 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "Please confirm NIC number: C0000000000001 before proceeding.",
+		"context": {},
+	}
+}
+
+test_allow_mauritius_nic_short_format_no_match if {
+	count(mauritius_dpa.deny) == 0 with input as {
+		"action": "respond",
+		"params": {},
+		"output": "Reference code: A123456 confirmed.",
 		"context": {},
 	}
 }
