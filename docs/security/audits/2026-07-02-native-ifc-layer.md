@@ -41,11 +41,11 @@ deterministic provenance, integrity, and confidentiality tracking.
 
 This PR adds a new governance control over sensitive content flow. The relevant
 security risk is whether IFC can fail open, silently downgrade labels, or create
-an overbroad claim that deployers rely on outside the implemented boundary.
+a claim that operators rely on outside the implemented boundary.
 
 | Risk | Mitigation | Test coverage |
 |------|------------|---------------|
-| Unlabeled or malformed IFC metadata bypasses sink policy | Strict mode treats unlabeled external output as untrusted/public and denies malformed integrity, role, and sink-policy fields | `test_from_metadata_rejects_unknown_integrity`, `test_malformed_information_flow_metadata_denies_precheck`, `test_sink_policy_rejects_malformed_accepts_untrusted` |
+| Unlabeled or malformed IFC metadata bypasses sink policy | Strict mode treats unlabeled external output as untrusted/public and denies malformed integrity, role, and sink-policy fields | `test_from_metadata_rejects_unknown_integrity`, malformed metadata denial coverage, `test_sink_policy_rejects_malformed_accepts_untrusted` |
 | Public or external sinks receive untrusted content | Sinks must opt in to untrusted input with `accepts_untrusted=True`; policy-configured `sink_tools` make enforcement independent of caller-supplied metadata | `test_strict_ifc_denies_untrusted_context_to_sink`, `test_policy_configured_sink_tools_do_not_require_request_role_metadata`, `test_malicious_untrusted_content_exfiltration_is_blocked` |
 | Confidential content is sent to a lower-classification sink | Sink policy enforces `max_allowed_confidentiality` before tool execution | `test_enforce_sink_blocks_confidentiality_over_limit`, `test_pre_execute_check_enforces_information_flow_sink_policy` |
 | Derived content lowers the running context label | `ContextEnvelope.with_ifc_label()` uses max-lattice confidentiality and sticky untrusted integrity | `test_with_ifc_label_tracks_integrity_and_confidentiality`, `test_with_ifc_label_untrusted_is_sticky` |
@@ -85,7 +85,7 @@ PR and must be backed by durable storage before production cross-session claims.
   runtime pre/post execution behavior.
 - 13 AgentMesh receipt tests cover valid receipt acceptance and rejection of
   tampered payloads, replayed nonces, expired or future-issued receipts,
-  overlong TTLs, wrong recipient/subject, workflow mismatch, downgrade, and
+  excessive TTLs, wrong recipient/subject, workflow mismatch, downgrade, and
   integrity restoration.
 - `examples/information-flow-control/demo.py` proves deterministic blocking of
   malicious untrusted content from an external email sink, with bounded reveal
