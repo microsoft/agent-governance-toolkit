@@ -238,5 +238,4 @@ print(result.kill_id)  # "kill:a1b2c3d4"
 - Integrate with the full `Hypervisor` orchestrator for session-managed rings
 - Use `RingBreachDetector` to automatically detect anomalous access patterns
 - Combine with `SagaOrchestrator` for transactional multi-step workflows
-- Add `LiabilityMatrix` to track agent trust scores alongside ring assignments
 - Explore the `ActionClassifier` for automatic ring-level classification

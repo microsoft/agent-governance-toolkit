@@ -24,14 +24,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ACTIONS = [
     REPO_ROOT / "action" / "action.yml",
-    REPO_ROOT / "action" / "security-scan" / "action.yml",
-    REPO_ROOT / "action" / "governance-attestation" / "action.yml",
 ]
 
 READMES = [
     REPO_ROOT / "action" / "README.md",
-    REPO_ROOT / "action" / "security-scan" / "README.md",
-    REPO_ROOT / "action" / "governance-attestation" / "README.md",
 ]
 
 EXPECTED_REGEX = "^[0-9]+\\.[0-9]+\\.[0-9]+((a|b|rc)[0-9]+)?$"

@@ -25,7 +25,7 @@ The red team dataset (60 prompts) is available both locally and on Hugging Face:
 
 ### Local Access
 ```python
-from benchmark.red_team_dataset import get_all_prompts, get_dataset_stats
+from benchmarks.red_team_dataset import get_all_prompts, get_dataset_stats
 
 # Get all prompts
 prompts = get_all_prompts()

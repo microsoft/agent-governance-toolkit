@@ -15,7 +15,7 @@ streamlit run app.py
 - **Session Overview** — Active sessions, participant counts, ring distribution
 - **Execution Rings** — Ring hierarchy, trust-based assignment, transition history
 - **Saga Orchestration** — Timeline/Gantt charts, step states, compensation chains
-- **Liability & Trust** — Sponsor networks, penalty cascades, trust leaderboard
+- **Audit & Verification** — Trust score leaderboard, audit events, verification signals
 - **Event Stream** — Real-time event log, type heatmaps, causal traces
 
 ## Screenshots

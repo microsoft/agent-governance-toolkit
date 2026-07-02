@@ -53,9 +53,8 @@ packages = ["src/hypervisor"]
 # The published wheel is a dep-only deprecation stub (see [project] above), but
 # the hypervisor source tree under src/ is still linted in CI. These dev-tooling
 # sections were dropped during the package consolidation in #2794; without the
-# per-file-ignores, ruff reports F401 on re-export __init__.py files such as
-# hypervisor/liability/__init__.py and hypervisor/session/__init__.py. Restoring
-# them keeps CI green.
+# per-file-ignores, ruff reports F401 on package re-export __init__.py files.
+# Restoring them keeps CI green.
 # ============================================================================
 [tool.ruff]
 target-version = "py311"

@@ -116,6 +116,6 @@ Default score for new agents: **500** (Standard tier). Score changes are driven 
 
 ## Benchmark Methodology
 
-Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`agent-governance-python/agent-os/modules/control-plane/benchmark/`](../agent-governance-python/agent-os/modules/control-plane/benchmark/) for methodology, datasets, and reproduction instructions.
+Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`agent-governance-python/agent-os/modules/control-plane/benchmarks/`](../agent-governance-python/agent-os/modules/control-plane/benchmarks/) for methodology, datasets, and reproduction instructions.
 
 Full benchmark results: **[BENCHMARKS.md](../BENCHMARKS.md)**
