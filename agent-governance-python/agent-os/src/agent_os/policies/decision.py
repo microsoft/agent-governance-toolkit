@@ -24,6 +24,7 @@ class ViolationCategory(str, Enum):
     HUMAN_APPROVAL = "human_approval_required"
     CONFIDENCE_THRESHOLD = "confidence_threshold"
     DRIFT = "drift"
+    INFORMATION_FLOW = "information_flow"
     POLICY_ERROR = "policy_error"
 
 

@@ -134,7 +134,7 @@ format or cloud-locked state.
 | Framework-agnostic library | A managed cloud service |
 | Audit trail of actions | Audit trail of outcomes |
 | Permission layer (L3/L4) | Application logic security (L7) |
-| Action governance | Knowledge / data provenance governance |
+| Runtime and scoped IFC governance | Semantic truth verification for arbitrary content labels |
 | Enforcement infrastructure | Turnkey compliance solution |
 
 ## Recommended Architecture
@@ -161,34 +161,69 @@ AGT is one layer in a defense-in-depth strategy, not the entire strategy.
 
 ---
 
-## 7. Knowledge Governance Gap
+## 7. Knowledge Governance Scope
 
-AGT governs **agent actions** (tool calls, resource access, inter-agent messages).
-It does **not** govern the **knowledge agents consume** — the documents, databases,
-embeddings, and context retrieved during reasoning.
+AGT now has a scoped native information-flow-control layer for governed Agent OS
+execution, aligned with the FIDES paper
+[*Securing AI Agents with Information-Flow Control*](https://arxiv.org/abs/2505.23643).
+It labels source output, accumulates integrity and confidentiality in
+`ContextEnvelope`, and blocks incompatible sinks before execution when
+`GovernancePolicy.information_flow.enabled` is true.
 
 **What this means in practice:**
 
-- ✅ AGT blocks an agent from calling `send_email` if policy forbids it
-- ❌ AGT does **not** verify the provenance, freshness, or authorization of
-  documents retrieved via RAG
-- ❌ AGT does **not** track which knowledge sources influenced an agent's decision
-- ❌ AGT does **not** enforce data classification labels on retrieved context
+- ✅ AGT can block `send_email` if policy forbids it
+- ✅ AGT can block a trusted-only sink when accumulated context is untrusted
+- ✅ AGT can block a sink when accumulated confidentiality exceeds the sink's
+  `max_allowed_confidentiality`
+- ❌ AGT does **not** infer correct labels from arbitrary retrieved documents
+  without labeled source metadata or an ingress classifier
+- ✅ AGT can attach and verify signed IFC receipts on native AgentMesh
+  agent-to-agent message frames
+- ✅ AGT can reject distributed receipt tampering, replayed nonces, and attempts
+  to lower sensitivity or restore untrusted integrity
+- ✅ AGT can normalize Agent Framework/FIDES `additional_properties` metadata into
+  the native IFC model
+- ✅ AGT can quarantine untrusted tool results behind opaque variable handles and
+  reveal only bounded, explicitly authorized fields
+- ✅ AGT can declassify confidentiality or endorse integrity only through
+  explicit audited transforms with authority and reason
+- ✅ AGT can project the IFC profile into ACS via `annotations.information_flow`
+- ❌ AGT does **not** yet claim durable distributed IFC across sessions,
+  persistent storage, arbitrary mesh topologies, or relay-side encrypted-payload
+  inspection
+- ❌ AGT does **not** verify freshness or authorization of retrieved RAG documents
+  unless those checks are implemented by the source tool or classifier
 
-**Example gap:** An agent retrieves a confidential HR document via a search tool
-(which AGT permits via policy), then summarizes it in a Slack message (also
-permitted). Both actions are individually governed, but the *knowledge flow* —
-confidential data reaching an unauthorized channel — is invisible to AGT.
+**Example enforced flow:** A source tool returns untrusted private content with
+FIDES-compatible metadata. AGT folds that label into the workflow's
+`ContextEnvelope` and can store raw content behind an opaque `ifcvar://` handle.
+A later public-email sink is either listed in `information_flow.sink_tools` or
+declares `role=sink`, `accepts_untrusted=False`, and
+`max_allowed_confidentiality=internal`, so AGT denies the sink before execution.
+If the workflow only needs a safe ticket id, a reveal policy can release that
+specific field with an explicit authority, authorization reference, reason, and
+character-capacity bound.
 
-**Mitigations available today:**
-- Use **egress policies** to restrict which domains agents can send data to
-- Use **blocked_patterns** to catch PII/confidential patterns in tool arguments
-- Combine AGT with a **data classification** layer that labels context before
-  it reaches the agent
+**Remaining gap:** If a source emits unlabeled content outside strict mode, or if
+an external system assigns labels incorrectly, AGT cannot prove the semantic
+truth of those labels.
 
-**What we're building:**
-- Integration points for external knowledge governance systems
-- Context provenance tracking in audit logs
+**Mitigations and controls available today:**
+- Enable strict IFC with `GovernancePolicy.information_flow={"enabled": True,
+  "strict": True}`.
+- Label source outputs with `information_flow`, `ifc`, `agt_ifc`, `fides`, or
+  `additional_properties` metadata.
+- List governed sinks in `information_flow.sink_tools` or mark them with
+  `information_flow.role="sink"`, then require `accepts_untrusted` and
+  `max_allowed_confidentiality`.
+- Keep egress policies and `blocked_patterns` as defense-in-depth controls.
+
+**Still being built:**
+- Durable cross-session nonce storage and remote envelope resolution for
+  distributed IFC.
+- Relay-side policy integration and encrypted payload lifecycle semantics for
+  arbitrary mesh topologies.
 
 > *This gap was identified in external analysis by [Mojar AI](https://www.mojar.ai/blog/industry-news/microsoft-agent-governance-toolkit-missing-knowledge-layer).*
 
@@ -248,8 +283,6 @@ dashboard shows "governed" status, but no rules are enforced.
 **Mitigations available today:**
 - Use `strict` mode (deny-by-default) in production — this requires explicit
   allow rules for every permitted action
-- Use `agt audit` CLI command to verify loaded policies and detect permissive
-  defaults
 - Use the **MCP Security Scanner** to validate tool configurations
 - Run `agt doctor` to check that all components are properly initialized
 
