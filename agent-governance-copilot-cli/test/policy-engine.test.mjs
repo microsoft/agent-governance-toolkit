@@ -461,6 +461,8 @@ test("evaluatePreToolUse denies recursive force deletes", async () => {
     for (const [toolName, command] of [
       ["bash", "rm -rf important-data"],
       ["bash", "rm -fr important-data"],
+      ["bash", "rm -rfv important-data"],
+      ["bash", "rm -rvf important-data"],
       ["bash", "rm -r -f important-data"],
       ["bash", "rm --recursive --force important-data"],
       ["bash", "rm --force --recursive important-data"],
@@ -468,7 +470,10 @@ test("evaluatePreToolUse denies recursive force deletes", async () => {
       ["bash", "rm -rf /"],
       ["bash", "rm -rf ~/.ssh"],
       ["bash", "npm test && rm -rf important-data"],
+      ["powershell", "rm -r -fo important-data"],
       ["powershell", "Remove-Item -Recurse -Force important-data"],
+      ["powershell", "Remove-Item -r -fo important-data"],
+      ["powershell", "ri -r -fo important-data"],
       ["powershell", "rd /s /q important-data"],
     ]) {
       const result = await evaluatePreToolUse(state, {
@@ -485,10 +490,14 @@ test("evaluatePreToolUse does not deny safe cleanup or non-recursive force delet
   await withPackagedPolicyState(async (state) => {
     for (const [toolName, command] of [
       ["bash", "rm -rf node_modules"],
+      ["bash", "rm -rfv node_modules"],
       ["bash", "rm -rf build"],
       ["bash", "rm -fr dist"],
       ["bash", "rm -f important-data"],
       ["bash", "rm --force important-data"],
+      ["powershell", "rm important-data -Confirm"],
+      ["powershell", "Remove-Item -Filter *.tmp important-data"],
+      ["powershell", "Remove-Item important-data -Confirm"],
       ["powershell", "Remove-Item -Recurse -Force build"],
       ["powershell", "rd /s /q node_modules"],
     ]) {

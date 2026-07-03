@@ -402,7 +402,7 @@ function createCommandPatternBackend(policy) {
         if (!matchedPattern) {
           continue;
         }
-        if (shouldBypassBlockedCommandRule(rule, commandText)) {
+        if (shouldBypassBlockedCommandRule(rule, commandText, toolName)) {
           continue;
         }
 
@@ -876,9 +876,9 @@ function createMinimalFallbackPolicy() {
   };
 }
 
-function shouldBypassBlockedCommandRule(rule, commandText) {
+function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
   if (rule.id === "recursive-delete") {
-    return !hasRecursiveForceDelete(commandText) || isSafeCleanupCommand(commandText);
+    return !hasRecursiveForceDelete(commandText, toolName) || isSafeCleanupCommand(commandText, toolName);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);
@@ -886,7 +886,7 @@ function shouldBypassBlockedCommandRule(rule, commandText) {
   return false;
 }
 
-function getRmCommandDetails(commandText) {
+function getRmCommandDetails(commandText, toolName) {
   const tokens = tokenizeCommand(commandText);
   const commandIndex = tokens.findIndex((token) =>
     /^(rm|remove-item|ri|rd|del)$/i.test(stripCommandToken(token)),
@@ -895,6 +895,8 @@ function getRmCommandDetails(commandText) {
     return undefined;
   }
 
+  const commandName = stripCommandToken(tokens[commandIndex]).toLowerCase();
+  const parsesUnixShortOptions = commandName === "rm" && !isPowerShellTool(toolName);
   let recursive = false;
   let force = false;
   const candidateTargets = [];
@@ -907,13 +909,12 @@ function getRmCommandDetails(commandText) {
       const normalizedFlag = normalizedToken.toLowerCase();
       if (
         normalizedFlag === "--recursive" ||
-        normalizedFlag === "-recursive" ||
-        normalizedFlag === "-recurse"
+        isPowerShellRecursiveParameter(normalizedFlag)
       ) {
         recursive = true;
-      } else if (normalizedFlag === "--force" || normalizedFlag === "-force") {
+      } else if (normalizedFlag === "--force" || isPowerShellForceParameter(normalizedFlag)) {
         force = true;
-      } else if (/^-[a-z]{1,2}$/i.test(normalizedFlag)) {
+      } else if (parsesUnixShortOptions && isUnixRmShortOptionCluster(normalizedFlag)) {
         recursive ||= /r/i.test(normalizedFlag);
         force ||= /f/i.test(normalizedFlag);
       }
@@ -940,19 +941,43 @@ function getRmCommandDetails(commandText) {
   };
 }
 
-function hasRecursiveForceDelete(commandText) {
-  const details = getRmCommandDetails(commandText);
+function hasRecursiveForceDelete(commandText, toolName) {
+  const details = getRmCommandDetails(commandText, toolName);
   return Boolean(details?.recursive && details?.force);
 }
 
-function isSafeCleanupCommand(commandText) {
+function isSafeCleanupCommand(commandText, toolName) {
   if (containsCommandControlOperator(commandText)) {
     return false;
   }
 
-  const details = getRmCommandDetails(commandText);
+  const details = getRmCommandDetails(commandText, toolName);
   const candidateTargets = details?.targets ?? [];
   return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
+}
+
+function isPowerShellTool(toolName) {
+  return /\b(?:powershell|pwsh)\b/i.test(String(toolName ?? ""));
+}
+
+function isPowerShellRecursiveParameter(flag) {
+  if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
+    return false;
+  }
+  const parameterName = flag.slice(1).toLowerCase();
+  return parameterName === "recursive" || "recurse".startsWith(parameterName);
+}
+
+function isPowerShellForceParameter(flag) {
+  if (!/^-[a-z]+$/i.test(flag) || flag.startsWith("--")) {
+    return false;
+  }
+  const parameterName = flag.slice(1).toLowerCase();
+  return parameterName.length >= 2 && "force".startsWith(parameterName);
+}
+
+function isUnixRmShortOptionCluster(flag) {
+  return /^-[dfiprvw]+$/i.test(flag);
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
