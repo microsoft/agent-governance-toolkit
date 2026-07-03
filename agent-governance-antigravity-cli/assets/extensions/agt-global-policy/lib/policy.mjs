@@ -1020,7 +1020,7 @@ function createMinimalFallbackPolicy() {
 
 function shouldBypassBlockedCommandRule(rule, commandText) {
   if (rule.id === "recursive-delete") {
-    return isSafeCleanupCommand(commandText);
+    return !hasRecursiveForceDelete(commandText) || isSafeCleanupCommand(commandText);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);
@@ -1028,25 +1028,45 @@ function shouldBypassBlockedCommandRule(rule, commandText) {
   return false;
 }
 
-function isSafeCleanupCommand(commandText) {
-  if (containsCommandControlOperator(commandText)) {
-    return false;
-  }
-
+function getRmCommandDetails(commandText) {
   const tokens = tokenizeCommand(commandText);
   const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(stripCommandToken(token)),
+    /^(rm|remove-item|rmdir|ri|rd|del)$/i.test(stripCommandToken(token)),
   );
   if (commandIndex === -1) {
-    return false;
+    return undefined;
   }
 
+  let recursive = false;
+  let force = false;
   const candidateTargets = [];
   for (const token of tokens.slice(commandIndex + 1)) {
     const normalizedToken = stripCommandToken(token);
-    if (!normalizedToken || normalizedToken.startsWith("-")) {
+    if (!normalizedToken) {
       continue;
     }
+    if (normalizedToken.startsWith("-")) {
+      const normalizedFlag = normalizedToken.toLowerCase();
+      if (
+        normalizedFlag === "--recursive" ||
+        normalizedFlag === "-recursive" ||
+        normalizedFlag === "-recurse"
+      ) {
+        recursive = true;
+      } else if (normalizedFlag === "--force" || normalizedFlag === "-force") {
+        force = true;
+      } else if (/^-[a-z]{1,2}$/i.test(normalizedFlag)) {
+        recursive ||= /r/i.test(normalizedFlag);
+        force ||= /f/i.test(normalizedFlag);
+      }
+      continue;
+    }
+    if (/^\/[a-z]+$/i.test(normalizedToken)) {
+      recursive ||= /s/i.test(normalizedToken);
+      force ||= /[fq]/i.test(normalizedToken);
+      continue;
+    }
+
     for (const part of normalizedToken.split(",")) {
       const cleaned = normalizeCommandPathToken(part);
       if (cleaned) {
@@ -1055,6 +1075,25 @@ function isSafeCleanupCommand(commandText) {
     }
   }
 
+  return {
+    force,
+    recursive,
+    targets: candidateTargets,
+  };
+}
+
+function hasRecursiveForceDelete(commandText) {
+  const details = getRmCommandDetails(commandText);
+  return Boolean(details?.recursive && details?.force);
+}
+
+function isSafeCleanupCommand(commandText) {
+  if (containsCommandControlOperator(commandText)) {
+    return false;
+  }
+
+  const details = getRmCommandDetails(commandText);
+  const candidateTargets = details?.targets ?? [];
   return candidateTargets.length > 0 && candidateTargets.every(isSafeCleanupTarget);
 }
 

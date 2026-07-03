@@ -44,7 +44,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "\\b(?:rm|del|rmdir|remove-item)\\b[\\s\\S]*(?:-rf|-fr|--recursive|/s)",
+          "source": "(^|[\\s;&|()])(?:rm|remove-item|rmdir|ri|rd|del)\\b",
           "flags": "i"
         }
       ]
