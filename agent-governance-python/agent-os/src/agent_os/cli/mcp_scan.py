@@ -1276,40 +1276,63 @@ def _list_remote_primitives(
 
 def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: float, max_pages: int) -> StdioMCPInspection:
     # Issue #3130: prefer stateless ``server/discover`` so the scanner can
-    # interop with ``2026-07-28`` peers without a session. Any error,
-    # non-stateless negotiated version, or transport-level HTTP failure
-    # falls through to the legacy ``initialize`` handshake below.
-    stateless_discover = _streamable_http_call(
-        server,
-        _jsonrpc_request(
-            "server/discover",
-            {},
-            meta={"clientInfo": _client_info(), "capabilities": {}},
-        ),
-        timeout=timeout,
-        protocol_version=MCP_PROTOCOL_VERSION_STATELESS,
-    )[0]
+    # interop with ``2026-07-28`` peers without a session.
+    # - HTTP 400/404/405 from the stateless probe means the peer rejected
+    #   stateless discovery on the Streamable HTTP endpoint; fall through
+    #   to the legacy ``initialize`` handshake on the SAME endpoint.
+    #   Transport-level mismatches in ``initialize`` itself still trigger
+    #   the SSE fallback in ``inspect_remote_server``.
+    # - HTTP 5xx and other transport errors propagate so the outer handler
+    #   can fail closed.
+    # - A malformed ``server/discover`` response is rejected via the same
+    #   validation the legacy ``initialize`` handshake uses, then falls
+    #   through to legacy.
+    stateless_discover: dict[str, Any] | None = None
+    try:
+        stateless_discover = _streamable_http_call(
+            server,
+            _jsonrpc_request(
+                "server/discover",
+                {},
+                meta={"clientInfo": _client_info(), "capabilities": {}},
+            ),
+            timeout=timeout,
+            protocol_version=MCP_PROTOCOL_VERSION_STATELESS,
+        )[0]
+    except urllib.error.HTTPError as http_error:
+        if http_error.code not in {400, 404, 405}:
+            raise
+        # Peer rejected stateless discovery on this Streamable HTTP
+        # endpoint; fall through to legacy ``initialize`` on the same URL.
+    except (urllib.error.URLError, ValueError, json.JSONDecodeError):
+        pass  # transport/parse failure: fall through to legacy.
+
     if stateless_discover and "error" not in stateless_discover:
         discover_result = stateless_discover.get("result", {})
         if isinstance(discover_result, Mapping):
-            discover_protocol = str(discover_result.get("protocolVersion", "")) or None
-            if discover_protocol == MCP_PROTOCOL_VERSION_STATELESS:
-                stateless_meta = {"clientInfo": _client_info(), "capabilities": {}}
+            try:
+                _validate_initialize_result(discover_result)
+            except RuntimeError:
+                discover_result = None  # malformed discover response: fall through to legacy.
+            if discover_result is not None:
+                discover_protocol = str(discover_result.get("protocolVersion", "")) or None
+                if discover_protocol == MCP_PROTOCOL_VERSION_STATELESS:
+                    stateless_meta = {"clientInfo": _client_info(), "capabilities": {}}
 
-                def call(payload: dict[str, Any]) -> dict[str, Any] | None:
-                    payload_with_meta = payload if "_meta" in payload else {**payload, "_meta": stateless_meta}
-                    response, _ = _streamable_http_call(server, payload_with_meta, timeout=timeout, protocol_version=MCP_PROTOCOL_VERSION_STATELESS)
-                    return response
+                    def call(payload: dict[str, Any]) -> dict[str, Any] | None:
+                        payload_with_meta = payload if "_meta" in payload else {**payload, "_meta": stateless_meta}
+                        response, _ = _streamable_http_call(server, payload_with_meta, timeout=timeout, protocol_version=MCP_PROTOCOL_VERSION_STATELESS)
+                        return response
 
-                tools = _list_remote_primitives(call, "tools/list", "tools", normalize_mcp_tool, max_pages) if _capability_enabled(discover_result, "tools") else []
-                resources = _list_remote_primitives(call, "resources/list", "resources", normalize_mcp_resource, max_pages) if _capability_enabled(discover_result, "resources") else []
-                resource_templates = _list_remote_primitives(call, "resources/templates/list", "resourceTemplates", normalize_mcp_resource_template, max_pages, optional=True) if _capability_enabled(discover_result, "resources") else []
-                prompts = _list_remote_primitives(call, "prompts/list", "prompts", normalize_mcp_prompt, max_pages) if _capability_enabled(discover_result, "prompts") else []
-                return StdioMCPInspection(
-                    server_name=server.name, ok=True, tools=tools, resources=resources,
-                    resource_templates=resource_templates, prompts=prompts,
-                    initialize_result=dict(discover_result), transport=server.transport, protocol_version=discover_protocol,
-                )
+                    tools = _list_remote_primitives(call, "tools/list", "tools", normalize_mcp_tool, max_pages) if _capability_enabled(discover_result, "tools") else []
+                    resources = _list_remote_primitives(call, "resources/list", "resources", normalize_mcp_resource, max_pages) if _capability_enabled(discover_result, "resources") else []
+                    resource_templates = _list_remote_primitives(call, "resources/templates/list", "resourceTemplates", normalize_mcp_resource_template, max_pages, optional=True) if _capability_enabled(discover_result, "resources") else []
+                    prompts = _list_remote_primitives(call, "prompts/list", "prompts", normalize_mcp_prompt, max_pages) if _capability_enabled(discover_result, "prompts") else []
+                    return StdioMCPInspection(
+                        server_name=server.name, ok=True, tools=tools, resources=resources,
+                        resource_templates=resource_templates, prompts=prompts,
+                        initialize_result=dict(discover_result), transport=server.transport, protocol_version=discover_protocol,
+                    )
 
     # Legacy 2025-11-25 handshake: ``initialize`` -> ``notifications/initialized``
     # -> session-bound ``tools/list`` / ``resources/list`` / ``prompts/list``.

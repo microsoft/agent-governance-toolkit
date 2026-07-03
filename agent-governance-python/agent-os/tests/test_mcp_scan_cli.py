@@ -686,6 +686,16 @@ class _StreamableHTTPMCPHandler(BaseHTTPRequestHandler):
     # (default), the handler returns method-not-found so the scanner
     # exercises the legacy fallback path.
     discover_protocol_response: str | None = None
+    # Issue #3130 (review feedback): when set, ``server/discover`` returns
+    # this HTTP status with an empty body, triggering the scanner's
+    # HTTPError fallback. 400/404/405 trigger the legacy ``initialize``
+    # fallback on the same endpoint; other codes propagate to the outer
+    # ``inspect_remote_server`` handler.
+    discover_response_status: int | None = None
+    # Issue #3130 (review feedback): when set, this dict replaces the
+    # auto-generated discover response body, used to inject malformed
+    # payloads (e.g. missing ``capabilities``) for validation tests.
+    discover_response_body: dict | None = None
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
         return
@@ -695,16 +705,31 @@ class _StreamableHTTPMCPHandler(BaseHTTPRequestHandler):
         payload = json.loads(self.rfile.read(length).decode("utf-8"))
         type(self).requests.append({"payload": payload, "headers": dict(self.headers)})
         method = payload.get("method")
-        if method == "server/discover" and type(self).discover_protocol_response is not None:
-            response = {
-                "jsonrpc": "2.0",
-                "id": payload["id"],
-                "result": {
-                    "protocolVersion": type(self).discover_protocol_response,
-                    "capabilities": type(self).capabilities_response,
-                    "serverInfo": {"name": "http-test", "version": "1.0"},
-                },
-            }
+        if method == "server/discover":
+            if type(self).discover_response_status is not None:
+                # HTTP-level rejection: empty body, urllib raises HTTPError.
+                self.send_response(type(self).discover_response_status)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if type(self).discover_response_body is not None:
+                # Issue #3130 (review feedback): always echo the request id
+                # so the scanner's ``_response_message`` id check passes,
+                # leaving only the intended malformed shape (e.g. missing
+                # ``capabilities``) for the scanner to detect.
+                response = {**type(self).discover_response_body, "id": payload["id"]}
+            elif type(self).discover_protocol_response is not None:
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": payload["id"],
+                    "result": {
+                        "protocolVersion": type(self).discover_protocol_response,
+                        "capabilities": type(self).capabilities_response,
+                        "serverInfo": {"name": "http-test", "version": "1.0"},
+                    },
+                }
+            else:
+                response = {"jsonrpc": "2.0", "id": payload.get("id"), "error": {"code": -32601, "message": "not found"}}
         elif method == "initialize":
             response = {
                 "jsonrpc": "2.0",
@@ -811,7 +836,10 @@ class _LegacySSEMCPHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         if self.path == "/sse" and type(self).reject_post_initialize:
-            type(self).reject_post_initialize = False
+            # Issue #3130 (review feedback): stay rejected for the legacy
+            # ``initialize`` POST that the dual-stack scanner sends as a
+            # fallback, so the SSE fallback path in ``inspect_remote_server``
+            # is reached.
             self.send_response(405)
             self.send_header("Content-Length", "0")
             self.end_headers()
@@ -1022,6 +1050,123 @@ def test_inspect_streamable_http_server_falls_back_to_legacy_when_discover_unsup
 
     tools_request = next(r for r in _StreamableHTTPMCPHandler.requests if r["payload"].get("method") == "tools/list")
     assert tools_request["headers"]["Mcp-Session-Id"] == _StreamableHTTPMCPHandler.session_id
+
+
+# Issue #3130 (review feedback): the scanner's ``server/discover`` probe
+# is wrapped in try/except so HTTP 400/404/405 from the stateless path
+# fall through to the legacy ``initialize`` handshake on the SAME
+# endpoint (instead of immediately diverting to SSE). 5xx and malformed
+# payloads are handled distinctly per the review.
+
+
+def _assert_discover_falls_back_to_legacy_initialize(discover_status: int) -> None:
+    # Shared body for HTTP 400/404/405 fallback tests.
+    _StreamableHTTPMCPHandler.requests = []
+    _StreamableHTTPMCPHandler.response_mode = "json"
+    _StreamableHTTPMCPHandler.discover_protocol_response = None
+    _StreamableHTTPMCPHandler.discover_response_status = discover_status
+    _StreamableHTTPMCPHandler.discover_response_body = None
+    _StreamableHTTPMCPHandler.protocol_response = MCP_PROTOCOL_VERSION
+    _StreamableHTTPMCPHandler.capabilities_response = {"tools": {}, "resources": {}, "prompts": {}}
+    server = _serve(_StreamableHTTPMCPHandler)
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/mcp"
+        inspection = inspect_remote_server(RemoteMCPServerConfig("http", "streamable-http", url), timeout=2)
+    finally:
+        _StreamableHTTPMCPHandler.discover_response_status = None
+        setattr(server, "_shutdown_sse", True)
+        server.shutdown()
+        server.server_close()
+
+    assert inspection.ok is True
+    assert inspection.transport == "streamable-http"
+    assert inspection.protocol_version == MCP_PROTOCOL_VERSION
+    methods_seen = [r["payload"].get("method") for r in _StreamableHTTPMCPHandler.requests]
+    assert methods_seen[0] == "server/discover"
+    assert "initialize" in methods_seen
+    assert "notifications/initialized" in methods_seen
+    assert "tools/list" in methods_seen
+
+
+def test_inspect_streamable_http_server_discover_http_400_falls_back_to_legacy_initialize():
+    _assert_discover_falls_back_to_legacy_initialize(400)
+
+
+def test_inspect_streamable_http_server_discover_http_404_falls_back_to_legacy_initialize():
+    _assert_discover_falls_back_to_legacy_initialize(404)
+
+
+def test_inspect_streamable_http_server_discover_http_405_falls_back_to_legacy_initialize():
+    _assert_discover_falls_back_to_legacy_initialize(405)
+
+
+def test_inspect_streamable_http_server_discover_http_500_does_not_fall_back():
+    # HTTP 500 is not in {400, 404, 405} so the discover probe's HTTPError
+    # propagates to ``inspect_remote_server``'s outer handler, which
+    # returns ``ok=False``. The scanner does NOT fall back to SSE
+    # (the SSE fallback is reserved for 400/404/405 on the
+    # ``initialize`` handshake itself, not on the stateless probe).
+    _StreamableHTTPMCPHandler.requests = []
+    _StreamableHTTPMCPHandler.response_mode = "json"
+    _StreamableHTTPMCPHandler.discover_protocol_response = None
+    _StreamableHTTPMCPHandler.discover_response_status = 500
+    _StreamableHTTPMCPHandler.discover_response_body = None
+    server = _serve(_StreamableHTTPMCPHandler)
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/mcp"
+        inspection = inspect_remote_server(RemoteMCPServerConfig("http", "streamable-http", url), timeout=2)
+    finally:
+        _StreamableHTTPMCPHandler.discover_response_status = None
+        setattr(server, "_shutdown_sse", True)
+        server.shutdown()
+        server.server_close()
+
+    assert inspection.ok is False
+    methods_seen = [r["payload"].get("method") for r in _StreamableHTTPMCPHandler.requests]
+    assert methods_seen == ["server/discover"]
+    assert inspection.transport == "streamable-http"
+
+
+def test_inspect_streamable_http_server_discover_malformed_falls_back_to_legacy_initialize():
+    # Issue #3130 (review feedback): a malformed ``server/discover``
+    # response (missing the required ``capabilities`` field) is rejected
+    # by the same validation the legacy ``initialize`` handshake uses
+    # (``_validate_initialize_result``), and the scanner falls through
+    # to the legacy handshake on the same endpoint.
+    _StreamableHTTPMCPHandler.requests = []
+    _StreamableHTTPMCPHandler.response_mode = "json"
+    _StreamableHTTPMCPHandler.discover_protocol_response = None
+    _StreamableHTTPMCPHandler.discover_response_status = None
+    _StreamableHTTPMCPHandler.discover_response_body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            # Missing ``capabilities`` entirely -> _validate_initialize_result
+            # raises ``RuntimeError("initialize result did not advertise
+            # capabilities")`` -> scanner falls through to legacy.
+            "protocolVersion": "2026-07-28",
+            "serverInfo": {"name": "http-test", "version": "1.0"},
+        },
+    }
+    _StreamableHTTPMCPHandler.protocol_response = MCP_PROTOCOL_VERSION
+    _StreamableHTTPMCPHandler.capabilities_response = {"tools": {}, "resources": {}, "prompts": {}}
+    server = _serve(_StreamableHTTPMCPHandler)
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/mcp"
+        inspection = inspect_remote_server(RemoteMCPServerConfig("http", "streamable-http", url), timeout=2)
+    finally:
+        _StreamableHTTPMCPHandler.discover_response_body = None
+        setattr(server, "_shutdown_sse", True)
+        server.shutdown()
+        server.server_close()
+
+    assert inspection.ok is True
+    assert inspection.transport == "streamable-http"
+    assert inspection.protocol_version == MCP_PROTOCOL_VERSION
+    methods_seen = [r["payload"].get("method") for r in _StreamableHTTPMCPHandler.requests]
+    assert methods_seen[0] == "server/discover"
+    assert "initialize" in methods_seen
+    assert "notifications/initialized" in methods_seen
 
 
 def test_inspect_streamable_http_server_accepts_sse_post_response():
