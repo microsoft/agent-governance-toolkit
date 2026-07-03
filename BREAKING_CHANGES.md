@@ -55,15 +55,56 @@ a default action.
 
 ---
 
-## Composite actions: `toolkit-version` is now **required**
+## `agent-hypervisor` removes joint-liability, blockchain-commitment, and advanced-saga symbols
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-hypervisor` (`hypervisor`)
+- `agentmesh-runtime` (`agent_runtime`, which re-exported these symbols)
+
+**What changed:**
+
+The following public symbols are removed from `hypervisor` and from the
+`agent_runtime` re-exports. Each backed a documented no-op stub (the ledger
+always admitted, slashing and quarantine recorded events but enforced nothing,
+the commitment engine stored in memory with no anchoring, and the saga DSL,
+fan-out, and checkpoint modules had no runtime), so the removal is behavior
+preserving:
+
+- Joint liability: `VouchingEngine`, `VouchRecord`, `SlashingEngine`,
+  `LiabilityLedger`, `LedgerEntryType`, `LiabilityMatrix`, `QuarantineManager`,
+  `QuarantineReason`, `CausalAttributor`, `AttributionResult`
+- Session intent locks: `IntentLockManager`, `LockIntent`,
+  `LockContentionError`, `DeadlockError`
+- Advanced saga: `FanOutOrchestrator`, `FanOutPolicy`, `SagaDSLParser`,
+  `SagaDefinition`, `CheckpointManager`, `SemanticCheckpoint`
+- Audit and clock internals: `CommitmentEngine`, `EphemeralGC`,
+  `VectorClockManager`
+
+**Why:**
+
+These surfaces were Public Preview stubs that advertised capabilities the
+runtime never applied, so keeping them exported implied enforcement that did
+not exist. Public Preview status permits removal without a deprecation cycle.
+
+**How to migrate:**
+
+Remove imports of these symbols. The supported runtime surface is unchanged:
+execution rings, session isolation, the hash-chained delta audit trail,
+`SagaOrchestrator` (ordered steps, retries, timeout handling, and reverse-order
+compensation), the kill switch, rate limiting, and observability.
+
+---
+
+## Composite action: `toolkit-version` is now **required**
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
 
 **Affected:**
 
 - `microsoft/agent-governance-toolkit/action`
-- `microsoft/agent-governance-toolkit/action/security-scan`
-- `microsoft/agent-governance-toolkit/action/governance-attestation`
 
 **What changed:**
 

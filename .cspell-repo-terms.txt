@@ -875,3 +875,6 @@ netcat
 socat
 nmap
 tcpdump
+isascii
+multisink
+writeln

@@ -6,7 +6,7 @@ Hypervisor Performance Benchmarks
 Measures latency and throughput of all hypervisor subsystems:
 - Session creation and lifecycle
 - Ring computation and enforcement
-- Sponsorship and eff_score calculation
+- Action classification and ring enforcement
 - Saga step execution
 - Delta audit capture and audit log root computation
 - End-to-end governance pipeline
@@ -30,7 +30,8 @@ from hypervisor import (
     SessionConfig,
 )
 from hypervisor.audit.delta import DeltaEngine, VFSChange
-from hypervisor.liability.vouching import VouchingEngine
+from hypervisor.models import ActionDescriptor, ReversibilityLevel
+from hypervisor.rings.classifier import ActionClassifier
 from hypervisor.rings.enforcer import RingEnforcer
 from hypervisor.saga.orchestrator import SagaOrchestrator
 
@@ -132,19 +133,22 @@ def bench_ring_computation():
 
 
 # ---------------------------------------------------------------------------
-# Benchmark: Sponsorship + eff_score
+# Benchmark: Action Classification
 # ---------------------------------------------------------------------------
 
-ve = VouchingEngine()
-_vouch_counter = [0]
+classifier = ActionClassifier()
+classification_action = ActionDescriptor(
+    action_id="bench.action",
+    name="Benchmark Action",
+    execute_api="/bench/action",
+    undo_api="/bench/undo",
+    reversibility=ReversibilityLevel.PARTIAL,
+)
 
 
-@benchmark("sponsorship_eff_score", iterations=10000)
-def bench_eff_score():
-    _vouch_counter[0] += 1
-    sid = f"bench-{_vouch_counter[0]}"
-    ve.vouch(f"did:v:{_vouch_counter[0]}", f"did:e:{_vouch_counter[0]}", sid, 0.9, bond_pct=0.2)
-    ve.compute_eff_score(f"did:e:{_vouch_counter[0]}", sid, 0.4, risk_weight=0.5)
+@benchmark("action_classification", iterations=50000)
+def bench_action_classification():
+    classifier.classify(classification_action)
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +311,7 @@ def main():
 
     benchmarks = [
         bench_ring_computation,
-        bench_eff_score,
+        bench_action_classification,
         bench_delta_capture,
         bench_hash_chain_root_10,
         bench_hash_chain_root_100,

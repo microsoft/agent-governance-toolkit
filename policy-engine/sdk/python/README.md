@@ -22,6 +22,7 @@ Runnable pieces today:
   - `guard_mcp_server()` for duck-typed MCP tool providers exposing `call_tool(...)` or `callTool(...)`
   - `guard_litellm_proxy()` / `LiteLLMProxyMiddleware` for ASGI JSON LiteLLM/OpenAI-compatible proxy calls
   - `AgentControlLiteLLMGuardrail` for codeless LiteLLM Proxy `guardrails:` YAML registration
+  - `guard_foundry_agent()` (alias `guard_azure_ai_agents()`) for governing an Azure AI Foundry hosted agent run loop
   - duck-typed async shapes for LangChain (`guard_langchain_runnable()` and `guard_langchain_tool()`), OpenAI clients (`guard_openai_client()`), OpenAI Agents Runner (`guard_openai_agents_runner()`), Anthropic (`guard_anthropic_client()`), AutoGen (`guard_autogen_agent()`), and CrewAI (`guard_crewai_crew()`)
 
 Adapters are intentionally stateless. Pass ambient per-call data with the reserved keyword `agent_control_snapshot={...}`; it is merged over any default snapshot supplied when creating the wrapper. Unsupported or potentially bypassing methods raise `AdapterUnsupportedError` rather than returning an unguarded path. `guard_mcp_server()` covers MCP tool calls only. MCP resources, prompts, streams, and lifecycle hooks still need package-specific adapters, and known unsupported methods on a wrapped provider are blocked instead of being delegated. `guard_litellm_proxy()` buffers JSON ASGI request/response bodies and streaming chat responses instead of bypassing controls. `AgentControlLiteLLMGuardrail` maps LiteLLM `pre_call` and `post_call` guardrail hooks to ACS input, model, tool, and output intervention points. Install the optional proxy dependency with `pip install "agent-control-specification[litellm-proxy]"`.
@@ -31,6 +32,8 @@ Adapters are intentionally stateless. Pass ambient per-call data with the reserv
 `guard_litellm_proxy()` mediates the ASGI request as a model call. It evaluates `pre_model_call` before replaying the request body to the upstream app and evaluates `post_model_call` over the captured upstream response before sending the response to the client. JSON responses and chat-completion SSE responses are buffered before release so `post_model_call` effects can redact or replace the response. Streaming is guarded only for chat-completion paths. Streaming on embeddings, completions, messages, and responses paths raises `AdapterUnsupportedError` before the upstream app runs.
 
 Use `post_model_call` for proxy response redaction. The generic `output` point is not evaluated by `guard_litellm_proxy()`. Approval uses the resolver configured on the `AgentControl` instance because the ASGI middleware has no per-request resolver argument.
+
+`guard_foundry_agent()` (alias `guard_azure_ai_agents()`) governs an Azure AI Foundry hosted agent. The Foundry seam is the manual run loop rather than a single client method, so the adapter returns a thin proxy over the real `AgentsClient` whose governed driver (`create_thread_and_run(...)` and `run_until_complete(thread_id, run_id)`) drives the `requires_action -> submit_tool_outputs` loop. Each required function tool call named in `tools` is routed through `control.run_tool` so `pre_tool_call` gates the arguments and `post_tool_call` gates the result before the output is submitted. In enforce mode a deny submits a policy rejection output and never executes the callable, an escalate is routed to the approval resolver and is never auto-allowed (a suspend outcome raises `AgentControlSuspended` for the host to resume), and a transform submits the rewritten arguments or result. Malformed or non-object tool arguments, unknown tools, and non function-tool required actions fail closed without executing. The SDK auto-function-call paths bypass governance, so `enable_auto_function_calls`, `create_thread_and_process_run`, `runs.create_and_process`, and the streaming run helpers are blocked through the governed handle. `azure-ai-agents` is an optional dependency loaded lazily. Install it with `pip install azure-ai-agents`.
 
 ```python
 from agent_control_specification import AgentControl, guard_litellm_proxy
@@ -59,7 +62,42 @@ Single-tool wrappers accept an optional snapshot-compatible tool call id: pass `
 
 ## Telemetry
 
-The Python SDK accepts the native `PerfTelemetry` level on `from_path`, `from_native`, and `from_manifest_chain`. It does not expose the Rust `TelemetrySink` or an OpenTelemetry exporter hook. Python hosts that need application telemetry should record sanitized decision, effect, duration, and action identity fields from `InterventionPointResult` at the host boundary. The Rust core and `agent_control_specification_otel` crate remain the direct telemetry sink surfaces.
+The Python SDK ships a pure-Python host-side telemetry layer. Pass a `telemetry_sink` to `AgentControl`, `from_native`, `from_path`, or `from_manifest_chain`, and every evaluation emits one redaction-safe `TelemetryEvent` to the sink. `telemetry_sink` accepts a single sink or a list of sinks (a list is fanned out through a `MultiSink`). The default `telemetry_sink=None` preserves the prior behavior with no events and no overhead beyond a `None` check. The native `PerfTelemetry` level is independent and still controls internal timing-detail capture only.
+
+```python
+from agent_control_specification import (
+    AgentControl,
+    JsonStdoutTelemetrySink,
+    OtelMetricsTelemetrySink,
+    MultiSink,
+)
+
+sink = MultiSink([JsonStdoutTelemetrySink(), OtelMetricsTelemetrySink()])
+control = AgentControl.from_path("manifest.yaml", telemetry_sink=sink)
+```
+
+### Event model
+
+`TelemetryEvent` mirrors the Rust `core/src/telemetry.rs` field set. It carries `event_type`, `intervention_point`, `decision`, `reason_code`, `error_class`, `policy_id`, `annotators`, `enforcement_mode`, `duration_ms`, `evidence_artefact`, `evidence_verification_pointer_keys`, `action_identity`, and `metadata`. Redaction is the load-bearing invariant. An event carries decision and reason metadata, the evidence `artefact`, and the sorted evidence pointer keys only. It never carries raw prompts, tool arguments, tool results, transform values, annotator outputs, or pointer URL values. A free-text policy reason is reduced to the constant `policy_reason`, matching the Rust `safe_telemetry_reason_code` helper, so an operator-authored reason string cannot leak through telemetry.
+
+`policy_id` and configured `annotators` are resolved from the fully merged manifest by the native core at construction, through the native `policy_labels` accessor, so they are populated for every constructor, including `from_url`, `from_manifest_chain`, and `extends`-inherited ids. A fail-closed event still carries the configured annotator names. A custom `RuntimeClient` that does not expose `policy_labels` leaves `policy_id` as `None`, and in that case `annotators` falls back to the result's executed-annotation keys, which reflect only annotators that ran.
+
+This host layer emits exactly one `decision` event per evaluation. It does not replicate the Rust core's second `intervention_point.transformed` event on a `transform` verdict; the transform is observable through `decision == "transform"`. The OTel `acs_intervention_transform_total` counter and `acs_intervention_duration_ms` histogram count one increment per evaluation, consistent across all SDKs (the Rust OTel sink records only the base `decision` event, so a transform counts once everywhere). The Rust event stream additionally carries the `intervention_point.transformed` event for stream consumers; the host SDKs do not.
+
+### Built-in sinks
+
+| Sink | Behavior |
+| --- | --- |
+| `InMemoryTelemetrySink` | Records events in an `events` list for tests and inspection. |
+| `JsonStdoutTelemetrySink` | Writes one JSON object per line. The audit.jsonl use case is built in. |
+| `OtelMetricsTelemetrySink` | Optional OpenTelemetry metrics export. |
+| `MultiSink` | Fans one event out to several sinks. A failing child is logged and isolated. |
+
+Emission is never load-bearing. A sink that raises is caught, logged, and swallowed so it can never change the verdict or fail the evaluation.
+
+### OpenTelemetry metrics
+
+`OtelMetricsTelemetrySink` matches the metric contract of the Rust `agent_control_specification_otel` crate. It emits the per-decision counters `acs_intervention_allow_total`, `acs_intervention_deny_total`, `acs_intervention_warn_total`, `acs_intervention_escalate_total`, and `acs_intervention_transform_total`, plus the duration histogram `acs_intervention_duration_ms`, under the meter name `agent_control_specification` by default. `opentelemetry` is an optional dependency. It is imported lazily, and when it is absent the sink degrades to a safe no-op after a single warning, so a host can wire it unconditionally without making OpenTelemetry a hard dependency. The Rust core and the `agent_control_specification_otel` crate remain the direct sink surfaces for hosts that prefer the in-core path.
 
 Python custom annotator dispatcher exceptions fail closed as `runtime_error:annotation_failed`. Distinct `runtime_error:annotation_timeout` reporting is available when a dispatcher surface explicitly returns that runtime error. Resource limit configuration is exposed by the Rust core surface, not by the Python constructor surface.
 

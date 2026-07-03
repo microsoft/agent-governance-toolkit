@@ -1,4 +1,4 @@
-# Tutorial 06 — Execution Sandboxing
+# Tutorial 06 Execution Sandboxing
 
 > **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
 
@@ -36,10 +36,10 @@ See also: [Deployment Guide](../deployment/README.md) | [Agent Runtime README](.
 AI agents that can read files, call APIs, and execute code need strict boundaries.
 Without sandboxing, a misbehaving agent can:
 
-- **Exfiltrate data** — read secrets and send them to external endpoints.
-- **Corrupt state** — write to databases or files it should never touch.
-- **Consume resources** — spin up infinite loops that exhaust CPU and memory.
-- **Cascade failures** — a failed step in a multi-agent workflow leaves the system in a broken half-finished state.
+- **Exfiltrate data.** Read secrets and send them to external endpoints.
+- **Corrupt state.** Write to databases or files it should never touch.
+- **Consume resources.** Spin up infinite loops that exhaust CPU and memory.
+- **Cascade failures.** A failed step in a multi-agent workflow leaves the system in a broken half-finished state.
 
 The **Agent Runtime** (`pip install agentmesh-runtime`) solves this with four
 layers of defense:
@@ -56,7 +56,7 @@ layers of defense:
 │  Multi-step transactions with auto-rollback     │
 ├─────────────────────────────────────────────────┤
 │          Session Isolation                      │
-│  VFS namespacing, vector clocks, intent locks   │
+│  VFS namespacing, snapshots, vector clocks      │
 ├─────────────────────────────────────────────────┤
 │          Emergency Controls                     │
 │  Kill switch, rate limiting, breach detection   │
@@ -79,19 +79,21 @@ Get sandboxing running in under 20 lines:
 from hypervisor import Hypervisor, ExecutionRing
 from hypervisor.rings.classifier import ActionClassifier
 from hypervisor.rings.enforcer import RingEnforcer
+from hypervisor.models import ActionDescriptor
 
 # 1. Create the runtime
 hv = Hypervisor()
 
 # 2. Classify an action — the classifier maps actions to rings
 classifier = ActionClassifier()
-result = classifier.classify_action_id("file.read")
-print(result.ring)        # ExecutionRing.RING_3_SANDBOX
-print(result.risk_weight) # 0.1
 
-result = classifier.classify_action_id("deploy.k8s")
-print(result.ring)        # ExecutionRing.RING_1_PRIVILEGED
-print(result.risk_weight) # 0.9
+read = ActionDescriptor(action_id="read_dataset", name="Read Dataset",
+                        execute_api="/data/read", is_read_only=True)
+print(classifier.classify(read).ring)      # ExecutionRing.RING_3_SANDBOX
+
+delete = ActionDescriptor(action_id="delete_database", name="Delete Database",
+                          execute_api="/db/drop")
+print(classifier.classify(delete).ring)    # ExecutionRing.RING_1_PRIVILEGED
 
 # 3. Enforce the ring — block agents that lack privilege
 enforcer = RingEnforcer()
@@ -116,8 +118,8 @@ trust is required.
 ```
         ┌───────────────────────┐
         │   Ring 0 — Root       │  eff_score: N/A (SRE Witness required)
-        │   Runtime config,     │  Penalty/slashing operations
-        │   penalty ops         │  Rate: unlimited
+        │   Runtime config      │  Requires SRE Witness
+        │                       │  Rate: unlimited
         ├───────────────────────┤
         │   Ring 1 — Privileged │  eff_score ≥ 0.95 + consensus
         │   Non-reversible ops  │  Write, deploy, delete
@@ -152,7 +154,7 @@ ring = ExecutionRing.from_eff_score(eff_score=0.40)
 assert ring == ExecutionRing.RING_3_SANDBOX
 ```
 
-> **Note:** Ring 0 is never assigned by score alone — it requires an SRE
+> **Note:** Ring 0 is never assigned by score alone. It requires an SRE
 > Witness attestation and is reserved for runtime-level configuration.
 
 ### 3.2 Action Classification
@@ -161,27 +163,34 @@ Every action is classified by **risk weight** and **reversibility** to determine
 which ring it requires:
 
 ```python
-from hypervisor.rings.classifier import ActionClassifier, ClassificationResult
-from hypervisor.models import ReversibilityLevel
+from hypervisor import ExecutionRing
+from hypervisor.rings.classifier import ActionClassifier
+from hypervisor.models import ActionDescriptor, ReversibilityLevel
 
 classifier = ActionClassifier()
 
-# Read operations → Ring 3 (low risk, fully reversible)
-result = classifier.classify_action_id("file.read")
-assert result.ring == ExecutionRing.RING_3_SANDBOX
-assert result.reversibility == ReversibilityLevel.REVERSIBLE
+# Read-only operations → Ring 3 (sandbox)
+read = ActionDescriptor(action_id="read_dataset", name="Read Dataset",
+                        execute_api="/data/read", is_read_only=True)
+assert classifier.classify(read).ring == ExecutionRing.RING_3_SANDBOX
 
-# Write operations → Ring 2 (medium risk, reversible with effort)
-result = classifier.classify_action_id("file.write")
+# Reversible writes (with an undo endpoint) → Ring 2 (standard)
+write = ActionDescriptor(action_id="write_file", name="Write File",
+                         execute_api="/files/write", undo_api="/files/restore",
+                         reversibility=ReversibilityLevel.FULL)
+result = classifier.classify(write)
 assert result.ring == ExecutionRing.RING_2_STANDARD
+assert result.reversibility == ReversibilityLevel.FULL
 
-# Deployments → Ring 1 (high risk, non-reversible)
-result = classifier.classify_action_id("deploy.k8s")
+# Destructive, non-reversible operations → Ring 1 (privileged)
+delete = ActionDescriptor(action_id="delete_database", name="Delete Database",
+                          execute_api="/db/drop")
+result = classifier.classify(delete)
 assert result.ring == ExecutionRing.RING_1_PRIVILEGED
-assert result.reversibility == ReversibilityLevel.NON_REVERSIBLE
+assert result.reversibility == ReversibilityLevel.NONE
 
 # Override classification for custom actions
-classifier.set_override("my_custom.action", ring=ExecutionRing.RING_2_STANDARD, risk_weight=0.5)
+classifier.set_override("my_custom_action", ring=ExecutionRing.RING_2_STANDARD, risk_weight=0.5)
 ```
 
 ### 3.3 Ring Elevation (Privilege Escalation)
@@ -432,76 +441,43 @@ Saga-level states:
 | `FAILED` | All compensation finished (or some compensation failed) |
 | `ESCALATED` | Compensation itself failed; human intervention required |
 
-### 5.4 Declarative Sagas with the DSL
+### 5.4 Programmatic saga orchestration
 
-For complex workflows, define sagas declaratively:
-
-```python
-from hypervisor.saga.dsl import SagaDSLParser, SagaDefinition
-
-saga_yaml = """
-saga:
-  id: deploy-pipeline
-  steps:
-    - id: create-pr
-      action_id: pr.create
-      agent: did:example:dev-agent
-      execute_api: /api/pr/create
-      undo_api: /api/pr/close
-      timeout: 60
-      retries: 2
-
-    - id: run-tests
-      action_id: tests.run
-      agent: did:example:ci-agent
-      execute_api: /api/tests/run
-      undo_api: /api/tests/cancel
-      timeout: 300
-      depends_on: [create-pr]
-
-    - id: deploy-staging
-      action_id: deploy.staging
-      agent: did:example:deploy-agent
-      execute_api: /api/deploy/staging
-      undo_api: /api/deploy/rollback
-      timeout: 600
-      depends_on: [run-tests]
-      checkpoint_goal: "Staging deployment matches PR diff"
-"""
-
-parser = SagaDSLParser()
-definition: SagaDefinition = parser.parse(saga_yaml)
-```
-
-### 5.5 Semantic Checkpoints
-
-Checkpoints verify that each step actually achieved its goal, not just that
-it returned HTTP 200:
+Define saga steps directly with `SagaOrchestrator` and pair each forward action with an undo endpoint:
 
 ```python
-from hypervisor.saga.checkpoint import CheckpointManager, SemanticCheckpoint
+from hypervisor.saga.orchestrator import SagaOrchestrator
 
-checkpoint_mgr = CheckpointManager()
+orchestrator = SagaOrchestrator()
+saga = orchestrator.create_saga("session-deploy-42")
 
-# After a deploy step, verify the deployment actually happened
-checkpoint = SemanticCheckpoint(
-    step_id="deploy-staging",
-    goal="Staging deployment matches PR diff",
+create_pr = orchestrator.add_step(
+    saga_id=saga.saga_id,
+    action_id="pr.create",
+    agent_did="did:example:dev-agent",
+    execute_api="/api/pr/create",
+    undo_api="/api/pr/close",
+    timeout_seconds=60,
+    max_retries=2,
 )
-# The checkpoint manager evaluates whether the goal was met
+
+run_tests = orchestrator.add_step(
+    saga_id=saga.saga_id,
+    action_id="tests.run",
+    agent_did="did:example:ci-agent",
+    execute_api="/api/tests/run",
+    undo_api="/api/tests/cancel",
+    timeout_seconds=300,
+)
 ```
 
-### 5.6 Fan-Out Orchestration
-
-For parallel step execution (e.g., deploy to multiple regions simultaneously):
+If a step fails, call `compensate()` to roll back committed steps in reverse order.
 
 ```python
-from hypervisor.saga.fan_out import FanOutOrchestrator, FanOutPolicy
+async def compensator(step):
+    return await call_undo_endpoint(step.undo_api)
 
-fan_out = FanOutOrchestrator()
-
-# Execute the same action across multiple agents in parallel
-# with configurable failure policies (fail-fast, best-effort, quorum)
+failed = await orchestrator.compensate(saga.saga_id, compensator)
 ```
 
 ---
@@ -552,22 +528,19 @@ Choose the right isolation level based on your consistency requirements:
 ```python
 from hypervisor.session.isolation import IsolationLevel
 
-# Snapshot — each agent sees a consistent snapshot (cheapest)
+# Snapshot gives each agent a stable view for the operation.
 level = IsolationLevel.SNAPSHOT
 assert not level.requires_vector_clocks
-assert not level.requires_intent_locks
 assert level.allows_concurrent_writes
 assert level.coordination_cost == "low"
 
-# Read Committed — agents see committed writes from others
+# Read Committed makes committed writes visible across agents.
 level = IsolationLevel.READ_COMMITTED
 assert level.requires_vector_clocks
-assert not level.requires_intent_locks
 
-# Serializable — strongest consistency (most expensive)
+# Serializable is the strongest consistency level.
 level = IsolationLevel.SERIALIZABLE
 assert level.requires_vector_clocks
-assert level.requires_intent_locks
 assert not level.allows_concurrent_writes
 assert level.coordination_cost == "high"
 ```
@@ -577,52 +550,21 @@ assert level.coordination_cost == "high"
 When agents produce concurrent writes, vector clocks establish a causal order:
 
 ```python
-from hypervisor.session.vector_clock import VectorClockManager, CausalViolationError
+from hypervisor.session.vector_clock import VectorClock
 
-clock_mgr = VectorClockManager()
+# Each agent maintains its own logical clock
+clock_a = VectorClock()
+clock_b = VectorClock()
 
-# Each agent gets its own logical clock
-clock_a = clock_mgr.create_clock("did:agent-a")
-clock_b = clock_mgr.create_clock("did:agent-b")
+# Agent A performs an action, advancing its clock
+clock_a.tick("did:agent-a")
 
-# Agent A performs an action
-clock_mgr.increment("did:agent-a")
-
-# Check causal ordering — did A's action happen before B's?
-happened_before = clock_mgr.happens_before(clock_a, clock_b)
+# Did A's action causally precede B's current state?
+happened_before = clock_a.happens_before(clock_b)
+concurrent = clock_a.is_concurrent(clock_b)
 ```
 
-### 6.4 Intent Locks for Concurrency Control
-
-Prevent conflicting concurrent operations with intent locks:
-
-```python
-from hypervisor.session.intent_locks import IntentLockManager, LockIntent, DeadlockError
-
-lock_mgr = IntentLockManager()
-
-# Agent A acquires a write lock on the session
-lock_mgr.acquire_lock(
-    session_id="session-001",
-    agent_did="did:agent-a",
-    intent=LockIntent.WRITE,
-)
-
-# Agent B tries an exclusive lock — blocked until A releases
-try:
-    lock_mgr.acquire_lock(
-        session_id="session-001",
-        agent_did="did:agent-b",
-        intent=LockIntent.EXCLUSIVE,
-    )
-except DeadlockError:
-    print("Deadlock detected — aborting Agent B's operation")
-
-# Release when done
-lock_mgr.release_lock(session_id="session-001", agent_did="did:agent-a")
-```
-
-### 6.5 Full Session Configuration
+### 6.4 Full Session Configuration
 
 Bring it all together with a `SharedSessionObject`:
 
@@ -631,10 +573,10 @@ from hypervisor.session import SharedSessionObject
 from hypervisor.models import SessionConfig, ConsistencyMode
 
 config = SessionConfig(
-    consistency_mode=ConsistencyMode.SERIALIZABLE,
+    consistency_mode=ConsistencyMode.STRONG,
     max_participants=5,
-    max_duration_seconds=3600,  # 1 hour
-    min_eff_score=0.60,         # minimum trust to join
+    max_duration_seconds=3600,
+    min_eff_score=0.60,
 )
 
 session = SharedSessionObject(
@@ -643,16 +585,14 @@ session = SharedSessionObject(
 )
 
 # Session provides:
-#   session.vfs           — SessionVFS (isolated file views)
-#   session.vector_clocks — VectorClockManager (causal ordering)
-#   session.intent_locks  — IntentLockManager (concurrency control)
+#   session.vfs           # SessionVFS isolated file views
 ```
 
 ---
 
 ## 7. Emergency Controls
 
-When an agent goes rogue, you need to stop it *immediately* — not after the
+When an agent goes rogue, you need to stop it *immediately*, not after the
 next polling interval.
 
 ### 7.1 Kill Switch
@@ -687,7 +627,6 @@ Available kill reasons:
 | `RATE_LIMIT` | Agent exceeded its rate limit repeatedly |
 | `RING_BREACH` | Agent attempted actions above its ring level |
 | `MANUAL` | Human operator triggered the kill |
-| `QUARANTINE_TIMEOUT` | Agent was quarantined and didn't recover |
 | `SESSION_TIMEOUT` | Session exceeded its `max_duration_seconds` |
 
 ### 7.2 Graceful Shutdown with Handoff
@@ -750,20 +689,7 @@ if not status.allowed:
 sandbox_limiter.reset(agent_did="did:example:new-agent")
 ```
 
-### 7.4 Quarantine
-
-Quarantine isolates an agent without killing it — useful for investigation:
-
-```python
-from hypervisor.liability.quarantine import QuarantineManager, QuarantineReason
-
-quarantine = QuarantineManager()
-
-# Quarantine a suspect agent — it can't take new actions but existing
-# saga steps are preserved for forensic analysis
-```
-
-### 7.5 Breach Detection Pipeline
+### 7.4 Breach Detection Pipeline
 
 Wire breach detection into your kill switch for automated response:
 
@@ -1002,17 +928,14 @@ trace_id = CausalTraceId.generate()
 | **Tools** | `CapabilityGuardMiddleware` | Per-agent tool allow/deny lists |
 | **Transactions** | `SagaOrchestrator` | Multi-step workflows with auto-rollback |
 | **Isolation** | `SessionVFS` | Per-agent virtual file system namespacing |
-| **Isolation** | `IntentLockManager` | Concurrency control with intent locks |
-| **Isolation** | `VectorClockManager` | Causal ordering of concurrent operations |
+| **Isolation** | `VectorClock` | Causal ordering of concurrent operations |
 | **Emergency** | `KillSwitch` | Immediate agent termination |
 | **Emergency** | `AgentRateLimiter` | Per-agent call rate enforcement |
-| **Emergency** | `QuarantineManager` | Agent isolation for investigation |
 | **Observability** | `HypervisorEventBus` | Real-time event streaming |
 
 ---
 
 ## Next Steps
 
-- **Audit trails:** Explore `CommitmentEngine` and `DeltaEngine` for hash-chained, tamper-evident logging.
-- **Liability:** See `LiabilityMatrix`, `CausalAttributor`, and `SlashingEngine` for agent accountability.
+- **Audit trails:** Use `DeltaEngine` for hash-chained, tamper-evident delta logging.
 - **Deployment:** Read the [Azure Container Apps guide](../deployment/azure-container-apps.md) for cloud-native deployment patterns.

@@ -1,12 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for delta audit engine and commitment."""
+"""Tests for the delta audit engine."""
 
-from datetime import UTC
-
-from hypervisor.audit.commitment import CommitmentEngine
 from hypervisor.audit.delta import DeltaEngine, VFSChange
-from hypervisor.audit.gc import EphemeralGC, RetentionPolicy
 
 
 class TestDeltaEngine:
@@ -75,53 +71,3 @@ class TestDeltaEngine:
         valid, error = self.engine.verify_chain()
         assert valid is True
         assert error is None
-
-
-class TestCommitmentEngine:
-    def setup_method(self):
-        self.engine = CommitmentEngine()
-
-    def test_commit_and_verify(self):
-        self.engine.commit("session:1", "abc123", ["did:a", "did:b"], 10)
-        assert self.engine.verify("session:1", "abc123")
-        assert not self.engine.verify("session:1", "wrong")
-
-    def test_unknown_session(self):
-        assert not self.engine.verify("nonexistent", "abc")
-
-    def test_batch_queue(self):
-        r = self.engine.commit("s1", "h1", ["did:a"], 5)
-        self.engine.queue_for_batch(r)
-        batch = self.engine.flush_batch()
-        assert len(batch) == 1
-        assert self.engine.flush_batch() == []  # cleared
-
-
-class TestEphemeralGC:
-    def test_collect(self):
-        gc = EphemeralGC()
-        result = gc.collect(
-            session_id="session:1",
-            vfs_file_count=100,
-            cache_count=50,
-            delta_count=20,
-            estimated_vfs_bytes=1_000_000,
-            estimated_cache_bytes=500_000,
-            estimated_delta_bytes=50_000,
-        )
-        # Public preview: no actual purge, data retained
-        assert result.purged_vfs_files == 0
-        assert result.retained_deltas == 20
-        # No savings since nothing is purged
-        assert result.storage_saved_bytes == 0
-        assert result.savings_pct == 0
-
-    def test_retention_policy(self):
-        from datetime import datetime, timedelta
-
-        gc = EphemeralGC(RetentionPolicy(delta_retention_days=30))
-        old = datetime.now(UTC) - timedelta(days=31)
-        # Public preview: never expires deltas
-        assert not gc.should_expire_deltas(old)
-        recent = datetime.now(UTC) - timedelta(days=1)
-        assert not gc.should_expire_deltas(recent)

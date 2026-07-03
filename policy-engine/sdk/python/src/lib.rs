@@ -320,6 +320,14 @@ impl NativeRuntime {
 
         result_to_py(py, result)
     }
+
+    /// Resolved `policy_id` and configured annotator names per intervention
+    /// point, from the merged manifest. The host SDK telemetry layer reads this
+    /// once at construction so events are labelled on every constructor,
+    /// including `from_url` and `from_manifest_chain`.
+    fn policy_labels(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(py, &self.runtime.policy_labels())
+    }
 }
 
 impl NativeRuntime {

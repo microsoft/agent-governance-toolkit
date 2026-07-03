@@ -59,7 +59,6 @@ class MockReputationEngine:
     def __init__(self, scores: dict[str, int] | None = None) -> None:
         self._scores: dict[str, int] = scores or {}
         self._outcomes: list[tuple[str, str]] = []
-        self._slashes: list[dict[str, Any]] = []
 
     def set_score(self, agent_did: str, score: int) -> None:
         self._scores[agent_did] = score
@@ -78,29 +77,6 @@ class MockReputationEngine:
 
     def record_task_outcome(self, agent_did: str, outcome: str) -> None:
         self._outcomes.append((agent_did, outcome))
-
-    def slash_reputation(
-        self,
-        agent_did: str,
-        reason: str,
-        severity: str = "medium",
-        evidence_hash: str | None = None,
-        trace_id: str | None = None,
-        broadcast: bool = True,
-    ) -> None:
-        self._slashes.append(
-            {
-                "agent_did": agent_did,
-                "reason": reason,
-                "severity": severity,
-                "evidence_hash": evidence_hash,
-            }
-        )
-        # Reduce score
-        current = self._scores.get(agent_did, 500)
-        penalty = {"low": 50, "medium": 200, "high": 500, "critical": 900}.get(severity, 200)
-        self._scores[agent_did] = max(0, current - penalty)
-
 
 # ---------------------------------------------------------------------------
 # Mock Verification Backend
@@ -159,9 +135,7 @@ class AgentHistory:
 
 
 class TestRogueAgentScenario:
-    """
-    Flow: Agent joins → Verification detects drift → Hypervisor slashes → Nexus notified
-    """
+    """Flow: Agent joins → Verification checks behavior → clean result accepted."""
 
     @pytest.fixture(autouse=True)
     def setup(self):
@@ -176,70 +150,6 @@ class TestRogueAgentScenario:
 
         self.verification_backend = MockVerificationBackend()
         self.policy_check = VerificationAdapter(verifier=self.verification_backend)
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    async def test_rogue_detected_slashed_reputation_reduced(self):
-        """Full rogue agent lifecycle: join → drift → penalize → nexus penalty."""
-        # 1) Resolve sigma from Nexus
-        sigma_rogue = self.nexus.resolve_sigma(
-            "did:mesh:rogue-agent",
-            history=AgentHistory("did:mesh:rogue-agent"),
-        )
-        assert sigma_rogue == 0.75  # 750 / 1000
-
-        # 2) Create session, join agent
-        session = await self.hv.create_session(
-            config=SessionConfig(max_participants=5),
-            creator_did="did:mesh:admin",
-        )
-        sid = session.sso.session_id
-        ring = await self.hv.join_session(sid, "did:mesh:rogue-agent", sigma_raw=sigma_rogue)
-        assert ring == ExecutionRing.RING_2_STANDARD
-
-        await self.hv.activate_session(sid)
-
-        # 3) Verification detects HIGH drift
-        self.verification_backend.set_drift("did:mesh:rogue-agent", 0.65)
-        drift_result = self.policy_check.check_behavioral_drift(
-            agent_did="did:mesh:rogue-agent",
-            session_id=sid,
-            claimed_embedding="did:mesh:rogue-agent",
-            observed_embedding="rogue-output",
-        )
-        assert drift_result.severity == DriftSeverity.HIGH
-        assert drift_result.should_slash is True
-
-        # 4) Penalize via hypervisor
-        agent_scores = {"did:mesh:rogue-agent": sigma_rogue}
-        slash_result = self.hv.slashing.slash(
-            vouchee_did="did:mesh:rogue-agent",
-            session_id=sid,
-            vouchee_sigma=sigma_rogue,
-            risk_weight=0.95,
-            reason=f"Verification drift: {drift_result.drift_score:.2f}",
-            agent_scores=agent_scores,
-        )
-        assert slash_result.vouchee_sigma_after == 0.0
-        assert agent_scores["did:mesh:rogue-agent"] == 0.0
-
-        # 5) Report to Nexus
-        self.nexus.report_slash(
-            agent_did="did:mesh:rogue-agent",
-            reason="Behavioral drift detected by Verification",
-            severity="high",
-        )
-        # Nexus score should drop 500 (high penalty): 750 → 250
-        assert self.nexus_engine._scores["did:mesh:rogue-agent"] == 250
-
-        # 6) Future resolution gives untrusted tier
-        new_sigma = self.nexus.resolve_sigma(
-            "did:mesh:rogue-agent",
-            history=AgentHistory("did:mesh:rogue-agent"),
-        )
-        assert new_sigma == 0.25  # 250/1000
-        cached = self.nexus.get_cached_result("did:mesh:rogue-agent")
-        assert cached is not None
-        assert cached.tier == "untrusted"  # 250 < 300 threshold
 
     async def test_clean_agent_passes_verification_check(self):
         """An honest agent produces no drift — no penalty needed."""
@@ -258,7 +168,6 @@ class TestRogueAgentScenario:
         )
         assert result.passed is True
         assert result.severity == DriftSeverity.NONE
-        assert result.should_slash is False
 
 
 # ---------------------------------------------------------------------------
@@ -453,104 +362,6 @@ class TestDriftDemotionCascade:
         assert self.policy_check.total_checks == 5
         assert self.policy_check.total_violations == 3
 
-    @pytest.mark.skip("Feature not available in Public Preview")
-    def test_critical_drift_immediate_slash(self):
-        """CRITICAL drift immediately signals for penalty."""
-        self.verification_backend.set_drift("did:mesh:bad", 0.80)
-        result = self.policy_check.check_behavioral_drift(
-            agent_did="did:mesh:bad",
-            session_id="session-1",
-            claimed_embedding="did:mesh:bad",
-            observed_embedding="malicious",
-        )
-        assert result.severity == DriftSeverity.CRITICAL
-        assert result.should_slash is True
-        assert result.should_demote is False  # penalize > demote
-
-
-# ---------------------------------------------------------------------------
-# Scenario 4: Sponsor Cascade with Nexus Reporting
-# ---------------------------------------------------------------------------
-
-
-class TestVoucherCascadeWithNexus:
-    """
-    Flow: Agent A sponsors for B → B drifts → both penalized → both reported to Nexus
-    """
-
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        self.hv = Hypervisor()
-        self.nexus_engine = MockReputationEngine(
-            {
-                "did:mesh:sponsor-A": 800,
-                "did:mesh:rogue-B": 700,
-            }
-        )
-        self.nexus = NexusAdapter(scorer=self.nexus_engine)
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    async def test_voucher_cascade_with_nexus_penalty(self):
-        """Sponsor → penalize → sponsor clipped → both reported to Nexus."""
-        # Create session
-        session = await self.hv.create_session(
-            config=SessionConfig(max_participants=5),
-            creator_did="did:mesh:admin",
-        )
-        sid = session.sso.session_id
-
-        # Join agents
-        await self.hv.join_session(sid, "did:mesh:sponsor-A", sigma_raw=0.80)
-        await self.hv.join_session(sid, "did:mesh:rogue-B", sigma_raw=0.70)
-        await self.hv.activate_session(sid)
-
-        # A sponsors for B
-        self.hv.vouching.vouch(
-            voucher_did="did:mesh:sponsor-A",
-            vouchee_did="did:mesh:rogue-B",
-            voucher_sigma=0.80,
-            bond_pct=0.50,
-            session_id=sid,
-        )
-
-        # Penalize B
-        agent_scores = {
-            "did:mesh:sponsor-A": 0.80,
-            "did:mesh:rogue-B": 0.70,
-        }
-        self.hv.slashing.slash(
-            vouchee_did="did:mesh:rogue-B",
-            session_id=sid,
-            vouchee_sigma=0.70,
-            risk_weight=0.80,
-            reason="Behavioral drift detected",
-            agent_scores=agent_scores,
-        )
-
-        # B is blacklisted
-        assert agent_scores["did:mesh:rogue-B"] == 0.0
-        # A is clipped: 0.80 × (1 - 0.80) = 0.16
-        assert agent_scores["did:mesh:sponsor-A"] == pytest.approx(0.16, abs=0.01)
-
-        # Report both to Nexus
-        self.nexus.report_slash(
-            "did:mesh:rogue-B",
-            reason="Primary violation",
-            severity="high",
-        )
-        self.nexus.report_slash(
-            "did:mesh:sponsor-A",
-            reason="Collateral: vouched for rogue agent",
-            severity="low",
-        )
-
-        assert self.nexus_engine._scores["did:mesh:rogue-B"] == 200  # 700 - 500
-        assert self.nexus_engine._scores["did:mesh:sponsor-A"] == 750  # 800 - 50
-
-        # Verify penalty count in Nexus
-        assert len(self.nexus_engine._slashes) == 2
-
-
 # ---------------------------------------------------------------------------
 # Scenario 5: Full Cross-Module Governance Pipeline
 # ---------------------------------------------------------------------------
@@ -560,7 +371,7 @@ class TestFullGovernancePipeline:
     """
     The complete governance flow across all modules:
     IATP manifest → Nexus trust → Ring assignment → Verification monitoring →
-    Drift detected → Penalty → Nexus reputation loss → Session cleanup
+    clean verification → task reporting → Session cleanup
     """
 
     @pytest.fixture(autouse=True)
@@ -575,138 +386,6 @@ class TestFullGovernancePipeline:
         self.iatp = IATPAdapter()
         self.verification_backend = MockVerificationBackend()
         self.policy_check = VerificationAdapter(verifier=self.verification_backend)
-
-    @pytest.mark.skip("Feature not available in Public Preview")
-    async def test_full_pipeline_join_to_slash_to_terminate(self):
-        """Complete cross-module pipeline: manifest → join → drift → penalize → terminate."""
-        agent_did = "did:mesh:agent-alpha"
-
-        # === Phase 1: IATP Manifest Parsing ===
-        manifest = {
-            "agent_id": agent_did,
-            "trust_level": "trusted",
-            "trust_score": 8,
-            "actions": [
-                {
-                    "action_id": "write-data",
-                    "name": "Write Data",
-                    "execute_api": "/write",
-                    "undo_api": "/undo-write",
-                    "reversibility": "full",
-                },
-                {
-                    "action_id": "send-email",
-                    "name": "Send Email",
-                    "execute_api": "/send",
-                    "reversibility": "none",
-                },
-            ],
-            "scopes": ["data", "email"],
-        }
-        analysis = self.iatp.analyze_manifest_dict(manifest)
-        assert analysis.trust_level == IATPTrustLevel.TRUSTED
-        assert analysis.has_non_reversible_actions is True
-
-        # === Phase 2: Nexus Trust Enrichment ===
-        sigma = self.nexus.resolve_sigma(
-            agent_did,
-            history=AgentHistory(agent_did),
-        )
-        assert sigma == 0.82
-
-        # === Phase 3: Session Join with Enriched Data ===
-        session = await self.hv.create_session(
-            config=SessionConfig(
-                consistency_mode=ConsistencyMode.EVENTUAL,
-                max_participants=5,
-                enable_audit=True,
-            ),
-            creator_did="did:mesh:admin",
-        )
-        sid = session.sso.session_id
-
-        ring = await self.hv.join_session(
-            sid,
-            agent_did,
-            actions=analysis.actions,
-            sigma_raw=sigma,
-        )
-        assert ring == ExecutionRing.RING_2_STANDARD
-        # Non-reversible action should force Strong mode (SSO, not config)
-        assert session.sso.consistency_mode == ConsistencyMode.STRONG
-
-        await self.hv.activate_session(sid)
-
-        # === Phase 4: Verification Behavioral Monitoring ===
-        # First check — clean
-        self.verification_backend.set_drift(agent_did, 0.05)
-        check1 = self.policy_check.check_behavioral_drift(
-            agent_did=agent_did,
-            session_id=sid,
-            claimed_embedding=agent_did,
-            observed_embedding="output-1",
-            action_id="write-data",
-        )
-        assert check1.passed is True
-
-        # Second check — HIGH drift (agent compromised?)
-        self.verification_backend.set_drift(agent_did, 0.55)
-        check2 = self.policy_check.check_behavioral_drift(
-            agent_did=agent_did,
-            session_id=sid,
-            claimed_embedding=agent_did,
-            observed_embedding="suspicious-output",
-            action_id="send-email",
-        )
-        assert check2.severity == DriftSeverity.HIGH
-        assert check2.should_slash is True
-
-        # === Phase 5: Penalty ===
-        agent_scores = {agent_did: sigma}
-        slash_result = self.hv.slashing.slash(
-            vouchee_did=agent_did,
-            session_id=sid,
-            vouchee_sigma=sigma,
-            risk_weight=0.95,  # non-reversible action
-            reason=f"Verification HIGH drift on send-email: {check2.drift_score}",
-            agent_scores=agent_scores,
-        )
-        assert slash_result.vouchee_sigma_after == 0.0
-        assert agent_scores[agent_did] == 0.0
-
-        # === Phase 6: Report to Nexus ===
-        self.nexus.report_slash(
-            agent_did=agent_did,
-            reason="Verification behavioral drift on send-email action",
-            severity="high",
-            evidence_hash="sha256:abc123",
-        )
-        # 820 - 500 = 320 (probationary)
-        assert self.nexus_engine._scores[agent_did] == 320
-
-        # === Phase 7: Terminate Session ===
-        # Capture audit delta so audit log root is produced
-        from hypervisor.audit.delta import VFSChange
-
-        session.delta_engine.capture(
-            agent_did,
-            [
-                VFSChange(
-                    path="/sessions/test/penalize-event",
-                    operation="add",
-                    content_hash="sha256:penalize-evidence",
-                    agent_did=agent_did,
-                )
-            ],
-        )
-        hash_chain_root = await self.hv.terminate_session(sid)
-        assert hash_chain_root is not None  # audit was enabled
-
-        # Verify complete governance trail
-        assert len(self.hv.slashing.history) == 1
-        assert self.policy_check.total_checks == 2
-        assert self.policy_check.total_violations == 1
-        assert len(self.nexus_engine._slashes) == 1
 
     async def test_clean_agent_full_pipeline(self):
         """Pipeline for a well-behaved agent: no penalty, clean termination."""
@@ -1013,36 +692,8 @@ class TestWiredHypervisor:
         )
         assert ring == ExecutionRing.RING_2_STANDARD  # 0.85, not 0.95
 
-    @pytest.mark.skip("Feature not available in Public Preview")
-    async def test_verify_behavior_auto_slashes(self):
-        """verify_behavior() auto-slashes on HIGH drift."""
-        session = await self.hv.create_session(
-            config=SessionConfig(max_participants=5),
-            creator_did="did:mesh:admin",
-        )
-        sid = session.sso.session_id
-
-        await self.hv.join_session(sid, "did:mesh:rogue", sigma_raw=0.75)
-        await self.hv.activate_session(sid)
-
-        # HIGH drift
-        self.verification_backend.set_drift("did:mesh:rogue", 0.60)
-        result = await self.hv.verify_behavior(
-            session_id=sid,
-            agent_did="did:mesh:rogue",
-            claimed_embedding="did:mesh:rogue",
-            observed_embedding="bad-output",
-        )
-
-        assert result is not None
-        assert result.should_slash is True
-        # Auto-penalty should have fired
-        assert len(self.hv.slashing.history) == 1
-        # Nexus should have been notified
-        assert len(self.nexus_engine._slashes) == 1
-
-    async def test_verify_behavior_no_slash_on_clean(self):
-        """verify_behavior() does NOT penalize on clean output."""
+    async def test_verify_behavior_returns_clean_result(self):
+        """verify_behavior() returns a passing result for clean output."""
         session = await self.hv.create_session(
             config=SessionConfig(max_participants=5),
             creator_did="did:mesh:admin",
@@ -1059,10 +710,9 @@ class TestWiredHypervisor:
             claimed_embedding="did:mesh:alice",
             observed_embedding="good-output",
         )
-
         assert result is not None
         assert result.passed is True
-        assert len(self.hv.slashing.history) == 0
+        assert result.passed is True
 
     async def test_verify_behavior_returns_none_without_verifier(self):
         """Without Verification adapter, verify_behavior returns None."""

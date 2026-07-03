@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import copy
 import inspect
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+import logging
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 
 from ._client import AnnotatorDispatcher, NativeRuntimeClient, PolicyDispatcher, RuntimeClient
+from ._telemetry import TelemetryEvent, TelemetrySink, _coerce_sink
 from ._types import (
     AgentControlBlocked,
     AgentControlInterruption,
@@ -27,6 +30,8 @@ from ._types import (
 
 Execute = Callable[[JsonValue], JsonValue | Awaitable[JsonValue]]
 
+_TELEMETRY_LOGGER = logging.getLogger("agent_control_specification.telemetry")
+
 
 class AgentControl:
     """Host-owned async orchestration around a stateless runtime client."""
@@ -36,9 +41,21 @@ class AgentControl:
         runtime_client: RuntimeClient,
         *,
         approval_resolver: ApprovalResolver | None = None,
+        telemetry_sink: TelemetrySink | Sequence[TelemetrySink] | None = None,
     ):
         self._runtime_client = runtime_client
         self._approval_resolver = approval_resolver
+        # A list/tuple of sinks is fanned out via MultiSink; a non-sink raises
+        # TypeError here rather than silently dropping every event later.
+        self._telemetry_sink = _coerce_sink(telemetry_sink)
+        # Maps of intervention-point value to its manifest policy id and sorted
+        # configured annotator names, resolved from the runtime client's merged
+        # manifest (see NativeRuntimeClient.policy_labels). Populated for every
+        # native-backed constructor, including from_url and from_manifest_chain.
+        # Empty for a custom RuntimeClient that does not expose policy_labels, in
+        # which case policy_id is None and annotators fall back to the executed
+        # annotation keys on the result.
+        self._policy_id_index, self._annotator_index = _labels_from_client(runtime_client)
 
     @classmethod
     def from_native(
@@ -49,6 +66,7 @@ class AgentControl:
         *,
         approval_resolver: ApprovalResolver | None = None,
         perf_telemetry: int = 0,
+        telemetry_sink: TelemetrySink | Sequence[TelemetrySink] | None = None,
     ) -> "AgentControl":
         return cls(
             NativeRuntimeClient(
@@ -58,6 +76,7 @@ class AgentControl:
                 perf_telemetry,
             ),
             approval_resolver=approval_resolver,
+            telemetry_sink=telemetry_sink,
         )
 
     @classmethod
@@ -69,10 +88,12 @@ class AgentControl:
         *,
         approval_resolver: ApprovalResolver | None = None,
         perf_telemetry: int = 0,
+        telemetry_sink: TelemetrySink | Sequence[TelemetrySink] | None = None,
     ) -> "AgentControl":
         return cls(
             NativeRuntimeClient.from_path(path, annotator_dispatcher, policy_dispatcher, perf_telemetry),
             approval_resolver=approval_resolver,
+            telemetry_sink=telemetry_sink,
         )
 
     @classmethod
@@ -88,6 +109,7 @@ class AgentControl:
         max_url_bytes: int | None = None,
         url_timeout_ms: int | None = None,
         max_url_redirects: int | None = None,
+        telemetry_sink: TelemetrySink | Sequence[TelemetrySink] | None = None,
     ) -> "AgentControl":
         return cls(
             NativeRuntimeClient.from_url(
@@ -101,6 +123,7 @@ class AgentControl:
                 max_url_redirects=max_url_redirects,
             ),
             approval_resolver=approval_resolver,
+            telemetry_sink=telemetry_sink,
         )
 
     @classmethod
@@ -112,10 +135,12 @@ class AgentControl:
         *,
         approval_resolver: ApprovalResolver | None = None,
         perf_telemetry: int = 0,
+        telemetry_sink: TelemetrySink | Sequence[TelemetrySink] | None = None,
     ) -> "AgentControl":
         return cls(
             NativeRuntimeClient.from_manifest_chain(manifests, annotator_dispatcher, policy_dispatcher, perf_telemetry),
             approval_resolver=approval_resolver,
+            telemetry_sink=telemetry_sink,
         )
 
     async def evaluate_intervention_point(
@@ -128,17 +153,65 @@ class AgentControl:
             normalized_intervention_point: InterventionPoint | str = InterventionPoint(intervention_point)
         except ValueError:
             normalized_intervention_point = str(intervention_point)
+        sink = self._telemetry_sink
+        started_at = time.perf_counter() if sink is not None else 0.0
         try:
             normalized_mode = EnforcementMode(mode)
             normalized_snapshot = dict(snapshot)
         except (TypeError, ValueError):
-            return _request_invalid_result()
+            result = _request_invalid_result()
+            self._emit_telemetry(normalized_intervention_point, None, result, started_at)
+            return result
         request = InterventionPointRequest(
             intervention_point=normalized_intervention_point,
             snapshot=normalized_snapshot,
             mode=normalized_mode,
         )
-        return await self._runtime_client.evaluate_intervention_point(request)
+        result = await self._runtime_client.evaluate_intervention_point(request)
+        self._emit_telemetry(normalized_intervention_point, normalized_mode, result, started_at)
+        return result
+
+    def _emit_telemetry(
+        self,
+        intervention_point: InterventionPoint | str,
+        mode: EnforcementMode | None,
+        result: InterventionPointResult,
+        started_at: float,
+    ) -> None:
+        """Build and emit one redaction-safe telemetry event for an evaluation.
+
+        Telemetry is never load-bearing. A sink that raises is caught, logged,
+        and swallowed so it can never change the verdict or fail the evaluation.
+        When no sink is configured this returns immediately, so the default
+        (``telemetry_sink=None``) path costs only this attribute check.
+        """
+
+        sink = self._telemetry_sink
+        if sink is None:
+            return
+        duration_ms = (time.perf_counter() - started_at) * 1000.0
+        point_key = (
+            intervention_point.value
+            if isinstance(intervention_point, InterventionPoint)
+            else str(intervention_point)
+        )
+        try:
+            event = TelemetryEvent.from_result(
+                intervention_point,
+                mode,
+                result,
+                duration_ms,
+                policy_id=self._policy_id_index.get(point_key),
+                annotators=self._annotator_index.get(point_key),
+            )
+            sink.emit(event)
+        except Exception:  # noqa: BLE001 - telemetry must never break enforcement
+            _TELEMETRY_LOGGER.warning(
+                "Telemetry sink %r raised while building or emitting a %s event; verdict is unaffected.",
+                type(sink).__name__,
+                point_key,
+                exc_info=True,
+            )
 
     async def run(
         self,
@@ -600,3 +673,44 @@ def _tool_call(tool_name: str, args: JsonValue, tool_call_id: str | None) -> dic
     if tool_call_id is not None:
         tool_call["id"] = tool_call_id
     return tool_call
+
+
+def _labels_from_client(
+    runtime_client: RuntimeClient,
+) -> tuple[dict[str, str], dict[str, tuple[str, ...]]]:
+    """Build the policy-id and annotator indexes from a runtime client.
+
+    Reads the client's ``policy_labels`` map, which the native client sources
+    from the merged manifest, so the labels are populated on every native-backed
+    constructor including ``from_url`` and ``from_manifest_chain`` and for
+    ``extends``-inherited bindings. A client that does not expose
+    ``policy_labels`` (a custom or pure-Python test client) yields empty indexes,
+    so ``policy_id`` is ``None`` and annotators fall back to the executed
+    annotation keys on the result. Never raises, since telemetry labels are best
+    effort and must not block construction.
+    """
+
+    policy_ids: dict[str, str] = {}
+    annotators: dict[str, tuple[str, ...]] = {}
+    try:
+        getter = getattr(runtime_client, "policy_labels", None)
+        if not callable(getter):
+            return policy_ids, annotators
+        labels = getter()
+    except Exception:  # noqa: BLE001 - label lookup must never break construction
+        return policy_ids, annotators
+    if not isinstance(labels, Mapping):
+        return policy_ids, annotators
+    for point, entry in labels.items():
+        if not isinstance(entry, Mapping):
+            continue
+        point_key = point.value if isinstance(point, InterventionPoint) else str(point)
+        policy_id = entry.get("policy_id")
+        if isinstance(policy_id, str):
+            policy_ids[point_key] = policy_id
+        names = entry.get("annotators")
+        if isinstance(names, Sequence) and not isinstance(names, (str, bytes)):
+            sorted_names = tuple(sorted(str(name) for name in names))
+            if sorted_names:
+                annotators[point_key] = sorted_names
+    return policy_ids, annotators

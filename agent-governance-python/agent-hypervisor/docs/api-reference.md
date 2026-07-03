@@ -1,4 +1,4 @@
-# Agent Hypervisor — API Reference
+# Agent Hypervisor API Reference
 
 > Complete reference for the REST API and Python SDK.
 > Run the server with `uvicorn hypervisor.api.server:app`.
@@ -14,18 +14,15 @@
   - [Sessions](#sessions)
   - [Rings](#rings)
   - [Sagas](#sagas)
-  - [Liability](#liability)
   - [Events](#events)
-  - [Audit](#audit)
   - [Verification](#verification)
 - [Python SDK](#python-sdk)
-  - [Agent Lifecycle](#agent-lifecycle) — Hypervisor, ExecutionRing, AgentConfig
-  - [Saga Engine](#saga-engine) — SagaOrchestrator, SagaDSLParser, CheckpointManager
-  - [Kill Switch](#kill-switch) — KillSwitch, BreachDetector
-  - [Rate Limiter](#rate-limiter) — AgentRateLimiter, TokenBucket
-  - [Audit & Observability](#audit--observability) — HypervisorEventBus, CausalTraceId
-  - [Joint Liability](#joint-liability) — VouchingEngine, SlashingEngine, LiabilityLedger
-  - [Classification](#classification) — ActionClassifier, RingEnforcer
+  - [Agent Lifecycle](#agent-lifecycle) Hypervisor, ExecutionRing, AgentConfig
+  - [Saga Engine](#saga-engine) SagaOrchestrator
+  - [Kill Switch](#kill-switch) KillSwitch, BreachDetector
+  - [Rate Limiter](#rate-limiter) AgentRateLimiter, TokenBucket
+  - [Audit & Observability](#audit--observability) HypervisorEventBus, CausalTraceId
+  - [Classification](#classification) ActionClassifier, RingEnforcer
 
 ---
 
@@ -69,7 +66,6 @@ curl http://localhost:8000/api/v1/stats
   "active_sessions": 1,
   "total_participants": 7,
   "active_sagas": 2,
-  "total_vouches": 4,
   "event_count": 42
 }
 ```
@@ -91,8 +87,7 @@ curl -X POST http://localhost:8000/api/v1/sessions \
     "max_participants": 5,
     "max_duration_seconds": 3600,
     "min_eff_score": 0.60,
-    "enable_audit": true,
-    "enable_blockchain_commitment": false
+    "enable_audit": true
   }'
 ```
 
@@ -106,7 +101,6 @@ curl -X POST http://localhost:8000/api/v1/sessions \
 | `max_duration_seconds` | int | `3600` | Session timeout in seconds |
 | `min_eff_score` | float | `0.60` | Minimum effective reputation score |
 | `enable_audit` | bool | `true` | Enable hash-chained audit trail |
-| `enable_blockchain_commitment` | bool | `false` | Reserved. Blockchain anchoring is not implemented, so this has no effect (the commitment is stored in memory only). |
 
 **Response** `201 Created`
 
@@ -203,7 +197,7 @@ curl http://localhost:8000/api/v1/sessions/ss-a1b2c3d4
 #### `POST /api/v1/sessions/{session_id}/join`
 
 Join an agent to a session. The agent is assigned an Execution Ring based on its
-trust score (`sigma_raw`) and any sponsorship bonds.
+trust score (`sigma_raw`).
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/sessions/ss-a1b2c3d4/join \
@@ -262,7 +256,7 @@ curl -X POST http://localhost:8000/api/v1/sessions/ss-a1b2c3d4/activate
 
 #### `POST /api/v1/sessions/{session_id}/terminate`
 
-Terminate a session, commit the audit trail, and release bonds.
+Terminate a session and commit the audit trail.
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/sessions/ss-a1b2c3d4/terminate
@@ -535,107 +529,6 @@ curl -X POST http://localhost:8000/api/v1/sagas/saga-e5f6a7b8/steps/step-001/exe
 
 ---
 
-### Liability
-
-#### `POST /api/v1/sessions/{session_id}/sponsor`
-
-Create a sponsorship bond between two agents. The voucher stakes a percentage
-of their reputation to back the vouchee.
-
-```bash
-curl -X POST http://localhost:8000/api/v1/sessions/ss-a1b2c3d4/sponsor \
-  -H "Content-Type: application/json" \
-  -d '{
-    "voucher_did": "did:example:alice",
-    "vouchee_did": "did:example:bob",
-    "voucher_sigma": 0.92,
-    "bond_pct": 0.10
-  }'
-```
-
-**Request Body**
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `voucher_did` | string | *required* | DID of the sponsoring agent |
-| `vouchee_did` | string | *required* | DID of the agent being sponsored |
-| `voucher_sigma` | float | *required* | Sponsor's raw reputation score |
-| `bond_pct` | float | `null` | Fraction of reputation to bond (0–1) |
-| `expiry` | string | `null` | ISO 8601 expiry timestamp |
-
-**Response** `201 Created`
-
-```json
-{
-  "vouch_id": "vouch-x9y8z7",
-  "voucher_did": "did:example:alice",
-  "vouchee_did": "did:example:bob",
-  "session_id": "ss-a1b2c3d4",
-  "bonded_amount": 0.092,
-  "bonded_sigma_pct": 0.10,
-  "is_active": true
-}
-```
-
----
-
-#### `GET /api/v1/sessions/{session_id}/sponsors`
-
-List all sponsorship bonds in a session.
-
-```bash
-curl http://localhost:8000/api/v1/sessions/ss-a1b2c3d4/sponsors
-```
-
-**Response** `200 OK`
-
-```json
-[
-  {
-    "vouch_id": "vouch-x9y8z7",
-    "voucher_did": "did:example:alice",
-    "vouchee_did": "did:example:bob",
-    "session_id": "ss-a1b2c3d4",
-    "bonded_amount": 0.092,
-    "bonded_sigma_pct": 0.10,
-    "is_active": true
-  }
-]
-```
-
----
-
-#### `GET /api/v1/agents/{agent_did}/liability`
-
-Get an agent's total liability exposure across all sessions.
-
-```bash
-curl http://localhost:8000/api/v1/agents/did:example:alice/liability
-```
-
-**Response** `200 OK`
-
-```json
-{
-  "agent_did": "did:example:alice",
-  "vouches_given": [
-    {
-      "vouch_id": "vouch-x9y8z7",
-      "voucher_did": "did:example:alice",
-      "vouchee_did": "did:example:bob",
-      "session_id": "ss-a1b2c3d4",
-      "bonded_amount": 0.092,
-      "bonded_sigma_pct": 0.10,
-      "is_active": true
-    }
-  ],
-  "vouches_received": [],
-  "total_exposure": 0.092
-}
-```
-
----
-
 ### Events
 
 #### `GET /api/v1/events`
@@ -681,18 +574,15 @@ curl "http://localhost:8000/api/v1/events?event_type=session.created&limit=10"
 | `session.terminated` | Session terminated |
 | `ring.assigned` | Ring assigned to agent |
 | `ring.demoted` | Agent demoted to lower ring |
-| `ring.breach` | Ring breach detected |
-| `liability.vouch_created` | Sponsorship bond created |
-| `liability.slash` | Reputation slashed |
-| `liability.quarantine` | Agent quarantined |
+| `ring.breach_detected` | Ring breach detected |
 | `saga.created` | Saga created |
 | `saga.step_committed` | Saga step committed |
 | `saga.step_failed` | Saga step failed |
 | `saga.compensating` | Saga compensation started |
 | `saga.completed` | Saga completed |
-| `security.kill` | Agent killed via kill switch |
+| `security.agent_killed` | Agent killed via kill switch |
 | `security.rate_limited` | Agent rate-limited |
-| `audit.commitment` | Audit trail committed |
+| `audit.committed` | Audit trail committed |
 
 ---
 
@@ -713,88 +603,8 @@ curl http://localhost:8000/api/v1/events/stats
     "session.created": 3,
     "session.joined": 7,
     "ring.assigned": 7,
-    "saga.step_committed": 12,
-    "liability.vouch_created": 4
+    "saga.step_committed": 12
   }
-}
-```
-
----
-
-### Audit
-
-#### `GET /api/v1/audit/commitments`
-
-List all session audit-trail commitments.
-
-```bash
-curl http://localhost:8000/api/v1/audit/commitments
-```
-
-**Response** `200 OK`
-
-```json
-[
-  {
-    "session_id": "ss-a1b2c3d4",
-    "hash_chain_root": "sha256:9f86d081884c...",
-    "participant_dids": ["did:example:alice", "did:example:bob"],
-    "delta_count": 15,
-    "committed_at": "2025-01-15T11:00:00+00:00",
-    "committed_to": "local",
-    "blockchain_tx_id": null
-  }
-]
-```
-
----
-
-#### `GET /api/v1/audit/commitments/{session_id}`
-
-Get the audit commitment for a specific session.
-
-```bash
-curl http://localhost:8000/api/v1/audit/commitments/ss-a1b2c3d4
-```
-
-**Response** `200 OK`
-
-```json
-{
-  "session_id": "ss-a1b2c3d4",
-  "hash_chain_root": "sha256:9f86d081884c...",
-  "participant_dids": ["did:example:alice", "did:example:bob"],
-  "delta_count": 15,
-  "committed_at": "2025-01-15T11:00:00+00:00",
-  "committed_to": "local",
-  "blockchain_tx_id": null
-}
-```
-
----
-
-#### `POST /api/v1/audit/verify/{session_id}`
-
-Verify a session's audit-log root hash matches its commitment.
-
-```bash
-curl -X POST "http://localhost:8000/api/v1/audit/verify/ss-a1b2c3d4?expected_root=sha256:9f86d081884c..."
-```
-
-**Query Parameters**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `expected_root` | string | *required* — The expected hash-chain root to verify against |
-
-**Response** `200 OK`
-
-```json
-{
-  "session_id": "ss-a1b2c3d4",
-  "valid": true,
-  "committed_root": "sha256:9f86d081884c...",
-  "expected_root": "sha256:9f86d081884c..."
 }
 ```
 
@@ -867,9 +677,7 @@ sub-systems.
 from hypervisor import Hypervisor
 from hypervisor.models import SessionConfig, ConsistencyMode
 
-hv = Hypervisor(
-    max_exposure=5.0,   # cap total liability per voucher
-)
+hv = Hypervisor()
 
 # Create a session
 config = SessionConfig(
@@ -899,8 +707,6 @@ hash_root = await hv.terminate_session(session_id)
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `retention_policy` | `RetentionPolicy` | `None` | Delta retention settings |
-| `max_exposure` | `float` | `None` | Maximum liability exposure per voucher |
 | `nexus` | `Any` | `None` | Nexus trust-scoring adapter |
 | `policy_check` | `Any` | `None` | External policy check hook |
 | `iatp` | `Any` | `None` | IATP manifest adapter |
@@ -951,7 +757,6 @@ config = SessionConfig(
     max_duration_seconds=7200,
     min_eff_score=0.50,
     enable_audit=True,
-    enable_blockchain_commitment=False,
 )
 ```
 
@@ -989,7 +794,7 @@ print(action.required_ring)  # Minimum ring needed
 Manages multi-step transactions with automatic compensation on failure.
 
 ```python
-from hypervisor.saga import SagaOrchestrator
+from hypervisor import SagaOrchestrator
 
 orch = SagaOrchestrator()
 
@@ -1040,123 +845,16 @@ compensated = await orch.compensate(saga.saga_id, compensator)
 
 ---
 
-#### `SagaDSLParser`
-
-Define sagas declaratively with a JSON/dict DSL.
-
-```python
-from hypervisor.saga import SagaDSLParser
-
-parser = SagaDSLParser()
-
-definition = {
-    "name": "deploy-pipeline",
-    "session_id": "ss-a1b2c3d4",
-    "steps": [
-        {
-            "id": "provision",
-            "action_id": "provision-vm",
-            "agent": "did:example:alice",
-            "execute_api": "/infra/provision",
-            "undo_api": "/infra/deprovision",
-            "timeout": 120,
-            "retries": 2,
-        },
-        {
-            "id": "deploy",
-            "action_id": "deploy-app",
-            "agent": "did:example:bob",
-            "execute_api": "/app/deploy",
-            "undo_api": "/app/undeploy",
-        },
-    ],
-}
-
-# Validate before parsing
-errors = parser.validate(definition)
-assert errors == []
-
-# Parse into a SagaDefinition
-saga_def = parser.parse(definition)
-steps = parser.to_saga_steps(saga_def)
-```
-
----
-
-#### `CheckpointManager`
-
-Semantic checkpoints for saga progress tracking.
-
-```python
-from hypervisor.saga import CheckpointManager
-
-mgr = CheckpointManager()
-
-# Save a checkpoint after a step succeeds
-cp = mgr.save(
-    saga_id="saga-001",
-    step_id="step-001",
-    goal_description="VM provisioned successfully",
-    state_snapshot={"vm_id": "vm-123"},
-)
-
-# Get all checkpoints for a saga
-checkpoints = mgr.get_saga_checkpoints("saga-001")
-
-# Build a replay plan (skip already-achieved goals)
-replay = mgr.get_replay_plan("saga-001", steps=["step-001", "step-002"])
-```
-
----
-
-#### `FanOutOrchestrator`
-
-Execute saga branches in parallel with configurable completion policies.
-
-```python
-from hypervisor.saga import FanOutOrchestrator, FanOutPolicy
-
-fan = FanOutOrchestrator()
-
-# Create a fan-out group
-group = fan.create_group(
-    saga_id="saga-001",
-    policy=FanOutPolicy.MAJORITY_MUST_SUCCEED,
-)
-
-# Add parallel branches
-fan.add_branch(group.group_id, step_a)
-fan.add_branch(group.group_id, step_b)
-fan.add_branch(group.group_id, step_c)
-
-# Execute all branches
-result = await fan.execute(
-    group.group_id,
-    executors={"step-a": exec_a, "step-b": exec_b, "step-c": exec_c},
-    timeout_seconds=300,
-)
-print(result.policy_satisfied)  # True if majority succeeded
-```
-
-**Fan-Out Policies**
-
-| Policy | Description |
-|--------|-------------|
-| `ALL_MUST_SUCCEED` | Every branch must complete successfully |
-| `MAJORITY_MUST_SUCCEED` | More than half must succeed |
-| `ANY_MUST_SUCCEED` | At least one branch must succeed |
-
----
-
 ### Kill Switch
 
 #### `KillSwitch`
 
-Gracefully terminate an agent — hands off in-flight work to substitutes and
+Gracefully terminate an agent. Hands off in-flight work to substitutes and
 triggers saga compensation.
 
 ```python
-from hypervisor.security import KillSwitch, KillReason
+from hypervisor import KillSwitch
+from hypervisor.security.kill_switch import KillReason
 
 ks = KillSwitch()
 
@@ -1354,134 +1052,6 @@ restored = CausalTraceId.from_string(s)
 
 ---
 
-### Joint Liability
-
-#### `VouchingEngine`
-
-Manages sponsorship bonds where trusted agents vouch for newcomers by staking
-a fraction of their reputation.
-
-```python
-from hypervisor.liability import VouchingEngine
-
-vouching = VouchingEngine(max_exposure=5.0)
-
-# Create a sponsorship bond
-record = vouching.vouch(
-    voucher_did="did:example:alice",
-    vouchee_did="did:example:bob",
-    session_id="ss-a1b2c3d4",
-    voucher_sigma=0.92,
-    bond_pct=0.10,
-)
-print(record.bonded_amount)  # 0.092 (10% of 0.92)
-
-# Compute the vouchee's effective reputation
-eff = vouching.compute_eff_score(
-    vouchee_did="did:example:bob",
-    session_id="ss-a1b2c3d4",
-    vouchee_sigma=0.40,
-    risk_weight=0.5,
-)
-print(eff)  # Boosted score thanks to sponsorship
-
-# Check exposure
-exposure = vouching.get_total_exposure("did:example:alice", "ss-a1b2c3d4")
-
-# Release bonds after clean session
-released = vouching.release_session_bonds("ss-a1b2c3d4")
-```
-
----
-
-#### `SlashingEngine`
-
-Penalizes misbehaving agents and cascades penalties to their vouchers.
-
-```python
-from hypervisor.liability import SlashingEngine
-
-slashing = SlashingEngine(vouching_engine=vouching)
-
-result = slashing.slash(
-    vouchee_did="did:example:bad-actor",
-    session_id="ss-a1b2c3d4",
-    vouchee_sigma=0.60,
-    risk_weight=0.8,
-    reason="Behavioral drift detected",
-    agent_scores={"did:example:bad-actor": 0.60},
-    cascade_depth=1,
-)
-
-print(result.vouchee_penalty)
-for clip in result.voucher_clips:
-    print(f"  Voucher {clip.voucher_did} lost {clip.clipped_amount}")
-```
-
----
-
-#### `LiabilityLedger`
-
-Append-only ledger tracking vouches, slashes, quarantines, and clean sessions
-per agent. Used for admission control and risk profiling.
-
-```python
-from hypervisor.liability import LiabilityLedger, LedgerEntryType
-
-ledger = LiabilityLedger()
-
-# Record events
-ledger.record(
-    agent_did="did:example:bob",
-    entry_type=LedgerEntryType.SLASH_RECEIVED,
-    session_id="ss-a1b2c3d4",
-    severity=0.8,
-    details="Behavioral drift",
-)
-
-# Compute risk profile
-profile = ledger.compute_risk_profile("did:example:bob")
-print(profile.total_slashes)
-print(profile.risk_score)
-
-# Admission check
-admitted, reason = ledger.should_admit("did:example:bob")
-if not admitted:
-    print(f"Denied: {reason}")
-```
-
----
-
-#### `QuarantineManager`
-
-Isolates misbehaving agents with optional auto-release timers.
-
-```python
-from hypervisor.liability import QuarantineManager, QuarantineReason
-
-qm = QuarantineManager()
-
-# Quarantine an agent
-record = qm.quarantine(
-    agent_did="did:example:bad-actor",
-    session_id="ss-a1b2c3d4",
-    reason=QuarantineReason.BEHAVIORAL_DRIFT,
-    details="Embedding drift exceeded threshold",
-    duration_seconds=300,
-)
-
-# Check status
-print(qm.is_quarantined("did:example:bad-actor", "ss-a1b2c3d4"))  # True
-
-# Tick to auto-release expired quarantines
-expired = qm.tick()
-
-# Manual release
-qm.release("did:example:bad-actor", "ss-a1b2c3d4")
-```
-
----
-
 ### Classification
 
 #### `ActionClassifier`
@@ -1489,7 +1059,7 @@ qm.release("did:example:bad-actor", "ss-a1b2c3d4")
 Classifies actions into ring levels and risk weights based on their properties.
 
 ```python
-from hypervisor.rings import ActionClassifier
+from hypervisor import ActionClassifier
 
 classifier = ActionClassifier()
 

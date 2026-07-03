@@ -414,7 +414,7 @@ agent-governance-python/agent-os/
 | [`observability`](modules/observability/) | 3 | `agent-os-observability` | Prometheus metrics + OpenTelemetry tracing | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
-| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
+| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Saga Orchestrator, Delta Audit** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
 
@@ -436,9 +436,9 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 │   Ring 3 (Sandbox)   ← Default for unknown agents          │
 │                                                            │
 │   ┌──────────┐  ┌───────────┐  ┌────────────────────────┐  │
-│   │  Joint    │  │  Semantic  │  │  Hash-Chained          │  │
-│   │ Liability │  │   Saga     │  │  Delta Audit Trail     │  │
-│   │  Engine   │  │ Orchestr.  │  │  (Tamper-Evident)      │  │
+│   │ Execution│  │   Saga     │  │  Hash-Chained          │  │
+│   │  Rings   │  │Orchestrator│  │  Delta Audit Trail     │  │
+│   │          │  │            │  │  (Tamper-Evident)      │  │
 │   └──────────┘  └───────────┘  └────────────────────────┘  │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -448,9 +448,8 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 | Feature | Description | Latency |
 |---------|-------------|---------|
 | **Execution Rings** | 4-level privilege model (Ring 0–3) based on trust score | **0.3μs** |
-| **Joint Liability** | High-trust agents vouch for low-trust agents with bonded reputation | **7μs** |
 | **Saga Orchestrator** | Multi-step transactions with timeout, retry, and auto-compensation | **151μs** |
-| **Delta Audit** | Hash-chained semantic diffs with blockchain commitment | **27μs** |
+| **Delta Audit** | Hash-chained semantic diffs | **27μs** |
 | **Full Pipeline** | Session + join + audit + saga + terminate | **268μs** |
 
 ### Quick Start
