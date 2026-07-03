@@ -2,8 +2,11 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { PromptDefenseEvaluator } from "@microsoft/agent-governance-sdk";
 
 import {
@@ -11,11 +14,53 @@ import {
   buildLegacyRules,
   checkArbitraryText,
   compilePolicy,
+  evaluatePreToolUse,
   evaluateDirectResourceAccess,
   extractCommandText,
   formatPolicySummary,
   getOutputHandlingMode,
+  loadPolicy,
 } from "../assets/extensions/agt-global-policy/lib/policy.mjs";
+
+async function withPackagedPolicyState(callback) {
+  const root = await mkdtemp(join(tmpdir(), "agt-copilot-policy-"));
+  const previousSdkEntry = process.env.AGT_COPILOT_SDK_ENTRY;
+  const previousUnsafeOverride = process.env.AGT_COPILOT_ALLOW_UNSAFE_SDK_OVERRIDE;
+  const previousAuditPath = process.env.AGT_COPILOT_AUDIT_PATH;
+  process.env.AGT_COPILOT_SDK_ENTRY = fileURLToPath(
+    new URL("../node_modules/@microsoft/agent-governance-sdk/dist/index.js", import.meta.url),
+  );
+  process.env.AGT_COPILOT_ALLOW_UNSAFE_SDK_OVERRIDE = "true";
+  process.env.AGT_COPILOT_AUDIT_PATH = join(root, "audit.json");
+
+  try {
+    const state = await loadPolicy({
+      defaultPolicyPath: new URL(
+        "../assets/extensions/agt-global-policy/config/default-policy.json",
+        import.meta.url,
+      ),
+      homeDirectory: root,
+    });
+    return await callback(state);
+  } finally {
+    if (previousSdkEntry === undefined) {
+      delete process.env.AGT_COPILOT_SDK_ENTRY;
+    } else {
+      process.env.AGT_COPILOT_SDK_ENTRY = previousSdkEntry;
+    }
+    if (previousUnsafeOverride === undefined) {
+      delete process.env.AGT_COPILOT_ALLOW_UNSAFE_SDK_OVERRIDE;
+    } else {
+      process.env.AGT_COPILOT_ALLOW_UNSAFE_SDK_OVERRIDE = previousUnsafeOverride;
+    }
+    if (previousAuditPath === undefined) {
+      delete process.env.AGT_COPILOT_AUDIT_PATH;
+    } else {
+      process.env.AGT_COPILOT_AUDIT_PATH = previousAuditPath;
+    }
+    await rm(root, { recursive: true, force: true });
+  }
+}
 
 test("default packaged policy keeps the hardened developer-protection baseline", async () => {
   const rawPolicy = JSON.parse(
@@ -409,6 +454,52 @@ test("evaluateDirectResourceAccess denies secret reads, allows env templates, re
     })?.effect,
     "deny",
   );
+});
+
+test("evaluatePreToolUse denies recursive force deletes", async () => {
+  await withPackagedPolicyState(async (state) => {
+    for (const [toolName, command] of [
+      ["bash", "rm -rf important-data"],
+      ["bash", "rm -fr important-data"],
+      ["bash", "rm -r -f important-data"],
+      ["bash", "rm --recursive --force important-data"],
+      ["bash", "rm --force --recursive important-data"],
+      ["bash", "rm important-data -rf"],
+      ["bash", "rm -rf /"],
+      ["bash", "rm -rf ~/.ssh"],
+      ["bash", "npm test && rm -rf important-data"],
+      ["powershell", "Remove-Item -Recurse -Force important-data"],
+      ["powershell", "rd /s /q important-data"],
+    ]) {
+      const result = await evaluatePreToolUse(state, {
+        toolName,
+        toolArgs: { command },
+      });
+
+      assert.equal(result?.permissionDecision, "deny", command);
+    }
+  });
+});
+
+test("evaluatePreToolUse does not deny safe cleanup or non-recursive force deletes", async () => {
+  await withPackagedPolicyState(async (state) => {
+    for (const [toolName, command] of [
+      ["bash", "rm -rf node_modules"],
+      ["bash", "rm -rf build"],
+      ["bash", "rm -fr dist"],
+      ["bash", "rm -f important-data"],
+      ["bash", "rm --force important-data"],
+      ["powershell", "Remove-Item -Recurse -Force build"],
+      ["powershell", "rd /s /q node_modules"],
+    ]) {
+      const result = await evaluatePreToolUse(state, {
+        toolName,
+        toolArgs: { command },
+      });
+
+      assert.notEqual(result?.permissionDecision, "deny", command);
+    }
+  });
 });
 
 test("getOutputHandlingMode ignores unscanned tools", () => {
