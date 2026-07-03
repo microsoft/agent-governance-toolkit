@@ -81,6 +81,64 @@ test("evaluatePreToolUse denies dangerous bootstrap and reviews persistence writ
   await rm(root, { recursive: true, force: true });
 });
 
+test("evaluatePreToolUse denies recursive force deletes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-claude-rm-"));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath });
+
+  for (const command of [
+    "rm -rf important-data",
+    "rm -fr important-data",
+    "rm -r -f important-data",
+    "rm --recursive --force important-data",
+    "rm --force --recursive important-data",
+    "rm important-data -rf",
+    "rm -rf /",
+    "rm -rf ~/.ssh",
+    "npm test && rm -rf important-data",
+    "Remove-Item -Recurse -Force important-data",
+    "rd /s /q important-data",
+  ]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Bash",
+      tool_input: { command },
+      session_id: "rm-session",
+      cwd: root,
+    });
+
+    assert.equal(result.hookSpecificOutput.permissionDecision, "deny", command);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("evaluatePreToolUse does not deny safe cleanup or non-recursive force deletes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-claude-rm-safe-"));
+  const auditPath = join(root, "audit.json");
+  const state = await loadPolicy({ auditPath });
+
+  for (const command of [
+    "rm -rf node_modules",
+    "rm -rf build",
+    "rm -fr dist",
+    "rm -f important-data",
+    "rm --force important-data",
+    "Remove-Item -Recurse -Force build",
+    "rd /s /q node_modules",
+  ]) {
+    const result = await evaluatePreToolUse(state, {
+      tool_name: "Bash",
+      tool_input: { command },
+      session_id: "rm-safe-session",
+      cwd: root,
+    });
+
+    assert.notEqual(result.hookSpecificOutput.permissionDecision, "deny", command);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("evaluatePreToolUse denies Windows-style secret reads", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-claude-windows-secret-"));
   const auditPath = join(root, "audit.json");
