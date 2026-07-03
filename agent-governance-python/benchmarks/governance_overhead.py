@@ -76,7 +76,6 @@ from hypervisor import Hypervisor, SessionConfig, ExecutionRing
 from hypervisor.rings.enforcer import RingEnforcer
 from hypervisor.models import ActionDescriptor, ReversibilityLevel
 from hypervisor.audit.delta import DeltaEngine, VFSChange
-from hypervisor.liability.vouching import VouchingEngine
 
 
 # ═══════════════════════════════════════════════════════════════════════════

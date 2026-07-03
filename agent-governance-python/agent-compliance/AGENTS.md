@@ -1,12 +1,11 @@
-# Agent Compliance — Coding Agent Instructions
+# Agent Compliance - Coding Agent Instructions
 
 ## Project Overview
 
-Agent Compliance (`agent-governance-toolkit`) provides **runtime policy enforcement, governance attestation validation, and security scanning** for AI agent systems. This package ensures agents operate within organizational compliance boundaries and security policies.
+Agent Compliance (`agent-governance-toolkit`) provides **runtime policy enforcement and security scanning** for AI agent systems. This package ensures agents operate within organizational compliance boundaries and security policies.
 
 **Core Capabilities:**
 
-- **Governance Attestation Validation:** PR checklist validation for organizational governance requirements
 - **Security Scanning:** Automated detection of secrets, CVEs, dangerous code patterns, and unsafe operations
 - **Runtime Policy Enforcement:** OWASP ASI 2026 controls and integrity verification
 
@@ -41,10 +40,8 @@ ruff format .
 
 | File | Purpose |
 |------|---------|
-| `src/agent_compliance/governance/attestation_validator.py` | PR governance attestation validation logic |
 | `src/agent_compliance/security/scanner.py` | Security scanning engine (secrets, CVEs, code patterns) |
 | `src/agent_compliance/security/schemas/` | JSON schemas for security exemptions |
-| `tests/test_governance_attestation.py` | Attestation validation test suite (17 tests) |
 | `tests/test_security_scanner.py` | Security scanner test suite (25 tests) |
 
 ## Coding Conventions
@@ -53,7 +50,6 @@ ruff format .
 - Use `dataclasses` for simple data structures, Pydantic for validation-heavy ones
 - SecurityFinding fields: `severity`, `category`, `title`, `file`, `line`, `code`, `description`, `recommendation`, `cwe`, `cve`
 - Severity levels: `critical`, `high`, `medium`, `low` (critical/high block PRs)
-- AttestationResult fields: `valid`, `errors`, `warnings`, `sections_found`
 
 ## Security Scanning
 
@@ -84,29 +80,9 @@ SEVERITY_CONFIG = {
 }
 ```
 
-## Governance Attestation
-
-### Required Sections (Default)
-
-1. Security review
-2. Privacy review
-3. CELA review
-4. Responsible AI review
-5. Accessibility review
-6. Release Readiness / Safe Deployment
-7. Org-specific Launch Gates
-
-### Validation Rules
-
-- Each section must have **exactly one** checkbox marked
-- Section titles must be at the start of lines (after `##`)
-- Checkboxes can have leading whitespace
-- Case-insensitive matching (`[x]` or `[X]`)
-
 ## Testing Requirements
 
 - All new features **must** include corresponding tests
-- **Attestation tests:** Cover valid/invalid sections, checkbox counts, edge cases (CRLF, special chars)
 - **Security tests:** Cover finding creation, exemption matching, pattern detection, formatting
 - Run tests before committing: `pytest tests/ -v`
 - Aim for >90% code coverage on new code
@@ -136,37 +112,6 @@ Security exemptions use `.security-exemptions.json`:
 - **Category + file:** Any line in file
 - **CVE identifier:** Matches across all files
 - **Temporary exemptions:** Must have `expires` field (ISO 8601 date)
-
-## GitHub Actions
-
-### action/governance-attestation
-
-Validates PR descriptions contain properly filled governance attestation checklists.
-
-**Inputs:**
-- `pr-body`: PR body to validate (defaults to current PR)
-- `required-sections`: YAML list of section titles
-- `min-body-length`: Minimum PR body length (default: 40)
-
-**Outputs:**
-- `status`: `pass` or `fail`
-- `errors`: Newline-separated list of errors
-- `sections-found`: JSON mapping sections to checkbox counts
-
-### action/security-scan
-
-Scans for secrets, CVEs, and dangerous code patterns.
-
-**Inputs:**
-- `paths`: Space-separated paths to scan (required)
-- `exemptions-file`: Path to exemptions JSON (default: `.security-exemptions.json`)
-- `min-severity`: Minimum severity to block (default: `high`)
-
-**Outputs:**
-- `status`: `pass` or `fail`
-- `findings-count`: Total findings
-- `blocking-count`: Critical/high findings
-- `findings`: JSON-formatted findings
 
 ## Boundaries
 

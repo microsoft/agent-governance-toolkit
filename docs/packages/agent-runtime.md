@@ -33,7 +33,6 @@ session level:
 - **Shared Sessions** — Multi-agent session management with consistency modes (strict, eventual, causal)
 - **Saga Orchestration** — Compensating transactions for multi-step agent workflows
 - **Kill Switch** — Immediate termination with audit trail and blast radius containment
-- **Joint Liability** — Attribution tracking across multi-agent collaborations
 - **Audit Trails** — Hash-chained, append-only execution logs
 
 ## Quick Start

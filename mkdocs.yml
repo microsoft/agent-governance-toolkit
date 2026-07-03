@@ -141,7 +141,6 @@ nav:
     - Prompt Injection Detection: tutorials/09-prompt-injection-detection.md
     - Plugin Marketplace: tutorials/10-plugin-marketplace.md
     - Saga Orchestration: tutorials/11-saga-orchestration.md
-    - Liability & Attribution: tutorials/12-liability-and-attribution.md
     - Observability & Tracing: tutorials/13-observability-and-tracing.md
     - Kill Switch & Rate Limiting: tutorials/14-kill-switch-and-rate-limiting.md
     - RL Training Governance: tutorials/15-rl-training-governance.md

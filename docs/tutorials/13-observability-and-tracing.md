@@ -55,7 +55,7 @@ primitives that solve all of these:
 ┌────────────────────────────────────────────────────────────┐
 │                    HypervisorEventBus                      │
 │   Append-only structured event store with pub/sub          │
-│   40+ typed events · session/agent/time indexes            │
+│   30 typed events · session/agent/time indexes             │
 ├──────────────────────┬─────────────────────────────────────┤
 │  RingMetricsCollector│       SagaSpanExporter              │
 │  Subscribes to ring  │       Subscribes to saga            │
@@ -263,17 +263,16 @@ transitions, saga steps, security incidents, audit records, and more.
 
 ### Event types
 
-The bus supports 40+ typed events organized into categories:
+The bus supports 30 typed events organized into categories:
 
 | Category | Event Types | Examples |
 |---|---|---|
 | **Session** | 5 | `SESSION_CREATED`, `SESSION_TERMINATED`, `SESSION_ARCHIVED` |
 | **Ring** | 5 | `RING_ASSIGNED`, `RING_ELEVATED`, `RING_BREACH_DETECTED` |
-| **Liability** | 6 | `VOUCH_CREATED`, `SLASH_EXECUTED`, `QUARANTINE_ENTERED` |
-| **Saga** | 10 | `SAGA_CREATED`, `SAGA_STEP_COMMITTED`, `SAGA_ESCALATED` |
+| **Saga** | 7 | `SAGA_CREATED`, `SAGA_STEP_COMMITTED`, `SAGA_ESCALATED` |
 | **VFS** | 5 | `VFS_WRITE`, `VFS_SNAPSHOT`, `VFS_CONFLICT` |
 | **Security** | 4 | `RATE_LIMITED`, `AGENT_KILLED`, `IDENTITY_VERIFIED` |
-| **Audit** | 3 | `AUDIT_DELTA_CAPTURED`, `AUDIT_COMMITTED` |
+| **Audit** | 2 | `AUDIT_DELTA_CAPTURED`, `AUDIT_COMMITTED` |
 | **Verification** | 2 | `BEHAVIOR_DRIFT`, `HISTORY_VERIFIED` |
 
 ### The HypervisorEvent dataclass
@@ -283,11 +282,11 @@ timestamp:
 
 ```python
 event = HypervisorEvent(
-    event_type=EventType.SLASH_EXECUTED,
+    event_type=EventType.RING_BREACH_DETECTED,
     session_id="session-042",
-    agent_did="did:mesh:rogue-agent",
+    agent_did="did:mesh:agent",
     causal_trace_id="abc123/def456",
-    payload={"severity": "critical", "stake_slashed": 150},
+    payload={"severity": "critical", "required_ring": 1, "agent_ring": 3},
 )
 
 print(event.event_id)    # Auto-generated 16-char UUID hex
@@ -295,7 +294,7 @@ print(event.timestamp)   # datetime.now(UTC)
 
 # Serialize to JSON-compatible dict
 d = event.to_dict()
-print(d["event_type"])   # "liability.slash_executed"
+print(d["event_type"])   # "ring.breach_detected"
 print(d["timestamp"])    # "2025-01-15T10:30:00+00:00" (ISO format)
 ```
 
@@ -312,7 +311,7 @@ bus.emit(HypervisorEvent(
 bus.emit(HypervisorEvent(
     event_type=EventType.RING_ELEVATED,
     session_id="s1", agent_did="did:mesh:agent-alpha",
-    payload={"from_ring": 3, "to_ring": 1, "reason": "admin vouch"},
+    payload={"from_ring": 3, "to_ring": 1, "reason": "operator approval"},
 ))
 
 print(f"Total events: {bus.event_count}")  # 2
