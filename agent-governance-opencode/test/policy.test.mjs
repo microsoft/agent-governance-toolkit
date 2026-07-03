@@ -81,6 +81,62 @@ test("evaluateOpenCodeTool denies dangerous bash bootstrap and reviews persisten
   await rm(root, { recursive: true, force: true });
 });
 
+test("evaluateOpenCodeTool denies recursive force deletes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-rm-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of [
+    "rm -rf important-data",
+    "rm -fr important-data",
+    "rm -r -f important-data",
+    "rm --recursive --force important-data",
+    "rm --force --recursive important-data",
+    "rm important-data -rf",
+    "rm -rf /",
+    "rm -rf ~/.ssh",
+    "npm test && rm -rf important-data",
+    "Remove-Item -Recurse -Force important-data",
+    "rd /s /q important-data",
+  ]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "rm-session",
+      cwd: root,
+    });
+
+    assert.equal(result.effect, "deny", command);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("evaluateOpenCodeTool does not deny safe cleanup or non-recursive force deletes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-rm-safe-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of [
+    "rm -rf node_modules",
+    "rm -rf build",
+    "rm -fr dist",
+    "rm -f important-data",
+    "rm --force important-data",
+    "Remove-Item -Recurse -Force build",
+    "rd /s /q node_modules",
+  ]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "rm-safe-session",
+      cwd: root,
+    });
+
+    assert.notEqual(result.effect, "deny", command);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
 test("evaluateOpenCodeTool denies metadata URL fetches regardless of arg name", async () => {
   const root = await mkdtemp(join(tmpdir(), "agt-opencode-url-"));
   const state = await loadPolicy({ auditPath: join(root, "audit.json") });
