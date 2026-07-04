@@ -40,3 +40,15 @@ test_unsupported_jurisdiction_warning_for_unknown_country if {
 	msg := router.unsupported_jurisdiction_warning with input as {"context": {"customer_country": "XX"}}
 	contains(msg, "No regulatory pack for jurisdiction 'XX'")
 }
+
+# Regression: UK pack must not remove India routing from upstream main.
+in_input := {"context": {"customer_country": "IN"}}
+
+test_in_applicable_policies_preserved if {
+	policies := router.applicable_policies with input as in_input
+	"dpdp" in policies
+	"certin" in policies
+	"rbi" in policies
+	"sebi" in policies
+	"aadhaar" in policies
+}
