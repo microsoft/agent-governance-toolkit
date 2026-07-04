@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -124,8 +125,213 @@ func TestApprovalCoordinatorWebhookAllow(t *testing.T) {
 		t.Fatal("approval audit chain should verify")
 	}
 	entries := audit.GetEntries(AuditFilter{})
-	if len(entries) != 3 {
-		t.Fatalf("audit entries = %d, want 3", len(entries))
+	if len(entries) != 4 {
+		t.Fatalf("audit entries = %d, want 4", len(entries))
+	}
+}
+
+func TestCanonicalJSONDoesNotEscapeHTMLAndUsesUTF16KeyOrder(t *testing.T) {
+	highBMP := "\ue000"
+	supplementary := "\U00010000"
+
+	data, err := canonicalJSON(map[string]interface{}{
+		"statement":   "select '<>&' from urls",
+		highBMP:       2,
+		supplementary: 1,
+	})
+	if err != nil {
+		t.Fatalf("canonicalJSON: %v", err)
+	}
+	got := string(data)
+	if strings.Contains(got, `\u003c`) || strings.Contains(got, `\u003e`) || strings.Contains(got, `\u0026`) {
+		t.Fatalf("canonical JSON escaped HTML characters: %s", got)
+	}
+	wantOrder := `"` + supplementary + `":1,"` + highBMP + `":2`
+	if !strings.Contains(got, wantOrder) {
+		t.Fatalf("canonical JSON key order = %s, want supplementary key before high-BMP key", got)
+	}
+}
+
+func TestApprovalCoordinatorOpenSubmitValidateConsume(t *testing.T) {
+	coordinator := NewApprovalCoordinator(
+		ApprovalChain{
+			ChainID: "manual-chain",
+			Version: "1",
+			Stages: []ApprovalStage{
+				{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+			},
+		},
+		WithApprovalPolicyVersion("2026.07.01"),
+	)
+
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+	result, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+		ApproverKind:      ApproverHuman,
+		ApproverIdentity:  "did:web:example.com:alice",
+		IdentityAssurance: "oidc",
+		Decision:          ApprovalEntryAllow,
+		ReasonCode:        "reviewed",
+	})
+	if err != nil {
+		t.Fatalf("SubmitEntry: %v", err)
+	}
+	if result.Resolution.Outcome != ApprovalOutcomeAllow {
+		t.Fatalf("outcome = %s, want allow", result.Resolution.Outcome)
+	}
+
+	check := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, productionBinding())
+	if !check.Allowed || check.Consumed {
+		t.Fatalf("check = %#v, want allowed without consume", check)
+	}
+	consumed := coordinator.ValidateForExecution(opened.Request.ApprovalRequestID, productionBinding())
+	if !consumed.Allowed || !consumed.Consumed {
+		t.Fatalf("consume = %#v, want allowed consumed", consumed)
+	}
+	replay := coordinator.ValidateForExecution(opened.Request.ApprovalRequestID, productionBinding())
+	if replay.Allowed || replay.ReasonCode != "approval_consumed" {
+		t.Fatalf("replay = %#v, want approval_consumed deny", replay)
+	}
+}
+
+func TestValidateForExecutionRejectsDigestPolicyAndTamper(t *testing.T) {
+	store := NewInMemoryApprovalStore()
+	coordinator := NewApprovalCoordinator(
+		ApprovalChain{
+			ChainID: "validate-chain",
+			Version: "1",
+			Stages: []ApprovalStage{
+				{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+			},
+		},
+		WithApprovalPolicyVersion("2026.07.01"),
+		WithApprovalStore(store),
+	)
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+	if _, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+		ApproverKind:     ApproverHuman,
+		ApproverIdentity: "did:web:example.com:alice",
+		Decision:         ApprovalEntryAllow,
+	}); err != nil {
+		t.Fatalf("SubmitEntry: %v", err)
+	}
+
+	changedBinding := productionBinding()
+	changedBinding.Parameters = map[string]interface{}{
+		"statement": "update accounts set status = ? where id = ?",
+		"values":    []interface{}{"closed", 43},
+	}
+	if decision := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, changedBinding); decision.Allowed || decision.ReasonCode != "action_digest_mismatch" {
+		t.Fatalf("digest mismatch decision = %#v", decision)
+	}
+
+	coordinator.policyVersion = "2026.07.02"
+	if decision := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, productionBinding()); decision.Allowed || decision.ReasonCode != "policy_version_mismatch" {
+		t.Fatalf("policy mismatch decision = %#v", decision)
+	}
+	coordinator.policyVersion = "2026.07.01"
+
+	store.mu.Lock()
+	store.records[opened.Request.ApprovalRequestID].entries[0].ReasonCode = "tampered"
+	store.mu.Unlock()
+	if decision := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, productionBinding()); decision.Allowed || decision.ReasonCode != "approval_chain_tampered" {
+		t.Fatalf("tamper decision = %#v", decision)
+	}
+}
+
+func TestLLMAdvisoryDoesNotSatisfyApprovalStage(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "advisory-chain",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverLLMAdvisory},
+			{StageIndex: 1, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+	afterAdvisory, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+		ApproverKind:     ApproverLLMAdvisory,
+		ApproverIdentity: "llm:reviewer",
+		Decision:         ApprovalEntryAllow,
+		ReasonCode:       "looks_safe",
+	})
+	if err != nil {
+		t.Fatalf("SubmitEntry advisory: %v", err)
+	}
+	if afterAdvisory.Resolution.ApprovalResolutionID != "" {
+		t.Fatalf("advisory entry resolved request: %#v", afterAdvisory.Resolution)
+	}
+	if decision := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, productionBinding()); decision.Allowed || decision.ReasonCode != "approval_pending" {
+		t.Fatalf("advisory execution decision = %#v, want approval_pending", decision)
+	}
+
+	final, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 1, ApprovalVote{
+		ApproverKind:     ApproverHuman,
+		ApproverIdentity: "did:web:example.com:alice",
+		Decision:         ApprovalEntryAllow,
+	})
+	if err != nil {
+		t.Fatalf("SubmitEntry human: %v", err)
+	}
+	if final.Resolution.Outcome != ApprovalOutcomeAllow {
+		t.Fatalf("outcome = %s, want allow", final.Resolution.Outcome)
+	}
+}
+
+func TestWebhookRolesSatisfyAllowedRoles(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"approval_request_id": payload["approval_request_id"],
+			"action_digest":       payload["action_digest"],
+			"approved":            true,
+			"verified_approver":   "did:web:example.com:alice",
+			"roles":               []string{"security-reviewer"},
+		})
+	}))
+	defer server.Close()
+
+	approver, err := NewWebhookApprover(server.URL, WithWebhookResponseVerifier(verifiedApproverFromBody))
+	if err != nil {
+		t.Fatalf("NewWebhookApprover: %v", err)
+	}
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "role-chain",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedRoles: []string{"security-reviewer"}, Transport: approver},
+		},
+	})
+
+	result, err := coordinator.RequestApproval(context.Background(), productionBinding())
+	if err != nil {
+		t.Fatalf("RequestApproval: %v", err)
+	}
+	if result.Decision != Allow {
+		t.Fatalf("decision = %s, want allow", result.Decision)
+	}
+	if len(result.Entries) != 1 || len(result.Entries[0].Roles) != 1 || result.Entries[0].Roles[0] != "security-reviewer" {
+		t.Fatalf("entry roles = %#v, want security-reviewer", result.Entries)
+	}
+}
+
+func TestApprovalWebhookBlocksIMDSIPv6(t *testing.T) {
+	if _, err := NewWebhookApprover("http://[fd00:ec2::254]/approve"); err == nil {
+		t.Fatal("expected fd00:ec2::254 approval webhook URL to be blocked")
 	}
 }
 
@@ -315,6 +521,38 @@ func TestExecuteWithGovernanceRoutesRequireApproval(t *testing.T) {
 	}
 	if result.Approval.Request.ActionDigest == "" {
 		t.Fatal("approval request missing action digest")
+	}
+}
+
+func TestExecuteWithGovernanceRetainsApprovalOnApprovalError(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	client, err := NewClient("approval-agent",
+		WithPolicyRules([]PolicyRule{
+			{Action: "deploy.production", Effect: Allow, MinApprovals: 1},
+		}),
+		WithApprovalCoordinator(coordinator),
+	)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	result, err := client.ExecuteWithGovernance("deploy.production", map[string]interface{}{"target": "prod"})
+	if err != nil {
+		t.Fatalf("ExecuteWithGovernance: %v", err)
+	}
+	if result.Decision != Deny || result.Allowed {
+		t.Fatalf("decision=%s allowed=%v, want deny false", result.Decision, result.Allowed)
+	}
+	if result.Approval == nil {
+		t.Fatal("approval result should be retained on approval error")
+	}
+	if result.Approval.Resolution.ReasonCode != "invalid_approval_chain" {
+		t.Fatalf("approval reason = %s, want invalid_approval_chain", result.Approval.Resolution.ReasonCode)
 	}
 }
 
