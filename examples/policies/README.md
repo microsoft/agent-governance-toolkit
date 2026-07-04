@@ -1,20 +1,41 @@
-# Policy Examples
+# Policies Example
 
-Sample YAML governance policy files for AgentMesh.
+Sample YAML governance policy files for AgentMesh. Each file provides an example configuration covering a specific security or compliance scenario. 
 
-Each file in this directory is a self-contained policy configuration that demonstrates how to express a particular class of security or compliance control using the policy engine. They are intended as starting points — review and adapt them for your environment before deploying to production.
+## Policies
+ 
+| File | Description |
+|------|-------------|
+| `adk-governance.yaml` | Tool restrictions and delegation controls for Google ADK agents |
+| `cli-security-rules.yaml` | Blocks dangerous shell and CLI patterns |
+| `conversation-guardian.yaml` | Content safety rules for conversational agents |
+| `mcp-security.yaml` | Security controls for MCP tool usage |
+| `pii-detection.yaml` | Detects and blocks personally identifiable information |
+| `prompt-injection-safety.yaml` | Guards against prompt injection attacks |
+| `sandbox-safety.yaml` | Restrictions for sandboxed agent execution |
+| `semantic-policy.yaml` | Semantic similarity-based policy enforcement |
+| `sql-readonly.yaml` | Restricts agents to read-only SQL operations |
+| `sql-safety.yaml` | Blocks destructive SQL patterns |
+| `sql-strict.yaml` | Strict SQL allowlist for production databases |
 
-## Using this directory
+## Policy Packs
 
-1. **Browse** the `.yaml` files to find a scenario close to what you need. Each file opens with a comment block describing what it covers and any caveats.
-2. **Copy** the file into your own project (or reference it by path) and edit the rules, thresholds, and matchers to fit your requirements.
-3. **Load** the policy into an agent workflow via the governance runtime. The [Quickstart](../quickstart/) shows runnable end-to-end examples that consume policies from this directory.
+Multi-file policy libraries for specific regulatory or enterprise scenarios. Each pack has its own README with file listings, usage, and jurisdiction details.
 
-## Policy format
+| Directory | Policies | Description |
+|-----------|----------|-------------|
+| [`african-regulatory/`](african-regulatory/) | 15 | African regulatory and universal agent safety controls for Nigeria, Kenya, South Africa, Uganda, Tanzania, and Ethiopia. Includes OPA Rego reference implementations and a jurisdiction router. |
+| [`production/`](production/) | 5 | Ready-to-use enterprise policies (`minimal`, `enterprise`, `healthcare`, `financial`, `strict`) with graduated risk levels. |
+| [`uk-regulatory/`](uk-regulatory/) | 3 | UK regulatory controls for UK GDPR/DPA 2018, ICO automated decision-making (Arts. 22A–22D), and FCA principles-based financial conduct. Includes OPA Rego reference implementations. |
 
-All files here follow the schema defined in [`policy-engine/spec`](../../policy-engine/spec/). Refer to that spec for the full list of supported fields, matchers, and enforcement actions.
+## How to Use
+ 
+These policy files can be applied to agent workflows to enforce governance rules.
+ 
+```bash
+scripts/check-policy.sh --action "web_search" --tokens 1500 --policy examples/policies/sql-safety.yaml
+```
 
 ## Related
-
-- [Quickstart](../quickstart/) — runnable examples that load policies from this directory
-- [Policy Engine tutorial](../../docs/tutorials/01-policy-engine.md) — walkthrough of how policies are evaluated
+ 
+- [Quickstart](../quickstart/) - Runnable examples that use these policies

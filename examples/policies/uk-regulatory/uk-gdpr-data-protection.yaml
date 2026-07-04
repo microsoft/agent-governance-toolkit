@@ -1,0 +1,199 @@
+# agt-policies-uk
+# UK GDPR + Data Protection Act 2018 — Personal Data Protection Policy
+#
+# Regulatory reference: UK GDPR (retained EU law); Data Protection Act 2018 (DPA 2018);
+#   Data (Use and Access) Act 2025 (DUAA) — international transfer and complaints reforms
+# Enforcing authority: Information Commissioner's Office (ICO)
+# Status: Binding (DUAA Part 5 commenced 5 February 2026 for transfer/ADM reforms;
+#   DPA 2018 s.164A complaints procedure required by 19 June 2026)
+#
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+# Perform your own compliance assessment with qualified advisors before deploying.
+#
+# Key obligations encoded:
+#   UK GDPR Art. 5(1)(b)  Purpose limitation
+#   UK GDPR Art. 5(1)(c)  Data minimisation
+#   UK GDPR Art. 9        Special category data
+#   UK GDPR Art. 32       Security of processing
+#   UK GDPR Art. 33–34    Breach notification (72 hours to ICO; individuals if high risk)
+#   DPA 2018 s.67         Statutory breach notification duty
+#   UK GDPR Art. 44–49    Restricted international transfers (DUAA "not materially lower" test)
+#   DPA 2018 s.164A       Mandatory data protection complaints procedure (DUAA s.103)
+#
+# Rego reference implementation: rego/uk-gdpr-data-protection.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: uk-gdpr-data-protection
+description: >
+  UK GDPR and DPA 2018 compliance policy for AI agents processing UK personal data.
+  Enforces purpose limitation, security safeguards, breach-notification non-suppression,
+  special-category handling, restricted-transfer review, and complaints-procedure awareness.
+
+metadata:
+  source_regulation: "UK GDPR Arts. 5, 9, 32, 33–34, 44–49; DPA 2018 ss. 67, 164A; DUAA 2025"
+  jurisdiction: "GB"
+  enforcing_authority: "Information Commissioner's Office (ICO)"
+
+rules:
+
+  # =========================================================================
+  # UK GDPR Art. 33 / DPA 2018 s.67 — Breach Notification (72 hours to ICO)
+  # =========================================================================
+
+  - name: ukgdpr-breach-suppression-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident)|suppress\\s+(the\\s+)?(breach|notification)|delay\\s+(breach|incident)\\s+(report|notification)|wait\\s+before\\s+report(ing)?\\s+(to\\s+)?(the\\s+)?ico)"
+    action: deny
+    priority: 1
+    message: "UK GDPR Art. 33 / DPA 2018 s.67: agent cannot suppress or delay breach notification to the ICO — report without undue delay and, where feasible, within 72 hours of becoming aware"
+
+  - name: ukgdpr-breach-individual-suppression-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(tell|inform|notify)\\s+(the\\s+)?(data\\s+subject|individual|customer|user)|hide\\s+(breach|incident)\\s+from\\s+(customer|user|individual))"
+    action: deny
+    priority: 1
+    message: "UK GDPR Art. 34: where breach poses high risk to individuals, they must be informed without undue delay — agent cannot suppress individual notification"
+
+  # =========================================================================
+  # UK GDPR Art. 32 — Security of Processing
+  # =========================================================================
+
+  - name: ukgdpr-security-safeguards-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(store|transmit|log|cache).{0,30}(personal\\s+data|pii).{0,30}(unencrypted|plaintext|clear\\s*text|without\\s+encryption)"
+    action: block
+    priority: 1
+    message: "UK GDPR Art. 32: personal data must be processed with appropriate technical and organisational security measures (encryption, access control)"
+
+  # =========================================================================
+  # UK GDPR Art. 5(1)(b) — Purpose Limitation
+  # =========================================================================
+
+  - name: ukgdpr-purpose-limitation-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(reuse|repurpose|secondary\\s+use|use\\s+for\\s+another\\s+purpose).{0,40}(personal\\s+data|pii)"
+    action: block
+    priority: 2
+    message: "UK GDPR Art. 5(1)(b): personal data must be collected for specified, explicit, legitimate purposes and not further processed incompatibly"
+
+  # =========================================================================
+  # UK GDPR Art. 9 — Special Category Data
+  # =========================================================================
+
+  - name: ukgdpr-special-category-health
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(medical\\s+record|health\\s+(condition|status|data)|nhs\\s+number|genetic\\s+(data|test)|mental\\s+health|disability|prescription)"
+    action: block
+    priority: 1
+    message: "UK GDPR Art. 9: health data is special category personal data — requires Art. 9(2) condition and, typically, explicit consent or Schedule 1 DPA condition"
+
+  - name: ukgdpr-special-category-general
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(ethnic\\s+origin|race|religion|political\\s+opinion|sexual\\s+orientation|trade\\s+union|criminal\\s+conviction|biometric\\s+(template|data))"
+    action: block
+    priority: 1
+    message: "UK GDPR Art. 9: special category personal data detected — requires explicit consent or a Schedule 1 DPA 2018 condition"
+
+  # =========================================================================
+  # UK GDPR Art. 5(1)(c) — Data Minimisation
+  # =========================================================================
+
+  - name: ukgdpr-bulk-export-block
+    condition:
+      field: action
+      operator: matches
+      value: "bulk_export|export_all|dump_database|download_all_records|full_table_export|batch_download_pii"
+    action: block
+    priority: 2
+    message: "UK GDPR Art. 5(1)(c): bulk personal data export — data minimisation requires documented necessity and DPO review"
+
+  # =========================================================================
+  # UK GDPR Art. 44–49 — Restricted International Transfers (DUAA 2025)
+  # =========================================================================
+
+  - name: ukgdpr-cross-border-language-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?).{0,60}(outside\\s+(the\\s+)?uk|cross.?border|international\\s+transfer|third\\s+country|offshore)"
+    action: block
+    priority: 2
+    message: "UK GDPR Art. 44: restricted transfer — requires UK adequacy regulations, appropriate safeguards (IDTA/UK Addendum) plus data protection test, or Art. 49 derogation"
+
+  - name: ukgdpr-cross-border-action-block
+    condition:
+      field: action
+      operator: matches
+      value: "send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote|transfer_personal_data"
+    action: block
+    priority: 2
+    message: "UK GDPR Art. 44–46: cross-border personal data transfer requires adequacy, binding safeguards, and documented data protection test (DUAA 'not materially lower' standard)"
+
+  # =========================================================================
+  # UK Identifiers — NHS Number, National Insurance Number
+  # =========================================================================
+
+  - name: ukgdpr-nhs-number-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)nhs\\s*(number|no\\.?)[\\s:=]{0,5}[0-9]{3}[\\s-]?[0-9]{3}[\\s-]?[0-9]{4}"
+    action: deny
+    priority: 1
+    message: "UK GDPR: NHS number detected in agent output — blocked to prevent health identity exposure"
+
+  - name: ukgdpr-ni-number-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(national\\s+insurance|ni\\s+number)[\\s:=]{0,5}[A-Z]{2}[0-9]{6}[A-D]"
+    action: deny
+    priority: 1
+    message: "UK GDPR: National Insurance number detected in agent output — blocked to prevent identity exposure"
+
+  # =========================================================================
+  # DPA 2018 s.164A — Complaints Procedure (DUAA, required by 19 June 2026)
+  # =========================================================================
+
+  - name: ukgdpr-complaints-bypass-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(skip|bypass|ignore|refuse).{0,30}(data\\s+protection\\s+complaint|ico\\s+complaint|subject\\s+access|dsar|right\\s+of\\s+access)"
+    action: deny
+    priority: 1
+    message: "DPA 2018 s.164A (DUAA): data subjects must be able to raise complaints with the controller before ICO escalation — agent cannot bypass complaints handling"
+
+  # =========================================================================
+  # UK GDPR Art. 30 — Accountability / Audit Trail
+  # =========================================================================
+
+  - name: ukgdpr-pii-access-audit
+    condition:
+      field: action
+      operator: matches
+      value: "read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii|subject_access_request"
+    action: audit
+    priority: 3
+    message: "UK GDPR Art. 30: personal data access logged — accountability and records of processing requirement"
+
+  - name: ukgdpr-pii-modification-audit
+    condition:
+      field: action
+      operator: matches
+      value: "update_user|modify_profile|patch_account|edit_customer|change_personal|erase_personal_data"
+    action: audit
+    priority: 3
+    message: "UK GDPR Art. 30: personal data modification logged — accountability and records of processing requirement"
