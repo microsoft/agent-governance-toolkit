@@ -18,13 +18,13 @@ automated decision-making, and financial-sector principles-based controls.
 ## Regulatory context (2026)
 
 - **Data (Use and Access) Act 2025 (DUAA)** received Royal Assent on 19 June 2025. Key data-protection reforms commenced 5 February 2026, including replacement of UK GDPR Art. 22 with Arts. 22A–22D (safeguard-led automated decision-making) and updated international transfer rules using the **"not materially lower"** data protection test.
-- **Breach notification** remains UK GDPR Art. 33 / DPA 2018 s.67: notify the ICO without undue delay and, where feasible, within **72 hours** of becoming aware. Inform individuals without undue delay where the breach poses high risk (Art. 34).
+- **Breach notification** remains UK GDPR Art. 33 / DPA 2018 s.67: notify the ICO without undue delay and, where feasible, within **72 hours** when a breach is **likely to result in a risk** to rights and freedoms. Inform individuals without undue delay where the breach poses **high risk** (Art. 34).
 - **Complaints procedure**: DPA 2018 s.164A (inserted by DUAA s.103) requires all controllers to maintain a formal data protection complaints procedure by **19 June 2026**. Data subjects must raise complaints with the controller before escalating to the ICO.
 - **FCA**: No AI-specific binding regulation as of 2026. The FCA applies its existing principles-based framework (Consumer Duty, SM&CR, operational resilience). The Mills Review reports to the FCA Board in summer 2026.
 
 ## What these rules detect (and what they do not)
 
-Output-side rules match intent phrases (for example "store PII unencrypted", "don't report the breach", "no human review"). They catch an agent that narrates or proposes a violation in its output; they do not observe the underlying system action. Treat them as a starting point, pair them with real action-level enforcement, and run your own compliance assessment.
+Output-side rules match intent phrases (for example "store PII unencrypted", "don't report the breach", "no human review"). Cross-border transfer rules **escalate** for review rather than blanket-block when adequacy or safeguards may apply. They catch an agent that narrates or proposes a violation in its output; they do not observe the underlying system action. Treat them as a starting point, pair them with real action-level enforcement, and run your own compliance assessment.
 
 ## Not covered (known gaps)
 

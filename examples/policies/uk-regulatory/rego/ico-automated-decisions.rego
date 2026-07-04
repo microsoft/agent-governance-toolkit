@@ -53,10 +53,10 @@ deny contains msg if {
 	msg := "UK GDPR Art. 22C(4): individuals must be able to contest the decision through an accessible process"
 }
 
-# Art. 22A + Art. 9: special category ADM
+# Art. 22B + Art. 9: special category ADM — explicit consent or legal authorisation required
 deny contains msg if {
 	input.action in special_category_adm_actions
-	msg := "UK GDPR Art. 22A + Art. 9: automated decisions on special category data require stricter conditions — human review required"
+	msg := "UK GDPR Art. 22B: automated decisions based on special category data require explicit consent or legal authorisation — human review alone is insufficient"
 }
 
 # Art. 22A: significant decision without safeguards metadata

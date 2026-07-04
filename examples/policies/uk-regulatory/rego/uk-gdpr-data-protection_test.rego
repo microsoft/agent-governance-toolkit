@@ -54,6 +54,14 @@ test_deny_transfer_without_safeguards if {
 	}
 }
 
+test_allow_transfer_to_adequacy_country if {
+	policy.decision == "allow" with input as {
+		"action": "export_data",
+		"params": {"destination_country": "US"},
+		"output": "",
+	}
+}
+
 test_allow_transfer_with_safeguards if {
 	policy.decision == "allow" with input as {
 		"action": "export_data",
@@ -61,6 +69,14 @@ test_allow_transfer_with_safeguards if {
 			"destination_country": "CN",
 			"safeguards_in_place": true,
 		},
+		"output": "",
+	}
+}
+
+test_escalate_cross_border_action_without_destination if {
+	policy.decision == "escalate" with input as {
+		"action": "export_data",
+		"params": {},
 		"output": "",
 	}
 }

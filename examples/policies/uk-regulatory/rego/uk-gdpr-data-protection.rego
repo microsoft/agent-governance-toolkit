@@ -46,7 +46,7 @@ adequacy_countries := {
 # Art. 33 / DPA 2018 s.67: block breach suppression
 deny contains msg if {
 	regex.match(`(?i)(don'?t\s+(report|notify|disclose)|hide\s+(the\s+)?(breach|incident)|suppress\s+(the\s+)?(breach|notification)|delay\s+(breach|incident)\s+(report|notification))`, _output_text)
-	msg := "UK GDPR Art. 33 / DPA 2018 s.67: agent cannot suppress or delay breach notification to the ICO (72 hours where feasible)"
+	msg := "UK GDPR Art. 33 / DPA 2018 s.67: where a breach is likely to result in a risk to rights and freedoms, notify the ICO without undue delay and, where feasible, within 72 hours — agent cannot suppress or delay notification"
 }
 
 # Art. 34: block suppression of individual notification
@@ -58,13 +58,13 @@ deny contains msg if {
 # Art. 32: block unencrypted personal data handling in output
 deny contains msg if {
 	regex.match(`(?i)(store|transmit|log|cache).{0,30}(personal\s+data|pii).{0,30}(unencrypted|plaintext|clear\s*text|without\s+encryption)`, _output_text)
-	msg := "UK GDPR Art. 32: personal data must be processed with appropriate security measures"
+	msg := "UK GDPR Art. 32: personal data must be processed with appropriate technical and organisational security measures proportionate to risk (encryption, access control, or equivalent safeguards)"
 }
 
 # DPA 2018 s.164A: block complaints bypass
 deny contains msg if {
-	regex.match(`(?i)(skip|bypass|ignore|refuse).{0,30}(data\s+protection\s+complaint|ico\s+complaint|subject\s+access|dsar|right\s+of\s+access)`, _output_text)
-	msg := "DPA 2018 s.164A (DUAA): data subjects must be able to raise complaints with the controller before ICO escalation"
+	regex.match(`(?i)(skip|bypass|ignore|refuse).{0,30}(data\s+protection\s+complaint|ico\s+complaint|complaints?\s+(process|procedure|handling))`, _output_text)
+	msg := "DPA 2018 s.164A (DUAA): data subjects must be able to raise data protection complaints with the controller (30-day acknowledgment) before ICO escalation"
 }
 
 # NHS number in output
@@ -117,7 +117,14 @@ escalate contains msg if {
 # Art. 5(1)(b): purpose limitation language in output
 escalate contains msg if {
 	regex.match(`(?i)(reuse|repurpose|secondary\s+use|use\s+for\s+another\s+purpose).{0,40}(personal\s+data|pii)`, _output_text)
-	msg := "UK GDPR Art. 5(1)(b): personal data must not be further processed incompatibly with original purpose"
+	msg := "UK GDPR Art. 5(1)(b): personal data must not be further processed incompatibly — verify compatible purpose or DUAA recognised legitimate interests before repurposing"
+}
+
+# Art. 44–46: escalate transfer action when destination/safeguards not specified
+escalate contains msg if {
+	input.action in transfer_actions
+	not input.params.destination_country
+	msg := "UK GDPR Art. 44–46: cross-border transfer action — confirm adequacy coverage or binding safeguards plus documented data protection test before export"
 }
 
 # Art. 44: cross-border language without structured params
@@ -135,13 +142,13 @@ escalate contains msg if {
 # Art. 30: personal data access audit
 audit contains msg if {
 	input.action in pii_access_actions
-	msg := "UK GDPR Art. 30: personal data access logged — records of processing requirement"
+	msg := "UK GDPR Art. 5(2) / Art. 30: personal data access logged for accountability and records of processing"
 }
 
 # Art. 30: personal data modification audit
 audit contains msg if {
 	input.action in pii_update_actions
-	msg := "UK GDPR Art. 30: personal data modification logged — records of processing requirement"
+	msg := "UK GDPR Art. 5(2) / Art. 30: personal data modification logged for accountability and records of processing"
 }
 
 decision := "deny" if count(deny) > 0

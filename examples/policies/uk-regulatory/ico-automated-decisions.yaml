@@ -11,6 +11,7 @@
 #
 # Key obligations encoded:
 #   Art. 22A  Solely automated decisions with legal or similarly significant effects
+#   Art. 22B  Restrictions on automated decision-making using special category data
 #   Art. 22C  Safeguards: information, representations, human intervention, contest
 #   Art. 35    DPIA for high-risk processing (including agentic orchestration chains)
 #
@@ -81,12 +82,12 @@ rules:
     priority: 2
     message: "UK GDPR Art. 22A: solely automated decision with legal or similarly significant effect — verify Art. 22C safeguards and lawful basis are in place"
 
-  - name: adm-recruitment-decision-audit
+  - name: adm-recruitment-decision-escalate
     condition:
       field: output
       operator: matches
       value: "(?i)(reject\\s+(the\\s+)?(candidate|applicant)|hire\\s+decision|shortlist|score\\s+(the\\s+)?(candidate|applicant)).{0,40}(automated|without\\s+human|ai\\s+only)"
-    action: audit
+    action: escalate
     priority: 2
     message: "ICO March 2026: automated recruitment decisions are in scope of Art. 22A — review safeguards and human oversight before proceeding"
 
@@ -107,14 +108,14 @@ rules:
   # Art. 9 + 22A — Special category data in ADM (stricter conditions)
   # =========================================================================
 
-  - name: adm-special-category-block
+  - name: adm-special-category-deny
     condition:
       field: action
       operator: matches
       value: "^(automated_decision_on_health|automated_decision_on_biometric|automated_decision_on_special_category)$"
-    action: block
+    action: deny
     priority: 1
-    message: "UK GDPR Art. 22A + Art. 9: automated decisions on special category data require stricter conditions beyond standard Art. 22C safeguards — human review required"
+    message: "UK GDPR Art. 22B: automated decisions based on special category data require explicit consent or legal authorisation — human review alone is insufficient"
 
   # =========================================================================
   # Art. 35 — DPIA for high-risk ADM
