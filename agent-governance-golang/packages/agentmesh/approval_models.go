@@ -5,11 +5,15 @@ package agentmesh
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const approvalSchemaVersion = "1.0"
+const maxApprovalBindingStringLength = 4096
 
 // ActionTarget identifies the tool or resource an approval-bound action will use.
 type ActionTarget struct {
@@ -31,6 +35,58 @@ type ActionBinding struct {
 // Digest returns the sha256-prefixed canonical digest for the binding.
 func (b ActionBinding) Digest() (string, error) {
 	return digestCanonical(b.canonical())
+}
+
+// Validate rejects malformed action bindings before they can enter approval flow.
+func (b ActionBinding) Validate() error {
+	schemaVersion := b.SchemaVersion
+	if schemaVersion == "" {
+		schemaVersion = approvalSchemaVersion
+	}
+	if schemaVersion != approvalSchemaVersion {
+		return fmt.Errorf("schema_version %q is not supported", schemaVersion)
+	}
+	if err := validateApprovalBindingString("operation", b.Operation, true); err != nil {
+		return err
+	}
+	if err := validateApprovalBindingString("agent_id", b.AgentID, true); err != nil {
+		return err
+	}
+	if err := validateApprovalBindingString("subject_id", b.SubjectID, false); err != nil {
+		return err
+	}
+	if err := validateApprovalBindingString("target.tool_name", b.Target.ToolName, true); err != nil {
+		return err
+	}
+	if err := validateApprovalBindingString("target.tool_schema_version", b.Target.ToolSchemaVersion, true); err != nil {
+		return err
+	}
+	if err := validateApprovalBindingString("target.resource", b.Target.Resource, false); err != nil {
+		return err
+	}
+	if _, err := canonicalJSON(clonePolicyContext(b.Parameters)); err != nil {
+		return fmt.Errorf("parameters cannot be canonicalized: %w", err)
+	}
+	return nil
+}
+
+func validateApprovalBindingString(field string, value string, required bool) error {
+	if strings.TrimSpace(value) == "" {
+		if required {
+			return fmt.Errorf("%s is required", field)
+		}
+		return nil
+	}
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("%s must be valid UTF-8", field)
+	}
+	if strings.ContainsRune(value, '\x00') {
+		return fmt.Errorf("%s must not contain NUL bytes", field)
+	}
+	if len(value) > maxApprovalBindingStringLength {
+		return fmt.Errorf("%s exceeds %d bytes", field, maxApprovalBindingStringLength)
+	}
+	return nil
 }
 
 func (b ActionBinding) canonical() map[string]interface{} {

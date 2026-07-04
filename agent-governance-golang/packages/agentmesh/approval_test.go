@@ -3,6 +3,7 @@ package agentmesh
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -193,6 +194,197 @@ func TestApprovalCoordinatorOpenSubmitValidateConsume(t *testing.T) {
 	replay := coordinator.ValidateForExecution(opened.Request.ApprovalRequestID, productionBinding())
 	if replay.Allowed || replay.ReasonCode != "approval_consumed" {
 		t.Fatalf("replay = %#v, want approval_consumed deny", replay)
+	}
+}
+
+func TestApprovalCoordinatorOpenRequestInvalidConfig(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman},
+		},
+	})
+
+	result, err := coordinator.OpenRequest(productionBinding())
+	if err == nil {
+		t.Fatal("OpenRequest should fail when chain id is missing")
+	}
+	if result == nil || result.Resolution.ReasonCode != "invalid_approval_chain" {
+		t.Fatalf("result = %#v, want invalid_approval_chain", result)
+	}
+}
+
+func TestApprovalCoordinatorRejectsInvalidActionBinding(t *testing.T) {
+	validChain := ApprovalChain{
+		ChainID: "binding-validation",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman},
+		},
+	}
+	cases := []struct {
+		name   string
+		mutate func(*ActionBinding)
+	}{
+		{
+			name: "missing operation",
+			mutate: func(binding *ActionBinding) {
+				binding.Operation = " "
+			},
+		},
+		{
+			name: "missing agent",
+			mutate: func(binding *ActionBinding) {
+				binding.AgentID = ""
+			},
+		},
+		{
+			name: "missing tool name",
+			mutate: func(binding *ActionBinding) {
+				binding.Target.ToolName = ""
+			},
+		},
+		{
+			name: "missing tool schema",
+			mutate: func(binding *ActionBinding) {
+				binding.Target.ToolSchemaVersion = ""
+			},
+		},
+		{
+			name: "unsupported schema",
+			mutate: func(binding *ActionBinding) {
+				binding.SchemaVersion = "2.0"
+			},
+		},
+		{
+			name: "nul resource",
+			mutate: func(binding *ActionBinding) {
+				binding.Target.Resource = "prod\x00db"
+			},
+		},
+		{
+			name: "nonfinite parameter",
+			mutate: func(binding *ActionBinding) {
+				binding.Parameters["amount"] = math.Inf(1)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			coordinator := NewApprovalCoordinator(validChain)
+			binding := productionBinding()
+			tc.mutate(&binding)
+
+			result, err := coordinator.OpenRequest(binding)
+			if err == nil {
+				t.Fatalf("OpenRequest should reject %s", tc.name)
+			}
+			if result == nil || result.Resolution.ReasonCode != "invalid_action_binding" {
+				t.Fatalf("result = %#v, want invalid_action_binding", result)
+			}
+		})
+	}
+}
+
+func TestValidateForExecutionRejectsInvalidActionBinding(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "execution-binding-validation",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+	if _, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+		ApproverKind:     ApproverHuman,
+		ApproverIdentity: "did:web:example.com:alice",
+		Decision:         ApprovalEntryAllow,
+	}); err != nil {
+		t.Fatalf("SubmitEntry: %v", err)
+	}
+
+	invalidBinding := productionBinding()
+	invalidBinding.Operation = ""
+	decision := coordinator.CheckApprovalForExecution(opened.Request.ApprovalRequestID, invalidBinding)
+	if decision.Allowed || decision.ReasonCode != "invalid_action_binding" {
+		t.Fatalf("decision = %#v, want invalid_action_binding deny", decision)
+	}
+}
+
+func TestApprovalCoordinatorSubmitEntryInvalidStageIndex(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "invalid-stage",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+
+	result, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 99, ApprovalVote{
+		ApproverKind:     ApproverHuman,
+		ApproverIdentity: "did:web:example.com:alice",
+		Decision:         ApprovalEntryAllow,
+	})
+	if err == nil {
+		t.Fatal("SubmitEntry should reject an invalid stage index")
+	}
+	if result == nil || result.Resolution.ApprovalResolutionID != "" {
+		t.Fatalf("result = %#v, want unresolved pending result", result)
+	}
+}
+
+func TestApprovalCoordinatorSubmitEntryUnauthorizedApprover(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "unauthorized-approver",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+		},
+	})
+	opened, err := coordinator.OpenRequest(productionBinding())
+	if err != nil {
+		t.Fatalf("OpenRequest: %v", err)
+	}
+
+	result, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+		ApproverKind:     ApproverHuman,
+		ApproverIdentity: "did:web:example.com:eve",
+		Decision:         ApprovalEntryAllow,
+	})
+	if err != nil {
+		t.Fatalf("SubmitEntry: %v", err)
+	}
+	if result.Decision != Deny || result.Resolution.ReasonCode != "unauthorized_approver" {
+		t.Fatalf("result = %#v, want unauthorized_approver deny", result)
+	}
+	if len(result.Entries) != 1 || result.Entries[0].Decision != ApprovalEntryDeny {
+		t.Fatalf("entries = %#v, want one deny entry", result.Entries)
+	}
+}
+
+func TestApprovalCoordinatorRequestApprovalNoRequiredStage(t *testing.T) {
+	coordinator := NewApprovalCoordinator(ApprovalChain{
+		ChainID: "no-required-stage",
+		Version: "1",
+		Stages: []ApprovalStage{
+			{StageIndex: 0, ApproverKind: ApproverHuman, Optional: true},
+		},
+	})
+
+	result, err := coordinator.RequestApproval(context.Background(), productionBinding())
+	if err != nil {
+		t.Fatalf("RequestApproval: %v", err)
+	}
+	if result.Decision != Deny || result.Resolution.ReasonCode != "no_required_approval_stage" {
+		t.Fatalf("result = %#v, want no_required_approval_stage deny", result)
 	}
 }
 

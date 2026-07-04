@@ -116,6 +116,9 @@ func (c *ApprovalCoordinator) OpenRequest(binding ActionBinding) (*ApprovalResul
 	if err := c.validateConfig(); err != nil {
 		return c.deniedResult(binding, "invalid_approval_chain"), err
 	}
+	if err := binding.Validate(); err != nil {
+		return c.deniedResult(binding, "invalid_action_binding"), fmt.Errorf("invalid action binding: %w", err)
+	}
 
 	now := c.clock().UTC()
 	actionDigest, err := binding.Digest()
@@ -289,6 +292,9 @@ func (c *ApprovalCoordinator) RequestApproval(ctx context.Context, binding Actio
 func (c *ApprovalCoordinator) validateForExecution(approvalRequestID string, binding ActionBinding, consume bool) ApprovalExecutionDecision {
 	if c == nil || c.store == nil {
 		return deniedExecution(approvalRequestID, "approval_coordinator_missing")
+	}
+	if err := binding.Validate(); err != nil {
+		return deniedExecution(approvalRequestID, "invalid_action_binding")
 	}
 	actionDigest, err := binding.Digest()
 	if err != nil {

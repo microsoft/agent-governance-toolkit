@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Go SDK approval-chain parity** — added action-bound approval requests with explicit open/submit/validate lifecycle APIs, an `ApprovalStore`, execution-time digest/policy/chain revalidation, tamper detection, one-time approval consumption, advisory approver handling, webhook role authorization, and SSRF hardening for approval webhooks.
+
 ## [5.0.0] - 2026-06-25
 
 ### Changed
