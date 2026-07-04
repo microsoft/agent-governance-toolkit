@@ -77,10 +77,12 @@ func (c *AgentMeshClient) ExecuteWithGovernanceContext(ctx context.Context, acti
 			Parameters: clonePolicyContext(params),
 		}
 		resolved, err := c.Approvals.RequestApproval(ctx, binding)
+		if resolved != nil {
+			approval = resolved
+		}
 		if err != nil {
 			decision = Deny
 		} else {
-			approval = resolved
 			decision = resolved.Decision
 		}
 	}
