@@ -34,6 +34,7 @@ from __future__ import annotations
 import abc
 import logging
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -173,11 +174,15 @@ class InMemoryApprovalQueue(ApprovalBackend):
             if any(a == approver for a, _, _ in req.votes):
                 return False
             req.votes.append((approver, "ALLOW", datetime.now(timezone.utc)))
-            if req.decision != EscalationDecision.PENDING:
-                return True
-            req.decision = EscalationDecision.ALLOW
-            req.resolved_by = approver
-            req.resolved_at = datetime.now(timezone.utc)
+            if req.decision == EscalationDecision.PENDING:
+                req.decision = EscalationDecision.ALLOW
+                req.resolved_by = approver
+                req.resolved_at = datetime.now(timezone.utc)
+            # Fire on every accepted vote, not just the one that first sets
+            # req.decision, wait_for_quorum() (see below) needs a wakeup
+            # for each subsequent vote too, to re-check quorum promptly
+            # instead of blocking for the remainder of the timeout even
+            # after enough votes have already arrived.
             event = self._events.get(request_id)
         if event:
             event.set()
@@ -193,11 +198,10 @@ class InMemoryApprovalQueue(ApprovalBackend):
             if any(a == approver for a, _, _ in req.votes):
                 return False
             req.votes.append((approver, "DENY", datetime.now(timezone.utc)))
-            if req.decision != EscalationDecision.PENDING:
-                return True
-            req.decision = EscalationDecision.DENY
-            req.resolved_by = approver
-            req.resolved_at = datetime.now(timezone.utc)
+            if req.decision == EscalationDecision.PENDING:
+                req.decision = EscalationDecision.DENY
+                req.resolved_by = approver
+                req.resolved_at = datetime.now(timezone.utc)
             event = self._events.get(request_id)
         if event:
             event.set()
@@ -225,6 +229,57 @@ class InMemoryApprovalQueue(ApprovalBackend):
         event.wait(timeout=timeout)
         req = self._requests.get(request_id)
         return req.decision if req else EscalationDecision.PENDING
+
+    def wait_for_quorum(
+        self,
+        request_id: str,
+        timeout: float | None,
+        is_satisfied: Callable[[EscalationRequest], bool],
+    ) -> EscalationRequest | None:
+        """Block until ``is_satisfied(request)`` is true, or until
+        ``timeout`` seconds have elapsed *in total* since this call started.
+
+        Unlike :meth:`wait_for_decision`, which returns as soon as the
+        underlying event fires once, this re-checks ``is_satisfied`` after
+        every vote and keeps waiting for the remaining time budget if it
+        still isn't met. The per-request ``threading.Event`` is fired by
+        ``approve``/``deny`` on every accepted vote; re-arming it here with
+        ``clear()`` -- always while holding ``self._lock``, the same lock
+        ``approve``/``deny`` hold while mutating the request and before
+        they call ``set()``, means no vote recorded between our check
+        and the next ``wait()`` can be missed.
+
+        Returns:
+            The ``EscalationRequest`` (whatever its latest state is when
+            ``is_satisfied`` becomes true or time runs out), or ``None``
+            if the request is unknown.
+        """
+        event = self._events.get(request_id)
+        if event is None:
+            return self._requests.get(request_id)
+
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while True:
+            with self._lock:
+                req = self._requests.get(request_id)
+                if req is None or is_satisfied(req):
+                    return req
+                # Not satisfied yet, re-arm so the next approve()/deny()
+                # wakes us again. Safe: still holding self._lock here, and
+                # approve()/deny() only call set() after releasing it, so
+                # any vote racing with this clear() is strictly ordered
+                # before or after this critical section, never lost.
+                event.clear()
+
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    with self._lock:
+                        return self._requests.get(request_id)
+            else:
+                remaining = None
+
+            event.wait(timeout=remaining)
 
 
 class WebhookApprovalBackend(ApprovalBackend):
@@ -409,6 +464,23 @@ class EscalationHandler:
             self._on_escalate(request)
         return request
 
+    def _quorum_outcome(self, req: EscalationRequest) -> EscalationDecision | None:
+        """Evaluate ``req.votes`` against ``self.quorum``.
+
+        Returns ``ALLOW``/``DENY`` once enough votes are in to decide,
+        or ``None`` if quorum has not been satisfied yet. Single source
+        of truth for the vote tally. Used both as the wait predicate
+        and for the final decision, so the two can never disagree.
+        """
+        assert self.quorum is not None
+        approvals = sum(1 for _, v, _ in req.votes if v == "ALLOW")
+        denials = sum(1 for _, v, _ in req.votes if v == "DENY")
+        if denials >= self.quorum.required_denials:
+            return EscalationDecision.DENY
+        if approvals >= self.quorum.required_approvals:
+            return EscalationDecision.ALLOW
+        return None
+
     def resolve(self, request_id: str) -> EscalationDecision:
         """Check or wait for a resolution.
 
@@ -416,33 +488,48 @@ class EscalationHandler:
         For other backends, this polls once and returns the current state.
 
         When quorum is configured, the decision is evaluated against
-        quorum thresholds instead of accepting a single vote.
+        quorum thresholds instead of accepting a single vote. With
+        ``InMemoryApprovalQueue``, this waits across all votes that
+        arrive within ``timeout_seconds``, not just the first one,
+        so an M-of-N quorum gets its full window to collect M votes.
+
+        Note:
+            Quorum with a non-``InMemoryApprovalQueue`` backend (e.g.
+            :class:`WebhookApprovalBackend`) still only polls once; it
+            cannot block on new votes the way the in-memory queue can.
+            Configure quorum with an in-memory backend, or poll
+            ``resolve()`` again yourself until enough votes are in.
 
         Returns:
             The final decision. If the timeout expires, applies the
             ``default_action`` and returns that.
         """
         if isinstance(self.backend, InMemoryApprovalQueue):
-            decision = self.backend.wait_for_decision(
-                request_id, timeout=self.timeout_seconds
-            )
+            if self.quorum:
+                req = self.backend.wait_for_quorum(
+                    request_id,
+                    timeout=self.timeout_seconds,
+                    is_satisfied=lambda r: self._quorum_outcome(r) is not None,
+                )
+                decision = req.decision if req else EscalationDecision.PENDING
+            else:
+                req = None
+                decision = self.backend.wait_for_decision(
+                    request_id, timeout=self.timeout_seconds
+                )
         else:
             req = self.backend.get_decision(request_id)
             decision = req.decision if req else EscalationDecision.PENDING
 
-        # Quorum evaluation
+        # Quorum evaluation (also catches the non-blocking backend case
+        # above, and re-derives the decision from votes either way so a
+        # raw req.decision set by a single approve()/deny() call never
+        # leaks through without being checked against quorum).
         if self.quorum and decision != EscalationDecision.PENDING:
-            req = self.backend.get_decision(request_id)
-            if req:
-                approvals = sum(1 for _, v, _ in req.votes if v == "ALLOW")
-                denials = sum(1 for _, v, _ in req.votes if v == "DENY")
-
-                if denials >= self.quorum.required_denials:
-                    return EscalationDecision.DENY
-                if approvals >= self.quorum.required_approvals:
-                    return EscalationDecision.ALLOW
-                # Not enough votes yet — treat as pending/timeout
-                decision = EscalationDecision.PENDING
+            decision = (
+                (self._quorum_outcome(req) if req else None)
+                or EscalationDecision.PENDING
+            )
 
         if decision == EscalationDecision.PENDING:
             # Timeout — apply default
