@@ -184,3 +184,25 @@ class NativeRuntimeClient:
             input_identity=input_identity,
             enforced_identity=enforced_identity,
         )
+
+    def policy_labels(self) -> dict[str, dict[str, object]]:
+        """Resolved ``policy_id`` and configured annotator names per intervention
+        point, from the native runtime's merged manifest.
+
+        The host telemetry layer reads this once at construction so events are
+        labelled on every constructor, including ``from_url`` and
+        ``from_manifest_chain`` where the SDK never holds the manifest text.
+        Returns an empty mapping when the native extension is unavailable (a
+        pure-Python test client), and never raises, since telemetry labels are
+        best effort. The shape is
+        ``{"<intervention_point>": {"policy_id": str | None, "annotators": [str]}}``.
+        """
+
+        native = self._native
+        if native is None or not hasattr(native, "policy_labels"):
+            return {}
+        try:
+            labels = native.policy_labels()
+        except Exception:  # noqa: BLE001 - label lookup must never break construction
+            return {}
+        return labels if isinstance(labels, dict) else {}

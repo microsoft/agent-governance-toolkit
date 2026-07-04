@@ -111,9 +111,6 @@ parameters:
       - name: agentmesh-mastra
         path: agent-governance-python/agentmesh-integrations/mastra-agentmesh
         nodeVersion: '20'
-      - name: agentmesh-api
-        path: agent-governance-python/agent-mesh/services/api
-        nodeVersion: '20'
       - name: agentmesh-mcp-proxy
         path: agent-governance-python/agent-mesh/packages/mcp-proxy
         nodeVersion: '20'
@@ -130,9 +127,6 @@ parameters:
       - name: agent-governance-opencode
         path: agent-governance-opencode
         nodeVersion: '22'
-      - name: agent-os-copilot-extension
-        path: agent-governance-python/agent-os/extensions/copilot
-        nodeVersion: '20'
       - name: agentos-mcp-server
         path: agent-governance-python/agent-os/extensions/mcp-server
         nodeVersion: '20'

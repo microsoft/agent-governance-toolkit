@@ -163,4 +163,4 @@ compensator for each step that has an `undo_api`.
 - Add retry logic by setting `max_retries` on critical steps
 - Integrate real service calls instead of mocks
 - Persist saga state with `saga.to_dict()` for crash recovery
-- Explore the `SagaDSLParser` for declarative saga definitions
+- Use `saga.to_dict()` to persist state for crash recovery

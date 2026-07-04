@@ -8,7 +8,6 @@ Store — Abstract interfaces and mutable file-based implementation for episodic
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-import json
 import numpy as np
 
 from emk.schema import Episode
@@ -275,6 +274,32 @@ try:
                 )
             except Exception:
                 return None
+
+        def update(self, episode_id: str, episode: Episode) -> bool:
+            """Replace the stored episode with the given ID. Returns True if found."""
+            existing = self.collection.get(ids=[episode_id])
+            if not existing or not existing.get("ids"):
+                return False
+            self.collection.update(
+                ids=[episode_id],
+                metadatas=[{
+                    "goal": episode.goal,
+                    "action": episode.action,
+                    "result": episode.result,
+                    "reflection": episode.reflection,
+                    "timestamp": episode.timestamp.isoformat(),
+                    **episode.metadata,
+                }],
+            )
+            return True
+
+        def delete(self, episode_id: str) -> bool:
+            """Remove the episode with the given ID. Returns True if found."""
+            existing = self.collection.get(ids=[episode_id])
+            if not existing or not existing.get("ids"):
+                return False
+            self.collection.delete(ids=[episode_id])
+            return True
 
 except ImportError:
     # ChromaDB not installed — adapter will not be available

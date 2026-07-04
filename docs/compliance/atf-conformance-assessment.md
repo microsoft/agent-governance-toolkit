@@ -116,7 +116,6 @@ Actions are attributed to agent identities, but naming conventions vary across p
 |-----------|----------|
 | Audit attribution | `agent-governance-python/agent-mesh/audit/merkle_chain.py` — `agent_did` field |
 | Hypervisor tracking | `agent-governance-python/agent-hypervisor/audit/delta.py` — `agent_did` per entry |
-| Joint liability | `agent-governance-python/agent-hypervisor/liability/joint.py` — `AgentContribution` |
 
 **Gap:** Inconsistent field naming (`agent_id` vs `agent_did` vs `AgentId`) across packages. No shared `Attribution` model.
 

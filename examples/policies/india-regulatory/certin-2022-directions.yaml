@@ -1,0 +1,60 @@
+# agt-policies - India Regulatory Pack
+# CERT-In Directions 2022 - Incident Reporting, Logging and Time Sync Policy
+#
+# Regulatory reference: CERT-In Directions No. 20(3)/2022-CERT-In, 28 April 2022 (under s.70B(6), IT Act 2000)
+# Enforcing authority: Indian Computer Emergency Response Team (CERT-In), MeitY
+# Status: In force / binding (penalties under IT Act s.70B(7))
+#
+# Community-maintained governance starter policy. NOT a certified legal compliance instrument.
+#
+# Key obligations enforced:
+#   Direction (ii)   6-hour cyber incident reporting to CERT-In
+#   Direction (i)    NTP clock synchronisation (NIC/NPL)
+#   Direction (iv)   180-day ICT log retention within India
+#
+# Rego reference implementation: rego/certin-2022-directions.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: certin-2022-directions
+description: >
+  CERT-In 2022 Directions compliance policy for AI agents and SOC automation. Prevents
+  suppression or delay of 6-hour incident reporting, enforces 180-day in-India log retention,
+  and flags NTP clock-sync gaps.
+
+metadata:
+  source_regulation: "CERT-In Directions No. 20(3)/2022-CERT-In, 28 April 2022; IT Act 2000 s.70B"
+  jurisdiction: "IN"
+  enforcing_authority: "Indian Computer Emergency Response Team (CERT-In), MeitY"
+
+rules:
+  - name: certin-incident-report-suppression-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(don'?t\\s+(report|notify)|skip\\s+(the\\s+)?(cert.?in\\s+)?report|suppress\\s+(the\\s+)?(incident|breach)|delay\\s+(the\\s+)?(incident|breach)\\s+report)"
+    action: deny
+    priority: 100
+    message: "CERT-In 2022 Directions (ii): cyber incidents must be reported to CERT-In within 6 hours of noticing; suppressing or delaying reporting is prohibited"
+
+  - name: certin-log-offshore-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(disable_logging|store_logs_offshore|set_log_retention_below_180)$"
+    action: block
+    priority: 95
+    message: "CERT-In 2022 Directions (iv): ICT logs must be enabled and retained for a rolling 180 days within Indian jurisdiction"
+
+  - name: certin-ntp-sync-audit
+    condition:
+      field: action
+      operator: matches
+      value: "^(disable_ntp|set_external_untrusted_ntp)$"
+    action: audit
+    priority: 70
+    message: "CERT-In 2022 Directions (i): synchronise ICT system clocks to NIC/NPL NTP servers or traceable sources"
+
+defaults:
+  action: audit
+  max_tokens: 8000
+  max_tool_calls: 25

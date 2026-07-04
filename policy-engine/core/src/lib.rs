@@ -64,7 +64,10 @@ pub use policy::{
 };
 pub use policy_input::{action_identity, build_policy_input, canonical_json};
 pub use runtime::{InterventionPointRequest, InterventionPointResult, PolicyDispatcher, Runtime};
-pub use telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetryEventType, TelemetrySink};
+pub use telemetry::{
+    InMemoryTelemetrySink, MultiSink, NoopTelemetrySink, StdoutJsonTelemetrySink, TelemetryEvent,
+    TelemetryEventType, TelemetrySink,
+};
 pub use verdict::{normalize_policy_output, Decision, Evidence, Transform, Verdict};
 
 #[cfg(test)]

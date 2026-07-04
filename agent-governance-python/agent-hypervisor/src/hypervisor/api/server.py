@@ -4,7 +4,7 @@
 FastAPI REST API server for the Agent Hypervisor.
 
 Exposes the hypervisor's core capabilities — sessions, rings, sagas,
-liability, events, and health — as a RESTful API with OpenAPI docs.
+events, and health — as a RESTful API with OpenAPI docs.
 
 Run with: uvicorn hypervisor.api.server:app
 """
@@ -24,17 +24,14 @@ from hypervisor.api.models import (
     AddStepRequest,
     AddStepResponse,
     AgentRingResponse,
-    CommitmentResponse,
     CreateSagaResponse,
     CreateSessionRequest,
     CreateSessionResponse,
-    CreateVouchRequest,
     EventResponse,
     EventStatsResponse,
     ExecuteStepResponse,
     JoinSessionRequest,
     JoinSessionResponse,
-    LiabilityExposureResponse,
     ParticipantInfo,
     RingCheckRequest,
     RingCheckResponse,
@@ -43,10 +40,8 @@ from hypervisor.api.models import (
     SessionDetailResponse,
     SessionListItem,
     StatsResponse,
-    VerifyCommitmentResponse,
     VerifyHistoryRequest,
     VerifyHistoryResponse,
-    VouchResponse,
 )
 from hypervisor.core import Hypervisor, ManagedSession
 from hypervisor.models import (
@@ -148,8 +143,8 @@ def create_app() -> FastAPI:
         title="Agent Hypervisor API",
         description=(
             "REST API for the Agent Hypervisor — runtime supervisor for "
-            "multi-agent Shared Sessions with Execution Rings, Joint Liability, "
-            "Saga Orchestration, and Audit log audit trails."
+            "multi-agent Shared Sessions with Execution Rings, Saga Orchestration, "
+            "and audit trails."
         ),
         version=__version__,
         lifespan=lifespan,
@@ -194,7 +189,6 @@ async def get_stats() -> StatsResponse:
         active_sessions=len(hv.active_sessions),
         total_participants=total_participants,
         active_sagas=active_sagas,
-        total_vouches=hv.vouching.vouch_count,
         event_count=bus.event_count,
     )
 
@@ -216,7 +210,6 @@ async def create_session(req: CreateSessionRequest) -> CreateSessionResponse:
         max_duration_seconds=req.max_duration_seconds,
         min_eff_score=req.min_eff_score,
         enable_audit=req.enable_audit,
-        enable_blockchain_commitment=req.enable_blockchain_commitment,
     )
     managed = await _hv().create_session(config=config, creator_did=req.creator_did)
     return CreateSessionResponse(
@@ -553,102 +546,6 @@ async def execute_saga_step(saga_id: str, step_id: str) -> ExecuteStepResponse:
     raise HTTPException(status_code=404, detail=f"Saga {saga_id} or step {step_id} not found")
 
 
-# ── Liability ───────────────────────────────────────────────────────────────
-
-
-@app.post(
-    "/api/v1/sessions/{session_id}/sponsor",
-    response_model=VouchResponse,
-    status_code=201,
-    tags=["Liability"],
-)
-async def create_vouch(session_id: str, req: CreateVouchRequest) -> VouchResponse:
-    """Create a sponsorship bond between agents in a session."""
-    hv = _hv()
-    _get_managed(session_id)  # verify session exists
-    try:
-        record = hv.vouching.vouch(
-            voucher_did=req.voucher_did,
-            vouchee_did=req.vouchee_did,
-            session_id=session_id,
-            voucher_sigma=req.voucher_sigma,
-            bond_pct=req.bond_pct,
-        )
-    except Exception as e:
-        logger.debug("create_vouch failed for session %s: %s", session_id, e, exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
-    return VouchResponse(
-        vouch_id=record.vouch_id,
-        voucher_did=record.voucher_did,
-        vouchee_did=record.vouchee_did,
-        session_id=record.session_id,
-        bonded_amount=record.bonded_amount,
-        bonded_sigma_pct=record.bonded_sigma_pct,
-        is_active=record.is_active,
-    )
-
-
-@app.get(
-    "/api/v1/sessions/{session_id}/sponsors",
-    response_model=list[VouchResponse],
-    tags=["Liability"],
-)
-async def list_vouches(session_id: str) -> list[VouchResponse]:
-    """List all sponsors in a session."""
-    _get_managed(session_id)
-    hv = _hv()
-    return [
-        VouchResponse(
-            vouch_id=v.vouch_id,
-            voucher_did=v.voucher_did,
-            vouchee_did=v.vouchee_did,
-            session_id=v.session_id,
-            bonded_amount=v.bonded_amount,
-            bonded_sigma_pct=v.bonded_sigma_pct,
-            is_active=v.is_active,
-        )
-        for v in hv.vouching._vouches.values()
-        if v.session_id == session_id
-    ]
-
-
-@app.get(
-    "/api/v1/agents/{agent_did}/liability",
-    response_model=LiabilityExposureResponse,
-    tags=["Liability"],
-)
-async def get_agent_liability(agent_did: str) -> LiabilityExposureResponse:
-    """Get an agent's liability exposure across all sessions."""
-    hv = _hv()
-    vouches_given = []
-    vouches_received = []
-    total_exposure = 0.0
-
-    for v in hv.vouching._vouches.values():
-        vr = VouchResponse(
-            vouch_id=v.vouch_id,
-            voucher_did=v.voucher_did,
-            vouchee_did=v.vouchee_did,
-            session_id=v.session_id,
-            bonded_amount=v.bonded_amount,
-            bonded_sigma_pct=v.bonded_sigma_pct,
-            is_active=v.is_active,
-        )
-        if v.voucher_did == agent_did:
-            vouches_given.append(vr)
-            if v.is_active and not v.is_expired:
-                total_exposure += v.bonded_amount
-        if v.vouchee_did == agent_did:
-            vouches_received.append(vr)
-
-    return LiabilityExposureResponse(
-        agent_did=agent_did,
-        vouches_given=vouches_given,
-        vouches_received=vouches_received,
-        total_exposure=total_exposure,
-    )
-
-
 # ── Events ──────────────────────────────────────────────────────────────────
 
 
@@ -693,65 +590,6 @@ async def get_event_stats() -> EventStatsResponse:
     return EventStatsResponse(
         total_events=bus.event_count,
         by_type=bus.type_counts(),
-    )
-
-
-# ── Audit endpoints ─────────────────────────────────────────────────────────
-
-
-@app.get("/api/v1/audit/commitments", response_model=list[CommitmentResponse], tags=["Audit"])
-async def list_commitments():
-    """List all session commitments."""
-    engine = _hv().commitment_engine
-    return [
-        CommitmentResponse(
-            session_id=r.session_id,
-            hash_chain_root=r.hash_chain_root,
-            participant_dids=r.participant_dids,
-            delta_count=r.delta_count,
-            committed_at=r.committed_at.isoformat(),
-            committed_to=r.committed_to,
-            blockchain_tx_id=r.blockchain_tx_id,
-        )
-        for r in engine._commitments.values()
-    ]
-
-
-@app.get(
-    "/api/v1/audit/commitments/{session_id}", response_model=CommitmentResponse, tags=["Audit"]
-)
-async def get_commitment(session_id: str):
-    """Get commitment for a specific session."""
-    engine = _hv().commitment_engine
-    record = engine.get_commitment(session_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Commitment not found")
-    return CommitmentResponse(
-        session_id=record.session_id,
-        hash_chain_root=record.hash_chain_root,
-        participant_dids=record.participant_dids,
-        delta_count=record.delta_count,
-        committed_at=record.committed_at.isoformat(),
-        committed_to=record.committed_to,
-        blockchain_tx_id=record.blockchain_tx_id,
-    )
-
-
-@app.post(
-    "/api/v1/audit/verify/{session_id}", response_model=VerifyCommitmentResponse, tags=["Audit"]
-)
-async def verify_commitment(session_id: str, expected_root: str = Query(...)):
-    """Verify a session's audit log root matches its commitment."""
-    engine = _hv().commitment_engine
-    record = engine.get_commitment(session_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Commitment not found")
-    valid = engine.verify(session_id, expected_root)
-    return VerifyCommitmentResponse(
-        session_id=session_id,
-        valid=valid,
-        committed_root=record.hash_chain_root,
-        expected_root=expected_root,
     )
 
 

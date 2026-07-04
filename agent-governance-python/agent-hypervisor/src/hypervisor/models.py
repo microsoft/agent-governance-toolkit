@@ -141,7 +141,6 @@ class SessionConfig:
     max_duration_seconds: int = 3600
     min_eff_score: float = SESSION_DEFAULT_MIN_EFF_SCORE
     enable_audit: bool = True
-    enable_blockchain_commitment: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.max_participants, int):

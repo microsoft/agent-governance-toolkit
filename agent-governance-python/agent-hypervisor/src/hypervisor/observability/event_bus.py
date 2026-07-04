@@ -43,14 +43,6 @@ class EventType(str, Enum):
     RING_ELEVATION_EXPIRED = "ring.elevation_expired"
     RING_BREACH_DETECTED = "ring.breach_detected"
 
-    # Liability
-    VOUCH_CREATED = "liability.vouch_created"
-    VOUCH_RELEASED = "liability.vouch_released"
-    SLASH_EXECUTED = "liability.slash_executed"
-    FAULT_ATTRIBUTED = "liability.fault_attributed"
-    QUARANTINE_ENTERED = "liability.quarantine_entered"
-    QUARANTINE_RELEASED = "liability.quarantine_released"
-
     # Saga
     SAGA_CREATED = "saga.created"
     SAGA_STEP_STARTED = "saga.step_started"
@@ -59,9 +51,6 @@ class EventType(str, Enum):
     SAGA_COMPENSATING = "saga.compensating"
     SAGA_COMPLETED = "saga.completed"
     SAGA_ESCALATED = "saga.escalated"
-    SAGA_FANOUT_STARTED = "saga.fanout_started"
-    SAGA_FANOUT_RESOLVED = "saga.fanout_resolved"
-    SAGA_CHECKPOINT_SAVED = "saga.checkpoint_saved"
 
     # VFS / Session writes
     VFS_WRITE = "vfs.write"
@@ -79,7 +68,6 @@ class EventType(str, Enum):
     # Audit
     AUDIT_DELTA_CAPTURED = "audit.delta_captured"
     AUDIT_COMMITTED = "audit.committed"
-    AUDIT_GC_COLLECTED = "audit.gc_collected"
 
     # Verification
     BEHAVIOR_DRIFT = "verification.behavior_drift"

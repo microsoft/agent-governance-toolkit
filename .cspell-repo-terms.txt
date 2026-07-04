@@ -221,6 +221,8 @@ healthz
 héllo
 helpdesk
 hexdigest
+HKDF
+hkdf
 HMAC
 HMACSHA
 htek
@@ -869,3 +871,6 @@ netcat
 socat
 nmap
 tcpdump
+isascii
+multisink
+writeln

@@ -126,7 +126,7 @@ impl PolicyConfig {
                     return Err(filesystem_field_error(
                         context,
                         "bundle",
-                        "inline policy text",
+                        "a pinned 'bundle_url' on a fully pinned URL sourced manifest, a host supplied policy dispatcher, or a file sourced manifest",
                     ));
                 }
                 reject_adapter_data_paths(&config.adapter_config, context)?;
@@ -148,22 +148,22 @@ impl PolicyConfig {
         Ok(())
     }
 
-    /// Reject a remote rego `bundle_url` declared on a URL sourced manifest. The
-    /// bundled OPA dispatcher runs the fetched bundle through `opa eval`, which
-    /// executes the bundle's rego with the host process environment and network
-    /// access. An untrusted URL sourced manifest that named a `bundle_url` could
-    /// therefore ship attacker chosen rego that reads a host secret through
-    /// `opa.runtime` and sends it out through `http.send`. The hash pin does
-    /// not establish trust here because the same untrusted manifest chooses both
-    /// the URL and the pin. A URL sourced manifest therefore cannot carry a
-    /// remote rego bundle, mirroring how it cannot carry a local `bundle` or read
-    /// host credentials. A file sourced manifest, authored by the host operator,
-    /// keeps full `bundle_url` support.
+    /// Reject a remote rego `bundle_url` declared on a URL sourced manifest that
+    /// was not fully pinned. The bundled OPA dispatcher runs the fetched bundle
+    /// through `opa eval`, which executes the bundle's rego with the host process
+    /// environment and network access. An unpinned URL sourced manifest that
+    /// named a `bundle_url` could therefore ship attacker chosen rego that reads
+    /// a host secret through `opa.runtime` and sends it out through `http.send`.
+    /// When the URL load chain is unpinned the hash pin does not establish trust,
+    /// because the same mutable manifest chooses both the URL and the pin. The
+    /// caller skips this check for a fully pinned chain, where the host that
+    /// chose the top level pin transitively vouches for the bundle URL and its
+    /// pin, matching how a file sourced manifest keeps full `bundle_url` support.
     pub fn reject_url_sourced_remote_bundle(&self, context: &str) -> Result<(), RuntimeError> {
         if let Self::Rego(config) = self {
             if config.bundle_url.is_some() {
                 return Err(RuntimeError::ManifestInvalid(format!(
-                    "{context} declares a remote rego 'bundle_url' in a URL sourced manifest; a URL sourced manifest cannot execute a remote rego bundle because the bundled rego runs with host environment and network access, load the policy from a file sourced manifest instead"
+                    "{context} declares a remote rego 'bundle_url' in an unpinned URL sourced manifest; an unpinned URL sourced manifest cannot execute a remote rego bundle because the bundled rego runs with host environment and network access, pin the top level manifest and every URL extends with a sha256 or integrity hash, or load the policy from a file sourced manifest instead"
                 )));
             }
         }
