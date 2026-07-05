@@ -429,4 +429,14 @@ describe('DataAccessEvaluator', () => {
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toMatch(/Geography/);
   });
+
+  it('denies when requiredGeography is set but geography label is absent (fail-closed)', () => {
+    // Unlabeled data must not bypass the geography restriction — the check must
+    // deny rather than skip when dataLabel.geography is empty.
+    const policy = makeABACPolicy({ agentId: 'agent-1', maxClassification: DC.TOP_SECRET, requiredGeography: 'US' });
+    const evaluator = new DataAccessEvaluator([policy]);
+    const decision = evaluator.evaluate('agent-1', makeDataLabel({ classification: DC.INTERNAL, geography: '' }));
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toMatch(/absent|Geography/i);
+  });
 });

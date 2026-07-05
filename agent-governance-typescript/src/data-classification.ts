@@ -134,15 +134,15 @@ function evaluateSingle(
     }
   }
 
-  if (
-    policy.requiredGeography &&
-    dataLabel.geography &&
-    dataLabel.geography !== policy.requiredGeography
-  ) {
+  // When requiredGeography is set, an absent/empty geography label must also deny:
+  // unlabeled data must not bypass the geography restriction.
+  if (policy.requiredGeography && dataLabel.geography !== policy.requiredGeography) {
     return {
       ...base,
       allowed: false,
-      reason: `Geography '${dataLabel.geography}' does not match required '${policy.requiredGeography}'`,
+      reason: dataLabel.geography
+        ? `Geography '${dataLabel.geography}' does not match required '${policy.requiredGeography}'`
+        : `Geography label absent but policy requires '${policy.requiredGeography}'`,
     };
   }
 
