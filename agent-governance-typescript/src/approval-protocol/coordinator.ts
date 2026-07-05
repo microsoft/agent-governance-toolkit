@@ -288,6 +288,14 @@ export class ApprovalCoordinator {
   private _maybeResolve(request: ApprovalRequest, chain: ApprovalChain): void {
     if (this.store.getResolution(request.approvalRequestId) !== null) return;
 
+    const required = new Set(chain.stages.filter((s) => s.required).map((s) => s.stageIndex));
+    // A chain with zero required stages is misconfigured: deny immediately rather
+    // than vacuously allowing (fail-closed semantics, mirrors Go port in #3242).
+    if (required.size === 0) {
+      this._resolve(request, 'deny', null);
+      return;
+    }
+
     const entries = this.store
       .getEntries(request.approvalRequestId)
       .filter((e) => e.approverKind !== 'llm_advisory');
@@ -302,7 +310,6 @@ export class ApprovalCoordinator {
     const allowedStages = new Set(
       entries.filter((e) => e.decision === 'allow').map((e) => e.stageIndex),
     );
-    const required = new Set(chain.stages.filter((s) => s.required).map((s) => s.stageIndex));
     if ([...required].every((idx) => allowedStages.has(idx))) {
       const finalDigest = entries.length > 0 ? entries[entries.length - 1].entryDigest : null;
       this._resolve(request, 'allow', finalDigest);

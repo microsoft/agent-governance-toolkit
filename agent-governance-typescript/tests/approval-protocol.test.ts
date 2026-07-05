@@ -406,6 +406,40 @@ describe('ApprovalCoordinator.validateForExecution', () => {
 });
 
 // ---------------------------------------------------------------------------
+// _maybeResolve — zero required stages (fail-closed)
+// ---------------------------------------------------------------------------
+
+describe('ApprovalCoordinator zero-required-stages guard', () => {
+  it('denies immediately when chain has no required stages (vacuous allow is unsafe)', () => {
+    const store = new InMemoryApprovalStore();
+    // All stages are advisory-only (required: false) → zero required stages
+    const chain: ApprovalChain = {
+      chainId: 'no-required',
+      version: '1',
+      stages: [makeApprovalStage({ stageIndex: 0, allowedIdentities: [ALICE], required: false })],
+    };
+    const coord = new ApprovalCoordinator(store, new Map([[chain.chainId, chain]]));
+    const { request } = coord.openRequest(makeBinding(), {
+      policyRuleId: 'r',
+      policyVersion: 'v1',
+      chainId: 'no-required',
+      ttlSeconds: 300,
+    });
+    coord.submitEntry(request.approvalRequestId, {
+      stageIndex: 0,
+      approverKind: 'human',
+      approverIdentity: ALICE,
+      identityAssurance: 'session',
+      decision: 'allow',
+    });
+    // A chain with zero required stages must not vacuously resolve to allow.
+    const req = store.getRequest(request.approvalRequestId)!;
+    expect(req.status).toBe('denied');
+    expect(store.getResolution(request.approvalRequestId)!.outcome).toBe('deny');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Chain integrity
 // ---------------------------------------------------------------------------
 
