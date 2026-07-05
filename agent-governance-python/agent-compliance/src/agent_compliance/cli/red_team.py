@@ -308,19 +308,27 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
 
     experiment.complete()
 
+    # A playbook passes when its score meets the user-supplied --threshold.
+    # PlaybookResult.passed uses agent-sre's hardcoded 70.0 cutoff, so relying on
+    # it here would let the report verdict diverge from the exit code (issue #3237).
+    def meets_threshold(r) -> bool:
+        return r.resilience_score >= threshold
+
+    overall_pass = all(meets_threshold(r) for r in results)
+
     # Format output
     if output_json:
         data = {
             "target": target,
             "experiment_id": experiment.experiment_id,
             "playbooks_run": len(results),
-            "overall_passed": all(r.passed for r in results),
+            "overall_passed": overall_pass,
             "results": [
                 {
                     "playbook_id": r.playbook.playbook_id,
                     "name": r.playbook.name,
                     "resilience_score": r.resilience_score,
-                    "passed": r.passed,
+                    "passed": meets_threshold(r),
                     "steps": [
                         {
                             "name": step.name,
@@ -342,28 +350,25 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
         click.echo(f"  Target: {target}")
         click.echo(f"  Experiment: {experiment.experiment_id}\n")
 
-        overall_pass = True
         for r in results:
-            icon = "+" if r.passed else "!"
+            icon = "+" if meets_threshold(r) else "!"
             click.echo(f"  [{icon}] {r.playbook.name}")
             click.echo(f"      Score: {r.resilience_score}/100  ", nl=False)
-            click.echo(f"{'PASS' if r.passed else 'FAIL'}")
+            click.echo(f"{'PASS' if meets_threshold(r) else 'FAIL'}")
 
             for step, result, passed in r.step_results:
                 step_icon = "+" if passed else "x"
                 click.echo(f"        [{step_icon}] {step.name}: {result.value}")
 
             click.echo()
-            if not r.passed:
-                overall_pass = False
 
         click.echo(f"  {'─'*56}")
         total = len(results)
-        passed_count = sum(1 for r in results if r.passed)
+        passed_count = sum(1 for r in results if meets_threshold(r))
         click.echo(f"  Results: {passed_count}/{total} playbooks passed")
         click.echo(f"  Overall: {'PASS' if overall_pass else 'FAIL'}\n")
 
-    if not all(r.resilience_score >= threshold for r in results):
+    if not overall_pass:
         raise SystemExit(1)
 
 

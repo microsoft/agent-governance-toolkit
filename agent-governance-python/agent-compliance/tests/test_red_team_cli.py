@@ -10,7 +10,6 @@ import textwrap
 from pathlib import Path
 from unittest import mock
 
-import click
 import pytest
 from click.testing import CliRunner
 
@@ -197,6 +196,115 @@ class TestRedTeamAttack:
         )
         if "agent-sre" not in (result.output or ""):
             assert result.exit_code == 1
+
+
+class _FakePlaybook:
+    def __init__(self, playbook_id: str = "pb-1", name: str = "Fake Playbook"):
+        self.playbook_id = playbook_id
+        self.name = name
+        self.steps: list = []
+
+
+class _FakeResult:
+    """Stands in for agent_sre PlaybookResult with a controllable score/passed pair."""
+
+    def __init__(self, resilience_score: float, passed: bool):
+        self.playbook = _FakePlaybook()
+        self.step_results: list = []
+        self.resilience_score = resilience_score
+        self.passed = passed
+
+
+def _fake_adversarial(results: list[_FakeResult]) -> dict:
+    class _FakeRunner:
+        def __init__(self, experiment):
+            pass
+
+        def run_all(self, playbooks):
+            return results
+
+    class _FakeExperiment:
+        experiment_id = "exp-fake"
+
+        def __init__(self, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+        def complete(self):
+            pass
+
+    return {
+        "BUILTIN_PLAYBOOKS": [r.playbook for r in results],
+        "AdversarialRunner": _FakeRunner,
+        "ChaosExperiment": _FakeExperiment,
+        "Fault": mock.Mock(),
+        "FaultType": mock.Mock(),
+    }
+
+
+def _patch_adversarial(fake: dict):
+    """Patch _get_adversarial in the module instance actually bound to the CLI.
+
+    Patching via the "agent_compliance.cli.red_team" module path is unreliable:
+    other test modules (test_init_imports.py) drop agent_compliance from
+    sys.modules and re-import it, so the path can resolve to a different module
+    object than the one whose functions back this file's ``cli`` group.
+    """
+    attack_callback = cli.commands["red-team"].commands["attack"].callback
+    return mock.patch.dict(attack_callback.__globals__, {"_get_adversarial": lambda: fake})
+
+
+class TestRedTeamAttackThresholdConsistency:
+    """Report verdict and exit code must use the same pass criterion (issue #3237).
+
+    ``PlaybookResult.passed`` is computed by agent-sre against a hardcoded 70.0,
+    while ``--threshold`` gates the process exit code. The report must follow the
+    user-supplied threshold so CI and humans see the same verdict.
+    """
+
+    def test_json_verdict_matches_failing_exit_code(self, runner: CliRunner):
+        # Score 75 passes the internal 70 criterion but fails --threshold 90.
+        fake = _fake_adversarial([_FakeResult(resilience_score=75.0, passed=True)])
+        with _patch_adversarial(fake):
+            result = runner.invoke(cli, ["red-team", "attack", "--threshold", "90", "--json"])
+
+        assert result.exit_code == 1
+        data = json.loads(result.output)
+        assert data["overall_passed"] is False
+        assert data["results"][0]["passed"] is False
+
+    def test_json_verdict_matches_passing_exit_code(self, runner: CliRunner):
+        # Score 60 fails the internal 70 criterion but passes --threshold 50.
+        fake = _fake_adversarial([_FakeResult(resilience_score=60.0, passed=False)])
+        with _patch_adversarial(fake):
+            result = runner.invoke(cli, ["red-team", "attack", "--threshold", "50", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["overall_passed"] is True
+        assert data["results"][0]["passed"] is True
+
+    def test_text_verdict_matches_exit_code(self, runner: CliRunner):
+        fake = _fake_adversarial([_FakeResult(resilience_score=75.0, passed=True)])
+        with _patch_adversarial(fake):
+            result = runner.invoke(cli, ["red-team", "attack", "--threshold", "90"])
+
+        assert result.exit_code == 1
+        assert "Overall: FAIL" in result.output
+        assert "0/1 playbooks passed" in result.output
+
+    def test_default_threshold_consistent(self, runner: CliRunner):
+        # At the default threshold (70) both criteria agree; behavior is unchanged.
+        fake = _fake_adversarial([_FakeResult(resilience_score=75.0, passed=True)])
+        with _patch_adversarial(fake):
+            result = runner.invoke(cli, ["red-team", "attack", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["overall_passed"] is True
+        assert data["results"][0]["passed"] is True
 
 
 class TestRedTeamReport:
