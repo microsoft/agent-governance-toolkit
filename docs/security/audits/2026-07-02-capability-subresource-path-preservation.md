@@ -133,10 +133,10 @@ The full `agent-mesh` Python suite passes (3428 passed, 73 skipped; the only
 failures are 4 pre-existing `ModuleNotFoundError: agentrust_trace` cases in
 `tests/governance/test_trace_sink.py`, unrelated to this change), and the Rust
 workspace passes `cargo test --release --workspace` (376 + crate tests, 0
-failures). The change was reviewed by a multi-lens deep code review (dual-model
-correctness and domain-semantics over an adversarial authorization matrix, plus a
-consequence-graph / obligation gate that surfaced this audit-doc requirement and
-the stale-derived-field hardening). The spec at
+failures). Correctness was validated against an adversarial authorization matrix
+(exact leaf, parent, siblings, deeper nesting, delegation, and the #3176
+regressions), and the cross-language surface was reviewed to confirm no other SDK
+escalates a leaf grant to its parent or siblings. The spec at
 `docs/specs/AGENTMESH-TRUST-COORDINATION-1.0.md` §8.2, §8.3, and §8.5 was updated
 to document that `qualifier` is the full sub-resource path compared as one opaque
 token.
