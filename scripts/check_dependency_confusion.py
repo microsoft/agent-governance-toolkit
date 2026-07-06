@@ -175,6 +175,9 @@ REGISTERED_PACKAGES = {
     "pyatr", "pyatr_core",
     # Timezone data package (real PyPI package, used on Windows/Alpine)
     "tzdata",
+    # google-re2: official Google RE2 bindings (real PyPI package; used by
+    # agt-policies for faithful RE2 regex validation matching OPA/Go RE2)
+    "google-re2", "google_re2",
 }
 
 # Local-only packages that should NEVER appear with version pins in

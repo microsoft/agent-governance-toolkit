@@ -874,3 +874,11 @@ tcpdump
 isascii
 multisink
 writeln
+
+# --- agt-policies stdlib/code identifiers (#3137) ---
+getpid
+prio
+fnmatchcase
+normcase
+weakref
+INLOOP
