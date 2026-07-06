@@ -202,6 +202,23 @@ _NETWORK_FETCH_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\b(curl|wget)\s+[a-z0-9.-]+\.[a-z]{2,}\b", re.IGNORECASE),
 ]
 
+# High-signal standing-instruction / concealment phrasing. These are the core
+# of markup tool-poisoning: a covert, always-on directive planted in memory
+# ("<important>when asked anything, silently ... do not mention this</important>").
+# They are ambiguous in benign prose on their own, so they only escalate a
+# hidden-instruction markup tag to HIGH — never block plain text by themselves.
+_STANDING_INSTRUCTION_PATTERNS: list[re.Pattern[str]] = [
+    # Concealment: hide the behaviour from the user/operator.
+    re.compile(r"\bdo\s*n[o']?t\s+(mention|tell|inform|reveal|disclose|notify|say)", re.IGNORECASE),
+    re.compile(r"\bwithout\s+(telling|informing|notifying|alerting|mentioning)", re.IGNORECASE),
+    re.compile(r"\b(silently|secretly|covertly|quietly|discreetly)\b", re.IGNORECASE),
+    # Conditional standing directive: fire on future/every interaction.
+    re.compile(r"\bwhen(ever)?\s+(asked|prompted|the\s+user|anyone|someone)", re.IGNORECASE),
+    re.compile(r"\bif\s+(asked|anyone\s+asks|the\s+user\s+asks)\b", re.IGNORECASE),
+    re.compile(r"\balways\s+(respond|reply|say|answer|forward|send|include|append)", re.IGNORECASE),
+    re.compile(r"\bfrom\s+now\s+on\b", re.IGNORECASE),
+]
+
 
 # ---------------------------------------------------------------------------
 # MemoryGuard
@@ -379,8 +396,9 @@ class MemoryGuard:
         """Detect tool-poisoning: hidden-instruction markup, destructive commands, exfil.
 
         Widens coverage beyond prompt-injection prose to catch instruction-bearing
-        markup tags wrapping destructive shell commands or exfiltration payloads —
-        the blatant memory-poisoning pattern that plain prose detectors miss.
+        markup tags that wrap destructive shell commands, exfiltration payloads, or
+        a covert standing instruction (concealment or an always-on directive) — the
+        blatant memory-poisoning patterns that plain prose detectors miss.
         """
         alerts: list[Alert] = []
 
@@ -388,6 +406,7 @@ class MemoryGuard:
         destructive = self._first_match(content, _DESTRUCTIVE_COMMAND_PATTERNS)
         exfil_exec = self._first_match(content, _EXFIL_EXEC_PATTERNS)
         network_fetch = self._first_match(content, _NETWORK_FETCH_PATTERNS)
+        standing = self._first_match(content, _STANDING_INSTRUCTION_PATTERNS)
 
         if destructive is not None:
             alerts.append(Alert(
@@ -408,22 +427,32 @@ class MemoryGuard:
             ))
 
         if markup is not None:
-            # A hidden-instruction tag is escalated to HIGH (blocking) only when
-            # it wraps a destructive command or an exfil/RCE command. A tag next
-            # to a BARE network fetch (e.g. `<tool>` docs alongside a plain
-            # `curl https://api...`) is common in legitimate tooling runbooks, so
-            # that pairing stays MEDIUM to avoid false-positive blocks.
-            paired = destructive is not None or exfil_exec is not None
+            # A hidden-instruction tag is escalated to HIGH (blocking) when it
+            # wraps a destructive/exfil command OR carries a covert standing
+            # instruction (concealment or a conditional always-on directive) —
+            # the core memory-poisoning payload. A tag next to a BARE network
+            # fetch (e.g. `<tool>` docs alongside a plain `curl https://api...`)
+            # or an innocuous note stays MEDIUM to avoid false-positive blocks.
+            paired = (
+                destructive is not None
+                or exfil_exec is not None
+                or standing is not None
+            )
+            if paired and standing is not None and destructive is None and exfil_exec is None:
+                message = "Hidden-instruction markup tag carrying a covert standing instruction"
+                matched = standing
+            elif paired:
+                message = "Instruction-bearing markup tag wrapping a dangerous payload"
+                matched = destructive or exfil_exec
+            else:
+                message = "Hidden-instruction markup tag in memory content"
+                matched = markup
             alerts.append(Alert(
                 alert_type=AlertType.TOOL_POISONING,
                 severity=AlertSeverity.HIGH if paired else AlertSeverity.MEDIUM,
-                message=(
-                    "Instruction-bearing markup tag wrapping a dangerous payload"
-                    if paired else
-                    "Hidden-instruction markup tag in memory content"
-                ),
+                message=message,
                 entry_source=source,
-                matched_pattern=markup,
+                matched_pattern=matched,
             ))
         elif network_fetch is not None:
             # Bare curl/wget without a hidden tag or destructive command is
