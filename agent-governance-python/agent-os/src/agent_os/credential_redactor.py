@@ -37,6 +37,11 @@ class CredentialRedactor:
     callers. The class operates on plain strings as well as nested dictionaries,
     lists, and tuples, replacing detected secret values with a stable
     placeholder.
+
+    By default :meth:`redact` and its helpers scrub only secret-like material
+    (:attr:`PATTERNS`). Personally identifiable information (:attr:`PII_PATTERNS`)
+    is detected by :meth:`find_pii_matches` and :meth:`contains_pii` but is
+    **not** removed unless ``redact_pii=True`` is passed to a redaction method.
     """
 
     # Python's stdlib ``re`` does not support per-pattern timeouts. These
@@ -115,8 +120,13 @@ class CredentialRedactor:
             ),
         ),
         CredentialPattern(
+            # Broadened to the canonical SSN form shared with
+            # ``integrations/base.py`` (dash/space/dot/none), which mirrors the
+            # YAML policy packs (see #2469 and #2594). Previously this only
+            # matched the dashed form, so ``123 45 6789`` / ``123.45.6789`` /
+            # ``123456789`` were detected by the integrations layer but not here.
             name="US SSN",
-            pattern=re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
+            pattern=re.compile(r"\b\d{3}[\s.-]?\d{2}[\s.-]?\d{4}\b"),
         ),
         CredentialPattern(
             name="Credit card number",
@@ -172,15 +182,23 @@ class CredentialRedactor:
         return bool(cls.find_pii_matches(value))
 
     @classmethod
-    def redact(cls, value: str | None) -> str:
+    def redact(cls, value: str | None, *, redact_pii: bool = False) -> str:
         """Redact credential-like values from a string.
+
+        By default only secret-like material (API keys, tokens, private keys,
+        ...) is redacted. Pass ``redact_pii=True`` to additionally scrub
+        personally identifiable information (email, phone, SSN, credit card,
+        IPv4 address) detected by :attr:`PII_PATTERNS`.
 
         Args:
             value: String content that may contain credential-like material.
+            redact_pii: When ``True``, also redact PII/CRI patterns. Defaults
+                to ``False`` to preserve the historical secrets-only behavior.
 
         Returns:
-            A string with each detected credential replaced by
-            ``REDACTED_PLACEHOLDER``. Empty input returns an empty string.
+            A string with each detected credential (and, when ``redact_pii`` is
+            set, each PII value) replaced by ``REDACTED_PLACEHOLDER``. Empty
+            input returns an empty string.
         """
         if not value:
             return ""
@@ -193,18 +211,29 @@ class CredentialRedactor:
                 redaction_count += count
                 result = updated
 
+        if redact_pii:
+            for pii_pattern in cls.PII_PATTERNS:
+                updated, count = pii_pattern.pattern.subn(REDACTED_PLACEHOLDER, result)
+                if count:
+                    redaction_count += count
+                    result = updated
+
         if redaction_count:
             logger.info("Credential redaction applied to %s value(s)", redaction_count)
 
         return result
 
     @classmethod
-    def redact_mapping(cls, mapping: dict[str, Any] | None) -> dict[str, Any]:
+    def redact_mapping(
+        cls, mapping: dict[str, Any] | None, *, redact_pii: bool = False
+    ) -> dict[str, Any]:
         """Redact all nested values in a mapping.
 
         Args:
             mapping: A possibly nested mapping containing strings, lists,
                 tuples, or dictionaries.
+            redact_pii: When ``True``, also redact PII/CRI patterns in nested
+                strings. Defaults to ``False`` (secrets-only).
 
         Returns:
             A new mapping with nested strings redacted recursively. Empty input
@@ -212,39 +241,53 @@ class CredentialRedactor:
         """
         if not mapping:
             return {}
-        return {key: cls.redact_data_structure(value) for key, value in mapping.items()}
+        return {
+            key: cls.redact_data_structure(value, redact_pii=redact_pii)
+            for key, value in mapping.items()
+        }
 
     @classmethod
-    def redact_dictionary(cls, mapping: dict[str, Any] | None) -> dict[str, Any]:
+    def redact_dictionary(
+        cls, mapping: dict[str, Any] | None, *, redact_pii: bool = False
+    ) -> dict[str, Any]:
         """Compatibility alias for dictionary redaction.
 
         Args:
             mapping: Dictionary-like content to redact.
+            redact_pii: When ``True``, also redact PII/CRI patterns. Defaults
+                to ``False`` (secrets-only).
 
         Returns:
             The redacted mapping produced by :meth:`redact_mapping`.
         """
-        return cls.redact_mapping(mapping)
+        return cls.redact_mapping(mapping, redact_pii=redact_pii)
 
     @classmethod
-    def redact_data_structure(cls, value: Any) -> Any:
+    def redact_data_structure(cls, value: Any, *, redact_pii: bool = False) -> Any:
         """Recursively redact nested strings in dicts, lists, and tuples.
 
         Args:
             value: Any Python value that may contain nested strings.
+            redact_pii: When ``True``, also redact PII/CRI patterns in every
+                nested string. Defaults to ``False`` (secrets-only).
 
         Returns:
             A value of the same general shape with strings redacted in place of
             their original secret-bearing content.
         """
         if isinstance(value, str):
-            return cls.redact(value)
+            return cls.redact(value, redact_pii=redact_pii)
         if isinstance(value, dict):
-            return {key: cls.redact_data_structure(item) for key, item in value.items()}
+            return {
+                key: cls.redact_data_structure(item, redact_pii=redact_pii)
+                for key, item in value.items()
+            }
         if isinstance(value, list):
-            return [cls.redact_data_structure(item) for item in value]
+            return [cls.redact_data_structure(item, redact_pii=redact_pii) for item in value]
         if isinstance(value, tuple):
-            return tuple(cls.redact_data_structure(item) for item in value)
+            return tuple(
+                cls.redact_data_structure(item, redact_pii=redact_pii) for item in value
+            )
         return value
 
     @classmethod

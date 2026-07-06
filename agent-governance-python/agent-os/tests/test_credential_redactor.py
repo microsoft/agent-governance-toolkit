@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from agent_os.credential_redactor import CredentialRedactor, REDACTED_PLACEHOLDER
+from agent_os.credential_redactor import REDACTED_PLACEHOLDER, CredentialRedactor
 
 
 def _fake_github_token(prefix: str) -> str:
@@ -180,3 +180,101 @@ def test_private_key_pattern_handles_adversarial_input_quickly():
 
     assert redacted == text
     assert elapsed < 1.0
+
+
+# ---------------------------------------------------------------------------
+# PII redaction — opt-in via ``redact_pii=True`` (see issue #3239).
+#
+# redact() is secrets-only by default; PII is detected by find_pii_matches() /
+# contains_pii() but not removed unless the caller opts in. These tests pin
+# both halves of that contract so the gap reported in #3239 cannot regress.
+# ---------------------------------------------------------------------------
+
+_PII_CASES = [
+    ("email user@example.com", "user@example.com"),
+    ("phone 415-555-0142", "415-555-0142"),
+    ("ssn 123-45-6789", "123-45-6789"),
+    ("card 4111111111111111", "4111111111111111"),
+    ("ip 10.0.0.1", "10.0.0.1"),
+]
+
+
+@pytest.mark.parametrize(("text", "fragment"), _PII_CASES)
+def test_default_redact_leaves_pii_untouched(text: str, fragment: str):
+    # Regression for #3239: by default redact() is secrets-only, so PII is
+    # detected but NOT removed.
+    assert CredentialRedactor.contains_pii(text) is True
+    assert CredentialRedactor.redact(text) == text
+    assert fragment in CredentialRedactor.redact(text)
+
+
+@pytest.mark.parametrize(("text", "fragment"), _PII_CASES)
+def test_redact_pii_scrubs_pii(text: str, fragment: str):
+    redacted = CredentialRedactor.redact(text, redact_pii=True)
+
+    assert REDACTED_PLACEHOLDER in redacted
+    assert fragment not in redacted
+
+
+@pytest.mark.parametrize(
+    "ssn",
+    ["123-45-6789", "123 45 6789", "123.45.6789", "123456789"],
+)
+def test_ssn_pattern_matches_all_separator_variants(ssn: str):
+    # The SSN pattern in PII_PATTERNS is reconciled with the canonical broadened
+    # form in integrations/base.py (dash/space/dot/none). See #3239.
+    matches = {match.matched_text for match in CredentialRedactor.find_pii_matches(ssn)}
+    assert ssn in matches
+    assert CredentialRedactor.redact(ssn, redact_pii=True) == REDACTED_PLACEHOLDER
+
+
+def test_redact_pii_still_redacts_secrets_too():
+    text = "key=sk-test_abcdefghijklmnopqrstuvwxyz email user@example.com"
+
+    redacted = CredentialRedactor.redact(text, redact_pii=True)
+
+    assert "sk-test_abcdefghijklmnopqrstuvwxyz" not in redacted
+    assert "user@example.com" not in redacted
+    assert redacted.count(REDACTED_PLACEHOLDER) >= 2
+
+
+def test_redact_pii_threads_through_nested_data_structure():
+    payload = {
+        "email": "user@example.com",
+        "nested": ["ssn 123-45-6789", {"ip": "10.0.0.1"}],
+        "safe": "hello",
+    }
+
+    redacted = CredentialRedactor.redact_data_structure(payload, redact_pii=True)
+
+    assert redacted["email"] == REDACTED_PLACEHOLDER
+    assert redacted["nested"][0] == f"ssn {REDACTED_PLACEHOLDER}"
+    assert redacted["nested"][1]["ip"] == REDACTED_PLACEHOLDER
+    assert redacted["safe"] == "hello"
+    # Default still leaves PII untouched in nested structures.
+    default_redacted = CredentialRedactor.redact_data_structure(payload)
+    assert default_redacted["email"] == "user@example.com"
+
+
+def test_redact_pii_threads_through_mapping_and_dictionary_alias():
+    payload = {"email": "user@example.com"}
+
+    assert (
+        CredentialRedactor.redact_mapping(payload, redact_pii=True)["email"]
+        == REDACTED_PLACEHOLDER
+    )
+    assert (
+        CredentialRedactor.redact_dictionary(payload, redact_pii=True)["email"]
+        == REDACTED_PLACEHOLDER
+    )
+    # Default remains secrets-only.
+    assert CredentialRedactor.redact_mapping(payload)["email"] == "user@example.com"
+
+
+def test_redact_pii_is_idempotent():
+    text = "email user@example.com ssn 123-45-6789"
+
+    once = CredentialRedactor.redact(text, redact_pii=True)
+    twice = CredentialRedactor.redact(once, redact_pii=True)
+
+    assert once == twice
