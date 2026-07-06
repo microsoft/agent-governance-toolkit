@@ -482,7 +482,6 @@ def _migrate_governance_chain(
         target_bundle_dir = Path(
             tempfile.mkdtemp(prefix="agt_migrate_dryrun_")
         )
-        target_bundle_preexisting = False
 
     try:
         manifest = resolve_manifest(
@@ -533,6 +532,7 @@ def _migrate_governance_chain(
             try:
                 tmp_manifest_path.unlink()
             except OSError:
+                # best-effort temp cleanup; nothing to recover if it fails
                 pass
             for backup, original in reversed(moved):
                 try:
@@ -560,6 +560,7 @@ def _migrate_governance_chain(
                     try:
                         tmp_manifest_path.unlink()
                     except OSError:
+                        # best-effort temp cleanup; nothing to recover if it fails
                         pass
             if not target_bundle_preexisting:
                 _rmtree_silent(target_bundle_dir)

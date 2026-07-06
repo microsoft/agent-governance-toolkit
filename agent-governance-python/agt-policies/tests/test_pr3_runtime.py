@@ -69,7 +69,7 @@ def test_run_sync_timeout_none_inside_running_loop_is_bounded(
     monkeypatch.setattr(
         runtime_module, "_DEFAULT_INLOOP_TIMEOUT_SECONDS", 0.05, raising=False
     )
-    outcome: dict[str, BaseException] = {}
+    outcome: dict[str, Exception] = {}
 
     async def _in_running_loop() -> None:
         awaitable = asyncio.Event().wait()
@@ -78,7 +78,7 @@ def test_run_sync_timeout_none_inside_running_loop_is_bounded(
     def _target() -> None:
         try:
             asyncio.run(_in_running_loop())
-        except BaseException as exc:  # noqa: BLE001 - assert propagated failure type
+        except Exception as exc:  # noqa: BLE001 - assert propagated failure type
             outcome["error"] = exc
 
     thread = threading.Thread(target=_target, name="run-sync-regression", daemon=True)
@@ -105,14 +105,14 @@ def test_resolver_event_loop_binding_error_fails_closed_promptly(tmp_path: Path)
         policy_dispatcher=policy,
         approval_resolver=resolver,
     )
-    outcome: dict[str, EvaluationResult | BaseException] = {}
+    outcome: dict[str, EvaluationResult | Exception] = {}
 
     def _target() -> None:
         try:
             outcome["result"] = runtime.evaluate_intervention_point(
                 "pre_tool_call", _snapshot()
             )
-        except BaseException as exc:  # noqa: BLE001 - surfaced for assertion
+        except Exception as exc:  # noqa: BLE001 - surfaced for assertion
             outcome["error"] = exc
 
     thread = threading.Thread(target=_target, name="binding-error-regression", daemon=True)
