@@ -1501,7 +1501,7 @@ class TestCapabilityFourSegmentEscalation:
 
     # --- model_validator self-heals stale/inconsistent derived fields ---
 
-    def test_validator_reheals_truncated_qualifier(self):
+    def test_validator_re_derives_truncated_qualifier(self):
         # A grant constructed (or deserialized) with a truncated
         # qualifier must be corrected from `capability`, otherwise the
         # #3180 escalation re-opens because matches() trusts qualifier.
@@ -1531,7 +1531,7 @@ class TestCapabilityFourSegmentEscalation:
             "table_users:row_1",
         )
 
-    def test_reassigning_capability_reheals_via_validate_assignment(self):
+    def test_reassigning_capability_re_derives_via_validate_assignment(self):
         # validate_assignment must re-derive components when `capability`
         # is mutated after construction; otherwise a stale truncated
         # qualifier would re-authorize the parent (#3180 defense-in-depth).
@@ -1543,7 +1543,7 @@ class TestCapabilityFourSegmentEscalation:
         assert g.matches("write:database:table_users:row_1") is True
         assert g.matches("write:database:table_users") is False   # parent denied
 
-    def test_non_dict_mapping_input_reheals(self):
+    def test_non_dict_mapping_input_re_derives(self):
         # model_validate on a non-dict mapping (e.g. UserDict) with a
         # deliberately stale qualifier must still re-derive from
         # `capability` (mode="after" runs regardless of input type).

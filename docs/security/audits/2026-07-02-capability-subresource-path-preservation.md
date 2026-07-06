@@ -101,7 +101,7 @@ Added to `agent-governance-python/agent-mesh/tests/test_coverage_boost.py`
 | `test_resource_scoped_leaf_grant` | `resource_ids` composes with a 4-segment scope. |
 | `test_leaf_grantor_cannot_delegate_parent_or_sibling` / `test_parent_grantor_can_delegate_child` | Delegation boundary under `require_grantor_capability=True`. |
 | `test_get_capabilities_returns_full_leaf_string` / `test_deny_exact_leaf_only` | Scope-level surfaces stay consistent. |
-| `test_validator_reheals_truncated_qualifier` / `test_model_validate_derives_components` / `test_reassigning_capability_reheals_via_validate_assignment` / `test_non_dict_mapping_input_reheals` | Derived fields are re-healed on construction, `model_validate`, reassignment, and non-dict mapping input. |
+| `test_validator_re_derives_truncated_qualifier` / `test_model_validate_derives_components` / `test_reassigning_capability_re_derives_via_validate_assignment` / `test_non_dict_mapping_input_re_derives` | Derived fields are re-derived on construction, `model_validate`, reassignment, and non-dict mapping input. |
 | `test_trailing_wildcard_still_matches_prefix` / `test_mid_remainder_wildcard_is_literal_fail_closed` / `test_empty_trailing_segment_behavior_pinned` | Wildcard and empty-segment grammar pins. |
 
 The full `agent-mesh` suite passes (3426 passed, 73 skipped; the only failures
