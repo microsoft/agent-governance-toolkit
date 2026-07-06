@@ -1582,14 +1582,34 @@ class TestCapabilityFourSegmentEscalation:
         assert g.matches("write:database:table_users:row") is False
         assert g.matches("write:database:*:row") is True
 
-    def test_empty_trailing_segment_behavior_pinned(self):
-        # Pin current behavior for an empty trailing segment; it is a
-        # distinct qualifier ("") and does not authorize the 3-segment
-        # parent.
-        g = CapabilityGrant.create("write:database:", "did:mesh:1", "did:mesh:0")
-        assert g.qualifier == ""
-        assert g.matches("write:database:") is True
-        assert g.matches("write:database") is False
+    def test_empty_segment_rejected_at_parse_and_construction(self):
+        # Maintainer decision (#3180 follow-up): empty colon-separated
+        # segments are malformed and fail closed at parse time, rather
+        # than being accepted as a distinct "" qualifier.
+        for bad in ("write:database:", "write::table", ":data", "a:b::c"):
+            with pytest.raises(ValueError, match="empty segment"):
+                CapabilityGrant.parse_capability(bad)
+            with pytest.raises(ValueError):
+                CapabilityGrant.create(bad, "did:mesh:1", "did:mesh:0")
+
+    def test_model_copy_re_derives_and_denies_parent(self):
+        # model_copy(update={"capability": ...}) must re-derive the
+        # components; otherwise a copy that rewrites capability keeps a
+        # stale qualifier and re-authorizes the parent (#3180 residual,
+        # now closed by the model_copy override).
+        g = CapabilityGrant.create(
+            "write:database:table_users", "did:mesh:1", "did:mesh:0"
+        )
+        c = g.model_copy(update={"capability": "write:database:table_users:row_1"})
+        assert c.qualifier == "table_users:row_1"
+        assert c.matches("write:database:table_users:row_1") is True
+        assert c.matches("write:database:table_users") is False   # parent denied
+        assert c.matches("write:database:table_users:row_2") is False  # sibling denied
+
+    def test_model_copy_rejects_malformed_capability_update(self):
+        g = CapabilityGrant.create("write:database", "did:mesh:1", "did:mesh:0")
+        with pytest.raises(ValueError):
+            g.model_copy(update={"capability": "write:database:"})
 
 
 # ---------------------------------------------------------------------------

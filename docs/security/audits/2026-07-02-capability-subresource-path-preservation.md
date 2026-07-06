@@ -54,7 +54,33 @@ the model so those fields can never disagree with `capability`:
   from `capability` on every construction, `model_validate`, and (via
   `ConfigDict(validate_assignment=True)`) every field reassignment, regardless of
   input type (dict, `UserDict`/mapping, model instance);
+- `model_copy` is overridden to re-derive the components from the copy's
+  `capability`, since Pydantic's `model_copy` does not run validators;
 - `create()` no longer passes the derived fields explicitly.
+
+Two further follow-ups (maintainer-approved) landed in the same change:
+
+- **Empty-segment rejection.** `parse_capability` now rejects any empty
+  colon-separated segment (`write:database:`, `write::table`, `:data`) with a
+  `ValueError`, so malformed scopes fail closed at parse/construction time instead
+  of being accepted as a distinct `""` qualifier.
+- **Single shared matcher.** The string-scope decision was extracted into
+  `capability_scope_matches(granted, requested)`; both `CapabilityGrant.matches()`
+  and the MCP tool gate (`integrations/mcp` `_check_capability`) now delegate to
+  it, so the MCP path can no longer drift from the core semantics (it previously
+  did exact + trailing-wildcard only).
+
+### Cross-language surface
+
+The same capability-string parser/matcher pattern exists in the other SDKs; all
+were audited:
+
+| SDK | Parser truncates? | Matcher escalates leaf→parent? | Action |
+|---|---|---|---|
+| Rust (`agent-governance-rust/agentmesh/src/trust_support.rs`) | **Yes** (`parts.get(2)`) | No (matcher keys on the full `capability` string, not the parsed qualifier) | **Fixed** parser to preserve the full remainder + reject empty segments; added regression tests. The truncated `qualifier` was still serialized (`Serialize`/`Deserialize`), a data-integrity defect. |
+| .NET (`agent-governance-dotnet`, `AgentIdentity.HasCapability`) | No parser | No (exact + trailing `:*` only) | None needed. |
+| Go (`agent-governance-golang`) | No capability-string parser/matcher | N/A (opaque exact strings) | None needed. |
+| TypeScript (`agent-governance-typescript`, `identity.hasCapability`) | No parser | No (exact + trailing `:*` only) | None needed. |
 
 ## Threat model impact
 
@@ -68,22 +94,14 @@ tighten", the direction is correct.
 | Authorization (escalation) | **Strengthened.** A 4+ segment leaf grant authorizes only that exact leaf; parent, siblings, and uncles are denied. |
 | Correct broad->narrow direction | **Preserved.** A broad grant (`write:database`, or a 3-segment `write:database:table_users`) still satisfies a narrower/deeper check via the colon-boundary prefix branch. |
 | #3176 behavior | **Preserved.** The 3-segment qualifier and `resource_ids` tightening is unaffected; regression tests for it continue to pass. |
-| Derived-field integrity | **Strengthened.** The `mode="after"` validator plus `validate_assignment` prevent a grant constructed or mutated with a stale/truncated `qualifier` from re-authorizing the parent. |
+| Derived-field integrity | **Strengthened.** The `mode="after"` validator, `validate_assignment`, and the `model_copy` override prevent a grant constructed, mutated, or copied with a stale/truncated `qualifier` from re-authorizing the parent. |
+| MCP tool gating | **Unified.** `integrations/mcp` now shares the core matcher, so a 4+ segment leaf capability cannot satisfy a parent tool requirement via a divergent checker. Existing exact/wildcard behavior is preserved (verified by the MCP test suite). |
+| Empty/malformed segments | **Fail-closed.** `write:database:` and similar are rejected at parse/grant time rather than accepted as an empty-`""` qualifier. |
 | Delegation guard (`grant(require_grantor_capability=True)`) | **Strengthened.** A grantor holding only a leaf can no longer delegate the parent or a sibling; it can still delegate a strictly-deeper child. |
 | Wildcard grammar | **Clarified / fail-closed.** Only a whole-segment action/resource `*` and a trailing `:*` are wildcards; a `*` in the middle of the remainder (`write:database:*:row`) is now a literal qualifier segment (stricter). |
 | Fail-closed behavior | **Preserved.** Malformed requests (no colon) still fail closed. Malformed `capability` at construction still raises a `ValueError` (now a `pydantic.ValidationError`, which subclasses `ValueError`, so the `/api/v1/capabilities/grant` handler's `except ValueError` still returns HTTP 400, not 500). |
 | New attack surface | **None.** No new inputs, network exposure, secrets, or trust decisions; the signatures of `matches()`/`check()`/`grant()` are unchanged. |
-| Backward compatibility | A caller that relied on a 4+ segment leaf grant implicitly authorizing its parent/siblings now receives `False`. This is the intended security fix. |
-
-### Known residual (out of scope)
-
-Pydantic's `model_copy(update={"capability": ...})` does **not** run validators,
-so a copy that rewrites `capability` without also updating the derived fields
-keeps stale components. No caller in the repository does this (grants are never
-`model_copy`-ed, serialized, or deserialized; the registry is in-memory). The
-`_derive_components` docstring instructs callers needing a re-scoped grant to use
-`CapabilityGrant.create()` rather than `model_copy`. Closing this fully would
-require overriding `model_copy` and is not warranted for the current call graph.
+| Backward compatibility | A caller that relied on a 4+ segment leaf grant implicitly authorizing its parent/siblings now receives `False`; a caller that relied on empty-segment capabilities now gets a `ValueError`. Both are the intended security fix. |
 
 ## Test coverage
 
@@ -102,15 +120,23 @@ Added to `agent-governance-python/agent-mesh/tests/test_coverage_boost.py`
 | `test_leaf_grantor_cannot_delegate_parent_or_sibling` / `test_parent_grantor_can_delegate_child` | Delegation boundary under `require_grantor_capability=True`. |
 | `test_get_capabilities_returns_full_leaf_string` / `test_deny_exact_leaf_only` | Scope-level surfaces stay consistent. |
 | `test_validator_re_derives_truncated_qualifier` / `test_model_validate_derives_components` / `test_reassigning_capability_re_derives_via_validate_assignment` / `test_non_dict_mapping_input_re_derives` | Derived fields are re-derived on construction, `model_validate`, reassignment, and non-dict mapping input. |
-| `test_trailing_wildcard_still_matches_prefix` / `test_mid_remainder_wildcard_is_literal_fail_closed` / `test_empty_trailing_segment_behavior_pinned` | Wildcard and empty-segment grammar pins. |
+| `test_model_copy_re_derives_and_denies_parent` / `test_model_copy_rejects_malformed_capability_update` | `model_copy` re-derives components (parent/sibling denied) and fails closed on a malformed capability update. |
+| `test_trailing_wildcard_still_matches_prefix` / `test_mid_remainder_wildcard_is_literal_fail_closed` | Wildcard grammar pins. |
+| `test_empty_segment_rejected_at_parse_and_construction` | Empty colon-separated segments are rejected at parse and construction. |
 
-The full `agent-mesh` suite passes (3426 passed, 73 skipped; the only failures
-are 4 pre-existing `ModuleNotFoundError: agentrust_trace` cases in
-`tests/governance/test_trace_sink.py`, unrelated to this change). The change was
-reviewed by a multi-lens deep code review (dual-model correctness and
-domain-semantics over an adversarial authorization matrix, plus a
+Rust regression tests in `agent-governance-rust/agentmesh/src/trust_support.rs`
+(`parse_capability_preserves_full_sub_resource_path`,
+`parse_capability_rejects_empty_segments`,
+`leaf_grant_does_not_authorize_parent_or_sibling`).
+
+The full `agent-mesh` Python suite passes (3428 passed, 73 skipped; the only
+failures are 4 pre-existing `ModuleNotFoundError: agentrust_trace` cases in
+`tests/governance/test_trace_sink.py`, unrelated to this change), and the Rust
+workspace passes `cargo test --release --workspace` (376 + crate tests, 0
+failures). The change was reviewed by a multi-lens deep code review (dual-model
+correctness and domain-semantics over an adversarial authorization matrix, plus a
 consequence-graph / obligation gate that surfaced this audit-doc requirement and
 the stale-derived-field hardening). The spec at
-`docs/specs/AGENTMESH-TRUST-COORDINATION-1.0.md` §8.2 and §8.5 was updated to
-document that `qualifier` is the full sub-resource path compared as one opaque
+`docs/specs/AGENTMESH-TRUST-COORDINATION-1.0.md` §8.2, §8.3, and §8.5 was updated
+to document that `qualifier` is the full sub-resource path compared as one opaque
 token.

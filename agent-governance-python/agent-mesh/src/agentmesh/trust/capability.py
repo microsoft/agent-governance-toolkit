@@ -81,10 +81,19 @@ class CapabilityGrant(BaseModel):
         and re-joined with ``":"``. Dropping segments past index 2
         (the historical behavior) collapsed a leaf grant onto its
         parent/siblings and caused a privilege escalation (#3180).
+
+        Empty colon-separated segments (e.g. ``write:database:``,
+        ``write::table``, ``:data``) are rejected: an empty segment is a
+        malformed scope whose matching behavior is ambiguous, so it fails
+        closed at parse time rather than being silently accepted.
         """
         parts = capability.split(":")
         if len(parts) < 2:
             raise ValueError(f"Invalid capability format: {capability}")
+        if any(part == "" for part in parts):
+            raise ValueError(
+                f"Invalid capability format (empty segment): {capability}"
+            )
 
         action = parts[0]
         resource = parts[1]
@@ -103,14 +112,9 @@ class CapabilityGrant(BaseModel):
         model instance). Without this, a grant built or mutated as
         ``CapabilityGrant(capability="a:b:c:d", qualifier="c")`` would
         keep a truncated ``qualifier`` and re-open the #3180 escalation,
-        because ``matches()`` trusts the stored qualifier.
-
-        Known residual: ``model_copy(update={"capability": ...})`` does
-        NOT run validators (a documented Pydantic behavior), so a copy
-        that rewrites ``capability`` without also updating the derived
-        fields keeps stale components. Callers needing a re-scoped grant
-        MUST use ``CapabilityGrant.create()`` (or re-validate), not
-        ``model_copy``.
+        because ``matches()`` trusts the stored qualifier. The
+        ``model_copy`` override applies the same re-derivation to copies,
+        which Pydantic otherwise builds without validation.
         """
         action, resource, qualifier = self.parse_capability(self.capability)
         # object.__setattr__ avoids re-triggering validate_assignment
@@ -119,6 +123,26 @@ class CapabilityGrant(BaseModel):
         object.__setattr__(self, "resource", resource)
         object.__setattr__(self, "qualifier", qualifier)
         return self
+
+    def model_copy(self, *, update=None, deep=False):
+        """Copy the grant, re-deriving components from ``capability``.
+
+        Pydantic's ``model_copy`` does NOT run validators, so a plain
+        ``super().model_copy(update={"capability": ...})`` would rewrite
+        ``capability`` while leaving ``action``/``resource``/``qualifier``
+        stale — re-opening the #3180 escalation because ``matches()``
+        trusts those derived fields. Overriding it here re-derives them
+        from the copy's ``capability`` so the invariant holds on every
+        copy, including ``update`` payloads that rewrite the capability.
+        Raises ``ValueError`` if the resulting ``capability`` is malformed
+        (fail-closed), matching construction-time behavior.
+        """
+        copied = super().model_copy(update=update, deep=deep)
+        action, resource, qualifier = self.parse_capability(copied.capability)
+        object.__setattr__(copied, "action", action)
+        object.__setattr__(copied, "resource", resource)
+        object.__setattr__(copied, "qualifier", qualifier)
+        return copied
 
     @classmethod
     def create(
@@ -154,47 +178,16 @@ class CapabilityGrant(BaseModel):
     def matches(self, requested: str, resource_id: Optional[str] = None) -> bool:
         """Check if this grant satisfies a requested capability.
 
-        Uses simple startswith matching for scope checking.
+        Delegates the string-scope decision to
+        :func:`capability_scope_matches` (shared with other capability
+        checkers so the semantics cannot drift), then applies this
+        grant's validity and ``resource_ids`` scoping.
         """
         if not self.is_valid():
             return False
 
-        # Simple string-based scope check
-        if self.capability == "*" or self.capability == requested:
-            pass  # exact match or wildcard
-        elif self.capability.endswith(":*"):
-            prefix = self.capability[:-1]  # e.g. "read:" from "read:*"
-            if not requested.startswith(prefix):
-                return False
-        elif ":" in self.capability and requested.startswith(self.capability + ":"):
-            # V30: Only allow prefix match at colon boundaries to prevent
-            # "read" matching "readwrite:secret". Require the granted
-            # capability to be a colon-delimited prefix of the requested one.
-            pass
-        else:
-            # Fall back to component matching. parse_capability raises
-            # ValueError on inputs that don't contain a colon (e.g.
-            # bare verbs like "read") — fail-closed for those rather
-            # than crashing the caller. The grant simply doesn't match
-            # a malformed request.
-            try:
-                req_action, req_resource, req_qualifier = self.parse_capability(requested)
-            except ValueError:
-                return False
-            if self.action != "*" and self.action != req_action:
-                return False
-            if self.resource != "*" and self.resource != req_resource:
-                return False
-            if self.qualifier is not None and self.qualifier != "*":
-                # This grant is scoped to a specific qualifier, so it
-                # only satisfies a request for that exact qualifier. A
-                # request that omits the qualifier (req_qualifier is
-                # None) is broader than the grant and must NOT be
-                # authorized by it. Otherwise a narrow grant (e.g.
-                # "write:database:table_users") would satisfy a broad
-                # check (e.g. "write:database"), a privilege escalation.
-                if req_qualifier != self.qualifier:
-                    return False
+        if not capability_scope_matches(self.capability, requested):
+            return False
 
         # Check resource ID scope. A grant restricted to specific
         # resource_ids must not satisfy a check that omits resource_id
@@ -211,6 +204,50 @@ class CapabilityGrant(BaseModel):
         """Revoke this grant immediately."""
         self.active = False
         self.revoked_at = datetime.now(timezone.utc)
+
+
+def capability_scope_matches(granted: str, requested: str) -> bool:
+    """Return ``True`` if a grant of ``granted`` authorizes ``requested``.
+
+    Pure ``action:resource[:qualifier]`` string-scope decision, with no
+    grant validity or ``resource_ids`` handling. This is the single
+    authoritative scope matcher; every capability checker (``CapabilityGrant.matches``
+    and the MCP tool gate) delegates here so their semantics cannot drift.
+
+    Rules, in order:
+
+    1. Global wildcard (``*``) or exact match.
+    2. Trailing wildcard (``granted`` ends with ``:*``): ``requested`` must
+       start with the colon-terminated prefix.
+    3. Colon-boundary prefix: a broad grant authorizes a strictly deeper
+       (narrower) request, e.g. ``write:database`` authorizes
+       ``write:database:table_users``. The ``+ ":"`` prevents ``read``
+       from matching ``readwrite:secret``.
+    4. Component fallback: compare action, resource, and the full qualifier
+       (the entire sub-resource remainder) as opaque exact tokens, so a leaf
+       grant (``write:database:table_users:row_1``) does NOT authorize its
+       parent (``write:database:table_users``) or a sibling (``...:row_2``).
+       Malformed inputs (no colon, empty segment) fail closed to ``False``.
+    """
+    if granted == "*" or granted == requested:
+        return True
+    if granted.endswith(":*"):
+        return requested.startswith(granted[:-1])
+    if ":" in granted and requested.startswith(granted + ":"):
+        return True
+    try:
+        g_action, g_resource, g_qualifier = CapabilityGrant.parse_capability(granted)
+        r_action, r_resource, r_qualifier = CapabilityGrant.parse_capability(requested)
+    except ValueError:
+        return False
+    if g_action != "*" and g_action != r_action:
+        return False
+    if g_resource != "*" and g_resource != r_resource:
+        return False
+    if g_qualifier is not None and g_qualifier != "*":
+        if r_qualifier != g_qualifier:
+            return False
+    return True
 
 
 class CapabilityScope(BaseModel):

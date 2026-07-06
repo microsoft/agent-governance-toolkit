@@ -794,7 +794,7 @@ Examples:
 | `capability` | string | Yes | -- | Capability string (e.g., `read:data`) |
 | `action` | string | Yes | -- | Action component parsed from capability |
 | `resource` | string | Yes | -- | Resource component parsed from capability |
-| `qualifier` | string or null | No | null | Optional qualifier component |
+| `qualifier` | string or null | No | null | Optional full sub-resource path (all segments after `action:resource`, joined by `:`), compared as one opaque token |
 | `granted_to` | string | Yes | -- | DID of the grantee agent |
 | `granted_by` | string | Yes | -- | DID of the grantor agent |
 | `resource_ids` | list[string] | No | [] | Specific resource IDs this grant applies to |
