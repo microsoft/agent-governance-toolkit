@@ -299,16 +299,48 @@ def test_idempotency_key_prevents_double_apply():
     assert trust.get_score("a1") == pytest.approx(0.3)
 
 
-def test_dep_error_fails_closed():
+def test_penalty_trust_error_fails_closed():
+    # On the penalty path trust is a gate input (it drives demotion), so a trust
+    # backend error must fail closed.
     class BoomTrust(FakeTrust):
         def record_interaction(self, *a, **k):
             raise RuntimeError("trust backend down")
 
     out = _bridge(trust=BoomTrust()).apply(
+        KernelDecision.from_decision("deny"), agent_id="a1"
+    )
+    assert out.proceeds is False
+    assert out.blocked_reason.startswith("trust_error:")
+
+
+def test_get_score_error_fails_closed_on_allow():
+    # get_score is read before any gate; if the trust backend is unreadable we
+    # cannot govern, so even an allow fails closed.
+    class UnreadableTrust(FakeTrust):
+        def get_score(self, agent_id):
+            raise RuntimeError("trust backend unreadable")
+
+    out = _bridge(trust=UnreadableTrust()).apply(
         KernelDecision.from_decision("allow"), agent_id="a1"
     )
     assert out.proceeds is False
     assert out.blocked_reason.startswith("trust_error:")
+
+
+def test_reward_record_failure_does_not_block_authorized_action():
+    # The reward is deferred until the gate passes and is telemetry, not a gate
+    # input; a failure to RECORD it must not block an already-authorized action.
+    class RewardBoomTrust(FakeTrust):
+        def record_interaction(self, agent_id, peer_id, action, success):
+            if success:
+                raise RuntimeError("reward write failed")
+            return super().record_interaction(agent_id, peer_id, action, success)
+
+    out = _bridge(trust=RewardBoomTrust()).apply(
+        KernelDecision.from_decision("allow"), agent_id="a1"
+    )
+    assert out.proceeds is True
+    assert out.trust_delta == 0.0
 
 
 def test_demotion_recomputes_ring_on_penalty():
@@ -486,12 +518,12 @@ def test_idempotency_key_is_scoped_per_agent():
 
 
 def test_dep_error_event_relabeled_as_violation():
-    class BoomTrust(FakeTrust):
-        def record_interaction(self, *a, **k):
-            raise RuntimeError("trust backend down")
+    class UnreadableTrust(FakeTrust):
+        def get_score(self, agent_id):
+            raise RuntimeError("trust backend unreadable")
 
     emit = _emitter()
-    out = _bridge(trust=BoomTrust(), emit=emit).apply(
+    out = _bridge(trust=UnreadableTrust(), emit=emit).apply(
         KernelDecision.from_decision("allow"), agent_id="a1"
     )
     assert out.proceeds is False
@@ -519,3 +551,238 @@ def _tool_action_v(required_value: int) -> SimpleNamespace:
     return SimpleNamespace(
         name="send_email", action_id="send_email", required_ring=_ring(required_value)
     )
+
+
+def test_blocked_allow_does_not_reward_trust():
+    # An ACS allow that the ring gate blocks must NOT be recorded as a trust
+    # success (the deferred-reward fix). No record_interaction, no delta.
+    trust = FakeTrust()
+    out = _bridge(trust=trust, rings=FakeRing(allow_check=False)).apply(
+        KernelDecision.from_decision("allow"),
+        agent_id="a1",
+        action=_tool_action(required_ring=1),
+        current_ring=3,
+    )
+    assert out.proceeds is False
+    assert out.trust_delta == 0.0
+    assert trust.get_score("a1") == pytest.approx(0.5)  # unchanged
+    assert trust.calls == []  # no success recorded for a blocked action
+
+
+def test_audit_blocked_allow_does_not_reward_trust():
+    # Same principle for a strict-audit block: no reward for a non-proceeding action.
+    trust = FakeTrust()
+    out = _bridge(trust=trust, emit=_emitter(AuditEmissionResult.NO_SINK)).apply(
+        KernelDecision.from_decision("allow"), agent_id="a1", strict_audit=True
+    )
+    assert out.proceeds is False
+    assert out.trust_delta == 0.0
+    assert trust.calls == []
+
+
+def test_tool_intervention_point_deny_emits_tool_call_blocked():
+    emit = _emitter()
+    out = _bridge(emit=emit).apply(
+        KernelDecision(
+            effective_decision="deny",
+            raw_decision="deny",
+            reason="blocked",
+            intervention_point="pre_tool_call",
+        ),
+        agent_id="a1",
+    )
+    assert out.proceeds is False
+    assert emit.events[0].kind == "tool_call_blocked"
+
+
+def test_non_tool_deny_stays_policy_violation():
+    emit = _emitter()
+    _bridge(emit=emit).apply(
+        KernelDecision(
+            effective_decision="deny",
+            raw_decision="deny",
+            reason="blocked",
+            intervention_point="input",
+        ),
+        agent_id="a1",
+    )
+    assert emit.events[0].kind == "policy_violation"
+
+
+def test_tool_point_allow_blocked_by_ring_relabels_to_tool_call_blocked():
+    emit = _emitter()
+    out = _bridge(emit=emit, rings=FakeRing(allow_check=False)).apply(
+        KernelDecision(
+            effective_decision="allow",
+            raw_decision="allow",
+            intervention_point="pre_tool_call",
+        ),
+        agent_id="a1",
+        action=_tool_action(required_ring=1),
+        current_ring=3,
+    )
+    assert out.proceeds is False
+    assert emit.events[0].kind == "tool_call_blocked"
+
+
+def test_from_evaluation_result_reads_intervention_point():
+    result = SimpleNamespace(
+        verdict="deny",
+        audit_entry={"verdict": "deny", "intervention_point": "pre_tool_call"},
+        category=None,
+        reason="",
+        input_identity=None,
+        enforced_identity=None,
+        transform=None,
+        evidence=None,
+    )
+    decision = KernelDecision.from_evaluation_result(result)
+    assert decision.intervention_point == "pre_tool_call"
+
+
+def test_locks_are_a_bounded_striped_pool():
+    from agt.policies.kernel import _LOCK_STRIPES
+
+    bridge = _bridge()
+    for i in range(500):
+        bridge.apply(KernelDecision.from_decision("deny"), agent_id=f"agent-{i}")
+    # The lock pool is fixed size regardless of agent-id cardinality.
+    assert len(bridge._locks) == _LOCK_STRIPES
+
+
+def test_seen_keys_are_bounded_and_evict_oldest():
+    bridge = KernelBridge(
+        trust_tracker=FakeTrust(),
+        emit_event=_emitter(),
+        max_seen_keys=3,
+    )
+    for i in range(10):
+        bridge.apply(
+            KernelDecision.from_decision("deny"),
+            agent_id=f"a{i}",
+            idempotency_key="k",
+        )
+    assert len(bridge._seen_keys) <= 3
+
+
+# --- Real-runtime escalate round-trip (deep-review Stage 4, #5) --------------
+#
+# Pins the coupling between KernelDecision.from_evaluation_result and the actual
+# AgtRuntime output: the raw escalate must be recoverable from a REAL approved
+# escalation, not just a hand-built EvaluationResult. Guards against a future
+# runtime refactor silently moving the audit_entry["verdict"] key.
+
+_ESCALATE_MANIFEST = (
+    "agent_control_specification_version: 0.3.0-alpha-agt\n"
+    "metadata:\n  name: kernel_escalate_test\n"
+    "extends: []\n"
+    "policies:\n  test_policy:\n    type: custom\n    adapter: kernel_escalate_adapter\n"
+    "intervention_points:\n  pre_tool_call:\n"
+    "    policy_target: $.tool_call.args\n"
+    "    policy_target_kind: tool_args\n"
+    "    tool_name_from: $.tool_call.name\n"
+    "    policy:\n      id: test_policy\n"
+    "tools:\n  lookup:\n    clearance: public\n"
+)
+
+
+def _run_real_escalate(tmp_path, *, approve: bool):
+    """Drive the real AgtRuntime through an escalate -> approve/deny cycle."""
+    from agt.policies import SnapshotBuilder
+    from agt.policies.runtime import AgtRuntime, ApprovalDecision
+
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(_ESCALATE_MANIFEST, encoding="utf-8")
+
+    class _EscalatePolicy:
+        def evaluate(self, invocation):  # noqa: ANN001
+            return {"decision": "escalate", "reason": "approval_required"}
+
+    def resolver(ip, result):  # noqa: ANN001
+        if approve:
+            return ApprovalDecision.allow(result.enforced_identity)
+        return ApprovalDecision.deny()
+
+    runtime = AgtRuntime(
+        manifest, policy_dispatcher=_EscalatePolicy(), approval_resolver=resolver
+    )
+    snapshot = SnapshotBuilder(agent_id="bot", session_id="s-1").pre_tool_call(
+        tool_name="lookup", args={"q": "x"}
+    )
+    return runtime.evaluate_intervention_point("pre_tool_call", snapshot)
+
+
+def test_real_runtime_approved_escalate_is_recovered_and_neutral(tmp_path):
+    pytest.importorskip("agent_control_specification")
+    result = _run_real_escalate(tmp_path, approve=True)
+    # The runtime rewrote the effective verdict to allow after approval.
+    assert result.verdict == "allow"
+
+    decision = KernelDecision.from_evaluation_result(result)
+    # ...but the raw escalate is recovered from the real runtime output.
+    assert decision.raw_decision == "escalate"
+    assert decision.was_escalated is True
+    assert decision.intervention_point == "pre_tool_call"
+
+    trust = FakeTrust()
+    emit = _emitter()
+    out = KernelBridge(trust_tracker=trust, emit_event=emit).apply(
+        decision, agent_id="bot"
+    )
+    # Approved escalate proceeds (effective allow) but earns no trust and audits
+    # as an escalation, not a reward.
+    assert out.proceeds is True
+    assert out.trust_delta == 0.0
+    assert trust.calls == []
+    assert emit.events[0].kind == "escalation_requested"
+
+
+def test_real_runtime_rejected_escalate_blocks_and_is_neutral(tmp_path):
+    pytest.importorskip("agent_control_specification")
+    result = _run_real_escalate(tmp_path, approve=False)
+    decision = KernelDecision.from_evaluation_result(result)
+    assert decision.was_escalated is True
+
+    trust = FakeTrust()
+    emit = _emitter()
+    out = KernelBridge(trust_tracker=trust, emit_event=emit).apply(
+        decision, agent_id="bot"
+    )
+    assert out.proceeds is False
+    assert out.trust_delta == 0.0  # rejection is the human's call, not the agent's fault
+    assert emit.events[0].kind == "escalation_requested"
+
+
+def test_concurrent_same_key_reward_applied_once():
+    # Two+ concurrent allows sharing (agent_id, idempotency_key) must reward the
+    # agent exactly once: phase 2 re-checks the ledger under the stripe lock.
+    import threading
+
+    trust = FakeTrust()
+    bridge = _bridge(trust=trust)
+    n = 8
+    barrier = threading.Barrier(n)
+    results = []
+    lock = threading.Lock()
+
+    def worker():
+        barrier.wait()
+        out = bridge.apply(
+            KernelDecision.from_decision("allow"),
+            agent_id="racer",
+            idempotency_key="dup",
+        )
+        with lock:
+            results.append(out.trust_delta)
+
+    threads = [threading.Thread(target=worker) for _ in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Exactly one call recorded a success; the score moved by one reward only.
+    success_calls = [c for c in trust.calls if c[3] is True]
+    assert len(success_calls) == 1
+    assert trust.get_score("racer") == pytest.approx(0.6)
+    assert sum(1 for d in results if d != 0.0) == 1

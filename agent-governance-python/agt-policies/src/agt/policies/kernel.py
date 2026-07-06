@@ -40,6 +40,7 @@ implementations, so no import cycle forms with
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
 from types import SimpleNamespace
@@ -53,6 +54,11 @@ _RECOGNIZED_DECISIONS = frozenset({"allow", "warn", "deny", "escalate", "transfo
 # warn and transform permit; deny and escalate halt until the host's approval
 # path resolves an escalate.
 _PERMITTING_DECISIONS = frozenset({"allow", "warn", "transform"})
+
+# Tool intervention points. A block at one of these emits the more specific
+# ``tool_call_blocked`` event kind instead of the generic ``policy_violation``.
+# Mirrors agent_control_specification.InterventionPoint.is_tool_intervention_point.
+_TOOL_INTERVENTION_POINTS = frozenset({"pre_tool_call", "post_tool_call"})
 
 # effective decision -> (trust action, governance event kind, severity).
 # trust action is one of "reward" (success=True), "penalty" (success=False) or
@@ -69,9 +75,21 @@ _OUTCOME_MAP: dict[str, tuple[str, str, str]] = {
     "escalate": ("neutral", "escalation_requested", "warning"),
 }
 
-# Applied when the decision is missing or unrecognized. Fail closed: treat as a
-# deny that penalizes trust and emits a violation.
-_FAIL_CLOSED_OUTCOME: tuple[str, str, str] = ("penalty", "policy_violation", "high")
+# Fail closed when the decision is missing or unrecognized: treat as a deny that
+# penalizes trust and emits a violation.
+_FAIL_CLOSED_TRUST = "penalty"
+_FAIL_CLOSED_SEVERITY = "high"
+
+# Bounds on per-bridge state so a long-lived bridge does not grow without limit.
+_LOCK_STRIPES = 64
+_DEFAULT_MAX_SEEN_KEYS = 100_000
+
+
+def _block_event_kind(intervention_point: str | None) -> str:
+    """Event kind for a BLOCKED action: tool_call_blocked at a tool point."""
+    if intervention_point in _TOOL_INTERVENTION_POINTS:
+        return "tool_call_blocked"
+    return "policy_violation"
 
 
 class AuditEmissionResult(str, Enum):
@@ -132,6 +150,7 @@ class KernelDecision:
     raw_decision: str
     reason: str = ""
     approval_outcome: str | None = None
+    intervention_point: str | None = None
     input_identity: str | None = None
     enforced_identity: str | None = None
     transform: Mapping[str, Any] | None = None
@@ -201,20 +220,22 @@ class KernelDecision:
         audit_entry = getattr(result, "audit_entry", None) or {}
         raw = None
         approval_outcome = None
+        intervention_point = None
         if isinstance(audit_entry, Mapping):
             # AgtRuntime._result_from_intervention records the raw engine verdict
             # under audit_entry["verdict"] (runtime.py) and keeps it there even
             # after the approval path rewrites the effective verdict, so an
             # approved escalate survives as audit_entry["verdict"] == "escalate"
             # while result.verdict == "allow". Recover it from there (falling back
-            # to older raw_decision/original_verdict keys). approval_outcome is
-            # written under audit_entry["approval_outcome"] by the same path.
+            # to older raw_decision/original_verdict keys). approval_outcome and
+            # intervention_point are written under the same audit_entry.
             raw = (
                 audit_entry.get("raw_decision")
                 or audit_entry.get("original_verdict")
                 or audit_entry.get("verdict")
             )
             approval_outcome = audit_entry.get("approval_outcome")
+            intervention_point = audit_entry.get("intervention_point") or None
         if raw is None:
             category = getattr(result, "category", None)
             category_value = getattr(category, "value", category)
@@ -231,6 +252,7 @@ class KernelDecision:
             raw_decision=str(raw),
             reason=getattr(result, "reason", "") or "",
             approval_outcome=approval_outcome,
+            intervention_point=intervention_point,
             input_identity=getattr(result, "input_identity", None),
             enforced_identity=getattr(result, "enforced_identity", None),
             transform=getattr(result, "transform", None),
@@ -238,14 +260,17 @@ class KernelDecision:
         )
 
     @classmethod
-    def from_intervention_point_result(cls, result: Any) -> "KernelDecision":
+    def from_intervention_point_result(
+        cls, result: Any, *, intervention_point: str | None = None
+    ) -> "KernelDecision":
         """Build from a raw ACS ``InterventionPointResult``.
 
         This is the lossless seam for hosts that do not use ``AgtRuntime``. The
         ``InterventionPointResult`` carries the verdict as the engine produced
         it (before host approval routing), so ``raw_decision`` and
         ``effective_decision`` are equal and an ``escalate`` is preserved
-        verbatim.
+        verbatim. ``intervention_point`` (which the raw result does not carry)
+        can be passed so a tool-point block audits as ``tool_call_blocked``.
         """
         verdict = getattr(result, "verdict", None)
         decision = getattr(verdict, "decision", None)
@@ -256,6 +281,7 @@ class KernelDecision:
             effective_decision=decision_value,
             raw_decision=decision_value,
             reason=getattr(verdict, "reason", None) or "",
+            intervention_point=intervention_point,
             input_identity=getattr(result, "input_identity", None),
             enforced_identity=getattr(result, "enforced_identity", None),
             transform=getattr(verdict, "transform", None),
@@ -393,6 +419,7 @@ class KernelBridge:
         emit_event: EmitEvent,
         ring_enforcer: Optional[RingEnforcerLike] = None,
         action_classifier: Optional[ActionClassifierLike] = None,
+        max_seen_keys: int = _DEFAULT_MAX_SEEN_KEYS,
     ) -> None:
         if trust_tracker is None:
             raise ValueError("trust_tracker is required")
@@ -402,17 +429,36 @@ class KernelBridge:
         self._emit = emit_event
         self._rings = ring_enforcer
         self._classifier = action_classifier
-        self._locks: dict[str, threading.Lock] = {}
-        self._locks_guard = threading.Lock()
-        self._seen_keys: set[str] = set()
+        # Fixed-size striped lock pool keyed by hash(agent_id): bounds memory for
+        # long-lived bridges with high agent-id cardinality while still
+        # serializing concurrent apply() calls for the same agent (a given
+        # agent_id always maps to the same stripe). Distinct agents may share a
+        # stripe, which only costs occasional contention.
+        self._locks: tuple[threading.Lock, ...] = tuple(
+            threading.Lock() for _ in range(_LOCK_STRIPES)
+        )
+        # Idempotency ledger, bounded LRU. Guarded by its own lock because it is
+        # shared across stripes.
+        self._max_seen_keys = max(1, max_seen_keys)
+        self._seen_keys: "OrderedDict[tuple[str, str], None]" = OrderedDict()
+        self._seen_lock = threading.Lock()
 
     def _lock_for(self, agent_id: str) -> threading.Lock:
-        with self._locks_guard:
-            lock = self._locks.get(agent_id)
-            if lock is None:
-                lock = threading.Lock()
-                self._locks[agent_id] = lock
-            return lock
+        return self._locks[hash(agent_id) % _LOCK_STRIPES]
+
+    def _seen_contains(self, key: tuple[str, str]) -> bool:
+        with self._seen_lock:
+            if key in self._seen_keys:
+                self._seen_keys.move_to_end(key)
+                return True
+            return False
+
+    def _seen_add(self, key: tuple[str, str]) -> None:
+        with self._seen_lock:
+            self._seen_keys[key] = None
+            self._seen_keys.move_to_end(key)
+            while len(self._seen_keys) > self._max_seen_keys:
+                self._seen_keys.popitem(last=False)
 
     def apply(
         self,
@@ -445,8 +491,16 @@ class KernelBridge:
             has_consensus: Passed through to ring computation and the check.
             strict_audit: When true, a governance event that is not accepted for
                 delivery drives ``proceeds`` false.
-            idempotency_key: When repeated, the trust delta is not applied twice
-                (guards audit-failure retries).
+            idempotency_key: When repeated for the same ``agent_id``, the trust
+                delta is not applied twice (guards audit-failure retries). The
+                key is scoped per agent, so one agent's key never suppresses
+                another agent's update.
+
+        Trust semantics: a penalty (deny or fail-closed) is applied immediately
+        and unconditionally because it drives ring demotion. A reward (allow) is
+        deferred and committed only if the action ultimately ``proceeds`` -- a
+        blocked allow is never recorded as a trust success. Warn, transform and
+        escalate are trust-neutral.
 
         Returns:
             A :class:`KernelOutcome` whose ``proceeds`` is the AND of the
@@ -460,13 +514,24 @@ class KernelBridge:
                 "deny", reason="fail_closed:missing_decision"
             )
 
+        # ``block_kind`` is the event kind used for any BLOCKED outcome: the more
+        # specific ``tool_call_blocked`` at a tool intervention point, else the
+        # generic ``policy_violation``.
+        block_kind = _block_event_kind(decision.intervention_point)
+
         if decision.is_recognized:
             effective = decision.effective_decision
             trust_action, event_kind, severity = _OUTCOME_MAP[effective]
+            if effective == "deny":
+                event_kind = block_kind
             reason = decision.reason
         else:
             effective = "deny"
-            trust_action, event_kind, severity = _FAIL_CLOSED_OUTCOME
+            trust_action, event_kind, severity = (
+                _FAIL_CLOSED_TRUST,
+                block_kind,
+                _FAIL_CLOSED_SEVERITY,
+            )
             reason = (
                 decision.reason
                 or f"fail_closed:unrecognized_decision:{decision.effective_decision}"
@@ -490,8 +555,16 @@ class KernelBridge:
         dep_error: str | None = None
 
         # --- Trust (atomic per agent; idempotent on retry) --------------------
+        # Penalties are applied here, unconditionally: a denied or fail-closed
+        # action loses trust and drives ring demotion below. A REWARD is deferred
+        # (pending_reward) and only committed after the composite gate confirms
+        # the action proceeds, so a blocked allow is never recorded as a success
+        # (which would contradict the emitted block event).
         trust_score = 0.0
         trust_delta = 0.0
+        pending_reward = False
+        seen_key: tuple[str, str] | None = None
+        already_applied = False
         try:
             with self._lock_for(agent_id):
                 # Scope the idempotency key per agent: a host that derives the key
@@ -500,19 +573,20 @@ class KernelBridge:
                 seen_key = (
                     (agent_id, idempotency_key) if idempotency_key is not None else None
                 )
-                already_applied = seen_key is not None and seen_key in self._seen_keys
+                already_applied = seen_key is not None and self._seen_contains(seen_key)
                 before = self._trust.get_score(agent_id)
+                trust_score = before
                 if already_applied or trust_action == "neutral":
-                    trust_score = before
                     trust_delta = 0.0
-                else:
-                    success = trust_action == "reward"
+                elif trust_action == "penalty":
                     trust_score = self._trust.record_interaction(
-                        agent_id, peer_id, action_name, success
+                        agent_id, peer_id, action_name, False
                     )
                     trust_delta = trust_score - before
                     if seen_key is not None:
-                        self._seen_keys.add(seen_key)
+                        self._seen_add(seen_key)
+                else:  # reward: defer until the gate confirms the action proceeds
+                    pending_reward = True
         except Exception as exc:  # fail closed: never proceed on a trust error
             dep_error = f"trust_error:{exc}"
 
@@ -615,12 +689,13 @@ class KernelBridge:
         if dep_error is not None:
             attributes["dep_error"] = dep_error
 
-        # Keep the audit record consistent with the enforced outcome: a trust or
-        # ring dependency error, or a ring denial, is a blocked action and must
-        # not be logged as a benign policy_check/info. This runs before emit; the
-        # audit-delivery gate (below) cannot relabel the event it is delivering.
-        if dep_error is not None or not ring_allowed:
-            event_kind = "policy_violation"
+        # Keep the audit record consistent with the enforced outcome: a permit
+        # (policy_check) that a dependency error or ring denial actually blocked
+        # must not be logged as benign. Relabel it to the block kind. Escalation
+        # events keep their kind (the escalation is the salient signal); deny is
+        # already the block kind.
+        if (dep_error is not None or not ring_allowed) and event_kind == "policy_check":
+            event_kind = block_kind
             severity = "high"
 
         event = GovernanceEventSpec(
@@ -644,6 +719,33 @@ class KernelBridge:
         proceeds = acs_permits and ring_allowed and dep_error is None
         if strict_audit and not audit.delivered:
             proceeds = False
+
+        # Commit a deferred reward only now that the action is confirmed to
+        # proceed. A trust error here is post-authorization bookkeeping: it must
+        # not retroactively block the already-permitted, already-audited action,
+        # so it is captured in an attribute without flipping ``proceeds``.
+        if pending_reward and proceeds:
+            try:
+                with self._lock_for(agent_id):
+                    # Re-check the ledger under the lock: two concurrent same-key
+                    # allows both defer in phase 1 (the key is not added until a
+                    # reward commits), so phase 2 must confirm no other call
+                    # already committed this key before recording.
+                    if seen_key is not None and self._seen_contains(seen_key):
+                        trust_score = self._trust.get_score(agent_id)
+                        trust_delta = 0.0
+                    else:
+                        before_reward = self._trust.get_score(agent_id)
+                        trust_score = self._trust.record_interaction(
+                            agent_id, peer_id, action_name, True
+                        )
+                        trust_delta = trust_score - before_reward
+                        if seen_key is not None:
+                            self._seen_add(seen_key)
+            except Exception:  # pragma: no cover - defensive
+                # Bookkeeping failure after authorization: leave trust unchanged
+                # (trust_delta stays 0) rather than blocking an approved action.
+                trust_delta = 0.0
 
         blocked_reason: str | None = None
         if not proceeds:
