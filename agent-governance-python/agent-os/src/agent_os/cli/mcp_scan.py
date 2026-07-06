@@ -44,7 +44,13 @@ console = Console() if Console else None
 
 MCP_PROTOCOL_VERSION = "2025-11-25"
 MCP_PROTOCOL_VERSION_STATELESS = "2026-07-28"
-_SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", MCP_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_STATELESS}
+_SUPPORTED_PROTOCOL_VERSIONS = {
+    "2024-11-05",
+    "2025-03-26",
+    "2025-06-18",
+    MCP_PROTOCOL_VERSION,
+    MCP_PROTOCOL_VERSION_STATELESS,
+}
 
 # Streamable HTTP header names from the MCP dual-stack migration spec
 # (RFC #2597, issue #3130).
@@ -66,11 +72,27 @@ def _configure_tls(*, verify: bool = True) -> None:
         _SSL_CONTEXT.check_hostname = False
         _SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
+
 # Allowlist of known-safe MCP server runtime commands (basename without extension).
 _COMMAND_ALLOWLIST: set[str] = {
-    "node", "npx", "python", "python3", "uvx", "uv", "pip", "pipx",
-    "docker", "podman", "deno", "bun", "tsx", "ts-node",
-    "dotnet", "java", "go", "cargo",
+    "node",
+    "npx",
+    "python",
+    "python3",
+    "uvx",
+    "uv",
+    "pip",
+    "pipx",
+    "docker",
+    "podman",
+    "deno",
+    "bun",
+    "tsx",
+    "ts-node",
+    "dotnet",
+    "java",
+    "go",
+    "cargo",
 }
 
 # Env keys that an attacker-controlled MCP config could set to redirect
@@ -80,41 +102,43 @@ _COMMAND_ALLOWLIST: set[str] = {
 # turn an allowlisted ``python`` / ``node`` / ``ruby`` into RCE on the
 # scanner host. See main-branch ``_blocked_command_env_keys`` for the
 # original rationale this list restores.
-_COMMAND_RESOLUTION_ENV_KEYS: frozenset[str] = frozenset({
-    # PATH-style resolution / loader hijack
-    "PATH",
-    "PATHEXT",
-    "PYTHONPATH",
-    "PYTHONHOME",
-    "PYTHONSTARTUP",
-    "NODE_OPTIONS",
-    "NODE_PATH",
-    "LD_PRELOAD",
-    "LD_LIBRARY_PATH",
-    "DYLD_INSERT_LIBRARIES",
-    "DYLD_LIBRARY_PATH",
-    # Runtime startup hooks that execute attacker code before main entry
-    "DOTNET_STARTUP_HOOKS",
-    "JAVA_TOOL_OPTIONS",
-    "_JAVA_OPTIONS",
-    "JDK_JAVA_OPTIONS",
-    "RUBYOPT",
-    "BASH_ENV",
-    "ENV",
-    "PERL5OPT",
-    "PERL5LIB",
-    # User-config-file lookup hijack
-    "HOME",
-    "USERPROFILE",
-    "APPDATA",
-    "LOCALAPPDATA",
-    "XDG_CONFIG_HOME",
-    "XDG_DATA_HOME",
-    "XDG_CACHE_HOME",
-    "ZDOTDIR",
-    "PSMODULEPATH",
-    "COMSPEC",
-})
+_COMMAND_RESOLUTION_ENV_KEYS: frozenset[str] = frozenset(
+    {
+        # PATH-style resolution / loader hijack
+        "PATH",
+        "PATHEXT",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "PYTHONSTARTUP",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        # Runtime startup hooks that execute attacker code before main entry
+        "DOTNET_STARTUP_HOOKS",
+        "JAVA_TOOL_OPTIONS",
+        "_JAVA_OPTIONS",
+        "JDK_JAVA_OPTIONS",
+        "RUBYOPT",
+        "BASH_ENV",
+        "ENV",
+        "PERL5OPT",
+        "PERL5LIB",
+        # User-config-file lookup hijack
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "ZDOTDIR",
+        "PSMODULEPATH",
+        "COMSPEC",
+    }
+)
 _COMMAND_RESOLUTION_ENV_PREFIXES: tuple[str, ...] = (
     "UV_",
     "NPM_CONFIG_",
@@ -354,14 +378,18 @@ def _contains_unresolved_variable(value: str) -> bool:
     return "${" in value and "}" in value
 
 
-def _resolve_cwd(value: Any, config_path: Path, findings: list[SecurityFinding], name: str) -> Path | None:
+def _resolve_cwd(
+    value: Any, config_path: Path, findings: list[SecurityFinding], name: str
+) -> Path | None:
     if value in (None, ""):
         return None
     if not isinstance(value, str):
         findings.append(_config_finding(name, "critical", "Server cwd must be a string"))
         return None
     if _contains_unresolved_variable(value):
-        findings.append(_config_finding(name, "critical", "Server cwd contains unresolved variables"))
+        findings.append(
+            _config_finding(name, "critical", "Server cwd contains unresolved variables")
+        )
         return None
     cwd = Path(value).expanduser()
     if not cwd.is_absolute():
@@ -395,7 +423,9 @@ def parse_stdio_mcp_servers(
     for name, spec in candidates.items():
         server_name = str(name)
         if not isinstance(spec, Mapping):
-            findings.append(_config_finding(server_name, "critical", "Server config must be an object"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server config must be an object")
+            )
             continue
         if spec.get("disabled") is True:
             continue
@@ -407,20 +437,30 @@ def parse_stdio_mcp_servers(
 
         command = spec.get("command")
         if not isinstance(command, str) or not command.strip():
-            findings.append(_config_finding(server_name, "critical", "Server command must be a string"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server command must be a string")
+            )
             continue
         if _contains_unresolved_variable(command):
-            findings.append(_config_finding(server_name, "critical", "Server command contains unresolved variables"))
+            findings.append(
+                _config_finding(
+                    server_name, "critical", "Server command contains unresolved variables"
+                )
+            )
             continue
 
         raw_args = spec.get("args", [])
         if raw_args is None:
             raw_args = []
         if not isinstance(raw_args, list) or not all(isinstance(arg, str) for arg in raw_args):
-            findings.append(_config_finding(server_name, "critical", "Server args must be a list of strings"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server args must be a list of strings")
+            )
             continue
         if any(_contains_unresolved_variable(arg) for arg in raw_args):
-            findings.append(_config_finding(server_name, "critical", "Server args contain unresolved variables"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server args contain unresolved variables")
+            )
             continue
 
         raw_env = spec.get("env", {})
@@ -429,10 +469,14 @@ def parse_stdio_mcp_servers(
         if not isinstance(raw_env, Mapping) or not all(
             isinstance(k, str) and isinstance(v, str) for k, v in raw_env.items()
         ):
-            findings.append(_config_finding(server_name, "critical", "Server env must be a string map"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server env must be a string map")
+            )
             continue
         if any(_contains_unresolved_variable(value) for value in raw_env.values()):
-            findings.append(_config_finding(server_name, "critical", "Server env contains unresolved variables"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server env contains unresolved variables")
+            )
             continue
 
         cwd = _resolve_cwd(spec.get("cwd"), config_path, findings, server_name)
@@ -453,7 +497,11 @@ def _remote_transport(spec: Mapping[str, Any]) -> str | None:
     transport = str(spec.get("type") or spec.get("transport") or "").lower()
     if "sseUrl" in spec or transport == "sse":
         return "sse"
-    if any(key in spec for key in ("url", "httpUrl")) or transport in {"http", "streamablehttp", "streamable-http"}:
+    if any(key in spec for key in ("url", "httpUrl")) or transport in {
+        "http",
+        "streamablehttp",
+        "streamable-http",
+    }:
         return "streamable-http"
     return None
 
@@ -508,14 +556,24 @@ def parse_remote_mcp_servers(
             continue
         url = _remote_url(spec, transport)
         if not isinstance(url, str) or not url.strip():
-            findings.append(_config_finding(server_name, "critical", "Remote MCP server url must be a string"))
+            findings.append(
+                _config_finding(server_name, "critical", "Remote MCP server url must be a string")
+            )
             continue
         if _contains_unresolved_variable(url):
-            findings.append(_config_finding(server_name, "critical", "Remote MCP server url contains unresolved variables"))
+            findings.append(
+                _config_finding(
+                    server_name, "critical", "Remote MCP server url contains unresolved variables"
+                )
+            )
             continue
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            findings.append(_config_finding(server_name, "critical", "Remote MCP server url must use http or https"))
+            findings.append(
+                _config_finding(
+                    server_name, "critical", "Remote MCP server url must use http or https"
+                )
+            )
             continue
         raw_headers = spec.get("headers", {})
         if raw_headers is None:
@@ -523,13 +581,27 @@ def parse_remote_mcp_servers(
         if not isinstance(raw_headers, Mapping) or not all(
             isinstance(k, str) and isinstance(v, str) for k, v in raw_headers.items()
         ):
-            findings.append(_config_finding(server_name, "critical", "Remote MCP server headers must be a string map"))
+            findings.append(
+                _config_finding(
+                    server_name, "critical", "Remote MCP server headers must be a string map"
+                )
+            )
             continue
         if any(_contains_unresolved_variable(v) for v in raw_headers.values()):
-            findings.append(_config_finding(server_name, "critical", "Remote MCP server headers contain unresolved variables"))
+            findings.append(
+                _config_finding(
+                    server_name,
+                    "critical",
+                    "Remote MCP server headers contain unresolved variables",
+                )
+            )
             continue
         if any(not _valid_http_header(k, v) for k, v in raw_headers.items()):
-            findings.append(_config_finding(server_name, "critical", "Remote MCP server headers contain invalid characters"))
+            findings.append(
+                _config_finding(
+                    server_name, "critical", "Remote MCP server headers contain invalid characters"
+                )
+            )
             continue
         servers[server_name] = RemoteMCPServerConfig(
             name=server_name,
@@ -547,7 +619,9 @@ def parse_config(config: Any) -> dict[str, list[dict[str, Any]]]:
     inspection is handled by ``inspect_stdio_config``.
     """
     if isinstance(config, list):
-        return {"default": [normalize_mcp_tool(tool) for tool in config if isinstance(tool, Mapping)]}
+        return {
+            "default": [normalize_mcp_tool(tool) for tool in config if isinstance(tool, Mapping)]
+        }
     if not isinstance(config, Mapping):
         return {"default": []}
     if isinstance(config.get("tools"), list):
@@ -561,9 +635,10 @@ def parse_config(config: Any) -> dict[str, list[dict[str, Any]]]:
     if isinstance(raw_servers, Mapping):
         for name, spec in raw_servers.items():
             tools = spec.get("tools", []) if isinstance(spec, Mapping) else []
-            servers[str(name)] = [normalize_mcp_tool(tool) for tool in tools if isinstance(tool, Mapping)]
+            servers[str(name)] = [
+                normalize_mcp_tool(tool) for tool in tools if isinstance(tool, Mapping)
+            ]
     return servers or {"default": []}
-
 
 
 def _has_inline_tools(spec: Mapping[str, Any]) -> bool:
@@ -571,7 +646,9 @@ def _has_inline_tools(spec: Mapping[str, Any]) -> bool:
     return isinstance(tools, list)
 
 
-def validate_stdio_launch_config(config_path: Path, single_server: str | None = None) -> list[SecurityFinding]:
+def validate_stdio_launch_config(
+    config_path: Path, single_server: str | None = None
+) -> list[SecurityFinding]:
     """Validate launch fields for local stdio MCP configs without launching them.
 
     Static-only scans should not execute configured commands, but they should
@@ -582,7 +659,9 @@ def validate_stdio_launch_config(config_path: Path, single_server: str | None = 
     try:
         config = load_config(config_path)
     except Exception as exc:
-        return [SecurityFinding("system", "critical", f"Failed to load config: {exc}", "configuration")]
+        return [
+            SecurityFinding("system", "critical", f"Failed to load config: {exc}", "configuration")
+        ]
     if not isinstance(config, Mapping):
         return []
 
@@ -596,13 +675,17 @@ def validate_stdio_launch_config(config_path: Path, single_server: str | None = 
         if single_server and server_name != single_server:
             continue
         if not isinstance(spec, Mapping):
-            findings.append(_config_finding(server_name, "critical", "Server config must be an object"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server config must be an object")
+            )
             continue
         if spec.get("disabled") is True:
             continue
 
         if _remote_transport(spec) is not None:
-            _, remote_findings = parse_remote_mcp_servers({"servers": {server_name: spec}}, config_path=config_path)
+            _, remote_findings = parse_remote_mcp_servers(
+                {"servers": {server_name: spec}}, config_path=config_path
+            )
             findings.extend(remote_findings)
             continue
 
@@ -610,20 +693,30 @@ def validate_stdio_launch_config(config_path: Path, single_server: str | None = 
         if command is None and _has_inline_tools(spec):
             continue
         if not isinstance(command, str) or not command.strip():
-            findings.append(_config_finding(server_name, "critical", "Server command must be a string"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server command must be a string")
+            )
             continue
         if _contains_unresolved_variable(command):
-            findings.append(_config_finding(server_name, "critical", "Server command contains unresolved variables"))
+            findings.append(
+                _config_finding(
+                    server_name, "critical", "Server command contains unresolved variables"
+                )
+            )
             continue
 
         raw_args = spec.get("args", [])
         if raw_args is None:
             raw_args = []
         if not isinstance(raw_args, list) or not all(isinstance(arg, str) for arg in raw_args):
-            findings.append(_config_finding(server_name, "critical", "Server args must be a list of strings"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server args must be a list of strings")
+            )
             continue
         if any(_contains_unresolved_variable(arg) for arg in raw_args):
-            findings.append(_config_finding(server_name, "critical", "Server args contain unresolved variables"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server args contain unresolved variables")
+            )
             continue
 
         raw_env = spec.get("env", {})
@@ -632,10 +725,14 @@ def validate_stdio_launch_config(config_path: Path, single_server: str | None = 
         if not isinstance(raw_env, Mapping) or not all(
             isinstance(k, str) and isinstance(v, str) for k, v in raw_env.items()
         ):
-            findings.append(_config_finding(server_name, "critical", "Server env must be a string map"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server env must be a string map")
+            )
             continue
         if any(_contains_unresolved_variable(value) for value in raw_env.values()):
-            findings.append(_config_finding(server_name, "critical", "Server env contains unresolved variables"))
+            findings.append(
+                _config_finding(server_name, "critical", "Server env contains unresolved variables")
+            )
             continue
 
         _resolve_cwd(spec.get("cwd"), config_path, findings, server_name)
@@ -712,7 +809,11 @@ class _StdioJSONRPCClient:
         self._write({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}})
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
-            if self.process is not None and self.process.poll() is not None and self._stdout_queue.empty():
+            if (
+                self.process is not None
+                and self.process.poll() is not None
+                and self._stdout_queue.empty()
+            ):
                 raise RuntimeError(f"Server exited before responding to {method}")
             remaining = max(0.01, min(0.25, deadline - time.monotonic()))
             try:
@@ -761,7 +862,6 @@ class _StdioJSONRPCClient:
             thread.join(timeout=2)
 
 
-
 def _sanitized_child_env() -> dict[str, str]:
     """Return a minimal process environment for launched MCP servers.
 
@@ -782,6 +882,7 @@ def _sanitized_child_env() -> dict[str, str]:
         "TMP",
     }
     return {key: value for key, value in os.environ.items() if key in keep}
+
 
 def _schema_text(schema: Mapping[str, Any]) -> str:
     """Return scanner-visible text from schema descriptions and property names."""
@@ -886,7 +987,11 @@ def _capability_enabled(initialize_result: Mapping[str, Any], key: str) -> bool:
 
 
 def _is_method_not_found(exc: Exception) -> bool:
-    return "-32601" in str(exc) or "not found" in str(exc).lower() or "method not found" in str(exc).lower()
+    return (
+        "-32601" in str(exc)
+        or "not found" in str(exc).lower()
+        or "method not found" in str(exc).lower()
+    )
 
 
 def _all_inspection_primitives(inspection: StdioMCPInspection) -> list[dict[str, Any]]:
@@ -924,7 +1029,9 @@ def _validate_initialize_result(result: Any) -> dict[str, Any]:
     capabilities = result.get("capabilities")
     if not isinstance(capabilities, Mapping):
         raise RuntimeError("initialize result did not advertise capabilities")
-    if not any(isinstance(capabilities.get(key), Mapping) for key in ("tools", "resources", "prompts")):
+    if not any(
+        isinstance(capabilities.get(key), Mapping) for key in ("tools", "resources", "prompts")
+    ):
         raise RuntimeError("server did not advertise inspectable MCP capabilities")
     server_info = result.get("serverInfo")
     if not isinstance(server_info, Mapping):
@@ -988,7 +1095,9 @@ def inspect_stdio_server(
             else []
         )
         resources = (
-            _list_stdio_primitives(client, "resources/list", "resources", normalize_mcp_resource, max_pages)
+            _list_stdio_primitives(
+                client, "resources/list", "resources", normalize_mcp_resource, max_pages
+            )
             if _capability_enabled(initialize_result, "resources")
             else []
         )
@@ -1005,7 +1114,9 @@ def inspect_stdio_server(
             else []
         )
         prompts = (
-            _list_stdio_primitives(client, "prompts/list", "prompts", normalize_mcp_prompt, max_pages)
+            _list_stdio_primitives(
+                client, "prompts/list", "prompts", normalize_mcp_prompt, max_pages
+            )
             if _capability_enabled(initialize_result, "prompts")
             else []
         )
@@ -1048,7 +1159,12 @@ def _jsonrpc_request(
     *,
     meta: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {"jsonrpc": "2.0", "id": _next_request_id(), "method": method, "params": params or {}}
+    payload: dict[str, Any] = {
+        "jsonrpc": "2.0",
+        "id": _next_request_id(),
+        "method": method,
+        "params": params or {},
+    }
     if meta:
         payload["_meta"] = dict(meta)
     return payload
@@ -1118,7 +1234,9 @@ def _response_message(
     if not isinstance(parsed, dict):
         return None
     if expected_id is not None and parsed.get("id") != expected_id:
-        raise RuntimeError(f"JSON-RPC response id mismatch: expected {expected_id}, got {parsed.get('id')!r}")
+        raise RuntimeError(
+            f"JSON-RPC response id mismatch: expected {expected_id}, got {parsed.get('id')!r}"
+        )
     return parsed
 
 
@@ -1181,19 +1299,27 @@ def _streamable_http_request(
         response_headers = dict(response.headers.items())
         if response.status == 202:
             return response.status, response_headers, None
-        content_type = response_headers.get("Content-Type", response_headers.get("content-type", "")).lower()
+        content_type = response_headers.get(
+            "Content-Type", response_headers.get("content-type", "")
+        ).lower()
         if "text/event-stream" in content_type:
             if expected_id is None:
                 return response.status, response_headers, None
-            return response.status, response_headers, _sse_message_from_stream(
-                response, expected_id=expected_id, timeout=timeout
+            return (
+                response.status,
+                response_headers,
+                _sse_message_from_stream(response, expected_id=expected_id, timeout=timeout),
             )
         raw = response.read()
-    return response.status, response_headers, _response_message(
+    return (
         response.status,
         response_headers,
-        raw,
-        expected_id=expected_id,
+        _response_message(
+            response.status,
+            response_headers,
+            raw,
+            expected_id=expected_id,
+        ),
     )
 
 
@@ -1220,7 +1346,9 @@ def _streamable_http_call(
         MCP_METHOD_HEADER: str(method),
     }
     if method in _METHODS_REQUIRING_NAME:
-        headers[MCP_NAME_HEADER] = _client_info()["name"]  # Single source of truth with ``_meta.clientInfo.name``.
+        headers[MCP_NAME_HEADER] = _client_info()[
+            "name"
+        ]  # Single source of truth with ``_meta.clientInfo.name``.
     is_stateless = protocol_version == MCP_PROTOCOL_VERSION_STATELESS
     if session_id and not is_stateless:
         # Issue #3130: the stateless flow MUST NOT set Mcp-Session-Id.
@@ -1274,16 +1402,16 @@ def _list_remote_primitives(
     return items
 
 
-def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: float, max_pages: int) -> StdioMCPInspection:
+def _inspect_streamable_http_server(
+    server: RemoteMCPServerConfig, *, timeout: float, max_pages: int
+) -> StdioMCPInspection:
     # Issue #3130: prefer stateless ``server/discover`` so the scanner can
     # interop with ``2026-07-28`` peers without a session.
-    # - HTTP 400/404/405 from the stateless probe means the peer rejected
-    #   stateless discovery on the Streamable HTTP endpoint; fall through
-    #   to the legacy ``initialize`` handshake on the SAME endpoint.
-    #   Transport-level mismatches in ``initialize`` itself still trigger
-    #   the SSE fallback in ``inspect_remote_server``.
-    # - HTTP 5xx and other transport errors propagate so the outer handler
-    #   can fail closed.
+    # - Any HTTP-level rejection of the stateless probe (4xx, 5xx) means
+    #   the peer rejected stateless discovery on the Streamable HTTP
+    #   endpoint; fall through to the legacy ``initialize`` handshake on
+    #   the SAME endpoint. Transport-level mismatches in ``initialize``
+    #   itself still trigger the SSE fallback in ``inspect_remote_server``.
     # - A malformed ``server/discover`` response is rejected via the same
     #   validation the legacy ``initialize`` handshake uses, then falls
     #   through to legacy.
@@ -1299,11 +1427,10 @@ def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: f
             timeout=timeout,
             protocol_version=MCP_PROTOCOL_VERSION_STATELESS,
         )[0]
-    except urllib.error.HTTPError as http_error:
-        if http_error.code not in {400, 404, 405}:
-            raise
+    except urllib.error.HTTPError:
         # Peer rejected stateless discovery on this Streamable HTTP
         # endpoint; fall through to legacy ``initialize`` on the same URL.
+        pass
     except (urllib.error.URLError, ValueError, json.JSONDecodeError):
         pass  # transport/parse failure: fall through to legacy.
 
@@ -1320,18 +1447,60 @@ def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: f
                     stateless_meta = {"clientInfo": _client_info(), "capabilities": {}}
 
                     def call(payload: dict[str, Any]) -> dict[str, Any] | None:
-                        payload_with_meta = payload if "_meta" in payload else {**payload, "_meta": stateless_meta}
-                        response, _ = _streamable_http_call(server, payload_with_meta, timeout=timeout, protocol_version=MCP_PROTOCOL_VERSION_STATELESS)
+                        payload_with_meta = (
+                            payload if "_meta" in payload else {**payload, "_meta": stateless_meta}
+                        )
+                        response, _ = _streamable_http_call(
+                            server,
+                            payload_with_meta,
+                            timeout=timeout,
+                            protocol_version=MCP_PROTOCOL_VERSION_STATELESS,
+                        )
                         return response
 
-                    tools = _list_remote_primitives(call, "tools/list", "tools", normalize_mcp_tool, max_pages) if _capability_enabled(discover_result, "tools") else []
-                    resources = _list_remote_primitives(call, "resources/list", "resources", normalize_mcp_resource, max_pages) if _capability_enabled(discover_result, "resources") else []
-                    resource_templates = _list_remote_primitives(call, "resources/templates/list", "resourceTemplates", normalize_mcp_resource_template, max_pages, optional=True) if _capability_enabled(discover_result, "resources") else []
-                    prompts = _list_remote_primitives(call, "prompts/list", "prompts", normalize_mcp_prompt, max_pages) if _capability_enabled(discover_result, "prompts") else []
+                    tools = (
+                        _list_remote_primitives(
+                            call, "tools/list", "tools", normalize_mcp_tool, max_pages
+                        )
+                        if _capability_enabled(discover_result, "tools")
+                        else []
+                    )
+                    resources = (
+                        _list_remote_primitives(
+                            call, "resources/list", "resources", normalize_mcp_resource, max_pages
+                        )
+                        if _capability_enabled(discover_result, "resources")
+                        else []
+                    )
+                    resource_templates = (
+                        _list_remote_primitives(
+                            call,
+                            "resources/templates/list",
+                            "resourceTemplates",
+                            normalize_mcp_resource_template,
+                            max_pages,
+                            optional=True,
+                        )
+                        if _capability_enabled(discover_result, "resources")
+                        else []
+                    )
+                    prompts = (
+                        _list_remote_primitives(
+                            call, "prompts/list", "prompts", normalize_mcp_prompt, max_pages
+                        )
+                        if _capability_enabled(discover_result, "prompts")
+                        else []
+                    )
                     return StdioMCPInspection(
-                        server_name=server.name, ok=True, tools=tools, resources=resources,
-                        resource_templates=resource_templates, prompts=prompts,
-                        initialize_result=dict(discover_result), transport=server.transport, protocol_version=discover_protocol,
+                        server_name=server.name,
+                        ok=True,
+                        tools=tools,
+                        resources=resources,
+                        resource_templates=resource_templates,
+                        prompts=prompts,
+                        initialize_result=dict(discover_result),
+                        transport=server.transport,
+                        protocol_version=discover_protocol,
                     )
 
     # Legacy 2025-11-25 handshake: ``initialize`` -> ``notifications/initialized``
@@ -1339,7 +1508,14 @@ def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: f
     session_id: str | None = None
     initialize, session_id = _streamable_http_call(
         server,
-        _jsonrpc_request("initialize", {"protocolVersion": MCP_PROTOCOL_VERSION, "capabilities": {}, "clientInfo": _client_info()}),
+        _jsonrpc_request(
+            "initialize",
+            {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": _client_info(),
+            },
+        ),
         timeout=timeout,
     )
     if not initialize or "error" in initialize:
@@ -1351,9 +1527,12 @@ def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: f
         timeout=timeout,
         session_id=session_id,
     )
+
     def call(payload: dict[str, Any]) -> dict[str, Any] | None:
         nonlocal session_id
-        response, session_id = _streamable_http_call(server, payload, timeout=timeout, session_id=session_id)
+        response, session_id = _streamable_http_call(
+            server, payload, timeout=timeout, session_id=session_id
+        )
         return response
 
     tools = (
@@ -1362,7 +1541,9 @@ def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: f
         else []
     )
     resources = (
-        _list_remote_primitives(call, "resources/list", "resources", normalize_mcp_resource, max_pages)
+        _list_remote_primitives(
+            call, "resources/list", "resources", normalize_mcp_resource, max_pages
+        )
         if _capability_enabled(initialize_result, "resources")
         else []
     )
@@ -1396,7 +1577,9 @@ def _inspect_streamable_http_server(server: RemoteMCPServerConfig, *, timeout: f
     )
 
 
-def _read_sse_message(queue_: queue.Queue[dict[str, Any]], request_id: int, timeout: float) -> dict[str, Any]:
+def _read_sse_message(
+    queue_: queue.Queue[dict[str, Any]], request_id: int, timeout: float
+) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
@@ -1408,8 +1591,12 @@ def _read_sse_message(queue_: queue.Queue[dict[str, Any]], request_id: int, time
     raise TimeoutError(f"Timed out waiting for SSE response id {request_id}")
 
 
-def _open_legacy_sse(url: str, headers: Mapping[str, str], timeout: float) -> tuple[urllib.response.addinfourl, str, queue.Queue[dict[str, Any]]]:
-    req = urllib.request.Request(url, method="GET", headers={**headers, "Accept": "text/event-stream"})
+def _open_legacy_sse(
+    url: str, headers: Mapping[str, str], timeout: float
+) -> tuple[urllib.response.addinfourl, str, queue.Queue[dict[str, Any]]]:
+    req = urllib.request.Request(
+        url, method="GET", headers={**headers, "Accept": "text/event-stream"}
+    )
     response = urllib.request.urlopen(req, timeout=timeout, context=_SSL_CONTEXT)  # noqa: S310 - user MCP endpoint by design.
     message_queue: queue.Queue[dict[str, Any]] = queue.Queue()
     endpoint_event = threading.Event()
@@ -1460,9 +1647,12 @@ def _open_legacy_sse(url: str, headers: Mapping[str, str], timeout: float) -> tu
     return response, endpoint, message_queue
 
 
-def _inspect_legacy_sse_server(server: RemoteMCPServerConfig, *, timeout: float, max_pages: int) -> StdioMCPInspection:
+def _inspect_legacy_sse_server(
+    server: RemoteMCPServerConfig, *, timeout: float, max_pages: int
+) -> StdioMCPInspection:
     response, endpoint, message_queue = _open_legacy_sse(server.url, server.headers, timeout)
     try:
+
         def post_and_wait(payload: dict[str, Any]) -> dict[str, Any] | None:
             _http_request(endpoint, payload=payload, headers=server.headers, timeout=timeout)
             request_id = payload.get("id")
@@ -1471,7 +1661,12 @@ def _inspect_legacy_sse_server(server: RemoteMCPServerConfig, *, timeout: float,
             return _read_sse_message(message_queue, int(request_id), timeout)
 
         initialize_payload = _jsonrpc_request(
-            "initialize", {"protocolVersion": MCP_PROTOCOL_VERSION, "capabilities": {}, "clientInfo": _client_info()}
+            "initialize",
+            {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": _client_info(),
+            },
         )
         initialize = post_and_wait(initialize_payload)
         if not initialize or "error" in initialize:
@@ -1479,12 +1674,16 @@ def _inspect_legacy_sse_server(server: RemoteMCPServerConfig, *, timeout: float,
         initialize_result = _validate_initialize_result(initialize.get("result", {}))
         post_and_wait(_jsonrpc_notification("notifications/initialized"))
         tools = (
-            _list_remote_primitives(post_and_wait, "tools/list", "tools", normalize_mcp_tool, max_pages)
+            _list_remote_primitives(
+                post_and_wait, "tools/list", "tools", normalize_mcp_tool, max_pages
+            )
             if _capability_enabled(initialize_result, "tools")
             else []
         )
         resources = (
-            _list_remote_primitives(post_and_wait, "resources/list", "resources", normalize_mcp_resource, max_pages)
+            _list_remote_primitives(
+                post_and_wait, "resources/list", "resources", normalize_mcp_resource, max_pages
+            )
             if _capability_enabled(initialize_result, "resources")
             else []
         )
@@ -1501,7 +1700,9 @@ def _inspect_legacy_sse_server(server: RemoteMCPServerConfig, *, timeout: float,
             else []
         )
         prompts = (
-            _list_remote_primitives(post_and_wait, "prompts/list", "prompts", normalize_mcp_prompt, max_pages)
+            _list_remote_primitives(
+                post_and_wait, "prompts/list", "prompts", normalize_mcp_prompt, max_pages
+            )
             if _capability_enabled(initialize_result, "prompts")
             else []
         )
@@ -1531,11 +1732,17 @@ def inspect_remote_server(
             return _inspect_streamable_http_server(server, timeout=timeout, max_pages=max_pages)
         except urllib.error.HTTPError as http_error:
             if server.transport == "streamable-http" and http_error.code in {400, 404, 405}:
-                legacy_server = RemoteMCPServerConfig(server.name, "sse", server.url, server.headers)
-                return _inspect_legacy_sse_server(legacy_server, timeout=timeout, max_pages=max_pages)
+                legacy_server = RemoteMCPServerConfig(
+                    server.name, "sse", server.url, server.headers
+                )
+                return _inspect_legacy_sse_server(
+                    legacy_server, timeout=timeout, max_pages=max_pages
+                )
             raise
     except Exception as exc:
-        return StdioMCPInspection(server_name=server.name, ok=False, error=str(exc), transport=server.transport)
+        return StdioMCPInspection(
+            server_name=server.name, ok=False, error=str(exc), transport=server.transport
+        )
 
 
 def inspect_stdio_config(
@@ -1587,14 +1794,22 @@ def inspect_mcp_config(
         inspection = inspect_stdio_server(server, timeout=timeout)
         inspections[name] = inspection
         if not inspection.ok:
-            findings.append(SecurityFinding(name, "critical", f"MCP inspection failed: {inspection.error}", "inspection"))
+            findings.append(
+                SecurityFinding(
+                    name, "critical", f"MCP inspection failed: {inspection.error}", "inspection"
+                )
+            )
     for name, server in remote_servers.items():
         if server_filter and name != server_filter:
             continue
         inspection = inspect_remote_server(server, timeout=timeout)
         inspections[name] = inspection
         if not inspection.ok:
-            findings.append(SecurityFinding(name, "critical", f"MCP inspection failed: {inspection.error}", "inspection"))
+            findings.append(
+                SecurityFinding(
+                    name, "critical", f"MCP inspection failed: {inspection.error}", "inspection"
+                )
+            )
     return inspections, findings
 
 
@@ -1609,7 +1824,9 @@ def scan_config(config_path: Path, single_server: str | None = None) -> list[Sec
     try:
         config = load_config(config_path)
     except Exception as exc:
-        return [SecurityFinding("system", "critical", f"Failed to load config: {exc}", "configuration")]
+        return [
+            SecurityFinding("system", "critical", f"Failed to load config: {exc}", "configuration")
+        ]
 
     if not isinstance(config, Mapping):
         return []
@@ -1641,11 +1858,15 @@ def scan_config(config_path: Path, single_server: str | None = None) -> list[Sec
         cmd = str(server.get("command", ""))
         if "sudo" in cmd.lower():
             findings.append(
-                SecurityFinding(server_name, "critical", "Server runs with sudo privileges", "privilege")
+                SecurityFinding(
+                    server_name, "critical", "Server runs with sudo privileges", "privilege"
+                )
             )
         if tempfile.gettempdir() in cmd.lower():
             findings.append(
-                SecurityFinding(server_name, "warning", "Server binary path in /tmp is risky", "execution")
+                SecurityFinding(
+                    server_name, "warning", "Server binary path in /tmp is risky", "execution"
+                )
             )
 
         args = server.get("args", [])
@@ -1755,7 +1976,11 @@ def run_security_scan(
         inspections, inspection_findings = inspect_mcp_config(
             config_path, server_filter=server_filter, timeout=timeout
         )
-        live_servers = {name: _all_inspection_primitives(inspection) for name, inspection in inspections.items() if inspection.ok}
+        live_servers = {
+            name: _all_inspection_primitives(inspection)
+            for name, inspection in inspections.items()
+            if inspection.ok
+        }
 
     servers_to_scan = dict(static_servers)
     for name, tools in live_servers.items():
@@ -1796,7 +2021,9 @@ def compute_fingerprints(servers: dict[str, list[dict[str, Any]]]) -> dict[str, 
     return fingerprints
 
 
-def get_fingerprints(config_path: Path, *, inspect_stdio: bool = False, timeout: float = 10.0) -> dict[str, dict[str, str]]:
+def get_fingerprints(
+    config_path: Path, *, inspect_stdio: bool = False, timeout: float = 10.0
+) -> dict[str, dict[str, str]]:
     """Generate per-tool fingerprints for a config file."""
     config = load_config(config_path)
     servers = parse_config(config)
@@ -1853,12 +2080,20 @@ def _threat_to_dict(threat: MCPThreat) -> dict[str, Any]:
     }
 
 
-
-
-def _summary(results: dict[str, ScanResult], extra_findings: Sequence[SecurityFinding] = ()) -> dict[str, int]:
-    warnings = sum(1 for result in results.values() for t in result.threats if t.severity == MCPSeverity.WARNING)
+def _summary(
+    results: dict[str, ScanResult], extra_findings: Sequence[SecurityFinding] = ()
+) -> dict[str, int]:
+    warnings = sum(
+        1
+        for result in results.values()
+        for t in result.threats
+        if t.severity == MCPSeverity.WARNING
+    )
     critical = sum(
-        1 for result in results.values() for t in result.threats if t.severity == MCPSeverity.CRITICAL
+        1
+        for result in results.values()
+        for t in result.threats
+        if t.severity == MCPSeverity.CRITICAL
     )
     primitives_scanned = sum(result.tools_scanned for result in results.values())
     primitives_flagged = sum(result.tools_flagged for result in results.values())
@@ -1937,7 +2172,9 @@ def format_table(
         threat_counts: dict[str, list[MCPThreat]] = {}
         for threat in result.threats:
             threat_counts.setdefault(threat.tool_name, []).append(threat)
-        tool_names = [str(tool.get("name", "unknown")) for tool in server_tools] or sorted(threat_counts)
+        tool_names = [str(tool.get("name", "unknown")) for tool in server_tools] or sorted(
+            threat_counts
+        )
         for tool_name in tool_names:
             tool_threats = threat_counts.get(tool_name, [])
             if not tool_threats:
@@ -1993,7 +2230,14 @@ def format_markdown(
                 f"| {threat.tool_name} | {threat.server_name} | "
                 f"{threat.severity.value} | {threat.message} |"
             )
-    lines.extend(["", "## Limitations", "", "This report is scan evidence, not a certification. It inspects MCP primitive metadata and selected launch/endpoint configuration; it does not execute tools, read resources, render prompts, or prove that a server is benign."])
+    lines.extend(
+        [
+            "",
+            "## Limitations",
+            "",
+            "This report is scan evidence, not a certification. It inspects MCP primitive metadata and selected launch/endpoint configuration; it does not execute tools, read resources, render prompts, or prove that a server is benign.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -2028,14 +2272,25 @@ def cmd_scan(args: argparse.Namespace) -> int:
             )
         )
     elif output_format == "markdown":
-        print(format_markdown(scan.results, scan.threats, [*scan.config_findings, *scan.inspection_findings]))
+        print(
+            format_markdown(
+                scan.results, scan.threats, [*scan.config_findings, *scan.inspection_findings]
+            )
+        )
     else:
         config = load_config(args.config)
         servers = parse_config(config)
         for name, inspection in scan.inspections.items():
             if inspection.ok:
                 servers[name] = _all_inspection_primitives(inspection)
-        print(format_table(scan.results, scan.threats, servers, [*scan.config_findings, *scan.inspection_findings]))
+        print(
+            format_table(
+                scan.results,
+                scan.threats,
+                servers,
+                [*scan.config_findings, *scan.inspection_findings],
+            )
+        )
         for finding in [*scan.config_findings, *scan.inspection_findings]:
             print(f"[{finding.severity.upper()}] {finding.server}: {finding.message}")
 
@@ -2049,9 +2304,14 @@ def cmd_fingerprint(args: argparse.Namespace) -> int:
         servers = parse_config(config)
         inspection_findings: list[SecurityFinding] = []
         if not args.static_only and isinstance(config, Mapping):
-            inspections, inspection_findings = inspect_mcp_config(Path(args.config), timeout=args.timeout)
+            inspections, inspection_findings = inspect_mcp_config(
+                Path(args.config), timeout=args.timeout
+            )
             for finding in inspection_findings:
-                print(f"{finding.severity.title()}: {finding.server}: {finding.message}", file=sys.stderr)
+                print(
+                    f"{finding.severity.title()}: {finding.server}: {finding.message}",
+                    file=sys.stderr,
+                )
             if _has_critical_findings(inspection_findings):
                 return 2
             for name, inspection in inspections.items():
@@ -2120,7 +2380,11 @@ def cmd_report(args: argparse.Namespace) -> int:
             )
         )
     else:
-        print(format_markdown(scan.results, scan.threats, [*scan.config_findings, *scan.inspection_findings]))
+        print(
+            format_markdown(
+                scan.results, scan.threats, [*scan.config_findings, *scan.inspection_findings]
+            )
+        )
     return _scan_exit_code(scan)
 
 
@@ -2132,7 +2396,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
-    scan_parser = subparsers.add_parser("scan", help="Inspect stdio, Streamable HTTP, and SSE MCP primitives for threats")
+    scan_parser = subparsers.add_parser(
+        "scan", help="Inspect stdio, Streamable HTTP, and SSE MCP primitives for threats"
+    )
     scan_parser.add_argument("config", help="Path to MCP config file (JSON/YAML)")
     scan_parser.add_argument("--server", default=None, help="Scan only this server")
     scan_parser.add_argument(
@@ -2169,14 +2435,20 @@ def build_parser() -> argparse.ArgumentParser:
             "relative to cwd, which the MCP config author can plant."
         ),
     )
-    scan_parser.add_argument("--no-verify-tls", action="store_true", help="Skip TLS certificate verification for remote endpoints")
+    scan_parser.add_argument(
+        "--no-verify-tls",
+        action="store_true",
+        help="Skip TLS certificate verification for remote endpoints",
+    )
 
     fp_parser = subparsers.add_parser("fingerprint", help="Register/compare tool fingerprints")
     fp_parser.add_argument("config", help="Path to MCP config file (JSON/YAML)")
     fp_parser.add_argument("--output", default=None, help="Save fingerprints to file")
     fp_parser.add_argument("--compare", default=None, help="Compare against saved file")
     fp_parser.add_argument("--timeout", type=float, default=10.0, help="Per-request timeout")
-    fp_parser.add_argument("--static-only", action="store_true", help="Fingerprint inline tools only")
+    fp_parser.add_argument(
+        "--static-only", action="store_true", help="Fingerprint inline tools only"
+    )
     fp_parser.add_argument("--json", action="store_true", help="Output in JSON format")
     fp_parser.add_argument(
         "--unsafe-allow-all-commands",
@@ -2194,13 +2466,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow config-provided server cwd during live launch.",
     )
-    fp_parser.add_argument("--no-verify-tls", action="store_true", help="Skip TLS certificate verification for remote endpoints")
+    fp_parser.add_argument(
+        "--no-verify-tls",
+        action="store_true",
+        help="Skip TLS certificate verification for remote endpoints",
+    )
 
     report_parser = subparsers.add_parser("report", help="Generate a full security report")
     report_parser.add_argument("config", help="Path to MCP config file (JSON/YAML)")
     report_parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
     report_parser.add_argument("--timeout", type=float, default=10.0, help="Per-request timeout")
-    report_parser.add_argument("--static-only", action="store_true", help="Report on inline tools only")
+    report_parser.add_argument(
+        "--static-only", action="store_true", help="Report on inline tools only"
+    )
     report_parser.add_argument("--json", action="store_true", help="Output in JSON format")
     report_parser.add_argument(
         "--unsafe-allow-all-commands",
@@ -2218,7 +2496,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow config-provided server cwd during live launch.",
     )
-    report_parser.add_argument("--no-verify-tls", action="store_true", help="Skip TLS certificate verification for remote endpoints")
+    report_parser.add_argument(
+        "--no-verify-tls",
+        action="store_true",
+        help="Skip TLS certificate verification for remote endpoints",
+    )
 
     return parser
 
@@ -2250,9 +2532,7 @@ def main(argv: list[str] | None = None) -> int:
             allow_untrusted_cwd=getattr(args, "allow_untrusted_cwd", False),
         )
     elif getattr(args, "allow_untrusted_cwd", False):
-        _configure_command_policy(
-            allow_all=False, allow_untrusted_cwd=True
-        )
+        _configure_command_policy(allow_all=False, allow_untrusted_cwd=True)
     if getattr(args, "no_verify_tls", False):
         _configure_tls(verify=False)
     if args.command == "scan":
