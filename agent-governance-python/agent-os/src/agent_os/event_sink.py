@@ -713,7 +713,7 @@ class OTLPGovernanceSink(GovernanceEventSinkBase):
         from agent_os.audit_logger import AuditEntry
 
         # Honest accounting: if the OTel backend is a no-op (opentelemetry not
-        # installed / not initialised), nothing is exported — report DROPPED so
+        # installed / not initialized), nothing is exported — report DROPPED so
         # the processor does not credit these events as delivered.
         if not self.enabled:
             return SinkExportResult.DROPPED

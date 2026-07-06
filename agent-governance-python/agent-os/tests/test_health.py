@@ -267,7 +267,7 @@ class TestBuiltInChecks:
 
 
 class TestBuiltInAutoRegistration:
-    def test_fresh_checker_autoregisters_builtins(self):
+    def test_fresh_checker_auto_registers_builtins(self):
         # Flips the defect: fresh checker verifies real components, not empty.
         report = HealthChecker().check_health()
         assert set(report.components) == {"policy_engine", "audit_backend"}

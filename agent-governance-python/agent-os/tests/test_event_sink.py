@@ -404,7 +404,7 @@ class TestGovernanceEventSigner:
 
     def test_short_key_rejected(self):
         with pytest.raises(ValueError):
-            GovernanceEventSigner(b"tooshort")
+            GovernanceEventSigner(b"short-key")
 
 
 class TestStdoutGovernanceSink:
