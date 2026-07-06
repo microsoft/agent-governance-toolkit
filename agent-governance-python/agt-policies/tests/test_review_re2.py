@@ -95,8 +95,18 @@ def test_regex_validation_errors_do_not_echo_pattern() -> None:
     with pytest.raises(ResolutionError) as exc:
         _validate_re2_regex("secret-token(?=suffix)")
 
+    # The invalid pattern (which may carry secrets) must not be echoed into the
+    # error detail (errors.py no-leak contract).
     assert "secret-token" not in str(exc.value)
-    assert "lookahead" in str(exc.value)
+    assert "suffix" not in str(exc.value)
+    assert "invalid" in str(exc.value).lower() or "not a valid" in str(exc.value).lower()
+
+
+def test_valid_re2_octal_and_unicode_property_are_accepted() -> None:
+    # RE2 supports octal escapes and Unicode-property classes that Python `re`
+    # rejects; the faithful google-re2 validator must NOT over-deny these.
+    for pattern in (r"\101", r"\123", r"\p{L}", r"\pL", r"\p{Lu}", r"\p{L}+\d"):
+        _validate_re2_regex(pattern)  # must not raise
 
 
 def test_bridge_regex_kind_uses_shared_re2_validation() -> None:

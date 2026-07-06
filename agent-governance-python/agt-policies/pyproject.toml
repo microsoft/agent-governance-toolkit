@@ -22,6 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "agent-control-specification>=0.3.1b0,<0.4.0",
+    "google-re2>=1.1.20251105,<1.2",
     "pydantic>=2.5.0,<3.0",
     "pyyaml>=6.0,<7.0",
 ]

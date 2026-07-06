@@ -26,6 +26,17 @@ from typing import Any, Optional
 
 import yaml
 
+try:
+    import re2 as _re2
+
+    _RE2_OPTIONS = _re2.Options()
+    # Do not let RE2's C++ layer echo the (user-supplied) pattern to stderr;
+    # invalid patterns are surfaced as a redacted ResolutionError instead.
+    _RE2_OPTIONS.log_errors = False
+except Exception:  # pragma: no cover - platform without a google-re2 wheel
+    _re2 = None
+    _RE2_OPTIONS = None
+
 from .discover import discover_policies
 from .errors import ResolutionError
 from .merge import merge_documents, merge_top_level_section
@@ -390,11 +401,38 @@ def _has_possessive_quantifier(pattern: str) -> bool:
 
 
 def _validate_re2_regex(pattern: str) -> None:
+    """Reject any pattern Go RE2 (used by OPA) would not accept.
+
+    Prefers the real RE2 engine (``google-re2``) so the accept/reject set
+    matches OPA exactly, eliminating both fail-open false negatives (Python
+    ``re``-valid but RE2-invalid patterns rendering into Rego that evaluates
+    undefined -> default allow) and over-deny false positives (RE2-valid octal
+    or Unicode-property patterns that Python ``re`` rejects). Falls back to a
+    conservative heuristic when the native engine is unavailable.
+    """
+    if _re2 is not None:
+        try:
+            _re2.compile(pattern, _RE2_OPTIONS)
+        except _re2.error as exc:
+            raise ResolutionError.invalid_governance(
+                "regex pattern is not a valid RE2 pattern"
+            ) from exc
+        return
+    _validate_re2_regex_fallback(pattern)
+
+
+def _validate_re2_regex_fallback(pattern: str) -> None:
+    """Conservative RE2 validation for hosts without a ``google-re2`` wheel.
+
+    Rejects the RE2-unsupported constructs that Python ``re`` accepts so the
+    fail-open direction stays closed; the ``--strict-builtin-errors`` flag on
+    ``opa eval`` is the eval-time backstop for anything this misses.
+    """
     try:
         re.compile(pattern)
     except re.error as exc:
         raise ResolutionError.invalid_governance(
-            f"regex pattern is invalid: {exc}"
+            "regex pattern is invalid"
         ) from exc
 
     for marker, label in (
