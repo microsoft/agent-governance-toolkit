@@ -8,9 +8,9 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
-import click
 import pytest
 from click.testing import CliRunner
 
@@ -286,3 +286,96 @@ class TestHelperFunctions:
         prompt_results = {"test.txt": {"grade": "A", "score": 95, "missing": []}}
         recs = _generate_recommendations(prompt_results, None)
         assert any("passed" in r.lower() for r in recs)
+
+
+class TestRedTeamAttackThreshold:
+    """Regression for #3237: overall verdict and exit code must share one criterion.
+
+    ``PlaybookResult.passed`` is a fixed 70.0 baseline baked into
+    ``agent_sre``, while ``--threshold`` is caller-controlled. Before the fix
+    the printed/JSON verdict used ``r.passed`` but the exit code used
+    ``r.resilience_score >= threshold``, so CI could exit 0 while printing
+    FAIL (or vice versa) whenever ``--threshold`` differed from 70.
+    """
+
+    @staticmethod
+    def _fake_adversarial(results):
+        """Stand in for ``_get_adversarial()`` with fixed playbook results."""
+        fake_experiment = mock.MagicMock(experiment_id="exp-test")
+        return {
+            "BUILTIN_PLAYBOOKS": [r.playbook for r in results],
+            "AdversarialRunner": lambda experiment: mock.MagicMock(
+                run_all=lambda playbooks: results
+            ),
+            "ChaosExperiment": mock.MagicMock(return_value=fake_experiment),
+            "Fault": mock.MagicMock(),
+            "FaultType": mock.MagicMock(),
+        }
+
+    @staticmethod
+    def _result(score, passed, name="Test Playbook", playbook_id="pb-1"):
+        return SimpleNamespace(
+            resilience_score=score,
+            passed=passed,
+            playbook=SimpleNamespace(name=name, playbook_id=playbook_id),
+            step_results=[],
+        )
+
+    def _patch(self, monkeypatch, results):
+        monkeypatch.setattr(
+            "agent_compliance.cli.red_team._get_adversarial",
+            lambda: self._fake_adversarial(results),
+        )
+
+    def test_threshold_above_baseline_shows_fail_and_exits_nonzero(self, runner, monkeypatch):
+        # score=75 -> passed=True on the 70 baseline, but below --threshold 90.
+        # Before fix: verdict printed PASS while exit code was 1.
+        self._patch(monkeypatch, [self._result(75.0, passed=True)])
+        res = runner.invoke(cli, ["red-team", "attack", "--threshold", "90"])
+
+        assert res.exit_code == 1
+        assert "Overall: FAIL" in res.output
+
+    def test_threshold_below_baseline_shows_pass_and_exits_zero(self, runner, monkeypatch):
+        # score=60 -> passed=False on the 70 baseline, but meets --threshold 50.
+        # Before fix: verdict printed FAIL while exit code was 0.
+        self._patch(monkeypatch, [self._result(60.0, passed=False)])
+        res = runner.invoke(cli, ["red-team", "attack", "--threshold", "50"])
+
+        assert res.exit_code == 0
+        assert "Overall: PASS" in res.output
+
+    def test_json_overall_passed_uses_threshold_not_baseline(self, runner, monkeypatch):
+        self._patch(monkeypatch, [self._result(75.0, passed=True)])
+        res = runner.invoke(cli, ["red-team", "attack", "--threshold", "90", "--json"])
+
+        assert res.exit_code == 1
+        data = json.loads(res.output)
+        assert data["overall_passed"] is False
+        # Per-playbook `passed` retains the agent-sre baseline semantics.
+        assert data["results"][0]["passed"] is True
+
+    def test_default_threshold_matches_baseline_behavior(self, runner, monkeypatch):
+        self._patch(monkeypatch, [self._result(80.0, passed=True)])
+        res = runner.invoke(cli, ["red-team", "attack"])
+
+        assert res.exit_code == 0
+        assert "Overall: PASS" in res.output
+
+    def test_score_equal_to_threshold_passes(self, runner, monkeypatch):
+        self._patch(monkeypatch, [self._result(90.0, passed=True)])
+        res = runner.invoke(cli, ["red-team", "attack", "--threshold", "90"])
+
+        assert res.exit_code == 0
+        assert "Overall: PASS" in res.output
+
+    def test_multiple_playbooks_one_below_threshold_fails(self, runner, monkeypatch):
+        results = [
+            self._result(95.0, passed=True, name="Strong"),
+            self._result(75.0, passed=True, name="Weak"),
+        ]
+        self._patch(monkeypatch, results)
+        res = runner.invoke(cli, ["red-team", "attack", "--threshold", "90"])
+
+        assert res.exit_code == 1
+        assert "Overall: FAIL" in res.output

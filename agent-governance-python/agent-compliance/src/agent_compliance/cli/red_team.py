@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -48,6 +48,18 @@ def _get_adversarial():
         }
     except ImportError:
         return None
+
+
+def _meets_threshold(result: Any, threshold: float) -> bool:
+    """Return whether a playbook result meets the configured resilience threshold.
+
+    The CLI pass criterion is the user-supplied ``--threshold`` (default 70),
+    which may differ from ``PlaybookResult.passed`` — a fixed 70.0 baseline
+    baked into ``agent_sre.chaos.adversarial``. Driving both the printed
+    verdict and the process exit code from this single criterion keeps them in
+    sync, so CI never exits 0 while printing FAIL (or vice versa). See #3237.
+    """
+    return result.resilience_score >= threshold
 
 
 @click.group("red-team")
@@ -314,7 +326,7 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
             "target": target,
             "experiment_id": experiment.experiment_id,
             "playbooks_run": len(results),
-            "overall_passed": all(r.passed for r in results),
+            "overall_passed": all(_meets_threshold(r, threshold) for r in results),
             "results": [
                 {
                     "playbook_id": r.playbook.playbook_id,
@@ -342,28 +354,27 @@ def attack(target: str, playbook_id: Optional[str], output_json: bool, threshold
         click.echo(f"  Target: {target}")
         click.echo(f"  Experiment: {experiment.experiment_id}\n")
 
-        overall_pass = True
+        overall_pass = all(_meets_threshold(r, threshold) for r in results)
         for r in results:
-            icon = "+" if r.passed else "!"
+            playbook_pass = _meets_threshold(r, threshold)
+            icon = "+" if playbook_pass else "!"
             click.echo(f"  [{icon}] {r.playbook.name}")
             click.echo(f"      Score: {r.resilience_score}/100  ", nl=False)
-            click.echo(f"{'PASS' if r.passed else 'FAIL'}")
+            click.echo(f"{'PASS' if playbook_pass else 'FAIL'}")
 
             for step, result, passed in r.step_results:
                 step_icon = "+" if passed else "x"
                 click.echo(f"        [{step_icon}] {step.name}: {result.value}")
 
             click.echo()
-            if not r.passed:
-                overall_pass = False
 
         click.echo(f"  {'─'*56}")
         total = len(results)
-        passed_count = sum(1 for r in results if r.passed)
+        passed_count = sum(1 for r in results if _meets_threshold(r, threshold))
         click.echo(f"  Results: {passed_count}/{total} playbooks passed")
         click.echo(f"  Overall: {'PASS' if overall_pass else 'FAIL'}\n")
 
-    if not all(r.resilience_score >= threshold for r in results):
+    if not all(_meets_threshold(r, threshold) for r in results):
         raise SystemExit(1)
 
 
