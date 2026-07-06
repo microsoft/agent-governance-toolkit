@@ -16,53 +16,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Imports under test
-# ---------------------------------------------------------------------------
-
-from hypervisor.models import (
-    ActionDescriptor,
-    ConsistencyMode,
-    ExecutionRing,
-    ReversibilityLevel,
-    SessionConfig,
-    SessionParticipant,
-    SessionState,
-)
-from hypervisor.rings.enforcer import (
-    RING_CONSTRAINTS,
-    ResourceConstraints,
-    ResourceType,
-    RingCheckResult,
-    RingEnforcer,
-)
-from hypervisor.rings.elevation import (
-    RingElevationManager,
-)
-from hypervisor.security.rate_limiter import (
-    AgentRateLimiter,
-    RateLimitExceeded,
-    TokenBucket,
-)
-from hypervisor.security.kill_switch import (
-    HandoffStatus,
-    KillReason,
-    KillResult,
-    KillSwitch,
-    StepHandoff,
-)
-from hypervisor.session.isolation import (
-    IsolationLevel,
-    SessionIsolationManager,
-    SessionScope,
-)
 from hypervisor.audit.delta import (
     DeltaEngine,
     SemanticDelta,
     VFSChange,
-)
-from hypervisor.liability.quarantine import (
-    QuarantineReason,
 )
 from hypervisor.constants import (
     MAX_AGENT_ID_LENGTH,
@@ -86,6 +43,45 @@ from hypervisor.constants import (
     SESSION_DEFAULT_MIN_EFF_SCORE,
 )
 
+# ---------------------------------------------------------------------------
+# Imports under test
+# ---------------------------------------------------------------------------
+from hypervisor.models import (
+    ActionDescriptor,
+    ConsistencyMode,
+    ExecutionRing,
+    ReversibilityLevel,
+    SessionConfig,
+    SessionParticipant,
+    SessionState,
+)
+from hypervisor.rings.elevation import (
+    RingElevationManager,
+)
+from hypervisor.rings.enforcer import (
+    RING_CONSTRAINTS,
+    ResourceConstraints,
+    ResourceType,
+    RingCheckResult,
+    RingEnforcer,
+)
+from hypervisor.security.kill_switch import (
+    HandoffStatus,
+    KillReason,
+    KillResult,
+    KillSwitch,
+    StepHandoff,
+)
+from hypervisor.security.rate_limiter import (
+    AgentRateLimiter,
+    RateLimitExceeded,
+    TokenBucket,
+)
+from hypervisor.session.isolation import (
+    IsolationLevel,
+    SessionIsolationManager,
+    SessionScope,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -372,7 +368,9 @@ class TestPrivilegeElevation:
                 current_ring=ExecutionRing.RING_1_PRIVILEGED,
                 target_ring=ExecutionRing.RING_0_ROOT,
             )
-        assert "ring_0_forbidden" in str(exc_info.value).lower() or hasattr(exc_info.value, "denial_reason")
+        assert "ring_0_forbidden" in str(exc_info.value).lower() or hasattr(
+            exc_info.value, "denial_reason"
+        )
 
     def test_same_ring_elevation_rejected(self):
         """S8.3 -- target same as current -> invalid_target."""
@@ -497,7 +495,6 @@ class TestSessionModel:
         assert config.max_duration_seconds == 3600
         assert config.min_eff_score == SESSION_DEFAULT_MIN_EFF_SCORE
         assert config.enable_audit is True
-        assert config.enable_blockchain_commitment is False
 
     def test_session_config_max_participants_validation(self):
         """S17.3 -- max_participants out of range MUST raise."""
@@ -566,7 +563,7 @@ class TestSessionIsolation:
         """S11.3 -- agent's own session directory is always allowed."""
         mgr = SessionIsolationManager()
         scope = mgr.create_scope("session-1", "did:mesh:a", IsolationLevel.SNAPSHOT)
-        own_path = f"/var/agt/sessions/session-1/data.txt"
+        own_path = "/var/agt/sessions/session-1/data.txt"
         assert mgr.check_access("session-1", own_path)
 
     def test_other_session_denied_snapshot(self):
@@ -660,28 +657,8 @@ class TestKillSwitch:
         ks.register_agent("did:mesh:a", lambda: None)
         ks.kill(agent_did="did:mesh:a", session_id="s1", reason=KillReason.MANUAL)
         # Second kill should find no callback
-        result = ks.kill(
-            agent_did="did:mesh:a", session_id="s1", reason=KillReason.MANUAL
-        )
+        result = ks.kill(agent_did="did:mesh:a", session_id="s1", reason=KillReason.MANUAL)
         assert not result.terminated
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Section 13: Quarantine
-# ═══════════════════════════════════════════════════════════════════════════
-
-
-class TestQuarantine:
-    """Spec S13 -- Quarantine."""
-
-    def test_quarantine_reasons_exist(self):
-        """S13.1 -- all quarantine reasons MUST exist."""
-        assert QuarantineReason.BEHAVIORAL_DRIFT
-        assert QuarantineReason.LIABILITY_VIOLATION
-        assert QuarantineReason.RING_BREACH
-        assert QuarantineReason.RATE_LIMIT_EXCEEDED
-        assert QuarantineReason.MANUAL
-        assert QuarantineReason.CASCADE_SLASH
 
 
 # ═══════════════════════════════════════════════════════════════════════════

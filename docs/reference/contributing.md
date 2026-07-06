@@ -239,14 +239,13 @@ pytest tests/ -x -q
 > AI-only approvals and bot approvals do NOT satisfy this requirement.
 
 This policy is enforced by:
-1. **CODEOWNERS** — every file requires review from `@microsoft/agent-governance-toolkit`
-2. **`require-maintainer-approval.yml`** — CI check that blocks merge without human maintainer approval
-3. **Branch protection** — CODEOWNERS review required on `main`
+1. **CODEOWNERS** — every file is owned by a maintainer; branch protection and the `Protect` ruleset require an approving review from a code owner before merge
+2. **Branch protection / ruleset** — a pull request with at least one code-owner approval is required on `main`; only the project lead and named maintainers can merge, and only the project lead can bypass the review requirement
 
 **Why this policy exists:** PRs #357 and #362 were auto-merged without maintainer review and reintroduced a command injection vulnerability (`subprocess.run(shell=True)`) that had been fixed for MSRC Case 111178 just days earlier. AI code review agents did not catch the security regression.
 
 **What counts as maintainer approval:**
-- ✅ A GitHub "Approve" review from a listed CODEOWNER
+- ✅ A GitHub "Approve" review from a code owner (see [.github/CODEOWNERS](../../.github/CODEOWNERS))
 - ❌ AI/bot approval (Copilot, Sourcery, etc.) — does not count
 - ❌ Author self-approval — does not count
 - ❌ Admin bypass — should not be used for external PRs

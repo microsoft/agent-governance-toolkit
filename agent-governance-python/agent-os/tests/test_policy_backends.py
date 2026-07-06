@@ -539,6 +539,71 @@ default allow = true
         )
         assert backend.name == "cedar"
 
+    def test_backend_error_fails_closed_not_fallthrough(self):
+        """A backend that returns an error must deny, not fall through to default.
+
+        Regression for #2992: the old code skipped errored backends with
+        ``if result.error is None: return ...``, allowing evaluation to
+        continue to the configurable default (which can be allow).
+        """
+        class _ErroringBackend:
+            name = "always-errors"
+
+            def evaluate(self, context):
+                return BackendDecision(
+                    allowed=False,
+                    action="deny",
+                    reason="",
+                    error="simulated backend failure",
+                )
+
+        evaluator = PolicyEvaluator()
+        evaluator.add_backend(_ErroringBackend())
+        decision = evaluator.evaluate({"tool_name": "anything"})
+        assert decision.allowed is False
+        assert decision.action == "deny"
+        assert decision.audit_entry.get("error") is True
+        assert "simulated backend failure" in decision.audit_entry.get("error_detail", "")
+
+    def test_backend_error_does_not_consult_subsequent_backends(self):
+        """Once a backend errors (fail closed), later backends are not reached."""
+        class _ErroringBackend:
+            name = "errors"
+
+            def evaluate(self, context):
+                return BackendDecision(allowed=False, action="deny", reason="", error="boom")
+
+        class _AllowingBackend:
+            name = "allows"
+            called = False
+
+            def evaluate(self, context):
+                _AllowingBackend.called = True
+                return BackendDecision(allowed=True, action="allow", reason="", error=None)
+
+        evaluator = PolicyEvaluator()
+        evaluator.add_backend(_ErroringBackend())
+        evaluator.add_backend(_AllowingBackend())
+        decision = evaluator.evaluate({"tool_name": "anything"})
+        assert decision.allowed is False
+        assert not _AllowingBackend.called
+
+    def test_healthy_backend_after_yaml_miss_still_allows(self):
+        """A healthy backend (error=None) after a YAML miss returns its decision."""
+        class _AllowingBackend:
+            name = "allows"
+
+            def evaluate(self, context):
+                return BackendDecision(allowed=True, action="allow", reason="ok", error=None)
+
+        evaluator = PolicyEvaluator(
+            policies=[self._make_yaml_policy("file_read", PolicyAction.DENY)]
+        )
+        evaluator.add_backend(_AllowingBackend())
+        decision = evaluator.evaluate({"tool_name": "web_search"})
+        assert decision.allowed is True
+        assert decision.audit_entry.get("error") is None
+
 
 # ── Regression Tests: Mock Evaluator Constraint Detection ─────
 

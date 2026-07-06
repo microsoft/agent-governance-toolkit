@@ -22,7 +22,7 @@
 </p>
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![Discord](https://dcbadge.limes.pink/api/server/vBg9SNN8?style=flat)](https://discord.gg/vBg9SNN8)
+[![Discord](https://dcbadge.limes.pink/api/server/7aVPCcVh?style=flat)](https://discord.gg/7aVPCcVh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI version](https://img.shields.io/pypi/v/agent-governance-toolkit?label=PyPI)](https://pypi.org/project/agent-governance-toolkit/)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-sdk?label=npm)](https://www.npmjs.com/package/@microsoft/agent-governance-sdk)
@@ -30,6 +30,8 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/microsoft/agent-governance-toolkit/badge)](https://scorecard.dev/viewer/?uri=github.com/microsoft/agent-governance-toolkit)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12085/badge)](https://www.bestpractices.dev/projects/12085)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_Top_10-10%2F10_Covered-blue)](docs/compliance/owasp-agentic-top10-architecture.md)
+[![AARM Extended](https://img.shields.io/badge/AARM-Extended_(R1–R9)-brightgreen)](https://aarm.dev/builders/agent-governance-toolkit-microsoft)
+[![ATF](https://img.shields.io/badge/ATF-All_5_Elements-brightgreen)](https://agentictrustframework.ai/ecosystem)
 
 > [!IMPORTANT]
 > **Public Preview** -- production-quality public preview releases. May have breaking changes before GA.
@@ -236,7 +238,7 @@ Every layer is optional. Start with `govern()` and add layers as your risk profi
 | [**Agent Compliance**](agent-governance-python/agent-compliance/) | OWASP verification, policy linting, integrity checks |
 | [**Agent Marketplace**](agent-governance-python/agent-marketplace/) | Plugin governance and trust scoring |
 | [**Agent Lightning**](agent-governance-python/agent-lightning/) | RL training governance with violation penalties |
-| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, commitment anchoring |
+| [**Agent Hypervisor**](agent-governance-python/agent-hypervisor/) | Execution audit, delta engine, in-memory commitment tracking, command denylist enforcement |
 
 ### Additional Capabilities
 
@@ -268,14 +270,14 @@ All five language SDKs implement core governance (policy, identity, trust, audit
 See **[Language Package Matrix](docs/PACKAGE-FEATURE-MATRIX.md)** for detailed per-language coverage.
 
 <details>
-<summary><b>Python distributions (v4.0.0 — consolidated)</b></summary>
+<summary><b>Python distributions (v4.1.0 — consolidated)</b></summary>
 
-As of v4.0.0, 45 packages have been consolidated into 5 top-level distributions:
+As of v4.1.0, 45 packages have been consolidated into 5 top-level distributions:
 
 | Distribution | PyPI | What's included |
 |--------------|------|-----------------|
 | `agent-governance-toolkit-core` | [`agent-governance-toolkit-core`](https://pypi.org/project/agent-governance-toolkit-core/) | Policy engine, capability model, audit, MCP gateway, zero-trust identity, trust scoring, A2A/MCP/IATP bridges |
-| `agent-governance-toolkit-runtime` | [`agent-governance-toolkit-runtime`](https://pypi.org/project/agent-governance-toolkit-runtime/) | Privilege rings, saga orchestration, termination control, execution plan validation |
+| `agent-governance-toolkit-runtime` | [`agent-governance-toolkit-runtime`](https://pypi.org/project/agent-governance-toolkit-runtime/) | Privilege rings, saga orchestration, termination control, execution plan validation, command denylist enforcement |
 | `agent-governance-toolkit-sre` | [`agent-governance-toolkit-sre`](https://pypi.org/project/agent-governance-toolkit-sre/) | SLOs, error budgets, chaos engineering, circuit breakers |
 | `agent-governance-toolkit-cli` | [`agent-governance-toolkit-cli`](https://pypi.org/project/agent-governance-toolkit-cli/) | `agt` CLI, OWASP verification, integrity checks, policy linting |
 | `agent-governance-toolkit[full]` | [`agent-governance-toolkit`](https://pypi.org/project/agent-governance-toolkit/) | Meta-package installing all of the above |
@@ -362,6 +364,8 @@ Every major component has a formal RFC 2119 specification with conformance tests
 | [NIST AI RMF 1.0](docs/compliance/nist-ai-rmf-alignment.md) | Full GOVERN, MAP, MEASURE, MANAGE alignment |
 | [EU AI Act](docs/compliance/) | Compliance mapping with automated evidence |
 | [SOC 2](docs/compliance/soc2-mapping.md) | Control mapping with audit trail export |
+| [AARM Extended](https://aarm.dev/builders/agent-governance-toolkit-microsoft) | All R1–R9 requirements satisfied; verified Jun 14, 2026 |
+| [ATF](https://agentictrustframework.ai/ecosystem) | All five elements mapped: Agent Mesh (identity), Agent OS (policy), Agent Compliance (governance), Agent Runtime (sandboxing), Agent SRE (incident response) |
 
 ---
 
@@ -391,7 +395,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 | **Architecture** | [System Design](docs/ARCHITECTURE.md) · [Threat Model](docs/security/threat-model.md) · [ADRs](docs/adr/) (29) |
 | **Specifications** | [All Specs](docs/specs/) (10 formal specs, 992 conformance tests) |
 | **API Reference** | [Agent OS](agent-governance-python/agent-os/README.md) · [AgentMesh](agent-governance-python/agent-mesh/README.md) · [Agent SRE](agent-governance-python/agent-sre/README.md) |
-| **Compliance** | [OWASP](docs/compliance/owasp-agentic-top10-architecture.md) · [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md) |
+| **Compliance** | [OWASP](docs/compliance/owasp-agentic-top10-architecture.md) · [EU AI Act](docs/compliance/) · [NIST AI RMF](docs/compliance/nist-ai-rmf-alignment.md) · [SOC 2](docs/compliance/soc2-mapping.md) · [AARM Extended](https://aarm.dev/builders/agent-governance-toolkit-microsoft) · [ATF](https://agentictrustframework.ai/ecosystem) |
 | **Deployment** | [Azure](docs/deployment/README.md) · [AWS](docs/deployment/README.md) · [GCP](docs/deployment/README.md) · [Docker Compose](docs/deployment/README.md) |
 | **Extensions** | [VS Code](agent-governance-typescript/agent-os-vscode/) · [Framework Integrations](agent-governance-python/agentmesh-integrations/) |
 
@@ -399,7 +403,7 @@ See [Known Limitations](docs/LIMITATIONS.md) for honest design boundaries and re
 
 ## Contributing
 
-[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/vBg9SNN8) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+[Contributing Guide](CONTRIBUTING.md) · [Community](docs/COMMUNITY.md) · [Discord](https://discord.gg/7aVPCcVh) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
 **Using AGT?** Add your organization to [ADOPTERS.md](docs/ADOPTERS.md).
 

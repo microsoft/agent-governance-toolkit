@@ -93,7 +93,9 @@ class MarketplacePolicy(BaseModel):
         description="Per-organization MCP server policy overrides",
     )
 
-    def get_effective_policy(self, organization: str | None = None) -> MarketplacePolicy:
+    def get_effective_policy(
+        self, organization: str | None = None
+    ) -> MarketplacePolicy:
         """Resolve effective policy for an organization (base + org overrides).
 
         When *organization* is ``None`` or the org has no overrides, the base
@@ -111,7 +113,9 @@ class MarketplacePolicy(BaseModel):
             merged_types = list(set(merged_types + org.additional_allowed_plugin_types))
 
         # Merge MCP server policy if org has overrides
-        merged_mcp = org.mcp_server_overrides if org.mcp_server_overrides else self.mcp_servers
+        merged_mcp = (
+            org.mcp_server_overrides if org.mcp_server_overrides else self.mcp_servers
+        )
 
         # Pass org_policies / org_mcp_policies through so subsequent calls on
         # the returned object can still resolve per-org overrides for *other*
@@ -125,7 +129,9 @@ class MarketplacePolicy(BaseModel):
             org_mcp_policies=self.org_mcp_policies,
         )
 
-    def get_effective_mcp_policy(self, organization: str | None = None) -> MCPServerPolicy:
+    def get_effective_mcp_policy(
+        self, organization: str | None = None
+    ) -> MCPServerPolicy:
         """Get effective MCP server policy for an organization.
 
         Org policies inherit from the base (enterprise) MCP policy.
@@ -161,7 +167,8 @@ class MarketplacePolicy(BaseModel):
                         "Org allowlist %r has no overlap with enterprise "
                         "allowlist %r; effective allowlist for this org is "
                         "empty (no servers will pass the allowlist check)",
-                        list(org.allowed), list(base.allowed),
+                        list(org.allowed),
+                        list(base.allowed),
                     )
             else:
                 merged_allowed = list(org.allowed)
@@ -261,9 +268,7 @@ def evaluate_plugin_compliance(
     mcp_policy = policy.get_effective_mcp_policy(organization)
 
     if mcp_policy.require_declaration and mcp_servers is None:
-        violations.append(
-            f"Plugin '{manifest.name}' must declare its MCP servers"
-        )
+        violations.append(f"Plugin '{manifest.name}' must declare its MCP servers")
 
     if mcp_servers is not None:
         if mcp_policy.mode == "allowlist" and mcp_policy.allowed:

@@ -414,7 +414,7 @@ agent-governance-python/agent-os/
 | [`observability`](modules/observability/) | 3 | `agent-os-observability` | Prometheus metrics + OpenTelemetry tracing | ⚠️ No tests |
 | [`nexus`](modules/nexus/) | — | *Not published* | Trust exchange network | 🔬 Prototype |
 | [`mcp-kernel-server`](modules/mcp-kernel-server/) | Int | `mcp-kernel-server` | MCP server for Claude Desktop | ⚠️ No tests |
-| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Joint Liability, Saga Orchestrator** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
+| [**`runtime`**](https://github.com/microsoft/agent-governance-toolkit) | **⭐** | `agentmesh-runtime` | **Execution supervisor — Execution Rings, Saga Orchestrator, Delta Audit** ([own repo](https://github.com/microsoft/agent-governance-toolkit)) | **✅ 184 tests** |
 
 ---
 
@@ -436,9 +436,9 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 │   Ring 3 (Sandbox)   ← Default for unknown agents          │
 │                                                            │
 │   ┌──────────┐  ┌───────────┐  ┌────────────────────────┐  │
-│   │  Joint    │  │  Semantic  │  │  Hash-Chained          │  │
-│   │ Liability │  │   Saga     │  │  Delta Audit Trail     │  │
-│   │  Engine   │  │ Orchestr.  │  │  (Tamper-Evident)      │  │
+│   │ Execution│  │   Saga     │  │  Hash-Chained          │  │
+│   │  Rings   │  │Orchestrator│  │  Delta Audit Trail     │  │
+│   │          │  │            │  │  (Tamper-Evident)      │  │
 │   └──────────┘  └───────────┘  └────────────────────────┘  │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -448,9 +448,8 @@ Just as OS runtimes isolate execution environments and enforce resource boundari
 | Feature | Description | Latency |
 |---------|-------------|---------|
 | **Execution Rings** | 4-level privilege model (Ring 0–3) based on trust score | **0.3μs** |
-| **Joint Liability** | High-trust agents vouch for low-trust agents with bonded reputation | **7μs** |
 | **Saga Orchestrator** | Multi-step transactions with timeout, retry, and auto-compensation | **151μs** |
-| **Delta Audit** | Hash-chained semantic diffs with blockchain commitment | **27μs** |
+| **Delta Audit** | Hash-chained semantic diffs | **27μs** |
 | **Full Pipeline** | Session + join + audit + saga + terminate | **268μs** |
 
 ### Quick Start
@@ -1131,7 +1130,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 Prompt-based guardrails ask the LLM to self-police, which is probabilistic. Agent OS enforces governance at the middleware level using deterministic policy engines and POSIX-inspired access controls. It controls what agents *can* do (capability-based), not just what they *should not* do (filter-based).
 
 **How does Agent OS work with other frameworks?**
-Agent OS integrates with 14+ frameworks via adapters. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `agentmesh-openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
+Agent OS integrates with 21 integration packages. Install the governance layer alongside your existing framework: use `langgraph-trust` for LangGraph, `agentmesh-openai-agents-trust` for OpenAI Agents, or the MCP server for any MCP-compatible client. Agent OS acts as a kernel layer underneath your agent framework.
 
 **What is the Agent Governance Ecosystem?**
 Agent OS is part of a suite of seven packages: Agent OS (policy engine), [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) (trust infrastructure), [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit) (execution supervisor), [Agent SRE](https://github.com/microsoft/agent-governance-toolkit) (reliability), [Agent Compliance](https://github.com/microsoft/agent-governance-toolkit) (regulatory compliance), [Agent Marketplace](https://github.com/microsoft/agent-governance-toolkit) (plugin lifecycle), and [Agent Lightning](https://github.com/microsoft/agent-governance-toolkit) (RL training governance). Together they provide 4,310+ tests across 17 modules.

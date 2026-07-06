@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import PurePosixPath
-from typing import Optional
 
 
 class IsolationLevel(str, Enum):
@@ -30,10 +29,6 @@ class IsolationLevel(str, Enum):
 
     @property
     def requires_vector_clocks(self) -> bool:
-        return self == IsolationLevel.SERIALIZABLE
-
-    @property
-    def requires_intent_locks(self) -> bool:
         return self == IsolationLevel.SERIALIZABLE
 
     @property
@@ -143,7 +138,7 @@ class SessionIsolationManager:
         self._scopes[session_id] = scope
         return scope
 
-    def get_scope(self, session_id: str) -> Optional[SessionScope]:
+    def get_scope(self, session_id: str) -> SessionScope | None:
         """Get the isolation scope for a session."""
         return self._scopes.get(session_id)
 
@@ -163,9 +158,7 @@ class SessionIsolationManager:
             return False  # Fail-closed: no scope = no access
         return scope.is_path_allowed(path)
 
-    def grant_cross_session_access(
-        self, session_id: str, target_session_id: str
-    ) -> bool:
+    def grant_cross_session_access(self, session_id: str, target_session_id: str) -> bool:
         """Grant one session access to another's data.
 
         Only works for READ_COMMITTED isolation.

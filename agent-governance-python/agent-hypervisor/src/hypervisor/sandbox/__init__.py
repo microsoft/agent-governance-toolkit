@@ -32,7 +32,7 @@ populated by ``docker/Dockerfile.sandbox``.  No system bin directories
 
 ALLOWED_BINARIES: tuple[str, ...] = (
     "python3",  # required interpreter for sandbox workloads
-    "python",   # python3 alias for compatibility
+    "python",  # python3 alias for compatibility
 )
 """Binaries intentionally present in ``MINIMAL_SANDBOX_PATH``.
 

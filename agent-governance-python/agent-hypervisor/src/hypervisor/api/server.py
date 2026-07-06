@@ -4,7 +4,7 @@
 FastAPI REST API server for the Agent Hypervisor.
 
 Exposes the hypervisor's core capabilities — sessions, rings, sagas,
-liability, events, and health — as a RESTful API with OpenAPI docs.
+events, and health — as a RESTful API with OpenAPI docs.
 
 Run with: uvicorn hypervisor.api.server:app
 """
@@ -24,17 +24,14 @@ from hypervisor.api.models import (
     AddStepRequest,
     AddStepResponse,
     AgentRingResponse,
-    CommitmentResponse,
     CreateSagaResponse,
     CreateSessionRequest,
     CreateSessionResponse,
-    CreateVouchRequest,
     EventResponse,
     EventStatsResponse,
     ExecuteStepResponse,
     JoinSessionRequest,
     JoinSessionResponse,
-    LiabilityExposureResponse,
     ParticipantInfo,
     RingCheckRequest,
     RingCheckResponse,
@@ -43,10 +40,8 @@ from hypervisor.api.models import (
     SessionDetailResponse,
     SessionListItem,
     StatsResponse,
-    VerifyCommitmentResponse,
     VerifyHistoryRequest,
     VerifyHistoryResponse,
-    VouchResponse,
 )
 from hypervisor.core import Hypervisor, ManagedSession
 from hypervisor.models import (
@@ -71,11 +66,10 @@ def _parse_cors_origins(raw: str) -> list[str]:
         if not origin:
             continue
         if origin == "*":
-            logger.warning(
-                "CORS origin '*' is not allowed with allow_credentials=True — skipping"
-            )
+            logger.warning("CORS origin '*' is not allowed with allow_credentials=True — skipping")
             continue
         from urllib.parse import urlparse
+
         parsed = urlparse(origin)
         if not parsed.scheme or not parsed.hostname:
             logger.warning("Invalid CORS origin (missing scheme or host): %s — skipping", origin)
@@ -85,6 +79,7 @@ def _parse_cors_origins(raw: str) -> list[str]:
         logger.warning("No valid CORS origins configured — falling back to localhost defaults")
         origins = ["http://localhost:3000", "http://localhost:8080"]
     return origins
+
 
 # ── Global state ────────────────────────────────────────────────────────────
 
@@ -127,6 +122,7 @@ def _participant_info(p: Any) -> ParticipantInfo:
 
 # ── Lifespan ────────────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """Initialize hypervisor on startup, clean up on shutdown."""
@@ -140,14 +136,15 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
 # ── App factory ─────────────────────────────────────────────────────────────
 
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     application = FastAPI(
         title="Agent Hypervisor API",
         description=(
             "REST API for the Agent Hypervisor — runtime supervisor for "
-            "multi-agent Shared Sessions with Execution Rings, Joint Liability, "
-            "Saga Orchestration, and Audit log audit trails."
+            "multi-agent Shared Sessions with Execution Rings, Saga Orchestration, "
+            "and audit trails."
         ),
         version=__version__,
         lifespan=lifespan,
@@ -155,7 +152,9 @@ def create_app() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=_parse_cors_origins(os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8080")),
+        allow_origins=_parse_cors_origins(
+            os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8080")
+        ),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -168,6 +167,7 @@ app = create_app()
 
 
 # ── Health ──────────────────────────────────────────────────────────────────
+
 
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict[str, str]:
@@ -189,12 +189,12 @@ async def get_stats() -> StatsResponse:
         active_sessions=len(hv.active_sessions),
         total_participants=total_participants,
         active_sagas=active_sagas,
-        total_vouches=hv.vouching.vouch_count,
         event_count=bus.event_count,
     )
 
 
 # ── Sessions ────────────────────────────────────────────────────────────────
+
 
 @app.post(
     "/api/v1/sessions",
@@ -210,7 +210,6 @@ async def create_session(req: CreateSessionRequest) -> CreateSessionResponse:
         max_duration_seconds=req.max_duration_seconds,
         min_eff_score=req.min_eff_score,
         enable_audit=req.enable_audit,
-        enable_blockchain_commitment=req.enable_blockchain_commitment,
     )
     managed = await _hv().create_session(config=config, creator_did=req.creator_did)
     return CreateSessionResponse(
@@ -250,10 +249,7 @@ async def get_session(session_id: str) -> SessionDetailResponse:
     """Get detailed session information including participants and sagas."""
     managed = _get_managed(session_id)
     sso = managed.sso
-    sagas = [
-        s.to_dict()
-        for s in managed.saga._sagas.values()
-    ]
+    sagas = [s.to_dict() for s in managed.saga._sagas.values()]
     return SessionDetailResponse(
         session_id=sso.session_id,
         state=sso.state.value,
@@ -330,6 +326,7 @@ async def terminate_session(session_id: str) -> dict[str, Any]:
 
 # ── Rings ───────────────────────────────────────────────────────────────────
 
+
 @app.get(
     "/api/v1/sessions/{session_id}/rings",
     response_model=RingDistributionResponse,
@@ -394,6 +391,7 @@ async def check_ring_access(req: RingCheckRequest) -> RingCheckResponse:
 
 
 # ── Sagas ───────────────────────────────────────────────────────────────────
+
 
 @app.post(
     "/api/v1/sessions/{session_id}/sagas",
@@ -522,12 +520,19 @@ async def execute_saga_step(saga_id: str, step_id: str) -> ExecuteStepResponse:
         saga = managed.saga.get_saga(saga_id)
         if saga:
             try:
+
                 async def _noop_executor() -> dict[str, str]:
                     return {"status": "executed_via_api"}
 
                 await managed.saga.execute_step(saga_id, step_id, _noop_executor)
             except Exception as e:
-                logger.debug("execute_step failed for saga %s step %s: %s", saga_id, step_id, e, exc_info=True)
+                logger.debug(
+                    "execute_step failed for saga %s step %s: %s",
+                    saga_id,
+                    step_id,
+                    e,
+                    exc_info=True,
+                )
                 raise HTTPException(status_code=400, detail=str(e))
             # Find the step to return its state
             for st in saga.steps:
@@ -541,102 +546,8 @@ async def execute_saga_step(saga_id: str, step_id: str) -> ExecuteStepResponse:
     raise HTTPException(status_code=404, detail=f"Saga {saga_id} or step {step_id} not found")
 
 
-# ── Liability ───────────────────────────────────────────────────────────────
-
-@app.post(
-    "/api/v1/sessions/{session_id}/sponsor",
-    response_model=VouchResponse,
-    status_code=201,
-    tags=["Liability"],
-)
-async def create_vouch(session_id: str, req: CreateVouchRequest) -> VouchResponse:
-    """Create a sponsorship bond between agents in a session."""
-    hv = _hv()
-    _get_managed(session_id)  # verify session exists
-    try:
-        record = hv.vouching.vouch(
-            voucher_did=req.voucher_did,
-            vouchee_did=req.vouchee_did,
-            session_id=session_id,
-            voucher_sigma=req.voucher_sigma,
-            bond_pct=req.bond_pct,
-        )
-    except Exception as e:
-        logger.debug("create_vouch failed for session %s: %s", session_id, e, exc_info=True)
-        raise HTTPException(status_code=400, detail=str(e))
-    return VouchResponse(
-        vouch_id=record.vouch_id,
-        voucher_did=record.voucher_did,
-        vouchee_did=record.vouchee_did,
-        session_id=record.session_id,
-        bonded_amount=record.bonded_amount,
-        bonded_sigma_pct=record.bonded_sigma_pct,
-        is_active=record.is_active,
-    )
-
-
-@app.get(
-    "/api/v1/sessions/{session_id}/sponsors",
-    response_model=list[VouchResponse],
-    tags=["Liability"],
-)
-async def list_vouches(session_id: str) -> list[VouchResponse]:
-    """List all sponsors in a session."""
-    _get_managed(session_id)
-    hv = _hv()
-    return [
-        VouchResponse(
-            vouch_id=v.vouch_id,
-            voucher_did=v.voucher_did,
-            vouchee_did=v.vouchee_did,
-            session_id=v.session_id,
-            bonded_amount=v.bonded_amount,
-            bonded_sigma_pct=v.bonded_sigma_pct,
-            is_active=v.is_active,
-        )
-        for v in hv.vouching._vouches.values()
-        if v.session_id == session_id
-    ]
-
-
-@app.get(
-    "/api/v1/agents/{agent_did}/liability",
-    response_model=LiabilityExposureResponse,
-    tags=["Liability"],
-)
-async def get_agent_liability(agent_did: str) -> LiabilityExposureResponse:
-    """Get an agent's liability exposure across all sessions."""
-    hv = _hv()
-    vouches_given = []
-    vouches_received = []
-    total_exposure = 0.0
-
-    for v in hv.vouching._vouches.values():
-        vr = VouchResponse(
-            vouch_id=v.vouch_id,
-            voucher_did=v.voucher_did,
-            vouchee_did=v.vouchee_did,
-            session_id=v.session_id,
-            bonded_amount=v.bonded_amount,
-            bonded_sigma_pct=v.bonded_sigma_pct,
-            is_active=v.is_active,
-        )
-        if v.voucher_did == agent_did:
-            vouches_given.append(vr)
-            if v.is_active and not v.is_expired:
-                total_exposure += v.bonded_amount
-        if v.vouchee_did == agent_did:
-            vouches_received.append(vr)
-
-    return LiabilityExposureResponse(
-        agent_did=agent_did,
-        vouches_given=vouches_given,
-        vouches_received=vouches_received,
-        total_exposure=total_exposure,
-    )
-
-
 # ── Events ──────────────────────────────────────────────────────────────────
+
 
 @app.get("/api/v1/events", response_model=list[EventResponse], tags=["Events"])
 async def query_events(
@@ -682,63 +593,14 @@ async def get_event_stats() -> EventStatsResponse:
     )
 
 
-# ── Audit endpoints ─────────────────────────────────────────────────────────
-
-@app.get("/api/v1/audit/commitments", response_model=list[CommitmentResponse], tags=["Audit"])
-async def list_commitments():
-    """List all session commitments."""
-    engine = _hv().commitment_engine
-    return [
-        CommitmentResponse(
-            session_id=r.session_id,
-            hash_chain_root=r.hash_chain_root,
-            participant_dids=r.participant_dids,
-            delta_count=r.delta_count,
-            committed_at=r.committed_at.isoformat(),
-            committed_to=r.committed_to,
-            blockchain_tx_id=r.blockchain_tx_id,
-        )
-        for r in engine._commitments.values()
-    ]
-
-@app.get("/api/v1/audit/commitments/{session_id}", response_model=CommitmentResponse, tags=["Audit"])
-async def get_commitment(session_id: str):
-    """Get commitment for a specific session."""
-    engine = _hv().commitment_engine
-    record = engine.get_commitment(session_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Commitment not found")
-    return CommitmentResponse(
-        session_id=record.session_id,
-        hash_chain_root=record.hash_chain_root,
-        participant_dids=record.participant_dids,
-        delta_count=record.delta_count,
-        committed_at=record.committed_at.isoformat(),
-        committed_to=record.committed_to,
-        blockchain_tx_id=record.blockchain_tx_id,
-    )
-
-@app.post("/api/v1/audit/verify/{session_id}", response_model=VerifyCommitmentResponse, tags=["Audit"])
-async def verify_commitment(session_id: str, expected_root: str = Query(...)):
-    """Verify a session's audit log root matches its commitment."""
-    engine = _hv().commitment_engine
-    record = engine.get_commitment(session_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Commitment not found")
-    valid = engine.verify(session_id, expected_root)
-    return VerifyCommitmentResponse(
-        session_id=session_id,
-        valid=valid,
-        committed_root=record.hash_chain_root,
-        expected_root=expected_root,
-    )
-
 # ── Verification endpoints ──────────────────────────────────────────────────
+
 
 @app.post("/api/v1/verify/history", response_model=VerifyHistoryResponse, tags=["Verification"])
 async def verify_agent_history(request: VerifyHistoryRequest):
     """Verify an agent's transaction history."""
     from hypervisor.verification.history import TransactionRecord
+
     records = [
         TransactionRecord(
             session_id=r.session_id,
@@ -759,6 +621,7 @@ async def verify_agent_history(request: VerifyHistoryRequest):
         is_trustworthy=result.is_trustworthy,
         cached=result.cached,
     )
+
 
 @app.delete("/api/v1/verify/cache/{agent_did}", tags=["Verification"])
 async def clear_verification_cache(agent_did: str):

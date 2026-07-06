@@ -457,9 +457,6 @@ class TestQuorumApproval:
         request = handler.escalate("agent-1", "deploy", "needs review")
         # One approval — not enough for quorum of 2
         queue.approve(request.request_id, approver="admin1")
-        # Manually add vote tracking
-        req = queue.get_decision(request.request_id)
-        req.votes.append(("admin1", "ALLOW", req.resolved_at))
         decision = handler.resolve(request.request_id)
         # With only 1 vote and quorum=2, should timeout-deny
         assert decision == EscalationDecision.DENY
@@ -474,9 +471,7 @@ class TestQuorumApproval:
         )
         request = handler.escalate("agent-1", "deploy", "needs review")
         queue.approve(request.request_id, approver="admin1")
-        req = queue.get_decision(request.request_id)
-        req.votes.append(("admin1", "ALLOW", req.resolved_at))
-        req.votes.append(("admin2", "ALLOW", req.resolved_at))
+        queue.approve(request.request_id, approver="admin2")
         decision = handler.resolve(request.request_id)
         assert decision == EscalationDecision.ALLOW
 
@@ -490,8 +485,6 @@ class TestQuorumApproval:
         )
         request = handler.escalate("agent-1", "deploy", "needs review")
         queue.deny(request.request_id, approver="sec-team")
-        req = queue.get_decision(request.request_id)
-        req.votes.append(("sec-team", "DENY", req.resolved_at))
         decision = handler.resolve(request.request_id)
         assert decision == EscalationDecision.DENY
 

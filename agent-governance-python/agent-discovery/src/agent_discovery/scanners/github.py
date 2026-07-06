@@ -24,7 +24,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..models import (
@@ -132,7 +132,10 @@ async def _request_with_backoff(client: Any, method: str, url: str, **kwargs: An
             if attempt < 3:
                 logger.warning(
                     "Rate limited (HTTP %d) on %s, retrying in %ds (attempt %d/4)",
-                    resp.status_code, url, wait, attempt + 1,
+                    resp.status_code,
+                    url,
+                    wait,
+                    attempt + 1,
                 )
                 await asyncio.sleep(wait)
                 delay = min(delay * 2, _BACKOFF_MAX)
@@ -212,7 +215,7 @@ class GitHubScanner(BaseScanner):
                 except Exception as e:
                     result.errors.append(f"Error scanning {repo}: {e}")
 
-        result.completed_at = datetime.now(timezone.utc)
+        result.completed_at = datetime.now(UTC)
         return result
 
     async def _list_org_repos(self, client: Any, org: str) -> list[str]:
@@ -221,7 +224,8 @@ class GitHubScanner(BaseScanner):
         page = 1
         while True:
             resp = await _request_with_backoff(
-                client, "get",
+                client,
+                "get",
                 f"/orgs/{org}/repos",
                 params={"per_page": 100, "page": page, "type": "all"},
             )
@@ -247,7 +251,8 @@ class GitHubScanner(BaseScanner):
 
         # Fetch repo file tree in one call (recursive)
         resp = await _request_with_backoff(
-            client, "get",
+            client,
+            "get",
             f"/repos/{repo}/git/trees/HEAD",
             params={"recursive": "1"},
         )
@@ -321,9 +326,7 @@ class GitHubScanner(BaseScanner):
                             fingerprint=fingerprint,
                             name=f"{dep['type']} dependency in {repo}",
                             agent_type=dep["type"],
-                            description=(
-                                f"Dependency '{dep['pattern']}' found in {dep_file}"
-                            ),
+                            description=(f"Dependency '{dep['pattern']}' found in {dep_file}"),
                             merge_keys=merge_keys,
                             tags={"repo": repo, "dep_file": dep_file},
                         )

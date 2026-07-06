@@ -47,11 +47,12 @@
     { "pattern": "huggingface\\.co/datasets/microsoft" },
     { "pattern": "datatracker\\.ietf\\.org" },
     { "pattern": "ExternalPlatform\\.dev" },
+    { "pattern": "github\\.com/agentrust-io" },
     { "pattern": "arxiv\\.org" },
     { "pattern": "genai\\.owasp\\.org" },
     { "pattern": "learn\\.microsoft\\.com" },
     { "pattern": "microsoft\\.com/en-us/security/blog" },
-    { "pattern": "dcbadge\\.limes\\.pink/api/server/vBg9SNN8" },
+    { "pattern": "dcbadge\\.limes\\.pink/api/server/7aVPCcVh" },
     { "pattern": "agent-governance-python/agent-lightning/pull" },
     { "pattern": "azure-container-apps/blob" },
     { "pattern": "^(?!https?://|mailto:|#)" }

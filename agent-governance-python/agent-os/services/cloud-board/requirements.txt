@@ -6,7 +6,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.27.1
 
 # Async HTTP
-aiohttp==3.14.0
+aiohttp==3.14.1
 httpx==0.27.0
 
 # Data Validation
@@ -22,7 +22,7 @@ pydantic==2.10.3
 # aiocache>=0.12.0
 
 # Cryptography
-cryptography==46.0.7  # CVE fix: subgroup attack on SECT curves
+cryptography==48.0.1  # CVE fix: subgroup attack on SECT curves
 pynacl==1.6.2
 
 # Observability

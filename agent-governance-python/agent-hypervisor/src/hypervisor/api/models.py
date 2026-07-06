@@ -13,6 +13,7 @@ from hypervisor.models import ConsistencyMode
 
 # ── Session models ──────────────────────────────────────────────────────────
 
+
 class CreateSessionRequest(BaseModel):
     """Request body for creating a new session."""
 
@@ -22,7 +23,6 @@ class CreateSessionRequest(BaseModel):
     max_duration_seconds: int = 3600
     min_eff_score: float = 0.60
     enable_audit: bool = True
-    enable_blockchain_commitment: bool = False
 
 
 class ParticipantInfo(BaseModel):
@@ -88,6 +88,7 @@ class JoinSessionResponse(BaseModel):
 
 # ── Ring models ─────────────────────────────────────────────────────────────
 
+
 class RingDistributionResponse(BaseModel):
     """Ring distribution across session participants."""
 
@@ -127,6 +128,7 @@ class RingCheckResponse(BaseModel):
 
 
 # ── Saga models ─────────────────────────────────────────────────────────────
+
 
 class CreateSagaResponse(BaseModel):
     """Response after creating a saga."""
@@ -178,40 +180,8 @@ class ExecuteStepResponse(BaseModel):
     error: str | None = None
 
 
-# ── Liability models ────────────────────────────────────────────────────────
-
-class CreateVouchRequest(BaseModel):
-    """Request body for creating a sponsor."""
-
-    voucher_did: str = Field(..., description="DID of the sponsorship agent")
-    vouchee_did: str = Field(..., description="DID of the agent being vouched for")
-    voucher_sigma: float = Field(..., description="Sponsor's raw reputation score")
-    bond_pct: float | None = None
-    expiry: str | None = None
-
-
-class VouchResponse(BaseModel):
-    """Response after creating a sponsor."""
-
-    vouch_id: str
-    voucher_did: str
-    vouchee_did: str
-    session_id: str
-    bonded_amount: float
-    bonded_sigma_pct: float
-    is_active: bool
-
-
-class LiabilityExposureResponse(BaseModel):
-    """Agent's liability exposure across sessions."""
-
-    agent_did: str
-    vouches_given: list[VouchResponse]
-    vouches_received: list[VouchResponse]
-    total_exposure: float
-
-
 # ── Event models ────────────────────────────────────────────────────────────
+
 
 class EventResponse(BaseModel):
     """Serialized hypervisor event."""
@@ -234,6 +204,7 @@ class EventStatsResponse(BaseModel):
 
 # ── Stats models ────────────────────────────────────────────────────────────
 
+
 class StatsResponse(BaseModel):
     """Overall hypervisor statistics."""
 
@@ -242,28 +213,11 @@ class StatsResponse(BaseModel):
     active_sessions: int
     total_participants: int
     active_sagas: int
-    total_vouches: int
     event_count: int
 
 
-# ── Audit models ────────────────────────────────────────────────────────────
-
-class CommitmentResponse(BaseModel):
-    session_id: str
-    hash_chain_root: str
-    participant_dids: list[str]
-    delta_count: int
-    committed_at: str
-    committed_to: str = "local"
-    blockchain_tx_id: str | None = None
-
-class VerifyCommitmentResponse(BaseModel):
-    session_id: str
-    valid: bool
-    committed_root: str
-    expected_root: str
-
 # ── Verification models ─────────────────────────────────────────────────────
+
 
 class TransactionInput(BaseModel):
     session_id: str
@@ -271,9 +225,11 @@ class TransactionInput(BaseModel):
     timestamp: datetime
     participant_count: int = 0
 
+
 class VerifyHistoryRequest(BaseModel):
     agent_did: str
     transactions: list[TransactionInput]
+
 
 class VerifyHistoryResponse(BaseModel):
     agent_did: str

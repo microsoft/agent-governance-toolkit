@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agent-governance-claude-code",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "description": "Public Preview — Claude Code governance plugin for Agent Governance Toolkit developer protection policies",
   "type": "module",
   "files": [
@@ -40,6 +40,9 @@
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-claude-code",
   "dependencies": {
     "@microsoft/agent-governance-sdk": "4.0.0"
+  },
+  "overrides": {
+    "js-yaml": "4.2.0"
   },
   "engines": {
     "node": ">=22.0.0"

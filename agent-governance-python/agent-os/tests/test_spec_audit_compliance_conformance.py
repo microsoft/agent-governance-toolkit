@@ -99,7 +99,6 @@ from agentmesh.governance.decision_bom import (
 # ---------------------------------------------------------------------------
 try:
     from hypervisor.audit.delta import DeltaEngine, SemanticDelta, VFSChange
-    from hypervisor.audit.commitment import CommitmentEngine, CommitmentRecord
     from hypervisor.observability.event_bus import (
         EventType,
         HypervisorEvent,
@@ -1087,10 +1086,10 @@ class TestDecisionBOM(unittest.TestCase):
 
 
 # ===================================================================
-# S18 -- Hypervisor Audit (Delta + Commitment)
+# S18 -- Hypervisor Audit (Delta)
 # ===================================================================
 class TestHypervisorAudit(unittest.TestCase):
-    """Conformance tests for hypervisor audit delta and commitment (spec S18)."""
+    """Conformance tests for hypervisor audit delta (spec S18)."""
 
     def test_vfs_change_fields(self):
         """S18.1 -- VFSChange must have path, operation, content_hash fields."""
@@ -1137,56 +1136,6 @@ class TestHypervisorAudit(unittest.TestCase):
         valid, err = engine.verify_chain()
         self.assertTrue(valid)
         self.assertIsNone(err)
-
-    def test_commitment_engine_commit(self):
-        """S18.7 -- CommitmentEngine.commit must return a CommitmentRecord."""
-        engine = CommitmentEngine()
-        record = engine.commit(
-            session_id="sess1",
-            hash_chain_root="abc123",
-            participant_dids=["did:a1"],
-            delta_count=5,
-        )
-        self.assertIsInstance(record, CommitmentRecord)
-        self.assertEqual(record.session_id, "sess1")
-
-    def test_commitment_verify(self):
-        """S18.8 -- CommitmentEngine.verify must return bool."""
-        engine = CommitmentEngine()
-        engine.commit(
-            session_id="sess1",
-            hash_chain_root="abc",
-            participant_dids=["did:a"],
-            delta_count=1,
-        )
-        result = engine.verify(session_id="sess1", expected_root="abc")
-        self.assertIsInstance(result, bool)
-
-    def test_commitment_get(self):
-        """S18.9 -- get_commitment must return record or None."""
-        engine = CommitmentEngine()
-        engine.commit(
-            session_id="sess_get",
-            hash_chain_root="root",
-            participant_dids=["did:a"],
-            delta_count=1,
-        )
-        record = engine.get_commitment("sess_get")
-        self.assertIsNotNone(record)
-        self.assertEqual(record.session_id, "sess_get")
-
-    def test_commitment_batch(self):
-        """S18.10 -- queue_for_batch and flush_batch must work."""
-        engine = CommitmentEngine()
-        record = engine.commit(
-            session_id="batch1",
-            hash_chain_root="root1",
-            participant_dids=["did:a"],
-            delta_count=1,
-        )
-        engine.queue_for_batch(record)
-        flushed = engine.flush_batch()
-        self.assertIsInstance(flushed, list)
 
 
 # ===================================================================
@@ -1493,25 +1442,6 @@ class TestCrossComponentCorrelation(unittest.TestCase):
             changes=[VFSChange(path="/f.txt", operation="write")],
         )
         self.assertEqual(mesh_entry.agent_did, delta.agent_did)
-
-    def test_audit_log_and_commitment_chain(self):
-        """S21.4 -- AuditLog entries must link to CommitmentEngine via hash chain."""
-        log = AuditLog()
-        log.log(event_type="action", agent_did="did:a1", action="read")
-        log.log(event_type="action", agent_did="did:a1", action="write")
-        valid, err = log.verify_integrity()
-        self.assertTrue(valid)
-
-        commitment_engine = CommitmentEngine()
-        # In a real flow, the root hash would come from the Merkle chain
-        # Here we verify the commitment engine accepts a hash and session
-        record = commitment_engine.commit(
-            session_id="audit_session",
-            hash_chain_root="simulated_root_hash",
-            participant_dids=["did:a1"],
-            delta_count=2,
-        )
-        self.assertIsInstance(record, CommitmentRecord)
 
     def test_event_kind_maps_to_violation_category(self):
         """S21.5 -- GovernanceEventKind and ViolationCategory must be independently usable."""

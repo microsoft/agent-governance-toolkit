@@ -15,6 +15,10 @@ import {
   DoubleRatchet,
   SecureChannel,
 } from "../src/encryption";
+// Imported via the deep path (not the public barrel) because `kdf` is an
+// internal primitive exposed only for spec-conformance / cross-runtime
+// known-answer testing.
+import { kdf } from "../src/encryption/x3dh";
 
 function makeManager(): X3DHKeyManager {
   const priv = ed25519.utils.randomSecretKey();
@@ -190,6 +194,47 @@ describe("X3DHKeyManager", () => {
     const bundle = bob.getPublicBundle();
     delete (bundle as any).identityKeyEd;
     expect(() => alice.initiate(bundle)).toThrow("Missing or invalid Ed25519 identity key (identityKeyEd)");
+  });
+});
+
+// ── X3DH KDF (Signal §2.2 spec conformance) ──
+
+describe("X3DH KDF", () => {
+  // Fixed 96-byte input standing in for a 3-DH `dhConcat` (DH1‖DH2‖DH3).
+  const fixedIkm = new Uint8Array(96);
+  for (let i = 0; i < fixedIkm.length; i++) fixedIkm[i] = i & 0xff;
+
+  // Known-answer vector computed independently from the Signal X3DH spec
+  // formula — HKDF-SHA256(salt = 0x00 × 32, IKM = 0xFF×32 ‖ ikm,
+  // info = "AgentMesh_X3DH_v1", L = 32) — and cross-checked against the AGT
+  // Python SDK (agent-governance-python/.../encryption/x3dh.py, PR #1926),
+  // which produces the byte-identical key for the same input. This pins
+  // Python↔TypeScript parity: a regression to the legacy salt/IKM would
+  // still pass the intra-runtime "alice === bob" exchange tests above but
+  // would fail here.
+  const SPEC_VECTOR =
+    "f8682588506e56d9b602f353a83910760692d4939a18b8043305b82f705a5bfa";
+  // The pre-fix output (F passed as HKDF *salt*, bare ikm as IKM). Asserted
+  // as a guard so the spec vector can never silently equal the buggy one.
+  const LEGACY_VECTOR =
+    "4d1a12faac5d3f02cfbf818d22cb0fd421fc4f06705ff05aa90e4e069552e22b";
+
+  test("matches the cross-runtime spec known-answer vector", () => {
+    const key = Buffer.from(kdf(fixedIkm)).toString("hex");
+    expect(key).toBe(SPEC_VECTOR);
+  });
+
+  test("does not derive the legacy (FF-salt) key", () => {
+    const key = Buffer.from(kdf(fixedIkm)).toString("hex");
+    expect(key).not.toBe(LEGACY_VECTOR);
+  });
+
+  test("derives a 32-byte key", () => {
+    expect(kdf(fixedIkm).length).toBe(32);
+  });
+
+  test("is deterministic for a given input", () => {
+    expect(Buffer.from(kdf(fixedIkm)).equals(Buffer.from(kdf(fixedIkm)))).toBe(true);
   });
 });
 

@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_GROUPS = {
     "ring_engine": "hypervisor.providers.ring_engine",
-    "liability": "hypervisor.providers.liability",
     "saga_engine": "hypervisor.providers.saga_engine",
     "breach_detector": "hypervisor.providers.breach_detector",
     "session_manager": "hypervisor.providers.session_manager",
@@ -37,9 +36,7 @@ def _discover_provider(group: str) -> type | None:
             ep = next(iter(eps))
             provider_cls = ep.load()
             if not isinstance(provider_cls, type):
-                logger.warning(
-                    "Provider %s is not a class, skipping", ep.name
-                )
+                logger.warning("Provider %s is not a class, skipping", ep.name)
             else:
                 _provider_cache[group] = provider_cls
                 logger.info("Advanced provider loaded: %s from %s", ep.name, ep.value)
@@ -62,25 +59,8 @@ def get_ring_engine(**kwargs: Any):
         return provider(**kwargs)
 
     from hypervisor.rings.enforcer import RingEnforcer
+
     return RingEnforcer(**kwargs)
-
-
-def get_liability_engine(**kwargs: Any):
-    """Get the best available liability engine.
-
-    Advanced: Shapley-value fault attribution with vouch cascades.
-    Community: ``LiabilityMatrix`` from ``hypervisor.liability``.
-    """
-    provider = _discover_provider(PROVIDER_GROUPS["liability"])
-    if provider is not None:
-        return provider(**kwargs)
-
-    # Community fallback. The previous import targeted
-    # ``hypervisor.liability.engine.LiabilityEngine`` which does not
-    # exist in this tree; ``LiabilityMatrix`` is the real public-
-    # edition entry point.
-    from hypervisor.liability import LiabilityMatrix
-    return LiabilityMatrix(**kwargs)
 
 
 def get_saga_engine(**kwargs: Any):
@@ -97,6 +77,7 @@ def get_saga_engine(**kwargs: Any):
     # ``hypervisor.saga.engine.SagaOrchestrator`` which does not exist
     # in this tree; the real module is ``hypervisor.saga.orchestrator``.
     from hypervisor.saga.orchestrator import SagaOrchestrator
+
     return SagaOrchestrator(**kwargs)
 
 
@@ -111,6 +92,7 @@ def get_breach_detector(**kwargs: Any):
         return provider(**kwargs)
 
     from hypervisor.rings.breach_detector import RingBreachDetector
+
     return RingBreachDetector(**kwargs)
 
 

@@ -98,9 +98,7 @@ class TestAgentRateLimiter:
 
     def test_check_exceeds_limit(self):
         # Use tiny bucket to force exhaustion
-        limiter = AgentRateLimiter(
-            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
-        )
+        limiter = AgentRateLimiter(ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)})
         # First call consumes the single token
         limiter.check("a1", "s1", ExecutionRing.RING_3_SANDBOX)
         # Second call should fail (no refill since rate=0)
@@ -108,16 +106,12 @@ class TestAgentRateLimiter:
             limiter.check("a1", "s1", ExecutionRing.RING_3_SANDBOX)
 
     def test_try_check_returns_false_on_limit(self):
-        limiter = AgentRateLimiter(
-            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
-        )
+        limiter = AgentRateLimiter(ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)})
         assert limiter.try_check("a1", "s1", ExecutionRing.RING_3_SANDBOX) is True
         assert limiter.try_check("a1", "s1", ExecutionRing.RING_3_SANDBOX) is False
 
     def test_separate_agents_tracked_independently(self):
-        limiter = AgentRateLimiter(
-            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
-        )
+        limiter = AgentRateLimiter(ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)})
         assert limiter.check("a1", "s1", ExecutionRing.RING_3_SANDBOX) is True
         assert limiter.check("a2", "s1", ExecutionRing.RING_3_SANDBOX) is True
         assert limiter.tracked_agents == 2
@@ -143,9 +137,7 @@ class TestAgentRateLimiter:
         assert limiter.get_stats("unknown", "s1") is None
 
     def test_stats_track_rejections(self):
-        limiter = AgentRateLimiter(
-            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
-        )
+        limiter = AgentRateLimiter(ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)})
         limiter.check("a1", "s1", ExecutionRing.RING_3_SANDBOX)
         limiter.try_check("a1", "s1", ExecutionRing.RING_3_SANDBOX)
         stats = limiter.get_stats("a1", "s1")
@@ -168,16 +160,11 @@ class TestAgentRateLimiter:
 
         With a tuple key the two pairs are tracked independently.
         """
-        limiter = AgentRateLimiter(
-            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
-        )
+        limiter = AgentRateLimiter(ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)})
         # Drain the bucket for the first pair.
         limiter.check("did:key:abc", "s", ExecutionRing.RING_3_SANDBOX)
         # The colliding-on-string pair must still have its own token.
-        assert (
-            limiter.try_check("did:key", "abc:s", ExecutionRing.RING_3_SANDBOX)
-            is True
-        )
+        assert limiter.try_check("did:key", "abc:s", ExecutionRing.RING_3_SANDBOX) is True
         # And tracked-agents reflects two distinct buckets, not one.
         assert limiter.tracked_agents == 2
 
@@ -185,14 +172,9 @@ class TestAgentRateLimiter:
         """Mirror of the agent-side test: colon in ``session_id`` must not
         leak into a different ``(agent_did, session_id)`` pair.
         """
-        limiter = AgentRateLimiter(
-            ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)}
-        )
+        limiter = AgentRateLimiter(ring_limits={ExecutionRing.RING_3_SANDBOX: (0.0, 1.0)})
         limiter.check("a", "1:sess", ExecutionRing.RING_3_SANDBOX)
-        assert (
-            limiter.try_check("a:1", "sess", ExecutionRing.RING_3_SANDBOX)
-            is True
-        )
+        assert limiter.try_check("a:1", "sess", ExecutionRing.RING_3_SANDBOX) is True
         assert limiter.tracked_agents == 2
 
     def test_get_stats_isolation_under_colon_collision(self):

@@ -121,9 +121,7 @@ class TransactionHistoryVerifier:
             # Validate hash consistency
             inconsistencies = self._check_consistency(declared_history)
             status = (
-                VerificationStatus.SUSPICIOUS
-                if inconsistencies
-                else VerificationStatus.VERIFIED
+                VerificationStatus.SUSPICIOUS if inconsistencies else VerificationStatus.VERIFIED
             )
             result = VerificationResult(
                 agent_did=agent_did,
@@ -152,8 +150,7 @@ class TransactionHistoryVerifier:
         for tx in history:
             if tx.summary_hash in seen_hashes:
                 issues.append(
-                    f"Duplicate hash in sessions {seen_hashes[tx.summary_hash]} "
-                    f"and {tx.session_id}"
+                    f"Duplicate hash in sessions {seen_hashes[tx.summary_hash]} and {tx.session_id}"
                 )
             seen_hashes[tx.summary_hash] = tx.session_id
 
@@ -162,7 +159,7 @@ class TransactionHistoryVerifier:
             if history[i].timestamp < history[i - 1].timestamp:
                 issues.append(
                     f"Non-monotonic timestamps: {history[i].session_id} "
-                    f"predates {history[i-1].session_id}"
+                    f"predates {history[i - 1].session_id}"
                 )
 
         # Check for empty hashes

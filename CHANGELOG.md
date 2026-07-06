@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-06-25
+
+### Changed
+- **BREAKING: Monorepo-wide v5 alignment.** Bumped all first-party Python, TypeScript, .NET, and Rust packages from `4.1.0` to `5.0.0` (plus the top-level `VERSION` file, the `docs/ARCHITECTURE.md` banner, and the Claude Code plugin/marketplace manifests), and widened internal cross-package version caps from `<5.0` to `<6.0`. This aligns the released version line with the documentation, which already describes Agent Control Specification (ACS) as the AGT 5.0 policy layer (ACS landed in #2747). Third-party dependency caps, the independently-versioned `policy-engine/` ACS engine (`0.3.1-beta`), and the separately-tagged Go module are unchanged; lockfiles regenerate at publish time.
+
+### Added
+- **Agent sandbox nono provider** — added `NonoSandboxProvider` to `agt-sandbox`, a Linux/macOS kernel-enforced sandbox backend via the `nono-py` bindings (Landlock / Seatbelt) with policy-driven egress proxying, host-side `PolicyEvaluator` gating, AST pre-scan, and a runnable quickstart (`examples/quickstart/nono_sandbox_test.py`); install with `pip install "agt-sandbox[nono]"`. A non-empty `tool_allowlist` is refused at session creation (fail-closed) because nono has no in-sandbox tool channel — gate tools with policy rules on `tool_name` instead.
+- **Command denylist enforcement in RingEnforcer** — added `check_command()` method to `RingEnforcer` that validates subprocess commands against a global `DENIED_COMMANDS` list with case-insensitive matching and shell metacharacter stripping (`;`, `&`, `|`) to prevent injection bypasses. Includes comprehensive test coverage in `tests/unit/test_command_denylist.py`.
+
 ### Fixed
 - **agent-os policy evaluator** - folder-scoped backend decisions now include `policy`, `backend`, `evaluation_ms`, `context_snapshot`, and `timestamp` fields in `audit_entry`, matching the flat evaluation path and eliminating the parity gap when an external backend (OPA / Cedar) returns a decision under folder-scoped evaluation (#2861).
 

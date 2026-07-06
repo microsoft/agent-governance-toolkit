@@ -57,21 +57,27 @@ class TestHypervisorEventBus:
 
     def test_query_combined_filters(self):
         bus = HypervisorEventBus()
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            session_id="s1",
-            agent_did="a1",
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.RING_ASSIGNED,
-            session_id="s1",
-            agent_did="a2",
-        ))
-        bus.emit(HypervisorEvent(
-            event_type=EventType.SLASH_EXECUTED,
-            session_id="s1",
-            agent_did="a1",
-        ))
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                session_id="s1",
+                agent_did="a1",
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.RING_ASSIGNED,
+                session_id="s1",
+                agent_did="a2",
+            )
+        )
+        bus.emit(
+            HypervisorEvent(
+                event_type=EventType.AGENT_KILLED,
+                session_id="s1",
+                agent_did="a1",
+            )
+        )
 
         results = bus.query(
             event_type=EventType.RING_ASSIGNED,
@@ -83,13 +89,13 @@ class TestHypervisorEventBus:
     def test_subscriber_notification(self):
         bus = HypervisorEventBus()
         received = []
-        bus.subscribe(EventType.SLASH_EXECUTED, handler=lambda e: received.append(e))
+        bus.subscribe(EventType.AGENT_KILLED, handler=lambda e: received.append(e))
 
         bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))
-        bus.emit(HypervisorEvent(event_type=EventType.SLASH_EXECUTED))
+        bus.emit(HypervisorEvent(event_type=EventType.AGENT_KILLED))
 
         assert len(received) == 1
-        assert received[0].event_type == EventType.SLASH_EXECUTED
+        assert received[0].event_type == EventType.AGENT_KILLED
 
     def test_wildcard_subscriber(self):
         bus = HypervisorEventBus()
@@ -97,7 +103,7 @@ class TestHypervisorEventBus:
         bus.subscribe(event_type=None, handler=lambda e: received.append(e))
 
         bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))
-        bus.emit(HypervisorEvent(event_type=EventType.SLASH_EXECUTED))
+        bus.emit(HypervisorEvent(event_type=EventType.AGENT_KILLED))
 
         assert len(received) == 2
 
@@ -113,13 +119,13 @@ class TestHypervisorEventBus:
 
     def test_event_to_dict(self):
         event = HypervisorEvent(
-            event_type=EventType.SLASH_EXECUTED,
+            event_type=EventType.AGENT_KILLED,
             session_id="s1",
             agent_did="a1",
             payload={"severity": "high"},
         )
         d = event.to_dict()
-        assert d["event_type"] == "liability.slash_executed"
+        assert d["event_type"] == "security.agent_killed"
         assert d["session_id"] == "s1"
         assert d["payload"]["severity"] == "high"
 
@@ -283,10 +289,7 @@ class TestEventBusBounds:
                     )
                 )
 
-        threads = [
-            threading.Thread(target=producer, args=(t,))
-            for t in range(N_THREADS)
-        ]
+        threads = [threading.Thread(target=producer, args=(t,)) for t in range(N_THREADS)]
         for t in threads:
             t.start()
         for t in threads:
@@ -307,9 +310,7 @@ class TestEventBusBounds:
             seen.append(event)
             if event.event_type == EventType.SESSION_CREATED:
                 # Re-enter: handler emits a follow-up event.
-                bus.emit(
-                    HypervisorEvent(event_type=EventType.RING_ASSIGNED)
-                )
+                bus.emit(HypervisorEvent(event_type=EventType.RING_ASSIGNED))
 
         bus.subscribe(None, re_emit_on_first)
         bus.emit(HypervisorEvent(event_type=EventType.SESSION_CREATED))

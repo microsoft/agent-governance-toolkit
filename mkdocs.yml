@@ -141,7 +141,6 @@ nav:
     - Prompt Injection Detection: tutorials/09-prompt-injection-detection.md
     - Plugin Marketplace: tutorials/10-plugin-marketplace.md
     - Saga Orchestration: tutorials/11-saga-orchestration.md
-    - Liability & Attribution: tutorials/12-liability-and-attribution.md
     - Observability & Tracing: tutorials/13-observability-and-tracing.md
     - Kill Switch & Rate Limiting: tutorials/14-kill-switch-and-rate-limiting.md
     - RL Training Governance: tutorials/15-rl-training-governance.md
@@ -177,6 +176,7 @@ nav:
     - Private Endpoints: deployment/private-endpoints.md
   - Security:
     - Overview: security/index.md
+    - OWASP Compliance: security/owasp-compliance.md
     - Threat Model: security/threat-model.md
     - Security Scanning: security/scanning.md
     - Tenant Isolation: security/tenant-isolation.md
@@ -203,6 +203,9 @@ nav:
     - Post-Market Monitoring: compliance/post-market-monitoring.md
     - Record Retention Policy: compliance/record-retention-policy.md
     - Data Provenance Model: compliance/data-provenance-model.md
+  - Conformance: conformance.md
+  - Studio:
+    - Engine API Contract: studio/engine-api-contract.md
   - Specifications:
     - "Agent OS Policy Engine": specs/AGENT-OS-POLICY-ENGINE-1.0.md
     - "AgentMesh Identity & Trust": specs/AGENTMESH-IDENTITY-TRUST-1.0.md

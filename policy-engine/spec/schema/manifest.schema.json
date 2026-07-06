@@ -211,6 +211,46 @@
               "type": "string",
               "minLength": 1
             },
+            "bundle_url": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "url"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^https://"
+                },
+                "integrity": {
+                  "type": "string",
+                  "pattern": "^sha256-[A-Za-z0-9+/_=-]+$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[A-Fa-f0-9]{64}$"
+                }
+              },
+              "anyOf": [
+                {
+                  "required": [
+                    "integrity"
+                  ]
+                },
+                {
+                  "required": [
+                    "sha256"
+                  ]
+                }
+              ],
+              "not": {
+                "required": [
+                  "integrity",
+                  "sha256"
+                ]
+              }
+            },
             "data_paths": {
               "$ref": "#/$defs/string_array"
             },
@@ -401,6 +441,50 @@
         "system_prompt": {
           "type": "string",
           "minLength": 1
+        },
+        "system_prompt_file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "system_prompt_url": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^https://"
+            },
+            "integrity": {
+              "type": "string",
+              "pattern": "^sha256-[A-Za-z0-9+/_=-]+$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[A-Fa-f0-9]{64}$"
+            }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "integrity"
+              ]
+            },
+            {
+              "required": [
+                "sha256"
+              ]
+            }
+          ],
+          "not": {
+            "required": [
+              "integrity",
+              "sha256"
+            ]
+          }
         },
         "timeout_ms": {
           "type": "integer",

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -101,6 +101,18 @@ class ConfigScanner(BaseScanner):
         return errors
 
     async def scan(self, **kwargs: Any) -> ScanResult:
+        """Execute the configuration scan.
+
+        Walks the provided directories looking for agent framework configuration
+        files, MCP server setups, and Docker/Compose files referencing agent images.
+
+        Args:
+            paths: List of directory paths to scan (default: ["."]).
+            max_depth: Maximum directory depth to traverse (default: 10).
+
+        Returns:
+            ScanResult containing discovered agents, any errors, and metadata.
+        """
         result = ScanResult(scanner_name=self.name)
         paths: list[str] = kwargs.get("paths", ["."])
         max_depth: int = kwargs.get("max_depth", 10)
@@ -118,7 +130,7 @@ class ConfigScanner(BaseScanner):
                 result.errors.append(f"Permission denied: {e}")
 
         result.scanned_targets = len(paths)
-        result.completed_at = datetime.now(timezone.utc)
+        result.completed_at = datetime.now(UTC)
         return result
 
     def _walk_directory(self, root: Path, max_depth: int) -> list[DiscoveredAgent]:
@@ -171,9 +183,9 @@ class ConfigScanner(BaseScanner):
                 if filename in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml"):
                     full_path = Path(dirpath) / filename
                     try:
-                        content = full_path.read_text(
-                            encoding="utf-8", errors="replace"
-                        )[:MAX_FILE_READ_BYTES]
+                        content = full_path.read_text(encoding="utf-8", errors="replace")[
+                            :MAX_FILE_READ_BYTES
+                        ]
                         for pattern in DOCKER_AGENT_PATTERNS:
                             match = pattern.search(content)
                             if match:
@@ -188,8 +200,7 @@ class ConfigScanner(BaseScanner):
                                     name=f"Containerized agent at {rel_dir / filename}",
                                     agent_type=match.group(0).lower(),
                                     description=(
-                                        f"Agent reference in {filename}: "
-                                        f"'{match.group(0)}'"
+                                        f"Agent reference in {filename}: '{match.group(0)}'"
                                     ),
                                     merge_keys=merge_keys,
                                     tags={
@@ -202,9 +213,7 @@ class ConfigScanner(BaseScanner):
                                         scanner=self.name,
                                         basis=DetectionBasis.CONFIG_FILE,
                                         source=str(full_path),
-                                        detail=(
-                                            f"Agent pattern '{match.group(0)}' in {filename}"
-                                        ),
+                                        detail=(f"Agent pattern '{match.group(0)}' in {filename}"),
                                         raw_data={"file": str(full_path)},
                                         confidence=0.70,
                                     )

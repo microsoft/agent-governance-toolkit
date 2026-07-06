@@ -1,4 +1,5 @@
 agent-os-kernel>=3.5.0
-cedarling_agentmesh>=3.5.0
+# cedarling-agentmesh is not yet published to PyPI. Install it from source:
+#   pip install -e ../../agent-governance-python/agentmesh-integrations/cedarling-agentmesh
 
 cedarling-python>=0.0.4

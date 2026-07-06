@@ -62,6 +62,29 @@ class TestRealCryptoSignAndVerify:
         assert is_valid, f"Verification failed: {error}"
         assert error is None
 
+    def test_verification_fails_closed_without_crypto_library(
+        self, keypair, validator_with_key, monkeypatch
+    ):
+        """Without the cryptography library, signature verification MUST fail
+        closed. A validly-signed attestation cannot be checked, so it must not
+        be accepted (regression: it previously returned valid, accepting any
+        unsigned or forged attestation)."""
+        priv_b64, _ = keypair
+        v = validator_with_key
+
+        attestation = v.create_attestation(
+            agent_id="agent-001",
+            codebase_hash="00112233",
+            config_hash="44556677",
+            signing_key_id="test-key",
+            private_key=priv_b64,
+        )
+
+        monkeypatch.setattr("iatp.attestation._CRYPTO_AVAILABLE", False)
+        is_valid, error = v.validate_attestation(attestation, verify_signature=True)
+        assert not is_valid
+        assert error is not None
+
     def test_tampered_signature_rejected(self, keypair, validator_with_key):
         """Tampered signature must be rejected."""
         import base64

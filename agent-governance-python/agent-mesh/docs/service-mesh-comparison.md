@@ -274,6 +274,7 @@ rules:
     
   - name: rate-limit
     condition: "action.type == 'api_call'"
+    action: allow
     limit: "100/hour"
 
 compliance:

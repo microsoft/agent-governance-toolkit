@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agt_sandbox"
-version = "4.1.0"
+version = "5.0.0"
 description = "Agent Sandbox: sandbox execution isolation for AI agents"
 readme = "README.md"
 license = {text = "MIT"}
@@ -18,6 +18,7 @@ maintainers = [
 keywords = [
     "ai", "agents", "sandbox", "docker", "isolation",
     "governance", "safety", "containers", "gvisor", "kata",
+    "landlock", "seatbelt", "nono",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -34,7 +35,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "agent-governance-toolkit-cli>=4.0.0,<5.0",
+    "agent-governance-toolkit-cli>=4.1.0,<6.0",
 ]
 
 [project.optional-dependencies]
@@ -50,8 +51,17 @@ azure = [
     "azure-identity>=1.19.0,<2.0",
     "azure-core>=1.32.0,<2.0",
 ]
+nono = [
+    # OS-native (Landlock / Seatbelt) capability sandbox. Linux & macOS
+    # only — no Windows wheels are published.
+    #
+    # nono-py is PyPI-classified Alpha (upstream always-further/nono).
+    # Suitable for defense-in-depth and dev/CI; evaluate kernel-enforced
+    # guarantees against your production bar before hard-boundary use.
+    "nono-py>=0.10.1,<0.11",
+]
 policy = [
-    "agent-governance-toolkit-core>=4.0.0,<5.0",
+    "agent-governance-toolkit-core>=4.1.0,<6.0",
 ]
 full = [
     "agt-sandbox[docker,hyperlight,policy]",

@@ -80,9 +80,7 @@ def simulated_sandbox_bin(tmp_path: Path) -> str:
 def test_minimal_sandbox_path_is_single_directory() -> None:
     """MINIMAL_SANDBOX_PATH must be exactly one directory (no colons)."""
     dirs = [d for d in MINIMAL_SANDBOX_PATH.split(":") if d]
-    assert len(dirs) == 1, (
-        f"MINIMAL_SANDBOX_PATH must contain exactly one directory; got: {dirs}"
-    )
+    assert len(dirs) == 1, f"MINIMAL_SANDBOX_PATH must contain exactly one directory; got: {dirs}"
 
 
 def test_minimal_sandbox_path_is_curated_directory() -> None:
@@ -214,6 +212,4 @@ def test_dockerfile_strips_setuid_bits() -> None:
     """
     dockerfile = Path(__file__).resolve().parents[2] / "docker" / "Dockerfile.sandbox"
     text = dockerfile.read_text(encoding="utf-8")
-    assert "chmod a-s" in text, (
-        "Dockerfile must strip setuid/setgid bits with 'chmod a-s'"
-    )
+    assert "chmod a-s" in text, "Dockerfile must strip setuid/setgid bits with 'chmod a-s'"

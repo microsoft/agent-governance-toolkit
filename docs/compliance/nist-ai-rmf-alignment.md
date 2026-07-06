@@ -142,8 +142,7 @@ and conflict detection provide lifecycle management. Three enforcement modes
 
 **Coverage: ✅ FULLY ADDRESSED**
 
-AGT provides cryptographic audit trails, Merkle hash chains, Shapley-value fault
-attribution, and joint liability tracking.
+AGT provides cryptographic audit trails, Merkle hash chains, DID-based attribution, and runtime verification signals.
 
 | Component | File | Key Class/Function |
 |-----------|------|--------------------|
@@ -152,10 +151,6 @@ attribution, and joint liability tracking.
 | Flight recorder (IATP) | `agent-governance-python/agent-os/modules/iatp/iatp/telemetry/__init__.py:21` | `FlightRecorder` |
 | Flight recorder (Lightning) | `agent-governance-python/agent-lightning/src/agent_lightning_gov/emitter.py:56` | `FlightRecorderEmitter` |
 | Hypervisor audit | `agent-governance-python/agent-hypervisor/audit/delta.py` | `DeltaEngine` |
-| Shapley attribution | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/attribution.py` | Shapley-value fault attribution |
-| Joint liability | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/__init__.py` | Joint liability module |
-| Liability ledger | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/ledger.py` | Liability tracking |
-| Quarantine system | `agent-governance-python/agent-hypervisor/src/hypervisor/liability/quarantine.py` | Agent quarantine |
 | RBAC | `agent-governance-python/agent-os/src/agent_os/integrations/rbac.py` | 4 roles: READER, WRITER, ADMIN, AUDITOR |
 | DID-based attribution | `agent-governance-python/agent-mesh/src/agentmesh/governance/audit.py` | `agent_did` field per entry |
 
@@ -445,7 +440,7 @@ platforms.
 |-----------|------|--------------------|
 | Content quality evaluator | `agent-governance-python/agent-os/src/agent_os/content_governance.py:78` | `ContentQualityEvaluator` |
 | Plugin quality assessor | `agent-governance-python/agent-marketplace/src/agent_marketplace/quality_assessment.py:120` | `QualityAssessor` |
-| Red team dataset | `agent-governance-python/agent-os/modules/control-plane/benchmark/red_team_dataset.py` | Red-team benchmark data |
+| Red team dataset | `agent-governance-python/agent-os/modules/control-plane/benchmarks/red_team_dataset.py` | Red-team benchmark data |
 | Policy benchmark suite | `agent-governance-python/agent-os/benchmarks/bench_policy.py` | 30-scenario OWASP benchmark |
 | CMVK verification | `agent-governance-python/agent-os/modules/cmvk/src/cmvk/constitutional.py` | Cross-Model Verification Kernel |
 

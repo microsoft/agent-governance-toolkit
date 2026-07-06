@@ -4,8 +4,6 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from agent_discovery.inventory import AgentInventory
 from agent_discovery.models import (
     AgentStatus,
@@ -139,9 +137,9 @@ class TestAgentInventory:
 
             assert inv.count == 0  # starts fresh
             warning_records = [
-                r for r in caplog.records
-                if r.levelno >= logging.WARNING
-                and r.name == "agent_discovery.inventory"
+                r
+                for r in caplog.records
+                if r.levelno >= logging.WARNING and r.name == "agent_discovery.inventory"
             ]
             assert warning_records, "expected a WARNING log for corrupt inventory"
             assert str(path) in warning_records[0].getMessage()

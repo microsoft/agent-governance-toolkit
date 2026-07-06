@@ -1,8 +1,8 @@
 # Copyright (c) Microsoft Corporation. Licensed under the MIT License.
 """Tests for VectorClock and SessionIsolationManager fixes."""
 
-from hypervisor.session.vector_clock import VectorClock, VectorClockManager, CausalViolationError
-from hypervisor.session.isolation import SessionIsolationManager, IsolationLevel
+from hypervisor.session.isolation import IsolationLevel, SessionIsolationManager
+from hypervisor.session.vector_clock import VectorClock
 
 
 class TestVectorClockHappensBefore:
@@ -76,7 +76,9 @@ class TestSessionIsolationFailClosed:
 
     def test_unscoped_session_denied(self):
         mgr = SessionIsolationManager()
-        assert mgr.check_access("unknown-session", "/var/agt/sessions/unknown-session/data") is False
+        assert (
+            mgr.check_access("unknown-session", "/var/agt/sessions/unknown-session/data") is False
+        )
 
     def test_scoped_session_allowed_own_path(self):
         mgr = SessionIsolationManager()

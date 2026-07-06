@@ -144,18 +144,14 @@ class SagaOrchestrator:
                     # would skip the validity check and the timestamp
                     # bookkeeping.
                     step.reset_for_retry()
-                    await asyncio.sleep(
-                        self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1)
-                    )
+                    await asyncio.sleep(self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1))
             except Exception as e:
                 last_error = e
                 step.error = str(e)
                 step.transition(StepState.FAILED)
                 if attempt < attempts - 1:
                     step.reset_for_retry()
-                    await asyncio.sleep(
-                        self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1)
-                    )
+                    await asyncio.sleep(self.DEFAULT_RETRY_DELAY_SECONDS * (attempt + 1))
 
         # All retries exhausted
         if last_error:
@@ -228,7 +224,8 @@ class SagaOrchestrator:
     def active_sagas(self) -> list[Saga]:
         """Get all non-terminal sagas."""
         return [
-            s for s in self._sagas.values()
+            s
+            for s in self._sagas.values()
             if s.state in (SagaState.RUNNING, SagaState.COMPENSATING)
         ]
 

@@ -431,7 +431,10 @@ def test_init_cli_preserves_regex_commas_in_repeatable_flags() -> None:
     assert rc == 0
     rego = (out / "policy" / "regex_agent.rego").read_text(encoding="utf-8")
     assert 'regex.match("acct_[0-9]{6,}", input.policy_target.value)' in rego
-    assert '"pattern": "acct_[0-9]{6,}"' in rego
+    # AGT D1.1: redaction is a transform that computes the replaced value in the
+    # rule body; the pattern (with its regex comma intact) appears in regex.replace.
+    assert 'regex.replace(input.policy_target.value, "acct_[0-9]{6,}", "[REDACTED]")' in rego
+    assert '"effects"' not in rego
 
 
 def test_init_cli_reads_answers_from_stdin(capsys: pytest.CaptureFixture[str]) -> None:

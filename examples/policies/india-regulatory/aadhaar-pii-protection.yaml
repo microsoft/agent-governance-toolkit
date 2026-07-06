@@ -1,0 +1,69 @@
+# agt-policies - India Regulatory Pack
+# Aadhaar Act 2016 + 2021 Regulations - Aadhaar Masking and Biometric Protection Policy
+#
+# Regulatory reference: Aadhaar Act 2016 s.29; Aadhaar (Authentication and Offline Verification) Regulations 2021
+# Enforcing authority: Unique Identification Authority of India (UIDAI)
+# Status: In force / binding
+#
+# Community-maintained governance starter policy. Regex heuristics may false-positive on
+# legitimate 12-digit numbers; test against your domain. NOT a certified legal compliance instrument.
+#
+# Key obligations enforced:
+#   s.29(1)    Core biometric information never shared/displayed/stored by unauthorised entities
+#   s.29(4)    No public display/posting of Aadhaar number (2019 amendment)
+#   2021 Regs  Mask first 8 of 12 Aadhaar digits (only last 4 visible)
+#
+# Rego reference implementation: rego/aadhaar-pii-protection.rego (NOT loaded at runtime)
+
+version: "1.0"
+name: aadhaar-pii-protection
+description: >
+  Aadhaar Act 2016 + 2021 Regulations compliance policy preventing AI agents from exposing Aadhaar
+  numbers or core biometrics. Masks unredacted 12-digit Aadhaar in output and blocks biometric disclosure.
+
+metadata:
+  source_regulation: "Aadhaar Act 2016 s.29; Aadhaar (Authentication and Offline Verification) Regulations 2021"
+  jurisdiction: "IN"
+  enforcing_authority: "Unique Identification Authority of India (UIDAI)"
+
+rules:
+  - name: aadhaar-unmasked-number-block
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)(aadhaa?r|आधार)\\D{0,15}\\d{12}\\b"
+    action: block
+    priority: 100
+    message: "Aadhaar Regulations 2021: mask the first 8 of 12 Aadhaar digits (only last 4 may be displayed/stored); full Aadhaar number must not be output, logged, or stored unmasked"
+
+  - name: aadhaar-grouped-format-block
+    condition:
+      field: output
+      operator: matches
+      value: "\\b\\d{4}[ -]\\d{4}[ -]\\d{4}\\b"
+    action: block
+    priority: 100
+    message: "Aadhaar Regulations 2021: a grouped 12-digit sequence (4-4-4) resembling an Aadhaar number must be masked; only the last 4 digits may be shown"
+
+  - name: aadhaar-biometric-disclosure-deny
+    condition:
+      field: output
+      operator: matches
+      value: "(?i)aadhaar.{0,20}(biometric|fingerprint|iris|face)"
+    action: deny
+    priority: 100
+    message: "Aadhaar Act s.29(1): core biometric information must never be shared, displayed, or stored by unauthorised entities"
+
+  - name: aadhaar-public-display-block
+    condition:
+      field: action
+      operator: matches
+      value: "^(publish_aadhaar|display_full_aadhaar|expose_uid)$"
+    action: block
+    priority: 95
+    message: "Aadhaar Act s.29(4): no Aadhaar number shall be published, displayed, or posted publicly (2019 amendment); s.29(3) bars use or disclosure beyond the specified purpose"
+
+defaults:
+  action: audit
+  max_tokens: 8000
+  max_tool_calls: 25

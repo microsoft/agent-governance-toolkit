@@ -1,24 +1,10 @@
-# CODEOWNERS — Default reviewers for microsoft/agent-governance-toolkit
-# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# Code owners for microsoft/agent-governance-toolkit
 #
-# POLICY: Every PR from a non-member MUST be approved by a CODEOWNER.
-# No bypass. No AI-only approval. Human maintainer review required.
-# See: docs/CONTRIBUTING.md and .github/workflows/require-maintainer-approval.yml
+# Every pull request requires an approving review from one of the owners
+# below (enforced by branch protection + the "Protect" ruleset:
+# require_code_owner_review). This is the maintainer-approval gate — it
+# replaces the former require-maintainer-approval.yml CI workflow.
+#
+# Only the project lead can bypass this requirement or push without a PR.
 
-# Default owners for everything in the repo
-* @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar @imran-siddique
-
-# Security-sensitive paths — require maintainer review, no exceptions
-/.github/                    @imran-siddique @MohammadHaroonAbuomar
-
-# Infrastructure & container security — require maintainer review
-/scripts/                    @imran-siddique @MohammadHaroonAbuomar
-**/Dockerfile                @imran-siddique @MohammadHaroonAbuomar
-**/docker-compose*           @imran-siddique @MohammadHaroonAbuomar
-/.dockerignore               @imran-siddique @MohammadHaroonAbuomar
-/.clusterfuzzlite/           @imran-siddique @MohammadHaroonAbuomar
-
-# Documentation
-/docs/                       @imran-siddique @MohammadHaroonAbuomar
-/site/                       @imran-siddique @MohammadHaroonAbuomar
-*.md                         @microsoft/agent-governance-toolkit @MohammadHaroonAbuomar
+* @MohammadHaroonAbuomar @liamcrumm

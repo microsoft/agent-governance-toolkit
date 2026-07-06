@@ -22,7 +22,7 @@ warnings.warn(
 )
 
 # Keep in sync with the ``version`` field in pyproject.toml.
-__version__ = "4.1.0"
+__version__ = "5.0.0"
 
 from hypervisor import (  # noqa: E402,F401
     # Core
@@ -39,24 +39,8 @@ from hypervisor import (  # noqa: E402,F401
     VFSEdit,
     VFSPermissionError,
     VectorClock,
-    VectorClockManager,
     CausalViolationError,
-    IntentLockManager,
-    LockIntent,
-    LockContentionError,
-    DeadlockError,
     IsolationLevel,
-    # Liability
-    VouchRecord,
-    VouchingEngine,
-    SlashingEngine,
-    LiabilityMatrix,
-    CausalAttributor,
-    AttributionResult,
-    QuarantineManager,
-    QuarantineReason,
-    LiabilityLedger,
-    LedgerEntryType,
     # Rings
     RingEnforcer,
     ActionClassifier,
@@ -72,16 +56,8 @@ from hypervisor import (  # noqa: E402,F401
     SagaTimeoutError,
     SagaState,
     StepState,
-    FanOutOrchestrator,
-    FanOutPolicy,
-    CheckpointManager,
-    SemanticCheckpoint,
-    SagaDSLParser,
-    SagaDefinition,
     # Audit
     DeltaEngine,
-    CommitmentEngine,
-    EphemeralGC,
     # Verification
     TransactionHistoryVerifier,
     # Observability
@@ -119,23 +95,8 @@ __all__ = [
     "VFSEdit",
     "VFSPermissionError",
     "VectorClock",
-    "VectorClockManager",
     "CausalViolationError",
-    "IntentLockManager",
-    "LockIntent",
-    "LockContentionError",
-    "DeadlockError",
     "IsolationLevel",
-    "VouchRecord",
-    "VouchingEngine",
-    "SlashingEngine",
-    "LiabilityMatrix",
-    "CausalAttributor",
-    "AttributionResult",
-    "QuarantineManager",
-    "QuarantineReason",
-    "LiabilityLedger",
-    "LedgerEntryType",
     "RingEnforcer",
     "ActionClassifier",
     "RingElevationManager",
@@ -148,15 +109,7 @@ __all__ = [
     "SagaTimeoutError",
     "SagaState",
     "StepState",
-    "FanOutOrchestrator",
-    "FanOutPolicy",
-    "CheckpointManager",
-    "SemanticCheckpoint",
-    "SagaDSLParser",
-    "SagaDefinition",
     "DeltaEngine",
-    "CommitmentEngine",
-    "EphemeralGC",
     "TransactionHistoryVerifier",
     "HypervisorEventBus",
     "EventType",

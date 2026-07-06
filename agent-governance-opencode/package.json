@@ -1,6 +1,6 @@
 {
   "name": "@microsoft/agent-governance-opencode",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "description": "Public Preview — OpenCode CLI governance plugin for Agent Governance Toolkit developer protection policies",
   "type": "module",
   "main": "src/index.mjs",
@@ -43,6 +43,9 @@
   "homepage": "https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-opencode",
   "dependencies": {
     "@microsoft/agent-governance-sdk": "3.7.0"
+  },
+  "overrides": {
+    "js-yaml": "4.2.0"
   },
   "engines": {
     "node": ">=22.0.0"

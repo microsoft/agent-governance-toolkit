@@ -11,6 +11,11 @@
     }
   ],
   "words": [
+    "Microbenchmarks",
+    "isin",
+    "tolist",
+    "dataframe",
+    "textposition",
     "Andriushchenko",
     "Chao",
     "GitHub",
@@ -46,6 +51,9 @@
     "fastapi",
     "structlog",
     "scipy",
+    "chromadb",
+    "dtype",
+    "metadatas",
     "croniter",
     "nbconvert",
     "PYTHONUTF",
@@ -58,9 +66,18 @@
     "javascripts",
     "tabindex",
     "dampenable",
+    "dunder",
     "forgeable",
     "unstarred",
-    "getcode"
+    "getcode",
+    "datetimes",
+    "tzdata",
+    "pyatr",
+    "RTMR",
+    "SCITT",
+    "Dayos",
+    "Provedit",
+    "Nobulex"
   ],
   "ignorePaths": [
     "**/node_modules/**",

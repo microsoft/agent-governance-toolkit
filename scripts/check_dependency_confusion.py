@@ -95,6 +95,7 @@ REGISTERED_PACKAGES = {
     # Telemetry / monitoring
     "sentry-sdk",
     "opentelemetry-instrumentation-fastapi", "opentelemetry-exporter-otlp",
+    "opentelemetry-exporter-otlp-proto-grpc", "opentelemetry-exporter-otlp-proto-http",
     "opentelemetry-instrumentation-httpx", "opentelemetry-instrumentation-asyncio",
     # pyproject.toml optional-dependency group names (not real packages)
     "dev", "cli", "all", "server", "storage", "observability",
@@ -106,7 +107,7 @@ REGISTERED_PACKAGES = {
     "sql", "async", "nexus", "caas-core", "message-bus",
     "ai-agents", "amb", "eval_type_backport",
     # Integration packages / real PyPI packages used as deps
-    # Optional integration deps in agt-integrations/pyproject.toml (all real PyPI packages):
+    # Optional integration backend deps (all real PyPI packages):
     #   flowise (Flowise SDK), boto3 (AWS, for AVP), nostr-sdk (Nostr WoT), oso (Oso authz).
     "flowise", "boto3", "nostr-sdk", "oso",
     # fastembed: Qdrant's embedding library, optional dep for the default-off
@@ -140,6 +141,9 @@ REGISTERED_PACKAGES = {
     # Azure SDK core libs (used by agent-sandbox ACASandboxProvider)
     "azure-identity", "azure_identity",
     "azure-core", "azure_core",
+    # Azure AI Foundry Agents SDK (real PyPI package, used by the
+    # examples/real_packages/foundry_agents.py integration reference)
+    "azure-ai-agents", "azure_ai_agents",
     # SpendGuard SDK (real PyPI package, used in examples)
     "spendguard-sdk", "spendguard_sdk",
     # Cedarling Python bindings (real PyPI package, optional dep)
@@ -156,7 +160,21 @@ REGISTERED_PACKAGES = {
     "autogen-agentchat", "autogen_agentchat",
     "autogen-core", "autogen_core", "autogen-ext", "autogen_ext",
     "agentdojo",
+    # IANA timezone database for Python (real PyPI package, optional dep for Windows tz support)
+    "tzdata",
+    # AGT Audit Trail Record library (real PyPI package, pre-1.0; used in acs-atr-annotator example)
+    "pyatr",
+    # agentrust-trace: TRACE v0.2 Trust Record library (real PyPI package; runtime dep for TRACE emission)
+    "agentrust-trace", "agentrust_trace",
+    # flowise-agentmesh: AGT governance nodes for Flowise (first-party package in this repo)
+    "flowise-agentmesh", "flowise_agentmesh",
+    # OS-native (Landlock / Seatbelt) capability sandbox (real PyPI package, Alpha; agt-sandbox[nono])
+    "nono-py", "nono_py",
     # With extras (base name is what matters)
+    # ACS annotator example dependency (real PyPI package)
+    "pyatr", "pyatr_core",
+    # Timezone data package (real PyPI package, used on Windows/Alpine)
+    "tzdata",
 }
 
 # Local-only packages that should NEVER appear with version pins in

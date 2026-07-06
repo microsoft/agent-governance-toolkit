@@ -73,7 +73,7 @@ function makeClient(overrides?: Partial<MeshClientOptions>): MeshClient {
     registryUrl: "http://localhost:8081",
     autoRegister: false,
     keyManager: makeKeyManager(),
-    agentDid: "did:agentmesh:test-agent",
+    agentDid: "did:mesh:test-agent",
     wsFactory: mockWsFactory,
     ...overrides,
   });
@@ -98,11 +98,11 @@ describe("MeshClient inbox replay", () => {
 
     const connectFrame = frames.find((f) => f.type === "connect");
     expect(connectFrame).toBeDefined();
-    expect(connectFrame!.from).toBe("did:agentmesh:test-agent");
+    expect(connectFrame!.from).toBe("did:mesh:test-agent");
 
     const fetchFrame = frames.find((f) => f.type === "fetch_pending");
     expect(fetchFrame).toBeDefined();
-    expect(fetchFrame!.from).toBe("did:agentmesh:test-agent");
+    expect(fetchFrame!.from).toBe("did:mesh:test-agent");
     expect(fetchFrame!.v).toBe(1);
   });
 
@@ -137,7 +137,7 @@ describe("MeshClient inbox replay", () => {
           v: 1,
           type: "message",
           from: "did:agentmesh:peer-a",
-          to: "did:agentmesh:test-agent",
+          to: "did:mesh:test-agent",
           id: "msg-001",
           ts: new Date().toISOString(),
           ciphertext: btoa(JSON.stringify({ text: "hello from offline" })),
@@ -147,7 +147,7 @@ describe("MeshClient inbox replay", () => {
           v: 1,
           type: "message",
           from: "did:agentmesh:peer-a",
-          to: "did:agentmesh:test-agent",
+          to: "did:mesh:test-agent",
           id: "msg-002",
           ts: new Date().toISOString(),
           ciphertext: btoa(JSON.stringify({ text: "second offline msg" })),
@@ -211,7 +211,7 @@ describe("MeshClient inbox replay", () => {
           v: 1,
           type: "message",
           from: "did:agentmesh:sender",
-          to: "did:agentmesh:test-agent",
+          to: "did:mesh:test-agent",
           id: "ack-test-001",
           ts: new Date().toISOString(),
           ciphertext: btoa(JSON.stringify({ data: "test" })),
@@ -286,7 +286,7 @@ describe("MeshClient inbox replay", () => {
       v: 1,
       type: "message",
       from: "did:agentmesh:peer",
-      to: "did:agentmesh:test-agent",
+      to: "did:mesh:test-agent",
       id: `order-${i}`,
       ts: new Date().toISOString(),
       ciphertext: btoa(JSON.stringify({ seq: i })),

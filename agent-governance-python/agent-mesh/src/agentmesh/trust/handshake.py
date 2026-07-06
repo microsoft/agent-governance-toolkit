@@ -107,6 +107,12 @@ class HandshakeResult(BaseModel):
     # Rejection reason (if not verified)
     rejection_reason: Optional[str] = None
 
+    # External identity (ADR-0007: present only for cross-org agents)
+    external_identity: Optional[Any] = Field(
+        None,
+        description="ExternalIdentity from JWKS federation, set when peer was resolved via ExternalJWKSProvider",
+    )
+
     @classmethod
     def success(
         cls,
@@ -116,6 +122,7 @@ class HandshakeResult(BaseModel):
         peer_name: Optional[str] = None,
         started: Optional[datetime] = None,
         user_context: Optional[UserContext] = None,
+        external_identity: Optional[Any] = None,
     ) -> "HandshakeResult":
         """Create a successful handshake result."""
         now = datetime.now(timezone.utc)
@@ -142,6 +149,7 @@ class HandshakeResult(BaseModel):
             handshake_started=start,
             handshake_completed=now,
             latency_ms=latency,
+            external_identity=external_identity,
         )
 
     @classmethod

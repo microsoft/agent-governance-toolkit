@@ -63,12 +63,25 @@ jobs:
   vendored-patch-audit:
     name: Dependency Audit Trail
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+      # Routine Dependabot patch/minor bumps cannot author an audit doc, so
+      # exempt them (issue #2975). Resolve the bump type from Dependabot
+      # metadata; the step is skipped (and the gate enforced normally) for
+      # every non-Dependabot PR.
+      - name: Fetch Dependabot metadata
+        id: dependabot-metadata
+        if: github.actor == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
       - env:
           BASE_REF: ${{ github.base_ref }}
+          PR_ACTOR: ${{ github.actor }}
+          DEPENDABOT_UPDATE_TYPE: ${{ steps.dependabot-metadata.outputs.update-type }}
         run: |
           chmod +x scripts/ci/vendored-patch-audit.sh
           scripts/ci/vendored-patch-audit.sh "origin/$BASE_REF"

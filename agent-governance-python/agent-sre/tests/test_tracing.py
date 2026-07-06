@@ -338,3 +338,51 @@ class TestExporters:
         resource_attrs = dict(provider.resource.attributes)
         assert resource_attrs["service.name"] == "my-agent"
         provider.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# Tests — OTLP TLS enforcement (security regression)
+# ---------------------------------------------------------------------------
+
+
+class TestOtlpGrpcTLSEnforcement:
+    """configure_otlp_grpc must default to TLS and deny insecure on non-local endpoints."""
+
+    _otlp = pytest.importorskip(
+        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+        reason="opentelemetry-exporter-otlp-proto-grpc not installed",
+    )
+    _EXPORTER_PATH = "opentelemetry.exporter.otlp.proto.grpc.trace_exporter.OTLPSpanExporter"
+
+    def test_default_is_not_insecure(self):
+        """configure_otlp_grpc() default must use TLS (insecure=False)."""
+        from unittest.mock import patch, MagicMock
+        from agent_sre.tracing.exporters import configure_otlp_grpc
+
+        with patch(self._EXPORTER_PATH) as mock_exporter:
+            mock_exporter.return_value = MagicMock()
+            configure_otlp_grpc(endpoint="collector.prod.example.com:4317")
+            mock_exporter.assert_called_once()
+            call_kwargs = mock_exporter.call_args[1]
+            assert call_kwargs.get("insecure") is not True, (
+                "configure_otlp_grpc() default must NOT use insecure=True"
+            )
+
+    def test_localhost_explicit_insecure_is_allowed_with_warning(self):
+        """localhost + insecure=True must be allowed but log a WARNING."""
+        from unittest.mock import patch, MagicMock
+        from agent_sre.tracing.exporters import configure_otlp_grpc
+
+        with patch(self._EXPORTER_PATH) as mock_exporter:
+            with patch("agent_sre.tracing.exporters._logger") as mock_logger:
+                mock_exporter.return_value = MagicMock()
+                provider = configure_otlp_grpc(endpoint="localhost:4317", insecure=True)
+                assert provider is not None
+                mock_logger.warning.assert_called()
+
+    def test_non_local_insecure_raises(self):
+        """Non-local endpoint + insecure=True must raise ValueError."""
+        from agent_sre.tracing.exporters import configure_otlp_grpc
+
+        with pytest.raises(ValueError, match="[Ii]nsecure"):
+            configure_otlp_grpc(endpoint="otel.prod.example.com:4317", insecure=True)

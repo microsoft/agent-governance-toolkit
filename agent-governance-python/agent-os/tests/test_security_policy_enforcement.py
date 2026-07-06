@@ -16,7 +16,7 @@ of which framework adapter is used:
 
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
@@ -106,7 +106,7 @@ class TestGovernancePolicyEnforcement:
         kernel = LangChainKernel(policy=policy)
         ctx = kernel.create_context("test-agent")
         # Backdate start time to exceed timeout
-        ctx.start_time = datetime.now() - timedelta(seconds=5)
+        ctx.start_time = datetime.now(timezone.utc) - timedelta(seconds=5)
 
         allowed, reason = kernel.pre_execute(ctx, "input")
         assert allowed is False

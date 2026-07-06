@@ -24,4 +24,3 @@ Extend Google's A2A protocol with trust scoring, payment negotiation, and delega
 ## References
 
 - [A2A Protocol](https://a2a-protocol.org/latest/)
-- [AAIF Proposal](AAIF-PROPOSAL.md)

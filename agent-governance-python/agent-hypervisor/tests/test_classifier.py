@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 """Tests for action risk classifier."""
 
-
 from hypervisor.models import ActionDescriptor, ExecutionRing, ReversibilityLevel
 from hypervisor.rings.classifier import ActionClassifier, ClassificationResult
 
@@ -35,7 +34,6 @@ class TestClassificationResult:
 class TestActionClassifier:
     def test_init(self):
         classifier = ActionClassifier()
-        assert classifier._cache == {}
         assert classifier._overrides == {}
 
     def test_classify_read_only(self):
@@ -86,17 +84,52 @@ class TestActionClassifier:
         result = classifier.classify(action)
         assert result.ring == ExecutionRing.RING_2_STANDARD
 
-    def test_classify_caches_result(self):
+    def test_classify_is_deterministic(self):
         classifier = ActionClassifier()
         action = ActionDescriptor(
-            action_id="act-cache",
-            name="Cached",
+            action_id="act-stable",
+            name="Stable",
             execute_api="/api/x",
             is_read_only=True,
         )
         r1 = classifier.classify(action)
         r2 = classifier.classify(action)
-        assert r1 is r2
+        # Classification is a pure function of the action's attributes, so
+        # repeated calls produce equal results (no cached state required).
+        assert r1 == r2
+
+    def test_classify_shared_id_does_not_mask_privilege_escalation(self):
+        """Two actions sharing an action_id but differing in privilege must be
+        classified independently. Regression for the cache keying on action_id
+        alone, which let an admin/destructive action inherit a prior read-only
+        RING_3_SANDBOX result for the same id.
+        """
+        classifier = ActionClassifier()
+        read_only = ActionDescriptor(
+            action_id="same",
+            name="Read",
+            execute_api="/api/read",
+            reversibility=ReversibilityLevel.FULL,
+            is_read_only=True,
+        )
+        admin = ActionDescriptor(
+            action_id="same",
+            name="Admin",
+            execute_api="/api/admin",
+            is_admin=True,
+        )
+
+        read_result = classifier.classify(read_only)
+        admin_result = classifier.classify(admin)
+
+        assert read_result.ring == ExecutionRing.RING_3_SANDBOX
+        assert read_result.risk_weight == ReversibilityLevel.FULL.default_risk_weight
+        # The admin action is NOT served the cached low-risk entry.
+        assert admin_result.ring == ExecutionRing.RING_0_ROOT
+        assert admin_result.risk_weight == ReversibilityLevel.NONE.default_risk_weight
+        # Re-classifying either action still returns its own correct entry.
+        assert classifier.classify(read_only).ring == ExecutionRing.RING_3_SANDBOX
+        assert classifier.classify(admin).ring == ExecutionRing.RING_0_ROOT
 
     def test_classify_risk_weight_from_reversibility(self):
         classifier = ActionClassifier()
@@ -117,8 +150,6 @@ class TestActionClassifier:
             execute_api="/api/t",
             is_read_only=True,
         )
-        # Classify first to populate cache
-        classifier.classify(action)
         classifier.set_override(
             "overridden",
             ring=ExecutionRing.RING_1_PRIVILEGED,
@@ -129,7 +160,7 @@ class TestActionClassifier:
         assert result.risk_weight == 0.9
         assert result.confidence == 0.9
 
-    def test_set_override_without_cache(self):
+    def test_set_override_for_unclassified_action(self):
         classifier = ActionClassifier()
         classifier.set_override("unknown-action", ring=ExecutionRing.RING_1_PRIVILEGED)
         action = ActionDescriptor(
@@ -141,26 +172,36 @@ class TestActionClassifier:
         assert result.ring == ExecutionRing.RING_1_PRIVILEGED
         assert result.confidence == 0.9
 
-    def test_clear_cache(self):
+    def test_set_override_to_ring_zero_is_respected(self):
+        """RING_0_ROOT == 0 is falsy; the override must still pin Ring 0 instead
+        of falling through to the RING_3_SANDBOX default. Pinning the MOST
+        privileged ring silently downgrading to the LEAST is a security bug.
+        """
         classifier = ActionClassifier()
+        classifier.set_override("danger", ring=ExecutionRing.RING_0_ROOT)
         action = ActionDescriptor(
-            action_id="cached-act",
-            name="X",
-            execute_api="/api/x",
+            action_id="danger",
+            name="Danger",
+            execute_api="/api/danger",
             is_read_only=True,
         )
-        classifier.classify(action)
-        assert "cached-act" in classifier._cache
-        classifier.clear_cache()
-        assert classifier._cache == {}
+        assert classifier.classify(action).ring == ExecutionRing.RING_0_ROOT
 
-    def test_clear_cache_does_not_clear_overrides(self):
+    def test_set_override_risk_weight_zero_is_respected(self):
+        """risk_weight 0.0 is falsy but must be honoured, not coerced to 0.5."""
         classifier = ActionClassifier()
-        classifier.set_override("act-o", ring=ExecutionRing.RING_0_ROOT)
-        classifier.clear_cache()
-        assert "act-o" in classifier._overrides
+        classifier.set_override(
+            "safe", ring=ExecutionRing.RING_3_SANDBOX, risk_weight=0.0
+        )
+        action = ActionDescriptor(
+            action_id="safe",
+            name="Safe",
+            execute_api="/api/safe",
+            is_read_only=True,
+        )
+        assert classifier.classify(action).risk_weight == 0.0
 
-    def test_override_takes_precedence_over_cache(self):
+    def test_override_takes_precedence_over_classification(self):
         classifier = ActionClassifier()
         action = ActionDescriptor(
             action_id="act-p",
@@ -168,7 +209,6 @@ class TestActionClassifier:
             execute_api="/api/x",
             is_read_only=True,
         )
-        classifier.classify(action)
         classifier.set_override("act-p", ring=ExecutionRing.RING_1_PRIVILEGED, risk_weight=1.0)
         result = classifier.classify(action)
         assert result.ring == ExecutionRing.RING_1_PRIVILEGED
