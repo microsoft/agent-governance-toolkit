@@ -1,7 +1,7 @@
 version: '1.0'
 name: atr-community-rules-full
-description: 'Auto-generated from Agent Threat Rules (ATR) v2.0.12. 1555 detection
-  patterns from 287 production-grade rules (27 draft/test rules excluded). Source:
+description: 'Auto-generated from Agent Threat Rules (ATR) v2.0.12. 1540 detection
+  patterns from 284 production-grade rules (27 draft/test rules excluded). Source:
   https://github.com/Agent-Threat-Rule/agent-threat-rules'
 rules:
 - name: atr-2026-00030
@@ -4676,51 +4676,6 @@ rules:
   action: deny
   priority: 100
   message: '[ATR-2026-00162] Credential Access with Exfiltration in Skill Instructions'
-- name: atr-2026-00212
-  condition:
-    field: tool_response
-    operator: matches
-    value: (?i)jira[_-]?cloud[_-]?id\s*[=:]\s*['"]?[^'"]*['"]?\s*,\s*hint\s*[=:]\s*['"][^'"\n]{0,300}(?:cookie|session|token|bearer|credential|authorization)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00212] mcp-atlassian Credential Leak via Hint Parameter Injection
-    (CVE-2026-27825/27826)'
-- name: atr-2026-00212-1
-  condition:
-    field: tool_response
-    operator: matches
-    value: (?i)confluence[_-]?spaces\s*[=:].*?hint\s*[=:]\s*['"][^'"\n]{0,300}(?:cookie|session|token|bearer|credential|authorization)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00212] mcp-atlassian Credential Leak via Hint Parameter Injection
-    (CVE-2026-27825/27826)'
-- name: atr-2026-00212-2
-  condition:
-    field: tool_response
-    operator: matches
-    value: (?i)mcp[-_]atlassian.{0,100}hint.{0,100}(?:cookie|authorization|x-api-key|bearer|credential)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00212] mcp-atlassian Credential Leak via Hint Parameter Injection
-    (CVE-2026-27825/27826)'
-- name: atr-2026-00212-3
-  condition:
-    field: tool_response
-    operator: matches
-    value: (?i)hint\s*[:=]\s*['"][^'"\n]*(?:please\s+echo|include|return|forward|send\s+back|repeat)\s+[^'"\n]{0,100}(?:cookie|auth|credential|token|header)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00212] mcp-atlassian Credential Leak via Hint Parameter Injection
-    (CVE-2026-27825/27826)'
-- name: atr-2026-00212-4
-  condition:
-    field: tool_response
-    operator: matches
-    value: (?i)\$\{?(?:req\.headers|request\.headers|session\.cookie|env\.ATLASSIAN|process\.env\.[A-Z_]*(?:TOKEN|KEY|SECRET|COOKIE|AUTH))
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00212] mcp-atlassian Credential Leak via Hint Parameter Injection
-    (CVE-2026-27825/27826)'
 - name: atr-2026-00261
   condition:
     field: tool_response
@@ -12391,91 +12346,6 @@ rules:
   priority: 100
   message: '[ATR-2026-00161] MCP Tool Description — IMPORTANT Tag Cross-Tool Shadowing
     Attack'
-- name: atr-2026-00209
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)"retry_hint"\s*:\s*"(?:retry|loop|continue|invoke|re-?call)[^"]{0,200}(?:until|without\s+(?:limit|bound|confirmation))
-  action: deny
-  priority: 80
-  message: '[ATR-2026-00209] MCPwn Runaway Tool Invocation via Retry Directive (CVE-2026-33032)'
-- name: atr-2026-00209-1
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)"continue_after_error"\s*:\s*(?:true|"true"|1)\s*,\s*"retry[^"]*"\s*:\s*\d{3,}
-  action: deny
-  priority: 80
-  message: '[ATR-2026-00209] MCPwn Runaway Tool Invocation via Retry Directive (CVE-2026-33032)'
-- name: atr-2026-00209-2
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)(?:retry|loop|re-?invoke)\s+(?:this|the\s+same)\s+tool\s+(?:indefinitely|forever|until\s+success|until\s+resolved)
-  action: deny
-  priority: 80
-  message: '[ATR-2026-00209] MCPwn Runaway Tool Invocation via Retry Directive (CVE-2026-33032)'
-- name: atr-2026-00209-3
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)"next_action"\s*:\s*"(?:call|invoke|execute)\s+[a-zA-Z_]+(?:\s*,\s*[a-zA-Z_]+)*\s*"
-  action: deny
-  priority: 80
-  message: '[ATR-2026-00209] MCPwn Runaway Tool Invocation via Retry Directive (CVE-2026-33032)'
-- name: atr-2026-00209-4
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)on_error\s*=\s*(?:lambda|function|=>).{0,120}(?:invoke|call|retry|re-?run)\s*\(
-  action: deny
-  priority: 80
-  message: '[ATR-2026-00209] MCPwn Runaway Tool Invocation via Retry Directive (CVE-2026-33032)'
-- name: atr-2026-00210
-  condition:
-    field: tool_description
-    operator: matches
-    value: \{\{\$flow\.variables\.[a-zA-Z_][a-zA-Z0-9_]*\}\}
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00210] Flowise System Message Override via Template Interpolation
-    (CVE-2025-59528)'
-- name: atr-2026-00210-1
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)\{\{\$input\}\}.*(?:system\s+message|assistant\s+role|tool\s+definition|function\s+spec)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00210] Flowise System Message Override via Template Interpolation
-    (CVE-2025-59528)'
-- name: atr-2026-00210-2
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)(?:system|assistant|tool)\s*[:=]\s*\{\{\$(?:input|flow\.variables)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00210] Flowise System Message Override via Template Interpolation
-    (CVE-2025-59528)'
-- name: atr-2026-00210-3
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)(?:vm\.runInNewContext|new\s+Function|eval)\s*\([^)]{0,200}\{\{\$(?:input|flow\.variables)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00210] Flowise System Message Override via Template Interpolation
-    (CVE-2025-59528)'
-- name: atr-2026-00210-4
-  condition:
-    field: tool_description
-    operator: matches
-    value: (?i)flowise[^\n]{0,80}(?:chatflow|system\s+message)[^\n]{0,120}(?:injection|override|bypass|rce)
-  action: deny
-  priority: 100
-  message: '[ATR-2026-00210] Flowise System Message Override via Template Interpolation
-    (CVE-2025-59528)'
 - name: atr-2026-00259
   condition:
     field: tool_description
