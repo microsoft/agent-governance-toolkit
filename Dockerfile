@@ -78,6 +78,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     && python -m pip install \
         "pydantic>=2.5.0,<3.0" \
         "pyyaml>=6.0,<7.0" \
+        "google-re2>=1.1.20251105,<1.2" \
     && python -m pip install --no-deps \
         -e "agent-governance-python/agt-policies" \
     && python -m pip install \

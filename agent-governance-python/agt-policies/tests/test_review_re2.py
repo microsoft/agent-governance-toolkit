@@ -104,7 +104,11 @@ def test_regex_validation_errors_do_not_echo_pattern() -> None:
 
 def test_valid_re2_octal_and_unicode_property_are_accepted() -> None:
     # RE2 supports octal escapes and Unicode-property classes that Python `re`
-    # rejects; the faithful google-re2 validator must NOT over-deny these.
+    # rejects; the faithful google-re2 validator must NOT over-deny these. The
+    # conservative fallback (no google-re2 wheel) legitimately cannot, so this
+    # property is only asserted when the real RE2 engine is available.
+    if build_module._re2 is None:
+        pytest.skip("google-re2 not installed; conservative fallback over-denies")
     for pattern in (r"\101", r"\123", r"\p{L}", r"\pL", r"\p{Lu}", r"\p{L}+\d"):
         _validate_re2_regex(pattern)  # must not raise
 
