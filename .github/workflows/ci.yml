@@ -512,6 +512,54 @@ jobs:
         working-directory: agent-governance-python/${{ matrix.package }}
         run: ls -la dist/*.whl
 
+  # ── Install coherence — built wheels must form one coherent module set ─
+  # Guards the order/version-dependent "Frankenstein install": builds the
+  # consolidation wheels, asserts no two of them own the same top-level import
+  # path (a stub re-shipping source would fail here), then imports the modules
+  # from clean venvs — the meta package alone, and the meta package next to all
+  # deprecation stubs, which is the exact combination that previously collided.
+  install-coherence:
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Install build tools
+        run: pip install --no-cache-dir --require-hashes -r agent-governance-python/requirements/ci-build.txt
+      - name: Build consolidation wheels
+        run: |
+          set -euo pipefail
+          rm -rf dist-coherence && mkdir -p dist-coherence
+          # -core owns the source; the five siblings are dep-only stubs. Build
+          # them all with --wheel because -core force-includes sibling source,
+          # which only resolves when building directly from the source tree.
+          for pkg in \
+            agent-governance-toolkit-core \
+            agent-hypervisor agent-mesh agent-os agent-runtime agent-primitives; do
+            python -m build --wheel "agent-governance-python/$pkg" -o dist-coherence
+          done
+          ls -la dist-coherence
+      - name: Assert one owner per top-level module (no collisions)
+        run: python scripts/ci/check_wheel_coherence.py dist-coherence
+      - name: Clean-venv import — meta package alone
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv-core
+          /tmp/venv-core/bin/pip install --no-cache-dir --find-links dist-coherence \
+            dist-coherence/agent_governance_toolkit_core-*.whl
+          /tmp/venv-core/bin/python -W ignore \
+            -c "import hypervisor, agentmesh, agent_os, agent_runtime, agent_primitives; print('meta import OK')"
+      - name: Clean-venv import — meta + all deprecation stubs (previously collided)
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv-all
+          /tmp/venv-all/bin/pip install --no-cache-dir --find-links dist-coherence dist-coherence/*.whl
+          /tmp/venv-all/bin/python -W ignore \
+            -c "import hypervisor, agentmesh, agent_os, agent_runtime, agent_primitives; print('combined import OK')"
+
   # ── Python dependency safety (only when Python files change) ──────────
   security:
     needs: changes
