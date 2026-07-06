@@ -106,6 +106,22 @@ class SyscallType(Enum):
     SYS_CHECKPOLICY = auto() # Check if action allowed
 
 
+# Syscalls that are self-scoped: they only affect the calling agent's own
+# sandbox — its private VFS or its own lifecycle — and have no externally
+# observable effect. When no policy engine is configured, these stay allowed so
+# an agent can still use its own scratch memory and terminate cleanly, while
+# every other syscall (notably SYS_EXEC tool execution, IPC, and signal
+# delivery) fails closed. Anything NOT in this set is denied without an engine,
+# so new/unknown syscalls fail closed by default.
+_SELF_SCOPED_SYSCALLS = frozenset({
+    SyscallType.SYS_EXIT,    # voluntary self-termination / cleanup
+    SyscallType.SYS_READ,    # read the agent's own VFS
+    SyscallType.SYS_WRITE,   # write the agent's own VFS
+    SyscallType.SYS_OPEN,    # open a path in the agent's own VFS
+    SyscallType.SYS_CLOSE,   # close the agent's own handle
+    SyscallType.SYS_STAT,    # stat the agent's own VFS
+})
+
 @dataclass
 class SyscallRequest:
     """A system call request from user space."""
@@ -183,14 +199,18 @@ class KernelSpace:
 
     Args:
         policy_engine: Optional policy engine for syscall authorization.
-            When ``None``, the kernel **fails closed**: every syscall is denied
-            unless ``permissive=True`` is set explicitly.
+            When ``None``, the kernel **fails closed** for syscalls that reach
+            outside the agent's own sandbox (``SYS_EXEC`` tool execution, IPC,
+            signal delivery, agent spawn): they are denied unless
+            ``permissive=True``. Self-scoped syscalls (``SYS_EXIT`` and the
+            agent's own VFS reads/writes) remain allowed so an agent can still
+            use its own memory and exit cleanly.
         flight_recorder: Optional ``FlightRecorder`` instance for audit
             logging. When ``None``, audit logging is disabled.
         permissive: Opt-in escape hatch. When ``True`` and no ``policy_engine``
-            is configured, syscalls are allowed (the legacy permissive mode).
-            Defaults to ``False`` so a misconfigured kernel governs rather than
-            silently allowing everything.
+            is configured, ALL syscalls are allowed (the legacy permissive
+            mode). Defaults to ``False`` so a misconfigured kernel refuses to
+            execute tools rather than silently allowing everything.
 
     Example:
         Basic kernel lifecycle::
@@ -463,13 +483,15 @@ class KernelSpace:
         """
         self._metrics.policy_checks += 1
         
-        # No policy engine: fail closed by default. Denying here is an
-        # infrastructure/misconfiguration denial, NOT an agent policy
-        # violation, so it does not increment policy_violations or raise a
-        # signal. Permissive mode is an explicit opt-in.
+        # No policy engine: fail closed for syscalls that reach outside the
+        # agent's own sandbox. Self-scoped syscalls (own VFS, lifecycle) stay
+        # allowed so an agent can use its own memory and exit cleanly. This
+        # denial is an infrastructure/misconfiguration denial, NOT an agent
+        # policy violation, so it does not increment policy_violations or raise
+        # a signal. Permissive mode allows everything as an explicit opt-in.
         if not self._policy_engine:
-            if self._permissive:
-                logger.debug(f"[Kernel] Permissive mode, no policy engine - allowing {request.syscall.name}")
+            if self._permissive or request.syscall in _SELF_SCOPED_SYSCALLS:
+                logger.debug(f"[Kernel] No policy engine - allowing {request.syscall.name}")
                 return (True, None)
             logger.warning(
                 f"[Kernel] No policy engine configured - denying {request.syscall.name} (fail closed)"

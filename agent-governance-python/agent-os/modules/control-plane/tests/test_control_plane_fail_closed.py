@@ -72,7 +72,7 @@ def _file_read_config(strict_mode=True):
 
 @pytest.mark.asyncio
 async def test_defect1_kernel_fails_closed_without_policy_engine():
-    """#1 A kernel with no policy engine denies syscalls by default."""
+    """#1 A kernel with no policy engine denies external syscalls by default."""
     kernel = KernelSpace()  # policy_engine=None, permissive=False
     ctx = kernel.create_agent_context("agent")
     req = SyscallRequest(
@@ -88,6 +88,38 @@ async def test_defect1_kernel_fails_closed_without_policy_engine():
     result = await kernel.syscall(req, ctx)
     assert result.success is False
     assert result.error_code == -2
+
+
+@pytest.mark.asyncio
+async def test_defect1_self_scoped_syscalls_allowed_without_engine():
+    """#1 Fail-closed is scoped: a no-engine kernel still allows self-scoped
+    syscalls (own VFS, lifecycle) while denying external ones (tool execution),
+    so an agent can use its own memory and exit cleanly and is not left
+    registered."""
+    kernel = KernelSpace()  # no engine, non-permissive
+    ctx = kernel.create_agent_context("agent")
+
+    # Own-VFS write then read: allowed.
+    w = await kernel.syscall(
+        SyscallRequest(syscall=SyscallType.SYS_WRITE,
+                       args={"path": "/mem/working/n.txt", "data": "hi"}), ctx)
+    assert w.success is True
+    r = await kernel.syscall(
+        SyscallRequest(syscall=SyscallType.SYS_READ,
+                       args={"path": "/mem/working/n.txt"}), ctx)
+    assert r.success is True
+
+    # SYS_EXEC (external tool execution) stays denied.
+    x = await kernel.syscall(
+        SyscallRequest(syscall=SyscallType.SYS_EXEC,
+                       args={"tool": "rm_rf_root", "target": "/"}), ctx)
+    assert x.success is False
+
+    # SYS_EXIT is honored and removes the agent (no leak).
+    e = await kernel.syscall(
+        SyscallRequest(syscall=SyscallType.SYS_EXIT, args={"code": 0}), ctx)
+    assert e.success is True
+    assert "agent" not in kernel._agents
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,47 @@ entries appear first.
 
 ---
 
+## KernelSpace fails closed when no policy engine is configured
+
+**Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
+
+**Affected:**
+
+- `agent-governance-python` (`agent_control_plane.kernel_space`,
+  Layer 3 control plane): `KernelSpace`, `create_kernel`
+
+**What changed:**
+
+A `KernelSpace` constructed without a policy engine previously allowed every
+syscall (fail-open), including `SYS_EXEC` tool execution. It now fails closed:
+
+1. **External syscalls are denied by default.** With no `policy_engine`,
+   syscalls that reach outside the agent's own sandbox (`SYS_EXEC`, IPC,
+   signal delivery, agent spawn) are denied. The denial is returned as a clean
+   `SyscallResult(success=False)`; it does not raise a kernel panic and is not
+   counted as a policy violation.
+2. **Self-scoped syscalls stay allowed.** `SYS_EXIT` and the agent's own VFS
+   operations (`SYS_READ`, `SYS_WRITE`, `SYS_OPEN`, `SYS_CLOSE`, `SYS_STAT`)
+   remain allowed so an agent can still use its own memory and exit cleanly.
+3. **New `permissive` parameter.** `KernelSpace(..., permissive=True)` and
+   `create_kernel(..., permissive=True)` restore the previous allow-all
+   behavior as an explicit, auditable opt-in.
+
+**Why:**
+
+For a governance kernel, a missing policy engine allowing arbitrary tool
+execution is a fail-open trust-boundary hole. The safe default for a missing
+governance dependency is to refuse externally-visible actions.
+
+**How to migrate:**
+
+If you construct `KernelSpace()` or `create_kernel()` without a policy engine
+and rely on tool execution or other external syscalls, either wire a policy
+engine or pass `permissive=True` to keep the previous behavior. Agents that
+only read and write their own VFS and exit need no change.
+
+---
+
 ## Policy engines: default-deny and consistent warn/log semantics
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)
