@@ -203,8 +203,11 @@ class TestHealthReExport:
         from agent_os.health import HealthChecker, HealthStatus
 
         class _AuditBackend:
-            def write(self, entry) -> None: ...
-            def flush(self) -> None: ...
+            def write(self, entry) -> None:
+                pass
+
+            def flush(self) -> None:
+                pass
 
         checker = HealthChecker(version="test", audit_backend=_AuditBackend())
         report = checker.check_health()
