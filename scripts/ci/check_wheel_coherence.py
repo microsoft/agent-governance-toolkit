@@ -33,8 +33,13 @@ import zipfile
 from collections import defaultdict
 from pathlib import Path
 
-# Wheel metadata directories never map to importable top-level packages.
-_METADATA_SUFFIXES = (".dist-info", ".data")
+# Of a wheel's ``*.data/<category>/`` trees, only these land in site-packages
+# (and can therefore collide on import); scripts/headers/data do not.
+_IMPORTABLE_DATA_CATEGORIES = ("purelib", "platlib")
+# A single top-level file is importable only if it is a module file; its import
+# name is the part before the first dot (``foo.py`` -> ``foo``,
+# ``foo.cpython-311-x86_64-linux-gnu.so`` -> ``foo``).
+_MODULE_FILE_SUFFIXES = (".py", ".so", ".pyd")
 
 
 def _wheel_dist_name(wheel: Path) -> str:
@@ -45,22 +50,49 @@ def _wheel_dist_name(wheel: Path) -> str:
     return wheel.name.split("-", 1)[0]
 
 
+def _import_top_level(rel_path: str) -> str | None:
+    """Map a site-packages-relative path to the top-level import name it creates.
+
+    Returns ``None`` for paths that are not importable (a bare data file). A path
+    inside a directory yields that directory (regular and PEP 420 namespace
+    packages); a bare top-level file yields its module name only when it is a
+    module file, so ``foo.py`` and ``foo/`` both resolve to ``foo`` and collide.
+    """
+    head, sep, _ = rel_path.partition("/")
+    if not head:
+        return None
+    if sep:
+        return head
+    for suffix in _MODULE_FILE_SUFFIXES:
+        if head.endswith(suffix):
+            return head.split(".", 1)[0]
+    return None
+
+
 def top_level_names(wheel: Path) -> set[str]:
     """Return the set of top-level import names a wheel installs.
 
-    A top-level name is the first path component of any archive entry that is
-    not wheel metadata (``*.dist-info/``, ``*.data/``). This mirrors what pip
-    unpacks into ``site-packages``, so it is what actually collides on disk.
+    Mirrors what pip unpacks into ``site-packages``: package directories and
+    top-level module files at the wheel root, plus the ``purelib``/``platlib``
+    subtrees of ``*.data/`` (which pip relocates into site-packages).
+    ``*.dist-info/`` and the non-importable ``*.data`` categories are ignored.
     """
     names: set[str] = set()
     with zipfile.ZipFile(wheel) as zf:
         for entry in zf.namelist():
             head = entry.split("/", 1)[0]
-            if head.endswith(_METADATA_SUFFIXES):
+            if head.endswith(".dist-info"):
                 continue
-            if not head:
-                continue
-            names.add(head)
+            if head.endswith(".data"):
+                # <name>-<ver>.data/<category>/<rest>
+                parts = entry.split("/", 2)
+                if len(parts) < 3 or parts[1] not in _IMPORTABLE_DATA_CATEGORIES:
+                    continue
+                name = _import_top_level(parts[2])
+            else:
+                name = _import_top_level(entry)
+            if name:
+                names.add(name)
     return names
 
 
