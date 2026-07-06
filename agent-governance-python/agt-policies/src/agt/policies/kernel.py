@@ -319,10 +319,10 @@ class TrustTrackerLike(Protocol):
     def record_interaction(
         self, agent_id: str, peer_id: str, action: str, success: bool
     ) -> float:
-        ...
+        """Record a trust interaction and return the agent's new score."""
 
     def get_score(self, agent_id: str) -> float:
-        ...
+        """Return the agent's current trust score."""
 
 
 @runtime_checkable
@@ -330,10 +330,10 @@ class RingEnforcerLike(Protocol):
     """Structural surface of ``hypervisor.rings.RingEnforcer`` the bridge needs."""
 
     def compute_ring(self, eff_score: float, has_consensus: bool = ...) -> Any:
-        ...
+        """Return the execution ring implied by a trust/effective score."""
 
     def should_demote(self, current_ring: Any, eff_score: float) -> bool:
-        ...
+        """Return True when the score warrants demoting the current ring."""
 
     def check(
         self,
@@ -343,7 +343,7 @@ class RingEnforcerLike(Protocol):
         has_consensus: bool = ...,
         has_sre_witness: bool = ...,
     ) -> Any:
-        ...
+        """Return the ring check result for an action at the agent's ring."""
 
 
 @runtime_checkable
@@ -351,7 +351,7 @@ class ActionClassifierLike(Protocol):
     """Structural surface of ``hypervisor.rings.ActionClassifier`` the bridge needs."""
 
     def classify(self, action: Any) -> Any:
-        ...
+        """Return the classification (ring, risk weight) for an action."""
 
 
 # Host callback that delivers one governance event and reports whether it was
