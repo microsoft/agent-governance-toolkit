@@ -874,3 +874,16 @@ tcpdump
 isascii
 multisink
 writeln
+
+# --- CloudEvents / signed audit-event terms ---
+cloudevent
+cloudevents
+specversion
+datacontenttype
+schemaversion
+sessionid
+traceid
+spanid
+parentspanid
+agtsignature
+agtsignaturealg
