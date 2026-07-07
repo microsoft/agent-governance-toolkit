@@ -26,11 +26,29 @@ from agent_os.integrations.health import (
 
 @pytest.fixture
 def checker():
-    return HealthChecker(version="1.3.1")
+    # A blank-slate checker (no built-ins) for exercising registration and
+    # aggregation logic in isolation. Default HealthChecker() auto-registers
+    # built-ins; that path is covered by TestBuiltInAutoRegistration below.
+    return HealthChecker(version="1.3.1", register_builtins=False)
+
+
+class _FakeAuditBackend:
+    """Minimal audit backend exposing the write/flush interface for probes."""
+
+    def write(self, entry):
+        pass
+
+    def flush(self):
+        pass
 
 
 @pytest.fixture
-def checker_with_checks(checker):
+def checker_with_checks():
+    checker = HealthChecker(
+        version="1.3.1",
+        register_builtins=False,
+        audit_backend=_FakeAuditBackend(),
+    )
     checker.register_check("policy_engine", checker._check_policy_engine)
     checker.register_check("audit_backend", checker._check_audit_backend)
     return checker
@@ -144,10 +162,14 @@ class TestRegisterCheck:
 
 
 class TestCheckHealth:
-    def test_no_checks_is_healthy(self, checker):
+    def test_empty_report_is_unhealthy(self):
+        # Fail closed: a checker that verifies nothing must not report HEALTHY.
+        checker = HealthChecker(register_builtins=False)
         report = checker.check_health()
-        assert report.is_healthy()
         assert report.components == {}
+        assert report.status == HealthStatus.UNHEALTHY
+        assert not report.is_healthy()
+        assert not report.is_ready()
 
     def test_all_healthy(self, checker_with_checks):
         report = checker_with_checks.check_health()
@@ -231,9 +253,32 @@ class TestBuiltInChecks:
         assert result.status == HealthStatus.HEALTHY
         assert result.name == "policy_engine"
 
-    def test_audit_backend_check(self, checker):
+    def test_audit_backend_check_degraded_without_backend(self, checker):
+        # No backend configured -> DEGRADED, never a bare HEALTHY.
+        result = checker._check_audit_backend()
+        assert result.status == HealthStatus.DEGRADED
+
+    def test_audit_backend_check_healthy_with_backend(self):
+        checker = HealthChecker(
+            register_builtins=False, audit_backend=_FakeAuditBackend()
+        )
         result = checker._check_audit_backend()
         assert result.status == HealthStatus.HEALTHY
+
+
+class TestBuiltInAutoRegistration:
+    def test_fresh_checker_auto_registers_builtins(self):
+        # Flips the defect: fresh checker verifies real components, not empty.
+        report = HealthChecker().check_health()
+        assert set(report.components) == {"policy_engine", "audit_backend"}
+        # No audit backend injected -> DEGRADED, and definitely not HEALTHY.
+        assert report.status == HealthStatus.DEGRADED
+        assert not report.is_healthy()
+
+    def test_fresh_checker_healthy_with_audit_backend(self):
+        report = HealthChecker(audit_backend=_FakeAuditBackend()).check_health()
+        assert report.is_healthy()
+        assert len(report.components) == 2
 
 
 # =============================================================================
