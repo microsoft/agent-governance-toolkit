@@ -405,3 +405,11 @@ After merging ANY external contributor PR, perform these follow-up checks and fi
 - **No mocks or stubs in production code.** Always provide real, working implementations. If a dependency is unavailable, build the real integration or defer the feature — never ship a mock.
 - **No TODO/FIXME/HACK comments as placeholders.** If something needs to be done, do it now or track it as a GitHub issue. Code with TODO comments will not be merged.
 - **No placeholder or skeleton implementations.** Every function, class, and module must be fully implemented and tested. Empty methods, `pass` bodies, `raise NotImplementedError`, or `// TODO` stubs are not acceptable.
+
+## User-Facing Agent Skills
+
+Use the matching prompt file when the user's request matches:
+
+- **apply-acs-policy** (`.github/prompts/apply-acs-policy.prompt.md`): Shield an agent with Agent Control Specification. Gathers a threat statement and intervention points, generates an ACS manifest and Rego policy with the `acs` generator CLI, validates it, and reports per-intervention-point verdicts (allow, warn, deny, escalate, transform).
+
+Equivalent guidance for other assistants lives in `.claude/skills/apply-acs-policy/SKILL.md` (Claude Code) and `.cursor/rules/acs.mdc` (Cursor). Keep all three aligned when you change the methodology.

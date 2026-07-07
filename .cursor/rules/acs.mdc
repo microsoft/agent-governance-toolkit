@@ -1,0 +1,62 @@
+---
+description: ACS repo orientation pointer plus the self-contained apply-acs-policy governance workflow.
+globs:
+alwaysApply: true
+---
+
+# Agent Control Specification — Cursor rules
+
+Read `AGENTS.md` at the repository root first, then `policy-engine/AGENTS.md` for
+ACS vocabulary and runtime invariants. Those files are the source of truth for
+this repository. Do not copy their content here so the two cannot drift.
+
+Never read, print, commit, or infer values from `.env` or other local
+environment files. The LLM-backed generator path reads `ACS_GENERATOR_API_*`
+variable NAMES only; the guided `acs init` path needs no credentials.
+
+## Apply an ACS governance policy
+
+When the user wants to shield, guard, or apply a control policy to an agent,
+author an ACS policy and show what it does. Orchestrate the existing `acs`
+generator CLI and the ACS SDK. Do not reimplement decision logic, which lives in
+the Rust `core/`.
+
+ACS mediates the agent loop `Input -> Model -> Tool Call -> Tool Result ->
+Output` at eight intervention points: `agent_startup`, `input`,
+`pre_model_call`, `post_model_call`, `pre_tool_call`, `post_tool_call`,
+`output`, `agent_shutdown`. Each returns a verdict of `allow`, `warn`, `deny`,
+`escalate`, or `transform`. Runtime errors fail closed to `deny`.
+
+### Workflow
+
+1. **Gather** the threat statement and the intervention points to guard. Ask one
+   clarifying question first if the request is vague.
+2. **Preconditions**: `acs --help` works (`pip install ./policy-engine/generator`),
+   and the native SDK imports (`pip install ./policy-engine/sdk/python`) because
+   `acs init` runs core semantic validation through it. `--strict` additionally
+   needs an `opa` binary on `PATH`.
+3. **Generate** with the deterministic guided path:
+   ```
+   acs init --non-interactive --name "<name>" --points <points> \
+     --tool <name>:<clearances> --deny-keyword <word> \
+     --escalate-tool <name> --redact-output-pattern '<regex>' \
+     --sample-test --out build/<slug>
+   ```
+   This writes `manifest.yaml`, `policy/<slug>.rego`, `report.md`,
+   `snapshots/<intervention_point>.json`, and `test_policy.py`.
+4. **Show and confirm** the intervention points and verdict rules before
+   treating the policy as final.
+5. **Validate** with `--strict` when an `opa` binary is on `PATH`, then **report**
+   a per-intervention-point verdict table from `report.md` and the snapshots. Do
+   not invent verdicts. If OPA is missing, say Rego was not evaluated.
+6. **Wire ACS into the host** as an optional next step using the Python SDK:
+   `AgentControl.from_path("manifest.yaml")`, then `control.protect_tool(...)`
+   or `control.run(...)`. See `policy-engine/sdk/python/README.md` and the
+   `policy-engine/examples/bank_agent` reference.
+
+### Guardrails
+
+- Orchestrate the CLI and SDK; never hand-code verdict logic.
+- Report only verdicts present in the generated artifacts.
+- ACS is fail-closed. Never suggest a bypass path.
+- Do not read, print, or commit `.env`, credential values, or build outputs.

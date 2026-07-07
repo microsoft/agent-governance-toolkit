@@ -80,6 +80,17 @@ The package provides two Claude commands:
 - `/agt-governance:agt-status`
 - `/agt-governance:agt-check`
 
+## Skills
+
+The package also bundles a conversational skill under `skills/`:
+
+- `apply-acs-policy` (`skills/apply-acs-policy/SKILL.md`) — shield an agent with
+  Agent Control Specification. It gathers a threat statement and intervention
+  points, generates an ACS manifest and Rego policy with the `acs` generator
+  CLI, validates it, and reports the per-intervention-point verdicts. Unlike the
+  governance hooks above, this skill orchestrates the `acs` CLI and SDK; it does
+  not govern the Claude session itself.
+
 ## Example walkthrough
 
 For a runnable repo-local walkthrough with a sample policy override, expected prompts, and cleanup

@@ -114,6 +114,14 @@ Before opening a PR:
 - treat expected 403-prone external links as markdown-link-check exceptions, not flaky failures
 - fix spell-check issues on changed lines before requesting review
 
+## Agent skills
+
+These are conversational skills for end users driving the toolkit through a coding assistant. Each skill orchestrates existing CLI commands and SDK surfaces. It does not reimplement policy or runtime logic.
+
+| Skill | Claude Code | GitHub Copilot | Cursor | What it does |
+|---|---|---|---|---|
+| `apply-acs-policy` | `.claude/skills/apply-acs-policy/SKILL.md` | `.github/prompts/apply-acs-policy.prompt.md` | `.cursor/rules/acs.mdc` | Shield an agent with Agent Control Specification. Gathers a threat statement and intervention points, generates a manifest and Rego policy with `acs init`, validates it, and reports per-intervention-point verdicts. |
+
 ## Validation
 
 - Run the narrowest existing tests for the paths you touched.

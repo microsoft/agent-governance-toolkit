@@ -29,7 +29,8 @@ node_modules/
 .idea/
 *.swp
 *.swo
-.claude/
+.claude/*
+!.claude/skills/
 .opencode/
 
 ## Ignore Visual Studio temporary files, build results, and
