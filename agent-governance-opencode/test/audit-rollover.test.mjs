@@ -12,6 +12,7 @@ import {
   getAuditStatus,
   loadAuditEntries,
   loadAuditFile,
+  MAX_ENTRIES,
   verifyAuditEntries,
 } from "../lib/audit.mjs";
 
@@ -28,6 +29,58 @@ async function chain(path, n) {
   }
   return loadAuditEntries(path);
 }
+
+test("MAX_ENTRIES default is exported and positive", () => {
+  assert.equal(Number.isInteger(MAX_ENTRIES), true);
+  assert.ok(MAX_ENTRIES > 0);
+});
+
+test("append itself evicts and computes the seam once entries exceed the limit", async () => {
+  const { dir, path } = await tmp();
+  try {
+    const limit = 3;
+    // Drive the real appendAuditEntry eviction path (combined.length > limit),
+    // not a hand-written rolled-over file. limit + 2 appends force the
+    // eviction/seam-computation branch to run more than once.
+    for (let i = 0; i < limit + 2; i += 1) {
+      await appendAuditEntry(
+        path,
+        { agentId: "a", action: `tool.t${i}`, decision: "allow" },
+        { limit },
+      );
+    }
+
+    const { seamHash, entries } = await loadAuditFile(path);
+    // Capped at the limit, oldest entries dropped, newest retained in order.
+    assert.equal(entries.length, limit);
+    assert.deepEqual(
+      entries.map((e) => e.action),
+      ["tool.t2", "tool.t3", "tool.t4"],
+    );
+    // A seam was computed and the surviving head links to it (not GENESIS).
+    assert.notEqual(seamHash, null);
+    assert.notEqual(entries[0].previousHash, GENESIS);
+    assert.equal(entries[0].previousHash, seamHash);
+
+    // Persisted format switched to { seamHash, entries } once rolled over.
+    const raw = JSON.parse(await readFile(path, "utf8"));
+    assert.equal(Array.isArray(raw), false);
+    assert.equal(raw.seamHash, seamHash);
+    assert.ok(Array.isArray(raw.entries));
+
+    // Chain verifies and further appends are still accepted (no brick).
+    assert.equal(verifyAuditEntries(entries, seamHash), true);
+    assert.equal((await getAuditStatus(path)).valid, true);
+    await appendAuditEntry(
+      path,
+      { agentId: "a", action: "tool.more", decision: "allow" },
+      { limit },
+    );
+    assert.equal((await getAuditStatus(path)).valid, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 
 test("rolled-over log (seam-anchored head) still verifies and accepts appends", async () => {
   const { dir, path } = await tmp();

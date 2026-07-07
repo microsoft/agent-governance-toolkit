@@ -7,9 +7,9 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const GENESIS_HASH = "0".repeat(64);
-const MAX_ENTRIES = 10000;
+export const MAX_ENTRIES = 10000;
 
-export async function appendAuditEntry(auditPath, entry) {
+export async function appendAuditEntry(auditPath, entry, { limit = MAX_ENTRIES } = {}) {
   const { seamHash, entries } = await loadAuditFile(auditPath);
   if (!verifyAuditEntries(entries, seamHash)) {
     throw new Error(`Audit log at ${auditPath} failed hash-chain verification.`);
@@ -37,14 +37,16 @@ export async function appendAuditEntry(auditPath, entry) {
   const combined = [...entries, nextEntry];
   let nextSeam = seamHash;
   let nextEntries = combined;
-  if (combined.length > MAX_ENTRIES) {
+  if (combined.length > limit) {
     // Evict the oldest entries, retaining the last evicted entry's hash as
     // the seam so verifyAuditEntries can re-anchor the surviving chain
     // instead of expecting GENESIS at its head. Without this, the previous
     // implementation truncated to a non-GENESIS-anchored head, which made
     // verification fail permanently and — because appends fail closed —
     // caused every subsequent governance decision to be denied.
-    const overflow = combined.length - MAX_ENTRIES;
+    // `limit` defaults to MAX_ENTRIES; it is injectable so tests can exercise
+    // this real eviction/seam-computation path without writing MAX_ENTRIES rows.
+    const overflow = combined.length - limit;
     nextSeam = combined[overflow - 1].hash;
     nextEntries = combined.slice(overflow);
   }
@@ -86,6 +88,20 @@ export async function loadAuditFile(auditPath) {
     const text = await readFile(auditPath, "utf8");
     const value = JSON.parse(text);
     if (Array.isArray(value)) {
+      // Legacy bare-array recovery: a non-GENESIS head means a prior version
+      // already front-truncated this log without persisting a seam. We adopt the
+      // head's own previousHash as the seam so the surviving chain verifies
+      // instead of staying permanently bricked.
+      //
+      // Trade-off (inherent, and by design): the seam here is *derived from* the
+      // surviving head rather than independently authenticating it, so a
+      // malicious prefix deletion of a legacy bare array is indistinguishable
+      // from a legitimate rollover and is accepted. A hash chain cannot detect
+      // head deletion once GENESIS anchoring is relaxed; this is the unavoidable
+      // cost of un-bricking real deployments, and it does not weaken in-place
+      // tamper detection (per-entry content hashes are still verified). Logs
+      // written by the current code carry an explicit seam and never take this
+      // path.
       const head = value[0];
       const seamHash =
         head && typeof head.previousHash === "string" && head.previousHash !== GENESIS_HASH
