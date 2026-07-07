@@ -228,6 +228,17 @@ def test_ssn_pattern_matches_all_separator_variants(ssn: str):
     assert CredentialRedactor.redact(ssn, redact_pii=True) == REDACTED_PLACEHOLDER
 
 
+def test_ssn_word_boundary_does_not_overmatch_longer_digit_runs():
+    # The no-separator SSN branch matches a bare 9-digit run. The \b anchors
+    # must keep it from over-matching longer numeric IDs (e.g. account numbers),
+    # which now surface through find_pii_matches()/contains_pii() callers such
+    # as mcp_response_scanner.py and stateless.py. A 12-digit run is longer
+    # than both SSN (9) and US phone (10/11 with optional leading 1), so no PII
+    # pattern should fire. (Review feedback on #3259.)
+    assert CredentialRedactor.contains_pii("acct 123456789012") is False
+    assert CredentialRedactor.find_pii_matches("acct 123456789012") == []
+
+
 def test_redact_pii_still_redacts_secrets_too():
     text = "key=sk-test_abcdefghijklmnopqrstuvwxyz email user@example.com"
 

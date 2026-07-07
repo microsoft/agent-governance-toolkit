@@ -252,6 +252,10 @@ class CredentialRedactor:
     ) -> dict[str, Any]:
         """Compatibility alias for dictionary redaction.
 
+        Kept for external API stability; there are no in-repo production callers
+        (callers use :meth:`redact_mapping` / :meth:`redact_data_structure`
+        directly). It threads ``redact_pii`` through for symmetry only.
+
         Args:
             mapping: Dictionary-like content to redact.
             redact_pii: When ``True``, also redact PII/CRI patterns. Defaults
@@ -265,6 +269,13 @@ class CredentialRedactor:
     @classmethod
     def redact_data_structure(cls, value: Any, *, redact_pii: bool = False) -> Any:
         """Recursively redact nested strings in dicts, lists, and tuples.
+
+        ``redact_pii`` defaults to ``False`` to preserve the historical
+        secrets-only behavior. The only production caller (the MCP gateway
+        audit path in ``mcp_gateway.py``) deliberately does not flip it: PII
+        scrubbing is an opt-in capability and ships wired to zero callers by
+        default, so audit logs retain their existing shape until a caller
+        explicitly opts in. See issue #3239.
 
         Args:
             value: Any Python value that may contain nested strings.
