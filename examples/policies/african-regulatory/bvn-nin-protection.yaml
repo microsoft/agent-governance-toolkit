@@ -214,28 +214,19 @@ rules:
     priority: 100
     message: "NIMC Act 2026: Bulk NIN/identity data export is prohibited — only individual authorised verifications are permitted"
 
-  - name: nimc-2026-purpose-limitation-gate
-    condition:
-      all:
-        - field: action
-          operator: matches
-          value: "^(verify_nin|check_nin|validate_nin|nin_lookup|nimc_nin_verify|verify_bvn|check_bvn|validate_bvn|bvn_lookup|nibss_bvn_verify)$"
-        - field: context.nin_purpose
-          operator: equals
-          value: ""
-    action: block
-    priority: 95
-    message: "NIMC Act 2026: NIN/BVN lookup attempted without a declared purpose — purpose limitation requires stating the reason before each verification"
+  # nimc-2026-purpose-limitation-gate is intentionally absent from this YAML.
+  # The regulation requires blocking NIN/BVN lookups that have no declared purpose.
+  # Expressing this needs two simultaneous predicates: action matches the lookup
+  # pattern AND context.nin_purpose is absent or empty. The Agent-OS PolicyCondition
+  # schema is a flat single-predicate model (field/operator/value only; no all/any
+  # composition). The full compound rule lives in the Rego reference layer:
+  #   rego/bvn-nin-protection.rego  nimc_2026_purpose_limitation_block
 
   - name: nimc-2026-mandatory-nin-service-gate
     condition:
-      all:
-        - field: action
-          operator: matches
-          value: "^(open_account|create_account|register_voter|apply_passport|sim_registration|land_registration|pension_enrollment|insurance_enrollment|apply_credit|tax_registration|apply_government_service)$"
-        - field: context.nin_verified
-          operator: not_equals
-          value: true
+      field: action
+      operator: matches
+      value: "^(open_account|create_account|register_voter|apply_passport|sim_registration|land_registration|pension_enrollment|insurance_enrollment|apply_credit|tax_registration|apply_government_service)$"
     action: audit
     priority: 80
     message: "NIMC Act 2026: This service requires verified NIN — bank accounts, SIM, passports, land transactions, pension, insurance, and consumer credit are mandatory-NIN services"
