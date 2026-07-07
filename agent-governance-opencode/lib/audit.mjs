@@ -88,20 +88,12 @@ export async function loadAuditFile(auditPath) {
     const text = await readFile(auditPath, "utf8");
     const value = JSON.parse(text);
     if (Array.isArray(value)) {
-      // Legacy bare-array recovery: a non-GENESIS head means a prior version
-      // already front-truncated this log without persisting a seam. We adopt the
-      // head's own previousHash as the seam so the surviving chain verifies
-      // instead of staying permanently bricked.
-      //
-      // Trade-off (inherent, and by design): the seam here is *derived from* the
-      // surviving head rather than independently authenticating it, so a
-      // malicious prefix deletion of a legacy bare array is indistinguishable
-      // from a legitimate rollover and is accepted. A hash chain cannot detect
-      // head deletion once GENESIS anchoring is relaxed; this is the unavoidable
-      // cost of un-bricking real deployments, and it does not weaken in-place
-      // tamper detection (per-entry content hashes are still verified). Logs
-      // written by the current code carry an explicit seam and never take this
-      // path.
+      // Legacy recovery: a non-GENESIS head means a prior version front-truncated
+      // this log without a seam; adopt the head's previousHash as the seam so it
+      // verifies instead of staying bricked. Trade-off: the seam is derived from
+      // (not authenticating) the head, so a malicious prefix deletion of a legacy
+      // log is indistinguishable from a real rollover — unavoidable once GENESIS
+      // anchoring is relaxed, and in-place tamper detection is unaffected.
       const head = value[0];
       const seamHash =
         head && typeof head.previousHash === "string" && head.previousHash !== GENESIS_HASH
