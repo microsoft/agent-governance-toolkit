@@ -24,6 +24,7 @@ from agent_os.integrations.base import (
     PatternType,
     PolicyInterceptor,
     ToolCallRequest,
+    ToolCallResult,
 )
 from agent_os.integrations.langchain_adapter import (
     LangChainKernel,
@@ -431,7 +432,12 @@ class TestGovernancePolicyYAML:
             information_flow={
                 "enabled": True,
                 "strict": True,
-                "default_source_integrity": "untrusted",
+                "sinks": {
+                    "send_email": {
+                        "accepts_untrusted": False,
+                        "max_allowed_confidentiality": "internal",
+                    }
+                },
             }
         )
 
@@ -440,7 +446,12 @@ class TestGovernancePolicyYAML:
         assert p2.information_flow == {
             "enabled": True,
             "strict": True,
-            "default_source_integrity": "untrusted",
+            "sinks": {
+                "send_email": {
+                    "accepts_untrusted": False,
+                    "max_allowed_confidentiality": "internal",
+                }
+            },
         }
 
     def test_from_yaml_invalid_yaml(self):
@@ -799,7 +810,7 @@ class TestBaseIntegrationPreExecute:
         assert allowed is True
         assert reason is None
 
-    def test_information_flow_strict_denies_missing_sink_metadata(self):
+    def test_information_flow_strict_denies_sink_role_without_trusted_policy(self):
         k = self._kernel(information_flow={"enabled": True, "strict": True})
         ctx = k.create_context("a1")
 
@@ -812,9 +823,9 @@ class TestBaseIntegrationPreExecute:
         )
 
         assert allowed is False
-        assert "IFC strict mode requires sink metadata for governed sink calls" in reason
+        assert "IFC strict mode requires trusted sink policy for governed sink calls" in reason
 
-    def test_information_flow_strict_denies_configured_sink_without_metadata(self):
+    def test_information_flow_strict_denies_configured_sink_without_policy(self):
         k = self._kernel(
             information_flow={
                 "enabled": True,
@@ -827,7 +838,7 @@ class TestBaseIntegrationPreExecute:
         allowed, reason = k.pre_execute(ctx, {"tool_name": "send_email"})
 
         assert allowed is False
-        assert "IFC strict mode requires sink metadata for governed sink calls" in reason
+        assert "IFC strict mode requires trusted sink policy for governed sink calls" in reason
 
     def test_information_flow_strict_allows_non_sink_tool_without_sink_metadata(self):
         k = self._kernel(information_flow={"enabled": True, "strict": True})
@@ -845,7 +856,18 @@ class TestBaseIntegrationPreExecute:
         assert reason is None
 
     def test_information_flow_denies_untrusted_context_to_trusted_only_sink(self):
-        k = self._kernel(information_flow={"enabled": True, "strict": True})
+        k = self._kernel(
+            information_flow={
+                "enabled": True,
+                "strict": True,
+                "sinks": {
+                    "send_email": {
+                        "accepts_untrusted": False,
+                        "max_allowed_confidentiality": "restricted",
+                    }
+                },
+            }
+        )
         ctx = k.create_context("a1")
         ctx.context_envelope = ContextEnvelope(
             envelope_id="env1",
@@ -853,22 +875,24 @@ class TestBaseIntegrationPreExecute:
             integrity="untrusted",
         )
 
-        allowed, reason = k.pre_execute(
-            ctx,
-            {
-                "tool_name": "send_email",
-                "information_flow": {
-                    "accepts_untrusted": False,
-                    "max_allowed_confidentiality": "restricted",
-                },
-            },
-        )
+        allowed, reason = k.pre_execute(ctx, {"tool_name": "send_email"})
 
         assert allowed is False
         assert "untrusted context cannot flow" in reason
 
-    def test_information_flow_denies_object_shaped_untrusted_sink_request(self):
-        k = self._kernel(information_flow={"enabled": True, "strict": True})
+    def test_information_flow_ignores_request_metadata_that_loosens_configured_sink(self):
+        k = self._kernel(
+            information_flow={
+                "enabled": True,
+                "strict": True,
+                "sinks": {
+                    "send_email": {
+                        "accepts_untrusted": False,
+                        "max_allowed_confidentiality": "restricted",
+                    }
+                },
+            }
+        )
         ctx = k.create_context("a1")
         ctx.context_envelope = ContextEnvelope(
             envelope_id="env1",
@@ -884,7 +908,7 @@ class TestBaseIntegrationPreExecute:
                 metadata={
                     "information_flow": {
                         "role": "sink",
-                        "accepts_untrusted": False,
+                        "accepts_untrusted": True,
                         "max_allowed_confidentiality": "restricted",
                     },
                 },
@@ -895,7 +919,18 @@ class TestBaseIntegrationPreExecute:
         assert "untrusted context cannot flow" in reason
 
     def test_information_flow_denies_over_confidential_context(self):
-        k = self._kernel(information_flow={"enabled": True, "strict": True})
+        k = self._kernel(
+            information_flow={
+                "enabled": True,
+                "strict": True,
+                "sinks": {
+                    "public_export": {
+                        "accepts_untrusted": True,
+                        "max_allowed_confidentiality": "internal",
+                    }
+                },
+            }
+        )
         ctx = k.create_context("a1")
         ctx.context_envelope = ContextEnvelope(
             envelope_id="env1",
@@ -903,16 +938,7 @@ class TestBaseIntegrationPreExecute:
             aggregate_sensitivity=DC.CONFIDENTIAL,
         )
 
-        allowed, reason = k.pre_execute(
-            ctx,
-            {
-                "tool_name": "public_export",
-                "information_flow": {
-                    "accepts_untrusted": True,
-                    "max_allowed_confidentiality": "internal",
-                },
-            },
-        )
+        allowed, reason = k.pre_execute(ctx, {"tool_name": "public_export"})
 
         assert allowed is False
         assert "CONFIDENTIAL exceeds INTERNAL" in reason
@@ -961,14 +987,16 @@ class TestBaseIntegrationPostExecute:
 
         k.post_execute(
             ctx,
-            {
-                "result": "mail content",
-                "information_flow": {
-                    "integrity": "untrusted",
-                    "confidentiality": "private",
-                    "categories": ["pii"],
+            ToolCallResult(
+                allowed=True,
+                metadata={
+                    "information_flow": {
+                        "integrity": "untrusted",
+                        "confidentiality": "private",
+                        "categories": ["pii"],
+                    }
                 },
-            },
+            ),
         )
 
         assert ctx.context_envelope is not None
@@ -982,20 +1010,54 @@ class TestBaseIntegrationPostExecute:
 
         allowed, reason = k.post_execute(
             ctx,
-            {
-                "result": "mail content",
-                "information_flow": {
-                    "integrity": "trusted-ish",
-                    "confidentiality": "private",
+            ToolCallResult(
+                allowed=True,
+                metadata={
+                    "information_flow": {
+                        "integrity": "trusted-ish",
+                        "confidentiality": "private",
+                    }
                 },
-            },
+            ),
         )
 
         assert allowed is False
         assert "integrity" in reason
 
-    def test_information_flow_blocks_malicious_untrusted_content_exfiltration(self):
+    def test_information_flow_post_execute_ignores_body_controlled_labels(self):
         k = self._kernel(information_flow={"enabled": True, "strict": True})
+        ctx = k.create_context("a1")
+
+        allowed, reason = k.post_execute(
+            ctx,
+            {
+                "result": "attacker-controlled body label",
+                "information_flow": {
+                    "integrity": "trusted",
+                    "confidentiality": "public",
+                },
+            },
+        )
+
+        assert allowed is True
+        assert reason is None
+        assert ctx.context_envelope is not None
+        assert ctx.context_envelope.integrity == "untrusted"
+        assert ctx.context_envelope.aggregate_sensitivity == DC.TOP_SECRET
+
+    def test_information_flow_blocks_malicious_untrusted_content_exfiltration(self):
+        k = self._kernel(
+            information_flow={
+                "enabled": True,
+                "strict": True,
+                "sinks": {
+                    "send_external_email": {
+                        "accepts_untrusted": False,
+                        "max_allowed_confidentiality": "internal",
+                    }
+                },
+            }
+        )
         ctx = k.create_context("support-agent")
         store = QuarantinedInformationFlowStore()
         source_label = InformationFlowLabel(
@@ -1015,22 +1077,15 @@ class TestBaseIntegrationPostExecute:
         )
         k.post_execute(
             ctx,
-            {
-                "content_ref": "ifcvar://customer-email",
-                "information_flow": source_label.to_metadata(),
-            },
+            ToolCallResult(
+                allowed=True,
+                metadata={"information_flow": source_label.to_metadata()},
+            ),
         )
 
         allowed, reason = k.pre_execute(
             ctx,
-            {
-                "tool_name": "send_external_email",
-                "information_flow": {
-                    "role": "sink",
-                    "accepts_untrusted": False,
-                    "max_allowed_confidentiality": "internal",
-                },
-            },
+            {"tool_name": "send_external_email", "information_flow": {"role": "sink"}},
         )
         safe_reveal = store.reveal(
             "customer-email",
@@ -1042,6 +1097,7 @@ class TestBaseIntegrationPostExecute:
                 authority="support-policy",
                 reason="ticket id is safe to show in triage",
                 authorization_reference="approval://support-policy/123",
+                authorizer=lambda _label: True,
             ),
         )
 

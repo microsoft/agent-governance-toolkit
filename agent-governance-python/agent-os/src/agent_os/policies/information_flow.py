@@ -69,8 +69,8 @@ class InformationFlowLabel:
     data-governance policies and context accumulation continue to compose.
     """
 
-    integrity: IntegrityLabel = IntegrityLabel.TRUSTED
-    confidentiality: DataClassification = DataClassification.PUBLIC
+    integrity: IntegrityLabel = IntegrityLabel.UNTRUSTED
+    confidentiality: DataClassification = DataClassification.TOP_SECRET
     categories: frozenset[str] = frozenset()
     source: str = ""
 
@@ -97,6 +97,7 @@ class InformationFlowLabel:
         value: Mapping[str, Any],
         *,
         default_integrity: IntegrityLabel = IntegrityLabel.UNTRUSTED,
+        default_confidentiality: DataClassification = DataClassification.TOP_SECRET,
     ) -> InformationFlowLabel:
         """Parse AGT or FIDES-compatible label metadata."""
 
@@ -107,7 +108,7 @@ class InformationFlowLabel:
         confidentiality = _coerce_confidentiality(
             label_value.get(
                 "confidentiality",
-                label_value.get("classification", DataClassification.PUBLIC),
+                label_value.get("classification", default_confidentiality),
             )
         )
         categories = label_value.get("categories", label_value.get("labels", ()))
@@ -323,6 +324,7 @@ class QuarantinedInformationFlowStore:
                 authority=policy.authority,
                 reason=policy.reason,
                 authorization_reference=policy.authorization_reference,
+                authorizer=policy.authorizer,
             )
             if not declassified.allowed:
                 return declassified
@@ -334,6 +336,7 @@ class QuarantinedInformationFlowStore:
                 authority=policy.authority,
                 reason=policy.reason,
                 authorization_reference=policy.authorization_reference,
+                authorizer=policy.authorizer,
             )
             if not endorsed.allowed:
                 return endorsed
@@ -384,7 +387,7 @@ def default_unlabeled_source_label(source: str = "") -> InformationFlowLabel:
 
     return InformationFlowLabel(
         integrity=IntegrityLabel.UNTRUSTED,
-        confidentiality=DataClassification.PUBLIC,
+        confidentiality=DataClassification.TOP_SECRET,
         source=source,
     )
 
@@ -459,15 +462,22 @@ def declassify_label(
     authority: str,
     reason: str,
     authorization_reference: str = "",
+    authorizer: Callable[[InformationFlowLabel], bool] | None = None,
 ) -> InformationFlowTransformDecision:
     """Explicitly lower confidentiality with an auditable authority and reason."""
 
     target = _coerce_confidentiality(target_confidentiality)
-    if not authority or not reason or not authorization_reference:
+    if (
+        not authority
+        or not reason
+        or not authorization_reference
+        or authorizer is None
+        or not authorizer(label)
+    ):
         return InformationFlowTransformDecision(
             allowed=False,
             label=label,
-            reason="IFC declassification requires explicit authorization",
+            reason="IFC declassification requires trusted authorizer approval",
             violation=InformationFlowViolation.DECLASSIFICATION_DENIED,
         )
     if target > label.confidentiality:
@@ -500,14 +510,21 @@ def endorse_label(
     authority: str,
     reason: str,
     authorization_reference: str = "",
+    authorizer: Callable[[InformationFlowLabel], bool] | None = None,
 ) -> InformationFlowTransformDecision:
     """Explicitly raise integrity from untrusted to trusted."""
 
-    if not authority or not reason or not authorization_reference:
+    if (
+        not authority
+        or not reason
+        or not authorization_reference
+        or authorizer is None
+        or not authorizer(label)
+    ):
         return InformationFlowTransformDecision(
             allowed=False,
             label=label,
-            reason="IFC endorsement requires explicit authorization",
+            reason="IFC endorsement requires trusted authorizer approval",
             violation=InformationFlowViolation.ENDORSEMENT_DENIED,
         )
     return InformationFlowTransformDecision(
@@ -580,8 +597,8 @@ def requires_sink_metadata(payload: Any) -> bool:
     return _information_flow_role(normalized) is InformationFlowRole.SINK
 
 
-def sink_policy_from_payload(payload: Any) -> InformationFlowSinkPolicy | None:
-    """Extract sink policy metadata from a runtime payload if present."""
+def _sink_policy_from_payload(payload: Any) -> InformationFlowSinkPolicy | None:
+    """Parse legacy sink policy payloads without exposing runtime authorization."""
 
     normalized = _payload_mapping(payload)
     if normalized is None:
@@ -762,4 +779,4 @@ def _is_authorized(
         return False
     if policy.authorizer is not None:
         return bool(policy.authorizer(label))
-    return bool(policy.authorization_reference)
+    return False

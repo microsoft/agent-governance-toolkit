@@ -65,7 +65,6 @@ from .information_flow import (
     label_from_payload,
     normalize_fides_additional_properties,
     requires_sink_metadata,
-    sink_policy_from_payload,
 )
 from .dynamic_context import (
     CostContext,
@@ -145,7 +144,6 @@ __all__ = [
     "merge_restrictions",
     "normalize_fides_additional_properties",
     "requires_sink_metadata",
-    "sink_policy_from_payload",
     "to_policy_action",
     "ExternalPolicyBackend",
     "OPABackend",

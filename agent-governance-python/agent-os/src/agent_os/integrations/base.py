@@ -809,6 +809,7 @@ class ToolCallResult:
     reason: str | None = None
     modified_arguments: dict[str, Any] | None = None  # For argument sanitization
     audit_entry: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self) -> str:
         return f"ToolCallResult(allowed={self.allowed!r}, reason={self.reason!r})"
@@ -1242,13 +1243,63 @@ class BaseIntegration(ABC):
     @staticmethod
     def _information_flow_sink_tools(policy: GovernancePolicy) -> frozenset[str]:
         configured = policy.information_flow.get("sink_tools", ())
+        sinks = policy.information_flow.get("sinks", ())
+        names: set[str] = set()
+        if isinstance(sinks, Mapping):
+            names.update(str(tool) for tool in sinks if str(tool).strip())
         if configured is None:
-            return frozenset()
+            return frozenset(names)
+        if isinstance(configured, Mapping):
+            names.update(str(tool) for tool in configured if str(tool).strip())
+            return frozenset(names)
         if isinstance(configured, str):
-            return frozenset({configured})
+            names.add(configured)
+            return frozenset(names)
         if not isinstance(configured, (list, tuple, set, frozenset)):
-            raise ValueError("IFC sink_tools must be a string or collection of strings")
-        return frozenset(str(tool) for tool in configured if str(tool).strip())
+            raise ValueError("IFC sink_tools must be a string, mapping, or collection of strings")
+        names.update(str(tool) for tool in configured if str(tool).strip())
+        return frozenset(names)
+
+    @staticmethod
+    def _information_flow_sink_policy(
+        policy: GovernancePolicy,
+        tool_name: str,
+    ) -> Any | None:
+        if not tool_name:
+            return None
+        from agent_os.policies.information_flow import InformationFlowSinkPolicy
+
+        for section_name in ("sinks", "sink_tools"):
+            configured = policy.information_flow.get(section_name, ())
+            if isinstance(configured, Mapping) and tool_name in configured:
+                value = configured[tool_name]
+                if not isinstance(value, Mapping):
+                    raise ValueError(
+                        f"IFC {section_name}.{tool_name} must be a sink policy mapping"
+                    )
+                return InformationFlowSinkPolicy.from_mapping(value, default_name=tool_name)
+        return None
+
+    @staticmethod
+    def _trusted_information_flow_metadata(output_data: Any) -> Mapping[str, Any] | None:
+        metadata = getattr(output_data, "metadata", None)
+        if isinstance(metadata, Mapping):
+            information_flow = metadata.get("information_flow")
+            if isinstance(information_flow, Mapping):
+                return {"information_flow": information_flow}
+            ifc = metadata.get("ifc")
+            if isinstance(ifc, Mapping):
+                return {"ifc": ifc}
+            agt_ifc = metadata.get("agt_ifc")
+            if isinstance(agt_ifc, Mapping):
+                return {"agt_ifc": agt_ifc}
+            additional = metadata.get("additional_properties")
+            if isinstance(additional, Mapping):
+                return {"additional_properties": additional}
+            fides = metadata.get("fides")
+            if isinstance(fides, Mapping):
+                return {"fides": fides}
+        return None
 
     @staticmethod
     def _ensure_context_envelope(ctx: ExecutionContext) -> ContextEnvelope:
@@ -1911,7 +1962,6 @@ class BaseIntegration(ABC):
             from agent_os.policies.information_flow import (
                 enforce_sink,
                 requires_sink_metadata,
-                sink_policy_from_payload,
             )
 
             tool_name = (
@@ -1920,9 +1970,9 @@ class BaseIntegration(ABC):
                 else getattr(input_data, "tool_name", "")
             )
             try:
-                sink_policy = sink_policy_from_payload(input_data)
                 missing_required_sink_metadata = requires_sink_metadata(input_data)
                 governed_sink_tools = self._information_flow_sink_tools(ctx.policy)
+                sink_policy = self._information_flow_sink_policy(ctx.policy, str(tool_name))
             except ValueError as exc:
                 self._release_semaphore_if_held(ctx)
                 result = deny_information_flow(
@@ -1943,7 +1993,7 @@ class BaseIntegration(ABC):
                 if missing_required_sink_metadata or str(tool_name) in governed_sink_tools:
                     self._release_semaphore_if_held(ctx)
                     result = deny_information_flow(
-                        "IFC strict mode requires sink metadata for governed sink calls",
+                        "IFC strict mode requires trusted sink policy for governed sink calls",
                         violation="missing_sink_metadata",
                         tool_name=str(tool_name) if tool_name else None,
                     )
@@ -2185,16 +2235,23 @@ class BaseIntegration(ABC):
 
         if self._information_flow_enabled(ctx.policy):
             from agent_os.policies.information_flow import (
+                default_unlabeled_source_label,
                 fold_information_flow_label,
                 label_from_payload,
             )
             from agent_os.policies.decision_factory import deny_information_flow
 
             try:
-                label = label_from_payload(
-                    output_data,
-                    strict=self._information_flow_strict(ctx.policy),
-                )
+                trusted_metadata = self._trusted_information_flow_metadata(output_data)
+                if trusted_metadata is not None:
+                    label = label_from_payload(
+                        trusted_metadata,
+                        strict=self._information_flow_strict(ctx.policy),
+                    )
+                else:
+                    label = default_unlabeled_source_label(
+                        type(output_data).__name__ if output_data is not None else "unlabeled"
+                    )
             except ValueError as exc:
                 return deny_information_flow(
                     str(exc),

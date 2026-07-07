@@ -187,7 +187,8 @@ It labels source output, accumulates integrity and confidentiality in
 - ✅ AGT can quarantine untrusted tool results behind opaque variable handles and
   reveal only bounded, explicitly authorized fields
 - ✅ AGT can declassify confidentiality or endorse integrity only through
-  explicit audited transforms with authority and reason
+  explicit audited transforms with authority, reason, and trusted authorizer
+  approval
 - ✅ AGT can project the IFC profile into ACS via `annotations.information_flow`
 - ❌ AGT does **not** yet claim durable distributed IFC across sessions,
   persistent storage, arbitrary mesh topologies, or relay-side encrypted-payload
@@ -195,14 +196,15 @@ It labels source output, accumulates integrity and confidentiality in
 - ❌ AGT does **not** verify freshness or authorization of retrieved RAG documents
   unless those checks are implemented by the source tool or classifier
 
-**Example enforced flow:** A source tool returns untrusted private content with
-FIDES-compatible metadata. AGT folds that label into the workflow's
-`ContextEnvelope` and can store raw content behind an opaque `ifcvar://` handle.
-A later public-email sink is either listed in `information_flow.sink_tools` or
-declares `role=sink`, `accepts_untrusted=False`, and
-`max_allowed_confidentiality=internal`, so AGT denies the sink before execution.
-If the workflow only needs a safe ticket id, a reveal policy can release that
-specific field with an explicit authority, authorization reference, reason, and
+**Example enforced flow:** A trusted source adapter returns untrusted private
+content with FIDES-compatible metadata on its adapter-owned metadata channel. AGT
+folds that label into the workflow's `ContextEnvelope` and can store raw content
+behind an opaque `ifcvar://` handle. A later public-email sink has trusted
+operator configuration under `information_flow.sinks.send_email` with
+`accepts_untrusted=False` and `max_allowed_confidentiality=internal`, so AGT
+denies the sink before execution. If the workflow only needs a safe ticket id, a
+reveal policy can release that specific field with explicit authority,
+authorization reference, reason, trusted authorizer approval, and
 character-capacity bound.
 
 **Remaining gap:** If a source emits unlabeled content outside strict mode, or if
@@ -211,12 +213,13 @@ truth of those labels.
 
 **Mitigations and controls available today:**
 - Enable strict IFC with `GovernancePolicy.information_flow={"enabled": True,
-  "strict": True}`.
-- Label source outputs with `information_flow`, `ifc`, `agt_ifc`, `fides`, or
-  `additional_properties` metadata.
-- List governed sinks in `information_flow.sink_tools` or mark them with
-  `information_flow.role="sink"`, then require `accepts_untrusted` and
-  `max_allowed_confidentiality`.
+  "strict": True}`. Strict unlabeled output defaults to untrusted/top_secret.
+- Label source outputs through trusted adapter metadata (`ToolCallResult.metadata`
+  or equivalent), using `information_flow`, `ifc`, `agt_ifc`, `fides`, or
+  `additional_properties`.
+- Configure governed sinks in `information_flow.sinks` or mapping-shaped
+  `information_flow.sink_tools`; request payload metadata may identify a sink
+  role but cannot supply or loosen sink capacity.
 - Keep egress policies and `blocked_patterns` as defense-in-depth controls.
 
 **Still being built:**

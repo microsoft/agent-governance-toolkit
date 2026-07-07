@@ -23,21 +23,21 @@ AGT owns a native IFC model instead of taking a runtime dependency on Microsoft 
 | Integrity provenance | `IntegrityLabel.TRUSTED` / `IntegrityLabel.UNTRUSTED` in `agent_os.policies.information_flow` |
 | Confidentiality lattice | Existing `DataClassification` reused by `InformationFlowLabel.confidentiality` |
 | Accumulated workflow context | Existing `ContextEnvelope` plus additive `integrity` field |
-| Strict unlabeled-source default | `default_unlabeled_source_label()` returns untrusted/public |
-| Sink metadata | `InformationFlowSinkPolicy.accepts_untrusted` and `max_allowed_confidentiality` |
+| Strict unlabeled-source default | `default_unlabeled_source_label()` returns untrusted/top_secret |
+| Trusted sink policy | Operator-owned `GovernancePolicy.information_flow.sinks` / mapping-shaped `sink_tools` entries define `InformationFlowSinkPolicy.accepts_untrusted` and `max_allowed_confidentiality` |
 | Runtime gate | `BaseIntegration.pre_execute_check(...)` denies incompatible sink flows before execution |
 | Runtime propagation | `BaseIntegration.post_execute_check(...)` folds result labels into `ExecutionContext.context_envelope` |
 | Structured denial | `ViolationCategory.INFORMATION_FLOW` and `deny_information_flow(...)` |
 | FIDES adapter boundary | `normalize_fides_additional_properties(...)` converts Agent Framework/FIDES `additional_properties` into native AGT IFC metadata |
 | Quarantined variable store | `QuarantinedInformationFlowStore` hides labeled tool results behind opaque `ifcvar://...` handles |
-| Bounded reveal | `InformationFlowRevealPolicy` requires explicit authority plus either authorizer approval or an authorization reference, reason, allowed fields, and capacity bounds before release |
-| Declassification and endorsement | `declassify_label(...)` and `endorse_label(...)` require explicit audited authority, authorization reference, and reason |
+| Bounded reveal | `InformationFlowRevealPolicy` requires explicit authority, reason, bounded fields/capacity, and trusted authorizer approval before label release |
+| Declassification and endorsement | `declassify_label(...)` and `endorse_label(...)` require explicit audited authority, reason, authorization reference, and trusted authorizer approval |
 | ACS profile | `acs_information_flow_annotation(...)` emits `annotations.information_flow` without changing the ACS wire schema |
 | Distributed message evidence | `InformationFlowReceipt` signs envelope reference, sensitivity, integrity, recipient, message subject, payload hash, timestamp, and nonce |
 
 ## Metadata contract
 
-Source and result payloads can carry AGT or FIDES-compatible metadata under `information_flow`, `ifc`, `agt_ifc`, `fides`, or `additional_properties`.
+Source adapters can attach AGT or FIDES-compatible metadata under `information_flow`, `ifc`, `agt_ifc`, `fides`, or `additional_properties`. Runtime result accumulation trusts the adapter-owned metadata channel (`ToolCallResult.metadata` or equivalent object metadata); arbitrary fields inside model/tool result bodies are treated as content and do not self-label the output.
 
 ```python
 {
@@ -50,24 +50,29 @@ Source and result payloads can carry AGT or FIDES-compatible metadata under `inf
 }
 ```
 
-Sink payloads use the same locations with sink policy fields:
+Sink capacity is trusted policy, not model-controlled request data. Configure sink policy on `GovernancePolicy.information_flow.sinks` or mapping-shaped `sink_tools` entries:
 
 ```python
 {
-    "tool_name": "send_email",
     "information_flow": {
-        "role": "sink",
-        "accepts_untrusted": False,
-        "max_allowed_confidentiality": "internal",
-    },
+        "enabled": True,
+        "strict": True,
+        "sinks": {
+            "send_email": {
+                "accepts_untrusted": False,
+                "max_allowed_confidentiality": "internal",
+            }
+        },
+    }
 }
 ```
 
 In strict mode, governed sink calls are identified either by policy-configured
 `information_flow.sink_tools` or by explicit `information_flow.role = "sink"`.
-Calls marked as sources or transforms can run without sink capacity metadata;
-configured or marked sinks must provide sink policy and fail closed when it is
-missing or malformed.
+Calls marked as sources or transforms can run without sink capacity metadata.
+Configured or marked sinks must have trusted policy-configured sink capacity and
+fail closed when that policy is missing or malformed. Request payload metadata is
+advisory for role identification only and cannot loosen sink policy.
 
 Agent Framework/FIDES style `additional_properties.content_label` is normalized into the same native metadata:
 
@@ -108,15 +113,16 @@ ACS hosts can carry the same profile under `annotations.information_flow`:
 
 - Untrusted integrity is sticky once folded into a `ContextEnvelope`.
 - Confidentiality uses the existing max-lattice and never lowers during accumulation.
+- Strict unlabeled outputs default to untrusted/top_secret, not public.
 - A trusted-only sink denies accumulated untrusted context.
-- A sink with `max_allowed_confidentiality` denies over-confidential context.
+- A sink with policy-configured `max_allowed_confidentiality` denies over-confidential context.
 - Malformed IFC metadata, such as unknown integrity labels or non-boolean sink
   fields, fails closed instead of silently downgrading protection.
 - Runtime behavior is additive: IFC is disabled unless `GovernancePolicy.information_flow.enabled` is true.
 - Audit events record redacted IFC state (`aggregate_sensitivity`, `integrity`, and label count), not raw envelope contents.
-- FIDES-compatible `additional_properties` normalize to the native AGT label and sink policy model.
+- FIDES-compatible `additional_properties` normalize to the native AGT label model at trusted adapter/source boundaries; sink capacity remains trusted operator policy.
 - Quarantined variables hide raw untrusted tool content behind opaque handles until a bounded reveal policy permits a specific release. The built-in store is bounded and thread-safe, but it is an in-memory primitive for runtime integration rather than durable long-term storage.
-- Declassification and endorsement are explicit transforms with authority, authorization reference, reason, and audit metadata. Labels do not decay automatically.
+- Declassification and endorsement are explicit transforms with authority, authorization reference, reason, trusted authorizer approval, and audit metadata. Labels do not decay automatically.
 - A malicious untrusted customer message attempting to exfiltrate private content is blocked before an external email sink executes.
 
 ## Distributed AgentMesh receipt proof

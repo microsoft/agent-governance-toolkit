@@ -20,7 +20,7 @@ from agent_os.policies.information_flow import (
     join_labels,
     label_from_payload,
     normalize_fides_additional_properties,
-    sink_policy_from_payload,
+    _sink_policy_from_payload,
 )
 
 
@@ -92,14 +92,16 @@ def test_confidentiality_sink_denial():
     assert decision.violation is InformationFlowViolation.CONFIDENTIALITY_EXCEEDED
 
 
-def test_strict_unlabeled_payload_defaults_to_untrusted_public():
+def test_strict_unlabeled_payload_defaults_to_untrusted_top_secret():
     label = label_from_payload({"content": "no metadata"}, strict=True)
 
     assert label == default_unlabeled_source_label()
+    assert label.integrity == IntegrityLabel.UNTRUSTED
+    assert label.confidentiality == DC.TOP_SECRET
 
 
 def test_extracts_fides_sink_policy_from_additional_properties():
-    policy = sink_policy_from_payload(
+    policy = _sink_policy_from_payload(
         {
             "tool_name": "email",
             "additional_properties": {
@@ -167,7 +169,7 @@ def test_malformed_integrity_label_fails_closed():
 
 
 def test_string_false_does_not_allow_untrusted_sink():
-    policy = sink_policy_from_payload(
+    policy = _sink_policy_from_payload(
         {
             "tool_name": "email",
             "information_flow": {
@@ -205,6 +207,7 @@ def test_quarantined_store_reveals_only_bounded_requested_fields():
             authority="support-policy",
             reason="ticket identifier is non-sensitive",
             authorization_reference="approval://support-policy/123",
+            authorizer=lambda _label: True,
         ),
     )
 
@@ -234,6 +237,7 @@ def test_reveal_preserves_source_label_without_explicit_target_label():
             authority="support-policy",
             reason="ticket identifier is safe to inspect",
             authorization_reference="approval://support-policy/123",
+            authorizer=lambda _label: True,
         ),
     )
 
@@ -260,6 +264,7 @@ def test_quarantined_store_denies_unapproved_field_reveal():
             authority="support-policy",
             reason="attempt to reveal customer email",
             authorization_reference="approval://support-policy/123",
+            authorizer=lambda _label: True,
         ),
     )
 
@@ -278,6 +283,7 @@ def test_quarantined_store_denies_reveal_over_capacity():
             authority="support-policy",
             reason="bounded preview",
             authorization_reference="approval://support-policy/123",
+            authorizer=lambda _label: True,
         ),
     )
 
@@ -285,39 +291,58 @@ def test_quarantined_store_denies_reveal_over_capacity():
     assert decision.violation is InformationFlowViolation.REVEAL_EXCEEDED
 
 
-def test_declassification_requires_explicit_authority_and_reason():
+def test_declassification_requires_explicit_authorizer_approval():
     label = InformationFlowLabel(confidentiality=DC.CONFIDENTIAL)
 
     denied = declassify_label(label, DC.PUBLIC, authority="", reason="approved summary")
-    allowed = declassify_label(
+    denied_reference_only = declassify_label(
         label,
         DC.PUBLIC,
         authority="privacy-review",
         reason="approved aggregate summary",
         authorization_reference="approval://privacy-review/1",
     )
+    allowed = declassify_label(
+        label,
+        DC.PUBLIC,
+        authority="privacy-review",
+        reason="approved aggregate summary",
+        authorization_reference="approval://privacy-review/1",
+        authorizer=lambda _label: True,
+    )
 
     assert denied.allowed is False
     assert denied.violation is InformationFlowViolation.DECLASSIFICATION_DENIED
+    assert denied_reference_only.allowed is False
+    assert denied_reference_only.violation is InformationFlowViolation.DECLASSIFICATION_DENIED
     assert allowed.allowed is True
     assert allowed.label.confidentiality == DC.PUBLIC
     assert allowed.audit_event is not None
     assert allowed.audit_event["operation"] == "declassify"
 
 
-def test_endorsement_requires_explicit_authority_and_reason():
+def test_endorsement_requires_explicit_authorizer_approval():
     label = InformationFlowLabel(integrity=IntegrityLabel.UNTRUSTED)
 
     denied = endorse_label(label, authority="moderation", reason="")
-    allowed = endorse_label(
+    denied_reference_only = endorse_label(
         label,
         authority="moderation",
         reason="validated structured ticket id",
         authorization_reference="approval://moderation/1",
     )
+    allowed = endorse_label(
+        label,
+        authority="moderation",
+        reason="validated structured ticket id",
+        authorization_reference="approval://moderation/1",
+        authorizer=lambda _label: True,
+    )
 
     assert denied.allowed is False
     assert denied.violation is InformationFlowViolation.ENDORSEMENT_DENIED
+    assert denied_reference_only.allowed is False
+    assert denied_reference_only.violation is InformationFlowViolation.ENDORSEMENT_DENIED
     assert allowed.allowed is True
     assert allowed.label.integrity == IntegrityLabel.TRUSTED
     assert allowed.audit_event is not None
