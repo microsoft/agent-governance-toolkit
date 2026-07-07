@@ -267,15 +267,11 @@ def test_redact_pii_threads_through_nested_data_structure():
     assert default_redacted["email"] == "user@example.com"
 
 
-def test_redact_pii_threads_through_mapping_and_dictionary_alias():
+def test_redact_pii_threads_through_mapping():
     payload = {"email": "user@example.com"}
 
     assert (
         CredentialRedactor.redact_mapping(payload, redact_pii=True)["email"]
-        == REDACTED_PLACEHOLDER
-    )
-    assert (
-        CredentialRedactor.redact_dictionary(payload, redact_pii=True)["email"]
         == REDACTED_PLACEHOLDER
     )
     # Default remains secrets-only.

@@ -248,23 +248,17 @@ class CredentialRedactor:
 
     @classmethod
     def redact_dictionary(
-        cls, mapping: dict[str, Any] | None, *, redact_pii: bool = False
+        cls, mapping: dict[str, Any] | None
     ) -> dict[str, Any]:
         """Compatibility alias for dictionary redaction.
 
-        Kept for external API stability; there are no in-repo production callers
-        (callers use :meth:`redact_mapping` / :meth:`redact_data_structure`
-        directly). It threads ``redact_pii`` through for symmetry only.
-
         Args:
             mapping: Dictionary-like content to redact.
-            redact_pii: When ``True``, also redact PII/CRI patterns. Defaults
-                to ``False`` (secrets-only).
 
         Returns:
             The redacted mapping produced by :meth:`redact_mapping`.
         """
-        return cls.redact_mapping(mapping, redact_pii=redact_pii)
+        return cls.redact_mapping(mapping)
 
     @classmethod
     def redact_data_structure(cls, value: Any, *, redact_pii: bool = False) -> Any:
