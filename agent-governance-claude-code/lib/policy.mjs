@@ -982,7 +982,7 @@ function isPowerShellForceParameter(flag) {
 function isUnixRmShortOptionCluster(flag) {
   // Match any single-dash short-option cluster (letters only) rather than an
   // allow-list of known letters. An allow-list fails open: an unrecognized letter
-  // such as the `x` in `rm -rfx foo` (not in the old allow-list) would discard the
+  // such as the `x` in `rm -rfx foo` would discard the
   // whole cluster and hide the recursive/force flags it contains. Matching all
   // letter clusters fails safe instead.
   return /^-[a-z]+$/i.test(flag);
