@@ -103,6 +103,12 @@ test("evaluatePreToolUse denies recursive force deletes", async () => {
     "Remove-Item -r -fo important-data",
     "ri -r -fo important-data",
     "rd /s /q important-data",
+    "rm --recursive important-data",
+    "rm -r important-data",
+    "Remove-Item -Recurse important-data",
+    "rm -rfx important-data",
+    "`rm -rf /`",
+    "{rm -rf /;}",
   ]) {
     const result = await evaluatePreToolUse(state, {
       tool_name: "Bash",
@@ -129,7 +135,7 @@ test("evaluatePreToolUse does not deny safe cleanup or non-recursive force delet
     "rm -fr dist",
     "rm -f important-data",
     "rm --force important-data",
-    "rm important-data -Confirm",
+    "rm -i important-data",
     "Remove-Item -Filter *.tmp important-data",
     "Remove-Item important-data -Confirm",
     "Remove-Item -Recurse -Force build",

@@ -879,7 +879,7 @@ function createMinimalFallbackPolicy() {
 
 function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
   if (rule.id === "recursive-delete") {
-    return !hasRecursiveForceDelete(commandText, toolName) || isSafeCleanupCommand(commandText, toolName);
+    return !hasRecursiveDelete(commandText, toolName) || isSafeCleanupCommand(commandText, toolName);
   }
   if (rule.id === "secret-read") {
     return isSafeEnvTemplateReadCommand(commandText);
@@ -890,13 +890,13 @@ function shouldBypassBlockedCommandRule(rule, commandText, toolName) {
 function getRmCommandDetails(commandText, toolName) {
   const tokens = tokenizeCommand(commandText);
   const commandIndex = tokens.findIndex((token) =>
-    /^(rm|remove-item|ri|rd|del)$/i.test(stripCommandToken(token)),
+    /^(rm|remove-item|ri|rd|del)$/i.test(normalizeCommandNameToken(token)),
   );
   if (commandIndex === -1) {
     return undefined;
   }
 
-  const commandName = stripCommandToken(tokens[commandIndex]).toLowerCase();
+  const commandName = normalizeCommandNameToken(tokens[commandIndex]).toLowerCase();
   const parsesUnixShortOptions = commandName === "rm" && !isPowerShellTool(toolName);
   let recursive = false;
   let force = false;
@@ -942,9 +942,12 @@ function getRmCommandDetails(commandText, toolName) {
   };
 }
 
-function hasRecursiveForceDelete(commandText, toolName) {
+function hasRecursiveDelete(commandText, toolName) {
+  // A recursive delete is destructive whether or not a force flag is present, so
+  // the deny decision intentionally does not require force. The `force` detail is
+  // still parsed for completeness and future messaging.
   const details = getRmCommandDetails(commandText, toolName);
-  return Boolean(details?.recursive && details?.force);
+  return Boolean(details?.recursive);
 }
 
 function isSafeCleanupCommand(commandText, toolName) {
@@ -978,7 +981,12 @@ function isPowerShellForceParameter(flag) {
 }
 
 function isUnixRmShortOptionCluster(flag) {
-  return /^-[dfiprvw]+$/i.test(flag);
+  // Match any single-dash short-option cluster (letters only) rather than an
+  // allow-list of known letters. An allow-list fails open: an unrecognized letter
+  // such as the `x` in `rm -rfx foo` (not in the old allow-list) would discard the
+  // whole cluster and hide the recursive/force flags it contains. Matching all
+  // letter clusters fails safe instead.
+  return /^-[a-z]+$/i.test(flag);
 }
 
 function isSafeEnvTemplateReadCommand(commandText) {
@@ -1181,6 +1189,13 @@ function tokenizeCommand(commandText) {
 
 function stripCommandToken(token) {
   return String(token ?? "").replace(/^['"]|['"]$/g, "");
+}
+
+function normalizeCommandNameToken(token) {
+  // Strip surrounding quotes and any leading shell grouping/substitution
+  // delimiters so a command glued to punctuation is still recognized, e.g.
+  // `rm ... ` (backtick substitution), {rm ...;} (brace group), $(rm ...).
+  return stripCommandToken(token).replace(/^[`({$]+/, "");
 }
 
 function normalizeCommandPathToken(token) {
@@ -1424,3 +1439,4 @@ function redactSecretLikeContent(text, _findings) {
 function describeSecretFindings(findings) {
   return `matched ${findings.length} secret pattern(s): ${findings.join(", ")}`;
 }
+

@@ -30,7 +30,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "(^|[\\s;&|()])(?:rm|remove-item|ri|rd|del)\\b",
+          "source": "(^|[\\s;&|(){`])(?:rm|remove-item|ri|rd|del)\\b",
           "flags": "i"
         }
       ]
@@ -110,7 +110,7 @@
       "effect": "deny",
       "commandPatterns": [
         {
-          "source": "(^|[\\s;&|()])(?:rm|remove-item|ri|rd|del)\\b",
+          "source": "(^|[\\s;&|(){`])(?:rm|remove-item|ri|rd|del)\\b",
           "flags": "i"
         }
       ]
