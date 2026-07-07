@@ -45,7 +45,7 @@ deny contains msg if {
 # PRIN 2A: fair value bypass
 deny contains msg if {
 	regex.match(`(?i)(skip\s+fair\s+value|bypass\s+value\s+assessment|no\s+need\s+to\s+(check|assess)\s+(fair\s+)?value|ignore\s+consumer\s+duty)`, _output_text)
-	msg := "FCA Consumer Duty (PRIN 2A.1): firms must ensure products and services provide fair value"
+	msg := "FCA Consumer Duty (PRIN 2A.4): firms must ensure products and services provide fair value"
 }
 
 # SM&CR: accountability delegation to AI

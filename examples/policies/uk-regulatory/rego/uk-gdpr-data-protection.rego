@@ -7,7 +7,7 @@
 #     "params": { "destination_country": "US", "adequacy_covered": false,
 #                 "safeguards_in_place": false, "record_count": 500 },
 #     "output": "agent output text",
-#     "context": { "lawful_basis_documented": false } }
+#     "context": { } }
 
 package agt_policies_uk.uk_gdpr
 
@@ -40,13 +40,13 @@ pii_update_actions := {
 
 # UK adequacy-covered destinations (illustrative — verify against current gov.uk list)
 adequacy_countries := {
-	"GB", "EU", "EEA", "US", "JP", "KR", "CA", "NZ", "AU", "CH", "IL", "UY",
+	"GB", "EU", "EEA", "US", "JP", "KR", "CA", "NZ", "CH", "IL", "UY",
 }
 
-# Art. 33 / DPA 2018 s.67: block breach suppression
+# Art. 33: block breach suppression
 deny contains msg if {
 	regex.match(`(?i)(don'?t\s+(report|notify|disclose)|hide\s+(the\s+)?(breach|incident)|suppress\s+(the\s+)?(breach|notification)|delay\s+(breach|incident)\s+(report|notification))`, _output_text)
-	msg := "UK GDPR Art. 33 / DPA 2018 s.67: where a breach is likely to result in a risk to rights and freedoms, notify the ICO without undue delay and, where feasible, within 72 hours — agent cannot suppress or delay notification"
+	msg := "UK GDPR Art. 33: where a breach is likely to result in a risk to rights and freedoms, notify the ICO without undue delay and, where feasible, within 72 hours — agent cannot suppress or delay notification"
 }
 
 # Art. 34: block suppression of individual notification

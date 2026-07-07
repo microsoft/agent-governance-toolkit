@@ -52,7 +52,7 @@ rules:
       value: "(?i)(skip\\s+fair\\s+value|bypass\\s+value\\s+assessment|no\\s+need\\s+to\\s+(check|assess)\\s+(fair\\s+)?value|ignore\\s+consumer\\s+duty)"
     action: deny
     priority: 1
-    message: "FCA Consumer Duty (PRIN 2A.1): firms must ensure products and services provide fair value — agent cannot bypass value assessment"
+    message: "FCA Consumer Duty (PRIN 2A.4): firms must ensure products and services provide fair value — agent cannot bypass value assessment"
 
   # =========================================================================
   # SM&CR — Senior Manager Accountability

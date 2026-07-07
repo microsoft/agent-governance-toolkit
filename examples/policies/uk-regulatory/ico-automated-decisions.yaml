@@ -82,12 +82,12 @@ rules:
     priority: 2
     message: "UK GDPR Art. 22A: solely automated decision with legal or similarly significant effect — verify Art. 22C safeguards and lawful basis are in place"
 
-  - name: adm-recruitment-decision-escalate
+  - name: adm-recruitment-decision-block
     condition:
       field: output
       operator: matches
       value: "(?i)(reject\\s+(the\\s+)?(candidate|applicant)|hire\\s+decision|shortlist|score\\s+(the\\s+)?(candidate|applicant)).{0,40}(automated|without\\s+human|ai\\s+only)"
-    action: escalate
+    action: block
     priority: 2
     message: "ICO March 2026: automated recruitment decisions are in scope of Art. 22A — review safeguards and human oversight before proceeding"
 
