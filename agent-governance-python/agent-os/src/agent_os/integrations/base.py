@@ -859,10 +859,10 @@ class PolicyInterceptor:
     Default interceptor that enforces GovernancePolicy rules.
 
     Checks:
+    - Call count within limits
     - Human approval requirement (require_human_approval)
     - Tool is in allowed_tools (if specified)
     - Arguments don't contain blocked patterns
-    - Call count within limits
     """
 
     def __init__(
@@ -882,6 +882,14 @@ class PolicyInterceptor:
             deny_max_tool_calls,
             deny_not_allowed_tool,
         )
+
+        # Check call count
+        if self.context and self.context.call_count >= self.policy.max_tool_calls:
+            result = deny_max_tool_calls(self.policy.max_tool_calls, self.context.call_count)
+            return ToolCallResult(
+                allowed=False,
+                reason=result.reason,
+            )
 
         # Check human approval requirement
         if self.policy.require_human_approval:
@@ -904,14 +912,6 @@ class PolicyInterceptor:
         matched = self.policy.matches_pattern(args_str)
         if matched:
             result = deny_blocked_pattern_tool(matched[0])
-            return ToolCallResult(
-                allowed=False,
-                reason=result.reason,
-            )
-
-        # Check call count
-        if self.context and self.context.call_count >= self.policy.max_tool_calls:
-            result = deny_max_tool_calls(self.policy.max_tool_calls, self.context.call_count)
             return ToolCallResult(
                 allowed=False,
                 reason=result.reason,
