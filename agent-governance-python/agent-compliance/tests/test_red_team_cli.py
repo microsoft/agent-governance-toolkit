@@ -322,8 +322,20 @@ class TestRedTeamAttackThreshold:
         )
 
     def _patch(self, monkeypatch, results):
-        monkeypatch.setattr(
-            "agent_compliance.cli.red_team._get_adversarial",
+        # Patch the `attack` command callback's own __globals__ instead of the
+        # dotted module path. `tests/test_init_imports.py` force-reimports
+        # agent_compliance (dropping every `agent_compliance.*` entry from
+        # sys.modules), which can leave several distinct `red_team` module
+        # objects alive in memory. When that happens, monkeypatching
+        # "agent_compliance.cli.red_team._get_adversarial" patches whichever
+        # module object is current in sys.modules at patch time — which may not
+        # be the one whose `attack` function the click `cli` tree actually
+        # invokes, so the stub is silently bypassed and the real agent_sre
+        # adversarial runner executes. Patching the callback's globals hits the
+        # exact namespace that runs. See #3237.
+        attack_fn = cli.commands["red-team"].commands["attack"].callback
+        monkeypatch.setitem(
+            attack_fn.__globals__, "_get_adversarial",
             lambda: self._fake_adversarial(results),
         )
 
