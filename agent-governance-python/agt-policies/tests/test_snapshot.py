@@ -1,15 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for :mod:`agt.policies.snapshot`.
-
-Covers AGT-SNAPSHOT-1.0.md §1 (envelope) and §§2.1-2.8 (per-intervention-
-point shapes) for both the module-level helpers and the long-lived
-:class:`SnapshotBuilder` class. The tests also assert the back-compat
-``agt._harness.snapshot`` shim still serves the helpers so the existing
-scenario suite keeps working.
-"""
+"""Tests for policies.snapshot: shapes, finite-number validation, deep-copy determinism."""
 
 from __future__ import annotations
+
+import json
 
 import pytest
 
@@ -26,9 +21,7 @@ from agt.policies import (
     pre_tool_call_snapshot,
 )
 from agt.policies import snapshot as snapshot_module
-
-
-# ── module-level helpers (per-IP shapes) ────────────────────────────
+from agt.policies.snapshot import _validate_budget_counter
 
 
 def _assert_envelope(envelope: dict, *, intervention_point: str) -> None:
@@ -45,6 +38,10 @@ def _assert_envelope(envelope: dict, *, intervention_point: str) -> None:
         "elapsed_seconds": 0.0,
         "cost_usd": 0.0,
     }
+
+
+def _canonical_snapshot_bytes(snapshot: dict) -> bytes:
+    return json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def test_input_snapshot_shape() -> None:
@@ -195,9 +192,6 @@ def test_module_helper_rejects_malformed_budget_counters() -> None:
         input_snapshot(agent_id="bot", body="hi", elapsed_seconds=None)
     with pytest.raises(ValueError, match="tool_call_count"):
         input_snapshot(agent_id="bot", body="hi", tool_call_count=True)
-
-
-# ── SnapshotBuilder class ────────────────────────────────────────────
 
 
 def test_builder_validates_agent_and_session_ids() -> None:
@@ -361,9 +355,6 @@ def test_builder_agent_shutdown_overrides_take_precedence_over_budgets() -> None
     }
 
 
-# ── back-compat shim ────────────────────────────────────────────────
-
-
 def test_harness_shim_reexports_module_helpers() -> None:
     # Existing scenario tests import from agt._harness.snapshot. The
     # shim must keep serving the same names so they don't break.
@@ -377,3 +368,242 @@ def test_harness_shim_reexports_module_helpers() -> None:
 
 def test_harness_shim_reexports_builder_class() -> None:
     assert harness_snapshot.SnapshotBuilder is SnapshotBuilder
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_validate_budget_counter_rejects_non_finite_cost(value: float) -> None:
+    with pytest.raises(ValueError, match="cost_usd"):
+        _validate_budget_counter("cost_usd", value)
+
+
+def test_record_cost_rejects_infinity_without_mutating() -> None:
+    builder = SnapshotBuilder(agent_id="bot", cost_usd=1.25)
+
+    with pytest.raises(ValueError, match="usd"):
+        builder.record_cost(float("inf"))
+
+    assert builder.cost_usd == pytest.approx(1.25)
+
+
+def test_record_elapsed_rejects_nan_without_mutating() -> None:
+    builder = SnapshotBuilder(agent_id="bot", elapsed_seconds=2.5)
+
+    with pytest.raises(ValueError, match="seconds"):
+        builder.record_elapsed(float("nan"))
+
+    assert builder.elapsed_seconds == pytest.approx(2.5)
+
+
+def test_envelope_rejects_non_finite_float_budget() -> None:
+    with pytest.raises(ValueError, match="elapsed_seconds"):
+        input_snapshot(agent_id="bot", body="hi", elapsed_seconds=float("inf"))
+
+
+def test_finite_cost_and_elapsed_serialize_without_non_standard_floats() -> None:
+    builder = SnapshotBuilder(agent_id="bot")
+
+    builder.record_cost(0.25)
+    builder.record_elapsed(1.5)
+
+    envelope = builder.envelope("input")
+    encoded = json.dumps(envelope)
+
+    assert "NaN" not in encoded
+    assert "Infinity" not in encoded
+    assert json.loads(encoded)["budgets"] == {
+        "tool_call_count": 0,
+        "token_count": 0,
+        "elapsed_seconds": 1.5,
+        "cost_usd": 0.25,
+    }
+
+
+def test_pre_model_call_snapshot_deep_copies_messages() -> None:
+    messages = [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]
+    snap = pre_model_call_snapshot(agent_id="bot", model_name="gpt-x", messages=messages)
+    before_bytes = _canonical_snapshot_bytes(snap)
+
+    messages[0]["content"][0]["text"] = "mutated"
+    messages.append({"role": "assistant", "content": "late"})
+
+    assert snap["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+    ]
+    assert _canonical_snapshot_bytes(snap) == before_bytes
+
+
+def test_pre_tool_call_snapshot_deep_copies_args() -> None:
+    args = {"query": {"text": "hello", "filters": ["safe"]}}
+    snap = pre_tool_call_snapshot(agent_id="bot", tool_name="search", args=args)
+    before_bytes = _canonical_snapshot_bytes(snap)
+
+    args["query"]["filters"].append("mutated")
+    args["late"] = True
+
+    assert snap["tool_call"]["args"] == {"query": {"text": "hello", "filters": ["safe"]}}
+    assert _canonical_snapshot_bytes(snap) == before_bytes
+
+
+@pytest.mark.parametrize("method_name", ["record_tool_call", "record_tokens"])
+def test_integer_budget_mutators_reject_bool_without_mutating(method_name: str) -> None:
+    builder = SnapshotBuilder(agent_id="bot")
+
+    with pytest.raises(ValueError):
+        getattr(builder, method_name)(True)
+
+    assert builder.tool_call_count == 0
+    assert builder.token_count == 0
+
+
+@pytest.mark.parametrize("method_name", ["record_cost", "record_elapsed"])
+def test_float_budget_mutators_reject_bool_without_mutating(method_name: str) -> None:
+    builder = SnapshotBuilder(agent_id="bot")
+
+    with pytest.raises(ValueError):
+        getattr(builder, method_name)(True)
+
+    assert builder.cost_usd == 0.0
+    assert builder.elapsed_seconds == 0.0
+
+
+def test_record_tokens_rejects_negative_without_mutating() -> None:
+    builder = SnapshotBuilder(agent_id="bot", token_count=5)
+
+    with pytest.raises(ValueError):
+        builder.record_tokens(-1)
+
+    assert builder.token_count == 5
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "field_name"),
+    [
+        ({"agent_id": "", "body": "hi"}, "agent_id"),
+        ({"agent_id": "bot", "body": "hi", "session_id": ""}, "session_id"),
+        ({"agent_id": 42, "body": "hi"}, "agent_id"),
+        ({"agent_id": "bot", "body": "hi", "session_id": 42}, "session_id"),
+    ],
+)
+def test_module_helper_rejects_invalid_identifier_strings(
+    kwargs: dict[str, object], field_name: str
+) -> None:
+    with pytest.raises(ValueError, match=field_name):
+        input_snapshot(**kwargs)
+
+
+def test_builder_envelope_rejects_empty_intervention_point() -> None:
+    builder = SnapshotBuilder(agent_id="bot")
+
+    with pytest.raises(ValueError, match="intervention_point"):
+        builder.envelope("")
+
+
+def test_snapshot_helpers_and_mutators_accept_valid_values() -> None:
+    builder = SnapshotBuilder(agent_id="bot", session_id="session-1")
+
+    builder.record_tool_call(2)
+    builder.record_tokens(3)
+    builder.record_cost(0.25)
+    builder.record_elapsed(1.5)
+
+    envelope = builder.envelope("input")
+    snap = input_snapshot(agent_id="bot", session_id="session-1", body={"text": "hi"})
+
+    assert envelope["budgets"] == {
+        "tool_call_count": 2,
+        "token_count": 3,
+        "elapsed_seconds": 1.5,
+        "cost_usd": 0.25,
+    }
+    assert snap["envelope"]["agent"]["id"] == "bot"
+    assert snap["envelope"]["session"]["id"] == "session-1"
+
+
+def test_reviewed_mutable_inputs_are_deep_copied_for_stable_snapshot_bytes() -> None:
+    model_params = {"nested": {"k": 1}}
+    model_snap = pre_model_call_snapshot(
+        agent_id="a",
+        session_id="s",
+        model_name="m",
+        model_vendor="v",
+        messages=[],
+        model_params=model_params,
+    )
+
+    headers = {"nested": {"h": ["original"]}}
+    source_labels = [{"label": ["internal"]}]
+    capabilities = [{"capability": ["chat"]}]
+    tools_registered = [{"tool": ["search"]}]
+    result = {"nested": {"value": ["ok"]}}
+    error = {"nested": {"code": [1]}}
+    result_labels = [{"label": ["safe"]}]
+    builder = SnapshotBuilder(agent_id="a", session_id="s")
+    input_snap = builder.input(body={"text": "hi"}, headers=headers, source_labels=source_labels)
+    startup_snap = builder.agent_startup(
+        capabilities=capabilities,
+        tools_registered=tools_registered,
+    )
+    tool_snap = builder.post_tool_call(tool_name="lookup", args={}, result=result, error=error)
+    output_snap = builder.output(content="done", result_labels=result_labels)
+
+    snapshots = [model_snap, input_snap, startup_snap, tool_snap, output_snap]
+    before_bytes = [_canonical_snapshot_bytes(snapshot) for snapshot in snapshots]
+
+    model_params["nested"]["k"] = 999
+    headers["nested"]["h"].append("mutated")
+    source_labels[0]["label"].append("mutated")
+    capabilities[0]["capability"].append("mutated")
+    tools_registered[0]["tool"].append("mutated")
+    result["nested"]["value"].append("mutated")
+    error["nested"]["code"].append(999)
+    result_labels[0]["label"].append("mutated")
+
+    assert model_snap["model"]["params"]["nested"]["k"] == 1
+    assert input_snap["input"]["headers"] == {"nested": {"h": ["original"]}}
+    assert input_snap["input"]["ifc"]["source_labels"] == [{"label": ["internal"]}]
+    assert startup_snap["agent_init"]["capabilities"] == [{"capability": ["chat"]}]
+    assert startup_snap["agent_init"]["tools_registered"] == [{"tool": ["search"]}]
+    assert tool_snap["tool_result"]["value"] == {"nested": {"value": ["ok"]}}
+    assert tool_snap["tool_result"]["error"] == {"nested": {"code": [1]}}
+    assert output_snap["response"]["ifc"]["result_labels"] == [{"label": ["safe"]}]
+    assert [_canonical_snapshot_bytes(snapshot) for snapshot in snapshots] == before_bytes
+
+
+@pytest.mark.parametrize("duration_ms", [float("nan"), float("inf"), float("-inf")])
+def test_post_tool_call_snapshot_rejects_non_finite_duration_ms(duration_ms: float) -> None:
+    with pytest.raises(ValueError, match="duration_ms"):
+        post_tool_call_snapshot(
+            agent_id="a",
+            tool_name="lookup",
+            args={},
+            result={"ok": True},
+            duration_ms=duration_ms,
+        )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "field_name"),
+    [
+        ({"tool_calls": float("nan")}, "tool_calls"),
+        ({"tokens": float("inf")}, "tokens"),
+        ({"errors": float("-inf")}, "errors"),
+        ({"duration_seconds": float("nan")}, "duration_seconds"),
+    ],
+)
+def test_agent_shutdown_snapshot_rejects_non_finite_numeric_fields(
+    kwargs: dict[str, float], field_name: str
+) -> None:
+    with pytest.raises(ValueError, match=field_name):
+        agent_shutdown_snapshot(agent_id="a", **kwargs)
+
+    snap = post_tool_call_snapshot(
+        agent_id="a",
+        tool_name="lookup",
+        args={"q": "x"},
+        result={"ok": True},
+        duration_ms=12.5,
+    )
+    encoded = json.dumps(snap)
+    assert "NaN" not in encoded
+    assert "Infinity" not in encoded
+    assert json.loads(encoded)["tool_result"]["duration_ms"] == 12.5

@@ -1,15 +1,14 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Regression tests for deterministic scope filtering."""
+"""Tests for manifest_resolution.scope: containment and deterministic matching."""
 
 from __future__ import annotations
 
-import fnmatch as fnmatch_module
 from pathlib import Path
-
 import pytest
+import fnmatch as fnmatch_module
 
-from agt.manifest_resolution import filter_by_scope
+from agt.manifest_resolution import ResolutionError, ResolutionReason, filter_by_scope
 
 
 def _action(root: Path, relative_path: str) -> Path:
@@ -17,6 +16,19 @@ def _action(root: Path, relative_path: str) -> Path:
     action_path.parent.mkdir(parents=True, exist_ok=True)
     action_path.write_text("# code\n", encoding="utf-8")
     return action_path
+
+
+def test_filter_by_scope_rejects_action_outside_root(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    action = tmp_path / "outside" / "main.py"
+    action.parent.mkdir()
+    action.write_text("# code\n", encoding="utf-8")
+
+    with pytest.raises(ResolutionError) as exc_info:
+        filter_by_scope(root / "governance.yaml", "**/*.py", action, root)
+
+    assert exc_info.value.reason == ResolutionReason.PATH_TRAVERSAL
 
 
 def test_scope_globs_remain_case_sensitive_under_windows_normcase(

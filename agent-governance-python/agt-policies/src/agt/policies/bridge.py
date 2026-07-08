@@ -157,7 +157,10 @@ def _pattern_to_regex(pattern: Any) -> str:
             _validate_re2_regex(value)
             return value
         if kind_name == "GLOB":
-            out = ["^"]
+            # (?s) so `*`/`?` cross newlines, matching v4 fnmatch.translate's
+            # dotall `(?s:...)` semantics; otherwise a `*secret*` blocked
+            # pattern fails to match multi-line field values (fail-open).
+            out = ["(?s)^"]
             index = 0
             while index < len(value):
                 ch = value[index]

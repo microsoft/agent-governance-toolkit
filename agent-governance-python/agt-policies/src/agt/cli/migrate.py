@@ -521,6 +521,11 @@ def _migrate_governance_chain(
             manifest_replaced = True
             chain_root_resolved = chain_root.resolve()
             for gov_file in discovered:
+                # Only back up governance files local to this chain_root. The
+                # discovered chain also includes parent files ABOVE chain_root;
+                # moving those would mutate parent deny rules that ADR-0014
+                # declares immutable and would break sibling chains sharing the
+                # same parent. Each parent file is migrated by its own chain.
                 if gov_file.parent.resolve() != chain_root_resolved:
                     continue
                 backup = gov_file.with_name(f".{gov_file.name}.v4-backup")
