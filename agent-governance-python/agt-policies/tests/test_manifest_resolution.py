@@ -194,12 +194,14 @@ def _condition_matches(condition: object, sample: dict) -> bool:
     try:
         if operator == "exists":
             return actual is not None
+        if operator == "ne":
+            return actual != expected
+        if operator == "not_in":
+            return isinstance(expected, list) and actual not in expected
         if actual is None:
             return False
         if operator == "eq":
             return actual == expected
-        if operator == "ne":
-            return actual != expected
         if operator == "gt":
             return actual > expected
         if operator == "gte":
@@ -210,8 +212,6 @@ def _condition_matches(condition: object, sample: dict) -> bool:
             return actual <= expected
         if operator == "in":
             return isinstance(expected, list) and actual in expected
-        if operator == "not_in":
-            return isinstance(expected, list) and actual not in expected
         if operator == "contains":
             return expected in actual
         if operator == "startswith":
@@ -958,6 +958,46 @@ def test_resolve_renders_operator_vocabulary(
     rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
 
     assert expected_snippet in rego
+    assert "runtime_error:manifest_invalid" not in rego
+
+
+@pytest.mark.parametrize(
+    ("operator", "value", "rego_snippet"),
+    [
+        ("ne", "sha256:registered", '_v != "sha256:registered"'),
+        ("not_in", ["eastus", "westus"], "not _v in"),
+    ],
+)
+def test_resolve_negative_operators_match_missing_fields(
+    tmp_path: Path, operator: str, value: object, rego_snippet: str
+) -> None:
+    root = tmp_path
+    condition = {
+        "field": "tool_call.content_hash",
+        "operator": operator,
+        "value": value,
+    }
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    f"deny-missing-{operator}",
+                    "deny",
+                    condition,
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert _condition_matches(condition, {"tool_call": {"name": "exec"}})
+    assert rego_snippet in rego
+    assert "_v != null" not in rego
     assert "runtime_error:manifest_invalid" not in rego
 
 
