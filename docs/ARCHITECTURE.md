@@ -112,10 +112,10 @@ AgentMesh assigns trust scores on a 0-1000 scale with the following tiers:
 | 300-499 | Probationary | Limited privileges, under observation |
 | 0-299 | Untrusted | Restricted to read-only or blocked |
 
-Default score for new agents: **500** (Standard tier). Score changes are driven by policy compliance history, successful task completions, and trust boundary violations. Full algorithm documentation is in [`agent-governance-python/agent-mesh/docs/TRUST-SCORING.md`](../agent-governance-python/agent-mesh/docs/TRUST-SCORING.md).
+Default score for new agents: **500** (Standard tier). Score changes are driven by policy compliance history, successful task completions, and trust boundary violations. Full algorithm documentation is in [`agent-governance-python/agent-mesh/docs/trust-scoring-api.md`](../agent-governance-python/agent-mesh/docs/trust-scoring-api.md).
 
 ## Benchmark Methodology
 
 Policy enforcement benchmarks are measured on a **30-scenario test suite** covering the OWASP Agentic Top 10 risk categories. Results (e.g., policy violation rates, latency) are specific to this test suite and should not be interpreted as universal guarantees. See [`agent-governance-python/agent-os/modules/control-plane/benchmarks/`](../agent-governance-python/agent-os/modules/control-plane/benchmarks/) for methodology, datasets, and reproduction instructions.
 
-Full benchmark results: **[BENCHMARKS.md](../BENCHMARKS.md)**
+Full benchmark results: **[BENCHMARKS.md](BENCHMARKS.md)**
