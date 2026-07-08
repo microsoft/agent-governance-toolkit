@@ -1,3 +1,5 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
 """
 YAML-level schema validation tests for the BVN/NIN protection policy pack.
 
