@@ -922,15 +922,35 @@ function isSafeEnvTemplateReadCommand(commandText) {
     return false;
   }
 
-  const sensitiveTokens = tokenizeCommand(commandText)
-    .map(stripCommandToken)
-    .filter(Boolean)
-    .filter((token) => token.includes(".env"));
+  const tokens = tokenizeCommand(commandText).map(stripCommandToken).filter(Boolean);
+  // For copy/move commands the final path argument is a write destination, not a
+  // read, so scaffolding a real .env from a template (`cp .env.example .env`) must
+  // not be classified as reading the sensitive destination.
+  const readTokens = dropCopyDestinationToken(tokens);
+  const sensitiveTokens = readTokens.filter((token) => token.includes(".env"));
 
   return (
     sensitiveTokens.length > 0 &&
     sensitiveTokens.every((token) => SAFE_ENV_TEMPLATE_NAME.test(getLastPathSegment(token)))
   );
+}
+
+function dropCopyDestinationToken(tokens) {
+  const commandName = getLastPathSegment(String(tokens[0] ?? "")).toLowerCase();
+  if (!/^(cp|mv|install)$/.test(commandName)) {
+    return tokens;
+  }
+  // With an explicit target-directory option (`-t DIR` / `--target-directory`)
+  // the destination is that option's argument, not the trailing token, so every
+  // remaining path is a source and nothing should be dropped.
+  if (tokens.some((token) => /^(?:-t|--target-directory)(?:=|$)/i.test(token))) {
+    return tokens;
+  }
+  const lastPathIndex = tokens.reduce(
+    (acc, token, index) => (index === 0 || token.startsWith("-") ? acc : index),
+    -1,
+  );
+  return lastPathIndex < 0 ? tokens : tokens.filter((_, index) => index !== lastPathIndex);
 }
 
 export function evaluateDirectResourceAccess(policy, context) {

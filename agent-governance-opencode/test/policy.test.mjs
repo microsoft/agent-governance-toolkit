@@ -186,3 +186,101 @@ test("corrupt audit logs are reported invalid and fail closed on new decisions",
 
   await rm(root, { recursive: true, force: true });
 });
+
+test("evaluateOpenCodeTool denies credential reads regardless of the reader binary", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-secret-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  // The rule must key on the sensitive target, not on an allow-list of readers:
+  // copy/encode/dump utilities and shell redirection are all credential reads.
+  const denied = [
+    "cp .env /tmp/x",
+    "xxd ~/.ssh/id_rsa",
+    "strings id_rsa",
+    "base64 .env",
+    "dd if=.env",
+    "read k < .env",
+    "cat /proc/self/environ",
+    "cp -t /exfil .env", // GNU target-directory form: .env is still the source
+  ];
+  for (const command of denied) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "secret-session",
+      cwd: root,
+    });
+    assert.equal(result.effect, "deny", `expected deny for: ${command}`);
+  }
+
+  // The .env template allow-list and unrelated copies must not be denied,
+  // including scaffolding a real .env from a template
+  for (const command of [
+    "cat .env.example",
+    "cp README.md docs/",
+    "cp .env.example .env",
+    "cp -t /dest .env.example", // GNU target-directory form of the template copy
+  ]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "secret-allow-session",
+      cwd: root,
+    });
+    assert.notEqual(result.effect, "deny", `expected non-deny for: ${command}`);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("evaluateOpenCodeTool denies environment dumps in redirect and builtin forms", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-envdump-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const command of ["env > /tmp/leak", "declare -x", "export -p"]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "envdump-session",
+      cwd: root,
+    });
+    assert.equal(result.effect, "deny", `expected deny for: ${command}`);
+  }
+
+  // Legitimate uses of env/set/declare and incidental ".env" mentions must not
+  // be denied: `declare -x VAR=val` exports a variable, and a
+  // string containing `<.env>` is not an `env >` redirection.
+  for (const command of [
+    "env FOO=bar node app.js",
+    "set -e",
+    "declare -x MYVAR=1",
+    'echo "put creds in <.env>"',
+  ]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "bash",
+      args: { command },
+      sessionId: "envdump-allow-session",
+      cwd: root,
+    });
+    assert.notEqual(result.effect, "deny", `expected non-deny for: ${command}`);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("evaluateOpenCodeTool denies /proc/self/environ reads via the read tool", async () => {
+  const root = await mkdtemp(join(tmpdir(), "agt-opencode-proc-"));
+  const state = await loadPolicy({ auditPath: join(root, "audit.json") });
+
+  for (const filePath of ["/proc/1234/environ", "/proc/self/environ", "/proc/thread-self/environ"]) {
+    const result = await evaluateOpenCodeTool(state, {
+      tool: "read",
+      args: { filePath },
+      sessionId: "proc-session",
+      cwd: root,
+    });
+    assert.equal(result.effect, "deny", `expected deny for: ${filePath}`);
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
