@@ -929,6 +929,15 @@ netcat
 socat
 nmap
 tcpdump
+filterwarnings
+simplefilter
+subn
+
+# --- Azure credential pattern terms (used in credential_redactor regexes) ---
+accountkey
+sharedaccesssignature
+sharedaccesskey
+
 isascii
 multisink
 writeln
