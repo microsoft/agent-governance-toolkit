@@ -2244,10 +2244,7 @@ class BaseIntegration(ABC):
             try:
                 trusted_metadata = self._trusted_information_flow_metadata(output_data)
                 if trusted_metadata is not None:
-                    label = label_from_payload(
-                        trusted_metadata,
-                        strict=self._information_flow_strict(ctx.policy),
-                    )
+                    label = label_from_payload(trusted_metadata)
                 else:
                     label = default_unlabeled_source_label(
                         type(output_data).__name__ if output_data is not None else "unlabeled"

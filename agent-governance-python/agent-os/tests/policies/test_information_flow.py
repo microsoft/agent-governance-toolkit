@@ -20,7 +20,6 @@ from agent_os.policies.information_flow import (
     join_labels,
     label_from_payload,
     normalize_fides_additional_properties,
-    _sink_policy_from_payload,
 )
 
 
@@ -93,30 +92,11 @@ def test_confidentiality_sink_denial():
 
 
 def test_strict_unlabeled_payload_defaults_to_untrusted_top_secret():
-    label = label_from_payload({"content": "no metadata"}, strict=True)
+    label = label_from_payload({"content": "no metadata"})
 
     assert label == default_unlabeled_source_label()
     assert label.integrity == IntegrityLabel.UNTRUSTED
     assert label.confidentiality == DC.TOP_SECRET
-
-
-def test_extracts_fides_sink_policy_from_additional_properties():
-    policy = _sink_policy_from_payload(
-        {
-            "tool_name": "email",
-            "additional_properties": {
-                "fides": {
-                    "accepts_untrusted": True,
-                    "max_allowed_confidentiality": "private",
-                }
-            },
-        }
-    )
-
-    assert policy is not None
-    assert policy.accepts_untrusted is True
-    assert policy.max_allowed_confidentiality == DC.CONFIDENTIAL
-    assert policy.name == "email"
 
 
 def test_normalizes_agent_framework_fides_additional_properties():
@@ -166,21 +146,6 @@ def test_malformed_integrity_label_fails_closed():
         assert "integrity" in str(exc)
     else:
         raise AssertionError("malformed integrity metadata should fail closed")
-
-
-def test_string_false_does_not_allow_untrusted_sink():
-    policy = _sink_policy_from_payload(
-        {
-            "tool_name": "email",
-            "information_flow": {
-                "accepts_untrusted": "false",
-                "max_allowed_confidentiality": "internal",
-            },
-        }
-    )
-
-    assert policy is not None
-    assert policy.accepts_untrusted is False
 
 
 def test_quarantined_store_reveals_only_bounded_requested_fields():

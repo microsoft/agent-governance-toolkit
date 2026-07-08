@@ -286,6 +286,8 @@ dashboard shows "governed" status, but no rules are enforced.
 **Mitigations available today:**
 - Use `strict` mode (deny-by-default) in production — this requires explicit
   allow rules for every permitted action
+- Use `agt audit` CLI command to verify loaded policies and detect permissive
+  defaults
 - Use the **MCP Security Scanner** to validate tool configurations
 - Run `agt doctor` to check that all components are properly initialized
 

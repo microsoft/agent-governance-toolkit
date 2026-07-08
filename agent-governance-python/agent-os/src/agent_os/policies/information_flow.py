@@ -19,7 +19,7 @@ from time import monotonic
 from typing import Any, Mapping
 
 from .context_envelope import ContextEnvelope, fold
-from .data_classification import DataClassification, DataLabel
+from .data_classification import DataClassification
 
 
 class IntegrityLabel(str, Enum):
@@ -75,23 +75,6 @@ class InformationFlowLabel:
     source: str = ""
 
     @classmethod
-    def from_data_label(
-        cls,
-        label: DataLabel,
-        *,
-        integrity: IntegrityLabel | str = IntegrityLabel.TRUSTED,
-        source: str = "",
-    ) -> InformationFlowLabel:
-        """Build an IFC label from the existing AGT data-label model."""
-
-        return cls(
-            integrity=_coerce_integrity(integrity),
-            confidentiality=label.classification,
-            categories=frozenset(label.categories),
-            source=source,
-        )
-
-    @classmethod
     def from_mapping(
         cls,
         value: Mapping[str, Any],
@@ -117,14 +100,6 @@ class InformationFlowLabel:
             confidentiality=confidentiality,
             categories=frozenset(str(c) for c in _iterable(categories)),
             source=str(label_value.get("source", "")),
-        )
-
-    def to_data_label(self) -> DataLabel:
-        """Project the IFC label onto AGT's existing data-label API."""
-
-        return DataLabel(
-            classification=self.confidentiality,
-            categories=sorted(self.categories),
         )
 
     def to_metadata(self) -> dict[str, Any]:
@@ -417,14 +392,18 @@ def fold_information_flow_label(
 ) -> ContextEnvelope:
     """Fold an IFC label into an existing context envelope."""
 
-    folded = fold(env, label.categories, label.confidentiality)
-    integrity = (
-        IntegrityLabel.UNTRUSTED.value
-        if env.integrity == IntegrityLabel.UNTRUSTED.value
-        or label.integrity == IntegrityLabel.UNTRUSTED
-        else IntegrityLabel.TRUSTED.value
+    joined = join_labels(
+        [
+            InformationFlowLabel(
+                integrity=env.integrity,
+                confidentiality=env.aggregate_sensitivity,
+                categories=env.labels,
+            ),
+            label,
+        ]
     )
-    return replace(folded, integrity=integrity)
+    folded = fold(env, label.categories, label.confidentiality)
+    return replace(folded, integrity=joined.integrity.value)
 
 
 def enforce_sink(
@@ -597,30 +576,10 @@ def requires_sink_metadata(payload: Any) -> bool:
     return _information_flow_role(normalized) is InformationFlowRole.SINK
 
 
-def _sink_policy_from_payload(payload: Any) -> InformationFlowSinkPolicy | None:
-    """Parse legacy sink policy payloads without exposing runtime authorization."""
-
-    normalized = _payload_mapping(payload)
-    if normalized is None:
-        return None
-    metadata = _nested_ifc_mapping(normalized)
-    has_policy_key = any(
-        key in metadata
-        for key in ("accepts_untrusted", "max_allowed_confidentiality", "sink")
-    )
-    if not has_policy_key:
-        return None
-    return InformationFlowSinkPolicy.from_mapping(
-        normalized,
-        default_name=str(normalized.get("tool_name", "")),
-    )
-
-
 def label_from_payload(
     payload: Any,
     *,
     default_source: str = "",
-    strict: bool = True,
 ) -> InformationFlowLabel:
     """Extract a result label or apply the strict unlabeled-source default."""
 
@@ -628,9 +587,7 @@ def label_from_payload(
         metadata = _nested_ifc_mapping(payload)
         if metadata:
             return InformationFlowLabel.from_mapping(metadata)
-    if strict:
-        return default_unlabeled_source_label(default_source)
-    return InformationFlowLabel(source=default_source)
+    return default_unlabeled_source_label(default_source)
 
 
 def _nested_ifc_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
