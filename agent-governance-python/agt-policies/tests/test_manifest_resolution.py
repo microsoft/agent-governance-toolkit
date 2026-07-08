@@ -1001,6 +1001,46 @@ def test_resolve_negative_operators_match_missing_fields(
     assert "runtime_error:manifest_invalid" not in rego
 
 
+@pytest.mark.parametrize(
+    ("operator", "value", "expected_snippet"),
+    [
+        ("eq", "sha256:registered", '== "sha256:registered"'),
+        ("gt", 10, "_v != null"),
+        ("in", ["eastus", "westus"], "_v != null"),
+    ],
+)
+def test_resolve_positive_operators_do_not_match_missing_fields(
+    tmp_path: Path, operator: str, value: object, expected_snippet: str
+) -> None:
+    root = tmp_path
+    condition = {
+        "field": "tool_call.content_hash",
+        "operator": operator,
+        "value": value,
+    }
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    f"deny-missing-{operator}",
+                    "deny",
+                    condition,
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert not _condition_matches(condition, {"tool_call": {"name": "exec"}})
+    assert expected_snippet in rego
+    assert "runtime_error:manifest_invalid" not in rego
+
+
 def test_resolve_explicit_bundle_dir(tmp_path: Path) -> None:
     root = tmp_path / "ws"
     root.mkdir()

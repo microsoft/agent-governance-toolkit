@@ -328,6 +328,8 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "eq":
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
+        # Missing fields intentionally satisfy negative conditions so deny
+        # rules fail closed when callers omit allowlist-bound fields.
         return f"{indent}_v := {accessor}\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
@@ -340,6 +342,8 @@ def _rego_op_clause(operator: str, accessor: str, value: Any) -> Optional[str]:
     if operator == "in":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
+        # Missing fields intentionally satisfy negative conditions so deny
+        # rules fail closed when callers omit allowlist-bound fields.
         return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
     if operator == "exists":
         return f"{indent}{accessor} != null"
