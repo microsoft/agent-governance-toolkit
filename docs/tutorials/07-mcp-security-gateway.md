@@ -1096,7 +1096,7 @@ Response scanning is built into `MCPGateway`. Choose a `ResponsePolicy`:
 | Policy | Behaviour |
 |--------|-----------|
 | `BLOCK` (default) | Deny the response if any threat is found |
-| `SANITIZE` | Strip injection tags; still block credential/PII leaks |
+| `SANITIZE` | Strip injection tags and redact credentials; block PII/exfiltration leaks |
 | `LOG` | Allow the response through but record all threats |
 
 ```python
@@ -1158,15 +1158,17 @@ The response scanner detects these PII/CRI categories via `CredentialRedactor`:
 | Credit card number | `4111 1111 1111 1111`, `4111-1111-1111-1111` |
 | IPv4 address | `10.0.0.1`, `192.168.1.100` |
 
-In addition, the scanner detects credentials (API keys, tokens, JWTs,
-connection strings) and prompt injection patterns (instruction tags,
+In addition, the scanner detects credentials (API keys, bearer tokens, JWTs,
+connection strings, AWS access and secret keys, Azure SAS tokens, and
+Slack/Google/Stripe tokens) and prompt injection patterns (instruction tags,
 imperative overrides, exfiltration URLs).
 
 ### Sanitize Mode: Category-Aware
 
-`SANITIZE` mode strips injection tags from responses but **still blocks**
-credential leaks, PII leaks, and exfiltration URLs. These categories cannot
-be safely removed from prose without data loss:
+`SANITIZE` mode strips injection tags and redacts credential values in place,
+then allows the cleaned response through. PII leaks and exfiltration URLs are
+still blocked, because they cannot be safely removed from prose without data
+loss:
 
 ```python
 gateway = MCPGateway(policy, response_policy=ResponsePolicy.SANITIZE)
@@ -1179,6 +1181,15 @@ decision = gateway.intercept_tool_response(
 print(decision.allowed)  # True
 print(decision.action)   # "sanitized"
 print(decision.content)  # " Here are your results."
+
+# Credential values are redacted, response allowed
+decision = gateway.intercept_tool_response(
+    "bot", "tool",
+    "Your key is sk-abcdefghijklmnopqrstuvwxyz012345.",
+)
+print(decision.allowed)  # True
+print(decision.action)   # "sanitized"
+print(decision.content)  # "Your key is [REDACTED]."
 
 # PII leaks are still blocked
 decision = gateway.intercept_tool_response(
