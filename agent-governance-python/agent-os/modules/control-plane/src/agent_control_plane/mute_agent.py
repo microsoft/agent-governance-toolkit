@@ -326,8 +326,13 @@ class MuteAgentValidator(CapabilityValidatorInterface):
         try:
             return bool(validator(request))
         except Exception as e:  # noqa: BLE001 - fail closed on validator error
-            logger.debug(
-                "Capability validator raised (%s); failing closed", e
+            # A validator that raises is a broken validator, not a legitimate
+            # rejection. Surface it at warning level with the error string so the
+            # fail-closed rejection is visible to operators rather than hidden,
+            # mirroring how governance_layer records alignment validator errors
+            # (there as a validator_error audit event) instead of swallowing them.
+            logger.warning(
+                "Capability validator raised (%s); rejecting request (fail closed)", e
             )
             return False
 
