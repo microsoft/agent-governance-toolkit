@@ -175,6 +175,11 @@ def _condition_matches(
     *,
     match_missing_negative: bool = False,
 ) -> bool:
+    """Evaluate a condition with the same missing-field mode as rendered Rego.
+
+    ``match_missing_negative`` mirrors deny-rule rendering: missing fields
+    satisfy ``ne`` and ``not_in`` only when deny rules must fail closed.
+    """
     if not isinstance(condition, dict):
         return False
     if "and" in condition:
@@ -1066,6 +1071,36 @@ def test_resolve_allow_negative_operators_do_not_match_missing_fields(
     assert rego_snippet in rego
     assert "_v != null" in rego
     assert "runtime_error:manifest_invalid" not in rego
+
+
+def test_condition_matches_propagates_missing_negative_mode_to_compounds() -> None:
+    condition = {
+        "and": [
+            {
+                "field": "tool_call.content_hash",
+                "operator": "ne",
+                "value": "sha256:registered",
+            },
+            {
+                "or": [
+                    {
+                        "field": "tool_call.region",
+                        "operator": "not_in",
+                        "value": ["eastus"],
+                    },
+                    {
+                        "field": "tool_call.region",
+                        "operator": "eq",
+                        "value": "westus",
+                    },
+                ]
+            },
+        ]
+    }
+    sample = {"tool_call": {"name": "exec"}}
+
+    assert _condition_matches(condition, sample, match_missing_negative=True)
+    assert not _condition_matches(condition, sample)
 
 
 @pytest.mark.parametrize(

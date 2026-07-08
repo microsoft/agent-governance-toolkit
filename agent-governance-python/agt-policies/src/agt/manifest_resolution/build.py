@@ -337,6 +337,14 @@ def _rego_op_clause(
 ) -> Optional[str]:
     """Render the body of a `_match[i]` rule for a given operator.
 
+    Args:
+        operator: Normalized AGT condition operator.
+        accessor: Rego expression that reads the condition field.
+        value: Expected condition value.
+        match_missing_negative: When true, missing fields satisfy negative
+            operators so deny rules fail closed. Allow rules leave this false
+            so they cannot mask a lower-priority deny rule.
+
     Returns None for unsupported operators; the caller turns the rule into a fail-closed deny.
     """
     literal = json.dumps(value)
