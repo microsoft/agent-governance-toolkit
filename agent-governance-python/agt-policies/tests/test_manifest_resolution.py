@@ -169,21 +169,40 @@ def _value_at(sample: dict, field: str) -> object:
     return current
 
 
-def _condition_matches(condition: object, sample: dict) -> bool:
+def _condition_matches(
+    condition: object,
+    sample: dict,
+    *,
+    match_missing_negative: bool = False,
+) -> bool:
     if not isinstance(condition, dict):
         return False
     if "and" in condition:
         items = condition["and"]
         return isinstance(items, list) and all(
-            _condition_matches(item, sample) for item in items
+            _condition_matches(
+                item,
+                sample,
+                match_missing_negative=match_missing_negative,
+            )
+            for item in items
         )
     if "or" in condition:
         items = condition["or"]
         return isinstance(items, list) and any(
-            _condition_matches(item, sample) for item in items
+            _condition_matches(
+                item,
+                sample,
+                match_missing_negative=match_missing_negative,
+            )
+            for item in items
         )
     if "not" in condition:
-        return not _condition_matches(condition["not"], sample)
+        return not _condition_matches(
+            condition["not"],
+            sample,
+            match_missing_negative=match_missing_negative,
+        )
 
     field = condition.get("field")
     operator = condition.get("operator")
@@ -195,8 +214,12 @@ def _condition_matches(condition: object, sample: dict) -> bool:
         if operator == "exists":
             return actual is not None
         if operator == "ne":
+            if actual is None:
+                return match_missing_negative
             return actual != expected
         if operator == "not_in":
+            if actual is None:
+                return match_missing_negative and isinstance(expected, list)
             return isinstance(expected, list) and actual not in expected
         if actual is None:
             return False
@@ -968,7 +991,7 @@ def test_resolve_renders_operator_vocabulary(
         ("not_in", ["eastus", "westus"], "not _v in"),
     ],
 )
-def test_resolve_negative_operators_match_missing_fields(
+def test_resolve_deny_negative_operators_match_missing_fields(
     tmp_path: Path, operator: str, value: object, rego_snippet: str
 ) -> None:
     root = tmp_path
@@ -995,9 +1018,53 @@ def test_resolve_negative_operators_match_missing_fields(
     bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
     rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
 
-    assert _condition_matches(condition, {"tool_call": {"name": "exec"}})
+    assert _condition_matches(
+        condition,
+        {"tool_call": {"name": "exec"}},
+        match_missing_negative=True,
+    )
     assert rego_snippet in rego
     assert "_v != null" not in rego
+    assert "runtime_error:manifest_invalid" not in rego
+
+
+@pytest.mark.parametrize(
+    ("operator", "value", "rego_snippet"),
+    [
+        ("ne", "sha256:registered", '_v != "sha256:registered"'),
+        ("not_in", ["eastus", "westus"], "not _v in"),
+    ],
+)
+def test_resolve_allow_negative_operators_do_not_match_missing_fields(
+    tmp_path: Path, operator: str, value: object, rego_snippet: str
+) -> None:
+    root = tmp_path
+    condition = {
+        "field": "tool_call.content_hash",
+        "operator": operator,
+        "value": value,
+    }
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    f"allow-missing-{operator}",
+                    "allow",
+                    condition,
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    rego = (bundle / "agt_legacy.rego").read_text(encoding="utf-8")
+
+    assert not _condition_matches(condition, {"tool_call": {"name": "exec"}})
+    assert rego_snippet in rego
+    assert "_v != null" in rego
     assert "runtime_error:manifest_invalid" not in rego
 
 
