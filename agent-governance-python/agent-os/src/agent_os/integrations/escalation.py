@@ -179,7 +179,7 @@ class InMemoryApprovalQueue(ApprovalBackend):
                 req.resolved_by = approver
                 req.resolved_at = datetime.now(timezone.utc)
             # Fire on every accepted vote, not just the one that first sets
-            # req.decision, wait_for_quorum() (see below) needs a wakeup
+            # req.decision, wait_for_quorum() (see below) needs a wake-up
             # for each subsequent vote too, to re-check quorum promptly
             # instead of blocking for the remainder of the timeout even
             # after enough votes have already arrived.

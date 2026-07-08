@@ -398,13 +398,13 @@ class TestQuorumWaitsFullTimeout:
         # ~1.9s of its 2s timeout for reviewer-2's vote at t=0.4s.
         assert decision == EscalationDecision.ALLOW
         # A decision-only assertion isn't enough: approve()/deny() only
-        # fire the wakeup event on the vote that first sets req.decision.
+        # fire the wake-up event on the vote that first sets req.decision.
         # A resolve()/wait_for_quorum() fix with no matching fix there
         # would still land on ALLOW, but only by blocking for the entire
         # timeout_seconds and re-checking votes at the deadline, exactly
         # the unresponsiveness #3186 exists to eliminate. Asserting on
         # elapsed time is what actually catches that regression.
         assert elapsed < 1.0, (
-            f"resolved in {elapsed:.3f}s -- expected a prompt wakeup near "
+            f"resolved in {elapsed:.3f}s -- expected a prompt wake-up near "
             f"reviewer-2's vote at ~0.4s, not a wait out to the 2s timeout"
         )
