@@ -251,8 +251,8 @@ export class DockerSandboxProvider implements SandboxProvider {
         // by accident — `null ?? 1` is `1` — but on the spawn-failure path it
         // let the string ('ENOENT') flow through as a `number`-typed exit
         // code, and downstream consumers treating `exitCode` as numeric saw
-        // a string. Narrow explicitly: only accept a numeric code; otherwise
-        // synthesise 1 for any error (signal kill, spawn failure, etc.).
+        // Narrow explicitly: only accept a numeric code; otherwise
+                // synthesize 1 for any error (signal kill, spawn failure, etc.).
         const exitCode = error
           ? typeof error.code === 'number' ? error.code : 1
           : 0;
@@ -267,9 +267,11 @@ export class DockerSandboxProvider implements SandboxProvider {
         // `docker exec` client was killed but the container process may still be
         // running. Force-cleanup the container to avoid resource leaks.
         if (killed && !timedOut) {
-          execFileSync('docker', ['kill', containerId], { stdio: 'pipe', timeout: 5_000 }).catch(() => {
+          try {
+            execFileSync('docker', ['kill', containerId], { stdio: 'pipe', timeout: 5_000 });
+          } catch {
             // Best effort; ignore failures
-          });
+          }
         }
 
         const result: SandboxResult = {
