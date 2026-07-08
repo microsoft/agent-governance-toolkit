@@ -22,8 +22,6 @@ from agt.policies import bridge as bridge_module  # noqa: E402
 pytest.importorskip("agent_os")
 
 
-_PACKAGE_SRC = Path(__file__).resolve().parents[1] / "src"
-
 class _PolicyFixture:
     name = "non_finite_threshold"
     max_tokens = 4096

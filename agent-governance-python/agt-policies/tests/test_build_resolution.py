@@ -13,7 +13,6 @@ import pytest
 import yaml
 import hashlib
 import os
-import agt.manifest_resolution.build as build
 import sys
 from types import SimpleNamespace
 
@@ -21,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from agt.manifest_resolution import ResolutionError, ResolutionReason, resolve_manifest  # noqa: E402
 from agt._harness import opa_runner  # noqa: E402
-from agt.manifest_resolution import build as build_module  # noqa: E402
+from agt.manifest_resolution import build  # noqa: E402
 from agt.manifest_resolution.build import (
     _rego_op_clause,
     _validate_re2_regex,
@@ -31,7 +30,6 @@ from agt.policies.bridge import _pattern_to_regex  # noqa: E402
 
 OPA = Path.home() / ".local" / "bin" / "opa"
 
-_PACKAGE_SRC = Path(__file__).resolve().parents[1] / "src"
 
 def _legacy_binding() -> dict[str, dict[str, Any]]:
     return {
@@ -379,7 +377,7 @@ def test_valid_re2_octal_and_unicode_property_are_accepted() -> None:
     # rejects; the faithful google-re2 validator must NOT over-deny these. The
     # conservative fallback (no google-re2 wheel) legitimately cannot, so this
     # property is only asserted when the real RE2 engine is available.
-    if build_module._re2 is None:
+    if build._re2 is None:
         pytest.skip("google-re2 not installed; conservative fallback over-denies")
     for pattern in (r"\101", r"\123", r"\p{L}", r"\pL", r"\p{Lu}", r"\p{L}+\d"):
         _validate_re2_regex(pattern)
@@ -543,7 +541,7 @@ def test_materialize_rego_write_failure_preserves_previous_bundle(
             "action": "deny",
         }
     ]
-    build_module._materialize_rego_bundle(tmp_path, old_rules)
+    build._materialize_rego_bundle(tmp_path, old_rules)
     rego_file = tmp_path / "policy" / "agt_legacy.rego"
     sidecar_file = tmp_path / "policy" / "agt_legacy.rego.sha256"
     previous_rego = rego_file.read_text(encoding="utf-8")
@@ -552,17 +550,17 @@ def test_materialize_rego_write_failure_preserves_previous_bundle(
         previous_rego.encode("utf-8")
     ).hexdigest()
 
-    original_atomic_write_text = build_module._atomic_write_text
+    original_atomic_write_text = build._atomic_write_text
 
     def fail_rego_write(path: Path, body: str) -> None:
         if path.name == "agt_legacy.rego":
             raise OSError("simulated rego write failure")
         original_atomic_write_text(path, body)
 
-    monkeypatch.setattr(build_module, "_atomic_write_text", fail_rego_write)
+    monkeypatch.setattr(build, "_atomic_write_text", fail_rego_write)
 
     with pytest.raises(ResolutionError):
-        build_module._materialize_rego_bundle(tmp_path, new_rules)
+        build._materialize_rego_bundle(tmp_path, new_rules)
 
     assert rego_file.read_text(encoding="utf-8") == previous_rego
     assert sidecar_file.read_text(encoding="utf-8") == previous_sidecar
