@@ -68,7 +68,10 @@ Two further follow-ups (maintainer-approved) landed in the same change:
   `capability_scope_matches(granted, requested)`; both `CapabilityGrant.matches()`
   and the MCP tool gate (`integrations/mcp` `_check_capability`) now delegate to
   it, so the MCP path can no longer drift from the core semantics (it previously
-  did exact + trailing-wildcard only).
+  did exact + trailing-wildcard only). This intentionally *widens* the MCP gate:
+  it gains the colon-boundary broad→narrow branch, so a `use:sql` grant now
+  satisfies a `use:sql:read` tool requirement it previously did not (see the
+  MCP tool gating row below).
 
 ### Cross-language surface
 
@@ -94,11 +97,11 @@ tighten", the direction is correct.
 | Authorization (escalation) | **Strengthened.** A 4+ segment leaf grant authorizes only that exact leaf; parent, siblings, and uncles are denied. |
 | Correct broad->narrow direction | **Preserved.** A broad grant (`write:database`, or a 3-segment `write:database:table_users`) still satisfies a narrower/deeper check via the colon-boundary prefix branch. |
 | #3176 behavior | **Preserved.** The 3-segment qualifier and `resource_ids` tightening is unaffected; regression tests for it continue to pass. |
-| Derived-field integrity | **Strengthened.** The `mode="after"` validator, `validate_assignment`, and the `model_copy` override prevent a grant constructed, mutated, or copied with a stale/truncated `qualifier` from re-authorizing the parent. |
-| MCP tool gating | **Unified.** `integrations/mcp` now shares the core matcher, so a 4+ segment leaf capability cannot satisfy a parent tool requirement via a divergent checker. Existing exact/wildcard behavior is preserved (verified by the MCP test suite). |
-| Empty/malformed segments | **Fail-closed.** `write:database:` and similar are rejected at parse/grant time rather than accepted as an empty-`""` qualifier. |
+| Derived-field integrity | **Serialization consistency (not an authz safeguard).** The authorization path re-derives from `capability` on each call (`matches()` → `capability_scope_matches`) and does not read the stored `action`/`resource`/`qualifier`. The `mode="after"` validator, `validate_assignment`, and the `model_copy` override keep the *serialized* mirror of those fields consistent with `capability`, so a consumer reading a serialized grant never sees a stale/truncated qualifier. |
+| MCP tool gating | **Unified — and widened.** `integrations/mcp` `_check_capability` now delegates to the core `capability_scope_matches` instead of its previous exact + trailing-`:*`-only check. This adds the colon-boundary broad→narrow branch to the MCP path: a client granted `use:sql` now satisfies a tool requiring `use:sql:read`/`use:sql:admin` (previously it did not). This is the intended hierarchical-capability model and removes a divergent checker, but it is a behavior widening of the MCP gate — call it out in release notes. A 4+ segment leaf capability still cannot satisfy a *parent* tool requirement. |
+| Empty/malformed segments | **Fail-closed.** `write:database:`, `write::table`, `:data` and similar are rejected at parse/grant time rather than accepted as an empty-`""` qualifier. Also note `CapabilityGrant(capability="*")` (bare global wildcard) now raises at construction, because `parse_capability` requires ≥2 non-empty segments; global scope must be expressed as `admin:*` etc. The matcher's literal-`"*"` branch is retained and still authorizes everything, because it is reachable via raw capability strings that do NOT go through `CapabilityGrant` construction — notably an MCP client's `client_capabilities` list, where a `"*"` entry grants any tool. So `"*"` is no longer a constructible *grant* but remains a valid *raw capability*; only the parsed-grant path is tightened. |
 | Delegation guard (`grant(require_grantor_capability=True)`) | **Strengthened.** A grantor holding only a leaf can no longer delegate the parent or a sibling; it can still delegate a strictly-deeper child. |
-| Wildcard grammar | **Clarified / fail-closed.** Only a whole-segment action/resource `*` and a trailing `:*` are wildcards; a `*` in the middle of the remainder (`write:database:*:row`) is now a literal qualifier segment (stricter). |
+| Wildcard grammar | **Clarified / fail-closed.** Only a whole-segment action/resource `*` and a trailing `:*` are wildcards; a `*` in the middle of the remainder (`write:database:*:row`) is now a literal qualifier segment (stricter). Concretely, a grant `*:db:schema` previously authorized `write:db:schema:table` (the request's `:table` was truncated away, so qualifiers matched) and now denies it (`True`→`False`, fail-closed), because the full qualifier `schema` no longer equals `schema:table`. |
 | Fail-closed behavior | **Preserved.** Malformed requests (no colon) still fail closed. Malformed `capability` at construction still raises a `ValueError` (now a `pydantic.ValidationError`, which subclasses `ValueError`, so the `/api/v1/capabilities/grant` handler's `except ValueError` still returns HTTP 400, not 500). |
 | New attack surface | **None.** No new inputs, network exposure, secrets, or trust decisions; the signatures of `matches()`/`check()`/`grant()` are unchanged. |
 | Backward compatibility | A caller that relied on a 4+ segment leaf grant implicitly authorizing its parent/siblings now receives `False`; a caller that relied on empty-segment capabilities now gets a `ValueError`. Both are the intended security fix. |

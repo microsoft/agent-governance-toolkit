@@ -1502,9 +1502,10 @@ class TestCapabilityFourSegmentEscalation:
     # --- model_validator self-heals stale/inconsistent derived fields ---
 
     def test_validator_re_derives_truncated_qualifier(self):
-        # A grant constructed (or deserialized) with a truncated
-        # qualifier must be corrected from `capability`, otherwise the
-        # #3180 escalation re-opens because matches() trusts qualifier.
+        # A grant constructed with a truncated qualifier must have the
+        # serialized mirror corrected from `capability` (the authz path
+        # re-derives independently, but model_dump/consumers read these
+        # fields, so they must not be stale).
         g = CapabilityGrant(
             capability="write:database:table_users:row_1",
             action="write",
@@ -1514,7 +1515,9 @@ class TestCapabilityFourSegmentEscalation:
             granted_by="did:mesh:0",
         )
         assert g.qualifier == "table_users:row_1"
-        assert g.matches("write:database:table_users") is False   # parent denied
+        assert g.model_dump()["qualifier"] == "table_users:row_1"
+        # authz is independent of the stored field and denies the parent
+        assert g.matches("write:database:table_users") is False
         assert g.matches("write:database:table_users:row_1") is True
 
     def test_model_validate_derives_components(self):
@@ -1532,21 +1535,20 @@ class TestCapabilityFourSegmentEscalation:
         )
 
     def test_reassigning_capability_re_derives_via_validate_assignment(self):
-        # validate_assignment must re-derive components when `capability`
-        # is mutated after construction; otherwise a stale truncated
-        # qualifier would re-authorize the parent (#3180 defense-in-depth).
+        # validate_assignment re-derives the serialized mirror when
+        # `capability` is mutated, so model_dump does not emit a stale
+        # truncated qualifier.
         g = CapabilityGrant.create(
             "write:database:table_users", "did:mesh:1", "did:mesh:0"
         )
         g.capability = "write:database:table_users:row_1"
         assert g.qualifier == "table_users:row_1"
-        assert g.matches("write:database:table_users:row_1") is True
-        assert g.matches("write:database:table_users") is False   # parent denied
+        assert g.model_dump()["qualifier"] == "table_users:row_1"
 
     def test_non_dict_mapping_input_re_derives(self):
         # model_validate on a non-dict mapping (e.g. UserDict) with a
-        # deliberately stale qualifier must still re-derive from
-        # `capability` (mode="after" runs regardless of input type).
+        # deliberately stale qualifier must still re-derive the mirror
+        # from `capability` (mode="after" runs regardless of input type).
         from collections import UserDict
 
         g = CapabilityGrant.model_validate(
@@ -1560,7 +1562,6 @@ class TestCapabilityFourSegmentEscalation:
             )
         )
         assert g.qualifier == "table_users:row_1"
-        assert g.matches("write:database:table_users") is False
 
 
 
@@ -1594,17 +1595,21 @@ class TestCapabilityFourSegmentEscalation:
 
     def test_model_copy_re_derives_and_denies_parent(self):
         # model_copy(update={"capability": ...}) must re-derive the
-        # components; otherwise a copy that rewrites capability keeps a
-        # stale qualifier and re-authorizes the parent (#3180 residual,
-        # now closed by the model_copy override).
+        # serialized mirror; Pydantic's model_copy skips validators, so
+        # without the override a copy that rewrites capability would
+        # serialize a stale truncated qualifier. (The authz path re-derives
+        # independently, so matches() is correct regardless; the override's
+        # observable effect is on the mirror / model_dump.)
         g = CapabilityGrant.create(
             "write:database:table_users", "did:mesh:1", "did:mesh:0"
         )
         c = g.model_copy(update={"capability": "write:database:table_users:row_1"})
         assert c.qualifier == "table_users:row_1"
+        assert c.model_dump()["qualifier"] == "table_users:row_1"
+        # authz independently denies parent/sibling for the copy
         assert c.matches("write:database:table_users:row_1") is True
-        assert c.matches("write:database:table_users") is False   # parent denied
-        assert c.matches("write:database:table_users:row_2") is False  # sibling denied
+        assert c.matches("write:database:table_users") is False
+        assert c.matches("write:database:table_users:row_2") is False
 
     def test_model_copy_rejects_malformed_capability_update(self):
         g = CapabilityGrant.create("write:database", "did:mesh:1", "did:mesh:0")

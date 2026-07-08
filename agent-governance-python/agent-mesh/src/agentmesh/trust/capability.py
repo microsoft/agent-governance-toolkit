@@ -32,10 +32,14 @@ class CapabilityGrant(BaseModel):
     its parent or its siblings.
     """
 
-    # validate_assignment re-runs validators when a field is mutated
-    # after construction, so reassigning ``capability`` re-derives
-    # action/resource/qualifier and cannot leave a stale (truncated)
-    # qualifier that matches() would trust (#3180 defense-in-depth).
+    # ``action``/``resource``/``qualifier`` are a *serialized mirror* of
+    # ``capability`` (they appear in ``model_dump``). The authorization
+    # path does NOT read them — ``matches()`` delegates to
+    # ``capability_scope_matches``, which re-derives from ``capability``
+    # independently. validate_assignment re-runs the validator when a
+    # field is mutated, so reassigning ``capability`` keeps that mirror
+    # from serializing a stale (truncated) qualifier. This is
+    # serialization consistency, not an authorization safeguard.
     model_config = ConfigDict(validate_assignment=True)
 
     grant_id: str = Field(default_factory=lambda: f"grant_{uuid.uuid4().hex[:12]}")
@@ -105,14 +109,19 @@ class CapabilityGrant(BaseModel):
     def _derive_components(self):
         """Re-derive action/resource/qualifier from ``capability``.
 
-        Runs after every construction, ``model_validate``, and (because
-        ``validate_assignment`` is enabled) every field reassignment, so
-        the parsed components can never disagree with the source
-        ``capability`` string regardless of input type (dict, mapping,
-        model instance). Without this, a grant built or mutated as
+        These fields are a *serialized mirror* of ``capability`` (they
+        appear in ``model_dump`` output). The authorization path does not
+        read them: ``matches()`` delegates to ``capability_scope_matches``,
+        which parses ``capability`` afresh on each call. This validator
+        therefore exists to keep the SERIALIZED mirror consistent with the
+        source string, not to protect an authorization decision — e.g. a
+        grant built or mutated as
         ``CapabilityGrant(capability="a:b:c:d", qualifier="c")`` would
-        keep a truncated ``qualifier`` and re-open the #3180 escalation,
-        because ``matches()`` trusts the stored qualifier. The
+        otherwise serialize a stale, truncated ``qualifier``.
+
+        Runs after every construction, ``model_validate``, and (because
+        ``validate_assignment`` is enabled) every field reassignment,
+        regardless of input type (dict, mapping, model instance); the
         ``model_copy`` override applies the same re-derivation to copies,
         which Pydantic otherwise builds without validation.
         """
@@ -129,12 +138,12 @@ class CapabilityGrant(BaseModel):
 
         Pydantic's ``model_copy`` does NOT run validators, so a plain
         ``super().model_copy(update={"capability": ...})`` would rewrite
-        ``capability`` while leaving ``action``/``resource``/``qualifier``
-        stale — re-opening the #3180 escalation because ``matches()``
-        trusts those derived fields. Overriding it here re-derives them
-        from the copy's ``capability`` so the invariant holds on every
-        copy, including ``update`` payloads that rewrite the capability.
-        Raises ``ValueError`` if the resulting ``capability`` is malformed
+        ``capability`` while leaving the serialized
+        ``action``/``resource``/``qualifier`` mirror stale. Overriding it
+        here re-derives them from the copy's ``capability`` so the
+        serialized mirror stays consistent on every copy, including
+        ``update`` payloads that rewrite the capability. Raises
+        ``ValueError`` if the resulting ``capability`` is malformed
         (fail-closed), matching construction-time behavior.
         """
         copied = super().model_copy(update=update, deep=deep)
