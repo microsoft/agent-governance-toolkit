@@ -264,7 +264,7 @@ class TestSavePolicy:
         from agentmesh.engine_api import create_app
 
         missing = tmp_path / "not_yet"
-        app = create_app(policy_dir=str(missing))
+        app = create_app(policy_dir=str(missing), enable_policy_save=True)
         local = TestClient(app)
         resp = local.post(
             "/api/v1/policy/save",
@@ -317,3 +317,78 @@ class TestSavePolicy:
         assert (policy_dir / "iota.json").exists()
         items = client.get("/api/v1/policies").json()["items"]
         assert [i["id"] for i in items].count("iota") == 1
+
+
+# ── /policy/save write-path gate (AGENTMESH_ENABLE_POLICY_SAVE) ───────────────
+class TestSavePolicyGate:
+    """The single write endpoint is disabled by default and opts in via env or argument.
+
+    Keeps the reference adapter from accepting an unauthenticated policy mutation out of the
+    box; a deployment enables it once it fronts the engine with its own auth (contract 4).
+    """
+
+    _SAVE_ENV = "AGENTMESH_ENABLE_POLICY_SAVE"
+
+    def _client(self, policy_dir, **kwargs):
+        from fastapi.testclient import TestClient
+
+        from agentmesh.engine_api import create_app
+
+        return TestClient(create_app(policy_dir=str(policy_dir), **kwargs))
+
+    def _post_save(self, client):
+        return client.post(
+            "/api/v1/policy/save",
+            json={"id": "gated", "content": _VALID_POLICY_YAML, "format": "yaml"},
+        )
+
+    def test_disabled_by_default_returns_403_and_does_not_write(self, policy_dir, monkeypatch):
+        monkeypatch.delenv(self._SAVE_ENV, raising=False)
+        client = self._client(policy_dir)  # no flag, no env -> disabled
+        resp = self._post_save(client)
+        assert resp.status_code == 403
+        body = resp.json()
+        assert body["code"] == "FORBIDDEN"
+        assert body["details"]["env"] == self._SAVE_ENV
+        assert not (policy_dir / "gated.yaml").exists()
+
+    def test_enabled_by_argument(self, policy_dir, monkeypatch):
+        monkeypatch.delenv(self._SAVE_ENV, raising=False)
+        client = self._client(policy_dir, enable_policy_save=True)
+        resp = self._post_save(client)
+        assert resp.status_code == 200
+        assert (policy_dir / "gated.yaml").exists()
+
+    @pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
+    def test_enabled_by_truthy_env(self, policy_dir, monkeypatch, value):
+        monkeypatch.setenv(self._SAVE_ENV, value)
+        client = self._client(policy_dir)  # argument omitted -> defers to env
+        assert self._post_save(client).status_code == 200
+
+    @pytest.mark.parametrize("value", ["0", "false", "no", "off", ""])
+    def test_falsy_env_stays_disabled(self, policy_dir, monkeypatch, value):
+        monkeypatch.setenv(self._SAVE_ENV, value)
+        client = self._client(policy_dir)
+        assert self._post_save(client).status_code == 403
+
+    def test_argument_false_overrides_truthy_env(self, policy_dir, monkeypatch):
+        monkeypatch.setenv(self._SAVE_ENV, "1")
+        client = self._client(policy_dir, enable_policy_save=False)
+        assert self._post_save(client).status_code == 403
+
+    def test_argument_true_overrides_falsy_env(self, policy_dir, monkeypatch):
+        monkeypatch.setenv(self._SAVE_ENV, "0")
+        client = self._client(policy_dir, enable_policy_save=True)
+        assert self._post_save(client).status_code == 200
+
+    def test_disabled_save_short_circuits_before_validation(self, policy_dir, monkeypatch):
+        # A disabled engine rejects with 403 even when the content is invalid, proving the
+        # gate runs before any schema work (no POLICY_PARSE_ERROR leaks through).
+        monkeypatch.delenv(self._SAVE_ENV, raising=False)
+        client = self._client(policy_dir)
+        resp = client.post(
+            "/api/v1/policy/save",
+            json={"id": "gated", "content": "just a string", "format": "yaml"},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["code"] == "FORBIDDEN"

@@ -20,6 +20,7 @@ class TestArgParser:
         assert args.host == DEFAULT_HOST == "127.0.0.1"
         assert args.port == DEFAULT_PORT == 8080
         assert args.policy_dir is None
+        assert args.enable_policy_save is False
 
     def test_custom_args(self):
         args = _build_arg_parser().parse_args(
@@ -32,6 +33,9 @@ class TestArgParser:
     def test_port_must_be_int(self):
         with pytest.raises(SystemExit):
             _build_arg_parser().parse_args(["--port", "not-a-number"])
+
+    def test_enable_policy_save_flag(self):
+        assert _build_arg_parser().parse_args(["--enable-policy-save"]).enable_policy_save is True
 
 
 class TestMain:
@@ -50,11 +54,34 @@ class TestMain:
         monkeypatch.setattr(uvicorn, "run", _fake_run)
 
         sentinel = object()
-        monkeypatch.setattr(
-            "agentmesh.engine_api.app.create_app", lambda policy_dir=None: sentinel
-        )
+
+        def _fake_create_app(policy_dir=None, enable_policy_save=None):
+            captured["policy_dir"] = policy_dir
+            captured["enable_policy_save"] = enable_policy_save
+            return sentinel
+
+        monkeypatch.setattr("agentmesh.engine_api.app.create_app", _fake_create_app)
 
         main(["--host", "127.0.0.1", "--port", "1234"])
         assert captured["app"] is sentinel
         assert captured["host"] == "127.0.0.1"
         assert captured["port"] == 1234
+        # No --enable-policy-save flag -> None, so create_app defers to the env var.
+        assert captured["enable_policy_save"] is None
+
+    def test_main_passes_enable_policy_save_when_flag_set(self, monkeypatch):
+        pytest.importorskip("fastapi")
+        pytest.importorskip("uvicorn")
+        import uvicorn
+
+        captured = {}
+        monkeypatch.setattr(uvicorn, "run", lambda app, host, port: None)
+
+        def _fake_create_app(policy_dir=None, enable_policy_save=None):
+            captured["enable_policy_save"] = enable_policy_save
+            return object()
+
+        monkeypatch.setattr("agentmesh.engine_api.app.create_app", _fake_create_app)
+
+        main(["--enable-policy-save"])
+        assert captured["enable_policy_save"] is True

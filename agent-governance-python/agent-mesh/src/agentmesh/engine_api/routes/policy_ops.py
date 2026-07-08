@@ -25,6 +25,7 @@ from agentmesh.engine_api.capabilities import capability_flags
 from agentmesh.engine_api.errors import (
     ENGINE_UNAVAILABLE,
     FIXTURE_LOAD_ERROR,
+    FORBIDDEN,
     POLICY_PARSE_ERROR,
     ApiError,
 )
@@ -212,7 +213,22 @@ async def save_policy(request: Request, body: SaveRequest) -> SaveResponse:
     reload (contract section 8.1), which is why no standalone reload route exists. Content is
     schema-validated before any write so a malformed document cannot overwrite a valid policy
     and then surface with ``rules_count: 0``.
+
+    The write path is disabled by default. When ``app.state.policy_save_enabled`` is false
+    (the default; enable via ``AGENTMESH_ENABLE_POLICY_SAVE=1`` or the ``enable_policy_save``
+    argument to ``create_app``) the request returns ``403 FORBIDDEN`` and nothing is written,
+    so the reference adapter never accepts an unauthenticated mutation out of the box. A
+    deployment opts in once it fronts the engine with its own auth (contract section 4).
     """
+    if not getattr(request.app.state, "policy_save_enabled", False):
+        raise ApiError(
+            403,
+            FORBIDDEN,
+            "Policy save is disabled on this engine. Set AGENTMESH_ENABLE_POLICY_SAVE=1 to "
+            "enable the write path (intended for deployments that front the engine with auth).",
+            {"env": "AGENTMESH_ENABLE_POLICY_SAVE"},
+        )
+
     # JSON is a subset of YAML, so the YAML-based schema validator accepts both formats.
     from agentmesh.governance.policy import validate_policy_schema
 

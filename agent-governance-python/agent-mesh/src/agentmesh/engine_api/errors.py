@@ -8,10 +8,12 @@ validation, or bubbled up as an unhandled exception - is rendered as the section
 envelope: ``{status, code, message, details}``.
 
 The full section 10.3 code set is defined here as module constants. The routes in this
-adapter can actually emit four of them (``POLICY_NOT_FOUND``, ``POLICY_PARSE_ERROR``,
-``FIXTURE_LOAD_ERROR``, ``VALIDATION_ERROR``) plus ``ENGINE_UNAVAILABLE`` when the optional
-policy-test engine is not installed. ``UNAUTHORIZED`` / ``FORBIDDEN`` are reserved for the
-auth layer (issue #7) and are defined here but not wired by this issue.
+adapter can actually emit five of them (``POLICY_NOT_FOUND``, ``POLICY_PARSE_ERROR``,
+``FIXTURE_LOAD_ERROR``, ``VALIDATION_ERROR``, ``FORBIDDEN``) plus ``ENGINE_UNAVAILABLE`` when
+the optional policy-test engine is not installed. ``FORBIDDEN`` is returned by
+``POST /api/v1/policy/save`` when the write path is disabled (its default; see
+``AGENTMESH_ENABLE_POLICY_SAVE``). ``UNAUTHORIZED`` is reserved for the non-loopback token
+auth layer (issue #7) and is defined here but not wired by this issue.
 
 **Handler ordering.** :func:`register_error_handlers` installs a handler for
 :class:`fastapi.exceptions.RequestValidationError` that overrides FastAPI's default. Without

@@ -39,6 +39,19 @@ POLICY_DIR_ENV = "AGENTMESH_POLICY_DIR"
 #: Default policy directory used when neither the argument nor the env var is set.
 DEFAULT_POLICY_DIR = "/etc/agentmesh/policies"
 
+#: Environment variable that enables the single write endpoint (``POST /api/v1/policy/save``).
+#: Defaults off so the reference adapter never accepts an unauthenticated policy mutation out of
+#: the box; a deployment opts in once it has placed its own auth in front of the engine.
+POLICY_SAVE_ENV = "AGENTMESH_ENABLE_POLICY_SAVE"
+
+#: Values (case-insensitive) that count as "on" for a boolean environment flag.
+_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _env_truthy(name: str) -> bool:
+    """Return ``True`` when environment variable ``name`` is set to a truthy value."""
+    return os.getenv(name, "").strip().lower() in _TRUTHY_ENV_VALUES
+
 #: Route modules included by the app, in contract order.
 _ROUTE_MODULES = (
     health,
@@ -72,13 +85,19 @@ def _register_routes_flat(app: FastAPI, router: APIRouter) -> None:
     app.router.routes.extend(router.routes)
 
 
-def create_app(policy_dir: str | None = None) -> FastAPI:
+def create_app(policy_dir: str | None = None, enable_policy_save: bool | None = None) -> FastAPI:
     """Build and return the Engine API FastAPI application.
 
     Args:
         policy_dir: Directory of policy files backing ``/policies`` and ``/policy/save``.
             Falls back to the ``AGENTMESH_POLICY_DIR`` environment variable, then to
             :data:`DEFAULT_POLICY_DIR`. The directory need not exist at startup.
+        enable_policy_save: Whether the single write endpoint ``POST /api/v1/policy/save``
+            accepts writes. Defaults to ``None``, which falls back to the
+            ``AGENTMESH_ENABLE_POLICY_SAVE`` environment variable (off unless set truthy).
+            While disabled, ``savePolicy`` returns ``403 FORBIDDEN`` and nothing is written,
+            so the reference adapter never accepts an unauthenticated policy mutation out of
+            the box. A deployment turns it on once it fronts the engine with its own auth.
 
     Returns:
         A fully wired :class:`fastapi.FastAPI` instance. The capability-extension OpenAPI
@@ -86,6 +105,10 @@ def create_app(policy_dir: str | None = None) -> FastAPI:
         in-schema operation is missing capability flags.
     """
     resolved_dir = policy_dir or os.getenv(POLICY_DIR_ENV, DEFAULT_POLICY_DIR)
+    if enable_policy_save is None:
+        save_enabled = _env_truthy(POLICY_SAVE_ENV)
+    else:
+        save_enabled = bool(enable_policy_save)
 
     app = FastAPI(
         title="AGT Studio Engine API",
@@ -95,6 +118,7 @@ def create_app(policy_dir: str | None = None) -> FastAPI:
 
     app.state.start_time = time.monotonic()
     app.state.policy_registry = PolicyRegistry(resolved_dir)
+    app.state.policy_save_enabled = save_enabled
 
     register_error_handlers(app)
 

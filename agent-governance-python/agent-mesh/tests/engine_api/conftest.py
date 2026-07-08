@@ -59,8 +59,13 @@ def policy_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def app(policy_dir: Path):
-    """A fully wired app over the seeded policy directory."""
-    return create_app(policy_dir=str(policy_dir))
+    """A fully wired app over the seeded policy directory, with the save endpoint enabled.
+
+    The write path defaults off (see ``create_app``); the route tests exercise an engine
+    configured for authoring, so the fixture opts in. Tests for the disabled default build
+    their own app without the flag.
+    """
+    return create_app(policy_dir=str(policy_dir), enable_policy_save=True)
 
 
 @pytest.fixture
