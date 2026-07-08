@@ -16,7 +16,7 @@ import pytest
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-AGT_SRC = Path(__file__).parents[5] / "agent-governance-python" / "agent-os" / "src"
+AGT_SRC = Path(__file__).parents[4] / "agent-governance-python" / "agent-os" / "src"
 sys.path.insert(0, str(AGT_SRC))
 
 from agent_os.policies.schema import PolicyAction, PolicyDocument, PolicyOperator
@@ -80,7 +80,7 @@ class TestRulePresence:
         names = [r.name for r in doc.rules]
         assert "nimc-2026-mandatory-nin-service-gate" in names
 
-    def test_nimc_2026_rules_are_four_total(self, doc):
+    def test_nimc_2026_rules_are_three_total(self, doc):
         nimc_rules = [r for r in doc.rules if r.name.startswith("nimc-2026-")]
         assert len(nimc_rules) == 3, (
             f"Expected 3 NIMC 2026 YAML rules (purpose-limitation is Rego-only); "
