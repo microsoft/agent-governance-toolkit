@@ -506,7 +506,7 @@ class TestHealthCheckerIntegration:
         """Custom health checks are executed."""
         from agent_os.integrations.health import HealthChecker, HealthStatus, ComponentHealth
 
-        checker = HealthChecker(version="1.0.0")
+        checker = HealthChecker(version="1.0.0", register_builtins=False)
 
         def custom_check():
             return ComponentHealth(
