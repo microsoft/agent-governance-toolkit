@@ -8,7 +8,7 @@ Simple string-based capability scope checking.
 
 from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 import uuid
 
 
@@ -22,14 +22,36 @@ class CapabilityGrant(BaseModel):
     - write:reports
     - execute:tools:calculator
     - admin:*
+
+    ``qualifier`` captures the *entire* sub-resource path after
+    ``action:resource``, including any further colon-separated
+    segments. For example ``write:database:table_users:row_1`` parses
+    to ``action='write'``, ``resource='database'``,
+    ``qualifier='table_users:row_1'``. It is compared as an opaque
+    exact-match token, so a grant scoped to a leaf does not authorize
+    its parent or its siblings.
     """
+
+    # ``action``/``resource``/``qualifier`` are a *serialized mirror* of
+    # ``capability`` (they appear in ``model_dump``). The authorization
+    # path does NOT read them — ``matches()`` delegates to
+    # ``capability_scope_matches``, which re-derives from ``capability``
+    # independently. validate_assignment re-runs the validator when a
+    # field is mutated, so reassigning ``capability`` keeps that mirror
+    # from serializing a stale (truncated) qualifier. This is
+    # serialization consistency, not an authorization safeguard.
+    model_config = ConfigDict(validate_assignment=True)
 
     grant_id: str = Field(default_factory=lambda: f"grant_{uuid.uuid4().hex[:12]}")
 
     # Capability specification
     capability: str = Field(..., description="Capability string (e.g., 'read:data')")
-    action: str = Field(..., description="Action part (e.g., 'read')")
-    resource: str = Field(..., description="Resource part (e.g., 'data')")
+    # action/resource/qualifier are derived from ``capability`` by the
+    # ``_derive_components`` model validator; any values passed at
+    # construction are overwritten, so they carry defaults rather than
+    # being required (the validator runs after field validation).
+    action: str = Field(default="", description="Action part (e.g., 'read')")
+    resource: str = Field(default="", description="Resource part (e.g., 'data')")
     qualifier: Optional[str] = Field(None, description="Optional qualifier")
 
     # Grant metadata
@@ -56,16 +78,80 @@ class CapabilityGrant(BaseModel):
 
     @classmethod
     def parse_capability(cls, capability: str) -> tuple[str, str, Optional[str]]:
-        """Parse a capability string into (action, resource, qualifier)."""
+        """Parse a capability string into (action, resource, qualifier).
+
+        ``qualifier`` is the full remainder after ``action:resource``:
+        every colon-separated segment from index 2 onward is preserved
+        and re-joined with ``":"``. Dropping segments past index 2
+        (the historical behavior) collapsed a leaf grant onto its
+        parent/siblings and caused a privilege escalation (#3180).
+
+        Empty colon-separated segments (e.g. ``write:database:``,
+        ``write::table``, ``:data``) are rejected: an empty segment is a
+        malformed scope whose matching behavior is ambiguous, so it fails
+        closed at parse time rather than being silently accepted.
+        """
         parts = capability.split(":")
         if len(parts) < 2:
             raise ValueError(f"Invalid capability format: {capability}")
+        if any(part == "" for part in parts):
+            raise ValueError(
+                f"Invalid capability format (empty segment): {capability}"
+            )
 
         action = parts[0]
         resource = parts[1]
-        qualifier = parts[2] if len(parts) > 2 else None
+        qualifier = ":".join(parts[2:]) if len(parts) > 2 else None
 
         return action, resource, qualifier
+
+    @model_validator(mode="after")
+    def _derive_components(self):
+        """Re-derive action/resource/qualifier from ``capability``.
+
+        These fields are a *serialized mirror* of ``capability`` (they
+        appear in ``model_dump`` output). The authorization path does not
+        read them: ``matches()`` delegates to ``capability_scope_matches``,
+        which parses ``capability`` afresh on each call. This validator
+        therefore exists to keep the SERIALIZED mirror consistent with the
+        source string, not to protect an authorization decision — e.g. a
+        grant built or mutated as
+        ``CapabilityGrant(capability="a:b:c:d", qualifier="c")`` would
+        otherwise serialize a stale, truncated ``qualifier``.
+
+        Runs after every construction, ``model_validate``, and (because
+        ``validate_assignment`` is enabled) every field reassignment,
+        regardless of input type (dict, mapping, model instance); the
+        ``model_copy`` override applies the same re-derivation to copies,
+        which Pydantic otherwise builds without validation.
+        """
+        action, resource, qualifier = self.parse_capability(self.capability)
+        # object.__setattr__ avoids re-triggering validate_assignment
+        # (which would recurse through this validator).
+        object.__setattr__(self, "action", action)
+        object.__setattr__(self, "resource", resource)
+        object.__setattr__(self, "qualifier", qualifier)
+        return self
+
+    def model_copy(self, *, update=None, deep=False):
+        """Copy the grant, re-deriving components from ``capability``.
+
+        Pydantic's ``model_copy`` does NOT run validators, so a plain
+        ``super().model_copy(update={"capability": ...})`` would rewrite
+        ``capability`` while leaving the serialized
+        ``action``/``resource``/``qualifier`` mirror stale. Overriding it
+        here re-derives them from the copy's ``capability`` so the
+        serialized mirror stays consistent on every copy, including
+        ``update`` payloads that rewrite the capability. Raises
+        ``ValueError`` if the resulting ``capability`` is malformed
+        (fail-closed), matching construction-time behavior.
+        """
+        copied = super().model_copy(update=update, deep=deep)
+        action, resource, qualifier = self.parse_capability(copied.capability)
+        object.__setattr__(copied, "action", action)
+        object.__setattr__(copied, "resource", resource)
+        object.__setattr__(copied, "qualifier", qualifier)
+        return copied
 
     @classmethod
     def create(
@@ -76,14 +162,14 @@ class CapabilityGrant(BaseModel):
         resource_ids: Optional[list[str]] = None,
         expires_at: Optional[datetime] = None,
     ) -> "CapabilityGrant":
-        """Create a new capability grant from a capability string."""
-        action, resource, qualifier = cls.parse_capability(capability)
+        """Create a new capability grant from a capability string.
 
+        ``action``/``resource``/``qualifier`` are derived from
+        ``capability`` by the ``_derive_components`` validator, so they
+        are not passed explicitly here.
+        """
         return cls(
             capability=capability,
-            action=action,
-            resource=resource,
-            qualifier=qualifier,
             granted_to=granted_to,
             granted_by=granted_by,
             resource_ids=resource_ids or [],
@@ -101,47 +187,16 @@ class CapabilityGrant(BaseModel):
     def matches(self, requested: str, resource_id: Optional[str] = None) -> bool:
         """Check if this grant satisfies a requested capability.
 
-        Uses simple startswith matching for scope checking.
+        Delegates the string-scope decision to
+        :func:`capability_scope_matches` (shared with other capability
+        checkers so the semantics cannot drift), then applies this
+        grant's validity and ``resource_ids`` scoping.
         """
         if not self.is_valid():
             return False
 
-        # Simple string-based scope check
-        if self.capability == "*" or self.capability == requested:
-            pass  # exact match or wildcard
-        elif self.capability.endswith(":*"):
-            prefix = self.capability[:-1]  # e.g. "read:" from "read:*"
-            if not requested.startswith(prefix):
-                return False
-        elif ":" in self.capability and requested.startswith(self.capability + ":"):
-            # V30: Only allow prefix match at colon boundaries to prevent
-            # "read" matching "readwrite:secret". Require the granted
-            # capability to be a colon-delimited prefix of the requested one.
-            pass
-        else:
-            # Fall back to component matching. parse_capability raises
-            # ValueError on inputs that don't contain a colon (e.g.
-            # bare verbs like "read") — fail-closed for those rather
-            # than crashing the caller. The grant simply doesn't match
-            # a malformed request.
-            try:
-                req_action, req_resource, req_qualifier = self.parse_capability(requested)
-            except ValueError:
-                return False
-            if self.action != "*" and self.action != req_action:
-                return False
-            if self.resource != "*" and self.resource != req_resource:
-                return False
-            if self.qualifier is not None and self.qualifier != "*":
-                # This grant is scoped to a specific qualifier, so it
-                # only satisfies a request for that exact qualifier. A
-                # request that omits the qualifier (req_qualifier is
-                # None) is broader than the grant and must NOT be
-                # authorized by it. Otherwise a narrow grant (e.g.
-                # "write:database:table_users") would satisfy a broad
-                # check (e.g. "write:database"), a privilege escalation.
-                if req_qualifier != self.qualifier:
-                    return False
+        if not capability_scope_matches(self.capability, requested):
+            return False
 
         # Check resource ID scope. A grant restricted to specific
         # resource_ids must not satisfy a check that omits resource_id
@@ -158,6 +213,50 @@ class CapabilityGrant(BaseModel):
         """Revoke this grant immediately."""
         self.active = False
         self.revoked_at = datetime.now(timezone.utc)
+
+
+def capability_scope_matches(granted: str, requested: str) -> bool:
+    """Return ``True`` if a grant of ``granted`` authorizes ``requested``.
+
+    Pure ``action:resource[:qualifier]`` string-scope decision, with no
+    grant validity or ``resource_ids`` handling. This is the single
+    authoritative scope matcher; every capability checker (``CapabilityGrant.matches``
+    and the MCP tool gate) delegates here so their semantics cannot drift.
+
+    Rules, in order:
+
+    1. Global wildcard (``*``) or exact match.
+    2. Trailing wildcard (``granted`` ends with ``:*``): ``requested`` must
+       start with the colon-terminated prefix.
+    3. Colon-boundary prefix: a broad grant authorizes a strictly deeper
+       (narrower) request, e.g. ``write:database`` authorizes
+       ``write:database:table_users``. The ``+ ":"`` prevents ``read``
+       from matching ``readwrite:secret``.
+    4. Component fallback: compare action, resource, and the full qualifier
+       (the entire sub-resource remainder) as opaque exact tokens, so a leaf
+       grant (``write:database:table_users:row_1``) does NOT authorize its
+       parent (``write:database:table_users``) or a sibling (``...:row_2``).
+       Malformed inputs (no colon, empty segment) fail closed to ``False``.
+    """
+    if granted == "*" or granted == requested:
+        return True
+    if granted.endswith(":*"):
+        return requested.startswith(granted[:-1])
+    if ":" in granted and requested.startswith(granted + ":"):
+        return True
+    try:
+        g_action, g_resource, g_qualifier = CapabilityGrant.parse_capability(granted)
+        r_action, r_resource, r_qualifier = CapabilityGrant.parse_capability(requested)
+    except ValueError:
+        return False
+    if g_action != "*" and g_action != r_action:
+        return False
+    if g_resource != "*" and g_resource != r_resource:
+        return False
+    if g_qualifier is not None and g_qualifier != "*":
+        if r_qualifier != g_qualifier:
+            return False
+    return True
 
 
 class CapabilityScope(BaseModel):

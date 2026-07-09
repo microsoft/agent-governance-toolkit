@@ -57,11 +57,19 @@ impl CapabilityGrant {
         if parts.len() < 2 {
             return Err(format!("invalid capability '{capability}'"));
         }
-        Ok((
-            parts[0].to_string(),
-            parts[1].to_string(),
-            parts.get(2).map(|value| (*value).to_string()),
-        ))
+        if parts.iter().any(|part| part.is_empty()) {
+            return Err(format!("invalid capability (empty segment) '{capability}'"));
+        }
+        // Preserve the full sub-resource path: every segment after
+        // action:resource is kept and re-joined with ':'. Dropping
+        // parts[3..] collapsed a leaf grant onto its parent/siblings
+        // (privilege escalation #3180 in the Python SDK).
+        let qualifier = if parts.len() > 2 {
+            Some(parts[2..].join(":"))
+        } else {
+            None
+        };
+        Ok((parts[0].to_string(), parts[1].to_string(), qualifier))
     }
 
     pub fn create(
@@ -811,6 +819,65 @@ mod tests {
             .unwrap();
         assert!(registry.has_capability("did:agentmesh:peer", "read:data", None));
         assert!(!registry.has_capability("did:agentmesh:peer", "write:data", None));
+    }
+
+    #[test]
+    fn parse_capability_preserves_full_sub_resource_path() {
+        let (action, resource, qualifier) =
+            CapabilityGrant::parse_capability("write:database:table_users:row_1").unwrap();
+        assert_eq!(action, "write");
+        assert_eq!(resource, "database");
+        assert_eq!(qualifier.as_deref(), Some("table_users:row_1"));
+    }
+
+    #[test]
+    fn parse_capability_rejects_empty_segments() {
+        for bad in ["write:database:", "write::table", ":data", "a:b::c"] {
+            assert!(
+                CapabilityGrant::parse_capability(bad).is_err(),
+                "expected {bad} to be rejected"
+            );
+            assert!(
+                CapabilityGrant::create(
+                    bad,
+                    "did:agentmesh:peer",
+                    "did:agentmesh:root",
+                    Vec::new()
+                )
+                .is_err(),
+                "expected create({bad}) to fail"
+            );
+        }
+    }
+
+    #[test]
+    fn leaf_grant_does_not_authorize_parent_or_sibling() {
+        // #3180 regression: a 4+-segment leaf grant authorizes only the
+        // exact leaf, never its parent or a sibling.
+        let registry = CapabilityRegistry::new();
+        registry
+            .grant(
+                "did:agentmesh:child",
+                "did:agentmesh:admin",
+                "write:database:table_users:row_1",
+                Vec::new(),
+            )
+            .unwrap();
+        assert!(registry.has_capability(
+            "did:agentmesh:child",
+            "write:database:table_users:row_1",
+            None
+        ));
+        assert!(!registry.has_capability(
+            "did:agentmesh:child",
+            "write:database:table_users",
+            None
+        ));
+        assert!(!registry.has_capability(
+            "did:agentmesh:child",
+            "write:database:table_users:row_2",
+            None
+        ));
     }
 
     #[test]
