@@ -9,8 +9,11 @@ resolution reasons in ``policy-engine/spec/SPECIFICATION.md`` §16.
 
 from __future__ import annotations
 
+import json
 import random
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -25,6 +28,17 @@ from agt.manifest_resolution import (
     resolve_manifest,
 )
 from agt.manifest_resolution.merge import merge_top_level_section
+
+
+def _require_opa() -> str:
+    opa = shutil.which("opa")
+    if opa is None:
+        candidate = Path.home() / ".local" / "bin" / "opa"
+        if candidate.is_file():
+            opa = str(candidate)
+    if opa is None:
+        pytest.skip("opa binary required for Rego evaluation")
+    return opa
 
 
 # ── discover_policies ────────────────────────────────────────────────
@@ -992,7 +1006,7 @@ def test_resolve_renders_operator_vocabulary(
 @pytest.mark.parametrize(
     ("operator", "value", "rego_snippet"),
     [
-        ("ne", "sha256:registered", '_v != "sha256:registered"'),
+        ("ne", "sha256:registered", "not object.get("),
         ("not_in", ["eastus", "westus"], "not _v in"),
     ],
 )
@@ -1031,6 +1045,59 @@ def test_resolve_deny_negative_operators_match_missing_fields(
     assert rego_snippet in rego
     assert "_v != null" not in rego
     assert "runtime_error:manifest_invalid" not in rego
+
+
+def test_resolve_deny_ne_missing_field_denies_with_generated_rego(
+    tmp_path: Path,
+) -> None:
+    opa = _require_opa()
+    root = tmp_path
+    _write(
+        root / "governance.yaml",
+        {
+            "rules": [
+                _rule_with_condition(
+                    "deny-missing-ne",
+                    "deny",
+                    {
+                        "field": "tool_call.content_hash",
+                        "operator": "ne",
+                        "value": "sha256:registered",
+                    },
+                )
+            ],
+            "intervention_points": _legacy_binding(),
+        },
+    )
+
+    manifest = resolve_manifest(root, root)
+    bundle = Path(manifest["policies"]["agt_legacy_rules"]["bundle"])
+    input_path = tmp_path / "input.json"
+    input_path.write_text(
+        json.dumps({"snapshot": {"tool_call": {"name": "exec"}}}),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            opa,
+            "eval",
+            "--format=json",
+            "--data",
+            str(bundle / "agt_legacy.rego"),
+            "--input",
+            str(input_path),
+            "data.agt.legacy.verdict",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+    verdict = payload["result"][0]["expressions"][0]["value"]
+
+    assert verdict["decision"] == "deny"
+    assert verdict["reason"] == "deny-missing-ne"
 
 
 @pytest.mark.parametrize(

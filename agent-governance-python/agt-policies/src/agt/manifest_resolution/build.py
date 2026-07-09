@@ -356,7 +356,7 @@ def _rego_op_clause(
             # Deny rules fail closed on missing negative fields per ACS §5.2;
             # allow rules keep the null guard so they cannot short-circuit
             # lower-priority deny rules.
-            return f"{indent}_v := {accessor}\n{indent}_v != {literal}"
+            return f"{indent}not {accessor} == {literal}"
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
