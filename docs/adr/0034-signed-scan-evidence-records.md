@@ -1,4 +1,4 @@
-# ADR 0033: Signed scan evidence records and a pre-tool-use verification gate
+# ADR 0034: Signed scan evidence records and a pre-tool-use verification gate
 
 - Status: proposed
 - Date: 2026-07-08
@@ -117,6 +117,10 @@ Three new OPTIONAL top-level policy keys, siblings of `minimumPromptDefenseGrade
 
 ### 5. PreToolUse verification flow
 
+Evidence records are discovered from a policy-configured `scanEvidencePaths` list (local
+directories and/or HTTPS URLs), keyed by `tool_name`, with remote lookups cached by
+`record_digest`.
+
 When `requireSignedScanEvidence` is true, `evaluatePreToolUse` performs, after the existing
 `toolPolicies` / `blockedToolCalls` checks and before returning `allow`:
 
@@ -168,7 +172,10 @@ behavior or promote it from status to enforcement.
   trusting the scanner's operator or re-running the scan; drift after scanning is caught
   structurally; auditors get content-addressed pointers from the ADR-0017 chain to the evidence.
 - Negative / accepted: policy evaluation gains a signature verification on the tool path
-  (Ed25519 verify is sub-millisecond; records are cacheable by `record_digest`); operators who
+  (Ed25519 verify is sub-millisecond; records are cacheable by `record_digest`). The hot path
+  meets the ADR-0004 budget only with a warm JWKS cache (existing ADR-0007 TTL semantics) —
+  implementations SHOULD resolve issuer JWKS at session start, keeping `PreToolUse` itself to
+  digest compare + signature verify with no network dependency; operators who
   enable enforcement must run or trust at least one issuer; a new schema surface must be
   versioned (`schema_version`, following the `schemaVersion` precedent).
 - Deferred (future ADRs): evidence transparency/append-only publication, richer finding taxonomies
