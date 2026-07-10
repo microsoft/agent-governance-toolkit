@@ -129,7 +129,7 @@ def test_wrap_tool_call_allow_path_forwards_to_handler(tmp_path: Path) -> None:
             {"decision": "allow"},  # output (post-execute)
         ],
     )
-    kernel = LangChainKernel(_runtime=runtime)
+    kernel = LangChainKernel(runtime=runtime)
     mw = kernel.as_middleware()
     handler = MagicMock(return_value=_make_tool_result("AI safety research"))
 
@@ -157,14 +157,14 @@ def test_wrap_tool_call_deny_path_raises_policy_violation(tmp_path: Path) -> Non
             }
         ],
     )
-    kernel = LangChainKernel(_runtime=runtime)
+    kernel = LangChainKernel(runtime=runtime)
     mw = kernel.as_middleware()
     handler = MagicMock(return_value=_make_tool_result())
 
     with pytest.raises(PolicyViolationError) as excinfo:
         mw.wrap_tool_call(_make_tool_request(), handler)
 
-    assert excinfo.value.check_result.reason == "tool_args_forbidden"
+    assert excinfo.value.evaluation_result.reason_code == "policy:tool_args_forbidden"
     handler.assert_not_called()
 
 
@@ -186,7 +186,7 @@ def test_wrap_tool_call_transform_path_rewrites_arguments(tmp_path: Path) -> Non
             {"decision": "allow"},  # output
         ],
     )
-    kernel = LangChainKernel(_runtime=runtime)
+    kernel = LangChainKernel(runtime=runtime)
     mw = kernel.as_middleware()
     handler = MagicMock(return_value=_make_tool_result())
 
@@ -218,7 +218,7 @@ def test_wrap_tool_call_escalate_with_approving_resolver_forwards(tmp_path: Path
         ],
         approval_resolver=resolver,
     )
-    kernel = LangChainKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = LangChainKernel(runtime=runtime)
     mw = kernel.as_middleware()
     handler = MagicMock(return_value=_make_tool_result())
 
@@ -241,7 +241,7 @@ def test_wrap_tool_call_escalate_with_no_resolver_denies(tmp_path: Path) -> None
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = LangChainKernel(_runtime=runtime)
+    kernel = LangChainKernel(runtime=runtime)
     mw = kernel.as_middleware()
     handler = MagicMock(return_value=_make_tool_result())
 

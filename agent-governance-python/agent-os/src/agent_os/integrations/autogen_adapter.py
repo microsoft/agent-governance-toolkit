@@ -47,11 +47,11 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from .base import (
     PII_PATTERNS,
     BaseIntegration,
@@ -504,6 +504,7 @@ class AutoGenKernel(BaseIntegration):
         evaluator: Any = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -529,6 +530,9 @@ class AutoGenKernel(BaseIntegration):
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -548,19 +552,20 @@ class AutoGenKernel(BaseIntegration):
         self._groupchat_message_log: list[dict[str, Any]] = []
         self._state_change_log: list[dict[str, Any]] = []
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+    def evaluate_input(self, ctx: Any, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
@@ -571,7 +576,7 @@ class AutoGenKernel(BaseIntegration):
         tool_name: str,
         args: Any,
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for an AutoGen FunctionCall."""
         normalised: dict[str, Any]
         if isinstance(args, dict):
@@ -1194,6 +1199,7 @@ def govern(
     policy: Optional[GovernancePolicy] = None,
     timeout_seconds: float = 300.0,
     on_error: Optional[Callable[[Exception, str], Any]] = None,
+    runtime: Any | None = None,
 ) -> list[Any]:
     """Convenience function to add governance to AutoGen agents.
 
@@ -1221,5 +1227,8 @@ def govern(
         stacklevel=2,
     )
     return AutoGenKernel(
-        policy, timeout_seconds=timeout_seconds, on_error=on_error
+        policy,
+        timeout_seconds=timeout_seconds,
+        on_error=on_error,
+        runtime=runtime,
     ).govern(*agents)

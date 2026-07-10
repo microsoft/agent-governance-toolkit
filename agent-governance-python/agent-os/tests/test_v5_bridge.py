@@ -27,9 +27,13 @@ pytest.importorskip("agt.policies.runtime")
 
 from agent_os.integrations._v5_runtime_bridge import (  # noqa: E402
     _build_runtime,
+    get_adapter_runtime,
     get_runtime_bridge,
 )
 from agent_os.integrations.base import GovernancePolicy  # noqa: E402
+from agent_os.integrations._native_adapter_runtime import (  # noqa: E402
+    NativeAdapterRuntime,
+)
 
 
 def _resolver_accept_all(_ip: str, result: Any) -> Any:
@@ -140,3 +144,32 @@ def test_runtime_factory_bypasses_process_cache_for_equal_policies():
     assert second.runtime == "second-runtime"
     assert second.runtime == "second-runtime"
     assert calls == ["first", "second"]
+
+
+def test_adapter_runtime_selects_public_native_path():
+    resolver = object()
+
+    class Runtime:
+        _approval_resolver = resolver
+
+    runtime = Runtime()
+    selected = get_adapter_runtime(
+        policy=_approval_required_policy(),
+        runtime=runtime,
+        approval_resolver=resolver,
+    )
+
+    assert isinstance(selected, NativeAdapterRuntime)
+    assert selected.runtime is runtime
+
+
+def test_adapter_runtime_rejects_competing_resolver():
+    class Runtime:
+        _approval_resolver = object()
+
+    with pytest.raises(ValueError, match="belongs to AgtRuntime"):
+        get_adapter_runtime(
+            policy=_approval_required_policy(),
+            runtime=Runtime(),
+            approval_resolver=object(),
+        )

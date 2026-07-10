@@ -46,11 +46,11 @@ from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from .base import (
     PII_PATTERNS,
     BaseIntegration,
@@ -356,9 +356,7 @@ class GovernanceHooks:
                         "[%s] Policy DENY (AGT output) on tool output: %s",
                         name, post_result.reason,
                     )
-                    raise PolicyViolationError.from_check_result(
-                        post_result.check_result
-                    )
+                    raise post_result.to_policy_violation(PolicyViolationError)
                 if post_result.transform is not None and isinstance(
                     post_result.transform.value, str
                 ):
@@ -544,9 +542,7 @@ class GovernanceHooks:
                         "[%s] Policy DENY (AGT output) on LLM output: %s",
                         name, post_result.reason,
                     )
-                    raise PolicyViolationError.from_check_result(
-                        post_result.check_result
-                    )
+                    raise post_result.to_policy_violation(PolicyViolationError)
                 if post_result.transform is not None and isinstance(
                     post_result.transform.value, str
                 ):
@@ -627,6 +623,7 @@ class CrewAIKernel(BaseIntegration):
         evaluator: Any = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -637,11 +634,12 @@ class CrewAIKernel(BaseIntegration):
         self._memory_audit_log: list[dict[str, Any]] = []
         self._delegation_log: list[dict[str, Any]] = []
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
         logger.debug(
             "CrewAIKernel initialized with policy=%s deep_hooks_enabled=%s",
@@ -649,15 +647,15 @@ class CrewAIKernel(BaseIntegration):
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+    def evaluate_input(self, ctx: Any, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
-    def evaluate_output(self, ctx: Any, output_data: Any) -> BridgeResult:
+    def evaluate_output(self, ctx: Any, output_data: Any) -> AdapterResult:
         """Public access to the AGT ``output`` intervention point evaluation."""
         return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
 
@@ -668,7 +666,7 @@ class CrewAIKernel(BaseIntegration):
         tool_name: str,
         args: Any,
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a CrewAI tool call."""
         normalised: dict[str, Any]
         if isinstance(args, dict):
@@ -1151,7 +1149,12 @@ class CrewAIKernel(BaseIntegration):
 
 # ── Convenience function (deprecated) ─────────────────────────────
 
-def wrap(crew: Any, policy: Optional[GovernancePolicy] = None) -> Any:
+def wrap(
+    crew: Any,
+    policy: Optional[GovernancePolicy] = None,
+    *,
+    runtime: Any | None = None,
+) -> Any:
     """Quick wrapper for CrewAI crews.
 
     .. deprecated::
@@ -1165,4 +1168,4 @@ def wrap(crew: Any, policy: Optional[GovernancePolicy] = None) -> Any:
         stacklevel=2,
     )
     logger.debug("Using convenience wrap function for crew")
-    return CrewAIKernel(policy).wrap(crew)
+    return CrewAIKernel(policy, runtime=runtime).wrap(crew)

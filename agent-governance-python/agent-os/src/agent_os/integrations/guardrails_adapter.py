@@ -16,7 +16,7 @@ Backend (AGT 5.0): when a :class:`~agent_os.integrations.base.GovernancePolicy`
 is supplied (or a pre-built :class:`agt.policies.runtime.AgtRuntime` is
 injected via the test seam), every ``validate_input`` /
 ``validate_output`` call routes through the AGT 5.0 ACS-backed runtime
-via the shared :class:`AdapterRuntimeBridge` in addition to running the
+via the shared :class:`AdapterRuntime` in addition to running the
 local validator chain. ``transform`` verdicts (AGT-DELTA D1.1) rewrite
 the ``final_value`` of the :class:`ValidationResult`; ``deny`` verdicts
 append a synthetic failing :class:`ValidationOutcome`; ``escalate``
@@ -47,11 +47,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import ExecutionContext, GovernancePolicy
 
@@ -299,7 +299,7 @@ class GuardrailsKernel:
     When a :class:`GovernancePolicy` is supplied (or a pre-built
     :class:`agt.policies.runtime.AgtRuntime` is injected via the test
     seam), every validate call ALSO routes through the AGT 5.0 ACS
-    runtime via :class:`AdapterRuntimeBridge`. The AGT verdict is
+    runtime via :class:`AdapterRuntime`. The AGT verdict is
     merged into the :class:`ValidationResult` so callers see both the
     local validator outcomes and the AGT engine's decision in one shape.
     """
@@ -312,6 +312,7 @@ class GuardrailsKernel:
         *,
         policy: GovernancePolicy | None = None,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -332,6 +333,9 @@ class GuardrailsKernel:
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -349,16 +353,22 @@ class GuardrailsKernel:
         # supplied or a runtime is injected). When neither is set, the
         # kernel behaves byte-identical to the legacy v4 surface so
         # existing tests pass unchanged.
-        self._bridge: Optional[AdapterRuntimeBridge] = None
+        self._bridge: Optional[AdapterRuntime] = None
         self._ctx: Optional[ExecutionContext] = None
-        if policy is not None or _runtime is not None or _runtime_factory is not None:
+        if (
+            policy is not None
+            or runtime is not None
+            or _runtime is not None
+            or _runtime_factory is not None
+        ):
             effective_policy = policy or GovernancePolicy()
             self._policy = effective_policy
-            self._bridge = get_runtime_bridge(
-                effective_policy,
+            self._bridge = get_adapter_runtime(
+                policy=effective_policy,
                 approval_resolver=approval_resolver,
-                runtime=_runtime,
-                runtime_factory=_runtime_factory,
+                runtime=runtime,
+                legacy_runtime=_runtime,
+                legacy_runtime_factory=_runtime_factory,
             )
             self._ctx = ExecutionContext(
                 agent_id="guardrails-kernel",
@@ -367,8 +377,8 @@ class GuardrailsKernel:
             )
 
     @property
-    def bridge(self) -> Optional[AdapterRuntimeBridge]:
-        """Return the v5 :class:`AdapterRuntimeBridge`, or ``None`` if disabled."""
+    def bridge(self) -> Optional[AdapterRuntime]:
+        """Return the v5 :class:`AdapterRuntime`, or ``None`` if disabled."""
         return self._bridge
 
     @property
@@ -381,7 +391,7 @@ class GuardrailsKernel:
         """Return the :class:`ExecutionContext` shared across bridge calls."""
         return self._ctx
 
-    def evaluate_input(self, value: str) -> Optional[BridgeResult]:
+    def evaluate_input(self, value: str) -> Optional[AdapterResult]:
         """Public access to the AGT ``input`` intervention point evaluation.
 
         Returns ``None`` when the bridge is disabled (no policy/runtime
@@ -391,7 +401,7 @@ class GuardrailsKernel:
             return None
         return self._bridge.evaluate_input(self._ctx, body=value)
 
-    def evaluate_output(self, value: str) -> Optional[BridgeResult]:
+    def evaluate_output(self, value: str) -> Optional[AdapterResult]:
         """Public access to the AGT ``output`` intervention point evaluation.
 
         Returns ``None`` when the bridge is disabled (no policy/runtime
@@ -451,7 +461,7 @@ class GuardrailsKernel:
 
     def _apply_bridge_result(
         self,
-        bridge_result: BridgeResult,
+        bridge_result: AdapterResult,
         outcomes: list[ValidationOutcome],
         final_value: str,
     ) -> tuple[list[ValidationOutcome], str]:
@@ -506,8 +516,8 @@ class GuardrailsKernel:
 
         ``intervention_point`` is ``"input"`` for ``validate_input``
         callers and ``"output"`` for ``validate_output`` callers. The
-        bridge dispatches to :meth:`AdapterRuntimeBridge.evaluate_input`
-        or :meth:`AdapterRuntimeBridge.evaluate_output` accordingly. The
+        bridge dispatches to :meth:`AdapterRuntime.evaluate_input`
+        or :meth:`AdapterRuntime.evaluate_output` accordingly. The
         plain :meth:`validate` entry point uses ``"input"`` so legacy
         callers keep getting the input-side semantics.
         """

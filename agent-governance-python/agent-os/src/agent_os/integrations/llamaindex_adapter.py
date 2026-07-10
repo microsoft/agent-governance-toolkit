@@ -33,11 +33,11 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
@@ -136,6 +136,7 @@ class LlamaIndexKernel(BaseIntegration):
         policy: Optional[GovernancePolicy] = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -150,6 +151,9 @@ class LlamaIndexKernel(BaseIntegration):
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -160,28 +164,29 @@ class LlamaIndexKernel(BaseIntegration):
         self._wrapped_agents: dict[int, Any] = {}
         self._stopped: dict[str, bool] = {}
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: ExecutionContext, input_data: Any) -> BridgeResult:
+    def evaluate_input(self, ctx: ExecutionContext, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
-    def evaluate_output(self, ctx: ExecutionContext, output_data: Any) -> BridgeResult:
+    def evaluate_output(self, ctx: ExecutionContext, output_data: Any) -> AdapterResult:
         """Public access to the AGT ``output`` intervention point evaluation."""
         return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
 
-    def evaluate_tool_budget(self, ctx: ExecutionContext) -> Optional[BridgeResult]:
-        """Return a deny ``BridgeResult`` if the call/token budget is exceeded.
+    def evaluate_tool_budget(self, ctx: ExecutionContext) -> Optional[AdapterResult]:
+        """Return a deny ``AdapterResult`` if the call/token budget is exceeded.
 
         A governed ``.query()`` / ``.chat()`` is a budgeted operation in the
         v4 contract; this keeps ``max_tool_calls`` / ``max_tokens`` enforced on
@@ -238,9 +243,7 @@ class LlamaIndexKernel(BaseIntegration):
                 """Evaluate the AGT input intervention point and apply transforms."""
                 bridge_result = self._kernel.evaluate_input(self._ctx, input_data)
                 if not bridge_result.allowed:
-                    raise PolicyViolationError.from_check_result(
-                        bridge_result.check_result
-                    )
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None and isinstance(
                     bridge_result.transform.value, str
                 ):
@@ -255,9 +258,7 @@ class LlamaIndexKernel(BaseIntegration):
                 """
                 bridge_result = self._kernel.evaluate_output(self._ctx, result)
                 if not bridge_result.allowed:
-                    raise PolicyViolationError.from_check_result(
-                        bridge_result.check_result
-                    )
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None and isinstance(
                     bridge_result.transform.value, str
                 ):
@@ -286,9 +287,7 @@ class LlamaIndexKernel(BaseIntegration):
                 """
                 budget = self._kernel.evaluate_tool_budget(self._ctx)
                 if budget is not None and not budget.allowed:
-                    raise PolicyViolationError.from_check_result(
-                        budget.check_result
-                    )
+                    raise budget.to_policy_violation(PolicyViolationError)
 
             def query(self, query_str: Any, **kwargs) -> Any:
                 """Governed query."""
@@ -440,6 +439,11 @@ class LlamaIndexKernel(BaseIntegration):
 
 
 # Convenience function
-def wrap(agent: Any, policy: Optional[GovernancePolicy] = None) -> Any:
+def wrap(
+    agent: Any,
+    policy: Optional[GovernancePolicy] = None,
+    *,
+    runtime: Any | None = None,
+) -> Any:
     """Quick wrapper for LlamaIndex engines."""
-    return LlamaIndexKernel(policy).wrap(agent)
+    return LlamaIndexKernel(policy, runtime=runtime).wrap(agent)

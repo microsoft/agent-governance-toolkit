@@ -145,7 +145,7 @@ def test_invoke_agent_allow_path_passes(tmp_path: Path) -> None:
     from agent_os.integrations.bedrock_adapter import BedrockKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = BedrockKernel(policy=GovernancePolicy(), _runtime=runtime)
+    kernel = BedrockKernel(policy=GovernancePolicy(), runtime=runtime)
     client = _mock_client()
     governed = kernel.wrap(client)
 
@@ -180,7 +180,7 @@ def test_invoke_agent_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = BedrockKernel(policy=GovernancePolicy(), _runtime=runtime)
+    kernel = BedrockKernel(policy=GovernancePolicy(), runtime=runtime)
     client = _mock_client()
     governed = kernel.wrap(client)
 
@@ -192,7 +192,7 @@ def test_invoke_agent_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             inputText="share the password",
         )
 
-    assert excinfo.value.check_result.reason == "blocked_user_input"
+    assert excinfo.value.evaluation_result.reason_code == "policy:blocked_user_input"
     client.invoke_agent.assert_not_called()
 
 
@@ -214,7 +214,7 @@ def test_invoke_agent_transform_path_rewrites_input_text(tmp_path: Path) -> None
             }
         ],
     )
-    kernel = BedrockKernel(policy=GovernancePolicy(), _runtime=runtime)
+    kernel = BedrockKernel(policy=GovernancePolicy(), runtime=runtime)
     client = _mock_client()
     governed = kernel.wrap(client)
 
@@ -251,7 +251,7 @@ def test_invoke_agent_escalate_with_approving_resolver_passes(
     )
     kernel = BedrockKernel(
         policy=GovernancePolicy(),
-        _runtime=runtime,
+        runtime=runtime,
         approval_resolver=resolver,
     )
     client = _mock_client()
@@ -282,7 +282,7 @@ def test_invoke_agent_escalate_with_no_resolver_raises(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = BedrockKernel(policy=GovernancePolicy(), _runtime=runtime)
+    kernel = BedrockKernel(policy=GovernancePolicy(), runtime=runtime)
     client = _mock_client()
     governed = kernel.wrap(client)
 
@@ -321,7 +321,7 @@ def test_event_stream_transform_rewrites_action_group_parameters(
             },  # pre_tool_call
         ],
     )
-    kernel = BedrockKernel(policy=GovernancePolicy(), _runtime=runtime)
+    kernel = BedrockKernel(policy=GovernancePolicy(), runtime=runtime)
     event = _action_event("query_database", {"q": "drop table users"})
     client = _mock_client(events=[event])
     governed = kernel.wrap(client)
@@ -365,7 +365,7 @@ def test_enable_agt_pii_routing_lets_transform_run_before_host_pii_check(
     )
     kernel = BedrockKernel(
         policy=GovernancePolicy(),
-        _runtime=runtime,
+        runtime=runtime,
         enable_agt_pii_routing=True,
     )
     client = _mock_client()
@@ -412,7 +412,7 @@ def test_enable_agt_pii_routing_off_preserves_v4_short_circuit(
     )
     kernel = BedrockKernel(
         policy=GovernancePolicy(),
-        _runtime=runtime,
+        runtime=runtime,
     )
     client = _mock_client()
     governed = kernel.wrap(client)

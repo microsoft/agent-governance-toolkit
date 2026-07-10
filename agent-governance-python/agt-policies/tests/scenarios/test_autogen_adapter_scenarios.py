@@ -158,7 +158,7 @@ def test_on_send_allow_path_forwards_function_call(tmp_path: Path) -> None:
     from agent_os.integrations.autogen_adapter import AutoGenKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = AutoGenKernel(_runtime=runtime)
+    kernel = AutoGenKernel(runtime=runtime)
     handler = kernel.as_handler()
 
     fc = _make_function_call()
@@ -184,7 +184,7 @@ def test_on_send_deny_path_drops_message(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = AutoGenKernel(_runtime=runtime)
+    kernel = AutoGenKernel(runtime=runtime)
     handler = kernel.as_handler()
 
     fc = _make_function_call()
@@ -210,7 +210,7 @@ def test_on_send_transform_path_rewrites_function_call_arguments(tmp_path: Path)
             }
         ],
     )
-    kernel = AutoGenKernel(_runtime=runtime)
+    kernel = AutoGenKernel(runtime=runtime)
     handler = kernel.as_handler()
 
     fc = _make_function_call(arguments='{"q":"drop table users"}')
@@ -236,7 +236,7 @@ def test_on_send_escalate_with_approving_resolver_forwards(tmp_path: Path) -> No
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = AutoGenKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = AutoGenKernel(runtime=runtime)
     handler = kernel.as_handler()
 
     fc = _make_function_call()
@@ -258,7 +258,7 @@ def test_on_send_escalate_with_no_resolver_drops(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = AutoGenKernel(_runtime=runtime)
+    kernel = AutoGenKernel(runtime=runtime)
     handler = kernel.as_handler()
 
     fc = _make_function_call()

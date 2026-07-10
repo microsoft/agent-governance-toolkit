@@ -75,11 +75,11 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from .base import PII_PATTERNS, BaseIntegration, GovernanceEventType, GovernancePolicy
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 
 logger = logging.getLogger("agent_os.langchain")
@@ -134,6 +134,7 @@ class LangChainKernel(BaseIntegration):
         evaluator: Any = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -158,6 +159,9 @@ class LangChainKernel(BaseIntegration):
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -174,19 +178,20 @@ class LangChainKernel(BaseIntegration):
         self._memory_audit_log: list[dict[str, Any]] = []
         self._delegation_chains: list[dict[str, Any]] = []
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+    def evaluate_input(self, ctx: Any, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
@@ -197,13 +202,13 @@ class LangChainKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a LangChain tool invocation."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
         )
 
-    def evaluate_output(self, ctx: Any, output_data: Any) -> BridgeResult:
+    def evaluate_output(self, ctx: Any, output_data: Any) -> AdapterResult:
         """AGT ``output`` evaluation for buffered LangChain output."""
         return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
 
@@ -760,9 +765,7 @@ class LangChainKernel(BaseIntegration):
                 bridge_result = self._kernel.evaluate_output(self._ctx, chunks)
                 if not bridge_result.allowed:
                     logger.info("Policy DENY on stream result: %s", bridge_result.reason)
-                    raise PolicyViolationError.from_check_result(
-                        bridge_result.check_result
-                    )
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None:
                     transformed = bridge_result.transform.value
                     chunks = transformed if isinstance(transformed, list) else [transformed]
@@ -807,9 +810,7 @@ class LangChainKernel(BaseIntegration):
                 bridge_result = self._kernel.evaluate_output(self._ctx, chunks)
                 if not bridge_result.allowed:
                     logger.info("Policy DENY on %s result: %s", method_name, bridge_result.reason)
-                    raise PolicyViolationError.from_check_result(
-                        bridge_result.check_result
-                    )
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None:
                     transformed = bridge_result.transform.value
                     if isinstance(transformed, list):
@@ -1012,7 +1013,7 @@ class GovernanceMiddleware(_MiddlewareBase):
         # on ``check_result.reason``.
         budget_result = self._kernel._bridge.evaluate_tool_budget(self._ctx)
         if budget_result is not None and not budget_result.allowed:
-            raise PolicyViolationError.from_check_result(budget_result.check_result)
+            raise budget_result.to_policy_violation(PolicyViolationError)
 
         # ─── 2. AGT pre_tool_call evaluation ──────────────────────
         bridge_result = self._kernel.evaluate_pre_tool_call(
@@ -1033,7 +1034,7 @@ class GovernanceMiddleware(_MiddlewareBase):
                 tool_name,
                 bridge_result.reason,
             )
-            raise PolicyViolationError.from_check_result(bridge_result.check_result)
+            raise bridge_result.to_policy_violation(PolicyViolationError)
         logger.info("[%s] Policy ALLOW on tool '%s'", self._name, tool_name)
 
         # ─── 3. Record invocation ─────────────────────────────────
@@ -1065,7 +1066,7 @@ class GovernanceMiddleware(_MiddlewareBase):
                 tool_name,
                 post_result.reason,
             )
-            raise PolicyViolationError.from_check_result(post_result.check_result)
+            raise post_result.to_policy_violation(PolicyViolationError)
         if post_result.transform is not None and isinstance(
             post_result.transform.value, str
         ):
@@ -1163,7 +1164,7 @@ class GovernanceMiddleware(_MiddlewareBase):
                     self._name,
                     pre_result.reason,
                 )
-                raise PolicyViolationError.from_check_result(pre_result.check_result)
+                raise pre_result.to_policy_violation(PolicyViolationError)
             if pre_result.transform is not None and isinstance(
                 pre_result.transform.value, str
             ):
@@ -1200,7 +1201,7 @@ class GovernanceMiddleware(_MiddlewareBase):
                     self._name,
                     post_result.reason,
                 )
-                raise PolicyViolationError.from_check_result(post_result.check_result)
+                raise post_result.to_policy_violation(PolicyViolationError)
             if post_result.transform is not None and isinstance(
                 post_result.transform.value, str
             ):
@@ -1240,6 +1241,8 @@ def wrap(
     agent: Any,
     policy: Optional[GovernancePolicy] = None,
     timeout_seconds: float = 300.0,
+    *,
+    runtime: Any | None = None,
 ) -> Any:
     """Convenience wrapper for LangChain agents and chains.
 
@@ -1267,4 +1270,6 @@ def wrap(
         DeprecationWarning,
         stacklevel=2,
     )
-    return LangChainKernel(policy, timeout_seconds=timeout_seconds).wrap(agent)
+    return LangChainKernel(
+        policy, timeout_seconds=timeout_seconds, runtime=runtime
+    ).wrap(agent)

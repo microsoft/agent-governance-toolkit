@@ -144,7 +144,7 @@ def test_generate_content_allow_path_forwards_to_gemini(tmp_path: Path) -> None:
     gemini_mod._HAS_GENAI = True
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
@@ -173,14 +173,14 @@ def test_generate_content_deny_path_raises_policy_violation(tmp_path: Path) -> N
             }
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.generate_content("tell me about secrets")
 
-    assert excinfo.value.check_result.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.reason_code == "policy:user_blocked_topic"
     model.generate_content.assert_not_called()
 
 
@@ -204,7 +204,7 @@ def test_generate_content_transform_path_redacts_outbound_prompt(tmp_path: Path)
             }
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
@@ -237,7 +237,7 @@ def test_generate_content_escalate_with_approving_resolver_forwards(
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = GeminiKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
@@ -260,7 +260,7 @@ def test_generate_content_escalate_with_no_resolver_denies(tmp_path: Path) -> No
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     model = _make_gemini_model()
     governed = kernel.wrap(model)
 
@@ -294,7 +294,7 @@ def test_function_call_transform_rewrites_args(tmp_path: Path) -> None:
             },
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     response = _make_function_call_response("get_weather", {"city": "Seattle"})
     model = _make_gemini_model(response=response)
     governed = kernel.wrap(model)
@@ -325,7 +325,7 @@ def test_function_call_deny_path_raises_policy_violation(tmp_path: Path) -> None
             },
         ],
     )
-    kernel = GeminiKernel(_runtime=runtime)
+    kernel = GeminiKernel(runtime=runtime)
     response = _make_function_call_response("get_weather", {"city": "Seattle"})
     model = _make_gemini_model(response=response)
     governed = kernel.wrap(model)
@@ -333,4 +333,4 @@ def test_function_call_deny_path_raises_policy_violation(tmp_path: Path) -> None
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.generate_content("weather please")
 
-    assert excinfo.value.check_result.reason == "tool_args_forbidden"
+    assert excinfo.value.evaluation_result.reason_code == "policy:tool_args_forbidden"

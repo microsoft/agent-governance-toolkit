@@ -51,7 +51,7 @@ Cedar/OPA policy evaluation is inherited from BaseIntegration::
 Features:
 - Graceful boto3 import (no hard dependency)
 - AGT 5.0 ACS runtime evaluation of inputText (input) and action-group
-  events (pre_tool_call) via AdapterRuntimeBridge
+  events (pre_tool_call) via AdapterRuntime
 - Transform-verdict rewriting of outbound inputText
 - Escalate-verdict approval routing via the configured resolver
 - Blocked-pattern scanning on inputText before invocation
@@ -72,11 +72,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Iterator, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from .base import (
     PII_PATTERNS,
     BaseIntegration,
@@ -166,6 +166,7 @@ class BedrockKernel(BaseIntegration):
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
         enable_agt_pii_routing: bool = False,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ) -> None:
@@ -212,6 +213,9 @@ class BedrockKernel(BaseIntegration):
                     manifest (typically via the stock
                     ``data.agt.patterns`` library plus a
                     ``transform`` verdict).
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -229,11 +233,12 @@ class BedrockKernel(BaseIntegration):
         self._last_error: str | None = None
         self._approval_resolver = approval_resolver
         self._enable_agt_pii_routing = bool(enable_agt_pii_routing)
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
@@ -242,13 +247,13 @@ class BedrockKernel(BaseIntegration):
         return self._enable_agt_pii_routing
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
     def evaluate_input(
         self, ctx: ExecutionContext, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         body = input_data if isinstance(input_data, (str, dict)) else str(input_data)
         return self._bridge.evaluate_input(ctx, body=body)
@@ -260,7 +265,7 @@ class BedrockKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a Bedrock action-group event."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
@@ -430,9 +435,7 @@ class _GovernedEventStream:
                                 "reason": bridge_result.reason,
                                 "timestamp": datetime.now().isoformat(),
                             })
-                            raise PolicyViolationError.from_check_result(
-                                bridge_result.check_result
-                            )
+                            raise bridge_result.to_policy_violation(PolicyViolationError)
                         self._ctx.action_groups_invoked.append(tool_name)
                         self._ctx.call_count += 1
                         self._ctx.tool_calls.append({
@@ -486,7 +489,7 @@ class GovernedBedrockClient:
         1. Rate limiting per agent ARN.
         2. Blocked-pattern and PII scanning on ``inputText``.
         3. AGT 5.0 ACS runtime evaluation at the ``input`` intervention
-           point via :class:`AdapterRuntimeBridge`. A ``deny`` verdict
+           point via :class:`AdapterRuntime`. A ``deny`` verdict
            raises :class:`PolicyViolationError.from_check_result(...)`;
            a ``transform`` verdict (AGT-DELTA D1.1) rewrites
            ``inputText`` before the boto3 client sees it; an
@@ -540,9 +543,7 @@ class GovernedBedrockClient:
                     "reason": bridge_result.reason,
                     "timestamp": datetime.now().isoformat(),
                 })
-                raise PolicyViolationError.from_check_result(
-                    bridge_result.check_result
-                )
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             # The bridge approved or transformed; fall through to the
             # host-side PII scan against the effective text.
             self._kernel._check_input(self._ctx, input_text)
@@ -566,9 +567,7 @@ class GovernedBedrockClient:
                         "reason": bridge_result.reason,
                         "timestamp": datetime.now().isoformat(),
                     })
-                    raise PolicyViolationError.from_check_result(
-                        bridge_result.check_result
-                    )
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
 
         # 4. Cedar/OPA gate (legacy)
         cedar_ctx = self._kernel._build_cedar_context(

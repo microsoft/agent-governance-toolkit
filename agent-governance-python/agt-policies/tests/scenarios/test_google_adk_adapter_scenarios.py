@@ -127,7 +127,7 @@ def _kernel(runtime, *, approval_resolver=None):
     from agent_os.integrations.google_adk_adapter import GoogleADKKernel
 
     return GoogleADKKernel(
-        _runtime=runtime,
+        runtime=runtime,
         approval_resolver=approval_resolver,
     )
 
@@ -219,6 +219,17 @@ def test_before_tool_callback_escalate_with_resolver_passes(
 
     assert captured["ip"] == "pre_tool_call"
     assert result is None
+    identity_events = [
+        event
+        for event in kernel.get_audit_log()
+        if event.event_type == "agt_pre_tool_call"
+    ]
+    assert len(identity_events) == 1
+    assert identity_events[0].details["input_identity"]
+    assert (
+        identity_events[0].details["enforced_identity"]
+        == captured["enforced_identity"]
+    )
 
 
 def test_before_tool_callback_escalate_with_no_resolver_denies(

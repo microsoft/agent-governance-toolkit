@@ -1,5 +1,5 @@
 {
-  "grand_total": 3790,
+  "grand_total": 3663,
   "package_totals": {
     "BREAKING_CHANGES.md": 1,
     "CHANGELOG.md": 2,
@@ -10,7 +10,7 @@
     "agent-governance-python/agent-compliance": 80,
     "agent-governance-python/agent-marketplace": 10,
     "agent-governance-python/agent-mesh": 4,
-    "agent-governance-python/agent-os": 2296,
+    "agent-governance-python/agent-os": 2169,
     "agent-governance-python/agent-rag-governance": 3,
     "agent-governance-python/agent-sandbox": 52,
     "agent-governance-python/agentmesh-integrations/adk-agentmesh": 5,
@@ -277,32 +277,23 @@
       "to_v4_check_result": 4
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/a2a_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 2,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/agentshield_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 4,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/anthropic_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 2,
       "GovernancePolicy": 3,
-      "from_check_result": 4,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/autogen_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 7,
       "GovernancePolicy": 3,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/base.py": {
@@ -315,22 +306,16 @@
       "from_cedar": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/bedrock_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 2,
-      "from_check_result": 3,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/config.py": {
       "GovernancePolicy": 3
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/crewai_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "GovernancePolicy": 3,
       "PolicyInterceptor": 2,
-      "from_check_result": 2,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/dry_run.py": {
@@ -340,35 +325,25 @@
       "ExecutionContext": 3
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/gemini_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 3,
-      "from_check_result": 2,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/google_adk_adapter.py": {
-      "AdapterRuntimeBridge": 5,
       "ExecutionContext": 7,
       "GovernancePolicy": 2,
-      "get_runtime_bridge": 3,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/guardrails_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 5,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/health.py": {
       "GovernancePolicy": 2
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/langchain_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "GovernancePolicy": 3,
-      "from_check_result": 7,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/langgraph_adapter.py": {
@@ -376,35 +351,24 @@
       "GovernancePolicy": 2
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/llamaindex_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 3,
-      "from_check_result": 3,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/maf_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 9,
       "GovernancePolicy": 3,
       "PolicyEvaluator": 4,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/mistral_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 3,
-      "from_check_result": 2,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/openai_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 6,
       "GovernancePolicy": 4,
-      "from_check_result": 5,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/openai_agents_sdk.py": {
@@ -415,11 +379,8 @@
       "GovernancePolicy": 14
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/pydantic_ai_adapter.py": {
-      "AdapterRuntimeBridge": 4,
       "ExecutionContext": 7,
       "GovernancePolicy": 3,
-      "from_check_result": 2,
-      "get_runtime_bridge": 3,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/rate_limiter.py": {
@@ -429,18 +390,13 @@
       "GovernancePolicy": 9
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/semantic_kernel_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 4,
       "GovernancePolicy": 3,
-      "from_check_result": 7,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/smolagents_adapter.py": {
-      "AdapterRuntimeBridge": 3,
       "ExecutionContext": 6,
       "GovernancePolicy": 2,
-      "get_runtime_bridge": 2,
       "import:agent_os.integrations._v5_runtime_bridge": 1
     },
     "agent-governance-python/agent-os/src/agent_os/integrations/templates.py": {
@@ -1790,7 +1746,7 @@
   "allowed_migration_files": {
     "agent-governance-python/agt-policies/src/agt/cli/migrate.py": {
       "CedarBackend": 1,
-      "GovernancePolicy": 1,
+      "GovernancePolicy": 2,
       "PatternType": 1,
       "PolicyInterceptor": 1,
       "import:agt.manifest_resolution": 1
@@ -1809,7 +1765,7 @@
       "import:agt.policies.bridge": 1
     },
     "docs/v4-removal.md": {
-      "AdapterRuntimeBridge": 1,
+      "AdapterRuntimeBridge": 2,
       "CedarBackend": 1,
       "GovernancePolicy": 4,
       "PatternType": 4,

@@ -165,7 +165,7 @@ def test_before_tool_call_allow_path_allows(tmp_path: Path) -> None:
     from agent_os.integrations.crewai_adapter import CrewAIKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = CrewAIKernel(_runtime=runtime)
+    kernel = CrewAIKernel(runtime=runtime)
     hooks = kernel.as_hooks(name=f"scenario-allow-{tmp_path.name}")
     hook_fn = hooks._make_before_tool_call()
 
@@ -190,7 +190,7 @@ def test_before_tool_call_deny_path_blocks(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = CrewAIKernel(_runtime=runtime)
+    kernel = CrewAIKernel(runtime=runtime)
     hooks = kernel.as_hooks(name=f"scenario-deny-{tmp_path.name}")
     hook_fn = hooks._make_before_tool_call()
 
@@ -217,7 +217,7 @@ def test_before_tool_call_transform_path_rewrites_input(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = CrewAIKernel(_runtime=runtime)
+    kernel = CrewAIKernel(runtime=runtime)
     hooks = kernel.as_hooks(name=f"scenario-transform-{tmp_path.name}")
     hook_fn = hooks._make_before_tool_call()
 
@@ -244,7 +244,7 @@ def test_before_tool_call_escalate_with_approving_resolver_allows(tmp_path: Path
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = CrewAIKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = CrewAIKernel(runtime=runtime)
     hooks = kernel.as_hooks(name=f"scenario-escalate-{tmp_path.name}")
     hook_fn = hooks._make_before_tool_call()
 
@@ -265,7 +265,7 @@ def test_before_tool_call_escalate_with_no_resolver_blocks(tmp_path: Path) -> No
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = CrewAIKernel(_runtime=runtime)
+    kernel = CrewAIKernel(runtime=runtime)
     hooks = kernel.as_hooks(name=f"scenario-noresolver-{tmp_path.name}")
     hook_fn = hooks._make_before_tool_call()
 

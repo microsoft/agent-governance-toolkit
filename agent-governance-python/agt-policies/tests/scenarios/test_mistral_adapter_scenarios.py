@@ -130,7 +130,7 @@ def test_chat_allow_path_forwards_to_mistral(tmp_path: Path) -> None:
     from agent_os.integrations.mistral_adapter import MistralKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = MistralKernel(_runtime=runtime)
+    kernel = MistralKernel(runtime=runtime)
     client = _make_client()
     governed = kernel.wrap(client)
 
@@ -162,7 +162,7 @@ def test_chat_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = MistralKernel(_runtime=runtime)
+    kernel = MistralKernel(runtime=runtime)
     client = _make_client()
     governed = kernel.wrap(client)
 
@@ -172,7 +172,7 @@ def test_chat_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             messages=[{"role": "user", "content": "tell me about secrets"}],
         )
 
-    assert excinfo.value.check_result.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.reason_code == "policy:user_blocked_topic"
     client.chat.assert_not_called()
 
 
@@ -193,7 +193,7 @@ def test_chat_transform_path_redacts_outbound_content(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = MistralKernel(_runtime=runtime)
+    kernel = MistralKernel(runtime=runtime)
     client = _make_client()
     governed = kernel.wrap(client)
 
@@ -224,7 +224,7 @@ def test_chat_escalate_with_approving_resolver_forwards(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = MistralKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = MistralKernel(runtime=runtime)
     client = _make_client()
     governed = kernel.wrap(client)
 
@@ -250,7 +250,7 @@ def test_chat_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = MistralKernel(_runtime=runtime)
+    kernel = MistralKernel(runtime=runtime)
     client = _make_client()
     governed = kernel.wrap(client)
 

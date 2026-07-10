@@ -122,7 +122,7 @@ def test_query_allow_path_forwards_to_engine(tmp_path: Path) -> None:
             {"decision": "allow"},  # output
         ],
     )
-    kernel = LlamaIndexKernel(_runtime=runtime)
+    kernel = LlamaIndexKernel(runtime=runtime)
     engine = _make_engine()
     governed = kernel.wrap(engine)
 
@@ -151,14 +151,14 @@ def test_query_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = LlamaIndexKernel(_runtime=runtime)
+    kernel = LlamaIndexKernel(runtime=runtime)
     engine = _make_engine()
     governed = kernel.wrap(engine)
 
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.query("tell me secrets")
 
-    assert excinfo.value.check_result.reason == "blocked_query"
+    assert excinfo.value.evaluation_result.reason_code == "policy:blocked_query"
     engine.query.assert_not_called()
 
 
@@ -180,7 +180,7 @@ def test_chat_transform_path_redacts_outbound_message(tmp_path: Path) -> None:
             {"decision": "allow"},  # output
         ],
     )
-    kernel = LlamaIndexKernel(_runtime=runtime)
+    kernel = LlamaIndexKernel(runtime=runtime)
     engine = _make_engine()
     governed = kernel.wrap(engine)
 
@@ -208,7 +208,7 @@ def test_output_transform_path_redacts_response(tmp_path: Path) -> None:
             },
         ],
     )
-    kernel = LlamaIndexKernel(_runtime=runtime)
+    kernel = LlamaIndexKernel(runtime=runtime)
     engine = _make_engine(query_response="leaked secret payload")
     governed = kernel.wrap(engine)
 
@@ -236,7 +236,7 @@ def test_query_escalate_with_approving_resolver_forwards(tmp_path: Path) -> None
         ],
         approval_resolver=resolver,
     )
-    kernel = LlamaIndexKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = LlamaIndexKernel(runtime=runtime)
     engine = _make_engine()
     governed = kernel.wrap(engine)
 
@@ -259,7 +259,7 @@ def test_query_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = LlamaIndexKernel(_runtime=runtime)
+    kernel = LlamaIndexKernel(runtime=runtime)
     engine = _make_engine()
     governed = kernel.wrap(engine)
 

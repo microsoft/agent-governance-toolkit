@@ -58,11 +58,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
@@ -168,6 +168,7 @@ class SmolagentsKernel(BaseIntegration):
         sensitive_tools: list[str] | None = None,
         max_budget: float | None = None,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -192,6 +193,9 @@ class SmolagentsKernel(BaseIntegration):
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -253,21 +257,22 @@ class SmolagentsKernel(BaseIntegration):
         # AGT 5.0 bridge — routes every intervention point through the
         # ACS-backed runtime per AGT-DELTA D1.1/D1.4.
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
     def evaluate_input(
         self, ctx: ExecutionContext, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
@@ -278,7 +283,7 @@ class SmolagentsKernel(BaseIntegration):
         tool_name: str,
         args: Any,
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a smolagents tool invocation."""
         normalised: dict[str, Any]
         if isinstance(args, dict):
@@ -293,7 +298,7 @@ class SmolagentsKernel(BaseIntegration):
 
     def evaluate_output(
         self, ctx: ExecutionContext, output_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``output`` intervention point evaluation for tool results."""
         return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
 
@@ -616,7 +621,7 @@ class SmolagentsKernel(BaseIntegration):
         (timeout / count / budget / tool-allowed / sensitive-tool
         approval / content-pattern) run first; only when they all pass
         does the AGT ``pre_tool_call`` intervention point fire through
-        the :class:`AdapterRuntimeBridge`. A ``deny`` verdict surfaces
+        the :class:`AdapterRuntime`. A ``deny`` verdict surfaces
         as a blocking dict; a ``transform`` verdict (AGT-DELTA D1.1)
         rewrites ``tool_args`` in place; an ``escalate`` verdict that
         the configured approval resolver refuses is surfaced as a deny.
@@ -723,7 +728,7 @@ class SmolagentsKernel(BaseIntegration):
                 tool_args.update(bridge_result.transform.value)
         if not bridge_result.allowed:
             reason_text = (
-                bridge_result.check_result.public_message
+                bridge_result.public_message
                 or bridge_result.reason
                 or "Tool call blocked by AGT policy"
             )
@@ -775,7 +780,7 @@ class SmolagentsKernel(BaseIntegration):
                 tool_result = bridge_result.transform.value
             elif not bridge_result.allowed:
                 detail = (
-                    bridge_result.check_result.public_message
+                    bridge_result.public_message
                     or bridge_result.reason
                     or "Tool output blocked by AGT policy"
                 )
@@ -1027,7 +1032,7 @@ class GovernanceStepCallback:
                 )
                 raise PolicyViolationError(
                     "agt_pre_tool_call",
-                    bridge_result.check_result.public_message
+                    bridge_result.public_message
                     or bridge_result.reason
                     or f"Tool '{tool_name}' denied by AGT policy",
                 )
@@ -1066,7 +1071,7 @@ class GovernanceStepCallback:
                     {"reason": bridge_result.reason, "step": self._step_count},
                 )
                 detail = (
-                    bridge_result.check_result.public_message
+                    bridge_result.public_message
                     or bridge_result.reason
                     or "Step observation blocked by AGT policy"
                 )

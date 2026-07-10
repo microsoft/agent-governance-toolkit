@@ -47,11 +47,11 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 
 
@@ -116,6 +116,7 @@ class SemanticKernelWrapper(BaseIntegration):
         evaluator: Any = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -137,6 +138,9 @@ class SemanticKernelWrapper(BaseIntegration):
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -152,21 +156,22 @@ class SemanticKernelWrapper(BaseIntegration):
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this wrapper."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this wrapper."""
         return self._bridge
 
     def evaluate_input(
         self, ctx: ExecutionContext, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         body: Any
         if isinstance(input_data, (str, dict)):
@@ -184,7 +189,7 @@ class SemanticKernelWrapper(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a Semantic Kernel function call."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
@@ -375,7 +380,13 @@ class GovernedSemanticKernel:
 
         # Build function identifier
         if function:
-            func_id = getattr(function, 'name', str(function))
+            function_name_value = getattr(function, "name", str(function))
+            function_plugin = getattr(function, "plugin_name", None)
+            func_id = (
+                f"{function_plugin}.{function_name_value}"
+                if function_plugin
+                else function_name_value
+            )
         else:
             func_id = f"{plugin_name}.{function_name}"
 
@@ -419,9 +430,7 @@ class GovernedSemanticKernel:
                 call_id=f"sk-call-{self._ctx.call_count}",
             )
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(
-                    bridge_result.check_result
-                )
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, dict
             ):
@@ -448,9 +457,7 @@ class GovernedSemanticKernel:
                 self._ctx, content=str(result)
             )
             if not post_result.allowed:
-                raise PolicyViolationError.from_check_result(
-                    post_result.check_result
-                )
+                raise post_result.to_policy_violation(PolicyViolationError)
             if post_result.transform is not None and isinstance(
                 post_result.transform.value, str
             ):
@@ -601,7 +608,7 @@ class GovernedSemanticKernel:
         # AGT input intervention point check on the memory body
         bridge_result = self._wrapper.evaluate_input(self._ctx, text)
         if not bridge_result.allowed:
-            raise _prefixed_violation("Memory save blocked", bridge_result.check_result)
+            raise _prefixed_violation("Memory save blocked", bridge_result)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, str
         ):
@@ -696,7 +703,7 @@ class GovernedSemanticKernel:
         # AGT input intervention point check on the prompt
         bridge_result = self._wrapper.evaluate_input(self._ctx, prompt)
         if not bridge_result.allowed:
-            raise _prefixed_violation("Prompt blocked", bridge_result.check_result)
+            raise _prefixed_violation("Prompt blocked", bridge_result)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, str
         ):
@@ -720,9 +727,7 @@ class GovernedSemanticKernel:
             self._ctx, content=str(result)
         )
         if not post_result.allowed:
-            raise PolicyViolationError.from_check_result(
-                post_result.check_result
-            )
+            raise post_result.to_policy_violation(PolicyViolationError)
         # v4 host post_execute hook (overridable) — honour host-side output
         # blocks the AGT output intervention point does not encode.
         valid, message = self._wrapper.post_execute(self._ctx, str(result))
@@ -776,9 +781,7 @@ class GovernedSemanticKernel:
         # AGT input intervention point check on the planner goal
         bridge_result = self._wrapper.evaluate_input(self._ctx, goal)
         if not bridge_result.allowed:
-            raise PolicyViolationError.from_check_result(
-                bridge_result.check_result
-            )
+            raise bridge_result.to_policy_violation(PolicyViolationError)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, str
         ):
@@ -931,17 +934,20 @@ class PolicyViolationError(_CanonicalPolicyViolationError):
     pass
 
 
-def _prefixed_violation(prefix: str, check_result: Any) -> PolicyViolationError:
+def _prefixed_violation(
+    prefix: str, adapter_result: AdapterResult
+) -> PolicyViolationError:
     """Build a host-friendly :class:`PolicyViolationError` for an SK surface.
 
     Surfaces the v4-style ``"<prefix>: <detail>"`` message that hosts match
     on (e.g. ``"Prompt blocked"``) while preserving the structured
-    ``check_result`` and details so callers can still switch on
-    ``e.check_result.category`` per the AGT host-integration contract.
+    native ``evaluation_result`` or compatibility ``check_result`` plus details
+    so callers can inspect the structured decision without parsing text.
     """
-    base = PolicyViolationError.from_check_result(check_result)
+    base = adapter_result.to_policy_violation(PolicyViolationError)
     exc = PolicyViolationError(f"{prefix}: {base}", details=base.details)
-    exc.check_result = check_result
+    exc.check_result = getattr(base, "check_result", None)
+    exc.evaluation_result = getattr(base, "evaluation_result", None)
     return exc
 
 
@@ -965,6 +971,8 @@ def wrap_kernel(
     kernel: Any,
     policy: Optional[GovernancePolicy] = None,
     timeout_seconds: float = 300.0,
+    *,
+    runtime: Any | None = None,
 ) -> GovernedSemanticKernel:
     """Quick wrapper for Semantic Kernel.
 
@@ -985,7 +993,11 @@ def wrap_kernel(
         DeprecationWarning,
         stacklevel=2,
     )
-    wrapper = SemanticKernelWrapper(policy=policy, timeout_seconds=timeout_seconds)
+    wrapper = SemanticKernelWrapper(
+        policy=policy,
+        timeout_seconds=timeout_seconds,
+        runtime=runtime,
+    )
     # Suppress the deprecation from wrap() since we already emitted one
     import contextlib
     with contextlib.suppress(Exception), warnings.catch_warnings():
@@ -1170,9 +1182,7 @@ class GovernanceFunctionFilter:
                 call_id=f"sk-filter-{self._ctx.call_count + 1}",
             )
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(
-                    bridge_result.check_result
-                )
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, dict
             ):
@@ -1191,9 +1201,7 @@ class GovernanceFunctionFilter:
                 self._ctx, content=str(result)
             )
             if not post_result.allowed:
-                raise PolicyViolationError.from_check_result(
-                    post_result.check_result
-                )
+                raise post_result.to_policy_violation(PolicyViolationError)
             if post_result.transform is not None and isinstance(
                 post_result.transform.value, str
             ):
@@ -1209,4 +1217,3 @@ class GovernanceFunctionFilter:
 
     def __repr__(self) -> str:
         return "GovernanceFunctionFilter(wrapper=SemanticKernelWrapper)"
-

@@ -15,11 +15,10 @@ import pytest
 
 from agent_os import integrations
 
-
 INTEGRATIONS_DIR = Path(__file__).resolve().parents[1] / "src" / "agent_os" / "integrations"
 
 
-V5_BRIDGE_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
+NATIVE_RUNTIME_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "A2AGovernanceAdapter": ("a2a_adapter.py", ("_bridge.evaluate_input(",)),
     "AgentShieldKernel": (
         "agentshield_adapter.py",
@@ -130,6 +129,9 @@ LEGACY_HOOK_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
 
 NON_KERNEL_EXPORTS = {"GovernedSemanticKernel", "LlamaFirewallAdapter"}
 DIRECT_SUPPORTED_ADAPTERS = {"AgentShieldKernel", "MAFKernel", "OpenAIAgentsKernel"}
+NATIVE_RUNTIME_PARAMETER = {
+    "AgentShieldKernel": "agt_runtime: Any | None = None",
+}
 
 
 def _source(filename: str) -> str:
@@ -156,7 +158,7 @@ def _assert_ordered(source: str, *markers: str) -> None:
 
 def test_public_adapter_mediation_contract_is_explicit() -> None:
     expected = (
-        set(V5_BRIDGE_CONTRACTS)
+        set(NATIVE_RUNTIME_CONTRACTS)
         | set(LEGACY_HOOK_CONTRACTS)
         | NON_KERNEL_EXPORTS
     )
@@ -164,12 +166,20 @@ def test_public_adapter_mediation_contract_is_explicit() -> None:
     assert _public_adapter_names() - expected == set()
 
 
-@pytest.mark.parametrize("adapter_name", sorted(V5_BRIDGE_CONTRACTS))
-def test_v5_bridge_adapters_route_declared_intervention_points(adapter_name: str) -> None:
-    filename, required_calls = V5_BRIDGE_CONTRACTS[adapter_name]
+@pytest.mark.parametrize("adapter_name", sorted(NATIVE_RUNTIME_CONTRACTS))
+def test_native_adapters_route_declared_intervention_points(
+    adapter_name: str,
+) -> None:
+    filename, required_calls = NATIVE_RUNTIME_CONTRACTS[adapter_name]
     source = _source(filename)
 
-    assert "get_runtime_bridge(" in source
+    assert "get_adapter_runtime(" in source
+    assert NATIVE_RUNTIME_PARAMETER.get(
+        adapter_name, "runtime: Any | None = None"
+    ) in source
+    assert "AdapterRuntime" + "Bridge" not in source
+    assert "BridgeResult" not in source
+    assert "get_runtime_bridge(" not in source
     for call in required_calls:
         assert call in source, f"{adapter_name} must route through {call}"
 
@@ -251,6 +261,6 @@ def test_bedrock_action_events_are_checked_before_yield() -> None:
     _assert_ordered(
         source,
         "bridge_result = self._kernel.evaluate_pre_tool_call",
-        "raise PolicyViolationError.from_check_result",
+        "raise bridge_result.to_policy_violation",
         "yield event",
     )

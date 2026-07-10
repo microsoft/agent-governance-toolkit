@@ -104,7 +104,7 @@ def _kernel(runtime, *, approval_resolver=None):
     return GuardrailsKernel(
         policy=GovernancePolicy(),
         approval_resolver=approval_resolver,
-        _runtime=runtime,
+        runtime=runtime,
     )
 
 

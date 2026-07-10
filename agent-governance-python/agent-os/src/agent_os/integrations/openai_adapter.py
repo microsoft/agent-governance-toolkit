@@ -60,11 +60,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 
@@ -179,6 +179,7 @@ class OpenAIKernel(BaseIntegration):
         timeout_seconds: float = 300.0,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -197,6 +198,9 @@ class OpenAIKernel(BaseIntegration):
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -212,21 +216,22 @@ class OpenAIKernel(BaseIntegration):
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
     def evaluate_input(
         self, ctx: ExecutionContext, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._evaluate_pre_execute(ctx, input_data)
 
@@ -237,19 +242,19 @@ class OpenAIKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a single tool invocation."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
         )
 
-    def evaluate_output(self, ctx: ExecutionContext, output_data: Any) -> BridgeResult:
+    def evaluate_output(self, ctx: ExecutionContext, output_data: Any) -> AdapterResult:
         """AGT ``output`` evaluation for buffered OpenAI stream output."""
         return self._bridge.evaluate_output(ctx, content=str(output_data))
 
     def _evaluate_pre_execute(
         self, ctx: ExecutionContext, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         body: Any
         if isinstance(input_data, (str, dict)):
             body = input_data
@@ -506,7 +511,7 @@ class GovernedAssistant:
         """
         bridge_result = self._kernel.evaluate_input(self._ctx, content)
         if not bridge_result.allowed:
-            raise PolicyViolationError.from_check_result(bridge_result.check_result)
+            raise bridge_result.to_policy_violation(PolicyViolationError)
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, str
         ):
@@ -571,7 +576,7 @@ class GovernedAssistant:
         if instructions:
             bridge_result = self._kernel.evaluate_input(self._ctx, instructions)
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(bridge_result.check_result)
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, str
             ):
@@ -614,7 +619,7 @@ class GovernedAssistant:
         if instructions:
             bridge_result = self._kernel.evaluate_input(self._ctx, instructions)
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(bridge_result.check_result)
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, str
             ):
@@ -638,9 +643,7 @@ class GovernedAssistant:
 
             bridge_result = self._kernel.evaluate_output(self._ctx, events)
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(
-                    bridge_result.check_result
-                )
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None:
                 transformed = bridge_result.transform.value
                 if not isinstance(transformed, list):
@@ -749,9 +752,7 @@ class GovernedAssistant:
                 raw_args = json.dumps(parsed_args)
             if not bridge_result.allowed:
                 self._kernel.cancel_run(thread_id, run.id, self._client)
-                raise PolicyViolationError.from_check_result(
-                    bridge_result.check_result
-                )
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.verdict == "escalate":
                 # Escalate with no resolver decision: surface as awaiting
                 # approval to the OpenAI API rather than executing.
@@ -918,6 +919,8 @@ def wrap(
     policy: Optional[GovernancePolicy] = None,
     max_retries: int = 3,
     timeout_seconds: float = 300.0,
+    *,
+    runtime: Any | None = None,
 ) -> GovernedAssistant:
     """Quick wrapper for OpenAI Assistants.
 
@@ -929,7 +932,10 @@ def wrap(
         result = governed.run(thread_id)
     """
     return OpenAIKernel(
-        policy, max_retries=max_retries, timeout_seconds=timeout_seconds
+        policy,
+        max_retries=max_retries,
+        timeout_seconds=timeout_seconds,
+        runtime=runtime,
     ).wrap(assistant, client)
 
 
@@ -939,6 +945,8 @@ def wrap_assistant(
     policy: Optional[GovernancePolicy] = None,
     max_retries: int = 3,
     timeout_seconds: float = 300.0,
+    *,
+    runtime: Any | None = None,
 ) -> GovernedAssistant:
     """Quick wrapper for OpenAI Assistants.
 
@@ -951,5 +959,11 @@ def wrap_assistant(
         DeprecationWarning,
         stacklevel=2,
     )
-    return wrap(assistant, client, policy=policy, max_retries=max_retries,
-                timeout_seconds=timeout_seconds)
+    return wrap(
+        assistant,
+        client,
+        policy=policy,
+        max_retries=max_retries,
+        timeout_seconds=timeout_seconds,
+        runtime=runtime,
+    )

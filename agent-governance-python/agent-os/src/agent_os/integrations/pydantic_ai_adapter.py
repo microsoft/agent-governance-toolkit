@@ -56,11 +56,11 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from .base import (
     BaseIntegration,
     ExecutionContext,
@@ -115,6 +115,7 @@ class PydanticAIKernel(BaseIntegration):
         evaluator: Any = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ) -> None:
@@ -139,6 +140,9 @@ class PydanticAIKernel(BaseIntegration):
                 matches :data:`agt.policies.runtime.ApprovalCallback`.
                 When ``None`` an escalate verdict fails closed to
                 ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built
                 :class:`AgtRuntime` so scenario tests can wire a
                 scripted policy dispatcher without OPA on PATH. Not
@@ -152,24 +156,26 @@ class PydanticAIKernel(BaseIntegration):
         self._audit_log: list[dict[str, Any]] = []
         self._approval_callback = approval_callback
         self._approval_resolver = approval_resolver
+        self._native_runtime = runtime
         self._start_time: float = time.monotonic()
         self._last_error: str | None = None
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
         logger.debug("PydanticAIKernel initialized with policy=%s", policy)
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
     def evaluate_input(
         self, ctx: ExecutionContext, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         body: Any
         if isinstance(input_data, (str, dict)):
@@ -187,7 +193,7 @@ class PydanticAIKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a PydanticAI tool invocation."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
@@ -359,9 +365,7 @@ class PydanticAIKernel(BaseIntegration):
                         reason=bridge_result.reason or "",
                         agent_id=agent_id,
                     )
-                    raise PolicyViolationError.from_check_result(
-                        bridge_result.check_result
-                    )
+                    raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None and isinstance(
                     bridge_result.transform.value, str
                 ):
@@ -489,7 +493,7 @@ class PydanticAIKernel(BaseIntegration):
             ),
         )
 
-    def _approved_bridge(self) -> AdapterRuntimeBridge:
+    def _approved_bridge(self) -> AdapterRuntime:
         """Return a sibling bridge with ``require_human_approval=False``.
 
         Built lazily on first access. Used after the legacy v4
@@ -501,11 +505,16 @@ class PydanticAIKernel(BaseIntegration):
         cached = getattr(self, "_bridge_no_approval", None)
         if cached is not None:
             return cached
+        if self._native_runtime is not None:
+            raise RuntimeError(
+                "approval_callback cannot replace the resolver owned by runtime"
+            )
         from dataclasses import replace
 
         approved_policy = replace(self.policy, require_human_approval=False)
-        bridge = get_runtime_bridge(
-            approved_policy,
+        bridge = get_adapter_runtime(
+            policy=approved_policy,
+            runtime=None,
             approval_resolver=self._approval_resolver,
         )
         self._bridge_no_approval = bridge
@@ -634,7 +643,13 @@ def _wrap_single_tool(
 
 
 # Convenience function
-def wrap(agent: Any, policy: GovernancePolicy | None = None, **kwargs) -> Any:
+def wrap(
+    agent: Any,
+    policy: GovernancePolicy | None = None,
+    *,
+    runtime: Any | None = None,
+    **kwargs,
+) -> Any:
     """Quick wrapper for PydanticAI agents.
 
     .. deprecated::
@@ -648,7 +663,7 @@ def wrap(agent: Any, policy: GovernancePolicy | None = None, **kwargs) -> Any:
         DeprecationWarning,
         stacklevel=2,
     )
-    kernel = PydanticAIKernel(policy, **kwargs)
+    kernel = PydanticAIKernel(policy, runtime=runtime, **kwargs)
     # Suppress nested deprecation from kernel.wrap()
     import contextlib
     with contextlib.suppress(Exception), warnings.catch_warnings():
@@ -748,9 +763,7 @@ class GovernanceCapability:
                 "event": "run_blocked",
                 "reason": bridge_result.reason,
             })
-            raise PolicyViolationError.from_check_result(
-                bridge_result.check_result
-            )
+            raise bridge_result.to_policy_violation(PolicyViolationError)
         effective_prompt = prompt
         if bridge_result.transform is not None and isinstance(
             bridge_result.transform.value, str

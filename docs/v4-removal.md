@@ -181,3 +181,31 @@ semantics cannot drift during the transition. REGEX and GLOB use OPA's Go RE2
 validator, and GLOB uses the RE2 `\z` end anchor rather than Python's unsupported
 `\Z`. Both constructor and governance-chain migrations refuse existing
 manifests, bundles, and backups instead of overwriting them.
+
+## Phase 3 adapter cutover
+
+The 17 bridge-backed framework adapters now accept a public native `runtime`
+argument and route their model, tool, stream, and output intervention points
+through `NativeAdapterRuntime` and `AdapterRuntimeSession`. Agent Shield uses
+`agt_runtime` because its existing positional `runtime` names the Agent Shield
+SDK object. A2A, Agent Shield, Anthropic, AutoGen, Bedrock, CrewAI, Gemini,
+Google ADK, Guardrails, LangChain, LlamaIndex, MAF, Mistral, OpenAI, PydanticAI,
+Semantic Kernel, and Smolagents no longer import or evaluate through
+`AdapterRuntimeBridge` or `BridgeResult`. Their only remaining dependency on
+`_v5_runtime_bridge` is the constructor selector for the temporary policy
+compatibility edge.
+
+Native denials attach `evaluation_result` and the
+`agt.policy_evaluation.v1` audit record to `PolicyViolationError`. The
+temporary policy-based edge still attaches `check_result`, selected by one
+shared result dispatcher. Transforms remain native objects in both paths.
+The runtime owns approval configuration. An adapter may omit
+`approval_resolver` or repeat the identical callback for transition code, but a
+different callback is rejected at construction.
+
+The old `policy` and private `_runtime` arguments remain only to keep the
+development tree green until the single public breaking cut in Phase 6.
+Convenience wrappers also accept `runtime`. Their policy path is not the native
+default and is removed with the compatibility bridge. OpenAI Agents SDK and
+LangGraph remain Phase 4 because they use `BaseIntegration` legacy hooks rather
+than the runtime bridge.

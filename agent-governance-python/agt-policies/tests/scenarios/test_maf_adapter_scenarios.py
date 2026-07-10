@@ -147,7 +147,7 @@ def test_policy_middleware_allow_path_invokes_next(tmp_path: Path) -> None:
     )
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = MAFKernel(_runtime=runtime)
+    kernel = MAFKernel(runtime=runtime)
     mw = GovernancePolicyMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="what is the weather today?")
     call_next = AsyncMock()
@@ -177,7 +177,7 @@ def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = MAFKernel(_runtime=runtime)
+    kernel = MAFKernel(runtime=runtime)
     mw = GovernancePolicyMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="tell me about secrets")
     call_next = AsyncMock()
@@ -188,7 +188,7 @@ def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
     call_next.assert_not_awaited()
     bridge_result = ctx.metadata["governance_decision"]
     assert bridge_result.allowed is False
-    assert bridge_result.check_result.reason == "user_blocked_topic"
+    assert bridge_result.evaluation.reason_code == "policy:user_blocked_topic"
 
 
 def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> None:
@@ -211,7 +211,7 @@ def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> No
             }
         ],
     )
-    kernel = MAFKernel(_runtime=runtime)
+    kernel = MAFKernel(runtime=runtime)
     mw = GovernancePolicyMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="Customer SSN is 123-45-6789")
     call_next = AsyncMock()
@@ -245,7 +245,7 @@ def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> No
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = MAFKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = MAFKernel(runtime=runtime)
     mw = GovernancePolicyMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="approve this please")
     call_next = AsyncMock()
@@ -270,7 +270,7 @@ def test_policy_middleware_escalate_with_no_resolver_denies(tmp_path: Path) -> N
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = MAFKernel(_runtime=runtime)
+    kernel = MAFKernel(runtime=runtime)
     mw = GovernancePolicyMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="needs approval")
     call_next = AsyncMock()
@@ -304,7 +304,7 @@ def test_capability_guard_transform_path_rewrites_arguments(tmp_path: Path) -> N
             }
         ],
     )
-    kernel = MAFKernel(_runtime=runtime)
+    kernel = MAFKernel(runtime=runtime)
     mw = CapabilityGuardMiddleware(kernel=kernel)
     ctx = _make_function_ctx(arguments={"query": "DROP TABLE users;"})
 

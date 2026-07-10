@@ -63,11 +63,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 
 logger = logging.getLogger(__name__)
@@ -215,6 +215,7 @@ class GoogleADKKernel(BaseIntegration):
         sensitive_tools: list[str] | None = None,
         max_budget: float | None = None,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -318,15 +319,17 @@ class GoogleADKKernel(BaseIntegration):
         # injected ``_runtime`` / ``_runtime_factory`` so scenario tests
         # do not need to construct two scripted runtimes.
         self._approval_resolver = approval_resolver
+        self._native_runtime = runtime
         self._runtime_injected = _runtime
         self._runtime_factory_injected = _runtime_factory
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
-        self._approval_bridge_instance: AdapterRuntimeBridge | None = None
+        self._approval_bridge_instance: AdapterRuntime | None = None
         self._adapter_ctx = ExecutionContext(
             agent_id="google-adk-kernel",
             session_id=f"adk-{int(time.time())}-{id(self)}",
@@ -334,11 +337,11 @@ class GoogleADKKernel(BaseIntegration):
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def _approval_bridge(self) -> AdapterRuntimeBridge:
+    def _approval_bridge(self) -> AdapterRuntime:
         """Return the sibling bridge that escalates every tool call.
 
         AGT-M3 round-2 BLOCK B. Used by :meth:`before_tool_callback`
@@ -350,7 +353,7 @@ class GoogleADKKernel(BaseIntegration):
         runtime drives the wired ``approval_resolver``. Built lazily on
         the first sensitive-tool dispatch and cached; an unsynchronised
         race on first access is harmless because
-        :func:`get_runtime_bridge` is idempotent given equal policies.
+        :func:`get_adapter_runtime` is idempotent given equal policies.
         Returns the default :attr:`bridge` unchanged when
         ``require_human_approval`` is false on the kernel config (the
         sensitive path is unreachable in that case).
@@ -360,21 +363,24 @@ class GoogleADKKernel(BaseIntegration):
         cached = self._approval_bridge_instance
         if cached is not None:
             return cached
+        if self._native_runtime is not None:
+            return self._bridge
         from dataclasses import replace
 
         approval_policy = replace(self.policy, require_human_approval=True)
-        bridge = get_runtime_bridge(
-            approval_policy,
+        bridge = get_adapter_runtime(
+            policy=approval_policy,
+            runtime=None,
             approval_resolver=self._approval_resolver,
-            runtime=self._runtime_injected,
-            runtime_factory=self._runtime_factory_injected,
+            legacy_runtime=self._runtime_injected,
+            legacy_runtime_factory=self._runtime_factory_injected,
         )
         self._approval_bridge_instance = bridge
         return bridge
 
     def evaluate_input(
         self, ctx: ExecutionContext | None, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation.
 
         Falls back to the shared adapter-level :class:`ExecutionContext`
@@ -398,7 +404,7 @@ class GoogleADKKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for an ADK tool invocation."""
         return self._bridge.evaluate_pre_tool_call(
             ctx or self._adapter_ctx,
@@ -409,7 +415,7 @@ class GoogleADKKernel(BaseIntegration):
 
     def evaluate_output(
         self, ctx: ExecutionContext | None, content: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``output`` intervention point evaluation for an ADK result."""
         body: Any
         if isinstance(content, (str, dict)):
@@ -749,11 +755,13 @@ class GoogleADKKernel(BaseIntegration):
         # AGT-DELTA D1.4: propagate the bisected input_identity /
         # enforced_identity from the bridge evaluation into the kernel
         # audit log so resolver-driven approvals are auditable.
-        audit_entry = getattr(bridge_result.evaluation, "audit_entry", None) or {}
         identity_audit = {
-            key: audit_entry[key]
-            for key in ("input_identity", "enforced_identity")
-            if key in audit_entry
+            key: value
+            for key, value in (
+                ("input_identity", bridge_result.input_identity),
+                ("enforced_identity", bridge_result.enforced_identity),
+            )
+            if value is not None
         }
         # Only emit the D1.4 identity-audit record on the resolver-driven
         # approval path. Without a wired ``approval_resolver`` there is no

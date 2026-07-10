@@ -57,11 +57,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from .base import ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ class A2AEvaluation:
             transform verdict (AGT-DELTA D1.1). When set, the host
             should substitute it into the outbound task before
             forwarding to the A2A consumer.
-        bridge_result: The full :class:`BridgeResult` from the AGT
+        bridge_result: The full :class:`AdapterResult` from the AGT
             content-policy evaluation, when one fired. Carries the
             verdict, the v4 :class:`PolicyCheckResult`, and the
             ``audit_entry`` with the AGT bisected input/enforced
@@ -122,7 +122,7 @@ class A2AEvaluation:
     trust_score: int = 0
     conversation_alert: Any | None = None
     transform_value: Any | None = None
-    bridge_result: BridgeResult | None = None
+    bridge_result: AdapterResult | None = None
     timestamp: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict[str, Any]:
@@ -152,7 +152,7 @@ class A2AGovernanceAdapter:
     inter-agent message content.
 
     Content-pattern enforcement is routed through the AGT 5.0 ACS
-    runtime via :class:`AdapterRuntimeBridge`: ``blocked_patterns`` is
+    runtime via :class:`AdapterRuntime`: ``blocked_patterns`` is
     translated to a v4 :class:`GovernancePolicy` and from there to an
     AGT manifest. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
     inbound message text on the returned :class:`A2AEvaluation`;
@@ -171,6 +171,7 @@ class A2AGovernanceAdapter:
         max_requests_per_minute: int = 100,
         conversation_guardian: Any | None = None,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -187,6 +188,9 @@ class A2AGovernanceAdapter:
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -217,17 +221,18 @@ class A2AGovernanceAdapter:
             blocked_patterns=list(self.policy.blocked_patterns),
         )
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self._governance_policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self._governance_policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
         self._contexts: dict[str, ExecutionContext] = {}
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this adapter."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this adapter."""
         return self._bridge
 
     def _get_or_create_context(self, source_did: str) -> ExecutionContext:
@@ -306,7 +311,7 @@ class A2AGovernanceAdapter:
         Evaluate an A2A task request against policies.
 
         Content-pattern checks route through the AGT 5.0 ACS runtime
-        via :class:`AdapterRuntimeBridge` at the ``input`` intervention
+        via :class:`AdapterRuntime` at the ``input`` intervention
         point. A ``deny`` verdict surfaces as
         :class:`A2AEvaluation` with ``allowed=False``; a ``transform``
         verdict (AGT-DELTA D1.1) is captured on
@@ -329,7 +334,7 @@ class A2AGovernanceAdapter:
         source_did = fields["source_did"]
         trust_score = fields["trust_score"]
 
-        def deny(reason: str, bridge_result: BridgeResult | None = None) -> A2AEvaluation:
+        def deny(reason: str, bridge_result: AdapterResult | None = None) -> A2AEvaluation:
             e = A2AEvaluation(
                 allowed=False,
                 reason=reason,
@@ -361,7 +366,7 @@ class A2AGovernanceAdapter:
 
         # 5. Content check via the AGT input intervention point.
         transform_value: Any | None = None
-        bridge_result: BridgeResult | None = None
+        bridge_result: AdapterResult | None = None
         if fields["texts"]:
             ctx = self._get_or_create_context(source_did)
             combined_text = " ".join(fields["texts"])

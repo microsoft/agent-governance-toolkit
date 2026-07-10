@@ -103,9 +103,36 @@ class BridgeResult:
     def reason(self) -> str:
         return str(self.evaluation.reason or "")
 
+    @property
+    def input_identity(self) -> str | None:
+        return self.evaluation.input_identity
+
+    @property
+    def enforced_identity(self) -> str | None:
+        return self.evaluation.enforced_identity
+
     def to_legacy_tuple(self) -> tuple[bool, str]:
         """Return the v4 ``(allowed, reason)`` tuple."""
         return self.allowed, self.reason
+
+    @property
+    def public_message(self) -> str:
+        return str(self.check_result.public_message or self.reason)
+
+    def to_policy_violation(self, error_type: Any) -> Exception:
+        result = self.check_result
+        details = {
+            "category": result.category.value if result.category else None,
+            "matched_rule": result.matched_rule,
+            "detail": result.detail,
+            "scope": result.scope,
+            "operation": result.operation,
+            "tool_name": result.tool_name,
+            **result.audit_entry,
+        }
+        error = error_type(result.public_message, "POLICY_VIOLATION", details)
+        error.check_result = result
+        return error
 
 
 class AdapterRuntimeBridge:
@@ -621,6 +648,21 @@ def get_runtime_bridge(
     to override the default bridge-based factory while still using the
     per-(policy, resolver) memoisation cache.
     """
+    return _new_compatibility_bridge(
+        policy,
+        approval_resolver=approval_resolver,
+        runtime=runtime,
+        runtime_factory=runtime_factory,
+    )
+
+
+def _new_compatibility_bridge(
+    policy: Any,
+    *,
+    approval_resolver: Callable[..., Any] | None = None,
+    runtime: Any | None = None,
+    runtime_factory: Callable[[Any], Any] | None = None,
+) -> Any:
     return AdapterRuntimeBridge(
         policy,
         approval_resolver=approval_resolver,
@@ -629,9 +671,43 @@ def get_runtime_bridge(
     )
 
 
+def get_adapter_runtime(
+    *,
+    policy: Any,
+    runtime: Any | None,
+    approval_resolver: Callable[..., Any] | None = None,
+    legacy_runtime: Any | None = None,
+    legacy_runtime_factory: Callable[[Any], Any] | None = None,
+) -> Any:
+    """Select the native path or retain the compatibility edge."""
+    if runtime is not None:
+        owned_resolver = getattr(runtime, "_approval_resolver", None)
+        if (
+            approval_resolver is not None
+            and owned_resolver is not approval_resolver
+        ):
+            raise ValueError(
+                "approval_resolver belongs to AgtRuntime when runtime is provided"
+            )
+        if legacy_runtime is not None or legacy_runtime_factory is not None:
+            raise ValueError(
+                "runtime cannot be combined with _runtime or _runtime_factory"
+            )
+        from ._native_adapter_runtime import NativeAdapterRuntime
+
+        return NativeAdapterRuntime(runtime)
+    return _new_compatibility_bridge(
+        policy,
+        approval_resolver=approval_resolver,
+        runtime=legacy_runtime,
+        runtime_factory=legacy_runtime_factory,
+    )
+
+
 __all__ = [
     "AdapterRuntimeBridge",
     "BridgeResult",
     "TransformOutcome",
     "get_runtime_bridge",
+    "get_adapter_runtime",
 ]

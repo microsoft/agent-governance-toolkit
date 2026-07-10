@@ -131,7 +131,7 @@ def test_filter_allow_path_invokes_next(tmp_path: Path) -> None:
             {"decision": "allow"},  # output
         ],
     )
-    wrapper = SemanticKernelWrapper(_runtime=runtime)
+    wrapper = SemanticKernelWrapper(runtime=runtime)
     sk_filter = wrapper.as_filter()
     ctx = _make_sk_context()
 
@@ -161,7 +161,7 @@ def test_filter_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    wrapper = SemanticKernelWrapper(_runtime=runtime)
+    wrapper = SemanticKernelWrapper(runtime=runtime)
     sk_filter = wrapper.as_filter()
     ctx = _make_sk_context()
     next_fn = AsyncMock()
@@ -169,7 +169,7 @@ def test_filter_deny_path_raises_policy_violation(tmp_path: Path) -> None:
     with pytest.raises(PolicyViolationError) as excinfo:
         asyncio.run(sk_filter(ctx, next_fn))
 
-    assert excinfo.value.check_result.reason == "tool_args_forbidden"
+    assert excinfo.value.evaluation_result.reason_code == "policy:tool_args_forbidden"
     next_fn.assert_not_awaited()
 
 
@@ -191,7 +191,7 @@ def test_filter_transform_path_rewrites_arguments(tmp_path: Path) -> None:
             {"decision": "allow"},  # output
         ],
     )
-    wrapper = SemanticKernelWrapper(_runtime=runtime)
+    wrapper = SemanticKernelWrapper(runtime=runtime)
     sk_filter = wrapper.as_filter()
     ctx = _make_sk_context(args={"query": "DROP TABLE users;"})
 
@@ -227,7 +227,7 @@ def test_filter_escalate_with_approving_resolver_forwards(tmp_path: Path) -> Non
         ],
         approval_resolver=resolver,
     )
-    wrapper = SemanticKernelWrapper(_runtime=runtime, approval_resolver=resolver)
+    wrapper = SemanticKernelWrapper(runtime=runtime)
     sk_filter = wrapper.as_filter()
     ctx = _make_sk_context()
     next_fn = AsyncMock()
@@ -251,7 +251,7 @@ def test_filter_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    wrapper = SemanticKernelWrapper(_runtime=runtime)
+    wrapper = SemanticKernelWrapper(runtime=runtime)
     sk_filter = wrapper.as_filter()
     ctx = _make_sk_context()
     next_fn = AsyncMock()
@@ -273,14 +273,12 @@ def test_governed_invoke_output_transform_rewrites_result(tmp_path: Path) -> Non
         SemanticKernelWrapper,
     )
 
-    # Only the ``output`` intervention point reaches the scripted
-    # dispatcher; ``pre_tool_call`` for the bare ``safe_func`` name
-    # fails closed as ``runtime_error:tool_unknown`` and the bridge
-    # rewrites it to allow because ``allowed_tools`` is empty (see
-    # _v5_runtime_bridge._evaluate rewrite_as_allow branch).
+    # Native mediation evaluates both bound points. The tool catalog uses the
+    # plugin-qualified function identity, then output applies the transform.
     runtime, _policy = _build_runtime(
         tmp_path,
         [
+            {"decision": "allow"},
             {
                 "decision": "transform",
                 "reason": "output_redaction",
@@ -291,7 +289,7 @@ def test_governed_invoke_output_transform_rewrites_result(tmp_path: Path) -> Non
             },
         ],
     )
-    wrapper = SemanticKernelWrapper(_runtime=runtime)
+    wrapper = SemanticKernelWrapper(runtime=runtime)
 
     fake_function = SimpleNamespace(name="safe_func", plugin_name="MyPlugin")
     fake_result = "leaked secret"
@@ -306,4 +304,3 @@ def test_governed_invoke_output_transform_rewrites_result(tmp_path: Path) -> Non
     assert out == "[REDACTED OUTPUT]", (
         f"AGT D1.1 output transform was dropped; got {out!r}"
     )
-

@@ -39,11 +39,11 @@ import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
@@ -146,12 +146,12 @@ except ImportError:  # pragma: no cover
 class MAFKernel(BaseIntegration):
     """Microsoft Agent Framework adapter for Agent OS (AGT 5.0).
 
-    Builds an :class:`AdapterRuntimeBridge` over the v4
+    Builds an :class:`AdapterRuntime` over the v4
     :class:`GovernancePolicy` so MAF middleware classes can route every
     intervention point evaluation through the ACS-backed
     :class:`agt.policies.runtime.AgtRuntime`. The kernel exposes:
 
-    - :meth:`bridge` — the underlying AdapterRuntimeBridge.
+    - :meth:`bridge` — the underlying AdapterRuntime.
     - :meth:`evaluate_input` — AGT ``input`` intervention point eval.
     - :meth:`evaluate_pre_tool_call` — AGT ``pre_tool_call`` eval.
     - :meth:`as_policy_middleware` — convenience factory returning a
@@ -170,6 +170,7 @@ class MAFKernel(BaseIntegration):
         policy: Optional[GovernancePolicy] = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ) -> None:
@@ -186,6 +187,9 @@ class MAFKernel(BaseIntegration):
                 matches :data:`agt.policies.runtime.ApprovalCallback`.
                 When ``None`` an escalate verdict fails closed to
                 ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built
                 :class:`AgtRuntime` so scenario tests can wire a
                 scripted policy dispatcher without OPA on PATH. Not
@@ -198,21 +202,22 @@ class MAFKernel(BaseIntegration):
         self._approval_resolver = approval_resolver
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
     def evaluate_input(
         self, ctx: ExecutionContext, input_data: Any
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         body: Any
         if isinstance(input_data, (str, dict)):
@@ -230,7 +235,7 @@ class MAFKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for a MAF function invocation."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
@@ -318,7 +323,7 @@ class GovernancePolicyMiddleware(AgentMiddleware):
        for back-compat.
     2. **AGT 5.0** — pass an :class:`MAFKernel`. The middleware routes
        every agent invocation through the kernel's AGT
-       :class:`AdapterRuntimeBridge` at the ``input`` intervention
+       :class:`AdapterRuntime` at the ``input`` intervention
        point. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
        most recent user message content before the agent runs;
        ``deny`` verdicts raise :class:`MiddlewareTermination` with the
@@ -326,7 +331,7 @@ class GovernancePolicyMiddleware(AgentMiddleware):
        through the kernel's configured approval resolver per AGT-DELTA
        D1.4 and surface as allow (resolver approved) or deny (resolver
        refused / not wired). The ``governance_decision`` metadata key
-       carries the v5 :class:`BridgeResult` on this path so downstream
+       carries the v5 :class:`AdapterResult` on this path so downstream
        middleware can introspect it.
 
     Args:
@@ -481,7 +486,7 @@ class GovernancePolicyMiddleware(AgentMiddleware):
         context: AgentContext,
         call_next: Callable[[], Awaitable[None]],
     ) -> None:
-        """AGT 5.0 AdapterRuntimeBridge-backed processing."""
+        """AGT 5.0 AdapterRuntime-backed processing."""
         assert self.kernel is not None
         agent_name = getattr(context.agent, "name", "unknown")
 
@@ -588,7 +593,7 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
        :class:`MiddlewareTermination` is raised.
     2. **AGT 5.0** — pass an :class:`MAFKernel`. The middleware routes
        every tool invocation through the kernel's AGT
-       :class:`AdapterRuntimeBridge` at the ``pre_tool_call``
+       :class:`AdapterRuntime` at the ``pre_tool_call``
        intervention point. ``transform`` verdicts (AGT-DELTA D1.1)
        rewrite ``context.arguments`` before the next filter runs;
        ``deny`` verdicts raise :class:`MiddlewareTermination` with the
@@ -719,7 +724,7 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
         context: FunctionInvocationContext,
         call_next: Callable[[], Awaitable[None]],
     ) -> None:
-        """AGT 5.0 AdapterRuntimeBridge-backed processing."""
+        """AGT 5.0 AdapterRuntime-backed processing."""
         assert self.kernel is not None
         func_name = getattr(
             getattr(context, "function", None), "name", "unknown"
@@ -1035,6 +1040,7 @@ def create_governance_middleware(
     *,
     policy: GovernancePolicy | None = None,
     approval_resolver: Optional[Callable[..., Any]] = None,
+    runtime: Any | None = None,
     _runtime: Optional[Any] = None,
     _runtime_factory: Optional[Callable[..., Any]] = None,
 ) -> list:
@@ -1102,10 +1108,11 @@ def create_governance_middleware(
 
     # Build an MAFKernel when an AGT 5.0 policy is supplied.
     kernel: MAFKernel | None = None
-    if policy is not None:
+    if policy is not None or runtime is not None:
         kernel = MAFKernel(
             policy,
             approval_resolver=approval_resolver,
+            runtime=runtime,
             _runtime=_runtime,
             _runtime_factory=_runtime_factory,
         )

@@ -115,7 +115,7 @@ def test_evaluate_task_allow_path_passes(tmp_path: Path) -> None:
     from agent_os.integrations.a2a_adapter import A2AGovernanceAdapter
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("hello"))
 
@@ -138,7 +138,7 @@ def test_evaluate_task_deny_path_blocks(tmp_path: Path) -> None:
             }
         ],
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("share the password"))
 
@@ -165,7 +165,7 @@ def test_evaluate_task_transform_path_captures_redaction(tmp_path: Path) -> None
             }
         ],
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("Customer SSN is 123-45-6789"))
 
@@ -191,7 +191,7 @@ def test_evaluate_task_escalate_with_approving_resolver_passes(
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime, approval_resolver=resolver)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("approve this please"))
 
@@ -209,7 +209,7 @@ def test_evaluate_task_escalate_with_no_resolver_blocks(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    adapter = A2AGovernanceAdapter(_runtime=runtime)
+    adapter = A2AGovernanceAdapter(runtime=runtime)
 
     result = adapter.evaluate_task(_make_task("needs approval"))
 

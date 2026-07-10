@@ -118,7 +118,7 @@ def test_hook_create_allow_path_forwards_to_anthropic(tmp_path: Path) -> None:
     from agent_os.integrations.anthropic_adapter import AnthropicKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = AnthropicKernel(_runtime=runtime)
+    kernel = AnthropicKernel(runtime=runtime)
     hook = kernel.as_message_hook()
     client = _make_client()
 
@@ -152,7 +152,7 @@ def test_hook_create_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = AnthropicKernel(_runtime=runtime)
+    kernel = AnthropicKernel(runtime=runtime)
     hook = kernel.as_message_hook()
     client = _make_client()
 
@@ -164,7 +164,7 @@ def test_hook_create_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             messages=[{"role": "user", "content": "share the credentials"}],
         )
 
-    assert excinfo.value.check_result.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.reason_code == "policy:user_blocked_topic"
     client.messages.create.assert_not_called()
 
 
@@ -185,7 +185,7 @@ def test_hook_create_transform_path_redacts_outbound_message(tmp_path: Path) -> 
             }
         ],
     )
-    kernel = AnthropicKernel(_runtime=runtime)
+    kernel = AnthropicKernel(runtime=runtime)
     hook = kernel.as_message_hook()
     client = _make_client()
 
@@ -217,7 +217,7 @@ def test_hook_create_escalate_with_approving_resolver_forwards(tmp_path: Path) -
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = AnthropicKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = AnthropicKernel(runtime=runtime)
     hook = kernel.as_message_hook()
     client = _make_client()
 
@@ -245,7 +245,7 @@ def test_hook_create_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = AnthropicKernel(_runtime=runtime)
+    kernel = AnthropicKernel(runtime=runtime)
     hook = kernel.as_message_hook()
     client = _make_client()
 

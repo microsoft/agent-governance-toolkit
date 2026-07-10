@@ -105,6 +105,11 @@ those values rather than silently dropping them.
 Policy-authored messages remain restricted audit detail, while host exceptions
 use stable sanitized text.
 
+The dependency-light
+[`native_a2a_runtime.py`](../agent-os/examples/integrations/native_a2a_runtime.py)
+example constructs an A2A adapter with the public `runtime=` argument and a
+custom ACS policy dispatcher.
+
 `AdapterRuntimeSession` charges every attempted tool call, including denied
 and failed attempts, before the next policy evaluation. Model token usage is
 recorded after `post_model_call`. Existing v4 adapters temporarily disable

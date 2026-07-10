@@ -56,11 +56,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Optional
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
 from .base import BaseIntegration, ExecutionContext, GovernancePolicy
 
@@ -144,6 +144,7 @@ class AnthropicKernel(BaseIntegration):
         evaluator: Any = None,
         *,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ) -> None:
@@ -164,6 +165,9 @@ class AnthropicKernel(BaseIntegration):
                 engine returns an ``escalate`` verdict. Signature matches
                 :data:`agt.policies.runtime.ApprovalCallback`. When
                 ``None`` an escalate verdict fails closed to ``deny``.
+            runtime: Native AgtRuntime used directly by this adapter. The runtime
+                owns policy dispatch and approval resolution; any supplied
+                approval_resolver must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -178,19 +182,20 @@ class AnthropicKernel(BaseIntegration):
         self._start_time = time.monotonic()
         self._last_error: str | None = None
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge = get_runtime_bridge(
-            self.policy,
+        self._bridge: AdapterRuntime = get_adapter_runtime(
+            policy=self.policy,
             approval_resolver=approval_resolver,
-            runtime=_runtime,
-            runtime_factory=_runtime_factory,
+            runtime=runtime,
+            legacy_runtime=_runtime,
+            legacy_runtime_factory=_runtime_factory,
         )
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel."""
+    def bridge(self) -> AdapterRuntime:
+        """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: Any, input_data: Any) -> BridgeResult:
+    def evaluate_input(self, ctx: Any, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
@@ -201,7 +206,7 @@ class AnthropicKernel(BaseIntegration):
         tool_name: str,
         args: dict[str, Any],
         call_id: str = "call-1",
-    ) -> BridgeResult:
+    ) -> AdapterResult:
         """AGT ``pre_tool_call`` evaluation for an Anthropic tool-use block."""
         return self._bridge.evaluate_pre_tool_call(
             ctx, tool_name=tool_name, args=args, call_id=call_id
@@ -365,7 +370,7 @@ class _GovernedMessages:
                 content = str(content)
             bridge_result = self._kernel.evaluate_input(self._ctx, content)
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(bridge_result.check_result)
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, str
             ):
@@ -443,9 +448,7 @@ class _GovernedMessages:
                     call_id=getattr(block, "id", "call-1"),
                 )
                 if not tool_result.allowed:
-                    raise PolicyViolationError.from_check_result(
-                        tool_result.check_result
-                    )
+                    raise tool_result.to_policy_violation(PolicyViolationError)
                 if tool_result.transform is not None and isinstance(
                     tool_result.transform.value, dict
                 ):
@@ -617,7 +620,7 @@ class GovernanceMessageHook:
                 content = str(content)
             bridge_result = self._kernel.evaluate_input(self._ctx, content)
             if not bridge_result.allowed:
-                raise PolicyViolationError.from_check_result(bridge_result.check_result)
+                raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, str
             ):
@@ -684,9 +687,7 @@ class GovernanceMessageHook:
                     call_id=getattr(block, "id", "call-1"),
                 )
                 if not tool_result.allowed:
-                    raise PolicyViolationError.from_check_result(
-                        tool_result.check_result
-                    )
+                    raise tool_result.to_policy_violation(PolicyViolationError)
                 if tool_result.transform is not None and isinstance(
                     tool_result.transform.value, dict
                 ):
@@ -710,6 +711,8 @@ class GovernanceMessageHook:
 def wrap_client(
     client: Any,
     policy: GovernancePolicy | None = None,
+    *,
+    runtime: Any | None = None,
 ) -> GovernedAnthropicClient:
     """Quick wrapper for Anthropic clients.
 
@@ -736,5 +739,4 @@ def wrap_client(
         DeprecationWarning,
         stacklevel=2,
     )
-    return AnthropicKernel(policy=policy).wrap(client)
-
+    return AnthropicKernel(policy=policy, runtime=runtime).wrap(client)

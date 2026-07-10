@@ -134,7 +134,7 @@ def test_before_tool_call_allow_path_allows(tmp_path: Path) -> None:
     from agent_os.integrations.smolagents_adapter import SmolagentsKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = SmolagentsKernel(_runtime=runtime)
+    kernel = SmolagentsKernel(runtime=runtime)
 
     result = kernel.before_tool_call(tool_name="search", tool_args={"q": "weather"})
 
@@ -156,7 +156,7 @@ def test_before_tool_call_deny_path_blocks(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = SmolagentsKernel(_runtime=runtime)
+    kernel = SmolagentsKernel(runtime=runtime)
 
     result = kernel.before_tool_call(tool_name="search", tool_args={"q": "x"})
 
@@ -182,7 +182,7 @@ def test_before_tool_call_transform_path_rewrites_args(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = SmolagentsKernel(_runtime=runtime)
+    kernel = SmolagentsKernel(runtime=runtime)
     args: dict[str, Any] = {"q": "drop table users"}
 
     result = kernel.before_tool_call(tool_name="search", tool_args=args)
@@ -209,7 +209,7 @@ def test_before_tool_call_escalate_with_approving_resolver_allows(
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = SmolagentsKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = SmolagentsKernel(runtime=runtime)
 
     result = kernel.before_tool_call(tool_name="search", tool_args={"q": "x"})
 
@@ -227,7 +227,7 @@ def test_before_tool_call_escalate_with_no_resolver_blocks(tmp_path: Path) -> No
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = SmolagentsKernel(_runtime=runtime)
+    kernel = SmolagentsKernel(runtime=runtime)
 
     result = kernel.before_tool_call(tool_name="search", tool_args={"q": "x"})
 
@@ -243,7 +243,7 @@ def test_step_callback_allow_path_allows(tmp_path: Path) -> None:
     from agent_os.integrations.smolagents_adapter import SmolagentsKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = SmolagentsKernel(_runtime=runtime)
+    kernel = SmolagentsKernel(runtime=runtime)
     callback = kernel.as_step_callback()
 
     callback(_Step(tool_calls=[_ToolCall()]), _Agent())
@@ -268,7 +268,7 @@ def test_step_callback_deny_path_raises(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = SmolagentsKernel(_runtime=runtime)
+    kernel = SmolagentsKernel(runtime=runtime)
     callback = kernel.as_step_callback()
 
     with pytest.raises(PolicyViolationError):
@@ -292,7 +292,7 @@ def test_step_callback_transform_path_rewrites_args(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = SmolagentsKernel(_runtime=runtime)
+    kernel = SmolagentsKernel(runtime=runtime)
     callback = kernel.as_step_callback()
     tc = _ToolCall(tool_arguments={"q": "drop table users"})
 

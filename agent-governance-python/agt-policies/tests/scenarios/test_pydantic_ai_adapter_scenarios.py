@@ -108,7 +108,7 @@ def test_before_run_allow_path_forwards_prompt(tmp_path: Path) -> None:
     from agent_os.integrations.pydantic_ai_adapter import PydanticAIKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = PydanticAIKernel(_runtime=runtime)
+    kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
 
     result = capability.before_run("what is the weather today?")
@@ -134,13 +134,13 @@ def test_before_run_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = PydanticAIKernel(_runtime=runtime)
+    kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
 
     with pytest.raises(PolicyViolationError) as excinfo:
         capability.before_run("tell me about secrets")
 
-    assert excinfo.value.check_result.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.reason_code == "policy:user_blocked_topic"
 
 
 def test_before_run_transform_path_rewrites_prompt(tmp_path: Path) -> None:
@@ -160,7 +160,7 @@ def test_before_run_transform_path_rewrites_prompt(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = PydanticAIKernel(_runtime=runtime)
+    kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
 
     rewritten = capability.before_run("Customer SSN is 123-45-6789")
@@ -186,7 +186,7 @@ def test_before_run_escalate_with_approving_resolver_forwards(tmp_path: Path) ->
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = PydanticAIKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
 
     result = capability.before_run("approve this please")
@@ -208,7 +208,7 @@ def test_before_run_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = PydanticAIKernel(_runtime=runtime)
+    kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
 
     with pytest.raises(PolicyViolationError):
@@ -232,7 +232,7 @@ def test_before_tool_execute_transform_rewrites_arguments(tmp_path: Path) -> Non
             }
         ],
     )
-    kernel = PydanticAIKernel(_runtime=runtime)
+    kernel = PydanticAIKernel(runtime=runtime)
     capability = kernel.as_capability()
 
     rewritten = capability.before_tool_execute(
@@ -274,7 +274,7 @@ def test_before_tool_execute_escalate_routes_through_resolver(
     policy = GovernancePolicy(require_human_approval=True)
     kernel = PydanticAIKernel(
         policy=policy,
-        _runtime=runtime,
+        runtime=runtime,
         approval_resolver=resolver,
         approval_callback=None,
     )

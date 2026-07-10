@@ -121,7 +121,7 @@ def test_add_message_allow_path_forwards_to_openai(tmp_path: Path) -> None:
     from agent_os.integrations.openai_adapter import OpenAIKernel
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
@@ -147,14 +147,14 @@ def test_add_message_deny_path_raises_policy_violation(tmp_path: Path) -> None:
             }
         ],
     )
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
     with pytest.raises(PolicyViolationError) as excinfo:
         governed.add_message("thread_1", "tell me about secrets")
 
-    assert excinfo.value.check_result.reason == "user_blocked_topic"
+    assert excinfo.value.evaluation_result.reason_code == "policy:user_blocked_topic"
     client.beta.threads.messages.create.assert_not_called()
 
 
@@ -175,7 +175,7 @@ def test_add_message_transform_path_redacts_outbound_content(tmp_path: Path) -> 
             }
         ],
     )
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
@@ -203,7 +203,7 @@ def test_add_message_escalate_with_approving_resolver_forwards(tmp_path: Path) -
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=resolver,
     )
-    kernel = OpenAIKernel(_runtime=runtime, approval_resolver=resolver)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 
@@ -223,7 +223,7 @@ def test_add_message_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "human_approval_required"}],
         approval_resolver=None,
     )
-    kernel = OpenAIKernel(_runtime=runtime)
+    kernel = OpenAIKernel(runtime=runtime)
     client = _make_openai_client()
     governed = kernel.wrap(_make_assistant(), client)
 

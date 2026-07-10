@@ -65,11 +65,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
-from ._v5_runtime_bridge import (
-    AdapterRuntimeBridge,
-    BridgeResult,
-    get_runtime_bridge,
+from ._native_adapter_runtime import (
+    AdapterResult,
+    AdapterRuntime,
 )
+from ._v5_runtime_bridge import get_adapter_runtime
 from .base import ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger(__name__)
@@ -334,6 +334,7 @@ class AgentShieldKernel:
         fail_closed: bool = True,
         governance_policy: GovernancePolicy | None = None,
         approval_resolver: Optional[Callable[..., Any]] = None,
+        agt_runtime: Any | None = None,
         _runtime: Optional[Any] = None,
         _runtime_factory: Optional[Callable[..., Any]] = None,
     ):
@@ -369,6 +370,10 @@ class AgentShieldKernel:
                 matches :data:`agt.policies.runtime.ApprovalCallback`.
                 When ``None`` an escalate verdict fails closed to
                 ``deny``.
+            agt_runtime: Native AgtRuntime used for governance decisions.
+                This is separate from the Agent Shield ``runtime`` argument
+                and owns its own approval resolver. A supplied
+                ``approval_resolver`` must be the same callback.
             _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
                 so scenario tests can wire a scripted policy dispatcher
                 without OPA on PATH. Not part of the public surface.
@@ -395,21 +400,26 @@ class AgentShieldKernel:
         # AGT verdict are AND-merged (any deny wins).
         self._governance_policy = governance_policy
         self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntimeBridge | None
-        if governance_policy is not None or _runtime is not None:
-            self._bridge = get_runtime_bridge(
-                governance_policy or GovernancePolicy(),
+        self._bridge: AdapterRuntime | None
+        if (
+            governance_policy is not None
+            or agt_runtime is not None
+            or _runtime is not None
+        ):
+            self._bridge = get_adapter_runtime(
+                policy=governance_policy or GovernancePolicy(),
                 approval_resolver=approval_resolver,
-                runtime=_runtime,
-                runtime_factory=_runtime_factory,
+                runtime=agt_runtime,
+                legacy_runtime=_runtime,
+                legacy_runtime_factory=_runtime_factory,
             )
         else:
             self._bridge = None
         self._contexts: dict[str, ExecutionContext] = {}
 
     @property
-    def bridge(self) -> AdapterRuntimeBridge | None:
-        """Return the v5 :class:`AdapterRuntimeBridge` for this kernel.
+    def bridge(self) -> AdapterRuntime | None:
+        """Return the v5 :class:`AdapterRuntime` for this kernel.
 
         ``None`` when the kernel was constructed without a
         ``governance_policy`` or injected runtime — in that case the
@@ -613,7 +623,7 @@ class AgentShieldKernel:
 
         When the kernel is constructed with a ``governance_policy``,
         the AGT 5.0 ``input`` intervention point also fires through
-        :class:`AdapterRuntimeBridge`. The Shield verdict and the AGT
+        :class:`AdapterRuntime`. The Shield verdict and the AGT
         verdict are AND-merged: a deny from either side blocks the
         call. A transform verdict from the AGT side (AGT-DELTA D1.1)
         sets ``modified_value`` on the returned verdict so the host
@@ -670,7 +680,7 @@ class AgentShieldKernel:
 
         When the kernel is constructed with a ``governance_policy``,
         the AGT 5.0 ``pre_tool_call`` intervention point also fires
-        through :class:`AdapterRuntimeBridge`. The Shield verdict and
+        through :class:`AdapterRuntime`. The Shield verdict and
         the AGT verdict are AND-merged on the returned
         :class:`ToolCallVerdict`: a deny from either side blocks the
         call. A transform verdict (AGT-DELTA D1.1) rewrites
@@ -807,7 +817,7 @@ class AgentShieldKernel:
 
         When the kernel is constructed with a ``governance_policy``,
         the AGT 5.0 ``output`` intervention point also fires through
-        :class:`AdapterRuntimeBridge`. The Shield verdict and the AGT
+        :class:`AdapterRuntime`. The Shield verdict and the AGT
         verdict are AND-merged: a deny from either side blocks the
         call. A transform verdict (AGT-DELTA D1.1) overrides
         ``modified_value`` on the returned verdict so the host can
@@ -951,9 +961,9 @@ class AgentShieldKernel:
     def _merge_bridge_verdict(
         self,
         shield_verdict: ShieldVerdict,
-        bridge_result: BridgeResult,
+        bridge_result: AdapterResult,
     ) -> ShieldVerdict:
-        """AND-merge an AGT :class:`BridgeResult` into a :class:`ShieldVerdict`.
+        """AND-merge an AGT :class:`AdapterResult` into a :class:`ShieldVerdict`.
 
         Rules:
 
@@ -972,8 +982,8 @@ class AgentShieldKernel:
         Args:
             shield_verdict: The verdict produced by the Agent Shield
                 SDK (already recorded via :meth:`_translate_verdict`).
-            bridge_result: The AGT :class:`BridgeResult` returned by
-                :class:`AdapterRuntimeBridge`.
+            bridge_result: The AGT :class:`AdapterResult` returned by
+                :class:`AdapterRuntime`.
 
         Returns:
             A merged :class:`ShieldVerdict` that reflects both layers.
