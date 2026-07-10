@@ -1,0 +1,110 @@
+name: Demos
+
+# Runs the runnable AGT demos on every push and pull request. The
+# governance middleware, policy engine, and audit trail are always real; the
+# LLM-driven demo is exercised against a small open-source model
+# (Meta Llama 3.2 3B) served locally by Ollama, so no paid API keys or secrets
+# are required. This keeps the demos honest and continuously verified.
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: demos-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # dorny/paths-filter uses the REST API to diff PRs on the pull_request
+      # trigger, which needs pull-requests: read.
+      pull-requests: read
+    outputs:
+      demos: ${{ steps.filter.outputs.demos }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            demos:
+              - 'examples/demos/**'
+              - 'agent-governance-python/agent-os/**'
+              - 'agent-governance-python/agent-mesh/**'
+              - 'agent-governance-python/agent-sre/**'
+              - 'agent-governance-python/agent-runtime/**'
+              - '.github/workflows/demos.yml'
+
+  run-demos:
+    needs: changes
+    if: needs.changes.outputs.demos == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Drive the existing OpenAI backend against a local Ollama server via the
+      # OpenAI-compatible API. OPENAI_API_KEY is a required-but-unused placeholder
+      # (Ollama ignores it); no real key or secret is involved.
+      OPENAI_BASE_URL: http://127.0.0.1:11434/v1
+      OPENAI_API_KEY: ollama
+      # Meta Llama 3.2 3B, instruct-tuned, and ≤8B so it still
+      # runs on a 2-core CPU GitHub-hosted runner. Bump to llama3.1:8b for higher
+      # quality on a larger runner.
+      AGT_DEMO_MODEL: llama3.2:3b
+      # Pin the Ollama runtime for reproducible, supply-chain-safe installs.
+      OLLAMA_VERSION: "0.5.7"
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install toolkit packages
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -e agent-governance-python/agent-os
+          pip install -e agent-governance-python/agent-mesh
+          pip install -e agent-governance-python/agent-sre
+          pip install -e agent-governance-python/agent-runtime
+          # Install the OpenAI client last and pin httpx: openai 1.54.x passes a
+          # `proxies=` kwarg that httpx>=0.28 removed, so pin httpx<0.28.
+          pip install openai==1.54.4 httpx==0.27.2
+
+      - name: Offline governance smoke test
+        run: python examples/demos/governed-agent-in-10-min/demo.py --no-pause
+
+      - name: Start Ollama with a safe open-source model
+        run: |
+          set -euo pipefail
+          curl -fsSL https://ollama.com/install.sh | sh >/dev/null 2>&1
+          # The installer starts Ollama as a service. Wait for it, and only
+          # start a server ourselves if the API never becomes reachable.
+          is_up() { curl -fsS "http://127.0.0.1:11434/api/version" >/dev/null 2>&1; }
+          up=0
+          for _ in $(seq 1 30); do
+            if is_up; then up=1; break; fi
+            sleep 2
+          done
+          if [ "$up" -ne 1 ]; then
+            ollama serve >/tmp/ollama.log 2>&1 &
+            for _ in $(seq 1 30); do
+              if is_up; then up=1; break; fi
+              sleep 2
+            done
+          fi
+          if [ "$up" -ne 1 ]; then
+            echo "Ollama failed to start" >&2
+            exit 1
+          fi
+          echo "Ollama is up."
+          ollama pull "$AGT_DEMO_MODEL" >/dev/null 2>&1
+
+      - name: Run governance demo against open-source model
+        run: python examples/demos/maf_governance_demo.py --model "$AGT_DEMO_MODEL"
