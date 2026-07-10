@@ -60,8 +60,16 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 
 **Prerequisites:** Python 3.10+
 
+> **Install note:** The base wheel (`pip install agent-governance-toolkit`) ships
+> a minimal surface. For the Quick Start imports below (`agentmesh.governance`,
+> policy evaluation helpers), install the full extra:
+>
+> ```bash
+> pip install "agent-governance-toolkit[full]"
+> ```
+
 ```bash
-pip install agent-governance-toolkit[full]
+pip install "agent-governance-toolkit[full]"
 ```
 
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
@@ -113,6 +121,9 @@ Or use the full `PolicyEvaluator` API for programmatic control:
 <summary><b>PolicyEvaluator example</b></summary>
 
 ```python
+# Prefer agentmesh.governance for new code (see docs/package-consolidation/MIGRATION.md).
+# agent_os.policies still works via the compatibility surface but may emit
+# DeprecationWarning when the underlying agent-os-kernel path is used.
 from agent_os.policies import (
     PolicyEvaluator, PolicyDocument, PolicyRule,
     PolicyCondition, PolicyAction, PolicyOperator, PolicyDefaults

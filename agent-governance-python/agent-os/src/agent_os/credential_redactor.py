@@ -230,20 +230,24 @@ class CredentialRedactor:
 
     @classmethod
     def redact(cls, value: str | None) -> str:
-        """Redact credential-like values from a string.
+        """Redact **secret/credential** patterns from a string (not general PII).
 
         Redaction is driven by the exact spans that :meth:`find_matches`
-        reports, so redaction removes precisely what detection finds. This is
-        deliberately not a sequential ``subn`` over the patterns: applying
-        patterns to a progressively mutated string lets an earlier greedy
-        pattern consume the anchor keyword of a later one, which would remove
-        less than detection reported and leave a secret in place.
+        reports (``PATTERNS`` only: tokens, keys, connection strings, etc.).
+        PII patterns (email, phone, SSN, …) are available via
+        :meth:`find_pii_matches` / :meth:`contains_pii` for **detection** but
+        are **not** removed by this method. Callers that need PII scrubbing must
+        handle ``PII_PATTERNS`` separately.
+
+        Span-based redaction (rather than sequential ``subn``) avoids an earlier
+        greedy pattern consuming the anchor of a later one and leaving a secret
+        in place.
 
         Args:
             value: String content that may contain credential-like material.
 
         Returns:
-            A string with each detected credential replaced by
+            A string with each detected **secret** replaced by
             ``REDACTED_PLACEHOLDER``. Empty input returns an empty string.
         """
         if not value:
