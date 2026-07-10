@@ -496,6 +496,8 @@ Subresource
 subresources
 SVID
 sybil
+checkpolicy
+getpolicy
 syscall
 syscalls
 SYSTEMROOT
@@ -874,3 +876,16 @@ tcpdump
 isascii
 multisink
 writeln
+
+# --- CloudEvents / signed audit-event terms ---
+cloudevent
+cloudevents
+specversion
+datacontenttype
+schemaversion
+sessionid
+traceid
+spanid
+parentspanid
+agtsignature
+agtsignaturealg
