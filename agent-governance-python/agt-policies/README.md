@@ -58,6 +58,8 @@ AGT adapters enforce.
   manifest + OPA rego module.
 - `agt.policies.result` provides native immutable `PolicyEvaluation` plus the
   temporary `EvaluationResult` compatibility surface.
+- `agt.policies.session` provides `AdapterRuntimeSession`, which owns one
+  session's snapshots and budget counters while sharing a stateless runtime.
 - `agt.policies.runtime` — Python wrapper over the ACS Python SDK that
   loads a resolved manifest, runs intervention points, applies the
   transform verdict, enforces approval, and emits AGT telemetry events.
@@ -103,6 +105,12 @@ those values rather than silently dropping them.
 Policy-authored messages remain restricted audit detail, while host exceptions
 use stable sanitized text.
 
+`AdapterRuntimeSession` charges every attempted tool call, including denied
+and failed attempts, before the next policy evaluation. Model token usage is
+recorded after `post_model_call`. Existing v4 adapters temporarily disable
+those native charges because they still update their old execution context.
+Phase 3 removes that compatibility override.
+
 ## Compatibility bridge
 
 Existing Agent OS adapters still accept the v4 `GovernancePolicy`
@@ -116,6 +124,14 @@ The generated compatibility policy is identified as `agt_legacy_rules`
 inside the resolved ACS manifest. If merged governance rules are
 present but no intervention point binds to `agt_legacy_rules`,
 resolution fails closed rather than producing rules that never run.
+
+The `agt migrate v4-to-v5` command does not import this runtime bridge. Its
+private one-way translator accepts exact literals only. Dynamic constructor
+expressions, host-only fields, unsupported pattern kinds, invalid patterns, and
+existing output paths produce manual-review findings and no manifest. A write
+run exits nonzero whenever any policy could not be translated exactly. REGEX
+and GLOB migration uses OPA's Go RE2 validator. GLOB anchors are normalized to
+RE2 `\z`; Python-only expressions such as backreferences are refused.
 
 ## Security invariants
 

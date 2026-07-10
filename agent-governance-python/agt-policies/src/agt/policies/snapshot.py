@@ -343,11 +343,11 @@ class SnapshotBuilder:
     def record_tool_call(self, count: int = 1) -> None:
         """Increment the ``tool_call_count`` budget by ``count`` (default 1).
 
-        Hosts call this after a ``post_tool_call`` returns successfully,
-        matching the v4 ``ExecutionContext.call_count += 1`` pattern. The
-        engine sees the new value on the next intervention point because
-        AGT-SNAPSHOT §1 specifies budgets are read at the start of each
-        evaluation.
+        Native hosts reserve attempted calls through
+        :class:`agt.policies.session.AdapterRuntimeSession`. Direct callers may
+        use this mutator for host-observed usage. The engine sees the new value
+        on the next intervention point because AGT-SNAPSHOT section 1 specifies
+        budgets are read at the start of each evaluation.
         """
         if not isinstance(count, int) or count < 0:
             raise ValueError(f"count must be a non-negative integer, got {count!r}")

@@ -51,6 +51,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterable, Protocol, runtime_checkable
 
+from ._re2 import glob_to_re2, validate_re2
+
 logger = logging.getLogger(__name__)
 
 ACS_VERSION = "0.3.0-alpha-agt"
@@ -117,11 +119,10 @@ def _pattern_to_regex(pattern: Any) -> str:
         if kind_name == "SUBSTRING":
             return re.escape(value)
         if kind_name == "REGEX":
+            validate_re2(value)
             return value
         if kind_name == "GLOB":
-            import fnmatch
-
-            return fnmatch.translate(value)
+            return glob_to_re2(value)
         raise ValueError(f"unsupported PatternType: {kind!r}")
 
     raise ValueError(f"unsupported blocked_patterns entry: {pattern!r}")

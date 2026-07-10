@@ -154,3 +154,30 @@ moves adapters to the native result. Phase 6 removes the compatibility surface.
 The migration tool must either translate each policy field exactly or refuse
 the conversion with a manual-review finding. Host-only fields move to explicit
 host configuration and must not be silently dropped.
+
+## Phase 2 extraction boundaries
+
+`AdapterRuntimeSession` now owns one session's `SnapshotBuilder`, counters, and
+native intervention-point calls. It reserves attempted tool calls before
+execution so denied and failed attempts consume budget, records model tokens
+after `post_model_call`, and serializes only counter mutation. `AgtRuntime`
+remains session-free and shareable under the Phase 1 callback thread-safety
+contract.
+
+The v4 runtime bridge delegates snapshot construction and evaluation to the
+native session. It retains only v4 translation, result conversion, host budget
+fallbacks, approval fallbacks, and the two default-permit rewrites. Existing
+adapters temporarily disable native counter charging to avoid double-counting
+until Phase 3 moves them off `ExecutionContext`.
+
+The one-way `GovernancePolicy` translator lives under `agt.cli` and has no
+runtime import path. It accepts exact literal fields and exact
+`PatternType.SUBSTRING`, `PatternType.REGEX`, and `PatternType.GLOB` forms.
+Dynamic expressions, host-only settings, invalid patterns, unsupported fields,
+and existing outputs refuse migration. The generated manifest is validated as
+`AgtManifest` before an atomic write. Differential tests compare every
+supported construct with the frozen runtime bridge so defaults and boundary
+semantics cannot drift during the transition. REGEX and GLOB use OPA's Go RE2
+validator, and GLOB uses the RE2 `\z` end anchor rather than Python's unsupported
+`\Z`. Both constructor and governance-chain migrations refuse existing
+manifests, bundles, and backups instead of overwriting them.

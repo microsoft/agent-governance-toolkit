@@ -196,6 +196,36 @@ class EvaluationResult(BaseModel):
     enforced_identity: str | None = None
     message: str = ""
 
+    @classmethod
+    def from_native(cls, result: PolicyEvaluation) -> "EvaluationResult":
+        """Build the temporary bridge result from the native contract."""
+        reason = result.reason_code
+        if reason.startswith("policy:"):
+            reason = reason.removeprefix("policy:")
+        audit = result.audit_record()
+        audit["reason"] = reason
+        return cls(
+            allowed=result.is_allowed(),
+            public_message=result.message,
+            detail=result.message,
+            reason=reason,
+            audit_entry=audit,
+            verdict=result.verdict,
+            transform=(
+                result.transform.model_dump(mode="python", exclude_none=True)
+                if result.transform is not None
+                else None
+            ),
+            evidence=(
+                result.evidence.model_dump(mode="python", exclude_none=True)
+                if result.evidence is not None
+                else None
+            ),
+            input_identity=result.input_identity,
+            enforced_identity=result.enforced_identity,
+            message=result.message,
+        )
+
     def is_allowed(self) -> bool:
         """True for verdicts that permit the action (``allow``/``warn``/``transform``).
 

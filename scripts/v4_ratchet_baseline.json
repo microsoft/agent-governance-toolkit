@@ -1,5 +1,5 @@
 {
-  "grand_total": 3795,
+  "grand_total": 3790,
   "package_totals": {
     "BREAKING_CHANGES.md": 1,
     "CHANGELOG.md": 2,
@@ -22,7 +22,7 @@
     "agent-governance-python/agentmesh-integrations/mastra-agentmesh": 6,
     "agent-governance-python/agentmesh-integrations/openai-agents-trust": 32,
     "agent-governance-python/agentmesh-integrations/pydantic-ai-governance": 99,
-    "agent-governance-python/agt-policies": 103,
+    "agent-governance-python/agt-policies": 98,
     "agent-governance-python/benchmarks": 10,
     "agent-governance-rust/agentmesh": 27,
     "docs/BENCHMARKS.md": 1,
@@ -1039,12 +1039,6 @@
       "discover_policies": 7,
       "import:agt.manifest_resolution": 2
     },
-    "agent-governance-python/agt-policies/tests/test_migrate.py": {
-      "CedarBackend": 1,
-      "GovernancePolicy": 2,
-      "PolicyAction": 1,
-      "import:agt.policies.bridge": 1
-    },
     "agent-governance-python/agt-policies/tests/test_runtime.py": {
       "resolution_root": 2
     },
@@ -1797,16 +1791,28 @@
     "agent-governance-python/agt-policies/src/agt/cli/migrate.py": {
       "CedarBackend": 1,
       "GovernancePolicy": 1,
+      "PatternType": 1,
       "PolicyInterceptor": 1,
+      "import:agt.manifest_resolution": 1
+    },
+    "agent-governance-python/agt-policies/tests/test_migrate.py": {
+      "CedarBackend": 1,
+      "GovernancePolicy": 1,
+      "PolicyAction": 1,
+      "import:agt.policies.bridge": 2
+    },
+    "agent-governance-python/agt-policies/tests/test_migration_boundary.py": {
+      "import:agt.manifest_resolution": 1
+    },
+    "agent-governance-python/agt-policies/tests/test_migration_equivalence.py": {
       "governance_to_acs_manifest": 2,
-      "import:agt.manifest_resolution": 1,
       "import:agt.policies.bridge": 1
     },
     "docs/v4-removal.md": {
       "AdapterRuntimeBridge": 1,
       "CedarBackend": 1,
-      "GovernancePolicy": 3,
-      "PatternType": 1,
+      "GovernancePolicy": 4,
+      "PatternType": 4,
       "PolicyAction": 1,
       "PolicyCheckResult": 1,
       "PolicyDocument": 2,

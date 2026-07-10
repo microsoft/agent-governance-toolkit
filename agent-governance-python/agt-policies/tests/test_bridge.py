@@ -24,6 +24,9 @@ import yaml
 pytest.importorskip("agent_os")
 
 from agent_os.integrations.base import GovernancePolicy, PatternType  # noqa: E402
+
+_PATTERN_REGEX = PatternType.REGEX
+_PATTERN_GLOB = PatternType.GLOB
 from agent_os.policies.decision import ViolationCategory  # noqa: E402
 
 from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402
@@ -119,8 +122,8 @@ def test_bridge_translates_blocked_patterns_via_patterns_library(tmp_path: Path)
         tmp_path,
         blocked_patterns=[
             "password",
-            ("rm\\s+-rf", PatternType.REGEX),
-            ("*.exe", PatternType.GLOB),
+            ("rm\\s+-rf", _PATTERN_REGEX),
+            ("*.exe", _PATTERN_GLOB),
         ],
     )
 
@@ -182,6 +185,61 @@ def test_bridge_blocked_patterns_match_stringified_tool_args(tmp_path: Path) -> 
         verdict = json.loads(completed.stdout)[0]
         assert verdict["decision"] == "deny"
         assert verdict["reason"] == "blocked_pattern_input"
+
+
+def test_bridge_glob_patterns_use_re2_end_anchor_and_enforce(
+    tmp_path: Path,
+) -> None:
+    opa = shutil.which("opa") or str(Path.home() / ".local" / "bin" / "opa")
+    if not Path(opa).exists():
+        pytest.skip("opa binary required for bridge Rego repro")
+
+    manifest = _bridge(
+        tmp_path,
+        blocked_patterns=[("*.exe", _PATTERN_GLOB)],
+        confidence_threshold=0.0,
+    )
+    bundle = Path(manifest["policies"]["agt_governance_policy"]["bundle"])
+    body = (bundle / "agt_governance_policy.rego").read_text(encoding="utf-8")
+    assert r"\\z" in body
+    assert r"\\Z" not in body
+
+    input_path = tmp_path / "glob.json"
+    input_path.write_text(
+        json.dumps({"policy_target": {"value": "payload.exe"}}),
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            opa,
+            "eval",
+            "-f",
+            "values",
+            "-d",
+            str(bundle),
+            "-i",
+            str(input_path),
+            "data.agt.governance_policy.verdict",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    verdict = json.loads(completed.stdout)[0]
+    assert verdict["decision"] == "deny"
+
+
+def test_bridge_rejects_python_only_regex_when_opa_is_available(
+    tmp_path: Path,
+) -> None:
+    if shutil.which("opa") is None:
+        pytest.skip("opa binary required for RE2 validation")
+
+    with pytest.raises(ValueError, match="Go RE2"):
+        _bridge(
+            tmp_path,
+            blocked_patterns=[(r"(a)\1", _PATTERN_REGEX)],
+        )
 
 
 def test_bridge_translates_require_human_approval_to_escalate(tmp_path: Path) -> None:

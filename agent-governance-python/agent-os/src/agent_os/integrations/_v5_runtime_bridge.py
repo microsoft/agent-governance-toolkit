@@ -16,11 +16,10 @@ The bridge:
   picks, and stands up an :class:`agt.policies.runtime.AgtRuntime` on
   it. The (policy, approval-resolver) pair is memoised so repeated
   intervention-point evaluations reuse the same runtime.
-- Owns a per-:class:`~agent_os.integrations.base.ExecutionContext`
-  :class:`agt.policies.snapshot.SnapshotBuilder` so the host budgets
-  (tool-call count, token count, elapsed seconds, USD cost) advance
-  between intervention points exactly as ``ExecutionContext`` did under
-  v4.
+- Delegates session snapshots and counters to
+  :class:`agt.policies.session.AdapterRuntimeSession`, while mirroring the
+  existing :class:`~agent_os.integrations.base.ExecutionContext` counters until
+  each adapter moves to the native session in phase 3.
 - Translates each intervention point hook into a snapshot, evaluates
   it through the runtime, and maps the returned
   :class:`agt.policies.result.EvaluationResult` into both the v4
@@ -45,15 +44,23 @@ from __future__ import annotations
 
 import logging
 import tempfile
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Protocol
 
 import yaml
 
 from .base import ExecutionContext, GovernancePolicy
 
 logger = logging.getLogger("agent_os.integrations.v5_bridge")
+
+
+class _ExecutionContextLike(Protocol):
+    agent_id: str
+    session_id: str
+    call_count: int
+    total_tokens: int
 
 
 @dataclass
@@ -82,7 +89,7 @@ class BridgeResult:
 
     evaluation: Any  # agt.policies.result.EvaluationResult
     check_result: Any  # agent_os.policies.decision.PolicyCheckResult
-    transform: Optional[TransformOutcome] = None
+    transform: TransformOutcome | None = None
 
     @property
     def allowed(self) -> bool:
@@ -104,10 +111,10 @@ class BridgeResult:
 class AdapterRuntimeBridge:
     """v4 → v5 routing helper attached to every v5-routed adapter kernel.
 
-    Construct one bridge per adapter kernel instance. The bridge owns
-    the per-policy memoisation cache and the per-context snapshot
-    builders so a single kernel can govern many concurrent agents
-    without re-translating the manifest.
+    Construct one bridge per adapter kernel instance. The bridge owns the
+    per-policy memoisation cache and one native session per v4 execution
+    context, so a single kernel can govern many concurrent agents without
+    re-translating the manifest.
     """
 
     _cache: dict[tuple[int, int], Any] = {}
@@ -116,9 +123,9 @@ class AdapterRuntimeBridge:
         self,
         policy: GovernancePolicy,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        runtime: Optional[Any] = None,
-        runtime_factory: Optional[Callable[[GovernancePolicy], Any]] = None,
+        approval_resolver: Callable[..., Any] | None = None,
+        runtime: Any | None = None,
+        runtime_factory: Callable[[GovernancePolicy], Any] | None = None,
     ) -> None:
         if not isinstance(policy, GovernancePolicy):
             raise TypeError(
@@ -130,7 +137,7 @@ class AdapterRuntimeBridge:
         self._runtime_factory = runtime_factory
         self._injected_runtime = runtime
         self._factory_runtime: Any | None = None
-        self._builders: dict[str, Any] = {}
+        self._sessions: dict[str, Any] = {}
 
     @property
     def policy(self) -> GovernancePolicy:
@@ -174,26 +181,30 @@ class AdapterRuntimeBridge:
         and ``ctx.total_tokens`` are mirrored into the builder on every
         access so the AGT engine sees the current budget values.
         """
-        from agt.policies.snapshot import SnapshotBuilder
+        return self._session_for(ctx).builder
+
+    def _session_for(self, ctx: _ExecutionContextLike) -> Any:
+        """Return the native session shim bound to ``ctx``."""
+        from agt.policies.session import AdapterRuntimeSession
 
         key = ctx.session_id or ctx.agent_id
-        builder = self._builders.get(key)
-        if builder is None:
-            builder = SnapshotBuilder(
+        session = self._sessions.get(key)
+        if session is None:
+            session = AdapterRuntimeSession(
+                self.runtime,
                 agent_id=ctx.agent_id,
                 session_id=ctx.session_id or f"{ctx.agent_id}-session",
             )
-            self._builders[key] = builder
-        # Mirror v4 ExecutionContext counters into the AGT envelope so
-        # the bridge-generated max_tool_calls / max_tokens checks see
-        # the live values.
-        builder.tool_call_count = max(builder.tool_call_count, int(ctx.call_count))
-        builder.token_count = max(builder.token_count, int(ctx.total_tokens))
-        return builder
+            self._sessions[key] = session
+        session.synchronize_counters(
+            tool_call_count=int(ctx.call_count),
+            token_count=int(ctx.total_tokens),
+        )
+        return session
 
     def evaluate_tool_budget(
         self, ctx: ExecutionContext
-    ) -> Optional["BridgeResult"]:
+    ) -> BridgeResult | None:
         """Return a deny ``BridgeResult`` if the call/token budget is exceeded.
 
         For governed surfaces that are budgeted operations but are not named
@@ -213,11 +224,10 @@ class AdapterRuntimeBridge:
         ``ctx.total_tokens += usage`` pattern so the next intervention
         point sees the running budget.
         """
-        builder = self.builder_for(ctx)
-        if tool_calls:
-            builder.record_tool_call(tool_calls)
-        if tokens:
-            builder.record_tokens(int(tokens))
+        self._session_for(ctx).record_usage(
+            tool_calls=tool_calls,
+            tokens=int(tokens),
+        )
 
     # ── intervention-point dispatchers ─────────────────────────────
 
@@ -227,15 +237,14 @@ class AdapterRuntimeBridge:
         *,
         body: Any,
         source: str = "user",
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> BridgeResult:
-        builder = self.builder_for(ctx)
-        snapshot = builder.input(
-            body=body if isinstance(body, (str, dict)) else str(body),
+        evaluation = self._session_for(ctx).evaluate_input(
+            body=body if isinstance(body, str | dict) else str(body),
             source=source,
             headers=headers,
         )
-        result = self._evaluate("input", snapshot)
+        result = self._bridge_native_evaluation(evaluation)
         # v4 ``require_human_approval`` blocks every pre-execute when no
         # resolver is wired (the v4 base evaluator returned a synthetic
         # deny). The AGT manifest bridge encodes the rule via the
@@ -260,11 +269,15 @@ class AdapterRuntimeBridge:
         args: Mapping[str, Any],
         call_id: str = "call-1",
     ) -> BridgeResult:
-        builder = self.builder_for(ctx)
-        snapshot = builder.pre_tool_call(
-            tool_name=tool_name, args=dict(args), call_id=call_id
+        evaluation = self._session_for(ctx).evaluate_pre_tool_call(
+            tool_name=tool_name,
+            args=dict(args),
+            call_id=call_id,
+            # Existing adapters charge successful calls through
+            # record_post_execute. Phase 3 removes this compatibility override.
+            count_attempt=False,
         )
-        result = self._evaluate("pre_tool_call", snapshot)
+        result = self._bridge_native_evaluation(evaluation)
         # AGT-M3 round-2 BLOCK A: after the bridge fix the manifest now
         # binds ``pre_tool_call`` whenever ``max_tool_calls >= 0`` (i.e.
         # always, since the field is a non-negative int) and emits the
@@ -296,8 +309,7 @@ class AdapterRuntimeBridge:
         duration_ms: float = 0.0,
         call_id: str = "call-1",
     ) -> BridgeResult:
-        builder = self.builder_for(ctx)
-        snapshot = builder.post_tool_call(
+        evaluation = self._session_for(ctx).evaluate_post_tool_call(
             tool_name=tool_name,
             args=dict(args),
             result=result,
@@ -305,7 +317,7 @@ class AdapterRuntimeBridge:
             duration_ms=duration_ms,
             call_id=call_id,
         )
-        return self._evaluate("post_tool_call", snapshot)
+        return self._bridge_native_evaluation(evaluation)
 
     def evaluate_pre_model_call(
         self,
@@ -313,19 +325,18 @@ class AdapterRuntimeBridge:
         *,
         model_name: str,
         messages: list[dict[str, Any]],
-        tools: Optional[list[dict[str, Any]]] = None,
+        tools: list[dict[str, Any]] | None = None,
         request_id: str = "req-1",
         model_vendor: str = "test",
     ) -> BridgeResult:
-        builder = self.builder_for(ctx)
-        snapshot = builder.pre_model_call(
+        evaluation = self._session_for(ctx).evaluate_pre_model_call(
             model_name=model_name,
             messages=list(messages),
             tools=tools,
             request_id=request_id,
             model_vendor=model_vendor,
         )
-        return self._evaluate("pre_model_call", snapshot)
+        return self._bridge_native_evaluation(evaluation)
 
     def evaluate_post_model_call(
         self,
@@ -333,39 +344,42 @@ class AdapterRuntimeBridge:
         *,
         model_name: str,
         response: dict[str, Any],
-        usage: Optional[dict[str, int]] = None,
+        usage: dict[str, int] | None = None,
         request_id: str = "req-1",
         model_vendor: str = "test",
     ) -> BridgeResult:
-        builder = self.builder_for(ctx)
-        snapshot = builder.post_model_call(
+        evaluation = self._session_for(ctx).evaluate_post_model_call(
             model_name=model_name,
             response=response,
             usage=usage,
             request_id=request_id,
             model_vendor=model_vendor,
+            # Existing adapters call record_post_execute with token usage.
+            # Avoid charging twice until they move to the native session.
+            charge_usage=False,
         )
-        return self._evaluate("post_model_call", snapshot)
+        return self._bridge_native_evaluation(evaluation)
 
     def evaluate_output(
         self,
         ctx: ExecutionContext,
         *,
         content: Any,
-        message_chain: Optional[list[dict[str, Any]]] = None,
+        message_chain: list[dict[str, Any]] | None = None,
     ) -> BridgeResult:
-        builder = self.builder_for(ctx)
-        snapshot = builder.output(
-            content=content if isinstance(content, (str, dict)) else str(content),
+        evaluation = self._session_for(ctx).evaluate_output(
+            content=content if isinstance(content, str | dict) else str(content),
             message_chain=message_chain,
         )
-        return self._evaluate("output", snapshot)
+        return self._bridge_native_evaluation(evaluation)
 
     # ── internals ──────────────────────────────────────────────────
 
-    def _evaluate(self, intervention_point: str, snapshot: Mapping[str, Any]) -> BridgeResult:
-        runtime = self.runtime
-        evaluation = runtime.evaluate_intervention_point(intervention_point, snapshot)
+    def _bridge_native_evaluation(self, native_evaluation: Any) -> BridgeResult:
+        """Apply only v4 compatibility semantics to a native evaluation."""
+        from agt.policies.result import EvaluationResult
+
+        evaluation = EvaluationResult.from_native(native_evaluation)
         # The bridge-generated AGT manifest only binds the intervention
         # points that match the v4 GovernancePolicy fields it could
         # translate (per agt.policies.bridge). Calls at unbound
@@ -396,7 +410,7 @@ class AdapterRuntimeBridge:
             evaluation = self._rewrite_as_allow(
                 evaluation, fallback_tag="empty_allowed_tools"
             )
-        transform: Optional[TransformOutcome] = None
+        transform: TransformOutcome | None = None
         if evaluation.verdict == "transform" and evaluation.transform is not None:
             transform = TransformOutcome(
                 path=str(evaluation.transform.get("path", "")),
@@ -490,7 +504,7 @@ def _host_human_approval_deny() -> BridgeResult:
 
 def _host_budget_check(
     policy: GovernancePolicy, ctx: ExecutionContext
-) -> Optional[BridgeResult]:
+) -> BridgeResult | None:
     """Return a deny :class:`BridgeResult` when the v4 budgets fail.
 
     AGT-M3 round-2 BLOCK A defense-in-depth. The bridge fix now binds
@@ -552,7 +566,7 @@ def _host_budget_check(
 
 def _build_runtime(
     policy: GovernancePolicy,
-    approval_resolver: Optional[Callable[..., Any]],
+    approval_resolver: Callable[..., Any] | None,
 ) -> Any:
     """Build a real :class:`AgtRuntime` from a v4 ``GovernancePolicy``.
 
@@ -595,9 +609,9 @@ def _build_runtime(
 def get_runtime_bridge(
     policy: GovernancePolicy,
     *,
-    approval_resolver: Optional[Callable[..., Any]] = None,
-    runtime: Optional[Any] = None,
-    runtime_factory: Optional[Callable[[GovernancePolicy], Any]] = None,
+    approval_resolver: Callable[..., Any] | None = None,
+    runtime: Any | None = None,
+    runtime_factory: Callable[[GovernancePolicy], Any] | None = None,
 ) -> AdapterRuntimeBridge:
     """Return a fresh :class:`AdapterRuntimeBridge` for ``policy``.
 

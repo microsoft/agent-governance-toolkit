@@ -36,6 +36,7 @@ from .result import (
     PolicyEvaluation,
     TransformResult,
 )
+from .session import AdapterRuntimeSession
 from .snapshot import (
     SnapshotBuilder,
     agent_shutdown_snapshot,
@@ -50,6 +51,7 @@ from .snapshot import (
 
 __all__ = [
     "AdapterManifestContract",
+    "AdapterRuntimeSession",
     "AgtManifest",
     "EvaluationResult",
     "EvidenceResult",
