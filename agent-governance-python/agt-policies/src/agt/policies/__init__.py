@@ -9,8 +9,10 @@ code imports:
   documented in ``policy-engine/spec/agt/AGT-SNAPSHOT-1.0.md``. It
   replaces the v4 ``agent_os.integrations.base.ExecutionContext`` carrier;
   see :class:`SnapshotBuilder` for the long-lived host helper.
-- :mod:`agt.policies.result` defines :class:`EvaluationResult`, the v5
-  successor to ``agent_os.policies.decision.PolicyCheckResult``.
+- :mod:`agt.policies.result` defines :class:`PolicyEvaluation`, the native v5
+  result, plus the temporary :class:`EvaluationResult` compatibility model.
+- :mod:`agt.policies.manifest` defines the lossless typed
+  :class:`AgtManifest` authoring model and adapter preflight contract.
 - :mod:`agt.policies.runtime` is the Python wrapper over the ACS Python
   SDK (:mod:`agent_control_specification`) that AGT host code calls.
 - :mod:`agt.policies.bridge` translates a v4
@@ -21,7 +23,19 @@ The module is structured as a thin re-export layer so external callers
 only need ``from agt.policies import ...``.
 """
 
-from .result import EvaluationResult
+from .manifest import (
+    AdapterManifestContract,
+    AgtManifest,
+    ManifestCompatibilityError,
+    ManifestProvenance,
+)
+from .result import (
+    EvaluationResult,
+    EvidenceResult,
+    PolicyAuditRecord,
+    PolicyEvaluation,
+    TransformResult,
+)
 from .snapshot import (
     SnapshotBuilder,
     agent_shutdown_snapshot,
@@ -35,8 +49,16 @@ from .snapshot import (
 )
 
 __all__ = [
+    "AdapterManifestContract",
+    "AgtManifest",
     "EvaluationResult",
+    "EvidenceResult",
+    "ManifestCompatibilityError",
+    "ManifestProvenance",
+    "PolicyAuditRecord",
+    "PolicyEvaluation",
     "SnapshotBuilder",
+    "TransformResult",
     "agent_shutdown_snapshot",
     "agent_startup_snapshot",
     "input_snapshot",

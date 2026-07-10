@@ -82,3 +82,75 @@ reported but never counted against the ratchet. The gate, its unit tests, and
 lint run on every pull request through `.github/workflows/v4-removal-ratchet.yml`.
 The final gate in phase 6 drives the non-migration total to zero, including
 normative specs.
+
+## Phase 1 native contracts
+
+`AgtRuntime.from_manifest(...)` is the canonical runtime constructor. It
+accepts a path, YAML text, a mapping, or `AgtManifest`. Paths carry their parent
+directory as provenance. Other inputs must provide `base_dir` when they contain
+relative bundle, data, prompt, Cedar, or `extends` references. The runtime never
+falls back to the current working directory.
+
+`AgtManifest` is a lossless typed representation of AGT-MANIFEST-1.0. It
+performs structural validation and preserves policy, tool, annotator, resolver,
+and host extension fields. It does not accept intent-level fields such as
+`max_tokens`, `allowed_tools`, or `blocked_patterns`, and it never synthesizes
+policies or bindings. Adapter compatibility is a separate
+`AdapterManifestContract` preflight. Static preflight requires a resolved
+manifest because an `extends` parent may supply required intervention points or
+tools. Phase 2 wires preflight to the runtime's resolved manifest labels.
+The model preserves the AGT `limits` section, but runtime construction rejects
+it until the Python SDK can enforce those values. Silently accepting an
+unenforced security limit is not allowed.
+
+`AgtRuntime.evaluate(...)` returns the native immutable `PolicyEvaluation`.
+The stable fields are `verdict`, `reason_code`, `message`,
+`intervention_point`, `transform`, `evidence`, `result_labels`,
+`input_identity`, and `enforced_identity`. Its audit envelope uses schema
+`agt.policy_evaluation.v1`. ACS does not currently expose `policy_id` or
+`rule_id` on `InterventionPointResult`, so neither field appears in this
+contract and callers must not infer them from `reason_code`.
+Policy-authored `message` remains restricted audit detail.
+`PolicyViolationError.from_evaluation_result(...)` emits a stable sanitized
+public message instead of copying policy or user content into exception text.
+
+The existing `AgtRuntime(...)`, `evaluate_intervention_point(...)`, and
+`EvaluationResult` remain temporary bridge-only compatibility surfaces. Phase 2
+moves adapters to the native result. Phase 6 removes the compatibility surface.
+
+### Adapter enforcement contract
+
+| Concern | Native contract |
+|---------|-----------------|
+| Required intervention points | Every adapter declares them and calls `AgtManifest.validate_for(...)` before execution. A missing required point is a construction error, never a runtime allow fallback. |
+| Tool catalog | `manifest` requires static `tools`, `host_dynamic` is synchronized by the host, and `optional` imposes no catalog requirement. |
+| Transform | Each adapter declares the intervention points where it can apply a transform. The shared adapter session applies it before forwarding the payload. |
+| Approval | `AgtRuntime` owns the resolver and timeout behavior. An adapter given a runtime cannot also accept competing resolver configuration. |
+| Budgets | Attempted calls consume tool-call budget, including denied and failed attempts. Session counters live in the adapter session, not `AgtRuntime`. |
+| Runtime sharing | One runtime may be shared when host dispatchers and approval callbacks are thread-safe. Session snapshots and counters are never stored on the runtime. |
+| Fail direction | Invalid manifests, missing required bindings, dispatcher errors, and approval errors fail closed. The native path does not rewrite unknown intervention points or tools to allow. |
+
+### GovernancePolicy field disposition
+
+| v4 field | v5 disposition |
+|----------|----------------|
+| `name` | `metadata.name` |
+| `version` | `metadata.policy_version` during migration only |
+| `max_tokens` | ACS budget policy over snapshot token count |
+| `max_tool_calls` | ACS budget policy over attempted tool-call count. Zero remains deny-all during migration. |
+| `allowed_tools` | ACS `tools` catalog or host-dynamic catalog contract. Empty v4 lists migrate to no allowlist. |
+| `blocked_patterns` | Explicit Rego policy bound to input, output, and tool arguments as needed |
+| `require_human_approval` | Escalate verdict plus manifest `approval` and runtime resolver |
+| `confidence_threshold` | Policy bound at `post_model_call` |
+| `timeout_seconds` | Host execution limit, not policy language |
+| `drift_threshold` | Host annotator or policy input, selected explicitly by the adapter |
+| `log_all_calls` | Host audit configuration |
+| `checkpoint_frequency` | Host orchestration configuration |
+| `max_concurrent` | Host concurrency configuration |
+| `backpressure_threshold` | Host concurrency configuration |
+| detection module dictionaries | Host security module configuration, not manifest policy |
+| `detection` | Host module enablement and enforcement actions |
+
+The migration tool must either translate each policy field exactly or refuse
+the conversion with a manual-review finding. Host-only fields move to explicit
+host configuration and must not be silently dropped.

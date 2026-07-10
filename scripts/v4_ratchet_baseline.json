@@ -1,5 +1,5 @@
 {
-  "grand_total": 3796,
+  "grand_total": 3795,
   "package_totals": {
     "BREAKING_CHANGES.md": 1,
     "CHANGELOG.md": 2,
@@ -22,7 +22,7 @@
     "agent-governance-python/agentmesh-integrations/mastra-agentmesh": 6,
     "agent-governance-python/agentmesh-integrations/openai-agents-trust": 32,
     "agent-governance-python/agentmesh-integrations/pydantic-ai-governance": 99,
-    "agent-governance-python/agt-policies": 104,
+    "agent-governance-python/agt-policies": 103,
     "agent-governance-python/benchmarks": 10,
     "agent-governance-rust/agentmesh": 27,
     "docs/BENCHMARKS.md": 1,
@@ -969,7 +969,6 @@
     "agent-governance-python/agt-policies/README.md": {
       "AGT-RESOLUTION": 1,
       "GovernancePolicy": 2,
-      "PolicyCheckResult": 1,
       "agt_legacy": 2
     },
     "agent-governance-python/agt-policies/src/agt/__init__.py": {
@@ -1806,11 +1805,11 @@
     "docs/v4-removal.md": {
       "AdapterRuntimeBridge": 1,
       "CedarBackend": 1,
-      "GovernancePolicy": 2,
+      "GovernancePolicy": 3,
       "PatternType": 1,
       "PolicyAction": 1,
       "PolicyCheckResult": 1,
-      "PolicyDocument": 1,
+      "PolicyDocument": 2,
       "PolicyInterceptor": 1,
       "ViolationCategory": 1,
       "get_runtime_bridge": 1,
@@ -1830,8 +1829,8 @@
       "resolution_root": 2
     },
     "scripts/v4_ratchet_baseline.json": {
-      "GovernancePolicy": 201,
-      "PolicyDocument": 99,
+      "GovernancePolicy": 202,
+      "PolicyDocument": 100,
       "v4_policy_document_file": 1
     }
   },

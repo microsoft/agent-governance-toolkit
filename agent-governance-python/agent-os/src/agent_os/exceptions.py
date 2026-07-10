@@ -10,11 +10,24 @@ for structured error handling and logging.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from agent_os.policies.decision import PolicyCheckResult
+
+
+class _PolicyEvaluationLike(Protocol):
+    """Structural contract used to avoid a hard agent-os → agt-policies import."""
+
+    message: str
+    reason_code: str
+
+    def is_allowed(self) -> bool: ...
+
+    def audit_record(self) -> dict[str, Any]: ...
+
+    def public_error_message(self) -> str: ...
 
 
 class AgentOSError(Exception):
@@ -24,7 +37,7 @@ class AgentOSError(Exception):
         super().__init__(message)
         self.error_code = error_code or "AGENT_OS_ERROR"
         self.details = details or {}
-        self.timestamp = datetime.now(timezone.utc).isoformat()
+        self.timestamp = datetime.now(UTC).isoformat()
 
     def to_dict(self):
         return {
@@ -50,6 +63,7 @@ class PolicyViolationError(PolicyError):
     def __init__(self, message, error_code=None, details=None):
         super().__init__(message, error_code or "POLICY_VIOLATION", details)
         self.check_result = None
+        self.evaluation_result = None
 
     @classmethod
     def from_check_result(cls, result: PolicyCheckResult) -> PolicyViolationError:
@@ -67,6 +81,21 @@ class PolicyViolationError(PolicyError):
         e = cls(result.public_message, "POLICY_VIOLATION", details)
         e.check_result = result
         return e
+
+    @classmethod
+    def from_evaluation_result(
+        cls, result: _PolicyEvaluationLike
+    ) -> PolicyViolationError:
+        """Create a policy violation error from the native v5 result."""
+        if result.is_allowed():
+            raise ValueError(
+                "a permitting policy evaluation cannot create PolicyViolationError"
+            )
+        details = result.audit_record()
+        message = result.public_error_message()
+        error = cls(message, "POLICY_VIOLATION", details)
+        error.evaluation_result = result
+        return error
 
 
 class PolicyDeniedError(PolicyError):
