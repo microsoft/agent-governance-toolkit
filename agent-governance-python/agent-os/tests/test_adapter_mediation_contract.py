@@ -110,19 +110,23 @@ NATIVE_RUNTIME_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
     ),
 }
 
-LEGACY_HOOK_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
+NATIVE_HOOK_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
     "LangGraphKernel": (
         "langgraph_adapter.py",
-        ("before_node_execution(", "before_tool_call(", "_wrap_nodes("),
+        (
+            "NativeAdapterRuntime(runtime)",
+            "_adapter_runtime.evaluate_input(",
+            "_adapter_runtime.evaluate_pre_tool_call(",
+        ),
     ),
     "OpenAIAgentsKernel": (
         "openai_agents_sdk.py",
         (
-            "on_agent_start",
-            "pre_execute(",
-            "on_agent_end",
-            "post_execute(",
-            "on_tool_start",
+            "NativeAdapterRuntime(runtime)",
+            "_adapter_runtime.evaluate_input(",
+            "_adapter_runtime.evaluate_pre_tool_call(",
+            "_adapter_runtime.evaluate_post_tool_call(",
+            "_adapter_runtime.evaluate_output(",
         ),
     ),
 }
@@ -159,7 +163,7 @@ def _assert_ordered(source: str, *markers: str) -> None:
 def test_public_adapter_mediation_contract_is_explicit() -> None:
     expected = (
         set(NATIVE_RUNTIME_CONTRACTS)
-        | set(LEGACY_HOOK_CONTRACTS)
+        | set(NATIVE_HOOK_CONTRACTS)
         | NON_KERNEL_EXPORTS
     )
 
@@ -184,9 +188,11 @@ def test_native_adapters_route_declared_intervention_points(
         assert call in source, f"{adapter_name} must route through {call}"
 
 
-@pytest.mark.parametrize("adapter_name", sorted(LEGACY_HOOK_CONTRACTS))
-def test_legacy_hook_adapters_keep_pre_side_effect_gates(adapter_name: str) -> None:
-    filename, required_markers = LEGACY_HOOK_CONTRACTS[adapter_name]
+@pytest.mark.parametrize("adapter_name", sorted(NATIVE_HOOK_CONTRACTS))
+def test_native_hook_adapters_keep_pre_side_effect_gates(
+    adapter_name: str,
+) -> None:
+    filename, required_markers = NATIVE_HOOK_CONTRACTS[adapter_name]
     source = _source(filename)
 
     for marker in required_markers:

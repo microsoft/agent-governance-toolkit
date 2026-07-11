@@ -72,30 +72,20 @@ class PythonCanonicalParityTests(unittest.TestCase):
         self.assertIn(Decision.TRANSFORM, seen_decisions)
 
     def test_error_mapping_fixture_covers_sdk_approval_mismatch_reason(self):
-        """The error_mapping_canonical fixture grew from 13 to 18 rows in
-        1d8fcb64: it drops the legacy ``effect_*`` reasons and adds the
-        seven AGT D5/D6 reserved reasons. Verify the SDK accepts every
-        fixture reason without choking on the new ones.
-        """
+        """The fixture covers runtime reasons exposed through the SDK."""
 
         fixture = load_fixture("error_mapping_canonical.json")
         reasons = {row["reason"] for row in fixture["runtime_errors"]}
         fail_closed = json.loads((ROOT / "tests" / "conformance" / "fail_closed_error_parity.json").read_text())
         agt_extension_reasons = {
             "runtime_error:approval_action_mismatch",
-            "runtime_error:resolution_path_traversal",
-            "runtime_error:resolution_cycle",
-            "runtime_error:resolution_invalid_governance",
-            "runtime_error:resolution_merge_conflict",
             "runtime_error:approval_resolver_missing",
         }
         expected = set(fail_closed["reserved_reasons"]) | agt_extension_reasons
         self.assertEqual(expected, reasons)
 
-        # AGT D6: the SDK MUST surface every fixture reason as a deny
-        # Verdict whose reason round-trips byte for byte, so audit
-        # consumers can dispatch on the reserved namespace without
-        # tripping on the new AGT-era reasons.
+        # The SDK MUST surface every fixture reason as a deny Verdict whose
+        # reason round-trips byte for byte.
         for reason in sorted(reasons):
             verdict = Verdict(Decision.DENY, reason=reason)
             self.assertEqual(verdict.reason, reason)

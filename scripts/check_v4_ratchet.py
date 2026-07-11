@@ -123,6 +123,7 @@ ALLOWED_V4_FILES: frozenset[str] = frozenset(
         "agent-governance-python/agt-policies/tests/test_migrate.py",
         "agent-governance-python/agt-policies/tests/test_migration_boundary.py",
         "agent-governance-python/agt-policies/tests/test_migration_equivalence.py",
+        "agent-governance-python/agt-policies/tests/test_migrate_resolution.py",
         "docs/v4-removal.md",
         # The ratchet's own test fixtures reference v4 names deliberately.
         "scripts/tests/test_check_v4_ratchet.py",
@@ -130,7 +131,10 @@ ALLOWED_V4_FILES: frozenset[str] = frozenset(
         "scripts/v4_ratchet_baseline.json",
     }
 )
-ALLOWED_V4_PREFIXES: tuple[str, ...] = ("agent-governance-python/agt-v4-migrate/",)
+ALLOWED_V4_PREFIXES: tuple[str, ...] = (
+    "agent-governance-python/agt-v4-migrate/",
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/",
+)
 
 EXCLUDE_DIR_NAMES: frozenset[str] = frozenset(
     {

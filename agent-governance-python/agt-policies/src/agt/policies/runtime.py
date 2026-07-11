@@ -6,11 +6,9 @@
 underlying :class:`agent_control_specification.AgentControl` async
 orchestrator with a small synchronous API tailored to AGT host code:
 
-- Accepts a manifest by path. When ``resolution_root`` is provided the
-  AGT manifest-resolution layer (:mod:`agt.manifest_resolution`) walks
-  the workspace, merges the governance chain, and writes a flat ACS
-  manifest first. Otherwise the manifest is fed to
-  :meth:`AgentControl.from_path` as-is.
+- Accepts a native ACS/AGT manifest by path or through
+  :meth:`AgtRuntime.from_manifest`. Legacy governance folder discovery is
+  migration-only and is never performed at runtime.
 - Translates an AGT snapshot (the dict shape from
   ``policy-engine/spec/agt/AGT-SNAPSHOT-1.0.md`` 1) into the ACS
   ``snapshot`` argument and calls
@@ -36,7 +34,6 @@ import asyncio
 import copy
 import math
 from pathlib import Path
-import tempfile
 import threading
 from typing import Any, Awaitable, Callable, Mapping, Optional, Union
 
@@ -198,12 +195,8 @@ def _snapshot_to_acs(
 class AgtRuntime:
     """Public host wrapper over :class:`agent_control_specification.AgentControl`.
 
-    Construct with the path to an AGT manifest. When ``resolution_root``
-    is supplied the AGT manifest-resolution layer pre-resolves the
-    governance chain (folder discovery, scope filter, merge, Rego bundle
-    materialisation) and feeds the engine the resolved manifest. With
-    no ``resolution_root`` the manifest at ``manifest_path`` is loaded
-    verbatim.
+    Construct with the path to a native ACS/AGT manifest. Use
+    :meth:`from_manifest` for typed, mapping, or YAML-text inputs.
 
     Pass ``approval_resolver`` to wire the host approval path. The
     callback is invoked synchronously by :meth:`evaluate_intervention_point`
@@ -221,43 +214,15 @@ class AgtRuntime:
         self,
         manifest_path: Path | str,
         *,
-        resolution_root: Path | None = None,
         approval_resolver: ApprovalCallback | None = None,
         policy_dispatcher: Any | None = None,
         annotator_dispatcher: Any | None = None,
     ) -> None:
         self._manifest_path = Path(manifest_path)
         self._manifest = None
-        self._resolution_root = resolution_root
         self._approval_resolver = approval_resolver
-        self._resolution_bundle_dir: Any | None = None
 
-        if resolution_root is not None:
-            from agt.manifest_resolution import resolve_manifest
-
-            bundle_dir = tempfile.TemporaryDirectory(prefix="agt_runtime_bundle_")
-            self._resolution_bundle_dir = bundle_dir
-            try:
-                resolved = resolve_manifest(
-                    Path(resolution_root),
-                    self._manifest_path,
-                    bundle_dir=Path(bundle_dir.name),
-                )
-                (
-                    self._approval_timeout_seconds,
-                    self._approval_on_timeout,
-                ) = _approval_settings_from_manifest(resolved)
-                engine_document, _ = _sanitize_manifest_for_acs(resolved)
-                self._control = AgentControl.from_native(
-                    engine_document,
-                    annotator_dispatcher=annotator_dispatcher,
-                    policy_dispatcher=policy_dispatcher,
-                )
-            except Exception:
-                bundle_dir.cleanup()
-                self._resolution_bundle_dir = None
-                raise
-        elif policy_dispatcher is not None or annotator_dispatcher is not None:
+        if policy_dispatcher is not None or annotator_dispatcher is not None:
             manifest_text = self._manifest_path.read_text(encoding="utf-8")
             parsed, engine_manifest_text = _parse_and_sanitize_manifest_text(
                 manifest_text
@@ -321,8 +286,6 @@ class AgtRuntime:
         document = typed.resolved_document(base_dir)
         instance = cls.__new__(cls)
         instance._manifest_path = None
-        instance._resolution_root = None
-        instance._resolution_bundle_dir = None
         instance._approval_resolver = approval_resolver
         instance._manifest = typed
         (
@@ -470,9 +433,6 @@ class AgtRuntime:
     def close(self) -> None:
         """Release the underlying ACS runtime (best effort)."""
         self._control = None  # type: ignore[assignment]
-        if self._resolution_bundle_dir is not None:
-            self._resolution_bundle_dir.cleanup()
-            self._resolution_bundle_dir = None
 
 
 def _parse_and_sanitize_manifest_text(manifest_text: str) -> tuple[Mapping[str, Any], str]:

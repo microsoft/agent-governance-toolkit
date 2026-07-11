@@ -583,21 +583,13 @@ mod tests {
             RuntimeError::TransformTargetForbidden(String::new()).reason(),
             RuntimeError::TransformInvalid(String::new()).reason(),
             RuntimeError::ApprovalResolverMissing(String::new()).reason(),
-            RuntimeError::ResolutionPathTraversal(String::new()).reason(),
-            RuntimeError::ResolutionCycle(String::new()).reason(),
-            RuntimeError::ResolutionInvalidGovernance(String::new()).reason(),
-            RuntimeError::ResolutionMergeConflict(String::new()).reason(),
         ];
         assert_eq!(
             reasons,
             [
                 "runtime_error:transform_target_forbidden",
                 "runtime_error:transform_invalid",
-                "runtime_error:approval_resolver_missing",
-                "runtime_error:resolution_path_traversal",
-                "runtime_error:resolution_cycle",
-                "runtime_error:resolution_invalid_governance",
-                "runtime_error:resolution_merge_conflict"
+                "runtime_error:approval_resolver_missing"
             ]
         );
     }

@@ -83,22 +83,6 @@ fn runtime_errors() -> BTreeMap<&'static str, RuntimeError> {
             RuntimeError::ApprovalActionMismatch(String::new()),
         ),
         (
-            "ResolutionPathTraversal",
-            RuntimeError::ResolutionPathTraversal(String::new()),
-        ),
-        (
-            "ResolutionCycle",
-            RuntimeError::ResolutionCycle(String::new()),
-        ),
-        (
-            "ResolutionInvalidGovernance",
-            RuntimeError::ResolutionInvalidGovernance(String::new()),
-        ),
-        (
-            "ResolutionMergeConflict",
-            RuntimeError::ResolutionMergeConflict(String::new()),
-        ),
-        (
             "TransformTargetForbidden",
             RuntimeError::TransformTargetForbidden(String::new()),
         ),
@@ -162,7 +146,7 @@ fn canonical_error_mapping_matches_core_and_spec() {
     let actual = runtime_errors();
     let rows = fixture["runtime_errors"].as_array().unwrap();
 
-    assert_eq!(rows.len(), 18);
+    assert_eq!(rows.len(), actual.len());
     for row in rows {
         let variant = row["variant"].as_str().unwrap();
         let reason = row["reason"].as_str().unwrap();

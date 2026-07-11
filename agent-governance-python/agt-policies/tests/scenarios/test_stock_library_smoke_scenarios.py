@@ -17,9 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from agt._harness.opa_runner import _find_stock_rego_root
 from agt._harness.snapshot import pre_tool_call_snapshot
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_STOCK_REGO_ROOT = _REPO_ROOT / "policy-engine" / "policy" / "lib"
 
 pytestmark = pytest.mark.skipif(
     shutil.which("opa") is None,
@@ -37,8 +38,7 @@ def _run_custom_policy(
     evaluate one query. Returns the verdict body."""
     bundle = tmp_path / "bundle"
     bundle.mkdir()
-    stock_root = _find_stock_rego_root()
-    for rego in stock_root.glob("*.rego"):
+    for rego in _STOCK_REGO_ROOT.glob("*.rego"):
         if rego.name.endswith("_test.rego"):
             continue
         (bundle / rego.name).write_text(rego.read_text(encoding="utf-8"))

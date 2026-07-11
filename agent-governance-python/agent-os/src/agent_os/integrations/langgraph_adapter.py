@@ -64,6 +64,7 @@ import time
 from datetime import datetime
 from typing import Any, Optional
 
+from ._native_adapter_runtime import NativeAdapterRuntime
 from .base import (
     BaseIntegration,
     ExecutionContext,
@@ -235,9 +236,14 @@ class LangGraphKernel(BaseIntegration):
         policy: Optional[GovernancePolicy] = None,
         audit_only_stale_auth: bool = False,
         evaluator: Any = None,
+        *,
+        runtime: Any | None = None,
     ) -> None:
         _require_langgraph()
         super().__init__(policy, evaluator=evaluator)
+        self._adapter_runtime = (
+            NativeAdapterRuntime(runtime) if runtime is not None else None
+        )
         self.audit_only_stale_auth = audit_only_stale_auth
         self._tool_callables: dict[str, Any] = {}
         self._start_time = time.monotonic()
@@ -315,27 +321,29 @@ class LangGraphKernel(BaseIntegration):
         """
         logger.debug("before_node_execution: node=%s", node_name)
 
-        # ── 1. Blocked-pattern scan on state ─────────────────────────
-        state_str = str(state)
-        matched = ctx.policy.matches_pattern(state_str)
-        if matched:
-            raise PolicyViolationError(
-                f"Node '{node_name}' blocked: pattern '{matched[0]}' "
-                "detected in agent state"
+        if self._adapter_runtime is not None:
+            evaluation = self._adapter_runtime.evaluate_input(ctx, body=state)
+            if not evaluation.allowed:
+                raise evaluation.to_policy_violation(PolicyViolationError)
+        else:
+            state_str = str(state)
+            matched = ctx.policy.matches_pattern(state_str)
+            if matched:
+                raise PolicyViolationError(
+                    f"Node '{node_name}' blocked: pattern '{matched[0]}' "
+                    "detected in agent state"
+                )
+            cedar_ctx = self._build_cedar_context(
+                agent_id=ctx.agent_id,
+                action_type="node_execution",
+                tool_name=node_name,
+                tool_args={"node_name": node_name},
             )
-
-        # ── 2. Cedar/OPA gate ────────────────────────────────────────
-        cedar_ctx = self._build_cedar_context(
-            agent_id=ctx.agent_id,
-            action_type="node_execution",
-            tool_name=node_name,
-            tool_args={"node_name": node_name},
-        )
-        allowed, reason = self._evaluate_policy(cedar_ctx)
-        if not allowed:
-            raise PolicyViolationError(
-                f"Node '{node_name}' blocked by policy evaluator: {reason}"
-            )
+            allowed, reason = self._evaluate_policy(cedar_ctx)
+            if not allowed:
+                raise PolicyViolationError(
+                    f"Node '{node_name}' blocked by policy evaluator: {reason}"
+                )
 
         # ── 3. Audit record ──────────────────────────────────────────
         record = {
@@ -362,50 +370,52 @@ class LangGraphKernel(BaseIntegration):
         """
         logger.debug("before_tool_call: tool=%s", tool_name)
 
-        # ── 1. Allowlist check ───────────────────────────────────────
-        if ctx.policy.allowed_tools and tool_name not in ctx.policy.allowed_tools:
-            raise PolicyViolationError(
-                f"Tool '{tool_name}' is not in the allowed_tools list: "
-                f"{ctx.policy.allowed_tools}"
+        if self._adapter_runtime is not None:
+            evaluation = self._adapter_runtime.evaluate_pre_tool_call(
+                ctx,
+                tool_name=tool_name,
+                args=tool_input,
+                call_id=f"langgraph-{ctx.call_count + 1}",
             )
-
-        # ── 2. Blocked-pattern scan on arguments ─────────────────────
-        args_str = str(tool_input)
-        matched = ctx.policy.matches_pattern(args_str)
-        if matched:
-            raise PolicyViolationError(
-                f"Tool '{tool_name}' blocked: pattern '{matched[0]}' "
-                "detected in tool arguments"
-            )
-
-        # ── 3. PII scan on arguments ─────────────────────────────────
-        for pii_pattern in PII_PATTERNS:
-            if pii_pattern.search(args_str):
+            if not evaluation.allowed:
+                raise evaluation.to_policy_violation(PolicyViolationError)
+            ctx.call_count += 1
+        else:
+            if ctx.policy.allowed_tools and tool_name not in ctx.policy.allowed_tools:
                 raise PolicyViolationError(
-                    f"Tool '{tool_name}' blocked: PII detected in arguments "
-                    f"(pattern: {pii_pattern.pattern})"
+                    f"Tool '{tool_name}' is not in the allowed_tools list: "
+                    f"{ctx.policy.allowed_tools}"
                 )
-
-        # ── 4. Cedar/OPA gate ────────────────────────────────────────
-        cedar_ctx = self._build_cedar_context(
-            agent_id=ctx.agent_id,
-            action_type="tool_call",
-            tool_name=tool_name,
-            tool_args=tool_input,
-        )
-        allowed, reason = self._evaluate_policy(cedar_ctx)
-        if not allowed:
-            raise PolicyViolationError(
-                f"Tool '{tool_name}' blocked by policy evaluator: {reason}"
+            args_str = str(tool_input)
+            matched = ctx.policy.matches_pattern(args_str)
+            if matched:
+                raise PolicyViolationError(
+                    f"Tool '{tool_name}' blocked: pattern '{matched[0]}' "
+                    "detected in tool arguments"
+                )
+            for pii_pattern in PII_PATTERNS:
+                if pii_pattern.search(args_str):
+                    raise PolicyViolationError(
+                        f"Tool '{tool_name}' blocked: PII detected in arguments "
+                        f"(pattern: {pii_pattern.pattern})"
+                    )
+            cedar_ctx = self._build_cedar_context(
+                agent_id=ctx.agent_id,
+                action_type="tool_call",
+                tool_name=tool_name,
+                tool_args=tool_input,
             )
-
-        # ── 5. Call-count limit ──────────────────────────────────────
-        ctx.call_count += 1
-        if ctx.call_count > ctx.policy.max_tool_calls:
-            raise PolicyViolationError(
-                f"Tool call limit reached: {ctx.call_count} > "
-                f"{ctx.policy.max_tool_calls}"
-            )
+            allowed, reason = self._evaluate_policy(cedar_ctx)
+            if not allowed:
+                raise PolicyViolationError(
+                    f"Tool '{tool_name}' blocked by policy evaluator: {reason}"
+                )
+            ctx.call_count += 1
+            if ctx.call_count > ctx.policy.max_tool_calls:
+                raise PolicyViolationError(
+                    f"Tool call limit reached: {ctx.call_count} > "
+                    f"{ctx.policy.max_tool_calls}"
+                )
 
         ctx.tool_calls.append({
             "tool_name": tool_name,
@@ -449,11 +459,21 @@ class LangGraphKernel(BaseIntegration):
         - Schema version field for future-proofing
         """
         # 1. Policy surface
-        policy_data = ctx.policy.to_dict()
+        if (
+            self._adapter_runtime is not None
+            and self._adapter_runtime.runtime.manifest is not None
+        ):
+            policy_data = self._adapter_runtime.runtime.manifest.to_document()
+            governed_tools = list(
+                self._adapter_runtime.runtime.manifest.tools
+            )
+        else:
+            policy_data = ctx.policy.to_dict()
+            governed_tools = list(ctx.policy.allowed_tools)
 
         # 2. Tool content hashes (source SHA-256 for registered callables)
         tool_hashes: dict[str, str] = {}
-        for tool_name in ctx.policy.allowed_tools:
+        for tool_name in governed_tools:
             fn = self._tool_callables.get(tool_name)
             if fn is not None:
                 try:

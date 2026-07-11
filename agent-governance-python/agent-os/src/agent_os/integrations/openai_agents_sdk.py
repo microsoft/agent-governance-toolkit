@@ -54,6 +54,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Optional
 
+from ._native_adapter_runtime import NativeAdapterRuntime
 from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
 
 logger = logging.getLogger("agent_os.openai_agents")
@@ -111,6 +112,7 @@ class OpenAIAgentsKernel(BaseIntegration):
         blocked_tools: Optional[list[str]] = None,
         blocked_patterns: Optional[list[str]] = None,
         require_human_approval: bool = False,
+        runtime: Any | None = None,
     ) -> None:
         """Initialise the OpenAI Agents governance kernel.
 
@@ -139,6 +141,9 @@ class OpenAIAgentsKernel(BaseIntegration):
                 require_human_approval=require_human_approval,
             )
         super().__init__(policy, evaluator=evaluator)
+        self._adapter_runtime = (
+            NativeAdapterRuntime(runtime) if runtime is not None else None
+        )
 
         self.on_violation: Callable[[PolicyViolationError], None] = (
             on_violation or self._default_violation_handler
@@ -724,11 +729,18 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         # Cedar/OPA + GovernancePolicy gate (skip if content already
         # failed locally and was logged — avoids double-block)
         if input_text and not content_violated:
-            allowed, reason = self._kernel.pre_execute(ctx, input_text)
-            if not allowed:
-                raise PolicyViolationError(
-                    f"Agent '{agent_name}' blocked by governance: {reason}"
+            if self._kernel._adapter_runtime is not None:
+                evaluation = self._kernel._adapter_runtime.evaluate_input(
+                    ctx, body=input_text
                 )
+                if not evaluation.allowed:
+                    raise evaluation.to_policy_violation(PolicyViolationError)
+            else:
+                allowed, reason = self._kernel.pre_execute(ctx, input_text)
+                if not allowed:
+                    raise PolicyViolationError(
+                        f"Agent '{agent_name}' blocked by governance: {reason}"
+                    )
 
         trusted_skill_sources = self._kernel.trusted_sources(
             *self._kernel.trusted_sources_from_attrs(agent),
@@ -784,11 +796,22 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         # Post-check output
         output_str = str(output) if output else ""
         if output_str:
-            valid, reason = self._kernel.post_execute(ctx, output_str)
-            if not valid:
-                logger.warning(
-                    "Agent '%s' output violated policy: %s", agent_name, reason
+            if self._kernel._adapter_runtime is not None:
+                evaluation = self._kernel._adapter_runtime.evaluate_output(
+                    ctx, content=output_str
                 )
+                if not evaluation.allowed:
+                    logger.warning(
+                        "Agent '%s' output violated policy: %s",
+                        agent_name,
+                        evaluation.reason,
+                    )
+            else:
+                valid, reason = self._kernel.post_execute(ctx, output_str)
+                if not valid:
+                    logger.warning(
+                        "Agent '%s' output violated policy: %s", agent_name, reason
+                    )
 
         self._kernel._record_event(
             "agent_end",
@@ -873,14 +896,24 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             context_before=tool_args,
             tool_name=tool_name,
         )
-        allowed, reason = self._kernel.pre_execute(
-            ctx,
-            {"tool_name": tool_name, "tool_args": tool_args},
-        )
-        if not allowed:
-            raise PolicyViolationError(
-                f"Tool '{tool_name}' blocked by governance: {reason}"
+        if self._kernel._adapter_runtime is not None:
+            evaluation = self._kernel._adapter_runtime.evaluate_pre_tool_call(
+                ctx,
+                tool_name=tool_name,
+                args=tool_args,
+                call_id=f"openai-agents-{self._kernel._tool_call_count}",
             )
+            if not evaluation.allowed:
+                raise evaluation.to_policy_violation(PolicyViolationError)
+        else:
+            allowed, reason = self._kernel.pre_execute(
+                ctx,
+                {"tool_name": tool_name, "tool_args": tool_args},
+            )
+            if not allowed:
+                raise PolicyViolationError(
+                    f"Tool '{tool_name}' blocked by governance: {reason}"
+                )
 
         # (d) Content filter on args
         for value in tool_args.values():
@@ -932,6 +965,21 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
 
         # Content filter on output
         result_str = str(result) if result else ""
+        if self._kernel._adapter_runtime is not None:
+            ctx = self._kernel._get_or_create_context(agent_name)
+            evaluation = self._kernel._adapter_runtime.evaluate_post_tool_call(
+                ctx,
+                tool_name=tool_name,
+                args={},
+                result=result,
+                call_id=f"openai-agents-{self._kernel._tool_call_count}",
+            )
+            if not evaluation.allowed:
+                logger.warning(
+                    "Tool '%s' output violated policy: %s",
+                    tool_name,
+                    evaluation.reason,
+                )
         if result_str:
             ok, reason = self._kernel._check_content(result_str)
             if not ok:

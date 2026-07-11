@@ -1,5 +1,5 @@
 {
-  "grand_total": 3663,
+  "grand_total": 3593,
   "package_totals": {
     "BREAKING_CHANGES.md": 1,
     "CHANGELOG.md": 2,
@@ -7,7 +7,7 @@
     "agent-governance-dotnet/src": 1,
     "agent-governance-golang/README.md": 1,
     "agent-governance-golang/examples": 2,
-    "agent-governance-python/agent-compliance": 80,
+    "agent-governance-python/agent-compliance": 78,
     "agent-governance-python/agent-marketplace": 10,
     "agent-governance-python/agent-mesh": 4,
     "agent-governance-python/agent-os": 2169,
@@ -22,7 +22,7 @@
     "agent-governance-python/agentmesh-integrations/mastra-agentmesh": 6,
     "agent-governance-python/agentmesh-integrations/openai-agents-trust": 32,
     "agent-governance-python/agentmesh-integrations/pydantic-ai-governance": 99,
-    "agent-governance-python/agt-policies": 98,
+    "agent-governance-python/agt-policies": 49,
     "agent-governance-python/benchmarks": 10,
     "agent-governance-rust/agentmesh": 27,
     "docs/BENCHMARKS.md": 1,
@@ -59,7 +59,6 @@
     "examples/quickstart": 22,
     "examples/smolagents-governed": 16,
     "examples/spendguard-composite": 9,
-    "policy-engine": 19,
     "scripts/check_v4_ratchet.py": 25,
     "tests/redteam": 6
   },
@@ -106,10 +105,6 @@
     "agent-governance-python/agent-compliance/src/agent_compliance/policy_test.py": {
       "PolicyDocument": 4,
       "PolicyEvaluator": 2
-    },
-    "agent-governance-python/agent-compliance/src/agent_compliance/verify.py": {
-      "GovernancePolicy": 1,
-      "PolicyInterceptor": 1
     },
     "agent-governance-python/agent-compliance/tests/test_policy_replay_metadata.py": {
       "PolicyDocument": 4,
@@ -923,30 +918,7 @@
       "PolicyCheckResult": 1
     },
     "agent-governance-python/agt-policies/README.md": {
-      "AGT-RESOLUTION": 1,
-      "GovernancePolicy": 2,
-      "agt_legacy": 2
-    },
-    "agent-governance-python/agt-policies/src/agt/__init__.py": {
-      "import:agt.manifest_resolution": 1
-    },
-    "agent-governance-python/agt-policies/src/agt/_harness/opa_runner.py": {
-      "import:agt.manifest_resolution": 1
-    },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/__init__.py": {
-      "discover_policies": 2,
-      "import:agt.manifest_resolution": 5
-    },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/build.py": {
-      "discover_policies": 2,
-      "import:agt.manifest_resolution": 4
-    },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/discover.py": {
-      "discover_policies": 1,
-      "import:agt.manifest_resolution": 1
-    },
-    "agent-governance-python/agt-policies/src/agt/manifest_resolution/merge.py": {
-      "import:agt.manifest_resolution": 1
+      "GovernancePolicy": 2
     },
     "agent-governance-python/agt-policies/src/agt/policies/bridge.py": {
       "governance_to_acs_manifest": 3
@@ -956,18 +928,11 @@
       "ViolationCategory": 4,
       "to_v4_check_result": 1
     },
-    "agent-governance-python/agt-policies/src/agt/policies/runtime.py": {
-      "import:agt.manifest_resolution": 1,
-      "resolution_root": 4
-    },
     "agent-governance-python/agt-policies/tests/scenarios/test_bedrock_adapter_scenarios.py": {
       "GovernancePolicy": 16
     },
     "agent-governance-python/agt-policies/tests/scenarios/test_guardrails_adapter_scenarios.py": {
       "GovernancePolicy": 2
-    },
-    "agent-governance-python/agt-policies/tests/scenarios/test_pii_redaction_transform_scenarios.py": {
-      "import:agt.manifest_resolution": 1
     },
     "agent-governance-python/agt-policies/tests/scenarios/test_pydantic_ai_adapter_scenarios.py": {
       "GovernancePolicy": 4
@@ -982,21 +947,6 @@
       "governance_to_acs_manifest": 2,
       "import:agt.policies.bridge": 1,
       "to_v4_check_result": 4
-    },
-    "agent-governance-python/agt-policies/tests/test_e2e_entry_paths.py": {
-      "GovernancePolicy": 2,
-      "discover_policies": 2,
-      "governance_to_acs_manifest": 2,
-      "import:agt.manifest_resolution": 1,
-      "import:agt.policies.bridge": 1,
-      "resolution_root": 3
-    },
-    "agent-governance-python/agt-policies/tests/test_manifest_resolution.py": {
-      "discover_policies": 7,
-      "import:agt.manifest_resolution": 2
-    },
-    "agent-governance-python/agt-policies/tests/test_runtime.py": {
-      "resolution_root": 2
     },
     "agent-governance-python/benchmarks/governance_overhead.py": {
       "PolicyAction": 4,
@@ -1700,21 +1650,6 @@
       "PolicyDocument": 2,
       "PolicyEvaluator": 4
     },
-    "policy-engine/spec/SPECIFICATION.md": {
-      "AGT-RESOLUTION": 2,
-      "governance.yaml": 1
-    },
-    "policy-engine/spec/agt/AGT-MANIFEST-1.0.md": {
-      "AGT-RESOLUTION": 2
-    },
-    "policy-engine/spec/agt/AGT-RESOLUTION-1.0.md": {
-      "AGT-RESOLUTION": 1,
-      "PolicyDocument": 1,
-      "agt.legacy": 3,
-      "agt_legacy": 3,
-      "discover_policies": 1,
-      "governance.yaml": 5
-    },
     "scripts/check_v4_ratchet.py": {
       "AdapterRuntimeBridge": 1,
       "CedarBackend": 1,
@@ -1744,12 +1679,28 @@
     }
   },
   "allowed_migration_files": {
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/AGT-RESOLUTION-1.0.md": {
+      "AGT-RESOLUTION": 1,
+      "PolicyDocument": 1,
+      "agt.legacy": 3,
+      "agt_legacy": 3,
+      "discover_policies": 1,
+      "governance.yaml": 5
+    },
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/__init__.py": {
+      "discover_policies": 2
+    },
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/build.py": {
+      "discover_policies": 2
+    },
+    "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/discover.py": {
+      "discover_policies": 1
+    },
     "agent-governance-python/agt-policies/src/agt/cli/migrate.py": {
       "CedarBackend": 1,
       "GovernancePolicy": 2,
       "PatternType": 1,
-      "PolicyInterceptor": 1,
-      "import:agt.manifest_resolution": 1
+      "PolicyInterceptor": 1
     },
     "agent-governance-python/agt-policies/tests/test_migrate.py": {
       "CedarBackend": 1,
@@ -1757,8 +1708,8 @@
       "PolicyAction": 1,
       "import:agt.policies.bridge": 2
     },
-    "agent-governance-python/agt-policies/tests/test_migration_boundary.py": {
-      "import:agt.manifest_resolution": 1
+    "agent-governance-python/agt-policies/tests/test_migrate_resolution.py": {
+      "discover_policies": 7
     },
     "agent-governance-python/agt-policies/tests/test_migration_equivalence.py": {
       "governance_to_acs_manifest": 2,
@@ -1775,7 +1726,7 @@
       "PolicyInterceptor": 1,
       "ViolationCategory": 1,
       "get_runtime_bridge": 1,
-      "governance.yaml": 3,
+      "governance.yaml": 4,
       "governance_to_acs_manifest": 1,
       "governance_to_document": 1,
       "resolution_root": 1,

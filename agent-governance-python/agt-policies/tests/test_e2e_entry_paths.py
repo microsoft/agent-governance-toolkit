@@ -19,7 +19,6 @@ pytest.importorskip("agent_control_specification._native")
 
 from agent_control_specification import AgentControl, Decision, InterventionPoint  # noqa: E402
 
-from agt.manifest_resolution import ResolutionError, ResolutionReason, discover_policies  # noqa: E402
 from agt.policies import SnapshotBuilder  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
@@ -56,43 +55,6 @@ def _pre_tool_snapshot(
         tool_call_count=tool_call_count,
         token_count=token_count,
     ).pre_tool_call(tool_name=tool_name, args=args or {})
-
-
-def _governance_doc(rules: list[dict[str, Any]], *, scope: str | None = None) -> dict[str, Any]:
-    doc: dict[str, Any] = {
-        "rules": rules,
-        "tools": {"lookup": {"clearance": "public"}, "danger": {"clearance": "public"}},
-        "intervention_points": {
-            "pre_tool_call": {
-                "policy_target": "$.tool_call.args",
-                "policy_target_kind": "tool_args",
-                "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "agt_legacy_rules"},
-            }
-        },
-    }
-    if scope is not None:
-        doc["scope"] = scope
-    return doc
-
-
-def _rule(
-    name: str,
-    action: str,
-    *,
-    field: str = "tool_call.name",
-    operator: str = "eq",
-    value: Any = "danger",
-    priority: int = 10,
-) -> dict[str, Any]:
-    return {
-        "name": name,
-        "condition": {"field": field, "operator": operator, "value": value},
-        "action": action,
-        "priority": priority,
-        "message": f"{name} fired",
-    }
-
 
 def _write_budget_rego_manifest(tmp_path: Path) -> Path:
     bundle = tmp_path / "budget_bundle"
@@ -138,135 +100,6 @@ verdict := v if {
     manifest_path = tmp_path / "direct_manifest.yaml"
     _write_yaml(manifest_path, manifest)
     return manifest_path
-
-
-def test_resolution_entry_path_enforces_deny_immutability_and_happy_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _require_opa(monkeypatch)
-    child = tmp_path / "service"
-    child.mkdir()
-    _write_yaml(tmp_path / "governance.yaml", _governance_doc([_rule("org_deny", "deny")]))
-    _write_yaml(
-        child / "governance.yaml",
-        _governance_doc([_rule("child_allow", "allow", priority=99)]),
-    )
-
-    runtime = AgtRuntime(child, resolution_root=tmp_path)
-
-    denied = runtime.evaluate_intervention_point(
-        "pre_tool_call", _pre_tool_snapshot("danger")
-    )
-    assert denied.verdict == "deny"
-    assert denied.reason == "org_deny"
-
-    allowed = runtime.evaluate_intervention_point(
-        "pre_tool_call", _pre_tool_snapshot("lookup")
-    )
-    assert allowed.verdict == "allow"
-
-
-def test_resolution_entry_path_applies_trailing_slash_scope(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _require_opa(monkeypatch)
-    action = tmp_path / "dir" / "file.py"
-    action.parent.mkdir()
-    action.write_text("# action\n", encoding="utf-8")
-    _write_yaml(
-        tmp_path / "governance.yaml",
-        _governance_doc([_rule("scoped_deny", "deny")], scope="dir/"),
-    )
-
-    runtime = AgtRuntime(action, resolution_root=tmp_path)
-
-    denied = runtime.evaluate_intervention_point(
-        "pre_tool_call", _pre_tool_snapshot("danger")
-    )
-    assert denied.verdict == "deny"
-    assert denied.reason == "scoped_deny"
-
-
-def test_resolution_entry_path_rejects_governance_symlink_escape(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    outside = tmp_path / "outside"
-    workspace.mkdir()
-    outside.mkdir()
-    (outside / "attacker.yaml").write_text("rules: []\n", encoding="utf-8")
-    (workspace / "governance.yaml").symlink_to(outside / "attacker.yaml")
-
-    with pytest.raises(ResolutionError) as exc:
-        discover_policies(workspace, workspace)
-
-    assert exc.value.reason == ResolutionReason.PATH_TRAVERSAL
-
-
-def test_resolution_entry_path_malformed_budget_snapshot_denies(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _require_opa(monkeypatch)
-    _write_yaml(
-        tmp_path / "governance.yaml",
-        _governance_doc(
-            [
-                _rule(
-                    "budget_deny",
-                    "deny",
-                    field="envelope.budgets.tool_call_count",
-                    operator="gte",
-                    value=1,
-                )
-            ]
-        ),
-    )
-    runtime = AgtRuntime(tmp_path, resolution_root=tmp_path)
-    malformed = _pre_tool_snapshot("lookup")
-    malformed["envelope"]["budgets"]["tool_call_count"] = "2"
-
-    denied = runtime.evaluate_intervention_point("pre_tool_call", malformed)
-
-    assert denied.verdict == "deny"
-    assert denied.allowed == False
-
-
-def test_bridge_entry_path_blocks_patterns_inside_nested_tool_args_and_allows_benign(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _require_opa(monkeypatch)
-    pytest.importorskip("agent_os")
-    from agent_os.integrations.base import GovernancePolicy
-    from agt.policies.bridge import governance_to_acs_manifest
-
-    policy = GovernancePolicy(
-        max_tokens=1000,
-        max_tool_calls=10,
-        allowed_tools=[],
-        blocked_patterns=["banned-substring"],
-        require_human_approval=False,
-        confidence_threshold=0.0,
-    )
-    manifest = governance_to_acs_manifest(policy, bundle_dir=tmp_path / "bridge_bundle")
-    manifest_path = tmp_path / "bridge_manifest.yaml"
-    _write_yaml(manifest_path, manifest)
-    runtime = AgtRuntime(manifest_path)
-
-    dict_result = runtime.evaluate_intervention_point(
-        "pre_tool_call",
-        _pre_tool_snapshot("lookup", {"outer": {"inner": "has banned-substring"}}),
-    )
-    list_result = runtime.evaluate_intervention_point(
-        "pre_tool_call",
-        _pre_tool_snapshot("lookup", {"items": ["has banned-substring"]}),
-    )
-    allowed = runtime.evaluate_intervention_point(
-        "pre_tool_call", _pre_tool_snapshot("lookup", {"items": ["safe"]})
-    )
-
-    assert dict_result.verdict == "deny"
-    assert dict_result.reason == "blocked_pattern_input"
-    assert list_result.verdict == "deny"
-    assert list_result.reason == "blocked_pattern_input"
-    assert allowed.verdict == "allow"
 
 
 def test_direct_entry_path_from_path_denies_malformed_budget_and_allows_benign(

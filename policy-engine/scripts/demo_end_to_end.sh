@@ -774,72 +774,71 @@ CS
   ) && { ok ".NET demo green"; record "dotnet-demo" "ok"; } || { warn ".NET demo had issues; see above"; record "dotnet-demo" "warn"; }
 fi
 
-# ── 9. AGT-policies wrapper: end-to-end with manifest resolution ─
+# ── 9. AGT-policies wrapper: native manifest end-to-end ─
 
 if should_run agt-policies; then
-  banner "6. agt-policies wrapper: manifest resolution end-to-end"
+  banner "6. agt-policies wrapper: native manifest end-to-end"
   cat > "$DEMO_TMP/demo_agt_policies.py" <<'PY'
-"""Demonstrates the AGT-side manifest resolution layer.
-
-Drops two governance.yaml files in a workspace (root + child),
-runs agt.manifest_resolution.resolve_manifest, confirms the
-resulting flat ACS manifest binds the merged rules, then runs
-through AgtRuntime to verify the deny-immutability invariant.
-"""
+"""Demonstrates direct native manifest loading through AgtRuntime."""
 from __future__ import annotations
 import sys, tempfile
 from pathlib import Path
 import yaml
 
-from agt.manifest_resolution import resolve_manifest
 from agt.policies.runtime import AgtRuntime
 from agt.policies.snapshot import pre_tool_call_snapshot
 
-with tempfile.TemporaryDirectory(prefix="agt-demo-resolve-") as tmp:
+class Policy:
+    def evaluate(self, invocation):
+        args = dict(invocation)["input"]["policy_target"]["value"]
+        if args.get("amount", 0) > 100000:
+            return {"decision": "deny", "reason": "large_wire"}
+        return {"decision": "allow"}
+
+with tempfile.TemporaryDirectory(prefix="agt-demo-native-") as tmp:
     tmp = Path(tmp)
-    # Parent: deny wire_transfer over $100k
-    (tmp / "governance.yaml").write_text(yaml.safe_dump({
-        "rules": [{
-            "name": "block_large_wire",
-            "condition": {"field": "tool_call.args.amount", "operator": "gt", "value": 100000},
-            "action": "deny", "priority": 100,
-            "message": "Org-level deny",
-        }],
-        "tools": {"wire_transfer": {"clearance": "confidential"}},
+    manifest = {
+        "agent_control_specification_version": "0.3.1-beta",
+        "metadata": {"name": "native-demo"},
+        "policies": {
+            "wire": {"type": "custom", "adapter": "native-demo"},
+        },
         "intervention_points": {
             "pre_tool_call": {
                 "policy_target": "$.tool_call.args",
                 "policy_target_kind": "tool_args",
                 "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "agt_legacy_rules"},
+                "policy": {"id": "wire"},
             }
         },
-    }))
-    # Child tries to override the parent deny with allow (must be DROPPED).
-    sub = tmp / "subdir"; sub.mkdir()
-    (sub / "governance.yaml").write_text(yaml.safe_dump({
-        "rules": [{
-            "name": "block_large_wire",
-            "condition": {"field": "tool_call.args.amount", "operator": "gt", "value": 100000},
-            "action": "allow", "priority": 200, "override": True,
-            "message": "Child tries to override",
-        }],
-    }))
-    bundle_dir = tmp / ".agt" / "resolved-bundle"
-    manifest = resolve_manifest(tmp, tmp, bundle_dir=bundle_dir)
-    manifest_path = tmp / "resolved.yaml"
+        "tools": {"wire_transfer": {"clearance": "confidential"}},
+    }
+    manifest_path = tmp / "manifest.yaml"
     manifest_path.write_text(yaml.safe_dump(manifest))
 
-    runtime = AgtRuntime(manifest_path)
+    runtime = AgtRuntime.from_manifest(manifest_path, policy_dispatcher=Policy())
     snap = pre_tool_call_snapshot(
         agent_id="demo", tool_name="wire_transfer", args={"amount": 999999},
     )
-    result = runtime.evaluate_intervention_point("pre_tool_call", snap)
-    if result.verdict == "deny":
-        print("  ✓ deny-immutability preserved across resolution chain")
-        sys.exit(0)
-    print(f"  ✗ expected deny (child override dropped), got {result.verdict}")
-    sys.exit(1)
+    result = runtime.evaluate("pre_tool_call", snap)
+    small_snap = pre_tool_call_snapshot(
+        agent_id="demo", tool_name="wire_transfer", args={"amount": 5},
+    )
+    small_result = runtime.evaluate("pre_tool_call", small_snap)
+    if result.verdict != "deny" or result.reason_code != "policy:large_wire":
+        print(
+            "  ✗ expected policy:large_wire deny, "
+            f"got {result.verdict}/{result.reason_code}"
+        )
+        sys.exit(1)
+    if small_result.verdict != "allow":
+        print(
+            "  ✗ expected small wire allow, "
+            f"got {small_result.verdict}/{small_result.reason_code}"
+        )
+        sys.exit(1)
+    print("  ✓ native manifest denied the large wire and allowed the small wire")
+    sys.exit(0)
 PY
   "$PY_VENV/bin/python3" "$DEMO_TMP/demo_agt_policies.py" || die "agt-policies demo failed"
   ok "agt-policies demo green"

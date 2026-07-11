@@ -473,38 +473,6 @@ def test_runtime_resolver_deny_blocks(tmp_path: Path) -> None:
     assert result.allowed is False
 
 
-def test_runtime_resolution_bundle_is_owned_and_cleaned_up(tmp_path: Path) -> None:
-    root = tmp_path / "workspace"
-    root.mkdir()
-    action_path = root / "agent.py"
-    action_path.write_text("# agent\n", encoding="utf-8")
-    (root / "governance.yaml").write_text(
-        """
-rules: []
-intervention_points:
-  pre_tool_call:
-    policy_target: $.tool_call.args
-    policy_target_kind: tool_args
-    tool_name_from: $.tool_call.name
-    policy:
-      id: agt_legacy_rules
-tools:
-  lookup:
-    clearance: public
-""",
-        encoding="utf-8",
-    )
-
-    runtime = AgtRuntime(action_path, resolution_root=root)
-    bundle_dir = Path(runtime._resolution_bundle_dir.name)  # type: ignore[union-attr]
-    assert bundle_dir.exists()
-    assert root not in bundle_dir.parents
-
-    runtime.close()
-
-    assert not bundle_dir.exists()
-
-
 @pytest.mark.parametrize(
     ("approval", "expected_verdict", "expected_allowed"),
     [
@@ -743,55 +711,3 @@ def test_runtime_timeout_threads_are_daemon_and_non_daemon_count_is_bounded(
     finally:
         for blocker in blockers:
             blocker.set()
-
-
-def test_runtime_resolution_root_pre_resolves_manifest(tmp_path: Path) -> None:
-    # End-to-end: the runtime should walk the AGT manifest-resolution
-    # layer when given a resolution_root, materialise the merged Rego
-    # bundle, and stand up the engine on it. Uses OPA via the bundled
-    # default policy dispatcher so this test is skipped when ``opa`` is
-    # not on PATH.
-    import shutil
-
-    if shutil.which("opa") is None:
-        pytest.skip("opa binary required for resolution end-to-end test")
-
-    governance = {
-        "rules": [
-            {
-                "name": "deny_dangerous",
-                "condition": {"field": "tool_call.name", "operator": "eq", "value": "rm"},
-                "action": "deny",
-                "priority": 10,
-                "override": False,
-                "message": "rm denied",
-            },
-        ],
-        "tools": {
-            "rm": {"clearance": "public"},
-            "ls": {"clearance": "public"},
-        },
-        "intervention_points": {
-            "pre_tool_call": {
-                "policy_target": "$.tool_call.args",
-                "policy_target_kind": "tool_args",
-                "tool_name_from": "$.tool_call.name",
-                "policy": {"id": "agt_legacy_rules"},
-            }
-        },
-    }
-    import yaml
-
-    (tmp_path / "governance.yaml").write_text(yaml.safe_dump(governance), encoding="utf-8")
-
-    runtime = AgtRuntime(tmp_path, resolution_root=tmp_path)
-
-    # A matching call denies.
-    snap = SnapshotBuilder(agent_id="bot").pre_tool_call(tool_name="rm", args={})
-    result = runtime.evaluate_intervention_point("pre_tool_call", snap)
-    assert result.verdict == "deny"
-
-    # A non-matching call falls through to default-allow.
-    snap2 = SnapshotBuilder(agent_id="bot").pre_tool_call(tool_name="ls", args={})
-    result2 = runtime.evaluate_intervention_point("pre_tool_call", snap2)
-    assert result2.verdict == "allow"

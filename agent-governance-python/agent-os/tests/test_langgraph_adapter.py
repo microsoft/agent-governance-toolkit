@@ -28,11 +28,11 @@ Run with:
 from __future__ import annotations
 
 from typing import TypedDict
-from unittest.mock import MagicMock
 
 import pytest
 
 from agent_os.integrations.base import GovernancePolicy, PolicyViolationError
+from agt.policies import PolicyEvaluation
 
 # langgraph is an optional extra. Most test classes require it; TestImportGuard
 # exercises the graceful-error path and works regardless.
@@ -56,6 +56,21 @@ def _kernel(**policy_kw):
 
 def _ctx(kernel, agent_id="test-agent"):
     return kernel.create_context(agent_id)
+
+
+class _NativeRuntime:
+    manifest = None
+
+    def __init__(self, evaluations):
+        self.evaluations = list(evaluations)
+        self.calls = []
+
+    def evaluate(self, intervention_point, snapshot):
+        self.calls.append((intervention_point, snapshot))
+        return self.evaluations.pop(0)
+
+    def close(self):
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -132,6 +147,25 @@ class TestBeforeToolCall:
         kernel.before_tool_call("search", {}, ctx)  # count -> 1, OK
         with pytest.raises(PolicyViolationError, match="limit"):
             kernel.before_tool_call("search", {}, ctx)  # count -> 2, BLOCK
+
+    def test_native_runtime_denial_uses_policy_evaluation(self):
+        from agent_os.integrations.langgraph_adapter import LangGraphKernel
+
+        evaluation = PolicyEvaluation(
+            verdict="deny",
+            reason_code="tool_blocked",
+            message="restricted detail",
+        )
+        runtime = _NativeRuntime([evaluation])
+        kernel = LangGraphKernel(runtime=runtime)
+        ctx = _ctx(kernel)
+
+        with pytest.raises(PolicyViolationError) as caught:
+            kernel.before_tool_call("search", {"q": "x"}, ctx)
+
+        assert caught.value.evaluation_result is evaluation
+        assert caught.value.check_result is None
+        assert runtime.calls[0][0] == "pre_tool_call"
 
     def test_empty_allowlist_allows_any_tool(self):
         kernel = _kernel()  # no allowed_tools restriction
@@ -218,8 +252,6 @@ class TestWrapGraph:
 
         class State(TypedDict):
             value: int
-
-        hook_count = {"n": 0}
 
         def node_fn(state):
             return state

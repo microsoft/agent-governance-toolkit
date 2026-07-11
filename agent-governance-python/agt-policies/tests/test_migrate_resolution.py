@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""Tests for agt.manifest_resolution.
+"""Tests for agt.cli._migrate_resolution.
 
 Cover the contract documented in
-``policy-engine/spec/agt/AGT-RESOLUTION-1.0.md`` and the reserved
+the private migration ``AGT-RESOLUTION-1.0.md`` contract and the reserved
 resolution reasons in ``policy-engine/spec/SPECIFICATION.md`` §16.
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agt.manifest_resolution import (
+from agt.cli._migrate_resolution import (
     ResolutionError,
     ResolutionReason,
     discover_policies,
@@ -24,7 +24,7 @@ from agt.manifest_resolution import (
     merge_documents,
     resolve_manifest,
 )
-from agt.manifest_resolution.merge import merge_top_level_section
+from agt.cli._migrate_resolution.merge import merge_top_level_section
 
 
 # ── discover_policies ────────────────────────────────────────────────

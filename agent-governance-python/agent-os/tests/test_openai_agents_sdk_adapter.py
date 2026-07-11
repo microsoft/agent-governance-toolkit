@@ -26,6 +26,7 @@ from agent_os.integrations.openai_agents_sdk import (
 )
 from agent_os.integrations.base import GovernancePolicy
 from agent_os.exceptions import PolicyViolationError
+from agt.policies import PolicyEvaluation
 
 
 # =============================================================================
@@ -85,6 +86,21 @@ class _FakeEvaluator:
         return _Decision(self._allowed, self._reason)
 
 
+class _NativeRuntime:
+    manifest = None
+
+    def __init__(self, evaluations):
+        self.evaluations = list(evaluations)
+        self.calls = []
+
+    def evaluate(self, intervention_point, snapshot):
+        self.calls.append((intervention_point, snapshot))
+        return self.evaluations.pop(0)
+
+    def close(self):
+        pass
+
+
 # =============================================================================
 # 1. Kernel initialisation & BaseIntegration inheritance
 # =============================================================================
@@ -132,6 +148,34 @@ class TestKernelInit:
         evaluator = _FakeEvaluator()
         k = OpenAIAgentsKernel(evaluator=evaluator)
         assert k._evaluator is evaluator
+
+    def test_native_runtime_parameter(self):
+        runtime = _NativeRuntime([PolicyEvaluation(verdict="allow")])
+        kernel = OpenAIAgentsKernel(runtime=runtime)
+        assert kernel._adapter_runtime.runtime is runtime
+
+
+class TestNativeRuntimeHooks:
+    def test_agent_start_deny_attaches_native_evaluation(self):
+        evaluation = PolicyEvaluation(
+            verdict="deny",
+            reason_code="blocked_input",
+            message="restricted detail",
+        )
+        runtime = _NativeRuntime([evaluation])
+        hooks = OpenAIAgentsKernel(runtime=runtime).as_hooks()
+
+        with pytest.raises(PolicyViolationError) as caught:
+            asyncio.run(
+                hooks.on_agent_start(
+                    _make_context("blocked"),
+                    _make_agent(),
+                )
+            )
+
+        assert caught.value.evaluation_result is evaluation
+        assert caught.value.check_result is None
+        assert runtime.calls[0][0] == "input"
 
 
 # =============================================================================

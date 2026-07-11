@@ -17,7 +17,7 @@ is a breaking change for v4 users.
 | `governance_to_document` | `agent_os/policies/bridge.py` | deleted |
 | `get_runtime_bridge`, `AdapterRuntimeBridge` | `agent_os/integrations/_v5_runtime_bridge.py` | `AdapterRuntimeSession` |
 | `to_v4_check_result` | `agt/policies/result.py` | deleted |
-| runtime `governance.yaml` resolution (`resolution_root`) | `agt/manifest_resolution/` | deleted, migration flattens once |
+| runtime `governance.yaml` resolution | private `agt.cli` migrator | migration flattens once |
 
 ## The one allowed home
 
@@ -207,5 +207,23 @@ The old `policy` and private `_runtime` arguments remain only to keep the
 development tree green until the single public breaking cut in Phase 6.
 Convenience wrappers also accept `runtime`. Their policy path is not the native
 default and is removed with the compatibility bridge. OpenAI Agents SDK and
-LangGraph remain Phase 4 because they use `BaseIntegration` legacy hooks rather
-than the runtime bridge.
+LangGraph now expose native runtime hook paths while retaining their
+checkpoint, handoff, audit, and wrapper behavior host-side.
+
+## Phase 4 runtime cleanup
+
+Runtime governance folder discovery has been removed. The resolver, its
+contract, and its tests live only under `agt.cli._migrate_resolution`.
+`AgtRuntime` no longer accepts `resolution_root`, `agt.manifest_resolution` is
+not public, and the OPA scenario harness no longer synthesizes runtime policy
+from `governance.yaml`. Native composition uses ACS `extends`.
+
+The Rust core and SDK parity fixtures no longer expose migration-only
+`runtime_error:resolution_*` variants. The migration command keeps equivalent
+diagnostics privately for report generation.
+
+OpenAI Agents SDK hooks evaluate input, tool calls, tool results, and output
+through `NativeAdapterRuntime` when given `runtime`. LangGraph evaluates node
+state and tool calls natively and fingerprints the runtime manifest plus
+registered tool hashes. Their non-policy semantics such as handoff limits,
+checkpoint metadata, node wrapping, and audit events remain host-owned.

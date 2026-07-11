@@ -77,7 +77,9 @@ A manifest MUST be validated before any evaluation uses it. A manifest that fail
 
 Merging is additive. A name defined in more than one manifest MUST be either identical in every manifest or non conflicting. Metadata object keys are merged additively, with nested object keys merged recursively when duplicate object values are non conflicting. For an intervention point, only its `annotations` may differ and are unioned. A conflicting duplicate definition MUST fail closed. Loading MUST also fail closed on a reference cycle, a missing file, a failed URL fetch, a URL body limit breach, or a version that differs between a parent and a child. A construction time load failure MAY surface by refusing to construct the runtime because no runtime exists yet to return an intervention verdict. A loader that parses an in memory string, including every FFI loader, cannot resolve `extends` against the file system or network. It may retain `extends` as data, but constructing an enforcing runtime from a manifest whose `extends` is non empty MUST fail closed, so such loaders MUST be given an already merged manifest.
 
-An AGT host MAY pre-resolve `extends` host side before it constructs the runtime. The host side resolution algorithm, including its cycle, path traversal, governance validation, and merge conflict failures, is defined in [`spec/agt/AGT-RESOLUTION-1.0.md`](agt/AGT-RESOLUTION-1.0.md) and surfaces the `runtime_error:resolution_path_traversal`, `runtime_error:resolution_cycle`, `runtime_error:resolution_invalid_governance`, and `runtime_error:resolution_merge_conflict` reasons defined in section 16. The runtime itself receives an already merged manifest as required above.
+AGT hosts pass native manifests to the runtime. Composition uses the ACS
+`extends` algorithm defined in this specification. Legacy governance folder
+discovery and its migration-only errors are not part of the runtime contract.
 
 ### 2.3 Loading from a URL
 
@@ -369,10 +371,6 @@ A runtime failure yields a `deny` verdict whose `reason` is one of the identifie
 | `runtime_error:resource_limit_exceeded` | Evaluation or manifest loading exceeded a configured resource limit. |
 | `runtime_error:approval_action_mismatch` | An approved action identity did not match the current action identity. |
 | `runtime_error:approval_resolver_missing` | An `escalate` verdict was returned but no resolver matched the manifest `approval.default_resolver`. |
-| `runtime_error:resolution_path_traversal` | AGT host side resolution refused an action path that resolved outside the workspace root. |
-| `runtime_error:resolution_cycle` | AGT host side resolution detected a cycle while merging an `extends` chain. |
-| `runtime_error:resolution_invalid_governance` | AGT host side resolution failed to validate a `governance.yaml` during merge. |
-| `runtime_error:resolution_merge_conflict` | AGT host side resolution found two non rule sections that could not be merged. |
 
 An SDK enforcement layer MAY also fail closed with a reserved `runtime_error:` reason that the core runtime never produces. Such a reason is SDK produced and is attributed to its producing layer. The reasons below are reserved for SDK enforcement helpers.
 
