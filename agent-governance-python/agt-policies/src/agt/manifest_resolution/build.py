@@ -353,10 +353,9 @@ def _rego_op_clause(
         return f"{indent}{accessor} == {literal}"
     if operator == "ne":
         if match_missing_negative:
-            # Deny rules fail closed on missing negative fields per ACS §5.2;
-            # allow rules keep the null guard so they cannot short-circuit
-            # lower-priority deny rules.
-            return f"{indent}not {accessor} == {literal}"
+            # Deny rules fail closed on absent negative fields; allow rules keep
+            # the null guard so they cannot short-circuit lower-priority deny rules.
+            return f"{indent}not ({accessor} == {literal})"
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v != {literal}"
     if operator == "gt":
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v > {literal}"
@@ -370,11 +369,10 @@ def _rego_op_clause(
         return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}_v in {literal}"
     if operator == "not_in":
         if match_missing_negative:
-            # Deny rules fail closed on missing negative fields per ACS §5.2;
-            # allow rules keep the null guard so they cannot short-circuit
-            # lower-priority deny rules.
-            return f"{indent}_v := {accessor}\n{indent}not _v in {literal}"
-        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not _v in {literal}"
+            # Deny rules fail closed on absent negative fields; allow rules keep
+            # the null guard so they cannot short-circuit lower-priority deny rules.
+            return f"{indent}_v := {accessor}\n{indent}not (_v in {literal})"
+        return f"{indent}_v := {accessor}\n{indent}_v != null\n{indent}not (_v in {literal})"
     if operator == "exists":
         return f"{indent}{accessor} != null"
     if operator == "contains":

@@ -970,7 +970,7 @@ def test_resolve_fails_closed_when_legacy_rules_unbound(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("operator", "value", "expected_snippet"),
     [
-        ("not_in", ["secret", "token"], "not _v in"),
+        ("not_in", ["secret", "token"], "not (_v in"),
         ("startswith", "sec", "startswith(_v"),
         ("endswith", "ret", "endswith(_v"),
         ("exists", None, "!= null"),
@@ -1004,18 +1004,22 @@ def test_resolve_renders_operator_vocabulary(
 
 
 @pytest.mark.parametrize(
-    ("operator", "value", "rego_snippet"),
+    ("operator", "field", "value", "rego_snippet"),
     [
-        ("ne", "sha256:registered", "not object.get("),
-        ("not_in", ["eastus", "westus"], "not _v in"),
+        ("ne", "tool_call.content_hash", "sha256:registered", "not (object.get("),
+        ("not_in", "tool_call.region", ["region-a", "region-b"], "not (_v in"),
     ],
 )
 def test_resolve_deny_negative_operators_match_missing_fields(
-    tmp_path: Path, operator: str, value: object, rego_snippet: str
+    tmp_path: Path,
+    operator: str,
+    field: str,
+    value: object,
+    rego_snippet: str,
 ) -> None:
     root = tmp_path
     condition = {
-        "field": "tool_call.content_hash",
+        "field": field,
         "operator": operator,
         "value": value,
     }
@@ -1024,7 +1028,7 @@ def test_resolve_deny_negative_operators_match_missing_fields(
         {
             "rules": [
                 _rule_with_condition(
-                    f"deny-missing-{operator}",
+                    f"deny-missing-{operator.replace('_', '-')}",
                     "deny",
                     condition,
                 )
@@ -1047,22 +1051,33 @@ def test_resolve_deny_negative_operators_match_missing_fields(
     assert "runtime_error:manifest_invalid" not in rego
 
 
-def test_resolve_deny_ne_missing_field_denies_with_generated_rego(
+@pytest.mark.parametrize(
+    ("operator", "field", "value"),
+    [
+        ("ne", "tool_call.content_hash", "sha256:registered"),
+        ("not_in", "tool_call.region", ["region-a", "region-b"]),
+    ],
+)
+def test_resolve_deny_negative_missing_field_denies_with_generated_rego(
     tmp_path: Path,
+    operator: str,
+    field: str,
+    value: object,
 ) -> None:
     opa = _require_opa()
     root = tmp_path
+    rule_name = f"deny-missing-{operator.replace('_', '-')}"
     _write(
         root / "governance.yaml",
         {
             "rules": [
                 _rule_with_condition(
-                    "deny-missing-ne",
+                    rule_name,
                     "deny",
                     {
-                        "field": "tool_call.content_hash",
-                        "operator": "ne",
-                        "value": "sha256:registered",
+                        "field": field,
+                        "operator": operator,
+                        "value": value,
                     },
                 )
             ],
@@ -1097,22 +1112,26 @@ def test_resolve_deny_ne_missing_field_denies_with_generated_rego(
     verdict = payload["result"][0]["expressions"][0]["value"]
 
     assert verdict["decision"] == "deny"
-    assert verdict["reason"] == "deny-missing-ne"
+    assert verdict["reason"] == rule_name
 
 
 @pytest.mark.parametrize(
-    ("operator", "value", "rego_snippet"),
+    ("operator", "field", "value", "rego_snippet"),
     [
-        ("ne", "sha256:registered", '_v != "sha256:registered"'),
-        ("not_in", ["eastus", "westus"], "not _v in"),
+        ("ne", "tool_call.content_hash", "sha256:registered", '_v != "sha256:registered"'),
+        ("not_in", "tool_call.region", ["region-a", "region-b"], "not (_v in"),
     ],
 )
 def test_resolve_allow_negative_operators_do_not_match_missing_fields(
-    tmp_path: Path, operator: str, value: object, rego_snippet: str
+    tmp_path: Path,
+    operator: str,
+    field: str,
+    value: object,
+    rego_snippet: str,
 ) -> None:
     root = tmp_path
     condition = {
-        "field": "tool_call.content_hash",
+        "field": field,
         "operator": operator,
         "value": value,
     }
@@ -1153,12 +1172,12 @@ def test_condition_matches_propagates_missing_negative_mode_to_compounds() -> No
                     {
                         "field": "tool_call.region",
                         "operator": "not_in",
-                        "value": ["eastus"],
+                        "value": ["region-a"],
                     },
                     {
                         "field": "tool_call.region",
                         "operator": "eq",
-                        "value": "westus",
+                        "value": "region-b",
                     },
                 ]
             },
@@ -1175,7 +1194,7 @@ def test_condition_matches_propagates_missing_negative_mode_to_compounds() -> No
     [
         ("eq", "sha256:registered", '== "sha256:registered"'),
         ("gt", 10, "_v != null"),
-        ("in", ["eastus", "westus"], "_v != null"),
+        ("in", ["region-a", "region-b"], "_v != null"),
     ],
 )
 def test_resolve_positive_operators_do_not_match_missing_fields(
