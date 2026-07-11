@@ -3,6 +3,9 @@
 
 //! Lightweight integration, discovery, and prompt-defense helpers for embedding governance.
 
+use agent_control_specification::{
+    AgentControl, Decision, EnforcementMode, InterventionPoint, Manifest, RuntimeError,
+};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -57,143 +60,34 @@ fn token_jaccard_distance(left: &str, right: &str) -> f64 {
     1.0 - (intersection / union.max(1.0))
 }
 
-fn glob_to_regex(pattern: &str) -> String {
-    let mut regex = String::from("^");
-    for ch in pattern.chars() {
-        match ch {
-            '*' => regex.push_str(".*"),
-            '?' => regex.push('.'),
-            '.' | '+' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '|' | '\\' => {
-                regex.push('\\');
-                regex.push(ch);
-            }
-            _ => regex.push(ch),
-        }
-    }
-    regex.push('$');
-    regex
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PatternType {
-    Substring,
-    Regex,
-    Glob,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GovernancePattern {
-    pub pattern: String,
-    pub pattern_type: PatternType,
-}
-
-impl GovernancePattern {
-    pub fn substring(pattern: &str) -> Self {
-        Self {
-            pattern: pattern.to_string(),
-            pattern_type: PatternType::Substring,
-        }
-    }
-
-    pub fn regex(pattern: &str) -> Self {
-        Self {
-            pattern: pattern.to_string(),
-            pattern_type: PatternType::Regex,
-        }
-    }
-
-    pub fn glob(pattern: &str) -> Self {
-        Self {
-            pattern: pattern.to_string(),
-            pattern_type: PatternType::Glob,
-        }
-    }
-
-    pub fn matches(&self, text: &str) -> bool {
-        match self.pattern_type {
-            PatternType::Substring => text
-                .to_ascii_lowercase()
-                .contains(&self.pattern.to_ascii_lowercase()),
-            PatternType::Regex => crate::regex_cache::compiled_regex(&self.pattern)
-                .map(|regex| regex.is_match(text))
-                .unwrap_or(false),
-            PatternType::Glob => crate::regex_cache::compiled_regex(&glob_to_regex(&self.pattern))
-                .map(|regex| regex.is_match(text))
-                .unwrap_or(false),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GovernancePolicy {
-    pub name: String,
-    pub max_tool_calls: usize,
-    pub allowed_tools: Vec<String>,
-    pub blocked_patterns: Vec<GovernancePattern>,
-    pub require_human_approval: bool,
-    pub confidence_threshold: f64,
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct FrameworkHostConfig {
     pub drift_threshold: f64,
     pub checkpoint_frequency: usize,
 }
 
-impl GovernancePolicy {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.max_tool_calls == 0 {
-            return Err("max_tool_calls must be greater than zero".to_string());
-        }
-        if !(0.0..=1.0).contains(&self.confidence_threshold) {
-            return Err("confidence_threshold must be between 0.0 and 1.0".to_string());
-        }
-        if !(0.0..=1.0).contains(&self.drift_threshold) {
-            return Err("drift_threshold must be between 0.0 and 1.0".to_string());
-        }
-        if self.checkpoint_frequency == 0 {
-            return Err("checkpoint_frequency must be greater than zero".to_string());
-        }
-        Ok(())
-    }
-
-    pub fn detect_conflicts(&self) -> Vec<String> {
-        let mut warnings = Vec::new();
-        if self.max_tool_calls == 0 && !self.allowed_tools.is_empty() {
-            warnings
-                .push("allowed_tools is non-empty but max_tool_calls blocks all calls".to_string());
-        }
-        if self.confidence_threshold == 0.0 {
-            warnings.push("confidence_threshold is 0.0, disabling confidence review".to_string());
-        }
-        warnings
-    }
-
-    pub fn allows_tool(&self, tool_name: Option<&str>) -> bool {
-        match tool_name {
-            None => true,
-            Some(tool) => self.allowed_tools.iter().any(|allowed| allowed == tool),
-        }
-    }
-
-    pub fn matches_payload(&self, payload: &str) -> Vec<String> {
-        self.blocked_patterns
-            .iter()
-            .filter(|pattern| pattern.matches(payload))
-            .map(|pattern| pattern.pattern.clone())
-            .collect()
-    }
-}
-
-impl Default for GovernancePolicy {
+impl Default for FrameworkHostConfig {
     fn default() -> Self {
         Self {
-            name: "default".to_string(),
-            max_tool_calls: 10,
-            allowed_tools: Vec::new(),
-            blocked_patterns: Vec::new(),
-            require_human_approval: false,
-            confidence_threshold: 0.8,
             drift_threshold: 0.15,
             checkpoint_frequency: 5,
         }
+    }
+}
+
+impl FrameworkHostConfig {
+    pub fn validate(self) -> Result<Self, RuntimeError> {
+        if !(0.0..=1.0).contains(&self.drift_threshold) {
+            return Err(RuntimeError::ManifestInvalid(
+                "framework host drift_threshold must be between 0.0 and 1.0".to_string(),
+            ));
+        }
+        if self.checkpoint_frequency == 0 {
+            return Err(RuntimeError::ManifestInvalid(
+                "framework host checkpoint_frequency must be greater than zero".to_string(),
+            ));
+        }
+        Ok(self)
     }
 }
 
@@ -299,6 +193,7 @@ pub enum FrameworkKind {
 pub struct FrameworkExecutionResult {
     pub decision: ExecutionResponse,
     pub requires_human_approval: bool,
+    pub effective_payload: Option<String>,
     pub matched_patterns: Vec<String>,
     pub events: Vec<GovernanceEvent>,
 }
@@ -313,24 +208,58 @@ pub struct ResponseGovernanceAssessment {
 pub struct FrameworkGovernanceAdapter<H: GovernanceHook> {
     pub framework: FrameworkKind,
     middleware: GovernanceMiddleware<H>,
-    policy: GovernancePolicy,
+    control: AgentControl,
+    host_config: FrameworkHostConfig,
     event_log: Mutex<VecDeque<GovernanceEvent>>,
     tool_call_count: Mutex<usize>,
 }
 
 impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
-    pub fn new(framework: FrameworkKind, hook: H) -> Self {
-        Self::with_policy(framework, hook, GovernancePolicy::default())
+    pub fn new(framework: FrameworkKind, hook: H, control: AgentControl) -> Self {
+        Self::with_host_config(framework, hook, control, FrameworkHostConfig::default())
     }
 
-    pub fn with_policy(framework: FrameworkKind, hook: H, policy: GovernancePolicy) -> Self {
+    pub fn with_host_config(
+        framework: FrameworkKind,
+        hook: H,
+        control: AgentControl,
+        host_config: FrameworkHostConfig,
+    ) -> Self {
+        let host_config = host_config
+            .validate()
+            .expect("FrameworkHostConfig must be validated before adapter construction");
         Self {
             framework,
             middleware: GovernanceMiddleware::new(hook),
-            policy,
+            control,
+            host_config,
             event_log: Mutex::new(VecDeque::new()),
             tool_call_count: Mutex::new(0),
         }
+    }
+
+    pub fn from_manifest(
+        framework: FrameworkKind,
+        hook: H,
+        manifest: Manifest,
+    ) -> Result<Self, RuntimeError> {
+        Ok(Self::new(
+            framework,
+            hook,
+            AgentControl::from_manifest(manifest)?,
+        ))
+    }
+
+    pub fn from_path(
+        framework: FrameworkKind,
+        hook: H,
+        manifest_path: impl AsRef<Path>,
+    ) -> Result<Self, RuntimeError> {
+        Ok(Self::new(
+            framework,
+            hook,
+            AgentControl::from_path(manifest_path)?,
+        ))
     }
 
     pub fn execute(&self, actor: &str, action: &str, payload: Option<&str>) -> ExecutionResponse {
@@ -346,16 +275,16 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         .decision
     }
 
-    pub fn for_tower(hook: H, policy: GovernancePolicy) -> Self {
-        Self::with_policy(FrameworkKind::Tower, hook, policy)
+    pub fn for_tower(hook: H, control: AgentControl) -> Self {
+        Self::new(FrameworkKind::Tower, hook, control)
     }
 
-    pub fn for_axum(hook: H, policy: GovernancePolicy) -> Self {
-        Self::with_policy(FrameworkKind::Axum, hook, policy)
+    pub fn for_axum(hook: H, control: AgentControl) -> Self {
+        Self::new(FrameworkKind::Axum, hook, control)
     }
 
-    pub fn for_actix(hook: H, policy: GovernancePolicy) -> Self {
-        Self::with_policy(FrameworkKind::Actix, hook, policy)
+    pub fn for_actix(hook: H, control: AgentControl) -> Self {
+        Self::new(FrameworkKind::Actix, hook, control)
     }
 
     pub fn evaluate_request(
@@ -364,88 +293,117 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         tool_name: Option<&str>,
         confidence: Option<f64>,
     ) -> FrameworkExecutionResult {
+        let tool_call_count = *self
+            .tool_call_count
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let mut events = vec![self.emit_event(
             GovernanceEventType::PolicyCheck,
             &request.actor,
             &request.action,
-            format!("policy '{}' evaluated request", self.policy.name),
+            "ACS evaluated request".to_string(),
         )];
-
-        let matched_patterns = request
-            .payload
-            .as_deref()
-            .map(|payload| self.policy.matches_payload(payload))
-            .unwrap_or_default();
-        if !matched_patterns.is_empty() {
+        let (intervention_point, snapshot) = match tool_name {
+            Some(tool) => (
+                InterventionPoint::PreToolCall,
+                serde_json::json!({
+                    "envelope": {
+                        "agent": {"id": request.actor},
+                        "session": {"id": format!("rust-framework-{}", request.actor)},
+                        "intervention_point": "pre_tool_call",
+                        "budgets": {
+                            "tool_call_count": tool_call_count,
+                            "token_count": 0,
+                            "elapsed_seconds": 0,
+                            "cost_usd": 0
+                        }
+                    },
+                    "tool_call": {
+                        "name": tool,
+                        "args": {"payload": request.payload, "confidence": confidence},
+                        "id": format!("{}-{}", request.actor, tool_call_count + 1)
+                    }
+                }),
+            ),
+            None => (
+                InterventionPoint::Input,
+                serde_json::json!({
+                    "envelope": {
+                        "agent": {"id": request.actor},
+                        "session": {"id": format!("rust-framework-{}", request.actor)},
+                        "intervention_point": "input",
+                        "budgets": {
+                            "tool_call_count": tool_call_count,
+                            "token_count": 0,
+                            "elapsed_seconds": 0,
+                            "cost_usd": 0
+                        }
+                    },
+                    "input": {
+                        "body": request.payload,
+                        "source": "host",
+                        "headers": {}
+                    }
+                }),
+            ),
+        };
+        let evaluation = self.control.evaluate_intervention_point(
+            intervention_point,
+            snapshot,
+            EnforcementMode::Enforce,
+        );
+        let requires_human_approval = evaluation.verdict.decision == Decision::Escalate;
+        if !evaluation.verdict.decision.permits() {
+            let reason = evaluation
+                .verdict
+                .reason
+                .clone()
+                .unwrap_or_else(|| "policy denied request".to_string());
             events.push(self.emit_event(
-                GovernanceEventType::PolicyViolation,
-                &request.actor,
-                &request.action,
-                format!(
-                    "blocked payload patterns matched: {}",
-                    matched_patterns.join(", ")
-                ),
-            ));
-            return FrameworkExecutionResult {
-                decision: ExecutionResponse {
-                    allowed: false,
-                    reason: Some("blocked by governance policy patterns".to_string()),
+                if tool_name.is_some() {
+                    GovernanceEventType::ToolCallBlocked
+                } else {
+                    GovernanceEventType::PolicyViolation
                 },
-                requires_human_approval: false,
-                matched_patterns,
-                events,
-            };
-        }
-
-        if !self.policy.allows_tool(tool_name) {
-            events.push(self.emit_event(
-                GovernanceEventType::ToolCallBlocked,
                 &request.actor,
                 &request.action,
-                format!("tool '{}' is not permitted", tool_name.unwrap_or("<none>")),
+                reason.clone(),
             ));
             return FrameworkExecutionResult {
                 decision: ExecutionResponse {
                     allowed: false,
-                    reason: Some("tool is not allowed by governance policy".to_string()),
-                },
-                requires_human_approval: false,
-                matched_patterns,
-                events,
-            };
-        }
-
-        let requires_human_approval = self.policy.require_human_approval
-            || confidence
-                .map(|score| score < self.policy.confidence_threshold)
-                .unwrap_or(false);
-        if requires_human_approval {
-            events.push(self.emit_event(
-                GovernanceEventType::PolicyViolation,
-                &request.actor,
-                &request.action,
-                "request requires human approval".to_string(),
-            ));
-            return FrameworkExecutionResult {
-                decision: ExecutionResponse {
-                    allowed: false,
-                    reason: Some("request requires human approval".to_string()),
+                    reason: Some(reason),
                 },
                 requires_human_approval,
-                matched_patterns,
+                effective_payload: None,
+                matched_patterns: Vec::new(),
                 events,
             };
         }
 
-        let hook_decision = self.middleware.execute(&request);
-        let checkpoint = self.record_tool_call(&request.actor, &request.action);
-        if let Some(event) = checkpoint {
-            events.push(event);
+        let effective_payload = evaluation
+            .transformed_policy_target
+            .as_ref()
+            .map(|value| match value {
+                serde_json::Value::String(text) => text.clone(),
+                other => other.to_string(),
+            })
+            .or_else(|| request.payload.clone());
+        let effective_request = ExecutionRequest {
+            payload: effective_payload.clone(),
+            ..request.clone()
+        };
+        let hook_decision = self.middleware.execute(&effective_request);
+        if tool_name.is_some() {
+            if let Some(event) = self.record_tool_call(&request.actor, &request.action) {
+                events.push(event);
+            }
         }
         FrameworkExecutionResult {
             decision: hook_decision,
             requires_human_approval: false,
-            matched_patterns,
+            effective_payload,
+            matched_patterns: Vec::new(),
             events,
         }
     }
@@ -460,7 +418,8 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
         let prompt_defense = PromptDefenseEvaluator::evaluate_report(response_body);
         let mut events = Vec::new();
         let drift = baseline.map(|baseline| {
-            let drift = DriftResult::compare(baseline, response_body, self.policy.drift_threshold);
+            let drift =
+                DriftResult::compare(baseline, response_body, self.host_config.drift_threshold);
             if drift.exceeded {
                 events.push(self.emit_event(
                     GovernanceEventType::DriftDetected,
@@ -515,14 +474,16 @@ impl<H: GovernanceHook> FrameworkGovernanceAdapter<H> {
             .lock()
             .unwrap_or_else(|e| e.into_inner());
         *tool_call_count += 1;
-        (*tool_call_count % self.policy.checkpoint_frequency == 0).then(|| {
-            self.emit_event(
-                GovernanceEventType::CheckpointCreated,
-                actor,
-                action,
-                format!("checkpoint created after {} tool calls", tool_call_count),
-            )
-        })
+        (*tool_call_count)
+            .is_multiple_of(self.host_config.checkpoint_frequency)
+            .then(|| {
+                self.emit_event(
+                    GovernanceEventType::CheckpointCreated,
+                    actor,
+                    action,
+                    format!("checkpoint created after {} tool calls", tool_call_count),
+                )
+            })
     }
 }
 
@@ -1374,6 +1335,8 @@ impl DiscoveryScanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_control_specification::{PolicyDispatcher, PreparedPolicyInvocation};
+    use std::sync::Arc;
     use tempfile::tempdir;
 
     struct DemoHook;
@@ -1394,6 +1357,95 @@ mod tests {
         }
     }
 
+    struct StaticPolicy {
+        decision: &'static str,
+        reason: Option<&'static str>,
+        transform: Option<&'static str>,
+    }
+
+    impl PolicyDispatcher for StaticPolicy {
+        fn evaluate(
+            &self,
+            _invocation: &PreparedPolicyInvocation,
+        ) -> Result<serde_json::Value, RuntimeError> {
+            let mut output = serde_json::json!({
+                "decision": self.decision,
+                "reason": self.reason,
+            });
+            if let Some(value) = self.transform {
+                output["transform"] = serde_json::json!({
+                    "path": "$policy_target",
+                    "value": value,
+                });
+            }
+            Ok(output)
+        }
+    }
+
+    fn control(decision: &'static str, reason: Option<&'static str>) -> AgentControl {
+        let manifest = Manifest::from_yaml_str(
+            r#"
+agent_control_specification_version: 0.3.1-beta
+policies:
+  integration:
+    type: custom
+    adapter: integration_test
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: integration
+  pre_tool_call:
+    policy_target: $.tool_call.args
+    tool_name_from: $.tool_call.name
+    policy:
+      id: integration
+tools:
+  read_file:
+    clearance: public
+"#,
+        )
+        .unwrap();
+        AgentControl::from_manifest_with_dispatchers(
+            manifest,
+            None,
+            Some(Arc::new(StaticPolicy {
+                decision,
+                reason,
+                transform: None,
+            })),
+        )
+        .unwrap()
+    }
+
+    fn transform_control(value: &'static str) -> AgentControl {
+        let manifest = Manifest::from_yaml_str(
+            r#"
+agent_control_specification_version: 0.3.1-beta
+policies:
+  integration:
+    type: custom
+    adapter: integration_test
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: integration
+"#,
+        )
+        .unwrap();
+        AgentControl::from_manifest_with_dispatchers(
+            manifest,
+            None,
+            Some(Arc::new(StaticPolicy {
+                decision: "transform",
+                reason: Some("redacted"),
+                transform: Some(value),
+            })),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn middleware_invokes_hook() {
         let middleware = GovernanceMiddleware::new(DemoHook);
@@ -1407,44 +1459,36 @@ mod tests {
 
     #[test]
     fn framework_adapter_executes_requests() {
-        let adapter = FrameworkGovernanceAdapter::new(FrameworkKind::Tower, DemoHook);
+        let adapter =
+            FrameworkGovernanceAdapter::new(FrameworkKind::Tower, DemoHook, control("allow", None));
         let result = adapter.execute("agent", "data.read", None);
         assert!(result.allowed);
     }
 
     #[test]
-    fn governance_policy_blocks_payload_and_tools() {
-        let policy = GovernancePolicy {
-            allowed_tools: vec!["read_file".into()],
-            blocked_patterns: vec![
-                GovernancePattern::substring("password"),
-                GovernancePattern::regex(r"rm\s+-rf"),
-            ],
-            ..GovernancePolicy::default()
-        };
-        let adapter =
-            FrameworkGovernanceAdapter::with_policy(FrameworkKind::Axum, DemoHook, policy);
+    fn framework_adapter_surfaces_acs_denial() {
+        let adapter = FrameworkGovernanceAdapter::new(
+            FrameworkKind::Axum,
+            DemoHook,
+            control("deny", Some("blocked_payload")),
+        );
         let result = adapter.evaluate_request(
             ExecutionRequest {
                 actor: "agent".into(),
                 action: "tools.call".into(),
                 payload: Some("contains password".into()),
             },
-            Some("write_file"),
+            Some("read_file"),
             Some(0.95),
         );
         assert!(!result.decision.allowed);
-        assert!(!result.matched_patterns.is_empty());
+        assert_eq!(result.decision.reason.as_deref(), Some("blocked_payload"));
     }
 
     #[test]
-    fn framework_adapter_requires_review_for_low_confidence() {
-        let policy = GovernancePolicy {
-            confidence_threshold: 0.9,
-            allowed_tools: vec!["read_file".into()],
-            ..GovernancePolicy::default()
-        };
-        let adapter = FrameworkGovernanceAdapter::for_tower(DemoHook, policy);
+    fn framework_adapter_requires_review_for_escalate() {
+        let adapter =
+            FrameworkGovernanceAdapter::for_tower(DemoHook, control("escalate", Some("review")));
         let result = adapter.evaluate_request(
             ExecutionRequest {
                 actor: "agent".into(),
@@ -1459,31 +1503,54 @@ mod tests {
     }
 
     #[test]
-    fn framework_adapter_denies_tools_without_explicit_allowlist() {
-        let adapter = FrameworkGovernanceAdapter::for_tower(DemoHook, GovernancePolicy::default());
+    fn framework_adapter_applies_acs_transform_to_hook_payload() {
+        let adapter = FrameworkGovernanceAdapter::new(
+            FrameworkKind::Tower,
+            DemoHook,
+            transform_control("safe"),
+        );
         let result = adapter.evaluate_request(
             ExecutionRequest {
                 actor: "agent".into(),
-                action: "tools.call".into(),
-                payload: None,
+                action: "data.read".into(),
+                payload: Some("secret".into()),
             },
-            Some("read_file"),
-            Some(0.95),
+            None,
+            None,
         );
-        assert!(!result.decision.allowed);
-        assert_eq!(
-            result.decision.reason.as_deref(),
-            Some("tool is not allowed by governance policy")
-        );
+        assert!(result.decision.allowed);
+        assert_eq!(result.effective_payload.as_deref(), Some("safe"));
+    }
+
+    #[test]
+    fn legacy_governance_shape_is_rejected_as_manifest_invalid() {
+        let error = Manifest::from_yaml_str(
+            r#"
+name: legacy
+max_tool_calls: 10
+allowed_tools: [read_file]
+blocked_patterns: [password]
+"#,
+        )
+        .unwrap_err();
+        assert_eq!(error.reason(), "runtime_error:manifest_invalid");
+        assert!(error
+            .detail()
+            .contains("agent_control_specification_version"));
     }
 
     #[test]
     fn framework_adapter_assesses_response_drift() {
-        let policy = GovernancePolicy {
+        let host_config = FrameworkHostConfig {
             drift_threshold: 0.10,
-            ..GovernancePolicy::default()
+            ..FrameworkHostConfig::default()
         };
-        let adapter = FrameworkGovernanceAdapter::for_actix(DemoHook, policy);
+        let adapter = FrameworkGovernanceAdapter::with_host_config(
+            FrameworkKind::Actix,
+            DemoHook,
+            control("allow", None),
+            host_config,
+        );
         let assessment = adapter.assess_response(
             "agent",
             "respond",
@@ -1721,8 +1788,7 @@ mod tests {
     #[test]
     fn token_jaccard_distance_increases_with_drift() {
         // Quarter-overlap should score around 0.6–0.7 distance — well
-        // above the typical 0.10–0.15 drift threshold used in
-        // GovernancePolicy::default().
+        // above the typical 0.10–0.15 host drift threshold.
         let dist = token_jaccard_distance("alpha beta gamma delta", "alpha epsilon zeta theta");
         assert!(dist > 0.5, "expected drift > 0.5, got {dist}");
         assert!(dist < 1.0, "expected drift < 1.0, got {dist}");

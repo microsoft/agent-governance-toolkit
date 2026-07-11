@@ -5,6 +5,31 @@ entries appear first.
 
 ---
 
+## Rust and Mastra framework policy surfaces now use ACS manifests
+
+**Date:** TBD
+
+**Affected:**
+
+- Rust `agentmesh::FrameworkGovernanceAdapter`
+- `@microsoft/agentmesh-mastra`
+
+**What changed:**
+
+The Rust framework adapter no longer accepts its local policy struct and
+pattern enum. It accepts native `AgentControl` or `Manifest` input. The Mastra
+wrapper no longer exports a local policy middleware. It requires a Node ACS
+`AgentControl` and delegates tool execution to `runTool`.
+
+**Migration:**
+
+Move tool catalogs, bindings, budgets, content policies, and approval rules
+into an ACS manifest. Rust callers construct `AgentControl::from_manifest` or
+`FrameworkGovernanceAdapter::from_path`. Mastra callers pass
+`AgentControl.fromPath(...)` as the `control` option to `createGovernedTool`.
+
+---
+
 ## MuteAgentValidator now runs capability validators consistently and honors strict_mode
 
 **Date:** TBD (next release of `microsoft/agent-governance-toolkit`)

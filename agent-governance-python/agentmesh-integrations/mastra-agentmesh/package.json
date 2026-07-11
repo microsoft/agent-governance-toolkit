@@ -37,6 +37,9 @@
     "@mastra/core": ">=0.10.0",
     "zod": ">=3.22.0"
   },
+  "dependencies": {
+    "agent-control-specification": "0.3.1-beta.0"
+  },
   "devDependencies": {
     "@mastra/core": "1.37.1",
     "@types/node": "^22.19.19",

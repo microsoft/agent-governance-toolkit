@@ -227,3 +227,21 @@ through `NativeAdapterRuntime` when given `runtime`. LangGraph evaluates node
 state and tool calls natively and fingerprints the runtime manifest plus
 registered tool hashes. Their non-policy semantics such as handoff limits,
 checkpoint metadata, node wrapping, and audit events remain host-owned.
+
+## Phase 5 language and packaging rewrite
+
+The Rust `FrameworkGovernanceAdapter` now accepts native `AgentControl`,
+`Manifest`, and explicit `FrameworkHostConfig`. The removed local policy and
+pattern types are no longer exported. Legacy-shaped YAML fails manifest
+validation instead of receiving an in-process translation.
+
+The Mastra package now requires the Node ACS package and delegates every tool
+call to `AgentControl.runTool`. Trust and tamper-evident audit remain Mastra
+middleware. Policy decisions, transforms, approval, and tool catalogs come
+from the ACS manifest.
+
+The consolidated Python core wheel declares `agt-policies` because it
+force-includes the native adapter modules. A wheel inspection gate builds both
+artifacts, verifies the dependency metadata, confirms native session/runtime
+modules and migration Rego resources are packaged, and rejects a public
+`manifest_resolution` package.

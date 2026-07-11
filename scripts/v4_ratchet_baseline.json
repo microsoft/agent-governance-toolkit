@@ -1,5 +1,5 @@
 {
-  "grand_total": 3593,
+  "grand_total": 3559,
   "package_totals": {
     "BREAKING_CHANGES.md": 1,
     "CHANGELOG.md": 2,
@@ -15,16 +15,13 @@
     "agent-governance-python/agent-sandbox": 52,
     "agent-governance-python/agentmesh-integrations/adk-agentmesh": 5,
     "agent-governance-python/agentmesh-integrations/cedarling-agentmesh": 1,
-    "agent-governance-python/agentmesh-integrations/copilot-governance": 1,
     "agent-governance-python/agentmesh-integrations/haystack-agentmesh": 6,
     "agent-governance-python/agentmesh-integrations/langflow-agentmesh": 59,
     "agent-governance-python/agentmesh-integrations/langgraph-trust": 26,
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh": 6,
     "agent-governance-python/agentmesh-integrations/openai-agents-trust": 32,
     "agent-governance-python/agentmesh-integrations/pydantic-ai-governance": 99,
     "agent-governance-python/agt-policies": 49,
     "agent-governance-python/benchmarks": 10,
-    "agent-governance-rust/agentmesh": 27,
     "docs/BENCHMARKS.md": 1,
     "docs/ERROR_HANDLING.md": 3,
     "docs/FAQ.md": 3,
@@ -835,9 +832,6 @@
     "agent-governance-python/agentmesh-integrations/cedarling-agentmesh/README.md": {
       "PolicyEvaluator": 1
     },
-    "agent-governance-python/agentmesh-integrations/copilot-governance/src/reviewer.ts": {
-      "GovernancePolicy": 1
-    },
     "agent-governance-python/agentmesh-integrations/haystack-agentmesh/README.md": {
       "GovernancePolicy": 6
     },
@@ -864,18 +858,6 @@
     },
     "agent-governance-python/agentmesh-integrations/langgraph-trust/tests/test_policy.py": {
       "GovernancePolicy": 21
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/governance.ts": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/governed-tool.ts": {
-      "GovernancePolicy": 2
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/index.ts": {
-      "GovernancePolicy": 1
-    },
-    "agent-governance-python/agentmesh-integrations/mastra-agentmesh/src/types.ts": {
-      "GovernancePolicy": 1
     },
     "agent-governance-python/agentmesh-integrations/openai-agents-trust/README.md": {
       "GovernancePolicy": 2
@@ -952,14 +934,6 @@
       "PolicyAction": 4,
       "PolicyDocument": 3,
       "PolicyEvaluator": 3
-    },
-    "agent-governance-rust/agentmesh/src/integration_support.rs": {
-      "GovernancePolicy": 17,
-      "PatternType": 8
-    },
-    "agent-governance-rust/agentmesh/src/lib.rs": {
-      "GovernancePolicy": 1,
-      "PatternType": 1
     },
     "docs/BENCHMARKS.md": {
       "GovernancePolicy": 1
@@ -1685,7 +1659,7 @@
       "agt.legacy": 3,
       "agt_legacy": 3,
       "discover_policies": 1,
-      "governance.yaml": 5
+      "governance.yaml": 2
     },
     "agent-governance-python/agt-policies/src/agt/cli/_migrate_resolution/__init__.py": {
       "discover_policies": 2
@@ -1742,7 +1716,7 @@
       "resolution_root": 2
     },
     "scripts/v4_ratchet_baseline.json": {
-      "GovernancePolicy": 202,
+      "GovernancePolicy": 200,
       "PolicyDocument": 100,
       "v4_policy_document_file": 1
     }
