@@ -10,7 +10,7 @@ guides.
 > numbered tutorials for deeper dives.
 >
 > Already comfortable with the basics? Start with
-> [Tutorial 01 — Policy Engine](01-policy-engine.md) and follow the numbered sequence.
+> Tutorial 01 — Policy Engine and follow the numbered sequence.
 
 ---
 
@@ -25,7 +25,7 @@ guides.
 
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
-| 01 | [Policy Engine](01-policy-engine.md) | YAML rules, operators, conflict resolution, middleware integration | `agent-governance-toolkit-core` |
+| 01 | Policy Engine | YAML rules, operators, conflict resolution, middleware integration | `agent-governance-toolkit-core` |
 | 02 | [Trust & Identity](02-trust-and-identity.md) | Ed25519 credentials, DIDs, SPIFFE/SVID, trust scoring (0–1000) | `agent-governance-toolkit-core` |
 | 03 | [Framework Integrations](03-framework-integrations.md) | Govern LangChain, CrewAI, AutoGen, OpenAI Agents, Google ADK | `agent-governance-toolkit-core` |
 | 04 | [Audit & Compliance](04-audit-and-compliance.md) | Append-only audit logs, hash chains, OWASP ASI mapping | `agent-governance-toolkit-cli` |
@@ -35,7 +35,7 @@ guides.
 | # | Tutorial | What You'll Learn | Package |
 |---|----------|-------------------|---------|
 | 07 | [MCP Security Gateway](07-mcp-security-gateway.md) | Tool poisoning detection, parameter sanitization, human-in-the-loop | `agent-governance-toolkit-core` |
-| 08 | [OPA/Rego & Cedar Policies](08-opa-rego-cedar-policies.md) | External policy backends, 3 evaluation modes, enterprise policies | `agent-governance-toolkit-core` |
+| 08 | OPA/Rego & Cedar Policies | External policy backends, 3 evaluation modes, enterprise policies | `agent-governance-toolkit-core` |
 | 09 | [Prompt Injection Detection](09-prompt-injection-detection.md) | 7 attack types, MemoryGuard, ConversationGuardian, red-teaming | `agent-governance-toolkit-core` |
 
 ## Runtime & Execution
@@ -134,16 +134,16 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 
 | Chapter | Topic | What You'll Learn |
 |---------|-------|-------------------|
-| [01 — Your First Policy](policy-as-code/01-your-first-policy.md) | Allow/deny basics | Write a YAML policy and evaluate it with Python |
-| [02 — Capability Scoping](policy-as-code/02-capability-scoping.md) | Restricting tool access by agent role | Give different agents different permissions |
-| [03 — Rate Limiting](policy-as-code/03-rate-limiting.md) | Preventing runaway agents | Set limits on how many actions an agent can take |
-| [04 — Conditional Policies](policy-as-code/04-conditional-policies.md) | Policy composition and conflict resolution | Layer base + environment policies with conflict strategies |
-| [05 — Approval Workflows](policy-as-code/05-approval-workflows.md) | Human-in-the-loop for sensitive actions | Route dangerous actions to a human before execution |
-| [06 — Policy Testing](policy-as-code/06-policy-testing.md) | Systematic validation with test matrices | Test every role + action + environment combination |
-| [07 — Policy Versioning](policy-as-code/07-policy-versioning.md) | Safe rollout of policy changes | Compare v1 vs v2 behavior, catch regressions before deploying |
+| 01 — Your First Policy | Allow/deny basics | Write a YAML policy and evaluate it with Python |
+| 02 — Capability Scoping | Restricting tool access by agent role | Give different agents different permissions |
+| 03 — Rate Limiting | Preventing runaway agents | Set limits on how many actions an agent can take |
+| 04 — Conditional Policies | Policy composition and conflict resolution | Layer base + environment policies with conflict strategies |
+| 05 — Approval Workflows | Human-in-the-loop for sensitive actions | Route dangerous actions to a human before execution |
+| 06 — Policy Testing | Systematic validation with test matrices | Test every role + action + environment combination |
+| 07 — Policy Versioning | Safe rollout of policy changes | Compare v1 vs v2 behavior, catch regressions before deploying |
 | [MCP Governance](policy-as-code/mcp-governance.md) | Supplemental | Governing MCP tool access with the proxy, trust-gated components, OWASP-aligned rules |
 
-> See the [Policy-as-Code README](policy-as-code/README.md) for installation and running instructions.
+> See the Policy-as-Code README for installation and running instructions.
 
 ---
 
@@ -151,7 +151,7 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 
 ### 🚀 "I want to govern my agent in 5 minutes"
 
-1. [01 — Policy Engine](01-policy-engine.md) → define allow/deny rules
+1. 01 — Policy Engine → define allow/deny rules
 2. [03 — Framework Integrations](03-framework-integrations.md) → wrap your framework
 3. [04 — Audit & Compliance](04-audit-and-compliance.md) → log everything
 
@@ -168,7 +168,7 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 
 ### 🏢 "I need enterprise compliance"
 
-1. [08 — OPA/Rego & Cedar](08-opa-rego-cedar-policies.md) → bring existing policies
+1. 08 — OPA/Rego & Cedar → bring existing policies
 2. [04 — Audit & Compliance](04-audit-and-compliance.md) → tamper-proof audit trails
 3. [18 — Compliance Verification](18-compliance-verification.md) → regulatory grading
 4. [13 — Observability & Tracing](13-observability-and-tracing.md) → distributed tracing
@@ -200,7 +200,7 @@ A self-contained sub-series progressing from basic allow/deny rules to productio
 
 1. [29 — Agent Discovery](29-agent-discovery.md) → scan processes, configs, and repos
 2. [02 — Trust & Identity](02-trust-and-identity.md) → register discovered agents
-3. [01 — Policy Engine](01-policy-engine.md) → govern the agents you find
+3. 01 — Policy Engine → govern the agents you find
 4. [27 — MCP Scan CLI](27-mcp-scan-cli.md) → secure discovered MCP servers
 
 ---

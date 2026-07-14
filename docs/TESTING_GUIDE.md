@@ -62,7 +62,7 @@ On Windows PowerShell, use `$env:OPENAI_API_KEY = "sk-..."` instead of `export`.
 ### Step 3: Run the demo
 
 ```bash
-python examples/demos/maf_governance_demo.py
+python examples/maf-integration/01-loan-processing/python/main.py
 ```
 
 You'll see 4 scenarios:
@@ -77,7 +77,7 @@ You'll see 4 scenarios:
 ### Step 4: Run adversarial attacks
 
 ```bash
-python examples/demos/maf_governance_demo.py --include-attacks
+python examples/maf-integration/01-loan-processing/python/main.py --include-attacks
 ```
 
 This adds a 5th scenario that tries to break governance:
@@ -182,14 +182,13 @@ print(f"Reason: {result2.reason}")    # "Blocked by policy"
 
 ### Step 4: Add to a LangChain/CrewAI/ADK agent
 
-See the quickstart examples:
-- `examples/quickstart/langchain_governed.py`
-- `examples/quickstart/crewai_governed.py`
-- `examples/quickstart/google_adk_governed.py`
-- `examples/quickstart/openai_agents_governed.py`
-- `examples/quickstart/autogen_governed.py`
+See the native framework examples:
 
-Each is a single file that creates a governed agent in the respective framework.
+- `examples/crewai-governed/getting_started.py`
+- `examples/openai-agents-governed/getting_started.py`
+- `examples/smolagents-governed/getting_started.py`
+- `examples/maf-integration/01-loan-processing/python/main.py`
+- `examples/quickstart/google_adk_governed.py`
 
 ---
 
@@ -253,8 +252,8 @@ cd ../agent-compliance && python -m pytest tests/ -q
 | Area | How to Test | Expected Result |
 |------|------------|-----------------|
 | **Install** | `pip install agent-governance-toolkit[full]` | Installs cleanly, no errors |
-| **Demo** | `python examples/demos/maf_governance_demo.py` | 4 scenarios run, blocked actions shown |
-| **Adversarial** | `python examples/demos/maf_governance_demo.py --include-attacks` | All 4 attacks blocked |
+| **Demo** | `python examples/maf-integration/01-loan-processing/python/main.py` | 4 scenarios run, blocked actions shown |
+| **Adversarial** | `python examples/maf-integration/01-loan-processing/python/main.py --include-attacks` | All 4 attacks blocked |
 | **Policy loading** | Load YAML from `examples/policies/` | Policies parse without errors |
 | **SQL safety** | Run `test_sql_policy.py` | 40 tests pass |
 | **Framework integration** | Run any `examples/quickstart/*.py` | Governed agent works end-to-end |

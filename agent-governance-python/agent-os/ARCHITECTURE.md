@@ -92,8 +92,8 @@ Framework integrations (LangChain, CrewAI, etc.) follow a governed execution lif
 sequenceDiagram
     participant Agent
     participant Integration as BaseIntegration
-    participant Policy as GovernancePolicy
-    participant Context as ExecutionContext
+    participant Policy as AgtRuntime
+    participant Context as AdapterExecutionState
 
     Agent->>Integration: execute(input)
     Integration->>Integration: pre_execute(ctx, input)
@@ -117,7 +117,7 @@ sequenceDiagram
 
 ## Policy Decision Flow
 
-`GovernancePolicy` enforces constraints at every execution boundary:
+`AgtRuntime` enforces constraints at every execution boundary:
 
 ```mermaid
 flowchart LR
@@ -147,7 +147,7 @@ flowchart LR
     end
 ```
 
-**GovernancePolicy fields:**
+**AgtRuntime fields:**
 
 | Field | Type | Purpose |
 |-------|------|---------|

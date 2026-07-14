@@ -261,12 +261,12 @@ rules:
 
 | Action | Enum Value | `Allowed` | Behaviour |
 |--------|-----------|-----------|-----------|
-| `allow` | `PolicyAction.Allow` | `true` | Permit the request |
-| `deny` | `PolicyAction.Deny` | `false` | Block the request |
-| `warn` | `PolicyAction.Warn` | `true` | Permit but flag for review |
-| `log` | `PolicyAction.Log` | `true` | Permit and log for audit |
-| `require_approval` | `PolicyAction.RequireApproval` | `false` | Block pending human approval |
-| `rate_limit` | `PolicyAction.RateLimit` | varies | Enforce sliding window limits |
+| `allow` | `PolicyEvaluation.Allow` | `true` | Permit the request |
+| `deny` | `PolicyEvaluation.Deny` | `false` | Block the request |
+| `warn` | `PolicyEvaluation.Warn` | `true` | Permit but flag for review |
+| `log` | `PolicyEvaluation.Log` | `true` | Permit and log for audit |
+| `require_approval` | `PolicyEvaluation.RequireApproval` | `false` | Block pending human approval |
+| `rate_limit` | `PolicyEvaluation.RateLimit` | varies | Enforce sliding window limits |
 
 ### Condition expressions
 
@@ -1224,7 +1224,7 @@ tutorials for deeper conceptual coverage:
 
 | .NET Feature | Python Tutorial | Notes |
 |-------------|-----------------|-------|
-| `PolicyEngine` | [Tutorial 01 — Policy Engine](01-policy-engine.md) | Same YAML syntax, same condition operators |
+| `PolicyEngine` | Tutorial 01 — Policy Engine | Same YAML syntax, same condition operators |
 | `AgentIdentity` / `FileTrustStore` | [Tutorial 02 — Trust & Identity](02-trust-and-identity.md) | DID format and trust decay are identical |
 | `GovernanceMiddleware` | [Tutorial 03 — Framework Integrations](03-framework-integrations.md) | MAF adapter pattern |
 | `AuditEmitter` / `GovernanceEvent` | [Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md) | Same event types and structure |

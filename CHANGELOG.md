@@ -11,13 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING: Python policy runtime now uses native ACS only.** Removed the
+  compatibility bridge, pre-ACS rule and result types, runtime folder
+  resolution, local framework policy interpreters, and legacy policy
+  generators. Framework adapters require `AgtRuntime`; sandbox providers use
+  `runtime=` plus explicit `SandboxConfig`.
+
 ## [5.0.0] - 2026-06-25
 
 ### Changed
 - **BREAKING: Monorepo-wide v5 alignment.** Bumped all first-party Python, TypeScript, .NET, and Rust packages from `4.1.0` to `5.0.0` (plus the top-level `VERSION` file, the `docs/ARCHITECTURE.md` banner, and the Claude Code plugin/marketplace manifests), and widened internal cross-package version caps from `<5.0` to `<6.0`. This aligns the released version line with the documentation, which already describes Agent Control Specification (ACS) as the AGT 5.0 policy layer (ACS landed in #2747). Third-party dependency caps, the independently-versioned `policy-engine/` ACS engine (`0.3.1-beta`), and the separately-tagged Go module are unchanged; lockfiles regenerate at publish time.
 
 ### Added
-- **Agent sandbox nono provider** — added `NonoSandboxProvider` to `agt-sandbox`, a Linux/macOS kernel-enforced sandbox backend via the `nono-py` bindings (Landlock / Seatbelt) with policy-driven egress proxying, host-side `PolicyEvaluator` gating, AST pre-scan, and a runnable quickstart (`examples/quickstart/nono_sandbox_test.py`); install with `pip install "agt-sandbox[nono]"`. A non-empty `tool_allowlist` is refused at session creation (fail-closed) because nono has no in-sandbox tool channel — gate tools with policy rules on `tool_name` instead.
+- **Agent sandbox nono provider** — added `NonoSandboxProvider` to `agt-sandbox`, a Linux/macOS kernel-enforced sandbox backend via the `nono-py` bindings (Landlock / Seatbelt) with filtered egress, native runtime gating, and AST pre-scan; install with `pip install "agt-sandbox[nono]"`.
 - **Command denylist enforcement in RingEnforcer** — added `check_command()` method to `RingEnforcer` that validates subprocess commands against a global `DENIED_COMMANDS` list with case-insensitive matching and shell metacharacter stripping (`;`, `&`, `|`) to prevent injection bypasses. Includes comprehensive test coverage in `tests/unit/test_command_denylist.py`.
 
 ### Fixed
@@ -130,11 +137,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove pi-mono integration breaking dependency scan (#1190)
 - Fix lint errors in encryption modules (#1248)
 - Add mkdocs-minify-plugin to dep scan allowlist (#1247)
-- Align lotl_prevention_policy.yaml with PolicyDocument schema
+- Align the LotL prevention example with the policy schema used in that release
 - Standardize DID method to did:agentmesh across all SDKs (#1170)
 - Downgrade rand 0.9.3 to 0.8.5 for ed25519-dalek compatibility (#1178)
 - Fix container publish workflow matrix issues (#1239, #1240, #1241, #1243)
-- Rewrite production policy examples to valid PolicyDocument schema (#1011)
+- Rewrite production policy examples to the schema used in that release (#1011)
 
 ### Documentation
 - **OpenClaw sidecar** — comprehensive rewrite with verified API examples and working demo (#1163, #1164, #1167)

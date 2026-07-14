@@ -172,10 +172,10 @@ defaults:
 **Python integration:**
 
 ```python
-from agent_os import GovernancePolicy, GovernedAgent
+from agent_os import AgtRuntime, GovernedAgent
 
 # Load policy from YAML
-policy = GovernancePolicy.from_yaml("policies/data-protection.yaml")
+policy = AgtRuntime.from_yaml("policies/data-protection.yaml")
 
 # Wrap any framework adapter — here using LangChain
 from agent_os.integrations import LangChainAdapter
@@ -315,7 +315,7 @@ The three tools form complementary defense layers. Here is how to combine them:
 ```python
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from nemoguardrails import RailsConfig, LLMRails
-from agent_os import GovernancePolicy
+from agent_os import AgtRuntime
 from agent_os.integrations import LangChainAdapter
 
 # --- Layer 1: LlamaGuard content screening ---
@@ -334,7 +334,7 @@ rails_config = RailsConfig.from_path("./guardrails_config")
 rails = LLMRails(rails_config)
 
 # --- Layer 3: Agent OS action governance ---
-policy = GovernancePolicy.from_yaml("policies/data-protection.yaml")
+policy = AgtRuntime.from_yaml("policies/data-protection.yaml")
 adapter = LangChainAdapter(
     policy=policy,
     allowed_tools=["read_file", "write_file", "search"],

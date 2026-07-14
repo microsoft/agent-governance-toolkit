@@ -132,9 +132,9 @@ In practice:
 | OpenAI Agents SDK | Middleware | `OpenAIAgentsKernel` | Async hooks on tool calls. Published on PyPI (`agentmesh-openai-agents-trust`). |
 | Google ADK | Adapter | `GoogleADKKernel` | Plugin-style integration via ADK's extension system. |
 | LlamaIndex | Middleware | `LlamaIndexAdapter` | `TrustedAgentWorker` + `TrustGatedQueryEngine` merged upstream. |
-| Haystack | Pipeline | `HaystackAdapter` | `GovernancePolicyChecker` + `TrustGate` pipeline components. |
+| Haystack | Pipeline | `HaystackAdapter` | `AgtRuntimeChecker` + `TrustGate` pipeline components. |
 | Dify | Plugin | `DifyPlugin` | Install from Dify Marketplace. Zero-code governance. |
-| Azure AI Foundry | Deployment Guide | MAF Middleware | `GovernancePolicyMW`, `CapabilityGuardMW`, `AuditTrailMW`, `RogueDetectionMW`. |
+| Azure AI Foundry | Deployment Guide | MAF Middleware | `AgtRuntimeMW`, `CapabilityGuardMW`, `AuditTrailMW`, `RogueDetectionMW`. |
 
 ### Which Should You Choose?
 
@@ -281,9 +281,9 @@ token = managed.get_token(scope="https://graph.microsoft.com/.default")
 ### In-Process Reload (Explicit)
 
 ```python
-from agent_os.policies import AsyncPolicyEvaluator
+from agent_os.policies import AsyncAgtRuntime
 
-evaluator = AsyncPolicyEvaluator(policy_dir="./policies")
+evaluator = AsyncAgtRuntime(policy_dir="./policies")
 
 # Later, when policies have been updated on disk:
 await evaluator.reload_policies(directory="./policies")
@@ -520,7 +520,7 @@ It works with Azure AI Foundry, AWS Bedrock, Google ADK, LangChain, CrewAI, Auto
 
 AGT follows an **adapter pattern**: core governance packages are vendor-neutral (pydantic + cryptography only), while framework-specific integrations are published as separate packages. This means:
 
-- **Foundry agents** get native middleware integration (`GovernancePolicyMW`, `CapabilityGuardMW`, `AuditTrailMW`) — governance is invisible and automatic.
+- **Foundry agents** get native middleware integration (`AgtRuntimeMW`, `CapabilityGuardMW`, `AuditTrailMW`) — governance is invisible and automatic.
 - **Non-Foundry agents** (LangChain, CrewAI, OpenClaw, etc.) use adapters or the sidecar HTTP API — 2–3 lines of code.
 - The **governance capabilities are identical** regardless of framework — policy enforcement, identity verification, audit logging, trust scoring.
 

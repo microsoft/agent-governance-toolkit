@@ -5,6 +5,34 @@ entries appear first.
 
 ---
 
+## Python runtime policy APIs now require native ACS
+
+**Date:** TBD
+
+**Affected**
+
+- `agt-policies` and `agent-os` framework adapters
+- `agt-sandbox`
+- Policy generation, lint, replay, and example tooling
+
+**What changed**
+
+The Python runtime no longer exports or interprets the pre-ACS rule model,
+compatibility result types, runtime bridge, folder resolver, local backends, or
+framework-local intent policies. Framework adapters require `AgtRuntime`.
+Sandbox providers now separate `runtime=` from explicit `SandboxConfig`.
+The unreleased `cedarling-agentmesh` backend and its consolidated package extra
+were also removed because they depended on the deleted backend contract.
+
+**Migration**
+
+Run the one-way migration command for supported literal inputs, then construct
+`AgtRuntime` from the generated manifest. Move sandbox resources, mounts,
+network settings, and tool exposure into `SandboxConfig`. Replace compatibility
+exception fields with `evaluation_result` and the native audit record.
+
+---
+
 ## Rust and Mastra framework policy surfaces now use ACS manifests
 
 **Date:** TBD
@@ -172,9 +200,8 @@ policy input. This release standardizes all three on fail-closed semantics:
 
 1. **Default action is now deny.** When `defaults.action` is omitted, or when
    no policies are loaded at all, the decision is now `deny` in every SDK.
-   - Python: `PolicyDefaults.action` now defaults to `PolicyAction.DENY`, and
-     the evaluator returns `deny` when no policies are loaded (previously both
-     were `allow`, fail-open).
+   - Python native ACS evaluation fails closed when no valid binding can
+     produce a decision.
    - .NET: the zero-policy path now returns `PolicyDecision.DenyDefault`
      (previously `AllowDefault`).
    - TypeScript already defaulted to `deny`; no change.

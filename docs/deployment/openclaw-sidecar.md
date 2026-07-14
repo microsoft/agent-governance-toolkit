@@ -410,7 +410,7 @@ For Kubernetes monitoring, use the health/ready endpoints as probes (already con
 Features we're actively working on:
 
 - [ ] **Transparent tool-call proxy** — Intercept agent → tool calls without agent modification
-- [ ] **YAML policy loading from mounted volume** — Load `PolicyDocument` files from `/policies`
+- [ ] **YAML policy loading from mounted volume** — Load `AgtManifest` files from `/policies`
 - [ ] **Prometheus `/metrics` endpoint** — Standard Prometheus format alongside the JSON API
 - [ ] **Published container images** — Pre-built images on a public registry (currently build-from-source)
 - [ ] **Helm chart sidecar injection** — First-class sidecar support in the AgentMesh Helm chart

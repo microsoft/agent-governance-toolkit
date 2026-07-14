@@ -1,6 +1,12 @@
+---
+title: AI Agent Governance Workshop
+last_reviewed: 2026-07-12
+owner: docs-team
+---
+
 # 🎓 Workshop: Introduction to AI Agent Governance
 
-> **Duration:** 2 hours · **Level:** Beginner–Intermediate · **Format:** Lecture + Hands-on Labs
+> **Duration:** 90 minutes · **Level:** Beginner–Intermediate · **Format:** Lecture + hands-on labs
 
 A complete, self-contained workshop kit for teaching AI agent governance using the
 Agent Governance Toolkit. All materials are in this folder — facilitators need only
@@ -12,27 +18,24 @@ a laptop and the prerequisites below.
 
 | File | Purpose |
 |------|---------|
-| [slides.md](slides.md) | Slide deck — 22 slides covering governance concepts |
-| [lab-guide.md](lab-guide.md) | Participant lab guide with 3 hands-on exercises |
+| [slides.md](slides.md) | Slide deck covering native policy and trust concepts |
+| [lab-guide.md](lab-guide.md) | Participant guide with 2 hands-on exercises |
 | [facilitator-notes.md](facilitator-notes.md) | Facilitator guide with talking points and timing |
 | [prerequisites.md](prerequisites.md) | Participant setup checklist (share 48 h before the session) |
-| [labs/lab1_first_policy.py](labs/lab1_first_policy.py) | Starter template for Lab 1 |
+| [labs/lab1_first_policy.py](labs/lab1_first_policy.py) | Native ACS policy lab |
 | [labs/lab2_multi_agent_trust.py](labs/lab2_multi_agent_trust.py) | Starter template for Lab 2 |
-| [labs/lab3_full_governance_stack.py](labs/lab3_full_governance_stack.py) | Starter template for Lab 3 |
 
 ---
 
-## Agenda (2 hours)
+## Agenda
 
 | Time | Segment | Format |
 |------|---------|--------|
-| 0:00–0:20 | Why governance matters | Slides 1–7 |
-| 0:20–0:40 | **Lab 1** — Your first policy | Hands-on |
-| 0:40–0:55 | Trust and identity concepts | Slides 8–14 |
-| 0:55–1:15 | **Lab 2** — Multi-agent trust | Hands-on |
-| 1:15–1:25 | Break | — |
-| 1:25–1:40 | Production patterns | Slides 15–22 |
-| 1:40–2:00 | **Lab 3** — Full governance stack | Hands-on |
+| 0:00–0:20 | Why governance matters and native ACS | Slides |
+| 0:20–0:45 | **Lab 1** - Native policy evaluation | Hands-on |
+| 0:45–1:00 | Trust and identity concepts | Slides |
+| 1:00–1:25 | **Lab 2** - Multi-agent trust | Hands-on |
+| 1:25–1:30 | Wrap-up | Discussion |
 
 ---
 
@@ -56,7 +59,7 @@ a laptop and the prerequisites below.
 
 ## Related Resources
 
-- [Tutorial 01 — Policy Engine](../tutorials/01-policy-engine.md) — deep-dive after Lab 1
-- [Tutorial 02 — Trust & Identity](../tutorials/02-trust-and-identity.md) — deep-dive after Lab 2
-- [Tutorial 04 — Audit & Compliance](../tutorials/04-audit-and-compliance.md) — deep-dive after Lab 3
-- [quickstart.md](../quickstart.md) — 10-minute overview of the full toolkit
+- [Agent Control Specification](../tutorials/55-agent-control-specification.md)
+- [Trust and Identity](../tutorials/02-trust-and-identity.md)
+- [Audit and Compliance](../tutorials/04-audit-and-compliance.md)
+- [Quickstart](../quickstart.md)

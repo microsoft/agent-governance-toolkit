@@ -194,16 +194,16 @@ result := client.ExecuteWithGovernance("data.read", nil)
 
 ```bash
 # 完整治理示範 (policy enforcement, audit, trust, cost, reliability)
-python examples/demos/maf_governance_demo.py
+python examples/maf-integration/01-loan-processing/python/main.py
 
 # 使用對抗性攻擊場景執行
-python examples/demos/maf_governance_demo.py --include-attacks
+python examples/maf-integration/01-loan-processing/python/main.py --include-attacks
 ```
 
 ## 更多範例與樣本
 
 - **[框架快速入門](../../examples/quickstart/)** — 單檔案受治理代理適用於 LangChain、CrewAI、AutoGen、OpenAI Agents、Google ADK
-- **[教學 1: Policy Engine](../../docs/tutorials/01-policy-engine.md)** — 定義並執行治理策略
+- **教學 1: Policy Engine** — 定義並執行治理策略
 - **[教學 2: Trust & Identity](../../docs/tutorials/02-trust-and-identity.md)** — 零信任代理憑證
 - **[教學 3: Framework Integrations](../../docs/tutorials/03-framework-integrations.md)** — 為任何框架新增治理
 - **[教學 4: Audit & Compliance](../../docs/tutorials/04-audit-and-compliance.md)** — OWASP 合規與證明
@@ -217,33 +217,23 @@ python examples/demos/maf_governance_demo.py --include-attacks
 ### OPA/Rego (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agt.policies import AdapterRuntimeSession, AgtRuntime
 
-evaluator = PolicyEvaluator()
-evaluator.load_rego(rego_content="""
-package agentos
-default allow = false
-allow { input.tool_name == "web_search" }
-allow { input.role == "admin" }
-""")
-
-decision = evaluator.evaluate({"tool_name": "web_search", "role": "analyst"})
-# decision.allowed == True
+runtime = AgtRuntime("policies/rego-manifest.yaml")
+session = AdapterRuntimeSession(
+    runtime, agent_id="agent-1", session_id="session-1"
+)
+decision = session.evaluate_pre_tool_call(
+    tool_name="web_search", args={"query": "status"}
+)
 ```
 
 ### Cedar (Agent OS)
 
 ```python
-from agent_os.policies import PolicyEvaluator
+from agt.policies import AgtRuntime
 
-evaluator = PolicyEvaluator()
-evaluator.load_cedar(policy_content="""
-permit(principal, action == Action::"ReadData", resource);
-forbid(principal, action == Action::"DeleteFile", resource);
-""")
-
-decision = evaluator.evaluate({"tool_name": "read_data", "agent_id": "agent-1"})
-# decision.allowed == True
+runtime = AgtRuntime("policies/cedar-manifest.yaml")
 ```
 
 ### AgentMesh OPA/Cedar

@@ -127,28 +127,22 @@ Ctrl+Shift+P → "Agent OS: Open Policy Editor"
 3. Click **Validate** to check syntax
 4. Click **Save Policy** to save to your workspace
 
-### Policy Rule Structure
+### Native Manifest Structure
 
 ```yaml
-rules:
-  - name: "Rule name"
-    condition: "when to apply"      # e.g., "agent.action == 'http.request'"
-    constraint: "what to check"     # e.g., "url.host in allowed_domains"
-    action: "deny | warn | allow"   # what to do
-    message: "User-facing message"  # shown when triggered
-```
-
-### Example: Block External API Calls
-
-```yaml
-policy:
-  name: "Internal Only"
-  rules:
-    - name: "Block external APIs"
-      condition: "agent.action == 'http.request'"
-      constraint: "not url.host.endsWith('.internal.company.com')"
-      action: "deny"
-      message: "External API calls are not allowed"
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: internal-only
+extends: []
+policies:
+  internal-network:
+    type: rego
+    bundle: ./internal-network
+intervention_points:
+  pre_tool_call:
+    policy_target: $.tool
+    policy:
+      id: internal-network
 ```
 
 ---

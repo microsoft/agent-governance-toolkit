@@ -1,176 +1,70 @@
-# Guide: Progressive Governance — Start Simple, Add Layers
-
-> **Applies to:** All AGT packages · **Time:** 15 minutes · **Prerequisites:** None
-
+---
+title: Progressive Governance
+last_reviewed: 2026-07-12
+owner: docs-team
 ---
 
-## What You'll Learn
+# Progressive Governance
 
-- The 5-level progressive complexity model for agent governance
-- When to add each governance layer based on your team's risk profile
+Start with one native ACS manifest, then add host controls only when the risk
+requires them.
 
----
+## Level 1
 
-> **You don't need the full stack to start.** Most teams run Level 1–2 in
-> production and never need Level 5. Pick the level that matches your risk.
-
----
-
-## Level 1: Govern in 3 Lines
-
-**When you need this:** You have one agent, you want to block dangerous actions,
-and you need something running today.
+Create a manifest and evaluate it through `AgtRuntime`.
 
 ```python
-from agent_os.policies import PolicyEvaluator, PolicyDocument
+from agt.policies import AdapterRuntimeSession, AgtRuntime
 
-doc = PolicyDocument.from_dict({
-    "version": "1.0",
-    "rules": [
-        {"action": "web_search", "effect": "allow"},
-        {"action": "read_file", "effect": "allow"},
-        {"action": "*", "effect": "deny"},
-    ],
-})
-
-evaluator = PolicyEvaluator(policies=[doc])
-decision = evaluator.evaluate({"action": "delete_file"})
-assert not decision.allowed  # blocked by default-deny
-```
-
-> 💡 **This is enough for 80% of teams starting out.** You get deterministic
-> policy enforcement with zero infrastructure.
-
----
-
-## Level 2: Add YAML Policies
-
-**When you need this:** Your rules are growing, you want version-controlled
-policies, or you need content filtering (PII, prompt injection).
-
-```yaml
-# policies/production.yaml
-version: "1.0"
-rules:
-  - action: "web_search"
-    effect: allow
-  - action: "read_file"
-    effect: allow
-    conditions:
-      path_pattern: "/data/public/**"
-  - action: "*"
-    effect: deny
-content_filters:
-  blocked_patterns:
-    - '\b\d{3}-\d{2}-\d{4}\b'   # SSN
-    - '\b\d{16}\b'               # Credit card numbers
-```
-
-```python
-from agent_os.policies import PolicyEvaluator
-
-evaluator = PolicyEvaluator.from_yaml("policies/production.yaml")
-decision = evaluator.evaluate({"action": "read_file", "path": "/data/public/report.csv"})
-```
-
-> 💡 **Generate policies instantly** with `agent-os policy generate --template strict`.
-> See [Policy Generator CLI](../../agent-governance-python/agent-os/src/agent_os/cli/cmd_policy_gen.py).
-
----
-
-## Level 3: Add Agent Identity
-
-**When you need this:** You have multiple agents, you need to know which agent
-did what, or you need trust scoring between agents.
-
-```python
-from agentmesh.identity import AgentIdentity
-
-identity = AgentIdentity.create(
-    name="research-agent",
-    capabilities=["web_search", "read_file"],
+runtime = AgtRuntime("policies/manifest.yaml")
+session = AdapterRuntimeSession(
+    runtime,
+    agent_id="agent-1",
+    session_id="session-1",
 )
 
-# Identity gives each agent a verifiable SPIFFE SVID
-# Use with policy evaluation: evaluator.evaluate({"agent_id": identity.id, "action": "web_search"})
-```
-
-> 💡 **Add this when you move to multi-agent systems.** Single-agent setups
-> rarely need identity management.
-
----
-
-## Level 4: Add Lifecycle Management
-
-**When you need this:** Agents are created dynamically, credentials need
-rotation, or you need to detect orphaned/shadow agents.
-
-```python
-from agentmesh.lifecycle import LifecycleManager, OrphanDetector
-
-manager = LifecycleManager()
-agent = manager.request_provisioning(
-    name="data-analyst",
-    owner="platform-team",
-    capabilities=["read_file", "web_search"],
+evaluation = session.evaluate_pre_tool_call(
+    tool_name="delete_file",
+    args={"path": "report.txt"},
 )
-
-detector = OrphanDetector()
-orphans = detector.scan()  # finds agents with no active owner
-for orphan in orphans:
-    manager.decommission(orphan.id)
+assert not evaluation.is_allowed()
 ```
 
-> 💡 **Add this when you're running agents in production at scale.** Credential
-> rotation and orphan detection prevent security drift.
+The manifest owns policy definitions, tool catalogs, intervention-point
+bindings, budgets, transforms, and approval.
 
----
+## Level 2
 
-## Level 5: Full Stack
+Add version-controlled Rego or Cedar bundles and use ACS `extends` to compose
+resolved manifests. Run `agt lint-policy` and `agt test` in CI.
 
-**When you need this:** Regulated industries, enterprise compliance requirements,
-or you need a complete governance dashboard with SRE capabilities.
-
-```python
-from agentmesh.governance import govern, GovernanceConfig
-from agent_os.policies import PolicyEvaluator
-
-# Wrap any agent with full governance: policies, identity, audit, SRE
-config = GovernanceConfig(
-    policy="policies/",
-    agent_id="enterprise-agent",
-    audit=True,
-    audit_file="audit/governance.jsonl",
-)
-
-safe_agent = govern(agent.run, config=config)
-
-# Everything from Levels 1–4, plus:
-# - Policy enforcement with conflict resolution
-# - Full audit trail with compliance mapping
-# - Approval workflows for high-risk actions
-result = safe_agent(action="transfer_funds", amount=10000)
+```bash
+agt lint-policy policies/manifest.yaml
+agt test policies/manifest.yaml policies/fixtures.json
 ```
 
-> 💡 **Most teams never need Level 5.** It exists for regulated industries
-> (finance, healthcare, government) with strict compliance requirements.
+## Level 3
 
----
+Use an Agent OS framework adapter. Pass the same runtime through `runtime=` so
+model, tool, and output paths are mediated by the manifest.
 
-## Summary
+## Level 4
 
-| Level | What You Get | Lines of Code | When You Need It |
-|-------|-------------|---------------|-----------------|
-| 1 | Policy enforcement | ~5 | Day one — block dangerous actions |
-| 2 | YAML policies + content filters | ~3 + YAML | Rules are growing, need version control |
-| 3 | Agent identity + trust scoring | ~8 | Multi-agent systems |
-| 4 | Lifecycle + orphan detection | ~10 | Production scale, credential rotation |
-| 5 | Full stack (SRE, compliance, dashboard) | ~12 | Regulated industries |
+Add AgentMesh identity, trust, and transport controls for multi-agent systems.
+These controls remain separate from ACS policy evaluation.
 
-## Next Steps
+## Level 5
 
-- [60-Second Quickstart](../../examples/quickstart/govern_in_60_seconds.py)
-- [Policy Engine Tutorial](01-policy-engine.md)
-- [Trust & Identity Tutorial](02-trust-and-identity.md)
-- [Agent Discovery Tutorial](29-agent-discovery.md)
-- [Agent Lifecycle Tutorial](30-agent-lifecycle.md)
+Add sandbox isolation, SRE controls, approval services, and centralized audit.
+Sandbox resources and egress belong in `SandboxConfig`, not in policy objects.
+
+| Level | Add when you need |
+|-------|-------------------|
+| 1 | Deterministic policy checks |
+| 2 | Reviewed bundles and replay |
+| 3 | Framework lifecycle mediation |
+| 4 | Multi-agent identity and trust |
+| 5 | Isolation, resilience, and operations |
+
+See [Your First Policy](policy-as-code/01-your-first-policy.md) and
+[Agent Control Specification](55-agent-control-specification.md).

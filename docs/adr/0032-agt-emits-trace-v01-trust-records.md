@@ -21,7 +21,7 @@ deployment boundary.
 
 AGT already has the raw data for most TRACE fields: the Merkle chain tip covers
 `tool_transcript.hash`, `SessionState` carries the monotonic `data_class`,
-`PolicyInterceptor` evaluates and records Cedar policy decisions. The gap is the
+`NativeAdapterRuntime` evaluates and records Cedar policy decisions. The gap is the
 TRACE envelope, the EdDSA signature over the payload, and a handful of fields
 (model, runtime, build provenance) that must be injected from configuration.
 
@@ -99,7 +99,7 @@ DID/SPIFFE URI.
 
 **What does not change:**
 
-`AuditEntry`, `MerkleAuditChain`, `PolicyInterceptor`, and `SessionState` are
+`AuditEntry`, `MerkleAuditChain`, `NativeAdapterRuntime`, and `SessionState` are
 unchanged. `TRACEAuditSink` is an adapter over the existing chain. No existing
 sink is affected. The HMAC-chained audit log continues to be written in parallel.
 

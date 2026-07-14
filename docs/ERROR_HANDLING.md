@@ -44,7 +44,7 @@ Raised when a policy document fails to parse or validate.
 from agent_os.exceptions import PolicyLoadError
 
 try:
-    policies = PolicyDocument.load_from_file("policies/my-policy.yaml")
+    policies = AgtManifest.load_from_file("policies/my-policy.yaml")
 except PolicyLoadError as e:
     print(f"Failed to load policy: {e.message}")
     print(f"File: {e.filename}")
@@ -89,13 +89,13 @@ Catch policy load errors at startup to fail fast with a clear message.
 ```python
 import yaml
 
-def load_policies(policy_paths: list[str]) -> list[PolicyDocument]:
+def load_policies(policy_paths: list[str]) -> list[AgtManifest]:
     policies = []
     for path in policy_paths:
         try:
             with open(path) as f:
                 data = yaml.safe_load(f)
-            policies.append(PolicyDocument.from_dict(data))
+            policies.append(AgtManifest.from_dict(data))
         except PolicyLoadError as e:
             raise RuntimeError(f"Policy load failed for '{path}': {e.message}") from e
     return policies

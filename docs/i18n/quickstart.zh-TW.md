@@ -83,43 +83,21 @@ agent-governance verify --badge
 建立一個名為 `governed_agent.py` 的檔案：
 
 ```python
-from agent_os.policies import PolicyEvaluator, PolicyDecision
-from agent_os.policies.schema import (
-    PolicyDocument, PolicyRule, PolicyCondition,
-    PolicyAction, PolicyOperator, PolicyDefaults,
+from agt.policies import AdapterRuntimeSession, AgtRuntime
+
+runtime = AgtRuntime("policies/manifest.yaml")
+session = AdapterRuntimeSession(
+    runtime,
+    agent_id="quickstart-agent",
+    session_id="quickstart-session",
 )
 
-# 內嵌定義治理規則（或從 YAML 載入 — 見下文）
-policy = PolicyDocument(
-    name="agent-safety",
-    version="1.0",
-    description="範例安全策略",
-    defaults=PolicyDefaults(action=PolicyAction.ALLOW),
-    rules=[
-        PolicyRule(
-            name="block-dangerous-tools",
-            condition=PolicyCondition(
-                field="tool_name",
-                operator=PolicyOperator.IN,
-                value=["execute_code", "delete_file", "shell_exec"],
-            ),
-            action=PolicyAction.DENY,
-            message="工具已被策略封鎖",
-            priority=100,
-        ),
-    ],
+result = session.evaluate_pre_tool_call(
+    tool_name="delete_file",
+    args={"path": "/etc/passwd"},
 )
-
-evaluator = PolicyEvaluator(policies=[policy])
-
-# 允許
-result = evaluator.evaluate({"tool_name": "web_search", "input_text": "latest AI news"})
-print(f"操作允許: {result.allowed}")   # True
-
-# 封鎖 — 確定性
-result = evaluator.evaluate({"tool_name": "delete_file", "input_text": "/etc/passwd"})
-print(f"操作允許: {result.allowed}")   # False
-print(f"原因: {result.reason}")       # "工具已被策略封鎖"
+print(result.verdict)
+print(result.reason_code)
 ```
 
 執行：

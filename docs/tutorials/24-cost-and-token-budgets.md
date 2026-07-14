@@ -1,3 +1,9 @@
+---
+title: Cost and Token Budgets
+last_reviewed: 2026-07-12
+owner: docs-team
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 24 — Cost and Token Budgets
@@ -32,7 +38,7 @@ budget enforcement with the "scale by subtraction" philosophy — 90% lookup,
 
 - **Python 3.10+**
 - `pip install agent-os-kernel`
-- Recommended: read [Tutorial 01 — Policy Engine](01-policy-engine.md)
+- Recommended: read Tutorial 01 — Policy Engine
 
 ---
 
@@ -151,17 +157,16 @@ print(tracker.format_status("researcher"))
 # [████████░░] 82% (82,000/100,000 tokens)
 ```
 
-### §2.7 Integrating with GovernancePolicy
+### §2.7 Coordinating with Native Sessions
 
-The tracker can read its default `max_tokens` from a `GovernancePolicy`:
+The host-side tracker uses an explicit soft limit. Native policy counters remain
+owned by `AdapterRuntimeSession`.
 
 ```python
-from agent_os.integrations.base import GovernancePolicy
+from agent_os.integrations.token_budget import TokenBudgetTracker
 
-policy = GovernancePolicy(max_tokens=50_000)
-tracker = TokenBudgetTracker(policy=policy)
+tracker = TokenBudgetTracker(max_tokens=50_000)
 
-# Budget limit comes from the policy
 status = tracker.get_usage("agent-y")
 print(status.limit)  # 50000
 ```
@@ -541,7 +546,7 @@ print(f"  Exceeded:      {final.is_exceeded}")
 
 | Concept | Tutorial |
 |---------|----------|
-| Policy engine integration | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
+| Policy engine integration | Tutorial 01 — Policy Engine |
 | Rate limiting | [Tutorial 14 — Kill Switch & Rate Limiting](./14-kill-switch-and-rate-limiting.md) |
 | Observability | [Tutorial 13 — Observability & Tracing](./13-observability-and-tracing.md) |
 | Agent reliability (SRE) | [Tutorial 05 — Agent Reliability](./05-agent-reliability.md) |

@@ -33,7 +33,7 @@ and hash-chain audit logging — all in a single `go get`.
 
 - **Go 1.25+**
 - Familiarity with Go modules (`go.mod`)
-- Recommended: read [Tutorial 01 — Policy Engine](01-policy-engine.md) for
+- Recommended: read Tutorial 01 — Policy Engine for
   governance concepts
 
 ---
@@ -287,7 +287,7 @@ fmt.Println(engine.Evaluate("deploy.production", nil))  // requires_approval
 Store policies in version-controlled YAML files:
 
 ```yaml
-# policies/governance.yaml
+# policies/agt-manifest.yaml
 rules:
   - action: "data.read"
     effect: allow
@@ -305,7 +305,7 @@ rules:
 
 ```go
 engine := agentmesh.NewPolicyEngine(nil)
-err := engine.LoadFromYAML("policies/governance.yaml")
+err := engine.LoadFromYAML("policies/agt-manifest.yaml")
 if err != nil {
     log.Fatalf("failed to load policy: %v", err)
 }
@@ -626,7 +626,7 @@ Agent DID: did:agentmesh:research-agent
   shell.exec → ❌ denied  (trust: 0.28, tier: low)
 
 Audit chain valid: true
-Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resear ...
+Audit JSON: {"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resear ...
 ```
 
 ---
@@ -635,7 +635,7 @@ Audit JSON: [{"timestamp":"2025-07-15T10:30:00Z","agent_id":"did:agentmesh:resea
 
 | Go module feature | Python Equivalent | Tutorial |
 |----------------|-------------------|----------|
-| `PolicyEngine` | `agent_os.policy` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
+| `PolicyEngine` | `agent_os.policy` | [Tutorial 01 — Policy Engine |
 | `TrustManager` | `agent_os.trust` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | `AuditLogger` | `agent_os.audit` | [Tutorial 04 — Audit & Compliance](./04-audit-and-compliance.md) |
 | `AgentIdentity` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |

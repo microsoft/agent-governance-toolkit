@@ -103,7 +103,7 @@ writes JSONL to stdout. Audit entries now carry execution-context fields
 - **YAML deserialization** hardened to JSON_SCHEMA (TypeScript) (#2333, #2334)
 - **Shell injection** prevention in Actions inputs (#2330)
 - **Docker CLI args** - use ArgumentList instead of string concat (#2357)
-- **PolicyAction validation** from YAML instead of unsafe cast (TS) (#2355)
+- **PolicyEvaluation validation** from YAML instead of unsafe cast (TS) (#2355)
 - **Hypervisor isolation** tests aligned with fail-closed implementation (#2370)
 - **CI hardening** - lint, safety check, docs deploy, ATR sync (#2341, #2345, #2348, #2349, #2365, #2367, #2371, #2376, #2378)
 - **.NET streaming governance** for MAF agents (#2366)

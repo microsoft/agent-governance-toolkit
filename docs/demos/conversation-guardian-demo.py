@@ -40,14 +40,12 @@ try:
     from agent_os.integrations.conversation_guardian import (
         AlertAction,
         ConversationGuardian,
-        ConversationGuardianConfig,
     )
 except ImportError:
     sys.path.insert(0, "src")
     from agent_os.integrations.conversation_guardian import (
         AlertAction,
         ConversationGuardian,
-        ConversationGuardianConfig,
     )
 
 
@@ -427,7 +425,7 @@ def main():
     print(c("bold", "  For more information:"))
     print(c("cyan", "  * Code: agent-governance-python/agent-os/src/agent_os/integrations/conversation_guardian.py"))
     print(c("cyan", "  * Tests: agent-governance-python/agent-os/tests/test_conversation_guardian.py"))
-    print(c("cyan", "  * Policy: agent-governance-python/agent-os/src/agent_os/policies/policy_schema.json"))
+    print(c("cyan", "  * Manifest schema: policy-engine/spec/schema/manifest.schema.json"))
     print()
 
 

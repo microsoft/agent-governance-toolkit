@@ -284,7 +284,7 @@ Combine AGT policy checks with Entra scope verification:
 from agentmesh import PolicyEngine
 
 # Load AGT policies
-policy_engine = PolicyEngine(config_path="governance.yaml")
+policy_engine = PolicyEngine(config_path="agt-manifest.yaml")
 
 # Combined verification: Entra scope + AGT policy
 def verify_tool_call(agent_did: str, tool_name: str, params: dict) -> bool:

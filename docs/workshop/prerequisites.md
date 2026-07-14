@@ -1,3 +1,9 @@
+---
+title: Workshop Prerequisites
+last_reviewed: 2026-07-12
+owner: docs-team
+---
+
 # Prerequisites — Introduction to AI Agent Governance Workshop
 
 > Share this file with participants **at least 48 hours before** the session.
@@ -48,13 +54,13 @@ source agt-workshop/bin/activate          # macOS / Linux
 # agt-workshop\Scripts\activate           # Windows PowerShell
 
 # 2. Install packages
-pip install agent-os-kernel agentmesh-platform agent-governance-toolkit
+pip install agent-governance-toolkit[full]
 ```
 
 Verify the install:
 
 ```bash
-python -c "from agent_os.policies import PolicyEvaluator; print('✅ agent-os-kernel OK')"
+python -c "from agt.policies import AgtManifest; print('✅ native policy API OK')"
 python -c "from agentmesh import AgentIdentity; print('✅ agentmesh-platform OK')"
 python -c "import agent_governance; print('✅ agent-governance-toolkit OK')"
 ```
@@ -95,9 +101,12 @@ Run this script to confirm everything is working:
 
 ```bash
 python -c "
-from agent_os.policies import PolicyEvaluator
-e = PolicyEvaluator()
-print('Policy engine:', type(e).__name__)
+from agt.policies import AgtManifest
+m = AgtManifest.model_validate({
+    'agent_control_specification_version': '0.3.1-beta',
+    'metadata': {'name': 'workshop-check'},
+})
+print('Manifest:', m.metadata['name'])
 
 from agentmesh import AgentIdentity, RiskScorer
 a = AgentIdentity.create(name='TestAgent', sponsor='you@example.com', capabilities=[])
@@ -114,7 +123,7 @@ print('All prerequisites satisfied. See you at the workshop!')
 Expected output (DIDs will differ):
 
 ```
-Policy engine: PolicyEvaluator
+Manifest: workshop-check
 Agent DID: did:mesh:...
 Audit log: AuditLog
 

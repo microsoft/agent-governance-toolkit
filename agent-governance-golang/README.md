@@ -105,7 +105,7 @@ OPA/Rego and Cedar support with fail-closed evaluation paths.
 | Type / Function | Description |
 |---|---|
 | `NewOPABackend(options)` | Create an OPA backend with remote, CLI, or built-in modes |
-| `NewCedarBackend(options)` | Create a Cedar backend with CLI or built-in modes |
+| `NewCedarlingDecision(options)` | Create a Cedar backend with CLI or built-in modes |
 | `OPAOptions` | Configure OPA URL, package/query, timeout, and Rego content |
 | `CedarOptions` | Configure Cedar policy content, entities, schema, and timeout |
 

@@ -25,7 +25,7 @@
 
 ## 1. Policy Evaluation
 
-Measures `PolicyEvaluator.evaluate()` — the core enforcement path every agent action passes through.
+Measures `AgtRuntime.evaluate()` — the core enforcement path every agent action passes through.
 
 | Benchmark | ops/sec | p50 (ms) | p95 (ms) | p99 (ms) |
 |---|---:|---:|---:|---:|
@@ -36,8 +36,6 @@ Measures `PolicyEvaluator.evaluate()` — the core enforcement path every agent 
 | YAML policy load (cold, 10 rules) | 112 | 8.432 | 12.717 | 17.763 |
 
 **Key takeaway:** Rule count scales linearly. Even with 100 rules, p99 is under 0.11 ms. YAML loading is a cold-start cost (once per deployment, not per action).
-
-Source: [`agent-governance-python/agent-os/benchmarks/bench_policy.py`](agent-governance-python/agent-os/benchmarks/bench_policy.py)
 
 ## 2. Kernel Enforcement
 
@@ -83,7 +81,7 @@ Measures the governance check overhead per framework adapter — the cost added 
 
 | Adapter | ops/sec | p50 (ms) | p95 (ms) | p99 (ms) |
 |---|---:|---:|---:|---:|
-| GovernancePolicy init (startup) | 134,923 | 0.007 | 0.008 | 0.019 |
+| AgtRuntime init (startup) | 134,923 | 0.007 | 0.008 | 0.019 |
 | Tool allowed check | 3,745,036 | 0.000 | 0.000 | 0.000 |
 | Pattern match (per call) | 135,717 | 0.007 | 0.008 | 0.022 |
 | **OpenAI** adapter | 166,363 | 0.005 | 0.007 | 0.017 |
@@ -97,8 +95,6 @@ Measures the governance check overhead per framework adapter — the cost added 
 | **Semantic Kernel** adapter | 170,930 | 0.005 | 0.007 | 0.014 |
 
 **Key takeaway:** All adapters add **< 0.02 ms** (p99) per tool call. This is 3–4 orders of magnitude below a typical LLM API round-trip (200–2000 ms). The governance layer is invisible to end users.
-
-Source: [`agent-governance-python/agent-os/benchmarks/bench_adapters.py`](agent-governance-python/agent-os/benchmarks/bench_adapters.py)
 
 ## 5. Agent SRE (Reliability Engineering)
 
@@ -120,7 +116,7 @@ Source: [`agent-governance-python/agent-sre/benchmarks/`](agent-governance-pytho
 
 ## 6. Memory Footprint
 
-Measured with `tracemalloc` — PolicyEvaluator with 100 rules, 1,000 evaluations:
+Measured with `tracemalloc` — AgtRuntime with 100 rules, 1,000 evaluations:
 
 | Metric | Value |
 |---|---|
@@ -151,12 +147,9 @@ git clone https://github.com/microsoft/agent-governance-toolkit.git
 cd agent-governance-toolkit
 
 # Policy, kernel, audit, adapter benchmarks
-cd agent-os
+cd agent-governance-python/agent-os
 pip install -e ".[dev]"
-python agent-governance-python/benchmarks/bench_policy.py
-python agent-governance-python/benchmarks/bench_kernel.py
-python agent-governance-python/benchmarks/bench_audit.py
-python agent-governance-python/benchmarks/bench_adapters.py
+python benchmarks/run_all.py
 
 # SRE benchmarks
 cd ../agent-sre

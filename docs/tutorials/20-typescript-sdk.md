@@ -307,7 +307,7 @@ console.log(result.evaluationMs);  // 0.123
 | Field | Type | Description |
 |-------|------|-------------|
 | `allowed` | `boolean` | Whether the action is permitted |
-| `action` | `PolicyAction` | `'allow'` \| `'deny'` \| `'warn'` \| `'require_approval'` \| `'log'` |
+| `action` | `PolicyEvaluation` | `'allow'` \| `'deny'` \| `'warn'` \| `'require_approval'` \| `'log'` |
 | `matchedRule` | `string?` | Name of the rule that matched |
 | `policyName` | `string?` | Name of the policy that matched |
 | `reason` | `string?` | Human-readable explanation |
@@ -1227,7 +1227,7 @@ equivalent Python tutorial for each topic:
 
 | TypeScript package | Python Package | Tutorial |
 |---------------|---------------|----------|
-| `PolicyEngine` | `agent_os.policies` | [Tutorial 01 — Policy Engine](./01-policy-engine.md) |
+| `PolicyEngine` | `agent_os.policies` | Tutorial 01 — Policy Engine |
 | `AgentIdentity`, `IdentityRegistry` | `agent_os.identity` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | `TrustManager` | `agent_os.trust` | [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md) |
 | Framework integration | `agent_os.integrations` | [Tutorial 03 — Framework Integrations](./03-framework-integrations.md) |

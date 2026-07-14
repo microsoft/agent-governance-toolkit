@@ -1,3 +1,9 @@
+---
+title: v4 Policy Language Removal
+last_reviewed: 2026-07-12
+owner: agent-governance
+---
+
 # v4 policy-language removal
 
 AGT is removing the legacy v4 policy language so the ACS (v5) policy layer
@@ -245,3 +251,26 @@ force-includes the native adapter modules. A wheel inspection gate builds both
 artifacts, verifies the dependency metadata, confirms native session/runtime
 modules and migration Rego resources are packaged, and rejects a public
 `manifest_resolution` package.
+
+## Phase 6 atomic removal
+
+The public compatibility cut removes the runtime bridge, the central
+`GovernancePolicy` contract, compatibility result and decision types, legacy
+policy loaders and backends, and runtime folder resolution. Framework adapters
+now require a native ACS runtime. Native denials use the canonical
+`PolicyViolationError` and retain the structured `PolicyEvaluation`.
+
+The old intent-policy fields no longer have runtime implementations. The
+Haystack integration's local checker and similar framework-local policy
+interpreters are removed rather than renamed. Conversion support remains only
+under `agt.cli`, where the one-way migration command translates supported
+literal inputs and refuses ambiguous cases.
+
+The AgentMesh Wire Protocol policy engine is a separate retained product. Its
+Python implementation and TypeScript, Go, and .NET ports use the AgentMesh
+rule schema and cross-language parity tests. They are not adapters for the
+removed intent-policy contract and are outside this migration.
+
+The ratchet baseline is zero outside the migration allowlist. Its structural
+checks also detect renamed intent-policy interpreters and distinguish retained
+AgentMesh rule documents from removed policy data.

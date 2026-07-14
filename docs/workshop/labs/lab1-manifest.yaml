@@ -1,0 +1,17 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
+metadata:
+  name: workshop-lab1
+  version: "1.0"
+extends: []
+policies:
+  workshop:
+    type: rego
+    bundle: .
+    query: data.agt.workshop.lab1.result
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: workshop

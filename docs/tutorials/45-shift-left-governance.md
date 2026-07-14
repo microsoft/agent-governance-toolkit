@@ -1,3 +1,9 @@
+---
+title: Shift-Left Governance
+last_reviewed: 2026-07-12
+owner: docs-team
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 45: Shift-Left Governance
@@ -318,7 +324,7 @@ The policy validation workflow (`policy-validation.yml`) triggers when any YAML
 file or the policy engine source changes. It:
 
 1. Discovers all policy files matching `*policy*` naming
-2. Validates each file using `agent_os.policies.cli validate`
+2. Validates each native manifest using `agt lint-policy`
 3. Runs policy CLI unit tests to verify evaluation behavior
 
 This ensures that policy file changes don't break the policy engine.
