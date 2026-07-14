@@ -6,9 +6,8 @@ Sensitivity accumulates from the *actual* labels an action produced (its
 ``result_labels``), never from a projection of an output that has not run yet.
 After folding, the next action is gated against the accumulated envelope.
 
-The governance-level ``constrain`` outcome is realized as allow-with-obligations
-and collapses to a concrete ``PolicyAction`` via :func:`to_policy_action`, which
-fails closed on a path that cannot carry obligations.
+The governance-level ``constrain`` outcome carries explicit obligations for the
+host to enforce before the next action.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ from .context_aggregation import AggregationRuleSet, evaluate_aggregation
 from .context_envelope import ContextEnvelope, apply_restrictions, fold
 from .data_classification import DataClassification
 from .obligations import Obligation, ObligationSet
-from .schema import PolicyAction
 
 # Action token -> the restriction that, when present, gates it.
 _RESTRICTED_ACTIONS: dict[str, str] = {
@@ -118,31 +116,3 @@ def decide_next(
         ObligationSet(result_labels=env.labels),
         agg.aggregate_sensitivity,
     )
-
-
-def to_policy_action(
-    decision: ContextDecision,
-    has_obligation_channel: bool,
-) -> PolicyAction:
-    """Collapse a ``ContextDecision`` onto the declarative ``PolicyAction`` enum.
-
-    ``PolicyAction`` has no ``constrain`` member and no obligation channel of
-    its own, so ``constrain`` maps to ``ALLOW`` only when the host can carry the
-    obligations (``has_obligation_channel``) or every obligation is already
-    satisfied; otherwise it FAILS CLOSED to ``DENY``. ``escalate`` maps to
-    ``BLOCK`` (the nearest stop-and-review action on this path).
-    """
-    if decision.outcome == ContextOutcome.ALLOW:
-        return PolicyAction.ALLOW
-    if decision.outcome == ContextOutcome.DENY:
-        return PolicyAction.DENY
-    if decision.outcome == ContextOutcome.ESCALATE:
-        return PolicyAction.BLOCK
-    # CONSTRAIN: allow only if the host can carry the obligations, or every
-    # obligation is already satisfied. An EMPTY obligation set does not grant
-    # allow on a channel-less path (vacuous all_satisfied must not fail open).
-    if has_obligation_channel:
-        return PolicyAction.ALLOW
-    if decision.obligations.obligations and decision.obligations.all_satisfied:
-        return PolicyAction.ALLOW
-    return PolicyAction.DENY

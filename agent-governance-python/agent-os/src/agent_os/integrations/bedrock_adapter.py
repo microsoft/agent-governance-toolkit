@@ -1,67 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-AWS Bedrock Agent Governance Adapter
+"""AWS Bedrock Agent integration backed by a required native ACS runtime.
 
-Wraps the Bedrock Agent Runtime client with Agent OS governance: blocked
-pattern scanning on inputs, tool allow/block-list enforcement on streaming
-action-group events, rate limiting per agent ARN, and a full audit trail.
-
-Backend (AGT 5.0): every policy decision is routed through
-:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
-The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
-translated to an AGT manifest via
-:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
-time, an :class:`AgtRuntime` is memoised per policy, and a
-:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
-``ExecutionContext`` budgets between intervention points. The legacy
-``invoke_agent`` surface (including ``PolicyViolationError`` raising
-on policy denial) is preserved so v4 callers keep working.
-``transform`` verdicts (AGT-DELTA D1.1) rewrite the outbound
-``inputText`` before the boto3 client sees it; ``escalate`` verdicts
-route through the configured approval resolver per AGT-DELTA D1.4.
-
-Usage::
-
-    from agent_os.integrations import BedrockKernel
-    from agent_os.integrations.base import GovernancePolicy
-    import boto3
-
-    kernel = BedrockKernel(
-        policy=GovernancePolicy(
-            blocked_patterns=["DROP TABLE", "rm -rf"],
-            allowed_tools=["query_database", "summarize"],
-            max_tool_calls=20,
-        )
-    )
-
-    governed = kernel.wrap(boto3.client("bedrock-agent-runtime", region_name="us-east-1"))
-    response = governed.invoke_agent(
-        agentId="ABCDEF1234",
-        agentAliasId="ALIAS1",
-        sessionId="session-xyz",
-        inputText="Summarize last quarter sales",
-    )
-
-Cedar/OPA policy evaluation is inherited from BaseIntegration::
-
-    kernel = BedrockKernel.from_cedar("policies/bedrock.cedar")
-    governed = kernel.wrap(client)
-
-Features:
-- Graceful boto3 import (no hard dependency)
-- AGT 5.0 ACS runtime evaluation of inputText (input) and action-group
-  events (pre_tool_call) via AdapterRuntime
-- Transform-verdict rewriting of outbound inputText
-- Escalate-verdict approval routing via the configured resolver
-- Blocked-pattern scanning on inputText before invocation
-- Tool allow/block-list enforced on action-group invocation events in stream
-- max_tool_calls limit enforced per session
-- Rate limiting per agent ARN via RateLimiter
-- Agent ARN mapped to AGT trust identity for audit
-- Full audit trail via GovernanceEventType events
-- health_check() endpoint
-- wrap() / unwrap() round-trip
+Inputs and streamed action-group calls are mediated before Bedrock receives or
+exposes them. Host-owned PII protection, rate limiting, and audit remain local.
 """
 
 from __future__ import annotations
@@ -70,19 +12,18 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Iterator
 
 from ._native_adapter_runtime import (
     AdapterResult,
     AdapterRuntime,
 )
-from ._v5_runtime_bridge import get_adapter_runtime
 from .base import (
+    get_adapter_runtime,
     PII_PATTERNS,
     BaseIntegration,
-    ExecutionContext,
+    AdapterExecutionState,
     GovernanceEventType,
-    GovernancePolicy,
     PolicyViolationError,
 )
 from .rate_limiter import RateLimiter
@@ -117,7 +58,7 @@ def _scan_pii(text: str) -> list[str]:
 
 
 @dataclass
-class BedrockContext(ExecutionContext):
+class BedrockContext(AdapterExecutionState):
     """Execution context for a Bedrock Agent session.
 
     Attributes:
@@ -134,96 +75,16 @@ class BedrockContext(ExecutionContext):
 
 
 class BedrockKernel(BaseIntegration):
-    """AWS Bedrock Agent governance adapter.
-
-    Wraps a ``boto3`` Bedrock Agent Runtime client and enforces governance
-    on every ``invoke_agent`` call.
-
-    Args:
-        policy: Governance policy.  Uses default when ``None``.
-        blocked_tools: Additional tool/action-group names to block regardless
-            of ``policy.allowed_tools``.
-        rate_limit_per_minute: Max ``invoke_agent`` calls per agent ARN per
-            minute.  ``0`` disables rate limiting.
-        evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA evaluation.
-
-    Example::
-
-        kernel = BedrockKernel(
-            policy=GovernancePolicy(allowed_tools=["summarize"]),
-            blocked_tools=["delete_s3_bucket"],
-            rate_limit_per_minute=60,
-        )
-        governed = kernel.wrap(boto3.client("bedrock-agent-runtime"))
-    """
+    """Govern Bedrock Agent input and action-group calls with ACS."""
 
     def __init__(
         self,
-        policy: GovernancePolicy | None = None,
-        blocked_tools: list[str] | None = None,
         rate_limit_per_minute: int = 0,
-        evaluator: Any = None,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        enable_agt_pii_routing: bool = False,
-        runtime: Any | None = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ) -> None:
-        """Initialise the Bedrock governance kernel.
-
-        Args:
-            policy: Governance policy.  Uses default when ``None``.
-                The policy is translated to an AGT manifest and an
-                :class:`agt.policies.runtime.AgtRuntime` is constructed
-                over it at init time.
-            blocked_tools: Additional tool/action-group names to block
-                regardless of ``policy.allowed_tools``.
-            rate_limit_per_minute: Max ``invoke_agent`` calls per agent
-                ARN per minute. ``0`` disables rate limiting.
-            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
-                policy evaluation. Retained for backward compatibility;
-                the primary decision path now runs through the AGT 5.0
-                runtime.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature
-                matches :data:`agt.policies.runtime.ApprovalCallback`.
-                When ``None`` an escalate verdict fails closed to
-                ``deny``.
-            enable_agt_pii_routing: When ``True`` the AGT input
-                intervention point runs BEFORE the host-side
-                ``_check_input`` PII / blocked-pattern scan, so an
-                AGT D1.1 transform on PII (or an AGT deny / escalate)
-                takes precedence and is given a chance to redact the
-                outbound text. When ``False`` (the v4 default) the
-                host scan still fires first and any PII match raises
-                a :class:`PolicyViolationError` before the bridge
-                runs. Hosts opt in to the AGT routing once they have
-                migrated their PII handling into the manifest.
-
-                .. deprecated::
-                    The ``False`` default is preserved for v4
-                    back-compatibility and is the documented exception
-                    to the AGT D1.1 "AGT runs first" ordering called
-                    out in ``policy-engine/spec/SPECIFICATION.md``
-                    §14. v6 will flip the default to ``True`` so
-                    every adapter routes through the bridge first.
-                    Existing hosts SHOULD set this to ``True`` ahead
-                    of v6 and migrate their PII patterns into the AGT
-                    manifest (typically via the stock
-                    ``data.agt.patterns`` library plus a
-                    ``transform`` verdict).
-            runtime: Native AgtRuntime used directly by this adapter. The runtime
-                owns policy dispatch and approval resolution; any supplied
-                approval_resolver must be the same callback.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
-        """
-        super().__init__(policy, evaluator=evaluator)
-        self._blocked_tools: set[str] = set(blocked_tools or [])
+        """Initialise host rate limiting and the required native runtime."""
+        super().__init__(runtime=runtime)
         self._rate_limiter: RateLimiter | None = (
             RateLimiter(max_calls=rate_limit_per_minute, time_window=60.0)
             if rate_limit_per_minute > 0
@@ -231,20 +92,7 @@ class BedrockKernel(BaseIntegration):
         )
         self._start_time = time.monotonic()
         self._last_error: str | None = None
-        self._approval_resolver = approval_resolver
-        self._enable_agt_pii_routing = bool(enable_agt_pii_routing)
-        self._bridge: AdapterRuntime = get_adapter_runtime(
-            policy=self.policy,
-            approval_resolver=approval_resolver,
-            runtime=runtime,
-            legacy_runtime=_runtime,
-            legacy_runtime_factory=_runtime_factory,
-        )
-
-    @property
-    def enable_agt_pii_routing(self) -> bool:
-        """Whether AGT runs first on the input intervention point."""
-        return self._enable_agt_pii_routing
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
 
     @property
     def bridge(self) -> AdapterRuntime:
@@ -252,7 +100,7 @@ class BedrockKernel(BaseIntegration):
         return self._bridge
 
     def evaluate_input(
-        self, ctx: ExecutionContext, input_data: Any
+        self, ctx: AdapterExecutionState, input_data: Any
     ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         body = input_data if isinstance(input_data, (str, dict)) else str(input_data)
@@ -260,7 +108,7 @@ class BedrockKernel(BaseIntegration):
 
     def evaluate_pre_tool_call(
         self,
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
         *,
         tool_name: str,
         args: dict[str, Any],
@@ -285,7 +133,6 @@ class BedrockKernel(BaseIntegration):
         ctx = BedrockContext(
             agent_id=f"bedrock-{id(client)}",
             session_id=f"bdr-{int(time.time())}",
-            policy=self.policy,
         )
         self.contexts[ctx.agent_id] = ctx
         return GovernedBedrockClient(client=client, kernel=self, ctx=ctx)
@@ -307,16 +154,7 @@ class BedrockKernel(BaseIntegration):
             )
 
     def _check_input(self, ctx: BedrockContext, input_text: str) -> None:
-        """Block on pattern matches and PII in input."""
-        matched = self.policy.matches_pattern(input_text)
-        if matched:
-            self.emit(GovernanceEventType.TOOL_CALL_BLOCKED, {
-                "agent_id": ctx.agent_id, "reason": f"blocked pattern: {matched[0]}",
-                "timestamp": datetime.now().isoformat(),
-            })
-            raise PolicyViolationError(
-                f"Input blocked by policy — matched pattern: {matched[0]!r}"
-            )
+        """Apply host-side PII protection after runtime evaluation."""
         pii = _scan_pii(input_text)
         if pii:
             self.emit(GovernanceEventType.TOOL_CALL_BLOCKED, {
@@ -326,24 +164,6 @@ class BedrockKernel(BaseIntegration):
             raise PolicyViolationError(
                 f"Input blocked — PII detected (pattern: {pii[0]})"
             )
-
-    def _check_tool(self, ctx: BedrockContext, tool_name: str) -> None:
-        """Enforce tool allow/block-list and call-count limit."""
-        if tool_name in self._blocked_tools:
-            ctx.blocked_events += 1
-            raise PolicyViolationError(
-                f"Action group '{tool_name}' is explicitly blocked by policy"
-            )
-        if self.policy.allowed_tools and tool_name not in self.policy.allowed_tools:
-            ctx.blocked_events += 1
-            raise PolicyViolationError(
-                f"Action group '{tool_name}' is not in the allowed_tools list"
-            )
-        if ctx.call_count >= self.policy.max_tool_calls:
-            raise PolicyViolationError(
-                f"Tool call limit reached: {ctx.call_count} >= {self.policy.max_tool_calls}"
-            )
-
 
     def health_check(self) -> dict[str, Any]:
         uptime = time.monotonic() - self._start_time
@@ -383,26 +203,8 @@ class _GovernedEventStream:
                     ag = inv.get("actionGroupInvocationInput", {})
                     tool_name = ag.get("actionGroupName") or ag.get("function", "")
                     if tool_name:
-                        # 1. Host-side allow/block-list + count guard
-                        # (preserves the v4 PolicyViolationError types
-                        # the existing tests check for).
-                        try:
-                            self._kernel._check_tool(self._ctx, tool_name)
-                        except PolicyViolationError:
-                            logger.warning(
-                                "Bedrock action blocked | tool=%s agent=%s",
-                                tool_name, self._ctx.agent_id,
-                            )
-                            self._kernel.emit(GovernanceEventType.TOOL_CALL_BLOCKED, {
-                                "agent_id": self._ctx.agent_id,
-                                "tool_name": tool_name,
-                                "timestamp": datetime.now().isoformat(),
-                            })
-                            raise
-                        # 2. AGT pre_tool_call intervention point.
-                        # ``ctx.call_count`` is the pre-increment value
-                        # going in so the bridge's host-side budget
-                        # check mirrors the v4 ``>=`` contract.
+                        # Evaluate every action group through ACS before
+                        # Bedrock exposes it to the host.
                         tool_args = ag.get("parameters") or {}
                         if not isinstance(tool_args, dict):
                             tool_args = {"value": tool_args}
@@ -483,32 +285,7 @@ class GovernedBedrockClient:
         self._ctx = ctx
 
     def invoke_agent(self, **kwargs: Any) -> dict[str, Any]:
-        """Govern a Bedrock ``invoke_agent`` call.
-
-        Enforces:
-        1. Rate limiting per agent ARN.
-        2. Blocked-pattern and PII scanning on ``inputText``.
-        3. AGT 5.0 ACS runtime evaluation at the ``input`` intervention
-           point via :class:`AdapterRuntime`. A ``deny`` verdict
-           raises :class:`PolicyViolationError.from_check_result(...)`;
-           a ``transform`` verdict (AGT-DELTA D1.1) rewrites
-           ``inputText`` before the boto3 client sees it; an
-           ``escalate`` verdict that the configured approval resolver
-           refuses fails closed to a deny.
-        4. Legacy Cedar/OPA gate (kept for backward compatibility).
-        5. Tool allow/block-list and call-count on streaming action
-           events (also routed through AGT ``pre_tool_call``).
-
-        Args:
-            **kwargs: Forwarded to ``client.invoke_agent()``.
-
-        Returns:
-            The Bedrock response dict with ``completion`` replaced by a
-            governed :class:`_GovernedEventStream`.
-
-        Raises:
-            PolicyViolationError: On any governance violation.
-        """
+        """Mediate a Bedrock call and return its governed event stream."""
         agent_id_param = kwargs.get("agentId", "")
         agent_alias = kwargs.get("agentAliasId", "")
         region = getattr(getattr(self._client, "meta", None), "region_name", "")
@@ -518,67 +295,22 @@ class GovernedBedrockClient:
         # 1. Rate limit
         self._kernel._check_rate_limit(agent_arn)
 
-        # 2. Input governance. Per AGT-DELTA D1.1 a transform verdict
-        # on the input intervention point rewrites the outbound text
-        # before it reaches Bedrock. When ``enable_agt_pii_routing`` is
-        # set on the kernel the AGT bridge runs FIRST so a manifest-
-        # defined PII transform can redact the text; the host-side
-        # ``_check_input`` PII scan then runs against the (possibly
-        # redacted) text and only raises when the AGT path allowed
-        # without rewriting. When the flag is off (the v4 default) the
-        # host scan still fires first to preserve the historical
-        # PolicyViolationError shape.
+        # 2. Native runtime input evaluation, followed by host-side PII checks.
         input_text = kwargs.get("inputText", "")
-        if self._kernel.enable_agt_pii_routing and input_text:
-            bridge_result = self._kernel.evaluate_input(self._ctx, input_text)
-            if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
-            ):
-                input_text = bridge_result.transform.value
+        if input_text:
+            result = self._kernel.evaluate_input(self._ctx, input_text)
+            if result.transform is not None and isinstance(result.transform.value, str):
+                input_text = result.transform.value
                 kwargs["inputText"] = input_text
-            if not bridge_result.allowed:
+            if not result.allowed:
                 self._kernel.emit(GovernanceEventType.POLICY_VIOLATION, {
                     "agent_id": self._ctx.agent_id,
                     "agent_arn": agent_arn,
-                    "reason": bridge_result.reason,
+                    "reason": result.reason,
                     "timestamp": datetime.now().isoformat(),
                 })
-                raise bridge_result.to_policy_violation(PolicyViolationError)
-            # The bridge approved or transformed; fall through to the
-            # host-side PII scan against the effective text.
+                raise result.to_policy_violation(PolicyViolationError)
             self._kernel._check_input(self._ctx, input_text)
-        else:
-            self._kernel._check_input(self._ctx, input_text)
-
-            # 3. AGT input intervention point (legacy ordering)
-            if input_text:
-                bridge_result = self._kernel.evaluate_input(self._ctx, input_text)
-                if bridge_result.transform is not None and isinstance(
-                    bridge_result.transform.value, str
-                ):
-                    # Rewrite the outbound inputText per AGT-DELTA D1.1 so
-                    # the Bedrock client sees the AGT-redacted payload.
-                    input_text = bridge_result.transform.value
-                    kwargs["inputText"] = input_text
-                if not bridge_result.allowed:
-                    self._kernel.emit(GovernanceEventType.POLICY_VIOLATION, {
-                        "agent_id": self._ctx.agent_id,
-                        "agent_arn": agent_arn,
-                        "reason": bridge_result.reason,
-                        "timestamp": datetime.now().isoformat(),
-                    })
-                    raise bridge_result.to_policy_violation(PolicyViolationError)
-
-        # 4. Cedar/OPA gate (legacy)
-        cedar_ctx = self._kernel._build_cedar_context(
-            agent_id=agent_arn,
-            action_type="invoke_agent",
-            tool_name="",
-            tool_args={"inputText": input_text},
-        )
-        allowed, reason = self._kernel._evaluate_policy(cedar_ctx)
-        if not allowed:
-            raise PolicyViolationError(f"Cedar/OPA policy denied invocation: {reason}")
 
         # Audit log
         logger.info(

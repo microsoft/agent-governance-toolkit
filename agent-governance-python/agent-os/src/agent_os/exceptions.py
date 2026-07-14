@@ -11,10 +11,7 @@ for structured error handling and logging.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Protocol
-
-if TYPE_CHECKING:
-    from agent_os.policies.decision import PolicyCheckResult
+from typing import Any, Protocol
 
 
 class _PolicyEvaluationLike(Protocol):
@@ -62,31 +59,13 @@ class PolicyViolationError(PolicyError):
 
     def __init__(self, message, error_code=None, details=None):
         super().__init__(message, error_code or "POLICY_VIOLATION", details)
-        self.check_result = None
         self.evaluation_result = None
-
-    @classmethod
-    def from_check_result(cls, result: PolicyCheckResult) -> PolicyViolationError:
-        """Create a policy violation error from a structured check result."""
-
-        details = {
-            "category": result.category.value if result.category else None,
-            "matched_rule": result.matched_rule,
-            "detail": result.detail,
-            "scope": result.scope,
-            "operation": result.operation,
-            "tool_name": result.tool_name,
-            **result.audit_entry,
-        }
-        e = cls(result.public_message, "POLICY_VIOLATION", details)
-        e.check_result = result
-        return e
 
     @classmethod
     def from_evaluation_result(
         cls, result: _PolicyEvaluationLike
     ) -> PolicyViolationError:
-        """Create a policy violation error from the native v5 result."""
+        """Create a policy violation error from a native evaluation."""
         if result.is_allowed():
             raise ValueError(
                 "a permitting policy evaluation cannot create PolicyViolationError"

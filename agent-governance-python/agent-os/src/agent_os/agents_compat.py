@@ -14,11 +14,10 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
-from agent_os.integrations.base import GovernancePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,6 @@ class AgentConfig:
     name: str
     description: str
     skills: list[AgentSkill]
-    policies: list[str]
     instructions: str
     security_config: dict[str, Any] = field(default_factory=dict)
 
@@ -84,7 +82,6 @@ class AgentsParser:
             name="default",
             description="",
             skills=[],
-            policies=[],
             instructions=""
         )
 
@@ -132,7 +129,6 @@ class AgentsParser:
             name=name,
             description=description,
             skills=skills,
-            policies=front_matter.get("policies", []),
             instructions=instructions,
             security_config=front_matter.get("security", {})
         )
@@ -221,47 +217,6 @@ class AgentsParser:
 
         return {}
 
-    def to_kernel_policies(self, config: AgentConfig) -> dict[str, Any]:
-        """
-        Convert AgentConfig to Agent OS kernel policies.
-
-        Returns policy configuration for Control Plane.
-        """
-        policies = {
-            "name": config.name,
-            "version": "1.0",
-            "rules": []
-        }
-
-        # Convert skills to rules
-        for skill in config.skills:
-            rule = {
-                "action": skill.name,
-                "effect": "allow" if skill.allowed else "deny",
-            }
-
-            if skill.read_only:
-                rule["mode"] = "read_only"
-
-            if skill.requires_approval:
-                rule["requires_approval"] = True
-
-            if skill.constraints:
-                rule["constraints"] = skill.constraints
-
-            policies["rules"].append(rule)
-
-        # Add security config
-        if config.security_config:
-            sec = config.security_config
-
-            if "signals" in sec:
-                policies["allowed_signals"] = sec["signals"]
-
-            if "max_tokens" in sec:
-                policies["limits"] = {"max_tokens": sec["max_tokens"]}
-
-        return policies
 
 
 def discover_agents(root_dir: str = ".") -> list[AgentConfig]:
@@ -318,8 +273,7 @@ class AgentMdConfig:
     name: str
     description: str = ""
     tools: list[str] = field(default_factory=list)
-    policy: Optional[GovernancePolicy] = None
-    role: Optional[str] = None
+    role: str | None = None
     build_commands: list[str] = field(default_factory=list)
     test_commands: list[str] = field(default_factory=list)
     lint_commands: list[str] = field(default_factory=list)
@@ -386,15 +340,6 @@ def generate_agents_md(config: AgentMdConfig) -> str:
         parts.append("")
         for key, value in config.code_style.items():
             parts.append(f"- **{key}:** {value}")
-        parts.append("")
-
-    # ── Governance ───────────────────────────────────────────────────────
-    if config.policy is not None:
-        parts.append("## Governance")
-        parts.append("")
-        parts.append("```yaml")
-        parts.append(config.policy.to_yaml().rstrip())
-        parts.append("```")
         parts.append("")
 
     # ── Boundaries ───────────────────────────────────────────────────────
@@ -480,12 +425,6 @@ def load_agents_md(path: str) -> AgentMdConfig:
         m = re.match(r"^-\s+\*\*(.+?):?\*\*:?\s*(.+)$", line.strip())
         if m:
             config.code_style[m.group(1).rstrip(":")] = m.group(2)
-
-    # ── Governance ───────────────────────────────────────────────────────
-    gov_section = sections.get("Governance", "")
-    gov_block = re.search(r"```(?:yaml)?\s*\n(.*?)```", gov_section, re.DOTALL)
-    if gov_block:
-        config.policy = GovernancePolicy.from_yaml(gov_block.group(1))
 
     # ── Boundaries ───────────────────────────────────────────────────────
     bd_section = sections.get("Boundaries", "")

@@ -1,51 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Anthropic Claude Integration
+"""Anthropic Messages integration backed by a required native ACS runtime.
 
-Wraps Anthropic's Messages API with Agent OS governance.
-
-Backend (AGT 5.0): every policy decision is routed through
-:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
-The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
-translated to an AGT manifest via
-:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
-time, an :class:`AgtRuntime` is memoised per policy, and a
-:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
-``ExecutionContext`` budgets between intervention points. The legacy
-``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
-keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
-outbound message content before the Anthropic client sees it;
-``escalate`` verdicts route through the configured approval resolver
-per AGT-DELTA D1.4.
-
-Usage:
-    from agent_os.integrations.anthropic_adapter import AnthropicKernel
-
-    kernel = AnthropicKernel(policy=GovernancePolicy(
-        max_tokens=4096,
-        allowed_tools=["web_search", "code_interpreter"],
-        blocked_patterns=["password", "api_key"],
-    ))
-
-    governed = kernel.wrap(client)
-    # All messages.create() calls are now governed
-    response = governed.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": "Hello"}],
-    )
-
-Features:
-- Pre-execution policy checks via the AGT 5.0 ACS runtime
-- Tool call interception at the AGT pre_tool_call hook
-- Transform-verdict rewriting of outbound message content
-- Escalate-verdict approval routing via the configured resolver
-- Token limit enforcement
-- Content filtering via the AGT manifest bridge
-- SIGKILL support (cancel running requests)
-- Full audit trail with AGT bisected input/enforced identities
-- Health check endpoint
+Input, tool, and output intervention points are mediated before content is
+forwarded to or disclosed by the Anthropic client.
 """
 
 from __future__ import annotations
@@ -54,15 +12,14 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ._native_adapter_runtime import (
     AdapterResult,
     AdapterRuntime,
 )
-from ._v5_runtime_bridge import get_adapter_runtime
-from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
+from ..exceptions import PolicyViolationError
+from .base import AdapterExecutionState, BaseIntegration, get_adapter_runtime
 
 logger = logging.getLogger("agent_os.anthropic")
 
@@ -84,7 +41,7 @@ def _check_anthropic_available() -> None:
 
 
 @dataclass
-class AnthropicContext(ExecutionContext):
+class AnthropicContext(AdapterExecutionState):
     """Execution context for Anthropic Claude interactions.
 
     Attributes:
@@ -102,18 +59,6 @@ class AnthropicContext(ExecutionContext):
     completion_tokens: int = 0
 
 
-class PolicyViolationError(_CanonicalPolicyViolationError):
-    """Raised when a Claude request violates governance policy.
-
-    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
-    canonical ``from_check_result`` constructor is available while
-    preserving the legacy ``agent_os.integrations.anthropic_adapter.PolicyViolationError``
-    import path for v4 callers.
-    """
-
-    pass
-
-
 class RequestCancelledException(Exception):
     """Raised when a request is cancelled via SIGKILL."""
 
@@ -121,74 +66,24 @@ class RequestCancelledException(Exception):
 
 
 class AnthropicKernel(BaseIntegration):
-    """Anthropic Claude adapter for Agent OS.
-
-    Provides governance for the Anthropic Messages API including policy
-    enforcement, tool-call validation, token tracking, and audit logging.
-
-    Example:
-        >>> kernel = AnthropicKernel(policy=GovernancePolicy(max_tokens=8192))
-        >>> governed = kernel.wrap(anthropic.Anthropic())
-        >>> response = governed.messages.create(
-        ...     model="claude-sonnet-4-20250514",
-        ...     max_tokens=1024,
-        ...     messages=[{"role": "user", "content": "Hello"}],
-        ... )
-    """
+    """Govern Anthropic Messages API calls with a native runtime."""
 
     def __init__(
         self,
-        policy: GovernancePolicy | None = None,
         max_retries: int = 3,
         timeout_seconds: float = 300.0,
-        evaluator: Any = None,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        runtime: Any | None = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ) -> None:
-        """Initialise the Anthropic governance kernel.
-
-        Args:
-            policy: Governance policy to enforce. Uses default when ``None``.
-                The policy is translated to an AGT manifest and an
-                :class:`agt.policies.runtime.AgtRuntime` is constructed
-                over it at init time.
-            max_retries: Maximum retry attempts for transient errors.
-            timeout_seconds: Default timeout for operations.
-            evaluator: Optional ``PolicyEvaluator`` for legacy Cedar/OPA
-                policy evaluation. Retained for backward compatibility;
-                the primary decision path now runs through the AGT 5.0
-                runtime.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature matches
-                :data:`agt.policies.runtime.ApprovalCallback`. When
-                ``None`` an escalate verdict fails closed to ``deny``.
-            runtime: Native AgtRuntime used directly by this adapter. The runtime
-                owns policy dispatch and approval resolution; any supplied
-                approval_resolver must be the same callback.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
-        """
-        super().__init__(policy, evaluator=evaluator)
+        """Initialise retry controls and the required native runtime."""
+        super().__init__(runtime=runtime)
         self.max_retries = max_retries
         self.timeout_seconds = timeout_seconds
         self._wrapped_clients: dict[int, Any] = {}
         self._cancelled_requests: set[str] = set()
         self._start_time = time.monotonic()
         self._last_error: str | None = None
-        self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntime = get_adapter_runtime(
-            policy=self.policy,
-            approval_resolver=approval_resolver,
-            runtime=runtime,
-            legacy_runtime=_runtime,
-            legacy_runtime_factory=_runtime_factory,
-        )
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
 
     @property
     def bridge(self) -> AdapterRuntime:
@@ -268,7 +163,6 @@ class AnthropicKernel(BaseIntegration):
         ctx = AnthropicContext(
             agent_id=f"anthropic-{client_id}",
             session_id=f"ant-{int(time.time())}",
-            policy=self.policy,
         )
         self.contexts[ctx.agent_id] = ctx
         self._wrapped_clients[client_id] = client
@@ -378,19 +272,6 @@ class _GovernedMessages:
                     msg["content"] = bridge_result.transform.value
                     messages[idx] = msg
 
-        # Validate requested tools against policy
-        tools = kwargs.get("tools")
-        if tools:
-            self._validate_tools(tools)
-
-        # Enforce max_tokens cap from policy
-        requested_max = kwargs.get("max_tokens", 0)
-        if requested_max > self._kernel.policy.max_tokens:
-            raise PolicyViolationError(
-                f"Requested max_tokens ({requested_max}) exceeds policy limit "
-                f"({self._kernel.policy.max_tokens})"
-            )
-
         # Audit log
         logger.info(
             "Anthropic messages.create | agent=%s model=%s",
@@ -420,10 +301,6 @@ class _GovernedMessages:
 
             total = self._ctx.prompt_tokens + self._ctx.completion_tokens
             self._ctx.total_tokens = total
-            if total > self._kernel.policy.max_tokens:
-                raise PolicyViolationError(
-                    f"Token limit exceeded: {total} > {self._kernel.policy.max_tokens}"
-                )
 
         # Validate tool_use blocks via AGT pre_tool_call intervention point
         content_blocks = getattr(response, "content", [])
@@ -461,23 +338,6 @@ class _GovernedMessages:
         self._kernel.post_execute(self._ctx, response)
 
         return response
-
-    def _validate_tools(self, tools: list[Any]) -> None:
-        """Validate tool definitions against policy allowlist.
-
-        Args:
-            tools: List of tool definitions from the request.
-
-        Raises:
-            PolicyViolationError: If a tool is not in the allowed list.
-        """
-        if not self._kernel.policy.allowed_tools:
-            return
-        for tool in tools:
-            name = tool.get("name") if isinstance(tool, dict) else getattr(tool, "name", None)
-            if name and name not in self._kernel.policy.allowed_tools:
-                raise PolicyViolationError(f"Tool not allowed: {name}")
-
 
 class GovernedAnthropicClient:
     """Anthropic client wrapped with Agent OS governance.
@@ -517,14 +377,12 @@ class GovernedAnthropicClient:
         """Return cumulative token usage statistics.
 
         Returns:
-            A dict with ``prompt_tokens``, ``completion_tokens``,
-            ``total_tokens``, and ``limit``.
+            A dict with cumulative prompt, completion, and total token counts.
         """
         return {
             "prompt_tokens": self._ctx.prompt_tokens,
             "completion_tokens": self._ctx.completion_tokens,
             "total_tokens": self._ctx.prompt_tokens + self._ctx.completion_tokens,
-            "limit": self._kernel.policy.max_tokens,
         }
 
     def __getattr__(self, name: str) -> Any:
@@ -541,12 +399,6 @@ class GovernedAnthropicClient:
 # composable "message hook" that wraps messages.create() calls
 # with governance checks — without creating a proxy client object.
 #
-# Usage:
-#     kernel = AnthropicKernel(policy=policy)
-#     hook = kernel.as_message_hook()
-#
-#     # Use the hook to govern individual calls
-#     response = hook.create(client, model="claude-sonnet-4-20250514", ...)
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -560,16 +412,6 @@ class GovernanceMessageHook:
     This is the recommended integration pattern for Anthropic because the
     SDK does not expose a native plugin/middleware system.
 
-    Example::
-
-        kernel = AnthropicKernel(policy=GovernancePolicy(
-            blocked_patterns=["password"],
-            allowed_tools=["web_search"],
-        ))
-        hook = kernel.as_message_hook()
-
-        response = hook.create(client, model="claude-sonnet-4-20250514",
-                               max_tokens=1024, messages=[...])
     """
 
     def __init__(self, kernel: AnthropicKernel, *, name: str = "anthropic-governance") -> None:
@@ -578,7 +420,6 @@ class GovernanceMessageHook:
         self._ctx = AnthropicContext(
             agent_id=name,
             session_id=f"ant-hook-{int(time.time())}",
-            policy=kernel.policy,
         )
         kernel.contexts[name] = self._ctx
 
@@ -628,16 +469,6 @@ class GovernanceMessageHook:
                     msg["content"] = bridge_result.transform.value
                     messages[idx] = msg
 
-        # Enforce max_tokens cap from policy (host-level guard preserved
-        # because Anthropic's max_tokens is a request-level cap, not a
-        # budget the AGT engine reads from the snapshot).
-        requested_max = kwargs.get("max_tokens", 0)
-        if requested_max > self._kernel.policy.max_tokens:
-            raise PolicyViolationError(
-                f"Requested max_tokens ({requested_max}) exceeds policy limit "
-                f"({self._kernel.policy.max_tokens})"
-            )
-
         # Audit log
         logger.info(
             "Anthropic hook.create | agent=%s model=%s",
@@ -660,10 +491,6 @@ class GovernanceMessageHook:
 
             total = self._ctx.prompt_tokens + self._ctx.completion_tokens
             self._ctx.total_tokens = total
-            if total > self._kernel.policy.max_tokens:
-                raise PolicyViolationError(
-                    f"Token limit exceeded: {total} > {self._kernel.policy.max_tokens}"
-                )
 
         # Validate tool_use blocks in response via AGT pre_tool_call
         content_blocks = getattr(response, "content", [])
@@ -699,7 +526,7 @@ class GovernanceMessageHook:
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
 
-        # Post-execute bookkeeping (mirrors v4 ctx.call_count increment)
+        # Record host completion after output mediation.
         self._kernel.post_execute(self._ctx, response)
 
         return response
@@ -710,9 +537,8 @@ class GovernanceMessageHook:
 
 def wrap_client(
     client: Any,
-    policy: GovernancePolicy | None = None,
     *,
-    runtime: Any | None = None,
+    runtime: Any,
 ) -> GovernedAnthropicClient:
     """Quick wrapper for Anthropic clients.
 
@@ -722,7 +548,7 @@ def wrap_client(
 
     Args:
         client: An ``anthropic.Anthropic`` client instance.
-        policy: Optional governance policy.
+        runtime: Native runtime used for every intervention point.
 
     Returns:
         A governed client.
@@ -734,9 +560,9 @@ def wrap_client(
     """
     import warnings
     warnings.warn(
-        "wrap_client() is deprecated. Use AnthropicKernel(policy=...).as_message_hook() "
+        "wrap_client() is deprecated. Use AnthropicKernel(runtime=...).as_message_hook() "
         "for a non-invasive governance pattern that doesn't proxy the client.",
         DeprecationWarning,
         stacklevel=2,
     )
-    return AnthropicKernel(policy=policy, runtime=runtime).wrap(client)
+    return AnthropicKernel(runtime=runtime).wrap(client)

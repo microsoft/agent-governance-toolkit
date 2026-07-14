@@ -2,8 +2,8 @@
 #
 # Runs every Monday at 09:00 UTC (matching the ai-repo-health cadence) or on manual
 # workflow_dispatch. Pulls the latest `agent-threat-rules` npm package, regenerates
-# atr_community_policy_full.yaml via the committed sync_atr_rules.py, and opens a
-# pull request for human review if the full policy has changed.
+# a native ACS manifest plus Rego bundle via the committed sync script, and
+# opens a draft pull request for human review when the output changes.
 #
 # Design notes:
 #   * Opens a PR; never commits directly. Maintainers retain full veto.
@@ -12,13 +12,11 @@
 #   * npm dependency is installed with --no-save so the main repo lock files stay clean.
 #     The tarball's SHA-512 is verified against a committed value before install so
 #     a same-version registry republish (supply-chain compromise) aborts the workflow.
-#   * No changes to the curated atr_security_policy.yaml — that file remains hand-maintained.
 #   * Runs sync WITHOUT --strict-regex: a small number of ATR rules use Unicode escape
 #     sequences valid in PCRE/JS but not Python re; strict mode would abort the sync.
 #     Invalid patterns are skipped with a WARNING and logged in the PR body.
 #
-# Scope limits: this workflow only updates one auto-synced YAML. It does not touch
-# the curated policy, tests, or source code.
+# Scope limits: this workflow updates only generated ATR ACS artefacts.
 
 name: Sync ATR Community Rules
 
@@ -122,9 +120,9 @@ jobs:
           # Strict mode would abort the sync; lenient mode skips them with a WARNING.
           python examples/atr-community-rules/sync_atr_rules.py \
             --atr-dir node_modules/agent-threat-rules/rules/ \
-            --output examples/atr-community-rules/atr_community_policy_full.yaml \
+            --output examples/atr-community-rules/atr_community_manifest.yaml \
             2>&1 | tee /tmp/sync_output.txt
-          RULE_COUNT=$(python -c "import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(len(d.get('rules', [])))" examples/atr-community-rules/atr_community_policy_full.yaml)
+          RULE_COUNT=$(grep -c '^matches contains' examples/atr-community-rules/atr-community-rules-bundle/policy.rego)
           SKIPPED=$(grep -c "^WARNING: skipping" /tmp/sync_output.txt || true)
           echo "rule_count=$RULE_COUNT" >> "$GITHUB_OUTPUT"
           echo "skipped_count=$SKIPPED" >> "$GITHUB_OUTPUT"
@@ -135,7 +133,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if git diff --quiet --exit-code examples/atr-community-rules/atr_community_policy_full.yaml; then
+          if git diff --quiet --exit-code -- \
+            examples/atr-community-rules/atr_community_manifest.yaml \
+            examples/atr-community-rules/atr-community-rules-bundle/policy.rego; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
             echo "No changes — skipping PR."
           else
@@ -152,21 +152,24 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add examples/atr-community-rules/atr_community_policy_full.yaml
+          git add \
+            examples/atr-community-rules/atr_community_manifest.yaml \
+            examples/atr-community-rules/atr-community-rules-bundle/policy.rego
           git commit -m "chore(examples/atr-community-rules): sync ATR v${{ steps.atr.outputs.version }}"
           git push -u origin "$BRANCH"
 
           BODY="Automated weekly sync of the ATR community detection-rule corpus.
 
           - Source: agent-threat-rules@${{ steps.atr.outputs.version }} on npm
-          - Patterns in refreshed atr_community_policy_full.yaml: ${{ steps.regen.outputs.rule_count }}
+          - Patterns in refreshed native ACS bundle: ${{ steps.regen.outputs.rule_count }}
           - Patterns skipped (invalid Python regex): ${{ steps.regen.outputs.skipped_count }}
 
-          This PR is opened for human review. The curated atr_security_policy.yaml is NOT modified."
+          This PR is opened for human review."
 
           if gh pr create \
             --title "chore(examples/atr-community-rules): sync ATR v${{ steps.atr.outputs.version }}" \
             --body "$BODY" \
+            --draft \
             --base main \
             --head "$BRANCH"; then
             echo "PR created successfully."

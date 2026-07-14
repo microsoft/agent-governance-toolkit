@@ -16,7 +16,12 @@ from unittest.mock import patch
 
 import pytest
 
-from agent_os.audit_logger import AuditEntry, GovernanceAuditLogger
+from agent_os.audit_logger import (
+    AuditEntry,
+    GovernanceAuditLogger,
+    InMemoryBackend,
+    JsonlFileBackend,
+)
 
 # Detect whether the OTel SDK Logs API is available
 try:
@@ -177,6 +182,42 @@ class TestOTelLogsBackend:
 
         records = self.exporter.get_finished_logs()
         assert len(records) == 5
+
+
+class TestCoreAuditBackends:
+    def test_entry_to_json(self):
+        entry = AuditEntry(event_type="test", agent_id="a1")
+
+        assert json.loads(entry.to_json())["agent_id"] == "a1"
+
+    def test_in_memory_backend(self):
+        backend = InMemoryBackend()
+        backend.write(AuditEntry(event_type="test"))
+
+        assert len(backend.entries) == 1
+
+    def test_logger_dispatches_to_all_backends(self):
+        audit = GovernanceAuditLogger()
+        first = InMemoryBackend()
+        second = InMemoryBackend()
+        audit.add_backend(first)
+        audit.add_backend(second)
+
+        audit.log_decision(agent_id="a1", action="search", decision="allow")
+
+        assert first.entries[0].decision == "allow"
+        assert second.entries[0].decision == "allow"
+
+    def test_jsonl_file_backend(self, tmp_path):
+        path = tmp_path / "audit.jsonl"
+        backend = JsonlFileBackend(path)
+        backend.write(AuditEntry(event_type="test", agent_id="a1"))
+        backend.flush()
+        backend.close()
+
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1
+        assert json.loads(lines[0])["agent_id"] == "a1"
 
 
 # ---------------------------------------------------------------------------

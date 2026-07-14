@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""``agentos policy`` command dispatcher."""
+"""Native ACS policy command aliases for ``agentos``."""
 
 from __future__ import annotations
 
@@ -8,34 +8,16 @@ import argparse
 
 
 def cmd_policy(args: argparse.Namespace) -> int:
-    """Dispatch 'agentos policy <subcommand>' to the policies CLI.
-
-    Routes ``agentos policy validate <file>`` and related subcommands
-    to :mod:`agent_os.policies.cli`, which provides full JSON-Schema
-    validation and Pydantic model validation in a single pass.
-
-    Args:
-        args: Parsed CLI arguments. Expects ``args.policy_command`` and
-            any subcommand-specific attributes set by the policy subparser.
-
-    Returns:
-        Exit code from the delegated command (0 = success, 1 = failure,
-        2 = runtime error).
-    """
-    from agent_os.policies import cli as policies_cli  # type: ignore[import]
+    """Dispatch ``agentos policy validate`` through native ACS validation."""
+    from .cmd_validate import cmd_validate
 
     sub = getattr(args, "policy_command", None)
     if sub == "validate":
-        return policies_cli.cmd_validate(args)
-    if sub == "test":
-        return policies_cli.cmd_test(args)
-    if sub == "diff":
-        return policies_cli.cmd_diff(args)
+        args.files = [args.path]
+        args.strict = bool(getattr(args, "strict", False))
+        return cmd_validate(args)
 
-    # No subcommand given — print help
-    print("Usage: agentos policy <validate|test|diff>")
+    print("Usage: agentos policy validate <manifest>")
     print()
-    print("  validate <file>                  Validate a policy YAML/JSON file")
-    print("  test <policy> <scenarios>         Run scenario tests against a policy")
-    print("  diff <file1> <file2>             Show differences between two policies")
+    print("Use `agt test` for native policy replay.")
     return 0

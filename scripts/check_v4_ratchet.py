@@ -19,7 +19,9 @@ import paths. Names that collide with unrelated code (``ExecutionContext``,
 accessed through a v4 module alias, or defined/used in the canonical v4 file,
 with relative imports resolved against the current module so foreign
 look-alikes are not miscounted. Ordinary prose strings and comments never
-match. Any Python file that cannot be decoded or parsed fails the gate closed.
+match. A narrow structural check catches renamed intent-policy interpreters
+that combine blocked patterns, tool lists, budgets, and pattern modes. Any
+Python file that cannot be decoded or parsed fails the gate closed.
 
 Rust and TypeScript use identifier-boundary token matching. Markdown, the
 normative AGT spec layer, v4 ``governance.yaml`` artifacts, and declarative v4
@@ -65,9 +67,20 @@ UNAMBIGUOUS_SYMBOLS: frozenset[str] = frozenset(
         "CedarBackend",
         "from_cedar",
         "discover_policies",
+        "aca_config_from_policy",
+        "docker_config_from_policy",
         "governance_to_acs_manifest",
         "governance_to_document",
         "get_runtime_bridge",
+        "hyperlight_config_from_policy",
+        "mxc_config_from_policy",
+        "nono_config_from_policy",
+        "PolicyTemplates",
+        "compose_policies",
+        "override_policy",
+        "policy_to_mxc_json",
+        "policy_yaml_to_mxc_json",
+        "policy_yaml_to_nono_config",
         "AdapterRuntimeBridge",
         "to_v4_check_result",
         "from_check_result",
@@ -78,7 +91,29 @@ UNAMBIGUOUS_SYMBOLS: frozenset[str] = frozenset(
 # Names that collide with unrelated classes; counted only when tied to a
 # qualifying v4 module or the canonical v4 file.
 AMBIGUOUS_MODULES: dict[str, frozenset[str]] = {
+    "AgtManifest": frozenset({"agent_os.policies.schema"}),
+    "AgtRuntime": frozenset(
+        {"agent_os.policies", "agent_os.integrations.base"}
+    ),
+    "BackendDecision": frozenset(
+        {"agent_os.policies", "agent_os.policies.backends"}
+    ),
     "ExecutionContext": frozenset({"agent_os.integrations.base"}),
+    "ExternalPolicyBackend": frozenset(
+        {"agent_os.policies", "agent_os.policies.backends"}
+    ),
+    "PolicyCondition": frozenset(
+        {"agent_os.policies", "agent_os.policies.schema"}
+    ),
+    "PolicyDefaults": frozenset(
+        {"agent_os.policies", "agent_os.policies.schema"}
+    ),
+    "PolicyOperator": frozenset(
+        {"agent_os.policies", "agent_os.policies.schema"}
+    ),
+    "PolicyRule": frozenset(
+        {"agent_os.policies", "agent_os.policies.schema"}
+    ),
     "PolicyEvaluator": frozenset(
         {"agent_os.policies", "agent_os.policies.evaluator", "agent_os.compat"}
     ),
@@ -95,9 +130,31 @@ CANONICAL_DEF_FILES: dict[str, frozenset[str]] = {
 # Module paths whose import marks a v4 consumer.
 PYTHON_V4_MODULES: tuple[str, ...] = (
     "agt.policies.bridge",
+    "agent_os.compat",
+    "agent_os.integrations.policy_compose",
+    "agent_os.integrations.templates",
     "agent_os.integrations._v5_runtime_bridge",
+    "agent_os.policies.backends",
     "agent_os.policies.bridge",
+    "agent_os.policies.budget",
+    "agent_os.policies.cli",
+    "agent_os.policies.conflict_resolution",
+    "agent_os.policies.decision",
+    "agent_os.policies.discovery",
+    "agent_os.policies.dynamic_conditions",
+    "agent_os.policies.evaluator",
+    "agent_os.policies.merge",
+    "agent_os.policies.schema",
+    "agent_os.policies.shared",
     "agt.manifest_resolution",
+)
+V4_AGENT_OS_POLICY_CLASSES: frozenset[str] = frozenset(
+    {
+        "BudgetPolicy",
+        "DynamicBudgetTracker",
+        "DynamicConditionEvaluator",
+        "PolicyConflictResolver",
+    }
 )
 
 # Non-Python source trees use identifier-boundary token matching.
@@ -106,7 +163,13 @@ NONPY_V4_TOKENS: frozenset[str] = frozenset({"GovernancePolicy", "PatternType"})
 # One authoritative documentation vocabulary derived from the Python symbols
 # plus spec literals. Substring matched in Markdown and the AGT spec layer.
 DOC_LITERAL_TOKENS: frozenset[str] = frozenset(
-    {"AGT-RESOLUTION", "governance.yaml", "agt_legacy", "agt.legacy"}
+    {
+        "AGT-RESOLUTION",
+        "governance.yaml",
+        "agt_legacy",
+        "agt.legacy",
+        *PYTHON_V4_MODULES,
+    }
 )
 # Ambiguous names are excluded from doc tokens because a document cannot
 # qualify them by import, so including them misclassifies unrelated trust
@@ -125,6 +188,8 @@ ALLOWED_V4_FILES: frozenset[str] = frozenset(
         "agent-governance-python/agt-policies/tests/test_migration_equivalence.py",
         "agent-governance-python/agt-policies/tests/test_migrate_resolution.py",
         "docs/v4-removal.md",
+        # The scanner necessarily contains every signature it detects.
+        "scripts/check_v4_ratchet.py",
         # The ratchet's own test fixtures reference v4 names deliberately.
         "scripts/tests/test_check_v4_ratchet.py",
         # The baseline inventories v4 names by design and must not inventory itself.
@@ -343,6 +408,10 @@ class _PyV4Visitor(ast.NodeVisitor):
         if t in UNAMBIGUOUS_SYMBOLS:
             self._add(t)
             return
+        if "\n" in raw:
+            for symbol in UNAMBIGUOUS_SYMBOLS:
+                if re.search(rf"\b{re.escape(symbol)}\b", raw):
+                    self._add(symbol)
         if not IDENT_PATH_RE.match(t) or "." not in t:
             return
         mod, _, last = t.rpartition(".")
@@ -445,6 +514,29 @@ class _PyV4Visitor(ast.NodeVisitor):
         if isinstance(node.value, str):
             self._bump_semantic_string(node.value)
 
+    def visit_Call(self, node: ast.Call) -> None:
+        func_name = None
+        if isinstance(node.func, ast.Name):
+            func_name = node.func.id
+        elif isinstance(node.func, ast.Attribute):
+            func_name = node.func.attr
+        if func_name == "AgtRuntime":
+            legacy_keywords = {
+                "policies",
+                "policy",
+                "name",
+                "blocked_patterns",
+                "allowed_tools",
+                "max_tokens",
+                "max_tool_calls",
+                "require_human_approval",
+                "confidence_threshold",
+            }
+            keyword_names = {keyword.arg for keyword in node.keywords}
+            if not node.args or keyword_names.intersection(legacy_keywords):
+                self._add("v4_agt_runtime_constructor")
+        self.generic_visit(node)
+
 
 def _scan_python(path: Path, text: str, rel: str) -> FileHits:
     hits = FileHits(path=path)
@@ -456,6 +548,98 @@ def _scan_python(path: Path, text: str, rel: str) -> FileHits:
     visitor = _PyV4Visitor(_collect_context(tree, rel))
     visitor.visit(tree)
     hits.counts = visitor.counts
+    strings = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    rule_document_keys = ("rules", "condition", "operator", "action")
+    multiline_rule_document = any(
+        all(
+            re.search(rf"(?m)^\s*(?:-\s*)?{key}\s*:", value)
+            for key in rule_document_keys
+        )
+        for value in strings
+    )
+    embedded_policy_document = any(
+        "\n" in value and _is_v4_policy_document("embedded.yaml", value)
+        for value in strings
+    )
+    policy_named_class = any(
+        isinstance(node, ast.ClassDef) and "Policy" in node.name
+        for node in ast.walk(tree)
+    )
+    intent_fields = {
+        "blocked_patterns",
+        "allowed_tools",
+        "blocked_tools",
+        "max_tokens",
+        "rate_limit",
+    }
+    pattern_modes = {"substring", "regex", "glob"}
+    if (
+        policy_named_class
+        and "blocked_patterns" in strings
+        and strings.intersection({"allowed_tools", "blocked_tools"})
+        and strings.intersection({"max_tokens", "rate_limit"})
+        and len(strings.intersection(pattern_modes)) >= 2
+        and len(strings.intersection(intent_fields)) >= 3
+    ):
+        hits.counts["v4_intent_policy_shape"] = 1
+    retained_agentmesh_policy = rel.startswith(
+        "agent-governance-python/agent-mesh/src/agentmesh/governance/"
+    )
+    if (
+        not retained_agentmesh_policy
+        and (
+            set(rule_document_keys).issubset(strings)
+            or multiline_rule_document
+            or embedded_policy_document
+        )
+    ):
+        hits.counts["v4_rule_document_shape"] = 1
+    if rel.startswith(
+        "agent-governance-python/agent-os/src/agent_os/policies/"
+    ):
+        defined_classes = {
+            node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+        }
+        for name in sorted(defined_classes.intersection(V4_AGENT_OS_POLICY_CLASSES)):
+            hits.counts[name] = 1
+    if rel.startswith(
+        "agent-governance-python/agent-sandbox/src/agent_sandbox/"
+    ):
+        sandbox_fields = {
+            "defaults",
+            "network_allowlist",
+            "sandbox_mounts",
+            "tool_allowlist",
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            args = (
+                node.args.posonlyargs
+                + node.args.args
+                + node.args.kwonlyargs
+            )
+            if not any(arg.arg == "policy" for arg in args):
+                continue
+            translated_fields = {
+                call.args[1].value
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == "getattr"
+                and len(call.args) >= 2
+                and isinstance(call.args[0], ast.Name)
+                and call.args[0].id == "policy"
+                and isinstance(call.args[1], ast.Constant)
+                and isinstance(call.args[1].value, str)
+            }
+            if len(translated_fields.intersection(sandbox_fields)) >= 2:
+                hits.counts["v4_sandbox_policy_translation"] = 1
+                break
     return hits
 
 
@@ -484,21 +668,48 @@ def _scan_substring_tokens(path: Path, text: str, tokens: frozenset[str]) -> Fil
 def _scan_doc(path: Path, text: str) -> FileHits:
     """Scan docs, qualifying ambiguous names by their v4 module context."""
     hits = _scan_substring_tokens(path, text, DOC_TOKENS)
-    qualified_patterns = {
-        "ExecutionContext": (
-            r"\bagent_os\.integrations\.base\.ExecutionContext\b",
-            r"\bfrom\s+agent_os\.integrations\.base\s+import[^\n]*\bExecutionContext\b",
-        ),
-        "PolicyEvaluator": (
-            r"\bagent_os\.(?:policies(?:\.evaluator)?|compat)\.PolicyEvaluator\b",
-            r"\bfrom\s+agent_os\.(?:policies(?:\.evaluator)?|compat)"
-            r"\s+import[^\n]*\bPolicyEvaluator\b",
-        ),
-    }
+    qualified_patterns: dict[str, tuple[str, ...]] = {}
+    for symbol, modules in AMBIGUOUS_MODULES.items():
+        patterns: list[str] = []
+        for module in modules:
+            escaped = re.escape(module)
+            patterns.extend(
+                (
+                    rf"\b{escaped}\.{re.escape(symbol)}\b",
+                    rf"\bfrom\s+{escaped}\s+import[^\n]*\b{re.escape(symbol)}\b",
+                )
+            )
+        qualified_patterns[symbol] = tuple(patterns)
     for symbol, patterns in qualified_patterns.items():
         count = sum(len(re.findall(pattern, text)) for pattern in patterns)
         if count:
             hits.counts[symbol] = count
+    legacy_runtime_patterns = {
+        "v4_agt_runtime_constructor": (
+            r"\bAgtRuntime\s*\(\s*\)",
+            r"\bAgtRuntime\s*\(\s*policies\s*=",
+            r"\bAgtRuntime\s*\([^)]*\bblocked_patterns\s*=",
+            r"\bAgtRuntime\s*\([^)]*\ballowed_tools\s*=",
+        ),
+        "v4_pattern_enum": (
+            r"\bPolicyEvaluation\.(?:SUBSTRING|REGEX|GLOB)\b",
+        ),
+        "v4_policy_model_shape": (
+            r"\bPolicyCondition\b[\s\S]{0,1000}\bPolicyOperator\b",
+            r"\bPolicyDefaults\b[\s\S]{0,1000}\bPolicyRule\b",
+        ),
+    }
+    for marker, patterns in legacy_runtime_patterns.items():
+        count = sum(len(re.findall(pattern, text)) for pattern in patterns)
+        if count:
+            hits.counts[marker] = count
+    fenced_data = re.findall(
+        r"```(?:yaml|yml|json)\s*\n(.*?)```",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if any(_is_v4_policy_document("fenced.yaml", block) for block in fenced_data):
+        hits.counts["v4_policy_document_fence"] = 1
     return hits
 
 
@@ -571,13 +782,32 @@ def _is_v4_policy_document(rel: str, text: str) -> bool:
         return True
     if "rules" in top_keys and top_keys.intersection({"inherit", "scope"}):
         return True
+    if "rules" in top_keys:
+        if parsed_json is not None:
+            rules = parsed_json.get("rules")
+            if isinstance(rules, list) and any(
+                isinstance(rule, dict)
+                and {"condition", "action", "message"}.issubset(rule)
+                for rule in rules
+            ):
+                return True
+        elif (
+            re.search(r"(?m)^\s{2,}(?:-\s*)?condition\s*:", text)
+            and re.search(r"(?m)^\s{2,}action\s*:", text)
+            and re.search(r"(?m)^\s{2,}message\s*:", text)
+        ):
+            return True
+        if re.search(r"(?m)^\s{2,}(?:-\s*)?trigger\s*:", text) and (
+            re.search(r"(?m)^\s{2,}check\s*:", text)
+            or re.search(r"(?m)^\s{2,}action\s*:", text)
+        ):
+            return True
     defaults = (
         parsed_json.get("defaults")
         if parsed_json is not None
         else _yaml_block(text, "defaults")
     )
     default_keys = {
-        "action",
         "max_tokens",
         "max_tool_calls",
         "confidence_threshold",

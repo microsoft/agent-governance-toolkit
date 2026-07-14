@@ -339,9 +339,7 @@ def test_builder_envelope_method_emits_bare_envelope() -> None:
 
 
 def test_builder_record_tool_call_then_post_tool_call_snapshot() -> None:
-    # End-to-end mutation: post a tool call, advance budgets, see new
-    # value on the next snapshot. Matches the v4 ExecutionContext.call_count
-    # += 1 flow.
+    # Post a tool call, advance budgets, and observe the next snapshot.
     b = SnapshotBuilder(agent_id="bot")
     first = b.pre_tool_call(tool_name="t", args={})
     assert first["envelope"]["budgets"]["tool_call_count"] == 0

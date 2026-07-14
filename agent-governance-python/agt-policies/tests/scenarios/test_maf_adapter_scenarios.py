@@ -2,15 +2,15 @@
 # Licensed under the MIT License.
 """MAF adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`MAFKernel` +
-:class:`GovernancePolicyMiddleware` + :class:`CapabilityGuardMiddleware`
+These scenarios exercise the native :class:`MAFKernel` and
+:class:`RuntimeGovernanceMiddleware` + :class:`CapabilityGuardMiddleware`
 surface routed through :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
 
 Each test covers one of the five AGT verdicts that the adapter must
-translate back to its v4 surface:
+expose through its native surface:
 
 - ``allow`` -> the MAF ``call_next`` continuation is awaited.
 - ``deny`` -> the middleware raises
@@ -42,7 +42,7 @@ pytest.importorskip("agent_os")
 # mirroring the adapter's own except-ImportError fallback.
 sys.modules.setdefault("agent_framework", types.ModuleType("agent_framework"))
 
-from agt.policies import EvaluationResult  # noqa: E402
+from agt.policies import PolicyEvaluation  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
@@ -136,19 +136,19 @@ def _make_function_ctx(
     )
 
 
-# ── verdict scenarios: GovernancePolicyMiddleware (input intervention) ──
+# ── verdict scenarios: RuntimeGovernanceMiddleware (input intervention) ──
 
 
 def test_policy_middleware_allow_path_invokes_next(tmp_path: Path) -> None:
     """An ``allow`` verdict lets MAF invoke the wrapped agent."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
     )
 
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
     kernel = MAFKernel(runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="what is the weather today?")
     call_next = AsyncMock()
 
@@ -162,7 +162,7 @@ def test_policy_middleware_allow_path_invokes_next(tmp_path: Path) -> None:
 def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
     """A ``deny`` verdict raises :class:`MiddlewareTermination`."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
         MiddlewareTermination,
     )
@@ -178,7 +178,7 @@ def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
         ],
     )
     kernel = MAFKernel(runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="tell me about secrets")
     call_next = AsyncMock()
 
@@ -194,7 +194,7 @@ def test_policy_middleware_deny_path_raises_termination(tmp_path: Path) -> None:
 def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> None:
     """A ``transform`` verdict rewrites the most recent user message body."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
     )
 
@@ -212,7 +212,7 @@ def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> No
         ],
     )
     kernel = MAFKernel(runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="Customer SSN is 123-45-6789")
     call_next = AsyncMock()
 
@@ -229,13 +229,13 @@ def test_policy_middleware_transform_path_rewrites_message(tmp_path: Path) -> No
 def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> None:
     """An ``escalate`` verdict that the resolver approves forwards the call."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
     )
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
@@ -246,7 +246,7 @@ def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> No
         approval_resolver=resolver,
     )
     kernel = MAFKernel(runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="approve this please")
     call_next = AsyncMock()
 
@@ -260,7 +260,7 @@ def test_policy_middleware_escalate_with_resolver_forwards(tmp_path: Path) -> No
 def test_policy_middleware_escalate_with_no_resolver_denies(tmp_path: Path) -> None:
     """An ``escalate`` verdict without a resolver fails closed to deny."""
     from agent_os.integrations.maf_adapter import (
-        GovernancePolicyMiddleware,
+        RuntimeGovernanceMiddleware,
         MAFKernel,
         MiddlewareTermination,
     )
@@ -271,7 +271,7 @@ def test_policy_middleware_escalate_with_no_resolver_denies(tmp_path: Path) -> N
         approval_resolver=None,
     )
     kernel = MAFKernel(runtime=runtime)
-    mw = GovernancePolicyMiddleware(kernel=kernel)
+    mw = RuntimeGovernanceMiddleware(kernel=kernel)
     ctx = _make_agent_ctx(text="needs approval")
     call_next = AsyncMock()
 

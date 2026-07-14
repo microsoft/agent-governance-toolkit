@@ -49,7 +49,7 @@ AGT adapters enforce.
   `spec/agt/AGT-SNAPSHOT-1.0.md`.
 - `agt.policies.manifest` provides lossless typed `AgtManifest`, provenance-aware
   local reference resolution, and adapter compatibility preflight.
-- `agt.policies.bridge` — renders a v4 `GovernancePolicy` into an ACS
+- `agt.policies.runtime` — renders a v4 `AgtRuntime` into an ACS
   manifest + OPA rego module.
 - `agt.policies.result` provides native immutable `PolicyEvaluation` plus the
   temporary `EvaluationResult` compatibility surface.
@@ -113,8 +113,8 @@ Phase 3 removes that compatibility override.
 
 ## Compatibility bridge
 
-Existing Agent OS adapters still accept the v4 `GovernancePolicy`
-dataclass. `agt.policies.bridge` renders that policy into an ACS
+Existing Agent OS adapters still accept the v4 `AgtRuntime`
+dataclass. `agt.policies.runtime` renders that policy into an ACS
 manifest plus a generated Rego bundle. The bridge preserves v4
 semantics where they differ from the native ACS defaults, including an
 empty `allowed_tools` list meaning no allowlist and `max_tool_calls=0`

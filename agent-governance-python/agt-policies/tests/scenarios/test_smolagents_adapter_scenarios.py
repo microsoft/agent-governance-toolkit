@@ -2,15 +2,15 @@
 # Licensed under the MIT License.
 """Smolagents adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`SmolagentsKernel` and
+These scenarios exercise the native :class:`SmolagentsKernel` and
 :class:`GovernanceStepCallback` surface routed through
 :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
 
 Each test covers one of the five AGT verdicts that the adapter must
-translate back to its v4 surface:
+expose through its native surface:
 
 - ``allow`` -> ``before_tool_call`` returns ``None`` and the step
   callback lets the smolagents step run.
@@ -34,7 +34,7 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import EvaluationResult  # noqa: E402
+from agt.policies import PolicyEvaluation  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
@@ -126,6 +126,12 @@ class _Agent:
     name = "scenario-agent"
 
 
+def _state():
+    from agent_os.integrations.base import AdapterExecutionState
+
+    return AdapterExecutionState(agent_id="scenario-agent", session_id="scenario")
+
+
 # ── verdict scenarios on before_tool_call ────────────────────────────
 
 
@@ -136,9 +142,11 @@ def test_before_tool_call_allow_path_allows(tmp_path: Path) -> None:
     runtime, policy = _build_runtime(tmp_path, [{"decision": "allow"}])
     kernel = SmolagentsKernel(runtime=runtime)
 
-    result = kernel.before_tool_call(tool_name="search", tool_args={"q": "weather"})
+    result = kernel.evaluate_pre_tool_call(
+        _state(), tool_name="search", args={"q": "weather"}
+    )
 
-    assert result is None
+    assert result.allowed
     assert len(policy.invocations) == 1
 
 
@@ -158,11 +166,12 @@ def test_before_tool_call_deny_path_blocks(tmp_path: Path) -> None:
     )
     kernel = SmolagentsKernel(runtime=runtime)
 
-    result = kernel.before_tool_call(tool_name="search", tool_args={"q": "x"})
+    result = kernel.evaluate_pre_tool_call(
+        _state(), tool_name="search", args={"q": "x"}
+    )
 
-    assert result is not None
-    assert result["policy"] == "agt_pre_tool_call"
-    assert result["verdict"] == "deny"
+    assert not result.allowed
+    assert result.verdict == "deny"
 
 
 def test_before_tool_call_transform_path_rewrites_args(tmp_path: Path) -> None:
@@ -185,10 +194,13 @@ def test_before_tool_call_transform_path_rewrites_args(tmp_path: Path) -> None:
     kernel = SmolagentsKernel(runtime=runtime)
     args: dict[str, Any] = {"q": "drop table users"}
 
-    result = kernel.before_tool_call(tool_name="search", tool_args=args)
+    result = kernel.evaluate_pre_tool_call(
+        _state(), tool_name="search", args=args
+    )
 
-    assert result is None
-    assert args == {"q": "[SANITIZED]"}
+    assert result.allowed
+    assert result.transform is not None
+    assert result.transform.value == {"q": "[SANITIZED]"}
 
 
 def test_before_tool_call_escalate_with_approving_resolver_allows(
@@ -199,7 +211,7 @@ def test_before_tool_call_escalate_with_approving_resolver_allows(
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
@@ -211,11 +223,13 @@ def test_before_tool_call_escalate_with_approving_resolver_allows(
     )
     kernel = SmolagentsKernel(runtime=runtime)
 
-    result = kernel.before_tool_call(tool_name="search", tool_args={"q": "x"})
+    result = kernel.evaluate_pre_tool_call(
+        _state(), tool_name="search", args={"q": "x"}
+    )
 
     assert captured["ip"] == "pre_tool_call"
     assert captured["enforced_identity"] is not None
-    assert result is None
+    assert result.allowed
 
 
 def test_before_tool_call_escalate_with_no_resolver_blocks(tmp_path: Path) -> None:
@@ -229,10 +243,11 @@ def test_before_tool_call_escalate_with_no_resolver_blocks(tmp_path: Path) -> No
     )
     kernel = SmolagentsKernel(runtime=runtime)
 
-    result = kernel.before_tool_call(tool_name="search", tool_args={"q": "x"})
+    result = kernel.evaluate_pre_tool_call(
+        _state(), tool_name="search", args={"q": "x"}
+    )
 
-    assert result is not None
-    assert result["policy"] == "agt_pre_tool_call"
+    assert not result.allowed
 
 
 # ── verdict scenarios on GovernanceStepCallback ──────────────────────

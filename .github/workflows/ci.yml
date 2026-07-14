@@ -353,7 +353,7 @@ jobs:
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-integrations
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-cli
           pip install --no-cache-dir --no-deps -e agent-governance-python/agent-governance-toolkit-protocols
-          # agt-policies backs the agent-os v5 runtime bridge. Install this
+          # agt-policies backs the native ACS runtime. Install this
           # local sibling without resolving agent-control-specification from
           # PyPI; the vendored native SDK is built below for the packages that
           # exercise the ACS-backed runtime. Keep its pure-Python runtime deps
@@ -379,7 +379,7 @@ jobs:
       - name: Build native ACS SDK (ACS-backed Python policy runtime)
         # agent-os and agt-policies route evaluations through the native
         # `agent_control_specification` Rust SDK (pyo3/maturin). Build & install
-        # it from the vendored policy-engine so bridge-backed tests run.
+        # it from the vendored policy-engine so native-runtime tests run.
         # The wheel is abi3-py311, so one build serves all agent-os matrix
         # Python versions (3.11-3.13). ubuntu-latest ships Rust + a C toolchain.
         if: steps.gate.outputs.run == 'true' && (matrix.package == 'agent-os' || matrix.package == 'agt-policies')
@@ -425,7 +425,7 @@ jobs:
         working-directory: agent-governance-python/agent-os
         run: |
           pytest tests/test_governance_parity.py \
-                 tests/test_spec_adapter_contract_conformance.py \
+                 tests/test_adapter_mediation_contract.py \
                  -v --tb=short
       - name: Test ${{ matrix.package }}
         if: steps.gate.outputs.run == 'true'

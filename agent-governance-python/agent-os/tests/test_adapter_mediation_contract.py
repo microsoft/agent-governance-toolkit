@@ -134,7 +134,7 @@ NATIVE_HOOK_CONTRACTS: dict[str, tuple[str, tuple[str, ...]]] = {
 NON_KERNEL_EXPORTS = {"GovernedSemanticKernel", "LlamaFirewallAdapter"}
 DIRECT_SUPPORTED_ADAPTERS = {"AgentShieldKernel", "MAFKernel", "OpenAIAgentsKernel"}
 NATIVE_RUNTIME_PARAMETER = {
-    "AgentShieldKernel": "agt_runtime: Any | None = None",
+    "AgentShieldKernel": "agt_runtime: Any",
 }
 
 
@@ -179,7 +179,7 @@ def test_native_adapters_route_declared_intervention_points(
 
     assert "get_adapter_runtime(" in source
     assert NATIVE_RUNTIME_PARAMETER.get(
-        adapter_name, "runtime: Any | None = None"
+        adapter_name, "runtime: Any"
     ) in source
     assert "AdapterRuntime" + "Bridge" not in source
     assert "BridgeResult" not in source
@@ -199,23 +199,15 @@ def test_native_hook_adapters_keep_pre_side_effect_gates(
         assert marker in source, f"{adapter_name} must keep mediation marker {marker}"
 
 
-def test_langchain_stream_buffers_before_yielding() -> None:
+def test_langchain_model_call_mediates_before_and_after_handler() -> None:
     source = _source("langchain_adapter.py")
 
     _assert_ordered(
         source,
-        "chunks = list(self._original.stream",
-        "bridge_result = self._kernel.evaluate_output",
-        "yield from chunks",
+        "pre_result = self._kernel.evaluate_input",
+        "response = handler(request)",
+        "post_result = self._kernel._bridge.evaluate_output",
     )
-    _assert_ordered(
-        source,
-        "async def astream",
-        "chunks = [chunk async for chunk in stream]",
-        "for chunk in chunks:",
-    )
-    assert "async def astream_log" in source
-    assert "async def astream_events" in source
 
 
 def test_openai_stream_buffers_before_yielding() -> None:
@@ -240,7 +232,6 @@ def test_llamaindex_stream_chat_post_checks_before_replay() -> None:
     _assert_ordered(
         source,
         "async def astream_chat",
-        "self._enforce_budget()",
         "response = await self._post_async_stream_response(response)",
         "self._ctx.call_count += 1",
         "return response",
@@ -248,7 +239,6 @@ def test_llamaindex_stream_chat_post_checks_before_replay() -> None:
     _assert_ordered(
         source,
         "def stream_chat",
-        "self._enforce_budget()",
         "response = self._post_stream_response(response)",
         "self._ctx.call_count += 1",
         "return response",

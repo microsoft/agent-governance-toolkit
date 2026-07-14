@@ -4,58 +4,40 @@
 OpenAI Agents SDK Integration for Agent-OS
 ============================================
 
-Provides kernel-level governance for OpenAI Agents SDK workflows using
-the SDK's native ``RunHooks`` lifecycle system.
+Provides native ACS mediation for OpenAI Agents SDK workflows using the
+SDK's ``RunHooks`` lifecycle system.
 
 **Preferred (native hooks)**::
 
     from agent_os.integrations.openai_agents_sdk import OpenAIAgentsKernel
     from agents import Agent, Runner
 
-    kernel = OpenAIAgentsKernel(
-        blocked_tools=["shell_exec"],
-        blocked_patterns=["DROP TABLE"],
-    )
+    from agt.policies import AgtRuntime
+
+    runtime = AgtRuntime("policies/manifest.yaml")
+    kernel = OpenAIAgentsKernel(runtime=runtime)
 
     agent = Agent(name="assistant", model="gpt-4o")
     result = await Runner.run(agent, "Analyze data", hooks=kernel.as_hooks())
 
-**With Cedar/OPA policy evaluation**::
-
-    kernel = OpenAIAgentsKernel.from_cedar("policies/governance.cedar")
-    result = await Runner.run(agent, "...", hooks=kernel.as_hooks())
-
-**Legacy (deprecated — kept for backward compatibility)**::
-
-    governed_agent = kernel.wrap(agent)
-    GovernedRunner = kernel.wrap_runner(Runner)
-    result = await GovernedRunner.run(governed_agent, "input")
-
 Features
 --------
 - Native ``RunHooks`` lifecycle integration (agent/tool/handoff callbacks)
-- Inherits ``BaseIntegration`` — Cedar/OPA, ``pre_execute``, ``post_execute``
-- Tool allowlist/blocklist enforcement via ``on_tool_start``
-- Content filtering via ``on_agent_start``
+- Native ACS input, tool, and output intervention-point evaluation
 - Handoff monitoring and limit enforcement via ``on_handoff``
 - Full audit trail with event recording
 - Health check endpoint
-- Backward-compatible ``wrap()`` / ``wrap_runner()`` / ``create_tool_guard()``
-  (deprecated, will be removed in a future release)
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
-import warnings
 from datetime import datetime, timezone
-from functools import wraps
 from typing import Any, Callable, Optional
 
 from ._native_adapter_runtime import NativeAdapterRuntime
-from .base import BaseIntegration, ExecutionContext, GovernanceEventType, GovernancePolicy
+from .base import BaseIntegration, AdapterExecutionState, GovernanceEventType
 
 logger = logging.getLogger("agent_os.openai_agents")
 
@@ -69,7 +51,7 @@ except ImportError:
     _SDKRunHooks = None
     _HAS_AGENTS_SDK = False
 
-# Re-export PolicyViolationError for backward compatibility
+# Re-export the canonical policy exception from the adapter module.
 from agent_os.exceptions import PolicyViolationError as PolicyViolationError  # noqa: F401
 
 
@@ -81,9 +63,8 @@ from agent_os.exceptions import PolicyViolationError as PolicyViolationError  # 
 class OpenAIAgentsKernel(BaseIntegration):
     """Governance kernel for the OpenAI Agents SDK.
 
-    Extends :class:`BaseIntegration` so that it inherits Cedar/OPA policy
-    evaluation, ``pre_execute`` / ``post_execute`` governance, and
-    ``from_cedar`` factory support.
+    Extends :class:`BaseIntegration` and routes SDK lifecycle hooks through
+    the required native ACS runtime.
 
     The primary integration path is via :meth:`as_hooks`, which returns a
     :class:`GovernanceRunHooks` instance that can be passed directly to
@@ -91,86 +72,26 @@ class OpenAIAgentsKernel(BaseIntegration):
 
     Example::
 
-        kernel = OpenAIAgentsKernel(
-            blocked_tools=["shell"],
-            blocked_patterns=["DROP TABLE"],
-        )
+        runtime = AgtRuntime("policies/manifest.yaml")
+        kernel = OpenAIAgentsKernel(runtime=runtime)
         result = await Runner.run(agent, "input", hooks=kernel.as_hooks())
     """
 
     def __init__(
         self,
-        policy: Optional[GovernancePolicy] = None,
         on_violation: Optional[Callable[[PolicyViolationError], None]] = None,
         *,
-        evaluator: Any = None,
-        # Convenience kwargs
-        max_tool_calls: int = 50,
-        max_handoffs: int = 5,
-        timeout_seconds: int = 300,
-        allowed_tools: Optional[list[str]] = None,
-        blocked_tools: Optional[list[str]] = None,
-        blocked_patterns: Optional[list[str]] = None,
-        require_human_approval: bool = False,
-        runtime: Any | None = None,
+        runtime: Any,
     ) -> None:
-        """Initialise the OpenAI Agents governance kernel.
-
-        Args:
-            policy: Full governance policy.  When ``None`` a policy is
-                built from the convenience kwargs.
-            on_violation: Optional callback invoked on every policy
-                violation.
-            evaluator: Optional ``PolicyEvaluator`` for Cedar/OPA policy
-                evaluation.
-            max_tool_calls: Max tool invocations before blocking.
-            max_handoffs: Max agent handoffs before blocking.
-            timeout_seconds: Global timeout in seconds.
-            allowed_tools: If non-empty, only these tools may execute.
-            blocked_tools: Tools that are always denied.
-            blocked_patterns: Content substrings that are always denied.
-            require_human_approval: When ``True``, violations raise
-                immediately; otherwise they are logged via *on_violation*.
-        """
-        if policy is None:
-            policy = GovernancePolicy(
-                max_tool_calls=max_tool_calls,
-                timeout_seconds=timeout_seconds,
-                allowed_tools=allowed_tools or [],
-                blocked_patterns=blocked_patterns or [],
-                require_human_approval=require_human_approval,
-            )
-        super().__init__(policy, evaluator=evaluator)
-        self._adapter_runtime = (
-            NativeAdapterRuntime(runtime) if runtime is not None else None
-        )
-
-        self.on_violation: Callable[[PolicyViolationError], None] = (
-            on_violation or self._default_violation_handler
-        )
-        self._blocked_tools: set[str] = set(blocked_tools or [])
-        self._allowed_tools: set[str] = set(
-            policy.allowed_tools if policy.allowed_tools else (allowed_tools or [])
-        )
-        self._max_handoffs: int = max_handoffs
-        self._require_human_approval: bool = (
-            policy.require_human_approval
-            if policy.require_human_approval
-            else require_human_approval
-        )
-
-        # ── Runtime state ─────────────────────────────────────────
-        self._agent_contexts: dict[str, ExecutionContext] = {}
-        self._tool_call_count: int = 0
-        self._handoff_count: int = 0
-        self._start_time: float = time.monotonic()
+        super().__init__(runtime=runtime)
+        self._adapter_runtime = NativeAdapterRuntime(runtime)
+        self.on_violation = on_violation or self._default_violation_handler
+        self._agent_contexts: dict[str, AdapterExecutionState] = {}
+        self._tool_call_count = 0
+        self._handoff_count = 0
+        self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
-
-        # Audit trail
         self._audit_events: list[dict[str, Any]] = []
-
-        # Legacy wrapped agents registry (used by deprecated wrap())
-        self._wrapped_agents: dict[str, Any] = {}
 
     # ── Violation Handling ─────────────────────────────────────────
 
@@ -185,48 +106,6 @@ class OpenAIAgentsKernel(BaseIntegration):
             error: The policy violation that was detected.
         """
         logger.error("Policy violation: %s", error)
-
-    # ── Tool / Content Checks ─────────────────────────────────────
-
-    def _check_tool_allowed(self, tool_name: str) -> tuple[bool, str]:
-        """Check whether *tool_name* is permitted by the active policy.
-
-        Evaluation order:
-
-        1. If *tool_name* is in ``_blocked_tools`` → deny.
-        2. If ``_allowed_tools`` is non-empty and *tool_name* is absent → deny.
-        3. Otherwise → allow.
-
-        Args:
-            tool_name: The name of the tool to evaluate.
-
-        Returns:
-            A ``(allowed, reason)`` tuple.  *reason* is the empty string
-            when *allowed* is ``True``.
-        """
-        if tool_name in self._blocked_tools:
-            return False, f"Tool '{tool_name}' is blocked by policy"
-        if self._allowed_tools and tool_name not in self._allowed_tools:
-            return False, f"Tool '{tool_name}' not in allowed list"
-        return True, ""
-
-    def _check_content(self, content: str) -> tuple[bool, str]:
-        """Check *content* against ``blocked_patterns`` in the policy.
-
-        Matching is case-insensitive substring search.
-
-        Args:
-            content: The text to scan.
-
-        Returns:
-            A ``(ok, reason)`` tuple.  *reason* describes the matched
-            pattern when *ok* is ``False``.
-        """
-        content_lower = content.lower()
-        for pattern in self.policy.blocked_patterns:
-            if pattern.lower() in content_lower:
-                return False, f"Content matches blocked pattern: {pattern}"
-        return True, ""
 
     # ── Event Recording ───────────────────────────────────────────
 
@@ -262,8 +141,8 @@ class OpenAIAgentsKernel(BaseIntegration):
 
     # ── Context Management ────────────────────────────────────────
 
-    def _get_or_create_context(self, agent_name: str) -> ExecutionContext:
-        """Return the ``ExecutionContext`` for *agent_name*, creating one if needed.
+    def _get_or_create_context(self, agent_name: str) -> AdapterExecutionState:
+        """Return the ``AdapterExecutionState`` for *agent_name*, creating one if needed.
 
         Contexts are cached in ``_agent_contexts`` keyed by agent name so
         that the same context is reused across hook invocations within a
@@ -273,7 +152,7 @@ class OpenAIAgentsKernel(BaseIntegration):
             agent_name: Identifier for the agent.
 
         Returns:
-            The existing or newly created :class:`ExecutionContext`.
+            The existing or newly created :class:`AdapterExecutionState`.
         """
         if agent_name not in self._agent_contexts:
             ctx = self.create_context(agent_name)
@@ -303,248 +182,6 @@ class OpenAIAgentsKernel(BaseIntegration):
         return GovernanceRunHooks(kernel=self, name=name)
 
     # ================================================================
-    # Deprecated wrap()-Based API  (BACKWARD COMPAT)
-    # ================================================================
-
-    def wrap(self, agent: Any) -> Any:
-        """Wrap an OpenAI Agent with a governance proxy.
-
-        .. deprecated::
-            Use :meth:`as_hooks` instead.  The ``wrap()`` approach creates
-            a fragile proxy object that cannot intercept all SDK
-            lifecycle events.  Prefer the native ``RunHooks`` path::
-
-                result = await Runner.run(agent, "input",
-                                          hooks=kernel.as_hooks())
-
-        Args:
-            agent: An OpenAI Agents SDK ``Agent`` instance.
-
-        Returns:
-            A ``GovernedAgent`` wrapper that delegates attribute access
-            to *agent* and stores a governance :class:`ExecutionContext`.
-        """
-        warnings.warn(
-            "OpenAIAgentsKernel.wrap() is deprecated. "
-            "Use kernel.as_hooks() with Runner.run(hooks=...) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        agent_id = getattr(agent, "name", str(id(agent)))
-
-        class GovernedAgent:
-            def __init__(wrapper_self, original: Any, kernel: OpenAIAgentsKernel):
-                wrapper_self._original = original
-                wrapper_self._kernel = kernel
-                wrapper_self._context = kernel._get_or_create_context(agent_id)
-                for attr in ["name", "model", "instructions", "tools"]:
-                    if hasattr(original, attr):
-                        setattr(wrapper_self, attr, getattr(original, attr))
-
-            @property
-            def original(wrapper_self) -> Any:
-                return wrapper_self._original
-
-            def __getattr__(wrapper_self, name: str) -> Any:
-                return getattr(wrapper_self._original, name)
-
-        wrapped = GovernedAgent(agent, self)
-        self._wrapped_agents[agent_id] = wrapped
-        logger.info("Wrapped agent '%s' with governance kernel (deprecated)", agent_id)
-        return wrapped
-
-    def unwrap(self, governed_agent: Any) -> Any:
-        """Remove the governance wrapper and return the original agent.
-
-        Args:
-            governed_agent: A previously wrapped agent or any object.
-
-        Returns:
-            The original unwrapped agent.  If *governed_agent* was never
-            wrapped, it is returned unchanged.
-        """
-        if hasattr(governed_agent, "_original"):
-            return governed_agent._original
-        return governed_agent
-
-    def wrap_runner(self, runner_class: Any) -> Any:
-        """Wrap the SDK ``Runner`` class to intercept ``run()`` calls.
-
-        .. deprecated::
-            Use :meth:`as_hooks` instead.  The ``wrap_runner()`` approach
-            relies on class-level monkey-patching that cannot access
-            lifecycle events between agent turns.
-
-        Args:
-            runner_class: The ``agents.Runner`` class to wrap.
-
-        Returns:
-            A ``GovernedRunner`` class with ``run()`` and ``run_sync()``
-            class methods that apply governance before delegating.
-        """
-        warnings.warn(
-            "OpenAIAgentsKernel.wrap_runner() is deprecated. "
-            "Use kernel.as_hooks() with Runner.run(hooks=...) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        kernel = self
-
-        class GovernedRunner:
-            @classmethod
-            async def run(cls, agent: Any, input_text: str, **kwargs) -> Any:
-                ctx = getattr(agent, "_context", None)
-                if ctx:
-                    ok, reason = kernel._check_content(input_text)
-                    if not ok:
-                        error = PolicyViolationError(
-                            f"Content blocked: {reason}"
-                        )
-                        kernel.on_violation(error)
-                        if kernel._require_human_approval:
-                            raise error
-                    ctx.tool_calls.append({
-                        "type": "run_start",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "data": {"input_length": len(input_text)},
-                    })
-
-                original_agent = getattr(agent, "_original", agent)
-                try:
-                    result = await runner_class.run(
-                        original_agent, input_text, **kwargs
-                    )
-                    if ctx:
-                        ctx.tool_calls.append({
-                            "type": "run_complete",
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "data": {"success": True},
-                        })
-                    return result
-                except Exception as e:
-                    if ctx:
-                        ctx.tool_calls.append({
-                            "type": "run_error",
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "data": {"error": str(e)},
-                        })
-                    raise
-
-            @classmethod
-            def run_sync(cls, agent: Any, input_text: str, **kwargs) -> Any:
-                return asyncio.run(cls.run(agent, input_text, **kwargs))
-
-        return GovernedRunner
-
-    def create_tool_guard(self) -> Callable:
-        """Create a decorator that applies governance checks to tool functions.
-
-        .. deprecated::
-            Tool governance is now handled automatically via
-            :meth:`as_hooks` through the ``on_tool_start`` hook.
-
-        Returns:
-            A decorator that wraps sync or async callables with tool
-            allow/block and content-filter checks.
-
-        Raises:
-            PolicyViolationError: When the decorated tool's name is
-                blocked or its arguments contain blocked content.
-        """
-        warnings.warn(
-            "OpenAIAgentsKernel.create_tool_guard() is deprecated. "
-            "Tool governance is handled via as_hooks() on_tool_start.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        kernel = self
-
-        def guard(func: Callable) -> Callable:
-            @wraps(func)
-            async def wrapper(*args, **kwargs):
-                tool_name = func.__name__
-                ok, reason = kernel._check_tool_allowed(tool_name)
-                if not ok:
-                    error = PolicyViolationError(f"Tool blocked: {reason}")
-                    kernel.on_violation(error)
-                    raise error
-
-                for arg in args:
-                    if isinstance(arg, str):
-                        ok, reason = kernel._check_content(arg)
-                        if not ok:
-                            error = PolicyViolationError(
-                                f"Content blocked: {reason}"
-                            )
-                            kernel.on_violation(error)
-                            raise error
-                for value in kwargs.values():
-                    if isinstance(value, str):
-                        ok, reason = kernel._check_content(value)
-                        if not ok:
-                            error = PolicyViolationError(
-                                f"Content blocked: {reason}"
-                            )
-                            kernel.on_violation(error)
-                            raise error
-
-                if asyncio.iscoroutinefunction(func):
-                    return await func(*args, **kwargs)
-                return func(*args, **kwargs)
-
-            return wrapper
-        return guard
-
-    def create_guardrail(self) -> Any:
-        """Create an OpenAI Agents SDK compatible guardrail callable.
-
-        The returned object is an async callable with the guardrail
-        signature ``(context, agent, input_text) -> str | None``.
-        Returns ``None`` when the input passes all checks, or a
-        human-readable rejection string when content or tool calls
-        violate the active policy.
-
-        Returns:
-            A ``PolicyGuardrail`` instance.
-        """
-        kernel = self
-
-        class PolicyGuardrail:
-            """OpenAI Agents SDK guardrail backed by Agent-OS governance."""
-
-            async def __call__(
-                self,
-                context: Any,
-                agent: Any,
-                input_text: str,
-            ) -> str | None:
-                """Evaluate governance rules and return a rejection or None.
-
-                Args:
-                    context: SDK run context (may contain ``tool_calls``).
-                    agent: The agent being guarded.
-                    input_text: The user input to check.
-
-                Returns:
-                    A rejection message string, or ``None`` if allowed.
-                """
-                ok, reason = kernel._check_content(input_text)
-                if not ok:
-                    logger.warning("Guardrail blocked: %s", reason)
-                    return f"Request blocked by policy: {reason}"
-
-                if hasattr(context, "tool_calls"):
-                    for tool_call in context.tool_calls:
-                        tool_name = getattr(tool_call, "name", "")
-                        ok, reason = kernel._check_tool_allowed(tool_name)
-                        if not ok:
-                            logger.warning("Guardrail blocked tool: %s", reason)
-                            return f"Tool blocked by policy: {reason}"
-                return None
-
-        return PolicyGuardrail()
-
-    # ================================================================
     # Observability
     # ================================================================
 
@@ -561,24 +198,11 @@ class OpenAIAgentsKernel(BaseIntegration):
         return list(self._audit_events)
 
     def get_stats(self) -> dict[str, Any]:
-        """Return aggregate governance statistics.
-
-        Returns:
-            A dict containing ``total_sessions``, ``total_tool_calls``,
-            ``total_handoffs``, ``wrapped_agents``, and a ``policy``
-            sub-dict with the active configuration.
-        """
+        """Return aggregate runtime and lifecycle statistics."""
         return {
             "total_sessions": len(self._agent_contexts),
             "total_tool_calls": self._tool_call_count,
             "total_handoffs": self._handoff_count,
-            "wrapped_agents": len(self._wrapped_agents),
-            "policy": {
-                "max_tool_calls": self.policy.max_tool_calls,
-                "max_handoffs": self._max_handoffs,
-                "blocked_tools": sorted(self._blocked_tools),
-                "allowed_tools": sorted(self._allowed_tools),
-            },
         }
 
     def health_check(self) -> dict[str, Any]:
@@ -616,10 +240,7 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
     governance at every stage of agent execution — without wrapping or
     monkey-patching agent/runner objects.
 
-    The hooks delegate all governance decisions to the backing
-    :class:`OpenAIAgentsKernel`, which in turn uses
-    :class:`BaseIntegration`'s ``pre_execute``, Cedar/OPA evaluation,
-    and ``GovernancePolicy`` checks.
+    The hooks delegate every decision to the backing kernel's native runtime.
 
     Register via :meth:`OpenAIAgentsKernel.as_hooks`::
 
@@ -713,34 +334,12 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             if msgs and hasattr(msgs[-1], "content"):
                 input_text = str(msgs[-1].content)
 
-        # Content filter (local fast check)
-        content_violated = False
         if input_text:
-            ok, reason = self._kernel._check_content(input_text)
-            if not ok:
-                content_violated = True
-                error = PolicyViolationError(
-                    f"Agent start blocked: {reason}"
-                )
-                self._kernel.on_violation(error)
-                if self._kernel._require_human_approval:
-                    raise error
-
-        # Cedar/OPA + GovernancePolicy gate (skip if content already
-        # failed locally and was logged — avoids double-block)
-        if input_text and not content_violated:
-            if self._kernel._adapter_runtime is not None:
-                evaluation = self._kernel._adapter_runtime.evaluate_input(
-                    ctx, body=input_text
-                )
-                if not evaluation.allowed:
-                    raise evaluation.to_policy_violation(PolicyViolationError)
-            else:
-                allowed, reason = self._kernel.pre_execute(ctx, input_text)
-                if not allowed:
-                    raise PolicyViolationError(
-                        f"Agent '{agent_name}' blocked by governance: {reason}"
-                    )
+            evaluation = self._kernel._adapter_runtime.evaluate_input(
+                ctx, body=input_text
+            )
+            if not evaluation.allowed:
+                raise evaluation.to_policy_violation(PolicyViolationError)
 
         trusted_skill_sources = self._kernel.trusted_sources(
             *self._kernel.trusted_sources_from_attrs(agent),
@@ -793,25 +392,13 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             ),
         )
 
-        # Post-check output
         output_str = str(output) if output else ""
         if output_str:
-            if self._kernel._adapter_runtime is not None:
-                evaluation = self._kernel._adapter_runtime.evaluate_output(
-                    ctx, content=output_str
-                )
-                if not evaluation.allowed:
-                    logger.warning(
-                        "Agent '%s' output violated policy: %s",
-                        agent_name,
-                        evaluation.reason,
-                    )
-            else:
-                valid, reason = self._kernel.post_execute(ctx, output_str)
-                if not valid:
-                    logger.warning(
-                        "Agent '%s' output violated policy: %s", agent_name, reason
-                    )
+            evaluation = self._kernel._adapter_runtime.evaluate_output(
+                ctx, content=output_str
+            )
+            if not evaluation.allowed:
+                raise evaluation.to_policy_violation(PolicyViolationError)
 
         self._kernel._record_event(
             "agent_end",
@@ -856,26 +443,7 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
         tool_name = getattr(tool, "name", "") or getattr(tool, "__name__", str(tool))
         ctx = self._kernel._get_or_create_context(agent_name)
 
-        # (a) Tool allow/block check
-        ok, reason = self._kernel._check_tool_allowed(tool_name)
-        if not ok:
-            error = PolicyViolationError(
-                f"Tool '{tool_name}' blocked: {reason}"
-            )
-            self._kernel.on_violation(error)
-            raise error
-
-        # (b) Budget check
         self._kernel._tool_call_count += 1
-        if self._kernel._tool_call_count > self._kernel.policy.max_tool_calls:
-            error = PolicyViolationError(
-                f"Tool call budget exceeded: "
-                f"{self._kernel._tool_call_count}/{self._kernel.policy.max_tool_calls}"
-            )
-            self._kernel.on_violation(error)
-            raise error
-
-        # (c) Cedar/OPA gate with tool identity
         tool_args = {}
         if hasattr(tool, "args"):
             tool_args = dict(tool.args) if tool.args else {}
@@ -896,35 +464,14 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             context_before=tool_args,
             tool_name=tool_name,
         )
-        if self._kernel._adapter_runtime is not None:
-            evaluation = self._kernel._adapter_runtime.evaluate_pre_tool_call(
-                ctx,
-                tool_name=tool_name,
-                args=tool_args,
-                call_id=f"openai-agents-{self._kernel._tool_call_count}",
-            )
-            if not evaluation.allowed:
-                raise evaluation.to_policy_violation(PolicyViolationError)
-        else:
-            allowed, reason = self._kernel.pre_execute(
-                ctx,
-                {"tool_name": tool_name, "tool_args": tool_args},
-            )
-            if not allowed:
-                raise PolicyViolationError(
-                    f"Tool '{tool_name}' blocked by governance: {reason}"
-                )
-
-        # (d) Content filter on args
-        for value in tool_args.values():
-            if isinstance(value, str):
-                ok, reason = self._kernel._check_content(value)
-                if not ok:
-                    error = PolicyViolationError(
-                        f"Tool argument blocked: {reason}"
-                    )
-                    self._kernel.on_violation(error)
-                    raise error
+        evaluation = self._kernel._adapter_runtime.evaluate_pre_tool_call(
+            ctx,
+            tool_name=tool_name,
+            args=tool_args,
+            call_id=f"openai-agents-{self._kernel._tool_call_count}",
+        )
+        if not evaluation.allowed:
+            raise evaluation.to_policy_violation(PolicyViolationError)
 
         self._kernel._record_event(
             "tool_start",
@@ -963,31 +510,17 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
             ),
         )
 
-        # Content filter on output
         result_str = str(result) if result else ""
-        if self._kernel._adapter_runtime is not None:
-            ctx = self._kernel._get_or_create_context(agent_name)
-            evaluation = self._kernel._adapter_runtime.evaluate_post_tool_call(
-                ctx,
-                tool_name=tool_name,
-                args={},
-                result=result,
-                call_id=f"openai-agents-{self._kernel._tool_call_count}",
-            )
-            if not evaluation.allowed:
-                logger.warning(
-                    "Tool '%s' output violated policy: %s",
-                    tool_name,
-                    evaluation.reason,
-                )
-        if result_str:
-            ok, reason = self._kernel._check_content(result_str)
-            if not ok:
-                logger.warning(
-                    "Tool '%s' output contains blocked pattern: %s",
-                    tool_name,
-                    reason,
-                )
+        ctx = self._kernel._get_or_create_context(agent_name)
+        evaluation = self._kernel._adapter_runtime.evaluate_post_tool_call(
+            ctx,
+            tool_name=tool_name,
+            args={},
+            result=result,
+            call_id=f"openai-agents-{self._kernel._tool_call_count}",
+        )
+        if not evaluation.allowed:
+            raise evaluation.to_policy_violation(PolicyViolationError)
 
         self._kernel._record_event(
             "tool_end",
@@ -1029,14 +562,6 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
 
         self._kernel._handoff_count += 1
 
-        if self._kernel._handoff_count > self._kernel._max_handoffs:
-            error = PolicyViolationError(
-                f"Handoff limit exceeded: "
-                f"{self._kernel._handoff_count}/{self._kernel._max_handoffs}"
-            )
-            self._kernel.on_violation(error)
-            raise error
-
         self._kernel._record_event(
             "handoff",
             {"from": from_name, "to": to_name},
@@ -1053,6 +578,5 @@ class GovernanceRunHooks(_HooksBase):  # type: ignore[misc]
 __all__ = [
     "OpenAIAgentsKernel",
     "GovernanceRunHooks",
-    "GovernancePolicy",
     "PolicyViolationError",
 ]

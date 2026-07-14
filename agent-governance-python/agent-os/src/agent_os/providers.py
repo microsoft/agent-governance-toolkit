@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 PROVIDER_GROUPS = {
     "verification": "agent_os.providers.verification",
     "self_correction": "agent_os.providers.self_correction",
-    "policy_engine": "agent_os.providers.policy_engine",
+    "governance_runtime": "agent_os.providers.governance_runtime",
     "context_service": "agent_os.providers.context_service",
     "memory": "agent_os.providers.memory",
     "trust_protocol": "agent_os.providers.trust_protocol",
@@ -95,18 +95,15 @@ def get_self_correction_kernel(**kwargs: Any):
     return SelfCorrectingAgentKernel(**kwargs)
 
 
-def get_policy_engine(**kwargs: Any):
-    """Get the best available policy engine.
-
-    Advanced: ABAC with attribute evaluation, constraint graphs, shadow mode.
-    Community: YAML-driven allow/deny rules with first-match semantics.
-    """
-    provider = _discover_provider(PROVIDER_GROUPS["policy_engine"])
+def get_governance_runtime(manifest: Any, **kwargs: Any):
+    """Get the native governance runtime, preferring a registered provider."""
+    provider = _discover_provider(PROVIDER_GROUPS["governance_runtime"])
     if provider is not None:
-        return provider(**kwargs)
+        return provider(manifest=manifest, **kwargs)
 
-    from agent_os.integrations.base import GovernancePolicy
-    return GovernancePolicy(**kwargs)
+    from agt.policies import AgtRuntime
+
+    return AgtRuntime.from_manifest(manifest, **kwargs)
 
 
 def get_context_service(**kwargs: Any):

@@ -2,9 +2,7 @@
 # Licensed under the MIT License.
 """AGT snapshot builder (public surface).
 
-This module is the canonical replacement for the v4
-``agent_os.integrations.base.ExecutionContext`` carrier. It implements the
-per-intervention-point snapshot shape documented in
+This module implements the per-intervention-point snapshot shape documented in
 ``policy-engine/spec/agt/AGT-SNAPSHOT-1.0.md`` §1 (the common envelope)
 and §§2.1-2.8 (the per-intervention-point bodies).
 
@@ -294,16 +292,13 @@ def agent_shutdown_snapshot(
 class SnapshotBuilder:
     """Long-lived per-session snapshot helper.
 
-    The builder owns the host-side state that the v4
-    ``agent_os.integrations.base.ExecutionContext`` previously carried:
-    the agent and session identifiers, the optional tenant, and the four
+    The builder owns the agent and session identifiers, optional tenant, and
     running budgets the host increments between intervention points. The
     ACS runtime stays stateless per ACS §1.1; this object lives on the
     host side of the boundary and emits a fresh snapshot for each hook.
 
     Mutators advance host-tracked counters as the agent runs. They are
-    additive (``record_tokens(100)`` adds 100), matching the v4
-    ``ExecutionContext.total_tokens += usage`` pattern.
+    additive, so ``record_tokens(100)`` adds 100.
 
     Example::
 

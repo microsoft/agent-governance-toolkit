@@ -4,17 +4,11 @@
 
 import pytest
 from unittest.mock import patch, MagicMock
-from importlib.metadata import EntryPoint
 
 from agent_os.providers import (
     _discover_provider,
     get_verification_engine,
     get_self_correction_kernel,
-    get_policy_engine,
-    get_context_service,
-    get_memory_store,
-    get_trust_protocol,
-    get_mute_agent,
     list_providers,
     clear_cache,
     PROVIDER_GROUPS,
@@ -89,18 +83,6 @@ class TestCommunityEditionFallback:
         except (ImportError, TypeError):
             pytest.skip("CE self-correction module not importable in test env")
 
-    def test_get_policy_engine_ce(self):
-        """Returns CE policy engine."""
-        try:
-            policy = get_policy_engine(
-                allowed_tools=["search"],
-                max_calls=10,
-            )
-            assert policy is not None
-        except (ImportError, TypeError):
-            pytest.skip("CE policy module not importable in test env")
-
-
 class TestAdvancedProviderOverride:
     """Test that advanced providers override CE when registered."""
 
@@ -173,7 +155,7 @@ class TestListProviders:
 
         assert result["verification"] == "advanced"
         assert result["self_correction"] == "community"
-        assert result["policy_engine"] == "community"
+        assert result["governance_runtime"] == "community"
 
 
 class TestClearCache:

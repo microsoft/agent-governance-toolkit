@@ -1,47 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Google Gemini Integration
+"""Google Gemini integration backed by a required native ACS runtime.
 
-Wraps Google's Generative AI SDK with Agent OS governance.
-
-Backend (AGT 5.0): every policy decision is routed through
-:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
-The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
-translated to an AGT manifest via
-:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
-time, an :class:`AgtRuntime` is memoised per policy, and a
-:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
-``ExecutionContext`` budgets between intervention points. The legacy
-``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
-keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
-outbound prompt or tool arguments before the Gemini client sees them;
-``escalate`` verdicts route through the configured approval resolver
-per AGT-DELTA D1.4.
-
-Usage:
-    from agent_os.integrations.gemini_adapter import GeminiKernel
-    import google.generativeai as genai
-
-    kernel = GeminiKernel(policy=GovernancePolicy(
-        max_tokens=4096,
-        allowed_tools=["web_search"],
-        blocked_patterns=["password"],
-    ))
-
-    model = genai.GenerativeModel("gemini-pro")
-    governed = kernel.wrap(model)
-    response = governed.generate_content("Hello")
-
-Features:
-- Pre-execution policy checks via the AGT 5.0 ACS runtime
-- Tool call interception at the AGT pre_tool_call hook
-- Transform-verdict rewriting of outbound prompts and tool arguments
-- Escalate-verdict approval routing via the configured resolver
-- Token limit enforcement
-- Content filtering via the AGT manifest bridge
-- Audit logging for all calls
-- Health check endpoint
+Prompts, tool calls, and outputs are mediated before Gemini receives or
+discloses them.
 """
 
 from __future__ import annotations
@@ -50,15 +12,14 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ._native_adapter_runtime import (
     AdapterResult,
     AdapterRuntime,
 )
-from ._v5_runtime_bridge import get_adapter_runtime
-from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
+from ..exceptions import PolicyViolationError
+from .base import AdapterExecutionState, BaseIntegration, get_adapter_runtime
 
 logger = logging.getLogger("agent_os.gemini")
 
@@ -83,7 +44,7 @@ def _check_genai_available() -> None:
 
 
 @dataclass
-class GeminiContext(ExecutionContext):
+class GeminiContext(AdapterExecutionState):
     """Execution context for Google Gemini interactions.
 
     Attributes:
@@ -101,79 +62,27 @@ class GeminiContext(ExecutionContext):
     completion_tokens: int = 0
 
 
-class PolicyViolationError(_CanonicalPolicyViolationError):
-    """Raised when a Gemini request violates governance policy.
-
-    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
-    canonical ``from_check_result`` constructor is available while
-    preserving the legacy ``agent_os.integrations.gemini_adapter.PolicyViolationError``
-    import path for v4 callers.
-    """
-
-    pass
-
-
 class GeminiKernel(BaseIntegration):
-    """Google Gemini adapter for Agent OS.
-
-    Provides governance for ``GenerativeModel.generate_content()`` calls
-    including policy enforcement, tool-call validation, token tracking,
-    and audit logging.
-
-    Example:
-        >>> kernel = GeminiKernel(policy=GovernancePolicy(max_tokens=8192))
-        >>> governed = kernel.wrap(genai.GenerativeModel("gemini-pro"))
-        >>> response = governed.generate_content("Explain quantum computing")
-    """
+    """Govern Gemini generation and tool calls with a native runtime."""
 
     def __init__(
         self,
-        policy: GovernancePolicy | None = None,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        runtime: Any | None = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ) -> None:
-        """Initialise the Gemini governance kernel.
-
-        Args:
-            policy: Governance policy to enforce. When ``None`` the default
-                ``GovernancePolicy`` is used. The policy is translated to
-                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
-                is constructed over it at init time.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature matches
-                :data:`agt.policies.runtime.ApprovalCallback`. When
-                ``None`` an escalate verdict fails closed to ``deny``.
-            runtime: Native AgtRuntime used directly by this adapter. The runtime
-                owns policy dispatch and approval resolution; any supplied
-                approval_resolver must be the same callback.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
-        """
-        super().__init__(policy)
+        """Initialise the kernel with the required native runtime."""
+        super().__init__(runtime=runtime)
         self._wrapped_models: dict[int, Any] = {}
         self._start_time = time.monotonic()
         self._last_error: str | None = None
-        self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntime = get_adapter_runtime(
-            policy=self.policy,
-            approval_resolver=approval_resolver,
-            runtime=runtime,
-            legacy_runtime=_runtime,
-            legacy_runtime_factory=_runtime_factory,
-        )
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
 
     @property
     def bridge(self) -> AdapterRuntime:
         """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: ExecutionContext, input_data: Any) -> AdapterResult:
+    def evaluate_input(self, ctx: AdapterExecutionState, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         body: Any
         if isinstance(input_data, (str, dict)):
@@ -186,7 +95,7 @@ class GeminiKernel(BaseIntegration):
 
     def evaluate_pre_tool_call(
         self,
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
         *,
         tool_name: str,
         args: dict[str, Any],
@@ -213,7 +122,6 @@ class GeminiKernel(BaseIntegration):
         ctx = GeminiContext(
             agent_id=f"gemini-{model_id}",
             session_id=f"gem-{int(time.time())}",
-            policy=self.policy,
             model_name=model_name,
         )
         self.contexts[ctx.agent_id] = ctx
@@ -337,11 +245,7 @@ class GovernedGeminiModel:
             )
 
             total = self._ctx.prompt_tokens + self._ctx.completion_tokens
-            if total > self._kernel.policy.max_tokens:
-                raise PolicyViolationError(
-                    f"Token limit exceeded: {total} > "
-                    f"{self._kernel.policy.max_tokens}"
-                )
+            self._ctx.total_tokens = total
 
         # Check for function calls in candidates via AGT pre_tool_call
         candidates = getattr(response, "candidates", [])
@@ -399,35 +303,17 @@ class GovernedGeminiModel:
         """Return cumulative token usage statistics.
 
         Returns:
-            A dict with ``prompt_tokens``, ``completion_tokens``,
-            ``total_tokens``, and ``limit``.
+            A dict with cumulative prompt, completion, and total token counts.
         """
         return {
             "prompt_tokens": self._ctx.prompt_tokens,
             "completion_tokens": self._ctx.completion_tokens,
             "total_tokens": self._ctx.prompt_tokens + self._ctx.completion_tokens,
-            "limit": self._kernel.policy.max_tokens,
         }
 
     def _validate_tools(self, tools: Any) -> None:
-        """Validate tool definitions against policy allowlist.
-
-        Args:
-            tools: Tool definitions from the request.
-
-        Raises:
-            PolicyViolationError: If a tool is not in the allowed list.
-        """
-        if not self._kernel.policy.allowed_tools:
-            return
-        tool_list = tools if isinstance(tools, list) else [tools]
-        for tool in tool_list:
-            declarations = getattr(tool, "function_declarations", None)
-            if declarations:
-                for decl in declarations:
-                    name = getattr(decl, "name", "") if not isinstance(decl, dict) else decl.get("name", "")
-                    if name and name not in self._kernel.policy.allowed_tools:
-                        raise PolicyViolationError(f"Tool not allowed: {name}")
+        """Tool authorization is enforced at the native tool intervention."""
+        del tools
 
     def __getattr__(self, name: str) -> Any:
         """Proxy attribute access to the underlying Gemini model."""
@@ -436,15 +322,14 @@ class GovernedGeminiModel:
 
 def wrap_model(
     model: Any,
-    policy: GovernancePolicy | None = None,
     *,
-    runtime: Any | None = None,
+    runtime: Any,
 ) -> GovernedGeminiModel:
     """Quick wrapper for Gemini GenerativeModel.
 
     Args:
         model: A ``google.generativeai.GenerativeModel`` instance.
-        policy: Optional governance policy.
+        runtime: Native runtime used for every intervention point.
 
     Returns:
         A governed model.
@@ -454,4 +339,4 @@ def wrap_model(
         >>> governed = wrap_model(my_model)
         >>> response = governed.generate_content("Hello")
     """
-    return GeminiKernel(policy=policy, runtime=runtime).wrap(model)
+    return GeminiKernel(runtime=runtime).wrap(model)

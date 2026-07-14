@@ -1,42 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-Guardrails AI Bridge for Agent-OS
-===================================
+"""Guardrails AI validator integration backed by a native ACS runtime.
 
-Bridges Guardrails AI validators with Agent-OS policy enforcement.
-
-Agent-OS enforces your Guardrails AI validators at the kernel level —
-policy violations trigger Agent-OS signals (SIGKILL, SIGPOLICYVIOLATION).
-
-Works without importing guardrails — uses a Protocol interface so you can
-plug in any validator that implements ``validate(value) -> ValidationOutcome``.
-
-Backend (AGT 5.0): when a :class:`~agent_os.integrations.base.GovernancePolicy`
-is supplied (or a pre-built :class:`agt.policies.runtime.AgtRuntime` is
-injected via the test seam), every ``validate_input`` /
-``validate_output`` call routes through the AGT 5.0 ACS-backed runtime
-via the shared :class:`AdapterRuntime` in addition to running the
-local validator chain. ``transform`` verdicts (AGT-DELTA D1.1) rewrite
-the ``final_value`` of the :class:`ValidationResult`; ``deny`` verdicts
-append a synthetic failing :class:`ValidationOutcome`; ``escalate``
-verdicts route through the configured approval resolver per AGT-DELTA
-D1.4. When no policy is supplied the legacy validator-only behaviour
-is preserved byte-identical so existing callers keep working.
-
-Example:
-    >>> from agent_os.integrations.guardrails_adapter import GuardrailsKernel
-    >>>
-    >>> kernel = GuardrailsKernel(
-    ...     validators=[PIIValidator(), ToxicityValidator()],
-    ...     on_fail="block",  # or "warn", "fix"
-    ... )
-    >>>
-    >>> result = kernel.validate_input("My SSN is 123-45-6789")
-    >>> assert not result.passed  # PII detected
-    >>>
-    >>> result = kernel.validate_output("Safe response text")
-    >>> assert result.passed
+ACS mediation and the configured validator chain both run before validated
+content is returned to the host.
 """
 
 from __future__ import annotations
@@ -45,30 +12,16 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from ._native_adapter_runtime import (
     AdapterResult,
     AdapterRuntime,
 )
-from ._v5_runtime_bridge import get_adapter_runtime
-from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import ExecutionContext, GovernancePolicy
+from ..exceptions import PolicyViolationError
+from .base import AdapterExecutionState, get_adapter_runtime
 
 logger = logging.getLogger(__name__)
-
-
-class PolicyViolationError(_CanonicalPolicyViolationError):
-    """Raised when a Guardrails AGT bridge evaluation denies the value.
-
-    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
-    canonical ``from_check_result`` constructor is available alongside
-    the legacy
-    ``agent_os.integrations.guardrails_adapter.PolicyViolationError``
-    import path.
-    """
-
-    pass
 
 
 # ------------------------------------------------------------------
@@ -283,26 +236,12 @@ class KeywordValidator:
 # Guardrails Kernel
 # ------------------------------------------------------------------
 
-# Sentinel for "AGT bridge ran and rejected the value"; surfaces in the
-# ValidationOutcome list so the existing on_violation handler still
-# fires and the v4 ValidationResult shape stays intact.
-_AGT_BRIDGE_VALIDATOR_NAME = "agt_runtime_bridge"
+# Sentinel used when ACS rejects a value alongside local validators.
+_ACS_VALIDATOR_NAME = "acs_runtime"
 
 
 class GuardrailsKernel:
-    """
-    Agent-OS governance kernel backed by Guardrails AI validators.
-
-    Validates inputs and outputs against a chain of validators.
-    Failed validations are recorded and trigger configurable actions.
-
-    When a :class:`GovernancePolicy` is supplied (or a pre-built
-    :class:`agt.policies.runtime.AgtRuntime` is injected via the test
-    seam), every validate call ALSO routes through the AGT 5.0 ACS
-    runtime via :class:`AdapterRuntime`. The AGT verdict is
-    merged into the :class:`ValidationResult` so callers see both the
-    local validator outcomes and the AGT engine's decision in one shape.
-    """
+    """Combine native ACS decisions with Guardrails AI validators."""
 
     def __init__(
         self,
@@ -310,11 +249,7 @@ class GuardrailsKernel:
         on_fail: str = "block",
         on_violation: Callable[[ValidationResult], None] | None = None,
         *,
-        policy: GovernancePolicy | None = None,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        runtime: Any | None = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ):
         """Initialise the Guardrails kernel.
 
@@ -324,91 +259,42 @@ class GuardrailsKernel:
             on_fail: One of ``"block"``, ``"warn"``, or ``"fix"``.
             on_violation: Optional callback invoked when one or more
                 validators fail.
-            policy: Optional governance policy that, when set, enables
-                AGT 5.0 ACS bridge routing for every validate call. The
-                policy is translated to an AGT manifest and an
-                :class:`agt.policies.runtime.AgtRuntime` is constructed
-                over it at init time.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature matches
-                :data:`agt.policies.runtime.ApprovalCallback`. When
-                ``None`` an escalate verdict fails closed to ``deny``.
-            runtime: Native AgtRuntime used directly by this adapter. The runtime
-                owns policy dispatch and approval resolution; any supplied
-                approval_resolver must be the same callback.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
+            runtime: Native runtime used directly by this adapter.
         """
         self._validators: list[Any] = validators or []
         self.on_fail = FailAction(on_fail)
         self.on_violation = on_violation or self._default_violation_handler
         self._history: list[ValidationResult] = []
-        self._policy: Optional[GovernancePolicy] = policy
-        self._approval_resolver = approval_resolver
-
-        # Only stand up the AGT bridge when the caller opts in (policy
-        # supplied or a runtime is injected). When neither is set, the
-        # kernel behaves byte-identical to the legacy v4 surface so
-        # existing tests pass unchanged.
-        self._bridge: Optional[AdapterRuntime] = None
-        self._ctx: Optional[ExecutionContext] = None
-        if (
-            policy is not None
-            or runtime is not None
-            or _runtime is not None
-            or _runtime_factory is not None
-        ):
-            effective_policy = policy or GovernancePolicy()
-            self._policy = effective_policy
-            self._bridge = get_adapter_runtime(
-                policy=effective_policy,
-                approval_resolver=approval_resolver,
-                runtime=runtime,
-                legacy_runtime=_runtime,
-                legacy_runtime_factory=_runtime_factory,
-            )
-            self._ctx = ExecutionContext(
-                agent_id="guardrails-kernel",
-                session_id=f"gr-{int(time.time())}",
-                policy=effective_policy,
-            )
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
+        self._ctx = AdapterExecutionState(
+            agent_id="guardrails-kernel",
+            session_id=f"gr-{int(time.time())}",
+        )
 
     @property
-    def bridge(self) -> Optional[AdapterRuntime]:
+    def bridge(self) -> AdapterRuntime:
         """Return the v5 :class:`AdapterRuntime`, or ``None`` if disabled."""
         return self._bridge
 
     @property
-    def policy(self) -> Optional[GovernancePolicy]:
-        """Return the :class:`GovernancePolicy` driving the bridge, if any."""
-        return self._policy
-
-    @property
-    def context(self) -> Optional[ExecutionContext]:
-        """Return the :class:`ExecutionContext` shared across bridge calls."""
+    def context(self) -> AdapterExecutionState:
+        """Return the :class:`AdapterExecutionState` shared across bridge calls."""
         return self._ctx
 
-    def evaluate_input(self, value: str) -> Optional[AdapterResult]:
+    def evaluate_input(self, value: str) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation.
 
         Returns ``None`` when the bridge is disabled (no policy/runtime
         was supplied at construction time).
         """
-        if self._bridge is None or self._ctx is None:
-            return None
         return self._bridge.evaluate_input(self._ctx, body=value)
 
-    def evaluate_output(self, value: str) -> Optional[AdapterResult]:
+    def evaluate_output(self, value: str) -> AdapterResult:
         """Public access to the AGT ``output`` intervention point evaluation.
 
         Returns ``None`` when the bridge is disabled (no policy/runtime
         was supplied at construction time).
         """
-        if self._bridge is None or self._ctx is None:
-            return None
         return self._bridge.evaluate_output(self._ctx, content=value)
 
     def _default_violation_handler(self, result: ValidationResult) -> None:
@@ -483,7 +369,7 @@ class GuardrailsKernel:
         reason = bridge_result.reason
         if bridge_result.allowed:
             outcome = ValidationOutcome(
-                validator_name=_AGT_BRIDGE_VALIDATOR_NAME,
+                validator_name=_ACS_VALIDATOR_NAME,
                 passed=True,
                 error_message="",
                 metadata={"verdict": verdict, "reason": reason},
@@ -498,7 +384,7 @@ class GuardrailsKernel:
         else:
             outcomes.append(
                 ValidationOutcome(
-                    validator_name=_AGT_BRIDGE_VALIDATOR_NAME,
+                    validator_name=_ACS_VALIDATOR_NAME,
                     passed=False,
                     error_message=reason or "AGT runtime denied the value",
                     metadata={"verdict": verdict, "reason": reason},
@@ -524,22 +410,13 @@ class GuardrailsKernel:
         outcomes = self._run_validators(value)
         final_value = value
 
-        # Route through the AGT bridge when one is wired. The local
-        # validator outcomes are preserved exactly; the bridge result
-        # is folded in as an extra synthetic outcome so callers see
-        # both decisions in the v4 ValidationResult shape.
-        if self._bridge is not None and self._ctx is not None:
-            if intervention_point == "output":
-                bridge_result = self._bridge.evaluate_output(
-                    self._ctx, content=value
-                )
-            else:
-                bridge_result = self._bridge.evaluate_input(
-                    self._ctx, body=value
-                )
-            outcomes, final_value = self._apply_bridge_result(
-                bridge_result, outcomes, final_value
-            )
+        if intervention_point == "output":
+            bridge_result = self._bridge.evaluate_output(self._ctx, content=value)
+        else:
+            bridge_result = self._bridge.evaluate_input(self._ctx, body=value)
+        outcomes, final_value = self._apply_bridge_result(
+            bridge_result, outcomes, final_value
+        )
 
         all_passed = all(o.passed for o in outcomes)
 

@@ -25,10 +25,6 @@ jobs:
         working-directory: agent-governance-python/agent-sre
         run: pip install --no-cache-dir -e ".[dev]" --quiet  # Install local package (Scorecard: pinned via pyproject.toml)
 
-      - name: Run policy benchmarks
-        working-directory: agent-governance-python/agent-os
-        run: python benchmarks/bench_policy.py | tee /tmp/bench_policy.json
-
       - name: Run kernel benchmarks
         working-directory: agent-governance-python/agent-os
         run: python benchmarks/bench_kernel.py | tee /tmp/bench_kernel.json
@@ -36,10 +32,6 @@ jobs:
       - name: Run audit benchmarks
         working-directory: agent-governance-python/agent-os
         run: python benchmarks/bench_audit.py | tee /tmp/bench_audit.json
-
-      - name: Run adapter benchmarks
-        working-directory: agent-governance-python/agent-os
-        run: python benchmarks/bench_adapters.py | tee /tmp/bench_adapters.json
 
       - name: Run SRE benchmarks
         working-directory: agent-governance-python/agent-sre

@@ -27,7 +27,6 @@ pytest.importorskip("agent_control_specification")
 
 from agt.policies import (  # noqa: E402
     AgtManifest,
-    EvaluationResult,
     PolicyEvaluation,
     SnapshotBuilder,
 )
@@ -106,9 +105,9 @@ def test_runtime_returns_allow_evaluation_result(tmp_path: Path) -> None:
 
     result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
 
-    assert isinstance(result, EvaluationResult)
+    assert isinstance(result, PolicyEvaluation)
     assert result.verdict == "allow"
-    assert result.allowed is True
+    assert result.is_allowed() is True
     assert result.transform is None
     assert result.evidence is None
     assert result.input_identity is not None
@@ -238,7 +237,7 @@ def test_shared_runtime_keeps_concurrent_approval_identities_isolated(
     seen: list[str] = []
     seen_lock = threading.Lock()
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         assert ip == "pre_tool_call"
         assert result.enforced_identity is not None
         with seen_lock:
@@ -279,10 +278,10 @@ def test_runtime_returns_deny_evaluation_result(tmp_path: Path) -> None:
     result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
 
     assert result.verdict == "deny"
-    assert result.allowed is False
-    assert result.reason == "blocked_tool"
+    assert result.is_allowed() is False
+    assert result.reason_code == "policy:blocked_tool"
     assert result.message == "nope"
-    assert result.audit_entry["verdict"] == "deny"
+    assert result.audit_record()["verdict"] == "deny"
 
 
 def test_runtime_returns_warn_evaluation_result(tmp_path: Path) -> None:
@@ -294,8 +293,8 @@ def test_runtime_returns_warn_evaluation_result(tmp_path: Path) -> None:
     result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
 
     assert result.verdict == "warn"
-    assert result.allowed is True
-    assert result.reason == "drift_detected"
+    assert result.is_allowed() is True
+    assert result.reason_code == "policy:drift_detected"
 
 
 def test_runtime_applies_transform_verdict(tmp_path: Path) -> None:
@@ -316,10 +315,10 @@ def test_runtime_applies_transform_verdict(tmp_path: Path) -> None:
     result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
 
     assert result.verdict == "transform"
-    assert result.allowed is True
+    assert result.is_allowed() is True
     assert result.transform is not None
-    assert result.transform["path"] == "$policy_target.q"
-    assert result.transform["value"] == "[REDACTED]"
+    assert result.transform.path == "$policy_target.q"
+    assert result.transform.value == "[REDACTED]"
     # AGT D1.4 prescribes that input_identity and enforced_identity are
     # bisected for transform verdicts; the current native binding only
     # exposes a single identity that surfaces under both fields. The
@@ -331,7 +330,7 @@ def test_runtime_applies_transform_verdict(tmp_path: Path) -> None:
     # The runtime mirrors the engine-applied target under
     # ``transform.applied_value`` for callers that want the materialised
     # rewrite without re-running the path resolution.
-    assert result.transform["applied_value"] == {"q": "[REDACTED]"}
+    assert result.transform.applied_value == {"q": "[REDACTED]"}
 
 
 def test_runtime_routes_escalate_through_resolver_allow(tmp_path: Path) -> None:
@@ -341,7 +340,7 @@ def test_runtime_routes_escalate_through_resolver_allow(tmp_path: Path) -> None:
 
     seen: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         seen["ip"] = ip
         seen["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
@@ -360,7 +359,7 @@ def test_runtime_routes_escalate_through_resolver_allow(tmp_path: Path) -> None:
     # the verdict to ``allow`` so callers do not need to special-case
     # the escalate state.
     assert result.verdict == "allow"
-    assert result.allowed is True
+    assert result.is_allowed() is True
 
 
 def test_runtime_evaluate_only_mode_does_not_invoke_resolver(tmp_path: Path) -> None:
@@ -370,7 +369,7 @@ def test_runtime_evaluate_only_mode_does_not_invoke_resolver(tmp_path: Path) -> 
 
     called = {"value": False}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         called["value"] = True
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
 
@@ -410,8 +409,8 @@ def test_runtime_round_trips_evidence_from_verdict(tmp_path: Path) -> None:
 
     assert result.verdict == "allow"
     assert result.evidence is not None
-    assert result.evidence["artefact"] == "sha256:abcdef"
-    assert result.evidence["verification_pointers"] == {
+    assert result.evidence.artefact == "sha256:abcdef"
+    assert result.evidence.verification_pointers == {
         "issuer_pubkey": "https://example.com/keys/2026.pem",
         "policy_registry": "https://example.com/policies/v1/",
     }
@@ -422,7 +421,7 @@ def test_runtime_resolver_identity_mismatch_blocks(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "approval_required"}]
     )
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         # Approving the wrong identity MUST be caught by the runtime
         # per AGT-DELTA D1.4 / ACS 17.1.
         return ApprovalDecision.allow("sha256:" + "0" * 64)
@@ -435,9 +434,9 @@ def test_runtime_resolver_identity_mismatch_blocks(tmp_path: Path) -> None:
 
     result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
 
-    assert result.allowed is False
+    assert result.is_allowed() is False
     assert result.verdict == "deny"
-    assert result.reason == "runtime_error:approval_action_mismatch"
+    assert result.reason_code == "runtime_error:approval_action_mismatch"
 
 
 def test_runtime_escalate_with_no_resolver_fails_closed(tmp_path: Path) -> None:
@@ -450,7 +449,7 @@ def test_runtime_escalate_with_no_resolver_fails_closed(tmp_path: Path) -> None:
 
     # No resolver -> deny per ACS enforce-mode contract.
     assert result.verdict == "deny"
-    assert result.allowed is False
+    assert result.is_allowed() is False
 
 
 def test_runtime_resolver_deny_blocks(tmp_path: Path) -> None:
@@ -458,7 +457,7 @@ def test_runtime_resolver_deny_blocks(tmp_path: Path) -> None:
         [{"decision": "escalate", "reason": "approval_required"}]
     )
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         return ApprovalDecision.deny()
 
     runtime = AgtRuntime(
@@ -470,7 +469,7 @@ def test_runtime_resolver_deny_blocks(tmp_path: Path) -> None:
     result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
 
     assert result.verdict == "deny"
-    assert result.allowed is False
+    assert result.is_allowed() is False
 
 
 @pytest.mark.parametrize(
@@ -495,7 +494,7 @@ def test_runtime_hanging_sync_resolver_honors_timeout_policy(
     )
     blocker = threading.Event()
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         blocker.wait()
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
 
@@ -514,10 +513,10 @@ def test_runtime_hanging_sync_resolver_honors_timeout_policy(
 
     assert elapsed < 0.5
     assert result.verdict == expected_verdict
-    assert result.allowed == expected_allowed
-    assert result.audit_entry["approval_timeout"]
+    assert result.is_allowed() == expected_allowed
+    assert result.approval["timeout"]
     if expected_verdict == "deny":
-        assert result.reason == "runtime_error:approval_timeout"
+        assert result.reason_code == "runtime_error:approval_timeout"
 
 
 @pytest.mark.parametrize(
@@ -542,7 +541,7 @@ def test_runtime_hanging_async_resolver_is_cancelled_on_timeout(
     )
     cancelled = threading.Event()
 
-    async def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    async def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
@@ -563,8 +562,8 @@ def test_runtime_hanging_async_resolver_is_cancelled_on_timeout(
     assert elapsed < 0.5
     assert cancelled.wait(1.0)
     assert result.verdict == expected_verdict
-    assert result.allowed == expected_allowed
-    assert result.audit_entry["approval_timeout"]
+    assert result.is_allowed() == expected_allowed
+    assert result.approval["timeout"]
 
 
 def test_runtime_async_resolver_foreign_loop_bound_awaitable_fails_closed(
@@ -576,7 +575,7 @@ def test_runtime_async_resolver_foreign_loop_bound_awaitable_fails_closed(
     foreign_loop = asyncio.new_event_loop()
     foreign_future = foreign_loop.create_future()
 
-    async def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    async def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         await foreign_future
         return ApprovalDecision.allow(result.enforced_identity)  # pragma: no cover
 
@@ -596,8 +595,8 @@ def test_runtime_async_resolver_foreign_loop_bound_awaitable_fails_closed(
 
     assert elapsed < 0.5
     assert result.verdict == "deny"
-    assert not result.allowed
-    assert result.reason == "runtime_error:approval_timeout"
+    assert not result.is_allowed()
+    assert result.reason_code == "runtime_error:approval_timeout"
 
 
 @pytest.mark.parametrize(
@@ -617,7 +616,7 @@ def test_runtime_invalid_timeout_values_fail_closed_immediately(
     )
     called = {"value": False}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         called["value"] = True
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
 
@@ -634,8 +633,8 @@ def test_runtime_invalid_timeout_values_fail_closed_immediately(
     assert elapsed < 0.5
     assert not called["value"]
     assert result.verdict == "deny"
-    assert not result.allowed
-    assert result.reason == "runtime_error:approval_timeout"
+    assert not result.is_allowed()
+    assert result.reason_code == "runtime_error:approval_timeout"
 
 
 def test_runtime_missing_timeout_uses_fail_closed_default(tmp_path: Path) -> None:
@@ -653,7 +652,7 @@ def test_runtime_resolver_result_just_before_timeout_is_used(tmp_path: Path) -> 
         [{"decision": "escalate", "reason": "approval_required"}]
     )
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         time.sleep(0.01)
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]
 
@@ -666,8 +665,8 @@ def test_runtime_resolver_result_just_before_timeout_is_used(tmp_path: Path) -> 
     result = runtime.evaluate_intervention_point("pre_tool_call", _snapshot())
 
     assert result.verdict == "allow"
-    assert result.allowed
-    assert "approval_timeout" not in result.audit_entry
+    assert result.is_allowed()
+    assert not result.approval.get("timeout", False)
 
 
 def test_runtime_timeout_threads_are_daemon_and_non_daemon_count_is_bounded(
@@ -684,7 +683,7 @@ def test_runtime_timeout_threads_are_daemon_and_non_daemon_count_is_bounded(
                 [{"decision": "escalate", "reason": f"approval_required_{index}"}]
             )
 
-            def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+            def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
                 blocker.wait()
                 return ApprovalDecision.deny()
 

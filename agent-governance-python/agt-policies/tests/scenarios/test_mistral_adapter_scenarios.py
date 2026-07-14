@@ -2,19 +2,19 @@
 # Licensed under the MIT License.
 """Mistral adapter end-to-end scenarios on the AGT 5.0 ACS-backed runtime.
 
-These scenarios exercise the v4 :class:`MistralKernel` /
+These scenarios exercise the native :class:`MistralKernel` /
 :class:`GovernedMistralClient` surface routed through
 :class:`agt.policies.runtime.AgtRuntime` via the
-:class:`agent_os.integrations._v5_runtime_bridge.AdapterRuntimeBridge`.
+:class:`agent_os.integrations._native_adapter_runtime.NativeAdapterRuntime`.
 The scripted policy dispatcher is injected directly so the suite does
 not depend on OPA being on ``PATH``.
 
 Each test covers one of the five AGT verdicts that the adapter must
-translate back to its v4 surface:
+expose through its native surface:
 
 - ``allow`` -> the Mistral client sees the original chat() payload.
 - ``deny`` -> the adapter raises
-  :class:`PolicyViolationError.from_check_result(...)`.
+  :class:`PolicyViolationError` with its native evaluation attached.
 - ``transform`` -> the adapter rewrites the outbound message content
   with the AGT D1.1 ``{path, value}`` payload before calling chat().
 - ``escalate`` (resolver approves) -> the adapter forwards the call.
@@ -44,7 +44,7 @@ import agent_os.integrations.mistral_adapter as _mistral_adapter_mod  # noqa: E4
 
 _mistral_adapter_mod._HAS_MISTRAL = True
 
-from agt.policies import EvaluationResult  # noqa: E402
+from agt.policies import PolicyEvaluation  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
@@ -214,7 +214,7 @@ def test_chat_escalate_with_approving_resolver_forwards(tmp_path: Path) -> None:
 
     captured: dict[str, Any] = {}
 
-    def resolver(ip: str, result: EvaluationResult) -> ApprovalDecision:
+    def resolver(ip: str, result: PolicyEvaluation) -> ApprovalDecision:
         captured["ip"] = ip
         captured["enforced_identity"] = result.enforced_identity
         return ApprovalDecision.allow(result.enforced_identity)  # type: ignore[arg-type]

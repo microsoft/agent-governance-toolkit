@@ -811,14 +811,36 @@ class TestAuditCsvExport:
 # ============================================================================
 
 
-class TestCmdValidateExtended:
-    """Extended validate command tests."""
+def _native_manifest_text(name: str) -> str:
+    return (
+        "agent_control_specification_version: 0.3.1-beta\n"
+        "metadata:\n"
+        f"  name: {name}\n"
+        '  version: "1.0"\n'
+        "extends: []\n"
+        "policies:\n"
+        "  test:\n"
+        "    type: custom\n"
+        "    adapter: test\n"
+        "intervention_points:\n"
+        "  input:\n"
+        "    policy_target: $.input.body\n"
+        "    policy:\n"
+        "      id: test\n"
+    )
 
-    def test_validate_strict_mode_warns_unknown_fields(self, tmp_path, capsys):
-        """Strict mode warns about unknown fields."""
+
+class TestCmdValidateExtended:
+    """Extended native manifest validation tests."""
+
+    def test_validate_rejects_unknown_fields(self, tmp_path, capsys):
+        """Native manifests reject unknown fields."""
         from agent_os.cli import cmd_validate
         f = tmp_path / "policy.yaml"
-        f.write_text("version: '1.0'\nname: test\ncustom_field: value\n")
+        f.write_text(
+            _native_manifest_text("test") + "custom_field: value\n",
+            encoding="utf-8",
+        )
 
         class Args:
             files = [str(f)]
@@ -826,16 +848,16 @@ class TestCmdValidateExtended:
 
         result = cmd_validate(Args())
         output = capsys.readouterr().out
-        # In strict mode, unknown fields generate warnings (not errors)
-        assert "custom_field" in output or result == 0
+        assert result == 1
+        assert "custom_field" in output
 
     def test_validate_multiple_files(self, tmp_path):
         """Multiple policy files can be validated at once."""
         from agent_os.cli import cmd_validate
         f1 = tmp_path / "a.yaml"
-        f1.write_text("version: '1.0'\nname: policy-a\n")
+        f1.write_text(_native_manifest_text("policy-a"), encoding="utf-8")
         f2 = tmp_path / "b.yaml"
-        f2.write_text("version: '1.0'\nname: policy-b\n")
+        f2.write_text(_native_manifest_text("policy-b"), encoding="utf-8")
 
         class Args:
             files = [str(f1), str(f2)]
@@ -848,9 +870,9 @@ class TestCmdValidateExtended:
         """Mix of valid and invalid files returns error."""
         from agent_os.cli import cmd_validate
         good = tmp_path / "good.yaml"
-        good.write_text("version: '1.0'\nname: good\n")
+        good.write_text(_native_manifest_text("good"), encoding="utf-8")
         bad = tmp_path / "bad.yaml"
-        bad.write_text("description: no version or name\n")
+        bad.write_text("metadata: []\n", encoding="utf-8")
 
         class Args:
             files = [str(good), str(bad)]
@@ -859,12 +881,17 @@ class TestCmdValidateExtended:
         result = cmd_validate(Args())
         assert result == 1
 
-    def test_validate_invalid_rule_type(self, tmp_path, capsys):
-        """Unknown rule type generates a warning."""
+    def test_validate_warns_without_intervention_points(self, tmp_path, capsys):
+        """A valid manifest without bindings reports a warning."""
         from agent_os.cli import cmd_validate
         f = tmp_path / "policy.yaml"
         f.write_text(
-            "version: '1.0'\nname: test\nrules:\n  - type: explode\n"
+            "agent_control_specification_version: 0.3.1-beta\n"
+            "metadata:\n"
+            "  name: test\n"
+            '  version: "1.0"\n'
+            "extends: []\n",
+            encoding="utf-8",
         )
 
         class Args:
@@ -872,10 +899,9 @@ class TestCmdValidateExtended:
             strict = False
 
         result = cmd_validate(Args())
-        # Unknown rule type is a warning, not error, so file still validates
         assert result == 0
         output = capsys.readouterr().out
-        assert "warning" in output.lower() or "explode" in output
+        assert "no intervention points" in output.lower()
 
 
 # ============================================================================

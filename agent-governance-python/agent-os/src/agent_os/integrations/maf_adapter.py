@@ -7,7 +7,7 @@ Bridges the Agent OS governance toolkit into MAF's native middleware system.
 Four composable middleware layers enforce policy, capability guards, audit
 trails, and rogue-agent detection at every level of the agent stack:
 
-- GovernancePolicyMiddleware (AgentMiddleware): Declarative policy enforcement
+- RuntimeGovernanceMiddleware (AgentMiddleware): Declarative policy enforcement
 - CapabilityGuardMiddleware (FunctionMiddleware): Tool allow/deny lists
 - AuditTrailMiddleware (AgentMiddleware): Tamper-proof audit logging
 - RogueDetectionMiddleware (FunctionMiddleware): Behavioral anomaly detection
@@ -36,25 +36,14 @@ from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
 from ._native_adapter_runtime import (
     AdapterResult,
     AdapterRuntime,
 )
-from ._v5_runtime_bridge import get_adapter_runtime
-from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
-
-# Optional v4 PolicyEvaluator (legacy back-compat path). When the
-# package is missing, GovernancePolicyMiddleware can still be
-# constructed via the v5 kernel path.
-try:
-    from agent_os.policies import PolicyDecision, PolicyEvaluator
-except ImportError:  # pragma: no cover - depends on workspace layout
-    PolicyDecision = None  # type: ignore[assignment,misc]
-    PolicyEvaluator = None  # type: ignore[assignment,misc]
+from ..exceptions import PolicyViolationError  # noqa: F401
+from .base import BaseIntegration, AdapterExecutionState, get_adapter_runtime
 
 # Optional agentmesh AuditLog. The MAF middleware adapter has shipped
 # with agentmesh.governance.AuditLog as the audit sink; we keep using
@@ -76,18 +65,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
-class PolicyViolationError(_CanonicalPolicyViolationError):
-    """Raised when a MAF agent invocation violates governance policy.
-
-    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
-    canonical ``from_check_result`` constructor is available while
-    preserving the legacy
-    ``agent_os.integrations.maf_adapter.PolicyViolationError`` import
-    path for v4 callers.
-    """
-
-    pass
 
 # ---------------------------------------------------------------------------
 # Conditional MAF imports — fall back to local stubs when agent_framework
@@ -144,71 +121,18 @@ except ImportError:  # pragma: no cover
 
 
 class MAFKernel(BaseIntegration):
-    """Microsoft Agent Framework adapter for Agent OS (AGT 5.0).
-
-    Builds an :class:`AdapterRuntime` over the v4
-    :class:`GovernancePolicy` so MAF middleware classes can route every
-    intervention point evaluation through the ACS-backed
-    :class:`agt.policies.runtime.AgtRuntime`. The kernel exposes:
-
-    - :meth:`bridge` — the underlying AdapterRuntime.
-    - :meth:`evaluate_input` — AGT ``input`` intervention point eval.
-    - :meth:`evaluate_pre_tool_call` — AGT ``pre_tool_call`` eval.
-    - :meth:`as_policy_middleware` — convenience factory returning a
-      :class:`GovernancePolicyMiddleware` wired to this kernel.
-    - :meth:`as_capability_guard` — convenience factory returning a
-      :class:`CapabilityGuardMiddleware` wired to this kernel.
-
-    The legacy :class:`GovernancePolicyMiddleware` /
-    :class:`CapabilityGuardMiddleware` constructors that took
-    a :class:`PolicyEvaluator` / tool-name lists still work; passing a
-    kernel switches them onto the v5 path.
-    """
+    """Microsoft Agent Framework adapter backed by a native ACS runtime."""
 
     def __init__(
         self,
-        policy: Optional[GovernancePolicy] = None,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        runtime: Any | None = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ) -> None:
-        """Initialise the MAF governance kernel.
-
-        Args:
-            policy: Governance policy to enforce. When ``None`` the
-                default :class:`GovernancePolicy` is used. The policy
-                is translated to an AGT manifest and an
-                :class:`agt.policies.runtime.AgtRuntime` is constructed
-                over it at init time.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature
-                matches :data:`agt.policies.runtime.ApprovalCallback`.
-                When ``None`` an escalate verdict fails closed to
-                ``deny``.
-            runtime: Native AgtRuntime used directly by this adapter. The runtime
-                owns policy dispatch and approval resolution; any supplied
-                approval_resolver must be the same callback.
-            _runtime: Test seam — inject a pre-built
-                :class:`AgtRuntime` so scenario tests can wire a
-                scripted policy dispatcher without OPA on PATH. Not
-                part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public
-                surface.
-        """
-        super().__init__(policy)
-        self._approval_resolver = approval_resolver
+        """Initialise the kernel with the required native runtime."""
+        super().__init__(runtime=runtime)
         self._start_time = time.monotonic()
         self._last_error: Optional[str] = None
-        self._bridge: AdapterRuntime = get_adapter_runtime(
-            policy=self.policy,
-            approval_resolver=approval_resolver,
-            runtime=runtime,
-            legacy_runtime=_runtime,
-            legacy_runtime_factory=_runtime_factory,
-        )
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
 
     @property
     def bridge(self) -> AdapterRuntime:
@@ -216,7 +140,7 @@ class MAFKernel(BaseIntegration):
         return self._bridge
 
     def evaluate_input(
-        self, ctx: ExecutionContext, input_data: Any
+        self, ctx: AdapterExecutionState, input_data: Any
     ) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         body: Any
@@ -230,7 +154,7 @@ class MAFKernel(BaseIntegration):
 
     def evaluate_pre_tool_call(
         self,
-        ctx: ExecutionContext,
+        ctx: AdapterExecutionState,
         *,
         tool_name: str,
         args: dict[str, Any],
@@ -249,7 +173,7 @@ class MAFKernel(BaseIntegration):
         """No-op wrap — MAFKernel surfaces governance via middleware.
 
         MAF integrations are composed by passing the middleware list
-        returned from :meth:`as_policy_middleware` /
+        returned from :meth:`as_runtime_middleware` /
         :meth:`as_capability_guard` (or
         :func:`create_governance_middleware`) to
         ``Agent(middleware=...)``. The wrap()/unwrap() pair satisfies
@@ -258,18 +182,18 @@ class MAFKernel(BaseIntegration):
         """
         return agent
 
-    def as_policy_middleware(
+    def as_runtime_middleware(
         self,
         *,
         audit_log: Any | None = None,
         agent_id: str = "maf-agent",
-    ) -> GovernancePolicyMiddleware:
-        """Return a :class:`GovernancePolicyMiddleware` backed by this kernel.
+    ) -> RuntimeGovernanceMiddleware:
+        """Return a :class:`RuntimeGovernanceMiddleware` backed by this kernel.
 
         The returned middleware evaluates every agent invocation at
         the AGT ``input`` intervention point via the runtime bridge.
         """
-        return GovernancePolicyMiddleware(
+        return RuntimeGovernanceMiddleware(
             kernel=self,
             audit_log=audit_log,
             agent_id=agent_id,
@@ -306,78 +230,32 @@ class MAFKernel(BaseIntegration):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 1. GovernancePolicyMiddleware
+# 1. RuntimeGovernanceMiddleware
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class GovernancePolicyMiddleware(AgentMiddleware):
-    """AgentMiddleware that evaluates declarative governance policies.
-
-    Two construction paths are supported:
-
-    1. **Legacy v4** — pass an :class:`agent_os.policies.PolicyEvaluator`
-       loaded with policy documents. The middleware runs the evaluator's
-       v4 :class:`PolicyDecision` and surfaces deny outcomes as
-       :class:`MiddlewareTermination`. The ``governance_decision`` key
-       attached to the context metadata stays a v4 :class:`PolicyDecision`
-       for back-compat.
-    2. **AGT 5.0** — pass an :class:`MAFKernel`. The middleware routes
-       every agent invocation through the kernel's AGT
-       :class:`AdapterRuntime` at the ``input`` intervention
-       point. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
-       most recent user message content before the agent runs;
-       ``deny`` verdicts raise :class:`MiddlewareTermination` with the
-       canonical AGT reason in the body; ``escalate`` verdicts route
-       through the kernel's configured approval resolver per AGT-DELTA
-       D1.4 and surface as allow (resolver approved) or deny (resolver
-       refused / not wired). The ``governance_decision`` metadata key
-       carries the v5 :class:`AdapterResult` on this path so downstream
-       middleware can introspect it.
-
-    Args:
-        evaluator: Legacy v4 :class:`PolicyEvaluator`. Mutually
-            exclusive with ``kernel``.
-        kernel: v5 :class:`MAFKernel`. Mutually exclusive with
-            ``evaluator``.
-        audit_log: Optional :class:`AuditLog` for recording decisions.
-        agent_id: Agent identifier used when constructing the
-            :class:`ExecutionContext` for the v5 path.
-    """
+class RuntimeGovernanceMiddleware(AgentMiddleware):
+    """Mediate every MAF agent invocation through a native runtime."""
 
     def __init__(
         self,
-        evaluator: Any | None = None,
-        audit_log: Any | None = None,
         *,
-        kernel: MAFKernel | None = None,
+        kernel: MAFKernel,
+        audit_log: Any | None = None,
         agent_id: str = "maf-agent",
     ) -> None:
-        if evaluator is None and kernel is None:
-            raise TypeError(
-                "GovernancePolicyMiddleware requires either an evaluator "
-                "(legacy v4) or a kernel (AGT 5.0). Pass exactly one."
-            )
-        if evaluator is not None and kernel is not None:
-            raise TypeError(
-                "GovernancePolicyMiddleware accepts an evaluator OR a "
-                "kernel, not both."
-            )
-        self.evaluator = evaluator
         self.kernel = kernel
         self.audit_log = audit_log
         self._agent_id = agent_id
-        # Lazily build a per-instance ExecutionContext for the v5 path
-        # so the bridge SnapshotBuilder can mirror call counts.
-        self._v5_ctx: ExecutionContext | None = None
+        self._v5_ctx: AdapterExecutionState | None = None
 
-    def _ensure_v5_context(self) -> ExecutionContext:
-        """Build the v5 :class:`ExecutionContext` on first need."""
+    def _ensure_v5_context(self) -> AdapterExecutionState:
+        """Build the v5 :class:`AdapterExecutionState` on first need."""
         assert self.kernel is not None
         if self._v5_ctx is None:
-            self._v5_ctx = ExecutionContext(
+            self._v5_ctx = AdapterExecutionState(
                 agent_id=self._agent_id,
                 session_id=f"maf-mw-{int(time.time())}",
-                policy=self.kernel.policy,
             )
         return self._v5_ctx
 
@@ -386,100 +264,8 @@ class GovernancePolicyMiddleware(AgentMiddleware):
         context: AgentContext,
         call_next: Callable[[], Awaitable[None]],
     ) -> None:
-        """Evaluate governance policy before agent execution."""
-        if self.kernel is not None:
-            await self._process_v5(context, call_next)
-        else:
-            await self._process_v4(context, call_next)
-
-    async def _process_v4(
-        self,
-        context: AgentContext,
-        call_next: Callable[[], Awaitable[None]],
-    ) -> None:
-        """Legacy v4 PolicyEvaluator-backed processing."""
-        agent_name = getattr(context.agent, "name", "unknown")
-
-        # Extract the last user message text (handle empty conversations).
-        last_message_text = ""
-        messages: list[Any] = getattr(context, "messages", None) or []
-        if messages:
-            last_msg = messages[-1]
-            # Message.text is the MAF accessor; fall back to str()
-            last_message_text = (
-                getattr(last_msg, "text", None) or str(last_msg)
-            )
-
-        # Build context dict for the policy evaluator.
-        eval_context: dict[str, Any] = {
-            "agent": agent_name,
-            "message": last_message_text,
-            "timestamp": time.time(),
-            "stream": getattr(context, "stream", False),
-            "message_count": len(messages),
-        }
-
-        decision = self.evaluator.evaluate(eval_context)
-
-        # Persist the decision in the MAF metadata for downstream middleware.
-        metadata: dict[str, Any] = getattr(context, "metadata", {})
-        metadata["governance_decision"] = decision
-
-        if not decision.allowed:
-            logger.info(
-                "Policy DENY for agent '%s': %s (rule=%s)",
-                agent_name,
-                decision.reason,
-                decision.matched_rule,
-            )
-
-            # Set a user-visible response explaining the denial.
-            context.result = AgentResponse(
-                messages=[
-                    Message(
-                        "assistant",
-                        [f"⛔ Policy violation: {decision.reason}"],
-                    )
-                ]
-            )
-
-            if self.audit_log:
-                self.audit_log.log(
-                    event_type="policy_violation",
-                    agent_did=agent_name,
-                    action="deny",
-                    data={
-                        "reason": decision.reason,
-                        "matched_rule": decision.matched_rule,
-                        "message_preview": last_message_text[:200],
-                    },
-                    outcome="denied",
-                    policy_decision=decision.action,
-                )
-
-            raise MiddlewareTermination(decision.reason)
-
-        # Policy allowed — log and continue the pipeline.
-        logger.debug(
-            "Policy ALLOW for agent '%s' (rule=%s)",
-            agent_name,
-            decision.matched_rule,
-        )
-
-        if self.audit_log:
-            self.audit_log.log(
-                event_type="policy_evaluation",
-                agent_did=agent_name,
-                action="allow",
-                data={
-                    "matched_rule": decision.matched_rule,
-                    "message_preview": last_message_text[:200],
-                },
-                outcome="success",
-                policy_decision=decision.action,
-            )
-
-        await call_next()
+        """Evaluate the native runtime before agent execution."""
+        await self._process_v5(context, call_next)
 
     async def _process_v5(
         self,
@@ -582,142 +368,37 @@ class GovernancePolicyMiddleware(AgentMiddleware):
 
 
 class CapabilityGuardMiddleware(FunctionMiddleware):
-    """FunctionMiddleware that enforces tool allow/deny lists.
-
-    Two construction paths are supported:
-
-    1. **Legacy v4** — pass ``allowed_tools`` and/or ``denied_tools``
-       lists. Each tool invocation is checked against those explicit
-       lists; the deny list takes precedence. If a tool is not
-       permitted, the function result is set to an error string and
-       :class:`MiddlewareTermination` is raised.
-    2. **AGT 5.0** — pass an :class:`MAFKernel`. The middleware routes
-       every tool invocation through the kernel's AGT
-       :class:`AdapterRuntime` at the ``pre_tool_call``
-       intervention point. ``transform`` verdicts (AGT-DELTA D1.1)
-       rewrite ``context.arguments`` before the next filter runs;
-       ``deny`` verdicts raise :class:`MiddlewareTermination` with the
-       canonical AGT reason; ``escalate`` verdicts route through the
-       kernel's configured approval resolver per AGT-DELTA D1.4.
-
-    Args:
-        allowed_tools: Legacy v4 whitelist of permitted tool names.
-        denied_tools: Legacy v4 blacklist of forbidden tool names.
-        audit_log: Optional :class:`AuditLog` for recording invocations.
-        kernel: v5 :class:`MAFKernel`. When provided, the v5 path
-            replaces the legacy allow/deny lists.
-        agent_id: Agent identifier used when constructing the v5
-            :class:`ExecutionContext`.
-    """
+    """Mediate every MAF function call through a native runtime."""
 
     def __init__(
         self,
-        allowed_tools: list[str] | None = None,
-        denied_tools: list[str] | None = None,
-        audit_log: Any | None = None,
         *,
-        kernel: MAFKernel | None = None,
+        kernel: MAFKernel,
+        audit_log: Any | None = None,
         agent_id: str = "maf-agent",
     ) -> None:
-        self.allowed_tools = allowed_tools
-        self.denied_tools = denied_tools
         self.audit_log = audit_log
         self.kernel = kernel
         self._agent_id = agent_id
-        self._v5_ctx: ExecutionContext | None = None
+        self._v5_ctx: AdapterExecutionState | None = None
 
-    def _ensure_v5_context(self) -> ExecutionContext:
-        """Build the v5 :class:`ExecutionContext` on first need."""
+    def _ensure_v5_context(self) -> AdapterExecutionState:
+        """Build the v5 :class:`AdapterExecutionState` on first need."""
         assert self.kernel is not None
         if self._v5_ctx is None:
-            self._v5_ctx = ExecutionContext(
+            self._v5_ctx = AdapterExecutionState(
                 agent_id=self._agent_id,
                 session_id=f"maf-cap-{int(time.time())}",
-                policy=self.kernel.policy,
             )
         return self._v5_ctx
-
-    def _is_denied(self, tool_name: str) -> bool:
-        """Return ``True`` if *tool_name* should be blocked (v4 path)."""
-        # Explicit deny list takes precedence.
-        if self.denied_tools and tool_name in self.denied_tools:
-            return True
-        # If an allow list is set, anything not in it is denied.
-        if self.allowed_tools is not None and tool_name not in self.allowed_tools:
-            return True
-        return False
 
     async def process(
         self,
         context: FunctionInvocationContext,
         call_next: Callable[[], Awaitable[None]],
     ) -> None:
-        """Guard tool invocations against capability policy."""
-        if self.kernel is not None:
-            await self._process_v5(context, call_next)
-        else:
-            await self._process_v4(context, call_next)
-
-    async def _process_v4(
-        self,
-        context: FunctionInvocationContext,
-        call_next: Callable[[], Awaitable[None]],
-    ) -> None:
-        """Legacy v4 allow/deny-list processing."""
-        func_name = getattr(
-            getattr(context, "function", None), "name", "unknown"
-        )
-
-        if self._is_denied(func_name):
-            logger.info("Capability DENY: tool '%s' blocked by policy", func_name)
-
-            context.result = (
-                f"⛔ Tool '{func_name}' is not permitted by governance policy"
-            )
-
-            if self.audit_log:
-                self.audit_log.log(
-                    event_type="tool_blocked",
-                    agent_did="capability-guard",
-                    action="deny",
-                    resource=func_name,
-                    data={"tool": func_name},
-                    outcome="denied",
-                )
-
-            raise MiddlewareTermination(
-                f"Tool '{func_name}' is not permitted by governance policy"
-            )
-
-        # Tool is allowed — log start, execute, log completion.
-        if self.audit_log:
-            self.audit_log.log(
-                event_type="tool_invocation",
-                agent_did="capability-guard",
-                action="start",
-                resource=func_name,
-                data={"tool": func_name},
-                outcome="success",
-            )
-
-        logger.debug("Capability ALLOW: invoking tool '%s'", func_name)
-
-        await call_next()
-
-        # Log completion with a truncated result summary.
-        result_summary = str(getattr(context, "result", ""))[:500]
-        if self.audit_log:
-            self.audit_log.log(
-                event_type="tool_invocation",
-                agent_did="capability-guard",
-                action="complete",
-                resource=func_name,
-                data={
-                    "tool": func_name,
-                    "result_preview": result_summary,
-                },
-                outcome="success",
-            )
+        """Evaluate the native runtime before function invocation."""
+        await self._process_v5(context, call_next)
 
     async def _process_v5(
         self,
@@ -1031,163 +712,34 @@ class RogueDetectionMiddleware(FunctionMiddleware):
 
 
 def create_governance_middleware(
-    policy_directory: str | Path | None = None,
-    allowed_tools: list[str] | None = None,
-    denied_tools: list[str] | None = None,
+    *,
+    runtime: Any,
     agent_id: str = "default-agent",
     enable_rogue_detection: bool = True,
     audit_log: Any | None = None,
-    *,
-    policy: GovernancePolicy | None = None,
-    approval_resolver: Optional[Callable[..., Any]] = None,
-    runtime: Any | None = None,
-    _runtime: Optional[Any] = None,
-    _runtime_factory: Optional[Callable[..., Any]] = None,
-) -> list:
-    """Create a complete governance middleware stack for a MAF agent.
-
-    Assembles and returns an ordered list of middleware instances ready
-    to pass directly to a MAF ``Agent(middleware=...)`` constructor.
-
-    The stack is built bottom-up:
-
-    1. :class:`AuditTrailMiddleware` (if *audit_log* provided)
-    2. :class:`GovernancePolicyMiddleware` (if *policy_directory* or
-       *policy* provided)
-    3. :class:`CapabilityGuardMiddleware` (if allow/deny lists or
-       *policy* provided)
-    4. :class:`RogueDetectionMiddleware` (if *enable_rogue_detection*)
-
-    Args:
-        policy_directory: Path to a directory of YAML policy files.
-            When provided, a :class:`PolicyEvaluator` is created and
-            loaded with all ``*.yaml`` / ``*.yml`` files found. Builds
-            the legacy v4 :class:`GovernancePolicyMiddleware`.
-        allowed_tools: Whitelist of permitted tool names (legacy v4
-            :class:`CapabilityGuardMiddleware` path).
-        denied_tools: Blacklist of forbidden tool names (legacy v4
-            :class:`CapabilityGuardMiddleware` path).
-        agent_id: Identifier for the agent (used by audit and rogue
-            detection).
-        enable_rogue_detection: Whether to include the
-            :class:`RogueDetectionMiddleware`.
-        audit_log: Shared :class:`AuditLog` instance.  When ``None``,
-            a fresh in-memory log is created if any auditing middleware
-            is needed.
-        policy: AGT 5.0 :class:`GovernancePolicy`. When provided, an
-            :class:`MAFKernel` is built and the v5 routing replaces the
-            legacy paths for :class:`GovernancePolicyMiddleware` and
-            :class:`CapabilityGuardMiddleware`. Mutually exclusive with
-            ``policy_directory`` for policy enforcement.
-        approval_resolver: Optional callable invoked when the AGT
-            engine returns an ``escalate`` verdict (only used when
-            ``policy`` is provided).
-        _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-            for scenario tests. Not part of the public surface.
-        _runtime_factory: Test seam — override the runtime factory.
-            Not part of the public surface.
-
-    Returns:
-        List of middleware instances in recommended execution order.
-
-    Example::
-
-        from agent_framework import Agent
-        from agent_os.integrations.maf_adapter import create_governance_middleware
-        from agent_os.integrations.base import GovernancePolicy
-
-        # AGT 5.0 path
-        stack = create_governance_middleware(
-            policy=GovernancePolicy(blocked_patterns=["password"]),
-            allowed_tools=["search", "read_file"],
-            agent_id="my-researcher",
-        )
-        agent = Agent(name="researcher", middleware=stack)
-    """
-    stack: list[Any] = []
-
-    # Build an MAFKernel when an AGT 5.0 policy is supplied.
-    kernel: MAFKernel | None = None
-    if policy is not None or runtime is not None:
-        kernel = MAFKernel(
-            policy,
-            approval_resolver=approval_resolver,
-            runtime=runtime,
-            _runtime=_runtime,
-            _runtime_factory=_runtime_factory,
-        )
-
-    # Determine whether we need an audit log for any layer.
-    needs_audit = (
-        audit_log is not None
-        or policy_directory is not None
-        or kernel is not None
-        or allowed_tools is not None
-        or denied_tools is not None
-        or enable_rogue_detection
-    )
-    if needs_audit and audit_log is None and AuditLog is not None:
+) -> list[Any]:
+    """Create the native runtime middleware stack for a MAF agent."""
+    kernel = MAFKernel(runtime=runtime)
+    if audit_log is None and AuditLog is not None:
         audit_log = AuditLog()
 
-    # 1. Audit trail (outermost — captures everything).
+    stack: list[Any] = []
     if audit_log is not None:
         stack.append(AuditTrailMiddleware(audit_log=audit_log, agent_did=agent_id))
-
-    # 2. Governance policy enforcement.
-    if kernel is not None:
-        stack.append(
-            GovernancePolicyMiddleware(
-                kernel=kernel,
-                audit_log=audit_log,
-                agent_id=agent_id,
-            )
-        )
-    elif policy_directory is not None:
-        if PolicyEvaluator is None:
-            raise ImportError(
-                "agent_os.policies.PolicyEvaluator is required for the "
-                "legacy v4 policy_directory path. Pass a `policy=` "
-                "GovernancePolicy to use the AGT 5.0 v5 path instead."
-            )
-        evaluator = PolicyEvaluator()
-        evaluator.load_policies(policy_directory)
-        stack.append(
-            GovernancePolicyMiddleware(evaluator=evaluator, audit_log=audit_log)
-        )
-
-    # 3. Capability guard.
-    if kernel is not None:
-        stack.append(
-            CapabilityGuardMiddleware(
-                allowed_tools=allowed_tools,
-                denied_tools=denied_tools,
-                audit_log=audit_log,
-                kernel=kernel,
-                agent_id=agent_id,
-            )
-        )
-    elif allowed_tools is not None or denied_tools is not None:
-        stack.append(
-            CapabilityGuardMiddleware(
-                allowed_tools=allowed_tools,
-                denied_tools=denied_tools,
-                audit_log=audit_log,
-            )
-        )
-
-    # 4. Rogue detection (innermost — closest to actual tool execution).
+    stack.extend([
+        RuntimeGovernanceMiddleware(
+            kernel=kernel, audit_log=audit_log, agent_id=agent_id
+        ),
+        CapabilityGuardMiddleware(
+            kernel=kernel, audit_log=audit_log, agent_id=agent_id
+        ),
+    ])
     if enable_rogue_detection and RogueAgentDetector is not None:
-        detector = RogueAgentDetector(config=RogueDetectorConfig())
-        capability_profile: dict[str, Any] | None = None
-        if allowed_tools:
-            capability_profile = {"allowed_tools": allowed_tools}
         stack.append(
             RogueDetectionMiddleware(
-                detector=detector,
+                detector=RogueAgentDetector(config=RogueDetectorConfig()),
                 agent_id=agent_id,
-                capability_profile=capability_profile,
                 audit_log=audit_log,
             )
         )
-
     return stack

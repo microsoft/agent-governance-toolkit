@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from agt.policies import EvaluationResult, PolicyAuditRecord, PolicyEvaluation
+from agt.policies import PolicyAuditRecord, PolicyEvaluation
 
 
 def test_policy_evaluation_normalizes_reason_and_builds_audit_record() -> None:
@@ -51,31 +51,3 @@ def test_policy_evaluation_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         result.verdict = "deny"  # type: ignore[misc]
-
-
-def test_compatibility_result_converts_to_native_without_v4_fields() -> None:
-    compatibility = EvaluationResult(
-        allowed=False,
-        public_message="legacy public",
-        detail="legacy detail",
-        reason="blocked_tool",
-        audit_entry={
-            "intervention_point": "pre_tool_call",
-            "result_labels": ["security"],
-        },
-        verdict="deny",
-        transform=None,
-        evidence=None,
-        input_identity="sha256:input",
-        enforced_identity="sha256:input",
-        message="native detail",
-    )
-
-    native = compatibility.to_native()
-
-    assert native.reason_code == "policy:blocked_tool"
-    assert native.intervention_point == "pre_tool_call"
-    assert native.result_labels == ("security",)
-    assert "allowed" not in native.model_dump()
-    assert "public_message" not in native.model_dump()
-    assert "audit_entry" not in native.model_dump()

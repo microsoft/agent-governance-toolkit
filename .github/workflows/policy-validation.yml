@@ -23,7 +23,8 @@ jobs:
             policies:
               - '**/*.yaml'
               - '**/*.yml'
-              - 'agent-governance-python/agent-os/src/agent_os/policies/**'
+              - 'agent-governance-python/agt-policies/**'
+              - 'agent-governance-python/agent-compliance/src/agent_compliance/lint_policy.py'
 
   validate-policies:
     runs-on: ubuntu-latest
@@ -36,42 +37,36 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install consolidated v4 packages (local, --no-deps)
-        # The deprecated shim packages (agent-primitives, agent-os, ...) all
-        # declare a hard dep on agent-governance-toolkit-core>=4.0, which is
-        # not yet on PyPI. Pre-install the local consolidated packages with
-        # --no-deps so the subsequent shim installs resolve without pip
-        # reaching out to PyPI for the unpublished names.
+      - name: Install native manifest linter
         run: |
-          pip install --no-cache-dir --no-deps \
-            -e agent-governance-python/agent-governance-toolkit-core \
-            -e agent-governance-python/agent-governance-toolkit-cli \
-            -e agent-governance-python/agent-governance-toolkit-integrations \
-            -e agent-governance-python/agent-governance-toolkit-protocols
+          pip install --no-cache-dir -e agent-governance-python/agent-compliance
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
 
-      - name: Install agent-primitives (local sibling)
-        run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
-
-      - name: Install agent-os-kernel
-        working-directory: agent-governance-python/agent-os
+      - name: Find and validate native ACS manifests
         run: |
-          pip install --no-cache-dir -e ".[dev]"
-          pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-yaml.txt"
+          python - <<'PY'
+          from pathlib import Path
+          from agent_compliance.lint_policy import lint_file
 
-      - name: Find and validate policy files
-        run: |
-          EXIT_CODE=0
-          echo "::group::Validating policy files"
-          for f in $(find . -name '*.yaml' -o -name '*.yml' \
-                     | grep -i policy \
-                     | grep -v 'charts/.*/templates/' \
-                     | grep -v 'node_modules/' \
-                     | sort); do
-            echo "--- Validating: $f ---"
-            python -m agent_os.policies.cli validate "$f" || EXIT_CODE=1
-          done
-          echo "::endgroup::"
-          exit "$EXIT_CODE"
+          manifests = []
+          for root in (Path("examples"), Path("agent-governance-python")):
+              for pattern in ("*.yaml", "*.yml"):
+                  for path in root.rglob(pattern):
+                      text = path.read_text(encoding="utf-8", errors="ignore")
+                      if "agent_control_specification_version:" in text:
+                          manifests.append(path)
+
+          failed = []
+          for path in sorted(manifests):
+              result = lint_file(path)
+              if not result.passed:
+                  failed.extend(result.errors)
+
+          print(f"Validated {len(manifests)} native ACS manifests.")
+          for finding in failed:
+              print(finding)
+          raise SystemExit(bool(failed))
+          PY
 
   test-policies:
     runs-on: ubuntu-latest
@@ -86,35 +81,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install consolidated v4 packages (local, --no-deps)
+      - name: Install native manifest test dependencies
         if: needs.changes.outputs.policies == 'true'
-        # The deprecated shim packages (agent-primitives, agent-os, ...) all
-        # declare a hard dep on agent-governance-toolkit-core>=4.0, which is
-        # not yet on PyPI. Pre-install the local consolidated packages with
-        # --no-deps so the subsequent shim installs resolve without pip
-        # reaching out to PyPI for the unpublished names.
         run: |
-          pip install --no-cache-dir --no-deps \
-            -e agent-governance-python/agent-governance-toolkit-core \
-            -e agent-governance-python/agent-governance-toolkit-cli \
-            -e agent-governance-python/agent-governance-toolkit-integrations \
-            -e agent-governance-python/agent-governance-toolkit-protocols
-
-      - name: Install agent-primitives (local sibling)
-        if: needs.changes.outputs.policies == 'true'
-        run: pip install --no-cache-dir -e agent-governance-python/agent-primitives
-
-      - name: Install agent-os-kernel
-        if: needs.changes.outputs.policies == 'true'
-        working-directory: agent-governance-python/agent-os
-        run: |
-          pip install --no-cache-dir -e ".[dev]"
+          pip install --no-cache-dir -e agent-governance-python/agent-compliance
+          pip install --no-cache-dir --no-deps -e agent-governance-python/agt-policies
           pip install --no-cache-dir --require-hashes -r "$GITHUB_WORKSPACE/agent-governance-python/requirements/ci-policy-test.txt"
 
-      - name: Run policy CLI tests
+      - name: Run native manifest lint tests
         if: needs.changes.outputs.policies == 'true'
-        working-directory: agent-governance-python/agent-os
-        run: pytest tests/test_policy_cli.py -v --tb=short
+        working-directory: agent-governance-python/agent-compliance
+        run: pytest tests/test_lint_policy.py tests/test_agt_cli.py -k lint -v --tb=short
 
       - name: Skip (no policy changes)
         if: needs.changes.outputs.policies != 'true'

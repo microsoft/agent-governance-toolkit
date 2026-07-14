@@ -247,4 +247,4 @@ approval:
 
     assert elapsed < 1.5
     assert result.verdict == "deny"
-    assert result.reason == "runtime_error:approval_timeout"
+    assert result.reason_code == "runtime_error:approval_timeout"

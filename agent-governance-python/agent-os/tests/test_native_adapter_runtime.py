@@ -64,7 +64,6 @@ def test_native_result_raises_native_policy_violation() -> None:
 
     assert str(error) == "Request blocked by policy."
     assert error.evaluation_result is result.evaluation
-    assert error.check_result is None
     assert error.details["message"] == "restricted detail"
 
 

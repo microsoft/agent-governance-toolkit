@@ -1,53 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-A2A Protocol Adapter for Agent-OS
-==================================
+"""A2A protocol integration backed by a required native ACS runtime.
 
-Provides kernel-level governance for A2A (Agent-to-Agent) protocol tasks.
-
-Backend (AGT 5.0): every content-policy decision is routed through
-:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
-The v4 :class:`A2APolicy` ``blocked_patterns`` are translated to a v4
-:class:`~agent_os.integrations.base.GovernancePolicy` and from there
-into an AGT manifest via
-:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
-time. The runtime is memoised per policy and a
-:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
-``ExecutionContext`` budgets between intervention points. The legacy
-``evaluate_task`` tuple-shaped API is preserved so v4 callers keep
-working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the inbound
-message text before the A2A task is forwarded; ``escalate`` verdicts
-route through the configured approval resolver per AGT-DELTA D1.4.
-
-Enforces Agent-OS policies on incoming A2A task negotiations:
-- Skill-level access control (which skills are allowed/blocked)
-- Content filtering on task messages
-- Rate limiting per source agent
-- Audit trail of all A2A interactions
-
-Works with or without the ``a2a-agentmesh`` package — accepts plain dicts
-from JSON-RPC endpoints as well as typed objects.
-
-Example:
-    >>> from agent_os.integrations.a2a_adapter import A2AGovernanceAdapter
-    >>>
-    >>> adapter = A2AGovernanceAdapter(
-    ...     allowed_skills=["search", "translate"],
-    ...     blocked_patterns=["DROP TABLE", "rm -rf"],
-    ...     min_trust_score=300,
-    ... )
-    >>>
-    >>> # Evaluate incoming A2A task request
-    >>> result = adapter.evaluate_task({
-    ...     "skill_id": "search",
-    ...     "x-agentmesh-trust": {
-    ...         "source_did": "did:mesh:agent-a",
-    ...         "source_trust_score": 500,
-    ...     },
-    ...     "messages": [{"role": "user", "parts": [{"text": "Find weather"}]}],
-    ... })
-    >>> assert result["allowed"]
+Task content is mediated through ACS. Skill access, trust thresholds, rate
+limits, conversation monitoring, and audit remain host-owned controls.
 """
 
 from __future__ import annotations
@@ -55,25 +11,22 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ._native_adapter_runtime import (
     AdapterResult,
     AdapterRuntime,
 )
-from ._v5_runtime_bridge import get_adapter_runtime
-from .base import ExecutionContext, GovernancePolicy
+from .base import AdapterExecutionState, get_adapter_runtime
 
 logger = logging.getLogger(__name__)
 
 
 def _sanitize_did_for_agent_id(did: str) -> str:
-    """Map an A2A DID to a string that satisfies the v4
-    :class:`ExecutionContext.agent_id` regex (``^[a-zA-Z0-9_-]+$``).
+    """Map an A2A DID to a valid :class:`AdapterExecutionState` agent ID.
 
     DIDs use colons (e.g. ``did:mesh:agent-a``) which are illegal in
-    the agent_id field. We swap colons for underscores so the bridge
-    can carry the DID end-to-end without losing identity.
+    the agent ID field, so unsupported characters become underscores.
     """
     safe = "".join(c if (c.isalnum() or c in "_-") else "_" for c in did)
     return safe or "anonymous"
@@ -85,7 +38,6 @@ class A2APolicy:
 
     allowed_skills: list[str] = field(default_factory=list)
     blocked_skills: list[str] = field(default_factory=list)
-    blocked_patterns: list[str] = field(default_factory=list)
     min_trust_score: int = 0
     max_requests_per_minute: int = 100
     require_trust_metadata: bool = False
@@ -107,11 +59,8 @@ class A2AEvaluation:
             transform verdict (AGT-DELTA D1.1). When set, the host
             should substitute it into the outbound task before
             forwarding to the A2A consumer.
-        bridge_result: The full :class:`AdapterResult` from the AGT
-            content-policy evaluation, when one fired. Carries the
-            verdict, the v4 :class:`PolicyCheckResult`, and the
-            ``audit_entry`` with the AGT bisected input/enforced
-            identities per AGT-DELTA D1.4.
+        bridge_result: The native :class:`AdapterResult` when content
+            evaluation ran.
         timestamp: Wall-clock evaluation time.
     """
 
@@ -143,22 +92,7 @@ class A2AEvaluation:
 
 
 class A2AGovernanceAdapter:
-    """
-    Agent-OS governance adapter for A2A protocol tasks.
-
-    Evaluates incoming A2A task requests (as dicts or typed objects)
-    against Agent-OS policies. Optionally runs a ConversationGuardian
-    to detect escalation, offensive intent, and feedback loops in
-    inter-agent message content.
-
-    Content-pattern enforcement is routed through the AGT 5.0 ACS
-    runtime via :class:`AdapterRuntime`: ``blocked_patterns`` is
-    translated to a v4 :class:`GovernancePolicy` and from there to an
-    AGT manifest. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
-    inbound message text on the returned :class:`A2AEvaluation`;
-    ``escalate`` verdicts that the configured approval resolver
-    refuses fail closed to a deny.
-    """
+    """Govern incoming A2A task requests with ACS and host controls."""
 
     def __init__(
         self,
@@ -166,44 +100,18 @@ class A2AGovernanceAdapter:
         *,
         allowed_skills: list[str] | None = None,
         blocked_skills: list[str] | None = None,
-        blocked_patterns: list[str] | None = None,
         min_trust_score: int = 0,
         max_requests_per_minute: int = 100,
         conversation_guardian: Any | None = None,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        runtime: Any | None = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ):
-        """Initialise the A2A governance adapter.
-
-        Args:
-            policy: An :class:`A2APolicy`. When ``None`` a policy is
-                constructed from the convenience kwargs.
-            allowed_skills, blocked_skills, blocked_patterns,
-            min_trust_score, max_requests_per_minute,
-            conversation_guardian: Convenience kwargs used to construct
-                an ``A2APolicy`` when ``policy`` is ``None``.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature matches
-                :data:`agt.policies.runtime.ApprovalCallback`. When
-                ``None`` an escalate verdict fails closed to ``deny``.
-            runtime: Native AgtRuntime used directly by this adapter. The runtime
-                owns policy dispatch and approval resolution; any supplied
-                approval_resolver must be the same callback.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
-        """
+        """Initialise host controls and the required native runtime."""
         if policy is not None:
             self.policy = policy
         else:
             self.policy = A2APolicy(
                 allowed_skills=allowed_skills or [],
                 blocked_skills=blocked_skills or [],
-                blocked_patterns=blocked_patterns or [],
                 min_trust_score=min_trust_score,
                 max_requests_per_minute=max_requests_per_minute,
             )
@@ -211,48 +119,27 @@ class A2AGovernanceAdapter:
         self._evaluations: list[A2AEvaluation] = []
         self._guardian = conversation_guardian
 
-        # ── AGT 5.0 bridge ─────────────────────────────────────────
-        # Translate ``blocked_patterns`` to a v4 GovernancePolicy so the
-        # AGT manifest bridge generates an ``input`` intervention point
-        # that pattern-scans the inbound message body. Skill / trust
-        # / rate-limit fields remain host-side because the v4
-        # GovernancePolicy schema does not encode them.
-        self._governance_policy = GovernancePolicy(
-            blocked_patterns=list(self.policy.blocked_patterns),
-        )
-        self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntime = get_adapter_runtime(
-            policy=self._governance_policy,
-            approval_resolver=approval_resolver,
-            runtime=runtime,
-            legacy_runtime=_runtime,
-            legacy_runtime_factory=_runtime_factory,
-        )
-        self._contexts: dict[str, ExecutionContext] = {}
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
+        self._contexts: dict[str, AdapterExecutionState] = {}
 
     @property
     def bridge(self) -> AdapterRuntime:
         """Return the v5 :class:`AdapterRuntime` for this adapter."""
         return self._bridge
 
-    def _get_or_create_context(self, source_did: str) -> ExecutionContext:
-        """Return (and lazily create) the :class:`ExecutionContext` for ``source_did``.
+    def _get_or_create_context(self, source_did: str) -> AdapterExecutionState:
+        """Return (and lazily create) the :class:`AdapterExecutionState` for ``source_did``.
 
-        The bridge requires a v4 :class:`ExecutionContext` to derive the
-        per-session :class:`SnapshotBuilder`. A2A identifies inbound
-        agents by DID, so we maintain one ``ExecutionContext`` per
-        source DID (falling back to a shared ``anonymous`` context when
-        the DID is empty). The DID is sanitised to satisfy the
-        ``ExecutionContext.agent_id`` regex (``^[a-zA-Z0-9_-]+$``).
+        A2A identifies inbound agents by DID, so each source gets a session
+        context. Empty DIDs share an anonymous context.
         """
         key = source_did or "anonymous"
         ctx = self._contexts.get(key)
         if ctx is None:
             safe_agent_id = _sanitize_did_for_agent_id(key)
-            ctx = ExecutionContext(
+            ctx = AdapterExecutionState(
                 agent_id=safe_agent_id,
                 session_id=f"a2a-{safe_agent_id}-{int(time.time())}",
-                policy=self._governance_policy,
             )
             self._contexts[key] = ctx
         return ctx
@@ -286,18 +173,6 @@ class A2AGovernanceAdapter:
             "trust_score": getattr(task, "source_trust_score", 0),
             "texts": texts,
         }
-
-    def _check_content(self, texts: list[str]) -> tuple[bool, str]:
-        """Host-side fallback content scan (kept for callers that
-        still invoke this method directly). The primary content gate
-        runs through the AGT bridge in :meth:`evaluate_task`.
-        """
-        for text in texts:
-            text_lower = text.lower()
-            for pattern in self.policy.blocked_patterns:
-                if pattern.lower() in text_lower:
-                    return False, f"Content matches blocked pattern: '{pattern}'"
-        return True, ""
 
     def evaluate_task(
         self,
@@ -388,16 +263,7 @@ class A2AGovernanceAdapter:
                     f"Content matches blocked pattern: '{reason_text}'",
                     bridge_result,
                 )
-            else:
-                # Host-side fallback content scan. The AGT manifest
-                # bridge currently emits case-sensitive substring
-                # patterns; the v4 A2A contract is case-insensitive, so
-                # run the host-side ``_check_content`` to cover the
-                # gap (mirrors the host-side guards documented for the
-                # other v5-routed adapters).
-                ok, reason = self._check_content(fields["texts"])
-                if not ok:
-                    return deny(reason, bridge_result)
+
 
         # 5.5 Conversation guardian analysis
         conversation_alert = None

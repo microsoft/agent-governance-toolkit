@@ -91,6 +91,21 @@ def test_ast_counts_relative_bridge_import():
     assert counts["get_runtime_bridge"] == 1
 
 
+def test_ast_counts_deleted_policy_module_imports():
+    counts = _py("from agent_os.policies.schema import PolicyRule\n")
+    assert counts["import:agent_os.policies.schema"] == 1
+
+
+def test_ast_counts_legacy_agt_runtime_constructors():
+    assert _py("runtime = AgtRuntime()\n")["v4_agt_runtime_constructor"] == 1
+    assert _py("runtime = AgtRuntime(policies=[])\n")[
+        "v4_agt_runtime_constructor"
+    ] == 1
+    assert "v4_agt_runtime_constructor" not in _py(
+        "runtime = AgtRuntime('manifest.yaml')\n"
+    )
+
+
 # --------------------------- ambiguous qualification ---------------------
 
 def test_ambiguous_counted_only_when_bound_from_v4_module():
@@ -169,6 +184,97 @@ def test_semantic_string_constants_count_but_not_prose():
     assert "GovernancePolicy" not in _py("m = 'the GovernancePolicy was removed'\n")
 
 
+def test_ast_detects_renamed_v4_intent_policy_shape():
+    src = """
+class GovernancePolicyChecker:
+    def run(self):
+        fields = {
+            "blocked_patterns": [],
+            "allowed_tools": [],
+            "max_tokens": 10,
+            "rate_limit": {},
+        }
+        modes = ("substring", "regex", "glob")
+        return fields, modes
+"""
+    assert _py(src)["v4_intent_policy_shape"] == 1
+
+
+def test_ast_does_not_misclassify_agentmesh_policy_shape():
+    src = """
+class PolicyEngine:
+    def evaluate(self):
+        return {"rules": [], "condition": {}, "action": "deny"}
+"""
+    assert "v4_intent_policy_shape" not in _py(src)
+
+
+def test_ast_detects_rule_document_generators():
+    src = """
+def compile_rules():
+    return {
+        "rules": [{
+            "condition": {"operator": "matches"},
+            "action": "deny",
+        }]
+    }
+"""
+    assert _py(src)["v4_rule_document_shape"] == 1
+
+
+def test_ast_detects_rule_document_in_multiline_string():
+    src = '''
+DOCUMENT = """
+rules:
+  - condition:
+      operator: matches
+    action: deny
+"""
+'''
+    assert _py(src)["v4_rule_document_shape"] == 1
+
+
+def test_ast_excludes_retained_agentmesh_rule_engine():
+    src = """
+class PolicyEngine:
+    fields = ("rules", "condition", "operator", "action")
+"""
+    rel = (
+        "agent-governance-python/agent-mesh/src/agentmesh/governance/"
+        "policy.py"
+    )
+    assert "v4_rule_document_shape" not in _py(src, rel)
+
+
+def test_ast_detects_orphaned_agent_os_policy_primitives():
+    rel = (
+        "agent-governance-python/agent-os/src/agent_os/policies/"
+        "conflict_resolution.py"
+    )
+    assert _py("class PolicyConflictResolver: ...\n", rel)[
+        "PolicyConflictResolver"
+    ] == 1
+    assert "PolicyConflictResolver" not in _py(
+        "class PolicyConflictResolver: ...\n",
+        "agent-governance-python/agent-mesh/src/agentmesh/governance/policy.py",
+    )
+
+
+def test_ast_detects_duck_typed_sandbox_policy_translation():
+    rel = (
+        "agent-governance-python/agent-sandbox/src/agent_sandbox/"
+        "provider.py"
+    )
+    src = """
+def config_from_input(policy):
+    defaults = getattr(policy, "defaults", None)
+    hosts = getattr(policy, "network_allowlist", [])
+    mounts = getattr(policy, "sandbox_mounts", None)
+    return defaults, hosts, mounts
+"""
+    assert _py(src, rel)["v4_sandbox_policy_translation"] == 1
+
+
 # --------------------------- policy data files ---------------------------
 
 def test_policy_data_detects_v4_policydocument_not_trust_rules(tmp_path):
@@ -200,6 +306,55 @@ def test_policy_data_detects_policydefaults_yaml_and_json():
         '"defaults":{"action":"allow","max_tokens":4096}}'
     )
     assert ratchet._is_v4_policy_document("config/example.json", json_doc)
+
+
+def test_policy_data_excludes_agentmesh_defaults_action():
+    agentmesh = (
+        "rules:\n"
+        "  - name: allow-data-read\n"
+        "    condition:\n"
+        "      field: action\n"
+        "      operator: eq\n"
+        "      value: data.read\n"
+        "    action: allow\n"
+        "defaults:\n"
+        "  action: deny\n"
+    )
+    assert not ratchet._is_v4_policy_document(
+        "agent-governance-golang/examples/policy-yaml/policy.yaml",
+        agentmesh,
+    )
+
+
+def test_policy_data_detects_rule_message_shape():
+    document = (
+        "name: guarded\n"
+        "version: '1.0'\n"
+        "rules:\n"
+        "  - name: deny-secret\n"
+        "    condition:\n"
+        "      field: input_text\n"
+        "      operator: matches\n"
+        "      value: secret\n"
+        "    action: deny\n"
+        "    message: secret detected\n"
+    )
+    assert ratchet._is_v4_policy_document("examples/policy.yaml", document)
+
+
+def test_policy_data_excludes_security_scanner_rules():
+    document = (
+        "name: scanner\n"
+        "rules:\n"
+        "  - name: block-shell\n"
+        "    pattern: shell_exec\n"
+        "    message: shell blocked\n"
+        "    severity: critical\n"
+    )
+    assert not ratchet._is_v4_policy_document(
+        "examples/policies/cli-security-rules.yaml",
+        document,
+    )
 
 
 def test_all_yaml_json_are_routed_to_policy_data():
@@ -236,6 +391,33 @@ def test_docs_count_only_qualified_ambiguous_names():
     )
     assert qualified.counts["PolicyEvaluator"] == 1
     assert qualified.counts["ExecutionContext"] == 1
+
+
+def test_docs_detect_deleted_modules_and_runtime_shapes():
+    hits = ratchet._scan_doc(
+        Path("README.md"),
+        "from agent_os.policies.schema import PolicyRule\n"
+        "runtime = AgtRuntime(policies=[])\n",
+    )
+    assert hits.counts["agent_os.policies.schema"] == 1
+    assert hits.counts["v4_agt_runtime_constructor"] == 1
+
+
+def test_docs_detect_v4_policy_fences():
+    hits = ratchet._scan_doc(
+        Path("README.md"),
+        """```yaml
+name: old
+rules:
+  - condition:
+      field: tool_name
+      operator: in
+    action: deny
+    message: blocked
+```
+""",
+    )
+    assert hits.counts["v4_policy_document_fence"] == 1
 
 
 def test_syntax_error_is_flagged_not_silently_zero():

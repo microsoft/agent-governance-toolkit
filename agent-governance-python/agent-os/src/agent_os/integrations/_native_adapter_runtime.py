@@ -66,8 +66,6 @@ class AdapterRuntime(Protocol):
 
     def evaluate_output(self, *args: Any, **kwargs: Any) -> AdapterResult: ...
 
-    def evaluate_tool_budget(self, *args: Any, **kwargs: Any) -> Any: ...
-
     def record_post_execute(self, *args: Any, **kwargs: Any) -> None: ...
 
 
@@ -143,11 +141,6 @@ class NativeAdapterRuntime:
             token_count=int(ctx.total_tokens),
         )
         return session
-
-    def evaluate_tool_budget(self, ctx: _ContextLike) -> None:
-        """Native budgets are enforced by the manifest at intervention points."""
-        self._session_for(ctx)
-        return None
 
     def record_post_execute(
         self,

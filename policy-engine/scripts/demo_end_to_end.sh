@@ -169,9 +169,8 @@ if should_run python-sdk; then
   cat > "$DEMO_TMP/demo_python.py" <<'PY'
 """AGT 5.0 Python end-to-end demo.
 
-Builds an ACS manifest via agt.policies.bridge.governance_to_acs_manifest
-from a v4-style GovernancePolicy spec, runs it through AgtRuntime, and
-exercises the four canonical paths:
+Builds a native ACS manifest, runs it through AgtRuntime, and exercises
+the four canonical paths:
 
   - allow             (under the budget)
   - deny              (over the budget)

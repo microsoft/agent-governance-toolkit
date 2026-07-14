@@ -1,58 +1,21 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-"""
-LlamaIndex Integration
+"""LlamaIndex integration backed by a required native ACS runtime.
 
-Wraps LlamaIndex query engines, retrievers, and agents with Agent OS governance.
-
-Backend (AGT 5.0): every policy decision is routed through
-:class:`agt.policies.runtime.AgtRuntime` (the ACS-backed v5 engine).
-The v4 :class:`~agent_os.integrations.base.GovernancePolicy` is
-translated to an AGT manifest via
-:func:`agt.policies.bridge.governance_to_acs_manifest` at adapter init
-time, an :class:`AgtRuntime` is memoised per policy, and a
-:class:`agt.policies.snapshot.SnapshotBuilder` mirrors the v4
-``ExecutionContext`` budgets between intervention points. The legacy
-``pre_execute`` / ``post_execute`` tuple API is preserved so v4 callers
-keep working. ``transform`` verdicts (AGT-DELTA D1.1) rewrite the
-outbound query or chat message before the LlamaIndex client sees it;
-``escalate`` verdicts route through the configured approval resolver
-per AGT-DELTA D1.4.
-
-Usage:
-    from agent_os.integrations import LlamaIndexKernel
-
-    kernel = LlamaIndexKernel()
-    governed_engine = kernel.wrap(my_query_engine)
-
-    # Now all queries go through Agent OS governance
-    result = governed_engine.query("What is the meaning of life?")
+Queries, tool calls, and outputs are mediated before LlamaIndex receives or
+discloses them.
 """
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import Any
 
 from ._native_adapter_runtime import (
     AdapterResult,
     AdapterRuntime,
 )
-from ._v5_runtime_bridge import get_adapter_runtime
-from ..exceptions import PolicyViolationError as _CanonicalPolicyViolationError
-from .base import BaseIntegration, ExecutionContext, GovernancePolicy
-
-
-class PolicyViolationError(_CanonicalPolicyViolationError):
-    """Raised when a LlamaIndex query/chat violates governance policy.
-
-    Subclass of :class:`agent_os.exceptions.PolicyViolationError` so the
-    canonical ``from_check_result`` constructor is available while
-    preserving the legacy
-    ``agent_os.integrations.llamaindex_adapter.PolicyViolationError``
-    import path for v4 callers.
-    """
-
-    pass
+from ..exceptions import PolicyViolationError
+from .base import AdapterExecutionState, BaseIntegration, get_adapter_runtime
 
 
 class _ReplayableStreamResponse:
@@ -133,66 +96,27 @@ class LlamaIndexKernel(BaseIntegration):
 
     def __init__(
         self,
-        policy: Optional[GovernancePolicy] = None,
         *,
-        approval_resolver: Optional[Callable[..., Any]] = None,
-        runtime: Any | None = None,
-        _runtime: Optional[Any] = None,
-        _runtime_factory: Optional[Callable[..., Any]] = None,
+        runtime: Any,
     ):
-        """Initialise the LlamaIndex governance kernel.
-
-        Args:
-            policy: Governance policy to enforce. When ``None`` the default
-                ``GovernancePolicy`` is used. The policy is translated to
-                an AGT manifest and an :class:`agt.policies.runtime.AgtRuntime`
-                is constructed over it at init time.
-            approval_resolver: Optional callable invoked when the AGT
-                engine returns an ``escalate`` verdict. Signature matches
-                :data:`agt.policies.runtime.ApprovalCallback`. When
-                ``None`` an escalate verdict fails closed to ``deny``.
-            runtime: Native AgtRuntime used directly by this adapter. The runtime
-                owns policy dispatch and approval resolution; any supplied
-                approval_resolver must be the same callback.
-            _runtime: Test seam — inject a pre-built :class:`AgtRuntime`
-                so scenario tests can wire a scripted policy dispatcher
-                without OPA on PATH. Not part of the public surface.
-            _runtime_factory: Test seam — override the runtime factory
-                used by the bridge cache. Not part of the public surface.
-        """
-        super().__init__(policy)
+        """Initialise the kernel with the required native runtime."""
+        super().__init__(runtime=runtime)
         self._wrapped_agents: dict[int, Any] = {}
         self._stopped: dict[str, bool] = {}
-        self._approval_resolver = approval_resolver
-        self._bridge: AdapterRuntime = get_adapter_runtime(
-            policy=self.policy,
-            approval_resolver=approval_resolver,
-            runtime=runtime,
-            legacy_runtime=_runtime,
-            legacy_runtime_factory=_runtime_factory,
-        )
+        self._bridge: AdapterRuntime = get_adapter_runtime(runtime)
 
     @property
     def bridge(self) -> AdapterRuntime:
         """Return the v5 :class:`AdapterRuntime` for this kernel."""
         return self._bridge
 
-    def evaluate_input(self, ctx: ExecutionContext, input_data: Any) -> AdapterResult:
+    def evaluate_input(self, ctx: AdapterExecutionState, input_data: Any) -> AdapterResult:
         """Public access to the AGT ``input`` intervention point evaluation."""
         return self._bridge.evaluate_input(ctx, body=self._to_body(input_data))
 
-    def evaluate_output(self, ctx: ExecutionContext, output_data: Any) -> AdapterResult:
+    def evaluate_output(self, ctx: AdapterExecutionState, output_data: Any) -> AdapterResult:
         """Public access to the AGT ``output`` intervention point evaluation."""
         return self._bridge.evaluate_output(ctx, content=self._to_body(output_data))
-
-    def evaluate_tool_budget(self, ctx: ExecutionContext) -> Optional[AdapterResult]:
-        """Return a deny ``AdapterResult`` if the call/token budget is exceeded.
-
-        A governed ``.query()`` / ``.chat()`` is a budgeted operation in the
-        v4 contract; this keeps ``max_tool_calls`` / ``max_tokens`` enforced on
-        those paths (the v5 input/output checks alone do not count calls).
-        """
-        return self._bridge.evaluate_tool_budget(ctx)
 
     @staticmethod
     def _to_body(data: Any) -> Any:
@@ -278,21 +202,9 @@ class LlamaIndexKernel(BaseIntegration):
                     return bridge_result.transform.value
                 return result
 
-            def _enforce_budget(self) -> None:
-                """Block the call when the v4 tool-call/token budget is spent.
-
-                A governed ``query``/``chat`` is a budgeted operation, so
-                ``max_tool_calls`` / ``max_tokens`` must be enforced here; the
-                input/output intervention points alone do not count calls.
-                """
-                budget = self._kernel.evaluate_tool_budget(self._ctx)
-                if budget is not None and not budget.allowed:
-                    raise budget.to_policy_violation(PolicyViolationError)
-
             def query(self, query_str: Any, **kwargs) -> Any:
                 """Governed query."""
                 self._check_stopped()
-                self._enforce_budget()
                 query_str = self._pre(query_str)
                 result = self._original.query(query_str, **kwargs)
                 result = self._post(result)
@@ -302,7 +214,6 @@ class LlamaIndexKernel(BaseIntegration):
             async def aquery(self, query_str: Any, **kwargs) -> Any:
                 """Governed async query."""
                 self._check_stopped()
-                self._enforce_budget()
                 query_str = self._pre(query_str)
                 result = await self._original.aquery(query_str, **kwargs)
                 result = self._post(result)
@@ -312,7 +223,6 @@ class LlamaIndexKernel(BaseIntegration):
             def chat(self, message: str, **kwargs) -> Any:
                 """Governed chat."""
                 self._check_stopped()
-                self._enforce_budget()
                 message = self._pre(message)
                 result = self._original.chat(message, **kwargs)
                 result = self._post(result)
@@ -322,7 +232,6 @@ class LlamaIndexKernel(BaseIntegration):
             async def achat(self, message: str, **kwargs) -> Any:
                 """Governed async chat."""
                 self._check_stopped()
-                self._enforce_budget()
                 message = self._pre(message)
                 result = await self._original.achat(message, **kwargs)
                 result = self._post(result)
@@ -332,7 +241,6 @@ class LlamaIndexKernel(BaseIntegration):
             async def astream_chat(self, message: str, **kwargs) -> Any:
                 """Governed async streaming chat."""
                 self._check_stopped()
-                self._enforce_budget()
                 message = self._pre(message)
                 response = self._original.astream_chat(message, **kwargs)
                 if hasattr(response, "__await__"):
@@ -349,7 +257,6 @@ class LlamaIndexKernel(BaseIntegration):
                 before any chunks are returned to the caller.
                 """
                 self._check_stopped()
-                self._enforce_budget()
                 message = self._pre(message)
                 response = self._original.stream_chat(message, **kwargs)
                 response = self._post_stream_response(response)
@@ -410,7 +317,6 @@ class LlamaIndexKernel(BaseIntegration):
             def retrieve(self, query_str: Any, **kwargs) -> Any:
                 """Governed retrieve."""
                 self._check_stopped()
-                self._enforce_budget()
                 query_str = self._pre(query_str)
                 result = self._original.retrieve(query_str, **kwargs)
                 result = self._post(result)
@@ -441,9 +347,8 @@ class LlamaIndexKernel(BaseIntegration):
 # Convenience function
 def wrap(
     agent: Any,
-    policy: Optional[GovernancePolicy] = None,
     *,
-    runtime: Any | None = None,
+    runtime: Any,
 ) -> Any:
     """Quick wrapper for LlamaIndex engines."""
-    return LlamaIndexKernel(policy, runtime=runtime).wrap(agent)
+    return LlamaIndexKernel(runtime=runtime).wrap(agent)
