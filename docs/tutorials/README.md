@@ -130,7 +130,8 @@ guides.
 
 ## Policy-as-Code Deep Dive
 
-A self-contained sub-series progressing from basic allow/deny rules to production-grade policy management. Each chapter has a matching Python script in [`policy-as-code/examples/`](policy-as-code/examples/).
+A self-contained sub-series progressing from basic policy bindings to
+production-grade native ACS management.
 
 | Chapter | Topic | What You'll Learn |
 |---------|-------|-------------------|
