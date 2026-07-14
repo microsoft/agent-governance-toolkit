@@ -172,6 +172,14 @@ func (c *ApprovalCoordinator) SubmitEntry(approvalRequestID string, stageIndex i
 	if !ok {
 		return nil, ErrApprovalRequestNotFound
 	}
+	entries, _ := c.store.ListEntries(approvalRequestID)
+	if vote.ChainEntryID != "" {
+		for _, existing := range entries {
+			if existing.ChainEntryID == vote.ChainEntryID {
+				return c.resultFromStore(policy, request), nil
+			}
+		}
+	}
 	result := c.resultFromStore(policy, request)
 	if request.Status != ApprovalPending {
 		return result, fmt.Errorf("approval request %s is %s", approvalRequestID, request.Status)
@@ -189,15 +197,10 @@ func (c *ApprovalCoordinator) SubmitEntry(approvalRequestID string, stageIndex i
 	}
 
 	isAdvisory := stage.isAdvisory() || vote.ApproverKind == ApproverLLMAdvisory
-	if vote.Decision == ApprovalEntryAllow && !isAdvisory && !stage.authorizes(vote.ApproverIdentity, vote.Roles) {
-		vote.Decision = ApprovalEntryDeny
-		vote.ReasonCode = "unauthorized_approver"
-		if vote.ApproverIdentity == "" {
-			vote.ApproverIdentity = "system:unverified-approver"
-		}
+	if !isAdvisory && !stage.authorizes(vote.ApproverIdentity, vote.Roles) {
+		return result, fmt.Errorf("identity %q not permitted for approval stage %d", vote.ApproverIdentity, stageIndex)
 	}
 
-	entries, _ := c.store.ListEntries(approvalRequestID)
 	entry, err := c.entryFromVote(request, entries, stage, vote)
 	if err != nil {
 		return result, err
@@ -267,6 +270,10 @@ func (c *ApprovalCoordinator) RequestApproval(ctx context.Context, binding Actio
 		vote, err := stage.Transport.RequestApproval(stageCtx, result.Request)
 		cancel()
 		if err != nil {
+			var protocolFailure *approvalProtocolFailureError
+			if errors.As(err, &protocolFailure) {
+				return c.appendSystemDenyAndResolve(result.Request.ApprovalRequestID, stage, protocolFailure.reasonCode)
+			}
 			return c.appendSystemDenyAndResolve(result.Request.ApprovalRequestID, stage, "approval_transport_error")
 		}
 

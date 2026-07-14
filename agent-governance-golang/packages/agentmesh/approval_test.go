@@ -341,12 +341,13 @@ func TestApprovalCoordinatorSubmitEntryInvalidStageIndex(t *testing.T) {
 	}
 }
 
-func TestApprovalCoordinatorSubmitEntryUnauthorizedApprover(t *testing.T) {
+func TestApprovalCoordinatorSubmitEntryIsIdempotent(t *testing.T) {
 	coordinator := NewApprovalCoordinator(ApprovalChain{
-		ChainID: "unauthorized-approver",
+		ChainID: "idempotent-resubmission",
 		Version: "1",
 		Stages: []ApprovalStage{
 			{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+			{StageIndex: 1, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:bob"}},
 		},
 	})
 	opened, err := coordinator.OpenRequest(productionBinding())
@@ -354,19 +355,90 @@ func TestApprovalCoordinatorSubmitEntryUnauthorizedApprover(t *testing.T) {
 		t.Fatalf("OpenRequest: %v", err)
 	}
 
-	result, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+	firstVote := ApprovalVote{
 		ApproverKind:     ApproverHuman,
-		ApproverIdentity: "did:web:example.com:eve",
+		ApproverIdentity: "did:web:example.com:alice",
 		Decision:         ApprovalEntryAllow,
-	})
+		ChainEntryID:     "ace-retry-alice",
+	}
+	first, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, firstVote)
 	if err != nil {
-		t.Fatalf("SubmitEntry: %v", err)
+		t.Fatalf("SubmitEntry first stage: %v", err)
 	}
-	if result.Decision != Deny || result.Resolution.ReasonCode != "unauthorized_approver" {
-		t.Fatalf("result = %#v, want unauthorized_approver deny", result)
+	if first.Resolution.ApprovalResolutionID != "" || len(first.Entries) != 1 {
+		t.Fatalf("first result = %#v, want one entry and pending request", first)
 	}
-	if len(result.Entries) != 1 || result.Entries[0].Decision != ApprovalEntryDeny {
-		t.Fatalf("entries = %#v, want one deny entry", result.Entries)
+
+	retriedPending, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, firstVote)
+	if err != nil {
+		t.Fatalf("SubmitEntry pending retry: %v", err)
+	}
+	if len(retriedPending.Entries) != 1 || retriedPending.Entries[0].EntryDigest != first.Entries[0].EntryDigest {
+		t.Fatalf("pending retry entries = %#v, want original entry only", retriedPending.Entries)
+	}
+
+	secondVote := ApprovalVote{
+		ApproverKind:     ApproverHuman,
+		ApproverIdentity: "did:web:example.com:bob",
+		Decision:         ApprovalEntryAllow,
+		ChainEntryID:     "ace-retry-bob",
+	}
+	resolved, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 1, secondVote)
+	if err != nil {
+		t.Fatalf("SubmitEntry second stage: %v", err)
+	}
+	if resolved.Resolution.Outcome != ApprovalOutcomeAllow || len(resolved.Entries) != 2 {
+		t.Fatalf("resolved result = %#v, want allow with two entries", resolved)
+	}
+
+	retriedResolved, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 1, secondVote)
+	if err != nil {
+		t.Fatalf("SubmitEntry resolved retry: %v", err)
+	}
+	if len(retriedResolved.Entries) != 2 || retriedResolved.Resolution.ApprovalResolutionID != resolved.Resolution.ApprovalResolutionID {
+		t.Fatalf("resolved retry = %#v, want original entries and resolution", retriedResolved)
+	}
+}
+
+func TestApprovalCoordinatorSubmitEntryRejectsUnauthorizedApprover(t *testing.T) {
+	for _, decision := range []ApprovalEntryDecision{ApprovalEntryAllow, ApprovalEntryDeny} {
+		t.Run(string(decision), func(t *testing.T) {
+			coordinator := NewApprovalCoordinator(ApprovalChain{
+				ChainID: "unauthorized-approver",
+				Version: "1",
+				Stages: []ApprovalStage{
+					{StageIndex: 0, ApproverKind: ApproverHuman, AllowedIdentities: []string{"did:web:example.com:alice"}},
+				},
+			})
+			opened, err := coordinator.OpenRequest(productionBinding())
+			if err != nil {
+				t.Fatalf("OpenRequest: %v", err)
+			}
+
+			result, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+				ApproverKind:     ApproverHuman,
+				ApproverIdentity: "did:web:example.com:eve",
+				Decision:         decision,
+			})
+			if err == nil || !strings.Contains(err.Error(), "not permitted") {
+				t.Fatalf("SubmitEntry error = %v, want not permitted", err)
+			}
+			if result == nil || result.Request.Status != ApprovalPending || result.Resolution.ApprovalResolutionID != "" || len(result.Entries) != 0 {
+				t.Fatalf("unauthorized result = %#v, want unchanged pending request", result)
+			}
+
+			approved, err := coordinator.SubmitEntry(opened.Request.ApprovalRequestID, 0, ApprovalVote{
+				ApproverKind:     ApproverHuman,
+				ApproverIdentity: "did:web:example.com:alice",
+				Decision:         ApprovalEntryAllow,
+			})
+			if err != nil {
+				t.Fatalf("SubmitEntry authorized: %v", err)
+			}
+			if approved.Resolution.Outcome != ApprovalOutcomeAllow {
+				t.Fatalf("authorized result = %#v, want allow", approved)
+			}
+		})
 	}
 }
 
