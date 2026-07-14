@@ -798,6 +798,15 @@ sanitisation
 retargeted
 realpath
 normpath
+alikes
+asname
+isspace
+NONPY
+policydocument
+policydefaults
+rpartition
+syms
+unaliased
 posixpath
 pypy
 fastembed
