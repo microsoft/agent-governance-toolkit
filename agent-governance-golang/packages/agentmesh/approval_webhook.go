@@ -114,7 +114,7 @@ func (a *WebhookApprover) RequestApproval(ctx context.Context, request ApprovalR
 	if err := decoder.Decode(&body); err != nil {
 		return ApprovalVote{}, fmt.Errorf("decoding approval webhook response: %w", err)
 	}
-	return parseWebhookApprovalResponse(body, request, a.verifier), nil
+	return parseWebhookApprovalResponse(body, request, a.verifier)
 }
 
 func buildWebhookApprovalPayload(request ApprovalRequest) (map[string]interface{}, error) {
@@ -133,17 +133,17 @@ func buildWebhookApprovalPayload(request ApprovalRequest) (map[string]interface{
 	return payload, nil
 }
 
-func parseWebhookApprovalResponse(body map[string]interface{}, request ApprovalRequest, verifier WebhookResponseVerifier) ApprovalVote {
+func parseWebhookApprovalResponse(body map[string]interface{}, request ApprovalRequest, verifier WebhookResponseVerifier) (ApprovalVote, error) {
 	if stringValue(body["approval_request_id"]) != request.ApprovalRequestID {
-		return webhookDenyVote("webhook:binding-mismatch", "approval_request_id_mismatch")
+		return ApprovalVote{}, newApprovalProtocolFailure("approval_request_id_mismatch")
 	}
 	if stringValue(body["action_digest"]) != request.ActionDigest {
-		return webhookDenyVote("webhook:binding-mismatch", "action_digest_mismatch")
+		return ApprovalVote{}, newApprovalProtocolFailure("action_digest_mismatch")
 	}
 
 	approved, ok := approvalResponseDecision(body)
 	if !ok {
-		return webhookDenyVote("webhook:malformed-response", "missing_or_malformed_decision")
+		return ApprovalVote{}, newApprovalProtocolFailure("missing_or_malformed_decision")
 	}
 	reason := stringValue(body["reason"])
 	if reason == "" {
@@ -168,7 +168,7 @@ func parseWebhookApprovalResponse(body map[string]interface{}, request ApprovalR
 			ReasonCode:        reason,
 			Roles:             roles,
 			ChainEntryID:      stringValue(body["chain_entry_id"]),
-		}
+		}, nil
 	}
 
 	var identity string
@@ -177,7 +177,7 @@ func parseWebhookApprovalResponse(body map[string]interface{}, request ApprovalR
 		identity, verified = verifier(body, request)
 	}
 	if !verified || identity == "" {
-		return webhookDenyVote("webhook:unverified-approver", "unverified_approver_identity")
+		return ApprovalVote{}, newApprovalProtocolFailure("unverified_approver_identity")
 	}
 
 	return ApprovalVote{
@@ -188,7 +188,7 @@ func parseWebhookApprovalResponse(body map[string]interface{}, request ApprovalR
 		ReasonCode:        reason,
 		Roles:             roles,
 		ChainEntryID:      stringValue(body["chain_entry_id"]),
-	}
+	}, nil
 }
 
 func approvalResponseDecision(body map[string]interface{}) (bool, bool) {
@@ -206,14 +206,16 @@ func approvalResponseDecision(body map[string]interface{}) (bool, bool) {
 	}
 }
 
-func webhookDenyVote(identity, reason string) ApprovalVote {
-	return ApprovalVote{
-		ApproverKind:      ApproverService,
-		ApproverIdentity:  identity,
-		IdentityAssurance: "webhook",
-		Decision:          ApprovalEntryDeny,
-		ReasonCode:        reason,
-	}
+type approvalProtocolFailureError struct {
+	reasonCode string
+}
+
+func newApprovalProtocolFailure(reasonCode string) error {
+	return &approvalProtocolFailureError{reasonCode: reasonCode}
+}
+
+func (e *approvalProtocolFailureError) Error() string {
+	return "approval transport protocol failure: " + e.reasonCode
 }
 
 func approverKindFromString(value string) ApproverKind {
