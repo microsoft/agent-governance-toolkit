@@ -5,7 +5,7 @@
 Entry points for ``.pre-commit-hooks.yaml``:
 
 - ``validate-manifest`` — schema validation of plugin manifests
-- ``evaluate-policy``   — policy evaluation of plugin manifests
+- ``evaluate-governance`` — native runtime evaluation of plugin manifests
 """
 
 from __future__ import annotations
@@ -66,45 +66,21 @@ def validate_manifest_cli() -> int:
     return 0
 
 
-def evaluate_policy_cli() -> int:
-    """Evaluate plugin manifests against a governance policy.
-
-    Returns 0 if all manifests comply, 1 if any violate.
-    """
+def evaluate_governance_cli() -> int:
+    """Evaluate plugin manifests against a native ACS manifest."""
     parser = argparse.ArgumentParser(
-        prog="evaluate-plugin-policy",
-        description="Evaluate plugin manifests against governance policy",
+        prog="evaluate-plugin-governance",
+        description="Evaluate plugin manifests with the native ACS runtime",
     )
-    parser.add_argument("files", nargs="+", help="Manifest files to evaluate")
-    parser.add_argument(
-        "--policy",
-        required=True,
-        help="Path to policy YAML file or directory",
-    )
+    parser.add_argument("files", nargs="+", help="Plugin manifest files to evaluate")
+    parser.add_argument("--manifest", required=True, help="Path to a native ACS manifest")
     args = parser.parse_args()
 
     try:
-        from agent_os.policies import PolicyEvaluator
-        from agent_os.policies.schema import PolicyDocument
-    except ImportError:
-        print(
-            "agent-os-kernel is required for policy evaluation. "
-            "Install with: pip install agent-os-kernel",
-            file=sys.stderr,
-        )
-        return 1
-
-    evaluator = PolicyEvaluator()
-    policy_path = Path(args.policy)
-    if policy_path.is_dir():
-        evaluator.load_policies(str(policy_path))
-    elif policy_path.is_file():
-        # Load only the file the user pointed at — previously this
-        # delegated to ``load_policies(policy_path.parent)``, which
-        # silently pulled in every sibling ``*.yaml`` in that directory.
-        evaluator.policies.append(PolicyDocument.from_yaml(policy_path))
-    else:
-        print(f"Policy path not found: {policy_path}", file=sys.stderr)
+        from agt.policies import AgtRuntime
+        runtime = AgtRuntime.from_manifest(Path(args.manifest))
+    except (ImportError, OSError, ValueError) as exc:
+        print(f"Unable to load native governance runtime: {exc}", file=sys.stderr)
         return 1
 
     violations = 0
@@ -112,35 +88,29 @@ def evaluate_policy_cli() -> int:
         path = Path(filepath)
         try:
             data = _load_manifest_file(path)
-            manifest = PluginManifest(**data)
-
-            context = {
-                "plugin_name": manifest.name,
-                "plugin_type": manifest.plugin_type.value,
-                "capabilities": manifest.capabilities,
-                "author": manifest.author,
-                "has_signature": manifest.signature is not None,
+            plugin = PluginManifest(**data)
+            snapshot = {
+                "plugin_name": plugin.name,
+                "plugin_type": plugin.plugin_type.value,
+                "capabilities": plugin.capabilities,
+                "author": plugin.author,
+                "has_signature": plugin.signature is not None,
             }
-
-            decision = evaluator.evaluate(context)
-            if decision.allowed:
-                print(f"  ✓ {path}: {decision.action} — {decision.reason}")
+            evaluation = runtime.evaluate("plugin_manifest", snapshot)
+            message = evaluation.message or evaluation.reason_code or evaluation.verdict
+            if evaluation.is_allowed():
+                print(f"  ✓ {path}: {evaluation.verdict} — {message}")
             else:
-                print(
-                    f"  ✗ {path}: {decision.action} — {decision.reason}",
-                    file=sys.stderr,
-                )
+                print(f"  ✗ {path}: {evaluation.verdict} — {message}", file=sys.stderr)
                 violations += 1
-
         except Exception as exc:  # noqa: BLE001
             print(f"  ✗ {path}: evaluation error — {exc}", file=sys.stderr)
             violations += 1
 
     if violations:
-        print(f"\n{violations} manifest(s) violate policy.", file=sys.stderr)
+        print(f"\n{violations} manifest(s) failed governance.", file=sys.stderr)
         return 1
-
-    print(f"\n{len(args.files)} manifest(s) comply with policy.")
+    print(f"\n{len(args.files)} manifest(s) passed governance.")
     return 0
 
 
@@ -148,15 +118,15 @@ def main() -> None:
     """CLI dispatcher for ``python -m agent_marketplace.hooks``."""
     if len(sys.argv) < 2:
         print("Usage: python -m agent_marketplace.hooks <command> [args...]")
-        print("Commands: validate-manifest, evaluate-policy")
+        print("Commands: validate-manifest, evaluate-governance")
         sys.exit(1)
 
     command = sys.argv.pop(1)
 
     if command == "validate-manifest":
         sys.exit(validate_manifest_cli())
-    elif command == "evaluate-policy":
-        sys.exit(evaluate_policy_cli())
+    elif command == "evaluate-governance":
+        sys.exit(evaluate_governance_cli())
     else:
         print(f"Unknown command: {command}", file=sys.stderr)
         sys.exit(1)

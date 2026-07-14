@@ -1,8 +1,8 @@
 # Agent Sandbox
 
-Public Preview — execution isolation for AI agents with policy-driven
-resource limits, tool proxies, network enforcement, and filesystem
-checkpointing. Ships five interchangeable backends behind the same
+Public Preview — execution isolation for AI agents with explicit host
+configuration, optional native ACS governance, and filesystem checkpointing.
+Ships five interchangeable backends behind the same
 `SandboxProvider` ABC.
 
 Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit).
@@ -18,14 +18,13 @@ Part of the [Agent Governance Toolkit](https://github.com/microsoft/agent-govern
 | `NonoSandboxProvider` | OS-native kernel sandbox via [nono](https://github.com/always-further/nono) (Landlock on Linux, Seatbelt on macOS) with a filtering network proxy | Kernel-enforced isolation with a pure-Python install; CI and laptops (**Linux/macOS only**) | `agt-sandbox[nono]` |
 
 All five implement the same async + sync API (`create_session`,
-`execute_code`, `destroy_session`, plus `*_async` variants) and consume
-the same `PolicyDocument` for resource caps, network allowlists, and
-tool allowlists.
+`execute_code`, `destroy_session`, plus `*_async` variants). Host controls use
+`SandboxConfig`. Policy decisions use an optional native `AgtRuntime`.
 
 ## Installation
 
 ```bash
-# Everything (Docker + Hyperlight + policy engine):
+# Everything (Docker + Hyperlight + native governance support):
 pip install "agt-sandbox[full]"
 
 # Pick what you need:
@@ -129,9 +128,8 @@ asyncio.run(run_agent_task())
 | Runtime | `runc` (auto-upgrades to gVisor or Kata when available) |
 | State | `save_state` / `restore_state` via image commit |
 
-Filesystem mounts come from the policy: `sandbox_mounts.input_dir` is
-bind-mounted read-only and `sandbox_mounts.output_dir` read-write
-(see [Policy-driven configuration](#policy-driven-configuration)).
+Filesystem mounts come from `SandboxConfig.input_dir` and
+`SandboxConfig.output_dir`.
 
 ---
 
@@ -141,10 +139,10 @@ Backed by the upstream [hyperlight-sandbox](https://github.com/hyperlight-dev/hy
 runtime. Each session is a fresh micro-VM on KVM (Linux), mshv (Azure
 HCL), or WHP (Windows) — typical cold start is well under a millisecond.
 Tools are registered as host functions and invoked synchronously from
-the guest, gated by the session's `policy.tool_allowlist`.
+the guest, gated by `SandboxConfig.tool_allowlist`.
 
 ```python
-from agent_sandbox import HyperLightSandboxProvider
+from agent_sandbox import HyperLightSandboxProvider, SandboxConfig
 
 def fetch_arxiv(query: str) -> str:
     return f"<results for {query}>"
@@ -158,7 +156,8 @@ provider = HyperLightSandboxProvider(
 if not provider.is_available():
     raise SystemExit(f"Hyperlight unavailable: {provider.unavailable_reason}")
 
-handle = provider.create_session("agent-1")
+config = SandboxConfig(tool_allowlist=["fetch_arxiv"])
+handle = provider.create_session("agent-1", config=config)
 out = provider.execute_code(
     "agent-1", handle.session_id,
     "print(fetch_arxiv('cs.CL'))",
@@ -173,11 +172,10 @@ Notes:
 - `provider.is_available()` probes for a hypervisor and returns
   `unavailable_reason` if none is present (e.g. on macOS hosts without
   WHP / KVM passthrough).
-- Only tools listed in a session's `policy.tool_allowlist` are exposed
+- Only tools listed in a session's `SandboxConfig.tool_allowlist` are exposed
   to that session's guest; the rest stay host-side.
-- Filesystem mounts come from the policy: `sandbox_mounts.input_dir`
-  is mounted into the guest as read-only `/input` and
-  `sandbox_mounts.output_dir` as writable `/output`.
+- Filesystem mounts come from `SandboxConfig.input_dir` and
+  `SandboxConfig.output_dir`.
 
 ---
 
@@ -221,18 +219,11 @@ provider.close()
 
 The provider holds one `SandboxGroupClient` per `(resource_group,
 sandbox_group)` pair and caches the per-sandbox `SandboxClient` returned
-by `begin_create_sandbox().result()`. When a `PolicyDocument` is
-supplied, `network_allowlist` is translated into a fail-closed egress
+by `begin_create_sandbox().result()`. When
+`SandboxConfig.network_allowlist` is supplied, it becomes a fail-closed egress
 policy (`defaultAction: Deny` + per-host `Allow` rules) and applied via
-`SandboxClient.set_egress_policy`. Set `defaults.network_default: allow`
-in the policy if you explicitly want the SDK's default-allow behaviour.
-
-A complete worked example (8 verified branches against live Azure —
-allow / policy-deny / egress-block / sanity / tool-allowed /
-tool-denied / remote-execution proof / egress audit) lives at
-[`examples/quickstart/aca_sandbox_test.py`](../../examples/quickstart/aca_sandbox_test.py)
-and reads its policy from
-[`examples/quickstart/policies/aca_research_agent.yaml`](../../examples/quickstart/policies/aca_research_agent.yaml).
+`SandboxClient.set_egress_policy`. Set `network_default="allow"` with
+`network_enabled=True` only when unrestricted egress is intentional.
 
 ---
 
@@ -265,9 +256,9 @@ print(execution.result.stdout)
 
 For repeated executions that share the persistent `output/` directory,
 use the full `create_session` + `execute_code` lifecycle instead.
-Because the MXC schema has no tool or resource-cap concept,
-`tool_allowlist` is enforced host-side before spawn and `max_cpu` /
-`max_memory_mb` are carried but not rendered into the MXC config. See
+Because the MXC schema has no tool or resource-cap concept, a non-empty
+`tool_allowlist` is rejected. CPU and memory settings are not rendered into
+the MXC config. See
 the [MXC quickstart tutorial](tutorials/mxc-quickstart/README.md) and the
 [design doc](../../docs/proposals/MXC-SANDBOX-PROVIDER.md) for details.
 
@@ -281,7 +272,7 @@ on Linux (kernel 5.13+) and Seatbelt on macOS — using the
 [nono](https://github.com/always-further/nono) library's `nono-py`
 bindings. No daemon, hypervisor SDK, or cloud account; install with
 `agt-sandbox[nono]` (prebuilt wheels). Network egress is mediated by a
-built-in filtering proxy restricted to the policy's `network_allowlist`.
+built-in filtering proxy restricted to `SandboxConfig.network_allowlist`.
 **Linux/macOS only** — there are no Windows wheels.
 
 ```python
@@ -319,62 +310,39 @@ to the OS. See the
 
 ---
 
-## Policy-driven configuration
+## Host configuration and native governance
 
-All five providers consume the same `agent_os.policies.PolicyDocument`.
-Sandbox resource caps, network allowlists, tool allowlists, and
-filesystem mounts (`sandbox_mounts`) are native fields on the schema, so
-policies live in YAML and load directly with `PolicyDocument.from_yaml`.
+Resource limits, mounts, network controls, environment variables, and
+provider capabilities use `SandboxConfig`.
 
-**Provider-specific notes:**
-
-| Provider | `tool_allowlist` | Platform |
-|----------|------------------|----------|
-| `DockerSandboxProvider` | host-side enforcement | Linux, macOS, Windows |
-| `HyperLightSandboxProvider` | in-sandbox tool registration | Linux, macOS, Windows |
-| `ACASandboxProvider` | host-side enforcement | cloud (Azure) |
-| `MxcSandboxProvider` | host-side enforcement | Linux, macOS, Windows |
-| `NonoSandboxProvider` | **refused** if non-empty — use a `tool_name` rule instead | Linux, macOS only |
-
-See `examples/quickstart/nono_sandbox_test.py` and
-`examples/quickstart/policies/nono_research_agent.yaml` for a full
-governed nono walkthrough (policy gate → AST scan → kernel isolation).
-
-```yaml
-name: research-agent
-version: "2"
-
-defaults:
-  action: allow
-  max_cpu: 1.0
-  max_memory_mb: 2048
-  timeout_seconds: 90
-  network_default: deny
-
-network_allowlist:
-  - api.openai.com
-  - "*.github.com"
-
-tool_allowlist:
-  - fetch_arxiv
-
-sandbox_mounts:
-  input_dir: /data/agent-input    # mounted read-only
-  output_dir: /data/agent-output  # mounted read-write
-
-rules:
-  - name: deny-shell-out
-    condition: { field: code, operator: contains, value: subprocess }
-    action: deny
-    priority: 100
-    message: "shell-out blocked by research-agent policy"
-```
+| Provider | Filtered network allowlist | Tool allowlist |
+|----------|----------------------------|----------------|
+| `DockerSandboxProvider` | Not supported, rejected | Not supported, rejected |
+| `HyperLightSandboxProvider` | `allow_domain` | In-sandbox registration |
+| `ACASandboxProvider` | Azure egress policy | Not supported, rejected |
+| `MxcSandboxProvider` | MXC `allowedHosts` | Not supported, rejected |
+| `NonoSandboxProvider` | Filtering proxy | Not supported, rejected |
 
 ```python
-from agent_os.policies import PolicyDocument
+from agt.policies.runtime import AgtRuntime
+from agent_sandbox import SandboxConfig
 
-policy = PolicyDocument.from_yaml("policies/aca_research_agent.yaml")
-handle = await provider.create_session_async("agent-1", policy=policy)
+runtime = AgtRuntime.from_manifest("manifest.yaml")
+config = SandboxConfig(
+    timeout_seconds=90,
+    memory_mb=2048,
+    cpu_limit=1.0,
+    input_dir="/data/agent-input",
+    output_dir="/data/agent-output",
+    network_enabled=True,
+    network_allowlist=["api.openai.com", "*.github.com"],
+)
+
+handle = await provider.create_session_async(
+    "agent-1",
+    runtime=runtime,
+    config=config,
+)
 ```
 
 ## Hardened sandbox image (minimal-PATH)

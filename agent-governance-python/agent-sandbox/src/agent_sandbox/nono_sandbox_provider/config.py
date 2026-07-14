@@ -11,16 +11,9 @@ filtering proxy (:func:`nono_py.start_proxy`), and the one-shot
 a command.
 
 This module models the provider-relevant subset of that surface as a
-typed, dependency-free :class:`NonoConfig` and translates an Agent-OS
-``PolicyDocument`` (or duck-typed equivalent) into one.  Building the
-actual ``CapabilitySet`` / ``ProxyConfig`` objects requires ``nono_py``
-and is performed by :class:`NonoSandboxProvider`; this module stays pure
-data so policy translation and the fail-closed egress contract can be
-unit-tested without the native extension installed.
-
-``nono_config_from_policy`` performs the same kind of policy → config
-translation as ``docker_config_from_policy`` and the other provider helpers
-so a single policy can drive any backend.
+typed, dependency-free :class:`NonoConfig`. Building the actual
+``CapabilitySet`` and ``ProxyConfig`` objects requires ``nono_py`` and is
+performed by :class:`NonoSandboxProvider`.
 """
 
 from __future__ import annotations
@@ -178,10 +171,10 @@ class NonoConfig:
     ) -> NonoConfig:
         """Translate the generic ``SandboxConfig`` into a :class:`NonoConfig`.
 
-        ``timeout_seconds`` carries over; ``network_enabled`` becomes
-        ``allow_outbound`` (treated as an explicit unrestricted-egress
-        opt-in, since the generic config carries no host filter);
-        ``input_dir`` is granted read-only and ``output_dir`` read-write.
+        ``timeout_seconds`` carries over. Network settings preserve host
+        allowlists and require an explicit default allow for unrestricted
+        egress. ``input_dir`` is granted read-only and ``output_dir``
+        read-write.
         ``memory_mb`` / ``cpu_limit`` are not expressible in nono and are
         dropped (the OS governs resources).
 
@@ -216,6 +209,16 @@ class NonoConfig:
             readwrite.append(str(output_dir))
 
         network_enabled = bool(getattr(cfg, "network_enabled", False))
+        allowed_hosts = (
+            list(getattr(cfg, "network_allowlist", []) or [])
+            if network_enabled
+            else []
+        )
+        allow_unrestricted = bool(
+            network_enabled
+            and not allowed_hosts
+            and getattr(cfg, "network_default", "deny") == "allow"
+        )
         timeout_seconds = float(
             getattr(cfg, "timeout_seconds", _DEFAULT_TIMEOUT_SECONDS)
         )
@@ -224,265 +227,10 @@ class NonoConfig:
         return cls(
             readonly_paths=readonly,
             readwrite_paths=readwrite,
-            allow_outbound=network_enabled,
-            allow_unrestricted_egress=network_enabled,
+            allow_outbound=bool(allowed_hosts or allow_unrestricted),
+            allowed_hosts=allowed_hosts,
+            allow_unrestricted_egress=allow_unrestricted,
             timeout_seconds=max(0.001, timeout_seconds),
             env_vars=env_vars,
             include_system_paths=include_system_paths,
         )
-
-
-def _validate_policy_sandbox_fields(policy: Any) -> None:
-    """Validate duck-typed sandbox fields before merging into :class:`NonoConfig`.
-
-    ``nono_config_from_policy`` accepts plain dicts (via :class:`_AttrDict`)
-    as well as :class:`~agent_os.policies.schema.PolicyDocument` instances.
-    Pydantic validates the latter at construction time; this helper
-    rejects malformed attribute types on duck-typed inputs so a hostile or
-    mistyped policy cannot slip non-string hosts or mount paths through.
-    """
-    net_allow = getattr(policy, "network_allowlist", None)
-    if net_allow is not None:
-        if not isinstance(net_allow, list):
-            raise TypeError(
-                "policy.network_allowlist must be a list of host patterns, "
-                f"got {type(net_allow).__name__}"
-            )
-        for idx, host in enumerate(net_allow):
-            if not isinstance(host, str) or not host.strip():
-                raise ValueError(
-                    "policy.network_allowlist entries must be non-empty "
-                    f"strings; entry {idx} is {host!r}"
-                )
-
-    defaults = getattr(policy, "defaults", None)
-    if defaults is not None:
-        timeout_s = getattr(defaults, "timeout_seconds", None)
-        if timeout_s is not None and not isinstance(timeout_s, (int, float)):
-            raise TypeError(
-                "policy.defaults.timeout_seconds must be a number, "
-                f"got {type(timeout_s).__name__}"
-            )
-        if isinstance(timeout_s, (int, float)) and timeout_s <= 0:
-            raise ValueError(
-                "policy.defaults.timeout_seconds must be positive, "
-                f"got {timeout_s}"
-            )
-        network_default = getattr(defaults, "network_default", None)
-        if network_default is not None and not isinstance(network_default, str):
-            raise TypeError(
-                "policy.defaults.network_default must be a string, "
-                f"got {type(network_default).__name__}"
-            )
-        max_mem = getattr(defaults, "max_memory_mb", None)
-        if max_mem is not None and not isinstance(max_mem, int):
-            raise TypeError(
-                "policy.defaults.max_memory_mb must be an int, "
-                f"got {type(max_mem).__name__}"
-            )
-        max_cpu = getattr(defaults, "max_cpu", None)
-        if max_cpu is not None and not isinstance(max_cpu, (int, float)):
-            raise TypeError(
-                "policy.defaults.max_cpu must be a number, "
-                f"got {type(max_cpu).__name__}"
-            )
-
-    mounts = getattr(policy, "sandbox_mounts", None)
-    if mounts is not None:
-        for label in ("input_dir", "output_dir"):
-            path = getattr(mounts, label, None)
-            if path is not None and not isinstance(path, str):
-                raise TypeError(
-                    f"policy.sandbox_mounts.{label} must be a string, "
-                    f"got {type(path).__name__}"
-                )
-
-
-def _network_default(policy: Any) -> str:
-    """Return the policy's sandbox egress default ('allow' or 'deny').
-
-    Reads ``policy.defaults.network_default`` and **falls back to
-    'deny'** (fail-closed) whenever the field is missing or
-    unrecognised. Mirrors the other sandbox providers so the only way to get
-    default-allow egress is to set ``defaults.network_default: allow``
-    explicitly.
-    """
-    defaults = getattr(policy, "defaults", None)
-    value = getattr(defaults, "network_default", None) if defaults else None
-    if isinstance(value, str) and value.lower() in ("allow", "deny"):
-        return value.lower()
-    return "deny"
-
-
-def nono_config_from_policy(
-    policy: Any,
-    base: NonoConfig | None = None,
-) -> NonoConfig:
-    """Extract nono-relevant fields from a policy.
-
-    Reads well-known attributes when present and merges them over
-    *base*; missing attributes leave *base* unchanged. Recognised:
-
-    * ``defaults.timeout_seconds`` → ``timeout_seconds``
-    * ``sandbox_mounts.input_dir`` → ``readonly_paths`` (appended)
-    * ``sandbox_mounts.output_dir`` → ``readwrite_paths`` (appended)
-    * ``network_allowlist`` → ``allow_outbound = True`` and
-      ``allowed_hosts`` (egress restricted to those hosts)
-    * ``defaults.network_default`` → ``allow`` opts into unrestricted
-      egress; ``deny`` (the fail-closed default) keeps egress off
-
-    Mount paths that target a protected system directory are rejected,
-    and egress stays fail-closed: outbound is only enabled by a
-    non-empty ``network_allowlist`` (restricted) or an explicit
-    ``network_default: allow`` (unrestricted).
-
-    Parameters
-    ----------
-    policy:
-        A :class:`~agent_os.policies.schema.PolicyDocument` or any
-        duck-typed object exposing ``defaults``, ``sandbox_mounts``, and
-        ``network_allowlist`` attributes.
-    base:
-        Optional starting :class:`NonoConfig`. Policy fields are merged
-        over this base rather than replacing it.
-
-    Returns
-    -------
-    NonoConfig
-        Assembled nono configuration derived from *policy* and *base*.
-
-    Raises
-    ------
-    TypeError
-        If a recognised policy field has the wrong type.
-    ValueError
-        If a recognised policy field has an invalid value (for example an
-        empty ``network_allowlist`` entry or a non-positive timeout).
-    """
-    _validate_policy_sandbox_fields(policy)
-    src = base or NonoConfig()
-    cfg = NonoConfig(
-        readonly_paths=list(src.readonly_paths),
-        readwrite_paths=list(src.readwrite_paths),
-        allow_outbound=src.allow_outbound,
-        allowed_hosts=list(src.allowed_hosts),
-        allow_unrestricted_egress=src.allow_unrestricted_egress,
-        timeout_seconds=src.timeout_seconds,
-        env_vars=dict(src.env_vars),
-        include_system_paths=src.include_system_paths,
-    )
-
-    defaults = getattr(policy, "defaults", None)
-    if defaults is not None:
-        timeout_s = getattr(defaults, "timeout_seconds", None)
-        if isinstance(timeout_s, (int, float)) and timeout_s > 0:
-            cfg.timeout_seconds = float(timeout_s)
-        # nono has no resource-cap surface; the OS governs CPU / memory.
-        # Warn rather than silently drop a cap the operator expressed.
-        max_mem = getattr(defaults, "max_memory_mb", None)
-        max_cpu = getattr(defaults, "max_cpu", None)
-        if max_mem or max_cpu:
-            logger.warning(
-                "Policy sets resource caps (max_memory_mb=%s, max_cpu=%s) "
-                "that nono cannot express; CPU / memory limits are delegated "
-                "to the operating system and not enforced by nono itself.",
-                max_mem,
-                max_cpu,
-            )
-
-    mounts = getattr(policy, "sandbox_mounts", None)
-    if mounts is not None:
-        in_dir = getattr(mounts, "input_dir", None)
-        if in_dir and str(in_dir) not in cfg.readonly_paths:
-            validate_mount_path(str(in_dir), "input_dir")
-            cfg.readonly_paths.append(str(in_dir))
-        out_dir = getattr(mounts, "output_dir", None)
-        if out_dir and str(out_dir) not in cfg.readwrite_paths:
-            validate_mount_path(str(out_dir), "output_dir")
-            cfg.readwrite_paths.append(str(out_dir))
-
-    net_allow = getattr(policy, "network_allowlist", None)
-    if net_allow:
-        cfg.allow_outbound = True
-        for host in net_allow:
-            if str(host) not in cfg.allowed_hosts:
-                cfg.allowed_hosts.append(str(host))
-    elif _network_default(policy) == "allow":
-        # Explicit opt-in: unrestricted egress with no host filter.
-        cfg.allow_outbound = True
-        cfg.allow_unrestricted_egress = True
-
-    # Re-validate the assembled config so the egress contract is enforced
-    # even though the fields above were mutated after construction.
-    cfg._check_egress()
-    return cfg
-
-
-class _AttrDict:
-    """Recursive attribute view over a nested mapping.
-
-    ``nono_config_from_policy`` reads a policy via duck-typed attribute
-    access (``policy.defaults.timeout_seconds``,
-    ``policy.sandbox_mounts.input_dir``, ``policy.network_allowlist``).
-    A plain ``dict`` loaded from YAML exposes those as keys, not
-    attributes, so this thin wrapper bridges the two without pulling in
-    the Agent-OS ``PolicyDocument`` model. Lists and scalars pass
-    through unchanged; nested mappings are wrapped lazily.
-    """
-
-    __slots__ = ("_data",)
-
-    def __init__(self, data: dict[str, Any]) -> None:
-        self._data = data
-
-    def __getattr__(self, name: str) -> Any:
-        try:
-            value = self._data[name]
-        except KeyError:
-            raise AttributeError(name) from None
-        if isinstance(value, dict):
-            return _AttrDict(value)
-        return value
-
-
-def policy_yaml_to_nono_config(
-    yaml_path: str,
-    *,
-    base: NonoConfig | None = None,
-) -> NonoConfig:
-    """Load a sandbox policy YAML file and convert it to a :class:`NonoConfig`.
-
-    The YAML is parsed with ``yaml.safe_load`` and exposed to
-    :func:`nono_config_from_policy` via an attribute view. This keeps the
-    converter dependency-free (it does not import the Agent-OS
-    ``PolicyDocument`` model) while still honoring the ``sandbox_mounts``
-    block, which is a native ``PolicyDocument`` field.
-
-    Parameters
-    ----------
-    yaml_path:
-        Path to the policy YAML file.
-    base:
-        Optional starting :class:`NonoConfig` (e.g. to pin timeout or
-        mount defaults before policy fields are merged).
-
-    Returns
-    -------
-    NonoConfig
-        Provider-specific configuration derived from the YAML policy.
-    """
-    try:
-        import yaml
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError(
-            "PyYAML is required to load policy YAML: pip install pyyaml"
-        ) from exc
-
-    with open(yaml_path, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"policy YAML at '{yaml_path}' must be a mapping, "
-            f"got {type(data).__name__}"
-        )
-    return nono_config_from_policy(_AttrDict(data), base=base)

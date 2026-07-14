@@ -13,10 +13,7 @@ the sandboxed process's stdio to the caller.
 
 This module models the documented schema-``0.6.0-alpha`` surface as a
 typed :class:`MxcConfig` and renders it to the JSON document the binary
-consumes.  ``mxc_config_from_policy`` performs the same kind of policy →
-config translation as ``docker_config_from_policy`` /
-``hyperlight_config_from_policy`` so a single ``PolicyDocument`` (or
-duck-typed equivalent) can drive any backend.
+consumes.
 
 Only the well-known schema fields are modelled directly
 (``version``, ``process.commandLine``, ``filesystem.readonlyPaths`` /
@@ -196,16 +193,15 @@ class MxcConfig:
         """Translate the generic :class:`SandboxConfig` into an
         :class:`MxcConfig`.
 
-        ``timeout_seconds`` becomes ``timeoutMs``; ``network_enabled``
-        becomes ``allow_outbound``; ``input_dir`` is exposed read-only
-        and ``output_dir`` read-write. ``memory_mb`` / ``cpu_limit`` are
+        ``timeout_seconds`` becomes ``timeoutMs``. Network configuration
+        remains fail-closed unless an allowlist or explicit default allow
+        is supplied. ``input_dir`` is exposed read-only and ``output_dir``
+        read-write. ``memory_mb`` / ``cpu_limit`` are
         not expressed in the ``0.6.0-alpha`` schema and are dropped (MXC
         relies on the backend's own resource model).
 
         ``input_dir`` / ``output_dir`` are rejected if they target a
-        protected system directory. ``network_enabled=True`` carries no
-        host filter, so it is treated as an explicit unrestricted-egress
-        opt-in.
+        protected system directory.
         """
         readonly: list[str] = []
         readwrite: list[str] = []
@@ -215,12 +211,21 @@ class MxcConfig:
         if cfg.output_dir:
             validate_mount_path(str(cfg.output_dir), "output_dir")
             readwrite.append(cfg.output_dir)
+        allowed_hosts = (
+            list(cfg.network_allowlist) if cfg.network_enabled else []
+        )
+        allow_unrestricted = bool(
+            cfg.network_enabled
+            and not allowed_hosts
+            and cfg.network_default == "allow"
+        )
         return cls(
             backend=backend,
             readonly_paths=readonly,
             readwrite_paths=readwrite,
-            allow_outbound=bool(cfg.network_enabled),
-            allow_unrestricted_egress=bool(cfg.network_enabled),
+            allow_outbound=bool(allowed_hosts or allow_unrestricted),
+            allowed_hosts=allowed_hosts,
+            allow_unrestricted_egress=allow_unrestricted,
             timeout_ms=max(1, int(cfg.timeout_seconds * 1000)),
             experimental=experimental,
             env_vars=dict(cfg.env_vars),
@@ -308,196 +313,3 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> None:
             _deep_merge(base[key], value)
         else:
             base[key] = copy.deepcopy(value)
-
-
-def _network_default(policy: Any) -> str:
-    """Return the policy's sandbox egress default ('allow' or 'deny').
-
-    Reads ``policy.defaults.network_default`` and **falls back to
-    'deny'** (fail-closed) whenever the field is missing or
-    unrecognised. Mirrors the ACA provider's contract so the only way to
-    get default-allow egress is to set ``defaults.network_default:
-    allow`` explicitly.
-    """
-    defaults = getattr(policy, "defaults", None)
-    value = getattr(defaults, "network_default", None) if defaults else None
-    if isinstance(value, str) and value.lower() in ("allow", "deny"):
-        return value.lower()
-    return "deny"
-
-
-def mxc_config_from_policy(
-    policy: Any,
-    base: MxcConfig | None = None,
-) -> MxcConfig:
-    """Extract MXC-relevant fields from a policy.
-
-    Reads well-known attributes when present and merges them over
-    *base*; missing attributes leave *base* unchanged. Recognised:
-
-    * ``defaults.timeout_seconds`` → ``timeout_ms``
-    * ``sandbox_mounts.input_dir`` → ``readonly_paths`` (appended)
-    * ``sandbox_mounts.output_dir`` → ``readwrite_paths`` (appended)
-    * ``network_allowlist`` → ``allow_outbound = True`` and
-      ``allowed_hosts`` (egress restricted to those hosts)
-    * ``defaults.network_default`` → ``allow`` opts into unrestricted
-      egress; ``deny`` (the fail-closed default) keeps egress off
-
-    Mount paths that target a protected system directory are rejected,
-    and egress stays fail-closed: outbound is only enabled by a
-    non-empty ``network_allowlist`` (restricted) or an explicit
-    ``network_default: allow`` (unrestricted).
-    """
-    src = base or MxcConfig()
-    cfg = MxcConfig(
-        version=src.version,
-        backend=src.backend,
-        readonly_paths=list(src.readonly_paths),
-        readwrite_paths=list(src.readwrite_paths),
-        allow_outbound=src.allow_outbound,
-        allowed_hosts=list(src.allowed_hosts),
-        allow_unrestricted_egress=src.allow_unrestricted_egress,
-        timeout_ms=src.timeout_ms,
-        experimental=src.experimental,
-        env_vars=dict(src.env_vars),
-        extra_config=copy.deepcopy(src.extra_config),
-    )
-
-    defaults = getattr(policy, "defaults", None)
-    if defaults is not None:
-        timeout_s = getattr(defaults, "timeout_seconds", None)
-        if isinstance(timeout_s, (int, float)) and timeout_s > 0:
-            cfg.timeout_ms = int(timeout_s * 1000)
-        # ``0.6.0-alpha`` has no resource-cap fields; MXC delegates CPU /
-        # memory limits to the backend. Warn rather than silently drop a
-        # cap the operator expressed in policy.
-        max_mem = getattr(defaults, "max_memory_mb", None)
-        max_cpu = getattr(defaults, "max_cpu", None)
-        if max_mem or max_cpu:
-            logger.warning(
-                "Policy sets resource caps (max_memory_mb=%s, max_cpu=%s) "
-                "that the MXC %s schema cannot express; they are delegated "
-                "to the containment backend and not enforced by MXC itself.",
-                max_mem,
-                max_cpu,
-                cfg.version,
-            )
-
-    mounts = getattr(policy, "sandbox_mounts", None)
-    if mounts is not None:
-        in_dir = getattr(mounts, "input_dir", None)
-        if in_dir and str(in_dir) not in cfg.readonly_paths:
-            validate_mount_path(str(in_dir), "input_dir")
-            cfg.readonly_paths.append(str(in_dir))
-        out_dir = getattr(mounts, "output_dir", None)
-        if out_dir and str(out_dir) not in cfg.readwrite_paths:
-            validate_mount_path(str(out_dir), "output_dir")
-            cfg.readwrite_paths.append(str(out_dir))
-
-    net_allow = getattr(policy, "network_allowlist", None)
-    if net_allow:
-        cfg.allow_outbound = True
-        for host in net_allow:
-            if str(host) not in cfg.allowed_hosts:
-                cfg.allowed_hosts.append(str(host))
-    elif _network_default(policy) == "allow":
-        # Explicit opt-in: unrestricted egress with no host filter.
-        cfg.allow_outbound = True
-        cfg.allow_unrestricted_egress = True
-
-    # Re-validate the assembled config so the egress contract is enforced
-    # even though the fields above were mutated after construction.
-    cfg._check_egress()
-    return cfg
-
-
-class _AttrDict:
-    """Recursive attribute view over a nested mapping.
-
-    ``mxc_config_from_policy`` reads a policy via duck-typed attribute
-    access (``policy.defaults.timeout_seconds``,
-    ``policy.sandbox_mounts.input_dir``, ``policy.network_allowlist``).
-    A plain ``dict`` loaded from YAML exposes those as keys, not
-    attributes, so this thin wrapper bridges the two without pulling in
-    the Agent-OS ``PolicyDocument`` model. Lists and scalars pass
-    through unchanged; nested mappings are wrapped lazily.
-    """
-
-    __slots__ = ("_data",)
-
-    def __init__(self, data: dict[str, Any]) -> None:
-        self._data = data
-
-    def __getattr__(self, name: str) -> Any:
-        try:
-            value = self._data[name]
-        except KeyError:
-            # Mirror "attribute absent" so getattr(..., default) works.
-            raise AttributeError(name) from None
-        if isinstance(value, dict):
-            return _AttrDict(value)
-        return value
-
-
-def policy_to_mxc_json(
-    policy: Any,
-    command_line: str,
-    *,
-    base: MxcConfig | None = None,
-) -> dict[str, Any]:
-    """Convert a policy object into the MXC JSON config document.
-
-    Ties the two existing steps together: translate the policy into an
-    :class:`MxcConfig` (resource caps, mounts, egress) and render the
-    JSON document MXC consumes for *command_line*.
-
-    *policy* may be an Agent-OS ``PolicyDocument`` (or subclass) or any
-    object exposing the same duck-typed attributes.
-    """
-    cfg = mxc_config_from_policy(policy, base=base)
-    return cfg.to_mxc_json(command_line)
-
-
-def policy_yaml_to_mxc_json(
-    yaml_path: str,
-    command_line: str,
-    *,
-    base: MxcConfig | None = None,
-) -> dict[str, Any]:
-    """Load a sandbox policy YAML file and convert it to MXC JSON config.
-
-    The YAML is parsed with ``yaml.safe_load`` and exposed to
-    :func:`mxc_config_from_policy` via an attribute view. This keeps the
-    converter dependency-free (it does not import the Agent-OS
-    ``PolicyDocument`` model) while still honoring the ``sandbox_mounts``
-    block, which is a native ``PolicyDocument`` field.
-
-    Parameters
-    ----------
-    yaml_path:
-        Path to the policy YAML file.
-    command_line:
-        The command the sandbox will run (``process.commandLine``).
-    base:
-        Optional starting :class:`MxcConfig` (e.g. to pin a backend).
-
-    Returns
-    -------
-    dict
-        A JSON-serialisable MXC config document.
-    """
-    try:
-        import yaml
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError(
-            "PyYAML is required to load policy YAML: pip install pyyaml"
-        ) from exc
-
-    with open(yaml_path, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"policy YAML at '{yaml_path}' must be a mapping, "
-            f"got {type(data).__name__}"
-        )
-    return policy_to_mxc_json(_AttrDict(data), command_line, base=base)

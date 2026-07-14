@@ -42,7 +42,6 @@ from typing import Any, Callable
 from agent_sandbox.code_scanner import enforce_no_subprocess_execution
 from agent_sandbox.hyperlight_provider.config import (
     HyperlightConfig,
-    hyperlight_config_from_policy,
 )
 from agent_sandbox.sandbox_provider import (
     ExecutionHandle,
@@ -357,7 +356,8 @@ class HyperLightSandboxProvider(SandboxProvider):
     def create_session(
         self,
         agent_id: str,
-        policy: Any | None = None,
+        *,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         if not self._available:
@@ -376,15 +376,17 @@ class HyperLightSandboxProvider(SandboxProvider):
             base_cfg, backend=self._backend, module=self._module
         )
 
-        # Translate policy → config (resource caps, mount dirs).
-        evaluator = None
-        tool_allow: list[str] = []
-        net_allow: list[str] = []
-        if policy is not None:
-            hl_cfg = hyperlight_config_from_policy(policy, base=hl_cfg)
-            tool_allow = list(getattr(policy, "tool_allowlist", []) or [])
-            net_allow = list(getattr(policy, "network_allowlist", []) or [])
-            evaluator = self._build_evaluator(policy)
+        tool_allow = list(base_cfg.tool_allowlist)
+        net_allow = (
+            list(base_cfg.network_allowlist)
+            if base_cfg.network_enabled
+            else []
+        )
+        evaluator = (
+            self._build_runtime_session(runtime, agent_id, session_id)
+            if runtime is not None
+            else None
+        )
 
         # Resolve tool callables. Names listed in the allowlist that the
         # provider does not know about fail closed at session creation
@@ -392,10 +394,9 @@ class HyperLightSandboxProvider(SandboxProvider):
         unknown_tools = [n for n in tool_allow if n not in self._tools]
         if unknown_tools:
             raise ValueError(
-                "tool_allowlist references tools not registered with the "
+                "SandboxConfig.tool_allowlist references tools not registered with the "
                 f"provider: {sorted(unknown_tools)}. Register them via "
-                "the ``tools=`` constructor argument or remove them "
-                "from the policy."
+                "the ``tools=`` constructor argument."
             )
         tools_to_register = {
             name: self._tools[name] for name in tool_allow
@@ -526,10 +527,12 @@ class HyperLightSandboxProvider(SandboxProvider):
             }
             if context:
                 eval_ctx.update(context)
-            decision = evaluator.evaluate(eval_ctx)
-            if not getattr(decision, "allowed", False):
-                reason = getattr(decision, "reason", "policy denied")
-                raise PermissionError(f"Policy denied: {reason}")
+            decision = evaluator.evaluate_pre_tool_call(
+                tool_name="sandbox_execute", args=eval_ctx, call_id=uuid.uuid4().hex[:8]
+            )
+            if not decision.is_allowed():
+                reason = decision.message or decision.reason_code
+                raise PermissionError(f"Governance denied: {reason}")
 
         enforce_no_subprocess_execution(code)
         # Ring subprocess gate (#2666)
@@ -838,24 +841,15 @@ class HyperLightSandboxProvider(SandboxProvider):
                 minimal["module"] = cfg.module
             return Sandbox(**minimal)
 
-    def _build_evaluator(self, policy: Any) -> Any | None:
-        """Best-effort PolicyEvaluator construction — returns ``None``
-        when ``agent-os-kernel`` isn't installed (the docker provider
-        does the same)."""
-        try:
-            from agent_os.policies.evaluator import PolicyEvaluator
-        except ImportError:
-            logger.warning(
-                "agent-os-kernel not installed — policy evaluation "
-                "unavailable, session runs ungated"
-            )
-            return None
-        try:
-            return PolicyEvaluator(policies=[policy])
-        except Exception as exc:
-            raise RuntimeError(
-                f"Failed to initialize PolicyEvaluator: {exc}"
-            ) from exc
+    def _build_runtime_session(
+        self, runtime: Any, agent_id: str, session_id: str
+    ) -> Any:
+        """Create the native ACS session used for host-side execution gates."""
+        from agt.policies.session import AdapterRuntimeSession
+
+        return AdapterRuntimeSession(
+            runtime, agent_id=agent_id, session_id=session_id
+        )
 
     @staticmethod
     def _normalise_run_result(

@@ -56,7 +56,6 @@ from typing import Any
 from agent_sandbox.code_scanner import enforce_no_subprocess_execution
 from agent_sandbox.mxc_sandbox_provider.config import (
     MxcConfig,
-    mxc_config_from_policy,
 )
 from agent_sandbox.sandbox_provider import (
     ExecutionHandle,
@@ -328,7 +327,8 @@ class MxcSandboxProvider(SandboxProvider):
     def create_session(
         self,
         agent_id: str,
-        policy: Any | None = None,
+        *,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         if not self._available:
@@ -344,26 +344,16 @@ class MxcSandboxProvider(SandboxProvider):
             base_cfg, backend=self._backend, experimental=self._experimental
         )
 
-        evaluator = None
-        if policy is not None:
-            # MXC's native binary has no tool-registration channel, so a
-            # tool_allowlist cannot be enforced inside the sandbox.
-            # Silently dropping a security control is the wrong default
-            # (Hyperlight fails closed here), so refuse rather than run a
-            # session that ignores the policy's allowlist.
-            tool_allow = list(getattr(policy, "tool_allowlist", []) or [])
-            if tool_allow:
-                raise ValueError(
-                    "MXC does not support tool allowlisting — the native "
-                    "binary exposes no tool-registration channel, so a "
-                    "non-empty policy.tool_allowlist "
-                    f"({sorted(tool_allow)}) cannot be enforced. Refusing "
-                    "to create a session that would silently ignore it. "
-                    "Remove tool_allowlist from the policy or use a "
-                    "provider that supports tools (e.g. Hyperlight)."
-                )
-            mxc_cfg = mxc_config_from_policy(policy, base=mxc_cfg)
-            evaluator = self._build_evaluator(policy)
+        if base_cfg.tool_allowlist:
+            raise ValueError(
+                "MXC does not support tool allowlisting because the "
+                "native binary has no tool-registration channel"
+            )
+        evaluator = (
+            self._build_runtime_session(runtime, agent_id, session_id)
+            if runtime is not None
+            else None
+        )
 
         # Per-session workspace: scripts go in ``scripts/`` (exposed
         # read-only to the sandbox) and persistent output in ``output/``
@@ -446,10 +436,12 @@ class MxcSandboxProvider(SandboxProvider):
             }
             if context:
                 eval_ctx.update(context)
-            decision = session.evaluator.evaluate(eval_ctx)
-            if not getattr(decision, "allowed", False):
-                reason = getattr(decision, "reason", "policy denied")
-                raise PermissionError(f"Policy denied: {reason}")
+            decision = session.evaluator.evaluate_pre_tool_call(
+                tool_name="sandbox_execute", args=eval_ctx, call_id=uuid.uuid4().hex[:8]
+            )
+            if not decision.is_allowed():
+                reason = decision.message or decision.reason_code
+                raise PermissionError(f"Governance denied: {reason}")
 
         enforce_no_subprocess_execution(code)
 
@@ -487,7 +479,7 @@ class MxcSandboxProvider(SandboxProvider):
         agent_id: str,
         code: str,
         *,
-        policy: Any | None = None,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
         context: dict[str, Any] | None = None,
     ) -> ExecutionHandle:
@@ -499,13 +491,13 @@ class MxcSandboxProvider(SandboxProvider):
         workspace (including ``output/``) is removed afterwards.
 
         The same governance applies as :meth:`execute_code`: the host-side
-        policy gate and the static code scan run before MXC is spawned.
+        native runtime gate and static code scan run before MXC is spawned.
 
         For repeated executions that must share the persistent ``output/``
         directory, use :meth:`create_session` + :meth:`execute_code` and
         keep the ``session_id``.
         """
-        handle = self.create_session(agent_id, policy=policy, config=config)
+        handle = self.create_session(agent_id, runtime=runtime, config=config)
         try:
             return self.execute_code(
                 handle.agent_id,
@@ -521,7 +513,7 @@ class MxcSandboxProvider(SandboxProvider):
         agent_id: str,
         code: str,
         *,
-        policy: Any | None = None,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
         context: dict[str, Any] | None = None,
     ) -> ExecutionHandle:
@@ -530,7 +522,7 @@ class MxcSandboxProvider(SandboxProvider):
             self.run_once,
             agent_id,
             code,
-            policy=policy,
+            runtime=runtime,
             config=config,
             context=context,
         )
@@ -668,26 +660,15 @@ class MxcSandboxProvider(SandboxProvider):
             interpreter=session.interpreter,
         )
 
-    def _build_evaluator(self, policy: Any) -> Any | None:
-        """Construct a policy evaluator, or ``None`` if unavailable."""
-        try:
-            from agent_os.policies.evaluator import PolicyEvaluator
-        except ImportError:
-            logger.warning(
-                "agent-os-kernel not installed — policy evaluation "
-                "unavailable, session runs ungated"
-            )
-            return None
-        except Exception as exc:  # pragma: no cover - defensive
-            raise RuntimeError(
-                f"Failed to import PolicyEvaluator: {exc}"
-            ) from exc
-        try:
-            return PolicyEvaluator(policies=[policy])
-        except Exception as exc:
-            raise RuntimeError(
-                f"Failed to initialize PolicyEvaluator: {exc}"
-            ) from exc
+    def _build_runtime_session(
+        self, runtime: Any, agent_id: str, session_id: str
+    ) -> Any:
+        """Create the native ACS session used for host-side execution gates."""
+        from agt.policies.session import AdapterRuntimeSession
+
+        return AdapterRuntimeSession(
+            runtime, agent_id=agent_id, session_id=session_id
+        )
 
     def _build_argv(self, config_path: Path, cfg: MxcConfig) -> list[str]:
         """Assemble the native-binary argv for a one-shot invocation."""

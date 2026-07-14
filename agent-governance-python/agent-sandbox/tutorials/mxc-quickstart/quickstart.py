@@ -5,7 +5,7 @@
 Demonstrates the ``MxcSandboxProvider`` end to end:
 
 1. Probe MXC availability.
-2. Render an MXC JSON config from a sandbox policy (works without a binary).
+2. Render MXC JSON from explicit host configuration.
 3. If a binary is present, create a session, run code, and tear it down.
 
 Run::
@@ -20,38 +20,25 @@ see exactly what the provider would hand the native binary.
 from __future__ import annotations
 
 import json
-import tempfile
-from pathlib import Path
-
 from agent_sandbox import MxcSandboxProvider, SandboxConfig
-from agent_sandbox.mxc_sandbox_provider import policy_yaml_to_mxc_json
+from agent_sandbox.mxc_sandbox_provider import MxcConfig
 
-# A sandbox policy: read-only input mount, read-write output mount, a
-# fail-closed egress allowlist, and a timeout. MXC has no tool concept, so a
-# ``tool_allowlist`` is intentionally omitted — a policy carrying one is
-# rejected at session creation (use Docker/Hyperlight for tool gating).
-POLICY_YAML = """
-version: "1.0"
-name: mxc-quickstart
-defaults:
-  timeout_seconds: 20
-  network_default: deny
-network_allowlist:
-  - pypi.org
-  - "*.github.com"
-sandbox_mounts:
-  input_dir: /data/user-input
-  output_dir: /data/agent-output
-"""
+
+HOST_CONFIG = SandboxConfig(
+    timeout_seconds=20,
+    input_dir="/data/user-input",
+    output_dir="/data/agent-output",
+    network_enabled=True,
+    network_allowlist=["pypi.org", "*.github.com"],
+)
 
 
 def show_rendered_config() -> None:
-    """Render the policy to MXC JSON — no binary or sandbox required."""
-    with tempfile.TemporaryDirectory() as tmp:
-        policy_path = Path(tmp) / "sandbox_policy.yaml"
-        policy_path.write_text(POLICY_YAML, encoding="utf-8")
-        doc = policy_yaml_to_mxc_json(str(policy_path), "python /scripts/run.py")
-    print("=== Rendered MXC config (policy -> JSON) ===")
+    """Render host configuration to MXC JSON without starting a sandbox."""
+    doc = MxcConfig.from_sandbox_config(HOST_CONFIG).to_mxc_json(
+        "python /scripts/run.py"
+    )
+    print("=== Rendered MXC config ===")
     print(json.dumps(doc, indent=2))
     print()
 
@@ -73,7 +60,7 @@ def run_in_sandbox() -> None:
     execution = provider.run_once(
         "mxc-quickstart",
         "print('hello from the MXC sandbox')",
-        config=SandboxConfig(timeout_seconds=20, network_enabled=False),
+        config=HOST_CONFIG,
     )
     result = execution.result
     print(f"exit={result.exit_code} success={result.success}")

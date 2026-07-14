@@ -22,17 +22,8 @@ Region selection follows the SDK's ``endpoint_for_region(region)``
 helper — supply ``region=`` (or set the ``AZURE_SANDBOX_REGION`` env
 var) so the data-plane client knows which regional endpoint to hit.
 
-Policy is loaded at session creation time:
-
-* ``defaults.max_memory_mb`` / ``defaults.max_cpu`` →
-  :class:`SandboxConfig` caps used for host-side timeout enforcement and
-  forwarded to ``begin_create_sandbox`` as ``cpu`` / ``memory`` kwargs
-  when the SDK accepts them.
-* ``network_allowlist`` → sandbox egress policy
-  (``defaultAction=Deny`` + per-host ``Allow`` rules) applied via
-  :meth:`SandboxClient.set_egress_policy`.
-* ``tool_allowlist`` is host-side only and is enforced through the
-  ``PolicyEvaluator`` gate on every :meth:`execute_code` call.
+Host resource and egress settings come from :class:`SandboxConfig`.
+Optional execution decisions come from a native ACS runtime.
 
 Example::
 
@@ -97,72 +88,6 @@ def _validate_resource_name(value: str, label: str) -> None:
             f"Invalid {label} '{value}': must match "
             r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}"
         )
-
-
-def aca_config_from_policy(
-    policy: Any, base: SandboxConfig
-) -> SandboxConfig:
-    """Project policy fields onto a :class:`SandboxConfig`.
-
-    Mirrors :func:`agent_sandbox.docker_sandbox_provider.docker_config_from_policy`
-    but only consumes the fields that map onto Azure sandbox primitives:
-    CPU/memory defaults, the network allowlist, and ``env_vars``.
-    """
-    cfg = SandboxConfig(
-        timeout_seconds=base.timeout_seconds,
-        memory_mb=base.memory_mb,
-        cpu_limit=base.cpu_limit,
-        network_enabled=base.network_enabled,
-        read_only_fs=base.read_only_fs,
-        env_vars=dict(base.env_vars),
-        input_dir=base.input_dir,
-        output_dir=base.output_dir,
-        runtime=base.runtime,
-    )
-
-    defaults = getattr(policy, "defaults", None)
-    if defaults is not None:
-        if hasattr(defaults, "max_memory_mb") and defaults.max_memory_mb:
-            cfg.memory_mb = defaults.max_memory_mb
-        if hasattr(defaults, "max_cpu") and defaults.max_cpu:
-            cfg.cpu_limit = defaults.max_cpu
-        if hasattr(defaults, "timeout_seconds") and defaults.timeout_seconds:
-            cfg.timeout_seconds = defaults.timeout_seconds
-
-    if getattr(policy, "network_allowlist", None):
-        cfg.network_enabled = True
-
-    return cfg
-
-
-def _network_allowlist(policy: Any) -> list[str]:
-    """Return the policy's network allowlist as a list of host patterns."""
-    allow = getattr(policy, "network_allowlist", None) or []
-    # Accept list[str] or list[obj-with-host]
-    out: list[str] = []
-    for entry in allow:
-        if isinstance(entry, str):
-            out.append(entry)
-        else:
-            host = getattr(entry, "host", None) or getattr(entry, "pattern", None)
-            if host:
-                out.append(host)
-    return out
-
-
-def _network_default(policy: Any) -> str:
-    """Return the policy's sandbox egress default ('allow' or 'deny').
-
-    Reads ``policy.defaults.network_default``. **Falls back to 'deny'**
-    (fail-closed) whenever a policy is supplied but the field is missing
-    or unrecognized. The only way to get a default-allow sandbox is to
-    explicitly set ``defaults.network_default: allow`` in the policy.
-    """
-    defaults = getattr(policy, "defaults", None)
-    value = getattr(defaults, "network_default", None) if defaults else None
-    if isinstance(value, str) and value.lower() in ("allow", "deny"):
-        return value.lower()
-    return "deny"
 
 
 def _unpack_exec_result(resp: Any) -> tuple[int, str, str]:
@@ -524,7 +449,8 @@ class ACASandboxProvider(SandboxProvider):
     def create_session(
         self,
         agent_id: str,
-        policy: Any | None = None,
+        *,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         if not self._available:
@@ -540,27 +466,24 @@ class ACASandboxProvider(SandboxProvider):
 
         cfg = config or SandboxConfig()
         evaluator = None
-        allow_hosts: list[str] = []
-        net_default = "deny"  # fail-closed when no policy is supplied
-        policy_provided = policy is not None
+        allow_hosts = list(cfg.network_allowlist) if cfg.network_enabled else []
+        net_default = (
+            "deny"
+            if allow_hosts or not cfg.network_enabled
+            else cfg.network_default
+        )
+        if cfg.tool_allowlist:
+            raise ValueError(
+                "ACASandboxProvider does not expose a tool-registration "
+                "channel; enforce tool access through the ACS runtime"
+            )
 
-        if policy is not None:
-            cfg = aca_config_from_policy(policy, cfg)
-            allow_hosts = _network_allowlist(policy)
-            net_default = _network_default(policy)
-            try:
-                from agent_os.policies.evaluator import PolicyEvaluator
+        if runtime is not None:
+            from agt.policies.session import AdapterRuntimeSession
 
-                evaluator = PolicyEvaluator(policies=[policy])
-            except ImportError:
-                logger.warning(
-                    "agent-os-kernel not installed — "
-                    "policy evaluation unavailable, session runs ungated"
-                )
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Failed to initialize PolicyEvaluator: {exc}"
-                ) from exc
+            evaluator = AdapterRuntimeSession(
+                runtime, agent_id=agent_id, session_id=f"aca-{agent_id}"
+            )
 
         # Apply hypervisor ring constraints (#2666)
         ring = getattr(cfg, 'ring', None)
@@ -609,7 +532,7 @@ class ACASandboxProvider(SandboxProvider):
             "disk": self._disk,
             "labels": {"agent_id": agent_id},
         }
-        if policy_provided:
+        if config is not None:
             create_kwargs["cpu"] = self._cpu_millicores(cfg.cpu_limit)
             create_kwargs["memory"] = self._memory_mib(cfg.memory_mb)
         if cfg.env_vars:
@@ -650,13 +573,8 @@ class ACASandboxProvider(SandboxProvider):
                 f"Azure sandbox client missing 'sandbox_id': {sb_client!r}"
             )
 
-        # Apply egress policy. We do this whenever a policy is supplied —
-        # the default `network_default="deny"` makes the sandbox
-        # fail-closed even if `network_allowlist` is empty. Callers that
-        # genuinely want a default-allow sandbox must set
-        # `defaults.network_default: allow` in the policy.
-        if policy_provided:
-            self._apply_egress_policy(sb_client, allow_hosts, net_default)
+        # Apply an explicit egress policy for every session. Defaults deny.
+        self._apply_egress_policy(sb_client, allow_hosts, net_default)
 
         session_id = sandbox_id
         key = (agent_id, session_id)
@@ -705,9 +623,11 @@ class ACASandboxProvider(SandboxProvider):
             }
             if context:
                 eval_ctx.update(context)
-            decision = evaluator.evaluate(eval_ctx)
-            if not decision.allowed:
-                raise PermissionError(f"Policy denied: {decision.reason}")
+            decision = evaluator.evaluate_pre_tool_call(
+                tool_name="sandbox_execute", args=eval_ctx, call_id=uuid.uuid4().hex[:8]
+            )
+            if not decision.is_allowed():
+                raise PermissionError(f"Governance denied: {decision.message or decision.reason_code}")
 
         enforce_no_subprocess_execution(code)
 

@@ -6,8 +6,8 @@ Each agent gets its own Docker container scoped to a session.  Containers
 are hardened by default: all capabilities dropped, ``no-new-privileges``,
 optional read-only root filesystem, non-root user, ``pids_limit=128``.
 
-Policy-driven resource limits, tool proxies, and network proxies are set
-up at session creation time when a ``PolicyDocument`` is passed.
+Resource limits and mounts come from :class:`SandboxConfig`. Optional
+governance decisions come from a native ACS runtime.
 """
 
 from __future__ import annotations
@@ -139,50 +139,6 @@ def _validate_resource_name(value: str, label: str) -> None:
 def has_iptables() -> bool:
     """Return ``True`` if iptables is available on this host."""
     return shutil.which("iptables") is not None
-
-
-def docker_config_from_policy(
-    policy: Any, base: SandboxConfig
-) -> SandboxConfig:
-    """Extract sandbox-relevant fields from a policy into a config.
-
-    Reads well-known policy attributes when present and merges them into
-    *base*.  Unknown or missing attributes are silently ignored so the
-    function works with any policy shape.
-    """
-    cfg = SandboxConfig(
-        timeout_seconds=base.timeout_seconds,
-        memory_mb=base.memory_mb,
-        cpu_limit=base.cpu_limit,
-        network_enabled=base.network_enabled,
-        read_only_fs=base.read_only_fs,
-        env_vars=dict(base.env_vars),
-        input_dir=base.input_dir,
-        output_dir=base.output_dir,
-        runtime=base.runtime,
-    )
-
-    # Resource limits from policy defaults
-    defaults = getattr(policy, "defaults", None)
-    if defaults is not None:
-        if hasattr(defaults, "max_memory_mb"):
-            cfg.memory_mb = defaults.max_memory_mb
-        if hasattr(defaults, "max_cpu"):
-            cfg.cpu_limit = defaults.max_cpu
-
-    # Sandbox mounts
-    mounts = getattr(policy, "sandbox_mounts", None)
-    if mounts is not None:
-        if hasattr(mounts, "input_dir") and mounts.input_dir:
-            cfg.input_dir = mounts.input_dir
-        if hasattr(mounts, "output_dir") and mounts.output_dir:
-            cfg.output_dir = mounts.output_dir
-
-    # Network: enable if the policy specifies an allowlist
-    if getattr(policy, "network_allowlist", None):
-        cfg.network_enabled = True
-
-    return cfg
 
 
 class DockerSandboxProvider(SandboxProvider):
@@ -448,7 +404,8 @@ class DockerSandboxProvider(SandboxProvider):
     def create_session(
         self,
         agent_id: str,
-        policy: Any | None = None,
+        *,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         if not self._available:
@@ -461,23 +418,27 @@ class DockerSandboxProvider(SandboxProvider):
         session_id = uuid.uuid4().hex[:8]
         cfg = config or SandboxConfig()
 
-        # 1. Extract policy constraints
-        evaluator = None
-        if policy is not None:
-            cfg = docker_config_from_policy(policy, cfg)
-            try:
-                from agent_os.policies.evaluator import PolicyEvaluator
+        if cfg.tool_allowlist:
+            raise ValueError(
+                "DockerSandboxProvider does not expose a tool-registration "
+                "channel; enforce tool access through the ACS runtime"
+            )
+        if cfg.network_allowlist:
+            raise ValueError(
+                "DockerSandboxProvider cannot enforce host allowlists; use "
+                "a provider with filtered egress support"
+            )
+        cfg.network_enabled = bool(
+            cfg.network_enabled and cfg.network_default == "allow"
+        )
 
-                evaluator = PolicyEvaluator(policies=[policy])
-            except ImportError:
-                logger.warning(
-                    "agent-os-kernel not installed — "
-                    "policy evaluation unavailable, session runs ungated"
-                )
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Failed to initialize PolicyEvaluator: {exc}"
-                ) from exc
+        evaluator = None
+        if runtime is not None:
+            from agt.policies.session import AdapterRuntimeSession
+
+            evaluator = AdapterRuntimeSession(
+                runtime, agent_id=agent_id, session_id=session_id
+            )
 
         # 2. Apply hypervisor ring constraints (#2666)
         ring = getattr(cfg, 'ring', None)
@@ -549,10 +510,12 @@ class DockerSandboxProvider(SandboxProvider):
             }
             if context:
                 eval_ctx.update(context)
-            decision = evaluator.evaluate(eval_ctx)
-            if not decision.allowed:
+            decision = evaluator.evaluate_pre_tool_call(
+                tool_name="sandbox_execute", args=eval_ctx, call_id=uuid.uuid4().hex[:8]
+            )
+            if not decision.is_allowed():
                 raise PermissionError(
-                    f"Policy denied: {decision.reason}"
+                    f"Governance denied: {decision.message or decision.reason_code}"
                 )
 
         enforce_no_subprocess_execution(code)

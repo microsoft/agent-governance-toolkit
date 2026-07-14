@@ -11,16 +11,11 @@ The configuration mirrors the design doc's ``HyperlightConfig`` surface:
 * ``input_dir`` / ``output_dir`` are mounted in the guest as read-only
   ``/input`` and writable ``/output``.
 
-``hyperlight_config_from_policy`` performs the same kind of policy →
-config translation as ``docker_config_from_policy`` so a single
-``PolicyDocument`` (or duck-typed equivalent) can drive either backend.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
-
 from agent_sandbox.sandbox_provider import SandboxConfig
 
 # Upstream backend identifiers. Kept as plain strings (not an Enum) to
@@ -111,50 +106,3 @@ class HyperlightConfig:
             output_dir=cfg.output_dir,
             env_vars=dict(cfg.env_vars),
         )
-
-
-def hyperlight_config_from_policy(
-    policy: Any,
-    base: HyperlightConfig | None = None,
-) -> HyperlightConfig:
-    """Extract Hyperlight-relevant fields from a policy.
-
-    Reads well-known attributes (``defaults.max_memory_mb``,
-    ``defaults.timeout_seconds``, ``sandbox_mounts.input_dir`` /
-    ``output_dir``) when present; missing attributes leave *base*
-    unchanged. Tool and network allowlists are *not* merged here —
-    those are applied by :class:`HyperLightSandboxProvider` directly
-    via ``register_tool`` / ``allow_domain``.
-    """
-    cfg = HyperlightConfig(
-        backend=base.backend if base else "wasm",
-        module=base.module if base else "python_guest",
-        heap_size_bytes=base.heap_size_bytes if base else _DEFAULT_HEAP_BYTES,
-        stack_size_bytes=base.stack_size_bytes if base else _DEFAULT_STACK_BYTES,
-        max_execution_time_ms=(
-            base.max_execution_time_ms if base else _DEFAULT_MAX_EXEC_MS
-        ),
-        input_dir=base.input_dir if base else None,
-        output_dir=base.output_dir if base else None,
-        env_vars=dict(base.env_vars) if base else {},
-    )
-
-    defaults = getattr(policy, "defaults", None)
-    if defaults is not None:
-        max_mem_mb = getattr(defaults, "max_memory_mb", None)
-        if isinstance(max_mem_mb, (int, float)) and max_mem_mb > 0:
-            cfg.heap_size_bytes = int(max_mem_mb) * 1024 * 1024
-        timeout_s = getattr(defaults, "timeout_seconds", None)
-        if isinstance(timeout_s, (int, float)) and timeout_s > 0:
-            cfg.max_execution_time_ms = int(timeout_s * 1000)
-
-    mounts = getattr(policy, "sandbox_mounts", None)
-    if mounts is not None:
-        in_dir = getattr(mounts, "input_dir", None)
-        if in_dir:
-            cfg.input_dir = str(in_dir)
-        out_dir = getattr(mounts, "output_dir", None)
-        if out_dir:
-            cfg.output_dir = str(out_dir)
-
-    return cfg

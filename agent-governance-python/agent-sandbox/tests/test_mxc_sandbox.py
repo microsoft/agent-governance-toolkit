@@ -12,8 +12,7 @@ Coverage targets:
 
 * Config: :class:`MxcConfig` validation, ``to_mxc_json``,
   ``from_sandbox_config``, ``backend_requires_experimental``.
-* Policy translation: ``mxc_config_from_policy``, ``policy_to_mxc_json``,
-  ``policy_yaml_to_mxc_json`` (including the ``sandbox_mounts`` block).
+* Explicit host configuration through :class:`SandboxConfig`.
 * Construction: binary discovery (explicit path, ``MXC_BINARY`` env,
   PATH), ``is_available``, bad backend.
 * Lifecycle: create/execute/destroy, session reuse, status, raw ``run``.
@@ -32,15 +31,13 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from agt.policies import PolicyEvaluation
 
 from agent_sandbox.code_scanner import SandboxCodeViolation
 from agent_sandbox.mxc_sandbox_provider import (
     MxcConfig,
     MxcSandboxProvider,
     backend_requires_experimental,
-    mxc_config_from_policy,
-    policy_to_mxc_json,
-    policy_yaml_to_mxc_json,
 )
 from agent_sandbox.mxc_sandbox_provider import provider as provider_mod
 from agent_sandbox.sandbox_provider import (
@@ -176,6 +173,7 @@ class TestMxcConfig:
         sc = SandboxConfig(
             timeout_seconds=10,
             network_enabled=True,
+            network_default="allow",
             input_dir="/in",
             output_dir="/out",
             env_vars={"K": "V"},
@@ -214,37 +212,17 @@ def _force_unix_paths(monkeypatch):
     monkeypatch.setattr(hardening.os.path, "realpath", lambda p: p)
 
 
-def _policy(**kw):
-    """Build a duck-typed policy object for mxc_config_from_policy."""
-    defaults = SimpleNamespace(
-        timeout_seconds=kw.get("timeout_seconds"),
-        max_memory_mb=kw.get("max_memory_mb"),
-        max_cpu=kw.get("max_cpu"),
-        network_default=kw.get("network_default"),
-    )
-    mounts = None
-    if "input_dir" in kw or "output_dir" in kw:
-        mounts = SimpleNamespace(
-            input_dir=kw.get("input_dir"),
-            output_dir=kw.get("output_dir"),
-        )
-    return SimpleNamespace(
-        defaults=defaults,
-        sandbox_mounts=mounts,
-        network_allowlist=kw.get("network_allowlist"),
-        tool_allowlist=kw.get("tool_allowlist"),
-    )
-
-
-class TestPolicyTranslation:
+class TestSandboxConfigTranslation:
     def test_mounts_and_egress(self):
-        policy = _policy(
-            timeout_seconds=45,
-            input_dir="/data/in",
-            output_dir="/data/out",
-            network_allowlist=["pypi.org", "*.github.com"],
+        cfg = MxcConfig.from_sandbox_config(
+            SandboxConfig(
+                timeout_seconds=45,
+                input_dir="/data/in",
+                output_dir="/data/out",
+                network_enabled=True,
+                network_allowlist=["pypi.org", "*.github.com"],
+            )
         )
-        cfg = mxc_config_from_policy(policy)
         assert cfg.timeout_ms == 45_000
         assert "/data/in" in cfg.readonly_paths
         assert "/data/out" in cfg.readwrite_paths
@@ -252,52 +230,23 @@ class TestPolicyTranslation:
         assert cfg.allowed_hosts == ["pypi.org", "*.github.com"]
 
     def test_no_network_allowlist_keeps_egress_off(self):
-        cfg = mxc_config_from_policy(_policy(timeout_seconds=5))
+        cfg = MxcConfig.from_sandbox_config(
+            SandboxConfig(timeout_seconds=5)
+        )
         assert cfg.allow_outbound is False
 
-    def test_policy_to_mxc_json(self):
-        doc = policy_to_mxc_json(
-            _policy(input_dir="/in", network_allowlist=["x.com"]),
-            "python run.py",
+    def test_config_to_mxc_json(self):
+        cfg = MxcConfig.from_sandbox_config(
+            SandboxConfig(
+                input_dir="/in",
+                network_enabled=True,
+                network_allowlist=["x.com"],
+            )
         )
+        doc = cfg.to_mxc_json("python run.py")
         assert doc["filesystem"]["readonlyPaths"] == ["/in"]
         assert doc["network"]["allowedHosts"] == ["x.com"]
         assert doc["process"]["commandLine"] == "python run.py"
-
-    def test_policy_yaml_to_mxc_json(self, tmp_path):
-        yaml_text = (
-            'version: "1.0"\n'
-            "name: demo\n"
-            "defaults:\n"
-            "  timeout_seconds: 30\n"
-            "  max_memory_mb: 512\n"
-            "network_allowlist:\n"
-            "  - pypi.org\n"
-            "tool_allowlist:\n"
-            "  - read_doc\n"
-            "sandbox_mounts:\n"
-            "  input_dir: /data/user-pdf\n"
-            "  output_dir: /data/agent-out\n"
-        )
-        path = tmp_path / "policy.yaml"
-        path.write_text(yaml_text, encoding="utf-8")
-
-        doc = policy_yaml_to_mxc_json(str(path), "python /scripts/run.py")
-        assert doc["timeoutMs"] == 30_000
-        assert doc["filesystem"]["readonlyPaths"] == ["/data/user-pdf"]
-        assert doc["filesystem"]["readwritePaths"] == ["/data/agent-out"]
-        assert doc["network"]["allowOutbound"] is True
-        assert doc["network"]["allowedHosts"] == ["pypi.org"]
-        # tool_allowlist / CPU / memory are intentionally NOT in MXC JSON.
-        assert "tools" not in doc
-        assert "maxMemoryMb" not in doc
-
-    def test_policy_yaml_non_mapping_rejected(self, tmp_path):
-        path = tmp_path / "bad.yaml"
-        path.write_text("- just\n- a list\n", encoding="utf-8")
-        with pytest.raises(ValueError, match="must be a mapping"):
-            policy_yaml_to_mxc_json(str(path), "cmd")
-
 
 # =========================================================================
 # Construction / binary discovery
@@ -520,14 +469,18 @@ class TestGuards:
 
     def test_policy_deny_blocks_execution(self, provider, fake_run):
         class _DenyEvaluator:
-            def evaluate(self, ctx):
-                return SimpleNamespace(allowed=False, reason="nope")
+            def evaluate_pre_tool_call(self, *, tool_name, args, call_id):
+                return PolicyEvaluation(
+                    verdict="deny",
+                    reason_code="nope",
+                    message="nope",
+                )
 
         handle = provider.create_session("agent-1")
         # Inject a denying evaluator into the live session.
         key = (handle.agent_id, handle.session_id)
         provider._sessions[key].evaluator = _DenyEvaluator()
-        with pytest.raises(PermissionError, match="Policy denied"):
+        with pytest.raises(PermissionError, match="Governance denied"):
             provider.execute_code(handle.agent_id, handle.session_id, "print(1)")
 
 
@@ -594,13 +547,14 @@ class TestFailClosedHardening:
         assert env == {"SAFE": "ok"}
 
     def test_tool_allowlist_fails_closed(self, provider, fake_run):
-        policy = _policy(tool_allowlist=["read_doc"])
+        config = SandboxConfig(tool_allowlist=["read_doc"])
         with pytest.raises(ValueError, match="tool allowlisting"):
-            provider.create_session("agent-1", policy=policy)
+            provider.create_session("agent-1", config=config)
 
     def test_empty_tool_allowlist_is_allowed(self, provider, fake_run):
-        policy = _policy(tool_allowlist=[])
-        handle = provider.create_session("agent-1", policy=policy)
+        handle = provider.create_session(
+            "agent-1", config=SandboxConfig(tool_allowlist=[])
+        )
         assert handle.status == SessionStatus.READY
 
     def test_protected_mount_path_rejected_input(self, monkeypatch):
@@ -617,11 +571,6 @@ class TestFailClosedHardening:
                 SandboxConfig(output_dir="/")
             )
 
-    def test_protected_mount_path_rejected_from_policy(self, monkeypatch):
-        _force_unix_paths(monkeypatch)
-        with pytest.raises(ValueError, match="protected system directory"):
-            mxc_config_from_policy(_policy(input_dir="/usr"))
-
     def test_outbound_without_hosts_rejected(self):
         with pytest.raises(ValueError, match="without a host allowlist"):
             MxcConfig(allow_outbound=True)
@@ -633,25 +582,39 @@ class TestFailClosedHardening:
         assert "allowedHosts" not in doc["network"]
 
     def test_network_default_allow_enables_unrestricted_egress(self):
-        cfg = mxc_config_from_policy(_policy(network_default="allow"))
+        cfg = MxcConfig.from_sandbox_config(
+            SandboxConfig(
+                network_enabled=True,
+                network_default="allow",
+            )
+        )
         assert cfg.allow_outbound is True
         assert cfg.allow_unrestricted_egress is True
         assert cfg.allowed_hosts == []
 
     def test_network_default_deny_keeps_egress_off(self):
-        cfg = mxc_config_from_policy(_policy(network_default="deny"))
+        cfg = MxcConfig.from_sandbox_config(
+            SandboxConfig(
+                network_enabled=True,
+                network_default="deny",
+            )
+        )
         assert cfg.allow_outbound is False
 
     def test_network_allowlist_takes_precedence_over_default(self):
-        cfg = mxc_config_from_policy(
-            _policy(network_default="allow", network_allowlist=["pypi.org"])
+        cfg = MxcConfig.from_sandbox_config(
+            SandboxConfig(
+                network_enabled=True,
+                network_default="allow",
+                network_allowlist=["pypi.org"],
+            )
         )
         assert cfg.allow_outbound is True
         assert cfg.allowed_hosts == ["pypi.org"]
         # Restricted egress, not unrestricted.
         assert cfg.allow_unrestricted_egress is False
 
-    def test_context_and_policy_env_do_not_leak_into_runner(
+    def test_context_and_guest_env_do_not_leak_into_runner(
         self, provider, fake_run
     ):
         """MXC_CONTEXT / guest env stay in the config doc, not the runner."""
@@ -683,4 +646,3 @@ class TestFailClosedHardening:
         handle = p.create_session("agent-1")
         with pytest.raises(ValueError, match="only supports a Python"):
             p.execute_code(handle.agent_id, handle.session_id, "print(1)")
-

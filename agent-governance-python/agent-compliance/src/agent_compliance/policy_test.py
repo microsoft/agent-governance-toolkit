@@ -10,8 +10,7 @@ exit code 0 when all fixtures pass, 1 on any mismatch.
 Fixture format:
     {"id": "unique-name",
      "input": {"action": "sql_execute", ...},
-     "expected_verdict": "allow",
-     "expected_rule": "pg-staging-reads"  # optional
+     "expected_verdict": "allow"
     }
 
 See schemas/fixture_schema.json for the full JSON Schema.
@@ -44,19 +43,13 @@ class FixtureResult:
     passed: bool
     expected_verdict: str
     actual_verdict: str
-    expected_rule: str | None = None
-    actual_rule: str | None = None
     fixture_path: str = ""
     resolution_metadata: dict[str, Any] | None = None
 
     def mismatch_summary(self) -> str:
         """Human-readable diff for a failed fixture."""
         lines = [f"  want verdict={self.expected_verdict!r}"]
-        if self.expected_rule:
-            lines[0] += f"  rule={self.expected_rule!r}"
         lines.append(f"  got  verdict={self.actual_verdict!r}")
-        if self.actual_rule:
-            lines[-1] += f"  rule={self.actual_rule!r}"
         return "\n".join(lines)
 
 
@@ -102,8 +95,6 @@ class ReplayReport:
                     "passed": r.passed,
                     "expected_verdict": r.expected_verdict,
                     "actual_verdict": r.actual_verdict,
-                    "expected_rule": r.expected_rule,
-                    "actual_rule": r.actual_rule,
                     "fixture_path": r.fixture_path,
                     "resolution_metadata": r.resolution_metadata,
                 }
@@ -164,112 +155,97 @@ def _load_file(path: Path) -> Any:
     return yaml.safe_load(text)
 
 
-def _normalize_verdict(decision_action: str, decision_allowed: bool) -> str:
-    """Map a PolicyDecision to a canonical verdict string.
-
-    Fixtures can use "allow", "deny", "audit", or "block" as the
-    expected_verdict. The evaluator returns an action string plus a
-    boolean. We normalize to the action string for comparison.
-    """
-    return decision_action
-
-
 def replay(
-    policy_path: str | Path,
+    manifest_path: str | Path,
     fixture_path: str | Path,
 ) -> ReplayReport:
-    """Replay fixtures against policies and return a report.
+    """Replay fixtures against a native ACS manifest and return a report."""
+    from agt.policies import AgtRuntime
 
-    Args:
-        policy_path: Directory or single YAML file containing policies.
-        fixture_path: Directory or single file containing test fixtures.
-
-    Returns:
-        A ReplayReport with per-fixture pass/fail results.
-    """
-    # Lazy import so the module can be loaded without agent_os installed
-    # (useful for CLI help text, tab completion, etc.)
-    from agent_os.policies.evaluator import PolicyEvaluator
-    from agent_os.policies.schema import PolicyDocument
-
-    policy_path = Path(policy_path)
+    manifest_path = Path(manifest_path)
     fixture_path = Path(fixture_path)
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"Manifest path not found: {manifest_path}")
 
-    # Load policies
-    policies: list[PolicyDocument] = []
-    if policy_path.is_dir():
-        for ext in ("*.yaml", "*.yml"):
-            for p in sorted(policy_path.glob(ext)):
-                policies.append(PolicyDocument.from_yaml(p))
-    elif policy_path.is_file():
-        policies.append(PolicyDocument.from_yaml(policy_path))
-    else:
-        raise FileNotFoundError(f"Policy path not found: {policy_path}")
-
-    if not policies:
-        raise FileNotFoundError(f"No policy files found in {policy_path}")
-
-    evaluator = PolicyEvaluator(policies=policies)
-
-    # Load and replay fixtures
+    runtime = AgtRuntime.from_manifest(manifest_path)
     fixtures = _load_fixtures(fixture_path)
     report = ReplayReport()
 
-    for fixture in fixtures:
-        # Extract fields — support both issue-spec format and tutorial format
-        fixture_id = fixture.get("id") or fixture.get("name", "unnamed")
-        context = fixture.get("input") or fixture.get("context", {})
-        expected_verdict = fixture.get("expected_verdict") or fixture.get("expected_action")
-        expected_rule = fixture.get("expected_rule")
-        source = fixture.get("_source", "")
-
-        # Also support expected_allowed (boolean) from tutorial format
-        expected_allowed = fixture.get("expected_allowed")
-        resolution_metadata = fixture.get("resolution_metadata")
-
-        if expected_verdict is None and expected_allowed is None:
-            logger.warning(
-                "Fixture %r has no expected_verdict or expected_allowed — skipping",
-                fixture_id,
+    try:
+        for fixture in fixtures:
+            fixture_id = fixture.get("id") or fixture.get("name", "unnamed")
+            raw_input = fixture.get("input") or fixture.get("context", {})
+            intervention_point = fixture.get("intervention_point", "input")
+            expected_verdict = fixture.get("expected_verdict") or fixture.get(
+                "expected_action"
             )
-            continue
+            expected_allowed = fixture.get("expected_allowed")
+            source = fixture.get("_source", "")
+            resolution_metadata = fixture.get("resolution_metadata")
 
-        decision = evaluator.evaluate(context)
-        actual_verdict = _normalize_verdict(decision.action, decision.allowed)
-        actual_rule = decision.matched_rule
-
-        # Determine pass/fail
-        passed = True
-        if expected_verdict is not None and actual_verdict != expected_verdict:
-            passed = False
-        if expected_allowed is not None and decision.allowed != expected_allowed:
-            passed = False
-        if expected_rule is not None and actual_rule != expected_rule:
-            passed = False
-
-        # Validate resolution_metadata.rule_id if provided (superset of
-        # expected_rule: rule_id is resolution-aware, checked after expected_rule)
-        if resolution_metadata is not None and passed:
-            rule_id = resolution_metadata.get("rule_id")
-            if rule_id is not None and actual_rule != rule_id:
-                passed = False
-                logger.debug(
-                    "resolution_metadata mismatch: expected rule_id=%r, got %r",
-                    rule_id, actual_rule,
+            if expected_verdict is None and expected_allowed is None:
+                logger.warning(
+                    "Fixture %r has no expected result — skipping", fixture_id
                 )
+                continue
 
-        report.results.append(
-            FixtureResult(
-                fixture_id=fixture_id,
-                passed=passed,
-                expected_verdict=expected_verdict or ("allow" if expected_allowed else "deny"),
-                actual_verdict=actual_verdict,
-                expected_rule=expected_rule,
-                actual_rule=actual_rule,
-                fixture_path=source,
-                resolution_metadata=resolution_metadata,
+            if (
+                isinstance(raw_input, dict)
+                and "envelope" in raw_input
+                and intervention_point in raw_input
+            ):
+                snapshot = raw_input
+            else:
+                identity = (
+                    raw_input.get("agent_id")
+                    or raw_input.get("agent_did")
+                    or "fixture-agent"
+                    if isinstance(raw_input, dict)
+                    else "fixture-agent"
+                )
+                snapshot = {
+                    "envelope": {
+                        "agent_id": identity,
+                        "budgets": {
+                            "token_count": (
+                                raw_input.get("token_count", 0)
+                                if isinstance(raw_input, dict)
+                                else 0
+                            ),
+                            "tool_call_count": (
+                                raw_input.get("tool_call_count", 0)
+                                if isinstance(raw_input, dict)
+                                else 0
+                            ),
+                        },
+                    },
+                    "input": {"body": raw_input},
+                }
+
+            evaluation = runtime.evaluate(intervention_point, snapshot)
+            actual_verdict = evaluation.verdict
+            passed = True
+            if expected_verdict is not None and actual_verdict != expected_verdict:
+                passed = False
+            if (
+                expected_allowed is not None
+                and evaluation.is_allowed() != expected_allowed
+            ):
+                passed = False
+
+            report.results.append(
+                FixtureResult(
+                    fixture_id=fixture_id,
+                    passed=passed,
+                    expected_verdict=expected_verdict
+                    or ("allow" if expected_allowed else "deny"),
+                    actual_verdict=actual_verdict,
+                    fixture_path=source,
+                    resolution_metadata=resolution_metadata,
+                )
             )
-        )
+    finally:
+        runtime.close()
 
     return report
 

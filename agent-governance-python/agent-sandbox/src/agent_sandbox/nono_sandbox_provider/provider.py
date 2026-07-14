@@ -51,7 +51,6 @@ from agent_sandbox.code_scanner import enforce_no_subprocess_execution
 from agent_sandbox.nono_sandbox_provider.config import (
     NonoConfig,
     default_system_paths,
-    nono_config_from_policy,
 )
 from agent_sandbox.sandbox_provider import (
     ExecutionHandle,
@@ -238,7 +237,8 @@ class NonoSandboxProvider(SandboxProvider):
     def create_session(
         self,
         agent_id: str,
-        policy: Any | None = None,
+        *,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
     ) -> SessionHandle:
         if not self._available:
@@ -254,26 +254,16 @@ class NonoSandboxProvider(SandboxProvider):
             base_cfg, include_system_paths=self._include_system_paths
         )
 
-        evaluator = None
-        if policy is not None:
-            # nono has no in-sandbox tool-registration channel, so a
-            # tool_allowlist cannot be enforced inside the sandbox.
-            # Silently dropping a security control is the wrong default
-            # (Hyperlight fails closed here), so refuse rather than run a
-            # session that ignores the policy's allowlist.
-            tool_allow = list(getattr(policy, "tool_allowlist", []) or [])
-            if tool_allow:
-                raise ValueError(
-                    "nono does not support tool allowlisting — the sandbox "
-                    "exposes no tool-registration channel, so a non-empty "
-                    f"policy.tool_allowlist ({sorted(tool_allow)}) cannot be "
-                    "enforced. Refusing to create a session that would "
-                    "silently ignore it. Remove tool_allowlist from the "
-                    "policy or use a provider that supports tools (e.g. "
-                    "Hyperlight)."
-                )
-            nono_cfg = nono_config_from_policy(policy, base=nono_cfg)
-            evaluator = self._build_evaluator(policy)
+        if base_cfg.tool_allowlist:
+            raise ValueError(
+                "nono does not support tool allowlisting because it has "
+                "no tool-registration channel"
+            )
+        evaluator = (
+            self._build_runtime_session(runtime, agent_id, session_id)
+            if runtime is not None
+            else None
+        )
 
         # Per-session workspace: scripts go in ``scripts/`` (granted
         # read-only to the sandbox) and persistent output in ``output/``
@@ -367,10 +357,12 @@ class NonoSandboxProvider(SandboxProvider):
             }
             if context:
                 eval_ctx.update(context)
-            decision = session.evaluator.evaluate(eval_ctx)
-            if not getattr(decision, "allowed", False):
-                reason = getattr(decision, "reason", "policy denied")
-                raise PermissionError(f"Policy denied: {reason}")
+            decision = session.evaluator.evaluate_pre_tool_call(
+                tool_name="sandbox_execute", args=eval_ctx, call_id=uuid.uuid4().hex[:8]
+            )
+            if not decision.is_allowed():
+                reason = decision.message or decision.reason_code
+                raise PermissionError(f"Governance denied: {reason}")
 
         enforce_no_subprocess_execution(code)
 
@@ -403,7 +395,7 @@ class NonoSandboxProvider(SandboxProvider):
         agent_id: str,
         code: str,
         *,
-        policy: Any | None = None,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
         context: dict[str, Any] | None = None,
     ) -> ExecutionHandle:
@@ -415,13 +407,13 @@ class NonoSandboxProvider(SandboxProvider):
         workspace (including ``output/``) is removed afterwards.
 
         The same governance applies as :meth:`execute_code`: the host-side
-        policy gate and the static code scan run before nono is invoked.
+        native runtime gate and static code scan run before nono is invoked.
 
         For repeated executions that must share the persistent ``output/``
         directory, use :meth:`create_session` + :meth:`execute_code` and
         keep the ``session_id``.
         """
-        handle = self.create_session(agent_id, policy=policy, config=config)
+        handle = self.create_session(agent_id, runtime=runtime, config=config)
         try:
             return self.execute_code(
                 handle.agent_id,
@@ -437,7 +429,7 @@ class NonoSandboxProvider(SandboxProvider):
         agent_id: str,
         code: str,
         *,
-        policy: Any | None = None,
+        runtime: Any | None = None,
         config: SandboxConfig | None = None,
         context: dict[str, Any] | None = None,
     ) -> ExecutionHandle:
@@ -446,7 +438,7 @@ class NonoSandboxProvider(SandboxProvider):
             self.run_once,
             agent_id,
             code,
-            policy=policy,
+            runtime=runtime,
             config=config,
             context=context,
         )
@@ -564,26 +556,15 @@ class NonoSandboxProvider(SandboxProvider):
                     return sess
         return None
 
-    def _build_evaluator(self, policy: Any) -> Any | None:
-        """Construct a policy evaluator, or ``None`` if unavailable."""
-        try:
-            from agent_os.policies.evaluator import PolicyEvaluator
-        except ImportError:
-            logger.warning(
-                "agent-os-kernel not installed — policy evaluation "
-                "unavailable, session runs ungated"
-            )
-            return None
-        except Exception as exc:  # pragma: no cover - defensive
-            raise RuntimeError(
-                f"Failed to import PolicyEvaluator: {exc}"
-            ) from exc
-        try:
-            return PolicyEvaluator(policies=[policy])
-        except Exception as exc:
-            raise RuntimeError(
-                f"Failed to initialize PolicyEvaluator: {exc}"
-            ) from exc
+    def _build_runtime_session(
+        self, runtime: Any, agent_id: str, session_id: str
+    ) -> Any:
+        """Create the native ACS session used for host-side execution gates."""
+        from agt.policies.session import AdapterRuntimeSession
+
+        return AdapterRuntimeSession(
+            runtime, agent_id=agent_id, session_id=session_id
+        )
 
     def _start_proxy(self, cfg: NonoConfig) -> Any:
         """Start a nono filtering proxy for *cfg*'s egress policy."""

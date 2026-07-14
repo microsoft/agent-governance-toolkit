@@ -49,7 +49,6 @@ flowise = []
 langflow = []
 adk = ["google-adk>=0.1.0,<1.0"]
 avp = []
-cedarling = ["cedarpy>=4.0.0,<5.0"]
 nostr-wot = []
 structural-authz = []
 openshell = ["pyyaml>=6.0,<7.0"]
@@ -83,7 +82,6 @@ packages = ["_placeholder"]
 "../agentmesh-integrations/openai-agents-agentmesh/openai_agents_agentmesh" = "openai_agents_agentmesh"
 "../agentmesh-integrations/langgraph-trust/langgraph_trust" = "langgraph_trust"
 "../agentmesh-integrations/llamaindex-agentmesh/llama_index" = "llama_index"
-"../agentmesh-integrations/cedarling-agentmesh/cedarling_agentmesh" = "cedarling_agentmesh"
 "../agentmesh-integrations/agentmesh-avp/agentmesh_avp" = "agentmesh_avp"
 "../agentmesh-integrations/nostr-wot/agentmesh_nostr_wot" = "agentmesh_nostr_wot"
 "../agentmesh-integrations/structural-authz-agentmesh/structural_authz_agentmesh" = "structural_authz_agentmesh"

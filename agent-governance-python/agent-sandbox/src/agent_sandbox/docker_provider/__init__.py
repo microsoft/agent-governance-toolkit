@@ -3,8 +3,8 @@
 """Docker-backed sandbox provider for ``agent-sandbox``.
 
 Implements :class:`agent_sandbox.SandboxProvider` on top of hardened
-Docker containers with policy-driven resource limits, tool/network
-proxies, and filesystem checkpointing via ``docker commit``.
+Docker containers with explicit resource and network configuration plus
+filesystem checkpointing via ``docker commit``.
 
 Importing :class:`DockerSandboxProvider` requires the optional
 ``docker`` SDK to be installed.
@@ -12,7 +12,6 @@ Importing :class:`DockerSandboxProvider` requires the optional
 
 from agent_sandbox.docker_provider.provider import (
     DockerSandboxProvider,
-    docker_config_from_policy,
     has_iptables,
 )
 from agent_sandbox.docker_provider.state import (
@@ -24,6 +23,5 @@ __all__ = [
     "DockerSandboxProvider",
     "SandboxCheckpoint",
     "SandboxStateManager",
-    "docker_config_from_policy",
     "has_iptables",
 ]
