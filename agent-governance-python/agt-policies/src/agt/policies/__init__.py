@@ -23,6 +23,8 @@ The module is structured as a thin re-export layer so external callers
 only need ``from agt.policies import ...``.
 """
 
+from typing import TYPE_CHECKING
+
 from .manifest import (
     AdapterManifestContract,
     AgtManifest,
@@ -49,10 +51,29 @@ from .snapshot import (
     pre_tool_call_snapshot,
 )
 
+if TYPE_CHECKING:
+    from .runtime import AgtRuntime, ApprovalDecision
+
+
+def __getattr__(name: str):
+    if name in {"AgtRuntime", "ApprovalDecision"}:
+        from .runtime import AgtRuntime, ApprovalDecision
+
+        runtime_exports = {
+            "AgtRuntime": AgtRuntime,
+            "ApprovalDecision": ApprovalDecision,
+        }
+        globals().update(runtime_exports)
+        return runtime_exports[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "AdapterManifestContract",
     "AdapterRuntimeSession",
+    "AgtRuntime",
     "AgtManifest",
+    "ApprovalDecision",
     "EvaluationResult",
     "EvidenceResult",
     "ManifestCompatibilityError",
