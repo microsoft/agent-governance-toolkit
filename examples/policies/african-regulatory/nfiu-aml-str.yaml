@@ -1,193 +1,22 @@
-# agt-policies — African Regulatory Pack
-# NFIU AML/CFT — Anti-Money Laundering & Suspicious Transaction Reporting
-#
-# Regulatory references:
-#   Money Laundering (Prevention and Prohibition) Act 2022 (MLPPA)
-#   Terrorism (Prevention and Prohibition) Act 2022 (TPPA)
-#   NFIU AML/CFT Regulations 2013 (as amended)
-#   CBN AML/CFT/CPF Risk-Based Supervisory Framework 2023
-#   FATF Recommendations (Nigeria FATF member obligations)
-#
-# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
-# AML/CFT compliance is a highly regulated domain. These rules represent
-# patterns derived from published NFIU guidelines. They do not constitute
-# legal AML advice. Firms must implement comprehensive AML programmes with
-# qualified CAMS-certified compliance officers.
-#
-# Key thresholds (MLPPA / NFIU):
-#   CTR (Currency Transaction Report):  ₦5,000,000 per transaction
-#   STR (Suspicious Transaction Report): any amount with red-flag indicators
-#   Structuring threshold:               amounts designed to avoid ₦5M CTR
-#   Velocity concern window:             multiple transactions within 24h
-
-version: "1.0"
-name: nfiu-aml-str
-description: >
-  NFIU AML/CFT governance policy for AI agents in Nigerian financial services.
-  Enforces CTR thresholds, detects structuring (smurfing) patterns, blocks
-  autonomous completion of transactions that should trigger STR review,
-  and implements velocity controls. Human-in-the-loop for all high-risk actions.
-
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
 metadata:
-  source_regulation: "Money Laundering (Prevention & Prohibition) Act 2022 (MLPPA 2022); NFIU Guidelines"
-  jurisdiction: "NG"
-  enforcing_authority: "Nigeria Financial Intelligence Unit (NFIU)"
-
-rules:
-
-  # =========================================================================
-  # CTR Threshold — ₦5,000,000
-  # MLPPA s.10 / NFIU Regulations: Financial institutions must file a
-  # Currency Transaction Report for any single transaction at or above ₦5M.
-  # AI agents must never autonomously complete CTR-threshold transactions.
-  # =========================================================================
-
-  - name: nfiu-ctr-threshold-transfer-block
-    condition:
-      field: action
-      operator: matches
-      value: "^(transfer_funds|send_money|wire_transfer|nip_transfer|instant_payment|disburse_funds)$"
-    action: block
-    priority: 95
-    message: "NFIU CTR: Transfer action requires human review — amount must be verified against ₦5,000,000 CTR filing threshold (MLPPA s.10)"
-
-  - name: nfiu-ctr-five-million-pattern
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(₦|NGN|naira)\\s*[5-9],?[0-9]{3},?[0-9]{3}|\\b[5-9][0-9]{6}\\b"
-    action: block
-    priority: 95
-    message: "NFIU CTR: Amount at or above ₦5,000,000 CTR threshold detected — transaction paused for human review and CTR assessment"
-
-  - name: nfiu-ctr-ten-million-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(₦|NGN|naira)\\s*1[0-9],?[0-9]{3},?[0-9]{3}|\\b1[0-9]{7}\\b"
-    action: deny
-    priority: 100
-    message: "NFIU CTR / CBN NIP: Amount exceeds ₦10,000,000 — blocked. CTR required and exceeds NIP single-transaction cap."
-
-  # =========================================================================
-  # Structuring Detection (Smurfing)
-  # MLPPA s.14 / FATF Rec. 29: Structuring transactions to avoid the ₦5M
-  # CTR threshold is a criminal offence. Detect patterns of multiple
-  # transactions just below the threshold.
-  # =========================================================================
-
-  - name: nfiu-structuring-split-pattern
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(split(ting)?|break(ing)?\\s+(up|down)|divide|multiple\\s+(transfers|payments|transactions)).{0,60}(avoid|under|below).{0,30}(threshold|limit|reporting|₦5|5\\s*million)"
-    action: deny
-    priority: 100
-    message: "NFIU Structuring: Transaction splitting to avoid CTR threshold detected — constitutes structuring under MLPPA s.14, a criminal offence"
-
-  - name: nfiu-structuring-amount-just-under
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(₦|NGN)\\s*4,?[5-9][0-9]{2},?[0-9]{3}|\\b4[5-9][0-9]{5}\\b"
-    action: audit
-    priority: 85
-    message: "NFIU Structuring Alert: Amount just under ₦5M CTR threshold — logged for STR review. Multiple occurrences in session may indicate structuring."
-
-  - name: nfiu-structuring-repeated-sessions
-    condition:
-      field: tool_call_count
-      operator: gt
-      value: 3
-    action: audit
-    priority: 80
-    message: "NFIU Velocity: Multiple transaction tool calls in session — logged for structuring and velocity pattern review"
-
-  # =========================================================================
-  # Suspicious Transaction Indicators
-  # STRs must be filed for transactions showing red-flag indicators regardless
-  # of amount. These patterns are derived from NFIU STR guidance.
-  # =========================================================================
-
-  - name: nfiu-str-round-trip-pattern
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(transfer.{0,30}back|send.{0,20}return|round.?trip|circular.{0,20}transfer|layering)"
-    action: block
-    priority: 95
-    message: "NFIU STR Indicator: Round-trip or layering transaction pattern detected — requires human review for STR assessment"
-
-  - name: nfiu-str-unusual-counterparty
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(unknown\\s+(account|beneficiary|recipient)|unverified\\s+(account|party)|no\\s+(kyc|verification)\\s+on\\s+(file|record))"
-    action: block
-    priority: 90
-    message: "NFIU STR Indicator: Transfer to unverified/unknown counterparty — requires human review before execution"
-
-  - name: nfiu-str-cash-equivalent-pattern
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(gift\\s+card|crypto|bitcoin|usdt|stable.?coin|mobile\\s+money\\s+to\\s+cash|convert.{0,20}to\\s+cash)"
-    action: block
-    priority: 90
-    message: "NFIU STR Indicator: Cash-equivalent or crypto conversion pattern — common money laundering typology, requires human review"
-
-  - name: nfiu-str-politically-exposed-person
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(PEP|politically\\s+exposed|government\\s+official|public\\s+servant|elected\\s+official|minister|senator|governor).{0,40}(transfer|payment|account|transaction)"
-    action: block
-    priority: 95
-    message: "NFIU STR / FATF Rec. 12: Politically Exposed Person (PEP) transaction detected — enhanced due diligence and STR assessment required"
-
-  # =========================================================================
-  # KYC Bypass Prevention
-  # Agents must not circumvent or shortcut KYC verification steps.
-  # Proceeding with a transaction for an unverified customer violates
-  # CBN AML/CFT Framework and MLPPA requirements.
-  # =========================================================================
-
-  - name: nfiu-kyc-bypass-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(skip\\s+(kyc|verification|identity\\s+check)|proceed\\s+without\\s+(verification|kyc)|waive\\s+(kyc|due\\s+diligence)|bypass\\s+(kyc|customer\\s+verification))"
-    action: deny
-    priority: 100
-    message: "NFIU / CBN AML: KYC bypass attempt blocked — proceeding without customer verification violates MLPPA and CBN AML/CFT Framework"
-
-  - name: nfiu-unverified-customer-transaction
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(unverified\\s+customer|customer\\s+not\\s+verified|no\\s+kyc|kyc\\s+(pending|incomplete|failed)).{0,40}(proceed|transfer|payment|transaction)"
-    action: deny
-    priority: 100
-    message: "NFIU / CBN AML: Transaction for unverified customer blocked — KYC must be completed before processing"
-
-  # =========================================================================
-  # Audit Trail — All Financial Events
-  # MLPPA s.6 requires financial institutions to maintain records of all
-  # transactions for at least 5 years. Every agent financial action must
-  # be logged with full payload for NFIU examination on demand.
-  # =========================================================================
-
-  - name: nfiu-audit-all-transaction-events
-    condition:
-      field: action
-      operator: matches
-      value: "^(transfer_|payment_|refund_|credit_|debit_|settlement_|reversal_|disbursement_).*"
-    action: audit
-    priority: 75
-    message: "NFIU Record-Keeping: Financial transaction logged — MLPPA s.6 requires 5-year retention for NFIU examination"
-
-defaults:
-  action: audit
-  max_tokens: 6000
-  max_tool_calls: 15
-  confidence_threshold: 0.95
+  name: nfiu-aml-str
+  version: "1.0"
+extends: []
+policies:
+  nfiu_aml_str:
+    type: rego
+    bundle: rego
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: nfiu_aml_str
+      query: data.agt_policies_nigeria.nfiu.acs_input_result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: nfiu_aml_str
+      query: data.agt_policies_nigeria.nfiu.acs_output_result

@@ -90,15 +90,19 @@ CASES = [
 
 
 def main() -> int:
-    policy_path = ROOT / "policies" / "deerflow-policy.yaml"
+    manifest_path = ROOT / "policies" / "manifest.yaml"
     audit_path = ROOT / "audit" / "deerflow-agt-audit.jsonl"
     if audit_path.exists():
         audit_path.unlink()
 
-    provider = AGTGuardrailProvider(policy_path=policy_path, audit_path=audit_path, framework="deerflow")
+    provider = AGTGuardrailProvider(
+        manifest_path=manifest_path,
+        audit_path=audit_path,
+        framework="deerflow",
+    )
     try:
         print("DeerFlow governed by AGT demo")
-        print(f"policy: {policy_path}")
+        print(f"manifest: {manifest_path}")
         print(f"audit:  {audit_path}\n")
 
         allow_count = 0

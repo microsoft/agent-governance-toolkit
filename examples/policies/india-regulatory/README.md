@@ -41,6 +41,15 @@ Universal agent-safety controls (prompt_injection, pii_leakage, tool_permissions
 model_routing) apply to all agents and are evaluated via the shared jurisdiction router. These India
 national packs add jurisdiction-specific regulatory controls, selected by context.customer_country = "IN".
 
-## Rego
-rego/ holds OPA reference implementations (NOT loaded by the Agent-OS Python runtime). Each pack exposes
-data.agt_policies_india.<pack>.decision. The shared router maps IN to these packs.
+## Native ACS and Rego
+
+Each YAML file is a native ACS manifest bound to its package under `rego/`.
+The shared ACS result adapter maps deny, escalate, audit, and allow outcomes to
+the runtime result contract. The jurisdiction router maps `IN` to these packs.
+
+```python
+from agt.policies.runtime import AgtRuntime
+
+runtime = AgtRuntime.from_manifest("dpdp-data-protection.yaml")
+result = runtime.evaluate("output", snapshot)
+```

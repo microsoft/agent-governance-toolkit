@@ -40,7 +40,7 @@ pytestmark = [
 
 ROOT = Path(__file__).resolve().parent
 PROVIDER_DIR = ROOT / "provider"
-POLICY_PATH = ROOT / "policies" / "deerflow-policy.yaml"
+MANIFEST_PATH = ROOT / "policies" / "manifest.yaml"
 
 deerflow_repo = os.environ.get("DEERFLOW_REPO")
 if deerflow_repo:
@@ -85,7 +85,7 @@ def integration_modules() -> SimpleNamespace:
 
 
 def _make_provider(modules: SimpleNamespace, audit_path: Path):
-    return modules.AGTGuardrailProvider(policy_path=POLICY_PATH, audit_path=audit_path, framework="deerflow")
+    return modules.AGTGuardrailProvider(manifest_path=MANIFEST_PATH, audit_path=audit_path, framework="deerflow")
 
 
 def _audit_entries(audit_path: Path) -> list[dict]:

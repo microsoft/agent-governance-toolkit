@@ -64,19 +64,12 @@ are selected per jurisdiction.
 
 ---
 
-## Rego Reference Implementations
+## Native ACS and Rego
 
 The `rego/` subdirectory contains [OPA](https://www.openpolicyagent.org/) Rego
-implementations of all 15 policies, plus a jurisdiction router.
-
-> **⚠️ Important:** The `.rego` files are **reference implementations only**.
-> They are **not loaded by the Agent-OS Python runtime**, which uses the YAML
-> `PolicyDocument` format evaluated by the Python policy engine. The Rego files
-> are provided for:
->
-> - Teams running OPA as a standalone policy engine
-> - Side-by-side verification of YAML rule logic
-> - Integration with OPA-based CI pipelines
+implementations of all 15 policies, a jurisdiction router, and a shared ACS
+result adapter. Each YAML file is a native ACS manifest that binds input,
+tool-call, and output intervention points to its Rego package.
 
 To run the Rego policies with OPA:
 
@@ -132,21 +125,13 @@ for:
 
 ---
 
-## Loading Policies in Agent-OS
+## Loading policies
 
 ```python
-from agent_os.policies.schema import PolicyDocument
+from agt.policies.runtime import AgtRuntime
 
-# Load a single pack
-policy = PolicyDocument.from_yaml("ndpa-data-residency.yaml")
-
-# Load all packs for a jurisdiction
-import os
-packs = [
-    PolicyDocument.from_yaml(f)
-    for f in os.listdir(".")
-    if f.endswith(".yaml")
-]
+runtime = AgtRuntime.from_manifest("ndpa-data-residency.yaml")
+result = runtime.evaluate("pre_tool_call", snapshot)
 ```
 
 ---

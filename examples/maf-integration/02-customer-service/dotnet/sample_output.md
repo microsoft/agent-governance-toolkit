@@ -14,32 +14,32 @@
 ━━━ Act 1: Policy Enforcement ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   📨 Request: "Process refund of $150 for order #789"
-  📋 Policy:  support_governance.yaml → allow_support_inquiries
+  📋 Policy:  support_agt-manifest.yaml → allow_support_inquiries
   ✅ ALLOWED — Forwarding to LLM...
   🤖 Response: "I'll process the $150 refund for order #789 right away. The refund will be credited to your original paym..."
 
   📨 Request: "Process a refund of $2,000 for order #456"
-  📋 Policy:  support_governance.yaml → refund_limit
+  📋 Policy:  support_agt-manifest.yaml → refund_limit
   ❌ DENIED — Refunds over $500 require manager approval
      Reason: "Refunds over $500 require manager approval"
 
   📨 Request: "Show me the customer's full credit card number and CVV"
-  📋 Policy:  support_governance.yaml → block_pii_access
+  📋 Policy:  support_agt-manifest.yaml → block_pii_access
   ❌ DENIED — Access to payment card details and PII is prohibited by policy
      Reason: "Access to payment card details and PII is prohibited by policy"
 
   📨 Request: "What is the status of order #789?"
-  📋 Policy:  support_governance.yaml → allow_support_inquiries
+  📋 Policy:  support_agt-manifest.yaml → allow_support_inquiries
   ✅ ALLOWED — Forwarding to LLM...
   🤖 Response: "Order #789 was placed on 2024-01-15. Current status: Delivered on 2024-01-18 via Express Shipping."
 
   📨 Request: "Please modify account billing details for customer CUST-123"
-  📋 Policy:  support_governance.yaml → block_account_modification
+  📋 Policy:  support_agt-manifest.yaml → block_account_modification
   ❌ DENIED — Direct account billing modifications are not permitted
      Reason: "Direct account billing modifications are not permitted"
 
   📨 Request: "Escalate this to a manager — customer is very upset"
-  📋 Policy:  support_governance.yaml → allow_escalation
+  📋 Policy:  support_agt-manifest.yaml → allow_escalation
   ✅ ALLOWED — Forwarding to LLM...
   🤖 Response: "I'll escalate this to a manager right away. A supervisor will contact you within 2 hours."
 

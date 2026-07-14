@@ -109,3 +109,31 @@ decision := "allow" if {
 	count(deny) == 0
 	count(escalate) == 0
 }
+
+
+# Native ACS result adapters
+import data.agt_policies.acs
+
+acs_input_result := result if {
+	legacy := acs.legacy_input(input, "input")
+	denials := deny with input as legacy
+	escalations := escalate with input as legacy
+	audits := {}
+	result := acs.normalize(denials, escalations, audits)
+}
+
+acs_pre_tool_call_result := result if {
+	legacy := acs.legacy_input(input, "pre_tool_call")
+	denials := deny with input as legacy
+	escalations := escalate with input as legacy
+	audits := {}
+	result := acs.normalize(denials, escalations, audits)
+}
+
+acs_output_result := result if {
+	legacy := acs.legacy_input(input, "output")
+	denials := deny with input as legacy
+	escalations := escalate with input as legacy
+	audits := {}
+	result := acs.normalize(denials, escalations, audits)
+}

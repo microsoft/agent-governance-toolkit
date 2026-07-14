@@ -13,7 +13,7 @@ This example uses a **real Microsoft Agent Framework agent** with native
 ## Runtime model
 
 - `Program.cs` builds the agent with `BuildAIAgent(...)` plus native `.Use(...)` middleware
-- `policies/healthcare_governance.yaml` uses simple local rule expressions for prompt and tool checks
+- `policies/healthcare_agt-manifest.yaml` uses simple local rule expressions for prompt and tool checks
 - Output is deterministic and requires no live LLM credentials
 
 ## Run it

@@ -1,205 +1,22 @@
-# agt-policies — African Regulatory Pack
-# Central Bank of Nigeria — Transaction Limits & Controls Policy
-#
-# Regulatory references:
-#   CBN Circular FPR/DIR/GEN/CIR/07/003  — Tiered KYC transaction limits
-#   CBN NIP (NIBSS Instant Payment) Framework — ₦10M per transaction cap
-#   CBN USSD Banking Guidelines            — ₦100,000 daily USSD limit
-#   CBN Contactless Payment Guidelines     — ₦15,000 per tap limit
-#   CBN Agent Banking Guidelines           — agent transaction controls
-#   CBN PSB Framework                      — mobile money limits
-#
-# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
-# CBN thresholds are subject to regulatory updates. Always verify current
-# limits against CBN circulars before production deployment.
-#
-# Tier KYC limits enforced (CBN FPR/DIR/GEN/CIR/07/003):
-#   Tier 1 (unverified):            ₦50,000 daily  /  ₦300,000 cumulative
-#   Tier 2 (basic verification):    ₦200,000 daily /  ₦500,000 cumulative
-#   Tier 3 (full verification):     ₦5,000,000 daily
-#   NIP single transaction cap:     ₦10,000,000
-
-version: "1.0"
-name: cbn-transaction-limits
-description: >
-  CBN-aligned transaction governance for AI agents in Nigerian fintech.
-  Enforces tiered KYC limits, NIP transaction caps, USSD and contactless
-  ceilings, and segregation-of-duties controls. High-value transactions
-  are routed to human approval queues rather than executed autonomously.
-
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
 metadata:
-  source_regulation: "CBN Circular FPR/DIR/GEN/CIR/07/003; CBN NIP Framework; CBN USSD Guidelines"
-  jurisdiction: "NG"
-  enforcing_authority: "Central Bank of Nigeria (CBN)"
-
-rules:
-
-  # =========================================================================
-  # Segregation of Duties — Agent Cannot Self-Approve Transactions
-  # An AI agent must never initiate AND approve the same transaction.
-  # This mirrors CBN's maker-checker requirement for financial institutions.
-  # =========================================================================
-
-  - name: cbn-sod-no-self-approval
-    condition:
-      field: action
-      operator: matches
-      value: "^(approve_transfer|confirm_payment|authorise_transaction|self_approve|auto_approve)$"
-    action: deny
-    priority: 100
-    message: "CBN Maker-Checker: AI agent cannot self-approve financial transactions — segregation of duties violated"
-
-  - name: cbn-sod-override-attempt
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(skip\\s+(approval|authorisation|verification)|bypass\\s+(checker|approval\\s+queue|maker.checker)|auto.?approv|proceed\\s+without\\s+approval)"
-    action: deny
-    priority: 100
-    message: "CBN Maker-Checker: Attempt to bypass maker-checker approval control detected and blocked"
-
-  # =========================================================================
-  # NIP Cap — ₦10,000,000 Single Transaction Limit
-  # NIBSS Instant Payment framework caps individual transactions at ₦10M.
-  # Transactions at or above this threshold must be blocked for manual review.
-  # =========================================================================
-
-  - name: cbn-nip-cap-transfer-action
-    condition:
-      field: action
-      operator: matches
-      value: "^(nip_transfer|instant_transfer|wire_transfer|transfer_funds|send_money|initiate_payment)$"
-    action: block
-    priority: 90
-    message: "CBN NIP Framework: Transfer action intercepted — requires human review to verify amount is within ₦10M NIP cap"
-
-  - name: cbn-nip-cap-amount-pattern
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(₦|NGN|naira)\\s*1[0-9],?[0-9]{3},?[0-9]{3}|\\b1[0-9]{7}\\b"
-    action: deny
-    priority: 100
-    message: "CBN NIP Framework: Transaction amount exceeds ₦10,000,000 NIP single-transaction cap — blocked"
-
-  - name: cbn-nip-high-value-naira-pattern
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(transfer|send|pay|remit).{0,40}(₦|NGN)\\s*[5-9],?[0-9]{3},?[0-9]{3}"
-    action: block
-    priority: 90
-    message: "CBN Tier 3 / NIP: High-value transfer (₦5M–₦10M range) detected — routed to human approval queue"
-
-  # =========================================================================
-  # Tier 3 Daily Limit — ₦5,000,000
-  # Maximum daily transfer for fully verified (Tier 3) customers.
-  # Agent must require approval for transactions approaching this ceiling.
-  # =========================================================================
-
-  - name: cbn-tier3-daily-ceiling
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(₦|NGN)\\s*[5-9],?[0-9]{3},?[0-9]{3}|\\b[5-9][0-9]{6}\\b"
-    action: block
-    priority: 90
-    message: "CBN Tier 3: Transaction at or near ₦5,000,000 daily ceiling — requires human approval before execution"
-
-  # =========================================================================
-  # USSD Transaction Limits
-  # CBN USSD guidelines: ₦20,000 per transaction, ₦100,000 daily.
-  # Agents accessing USSD channels must enforce these ceilings.
-  # =========================================================================
-
-  - name: cbn-ussd-transaction-limit
-    condition:
-      field: action
-      operator: matches
-      value: "^(ussd_transfer|ussd_payment|ussd_transaction)$"
-    action: block
-    priority: 85
-    message: "CBN USSD Guidelines: USSD transaction intercepted — verify amount is within ₦20,000 per-transaction / ₦100,000 daily USSD limits"
-
-  - name: cbn-ussd-channel-audit
-    condition:
-      field: action
-      operator: matches
-      value: "^ussd_.*"
-    action: audit
-    priority: 75
-    message: "CBN USSD Guidelines: USSD channel transaction logged for daily-limit tracking"
-
-  # =========================================================================
-  # Contactless Payment Ceiling — ₦15,000 per tap
-  # CBN Contactless Payment Guidelines cap each tap transaction at ₦15,000.
-  # =========================================================================
-
-  - name: cbn-contactless-ceiling
-    condition:
-      field: action
-      operator: matches
-      value: "^(contactless_payment|tap_to_pay|nfc_payment)$"
-    action: block
-    priority: 85
-    message: "CBN Contactless Guidelines: Contactless payment intercepted — verify amount does not exceed ₦15,000 per-tap ceiling"
-
-  # =========================================================================
-  # Bulk / Batch Payments
-  # Bulk payment operations aggregate large sums. Always require approval
-  # regardless of individual item amounts, as aggregate may exceed limits.
-  # =========================================================================
-
-  - name: cbn-bulk-payment-block
-    condition:
-      field: action
-      operator: matches
-      value: "^(bulk_transfer|batch_payment|mass_payment|payroll_run|bulk_disbursement)$"
-    action: block
-    priority: 95
-    message: "CBN: Bulk/batch payment requires human approval — aggregate amount must be verified against applicable limits"
-
-  # =========================================================================
-  # Audit Trail — All Financial Transaction Actions
-  # Every financial transaction action must be logged regardless of outcome,
-  # to satisfy CBN record-keeping and NFIU reporting requirements.
-  # =========================================================================
-
-  - name: cbn-audit-all-financial-actions
-    condition:
-      field: action
-      operator: matches
-      value: "^(transfer_|payment_|refund_|reversal_|settlement_|disbursement_|credit_|debit_).*"
-    action: audit
-    priority: 80
-    message: "CBN Record-Keeping: Financial transaction action logged — required for CBN examination and NFIU reporting"
-
-  # =========================================================================
-  # Refund Controls
-  # Refunds above a threshold must require approval to prevent fraud.
-  # Agent-initiated refunds without human review are a common attack vector.
-  # =========================================================================
-
-  - name: cbn-refund-approval-gate
-    condition:
-      field: action
-      operator: matches
-      value: "^(process_refund|issue_refund|reverse_charge|credit_account|manual_refund)$"
-    action: block
-    priority: 90
-    message: "CBN / Fraud Controls: Refund action requires human approval — agent cannot autonomously issue refunds"
-
-  - name: cbn-refund-pretext-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(manual\\s+refund|goodwill\\s+credit|override\\s+refund|waive\\s+(fee|charge)|unauthorized\\s+refund)"
-    action: deny
-    priority: 95
-    message: "CBN / Fraud Controls: Refund pretext or policy-override language detected — blocked to prevent social engineering"
-
-defaults:
-  action: audit
-  max_tokens: 6000
-  max_tool_calls: 20
-  confidence_threshold: 0.95
+  name: cbn-transaction-limits
+  version: "1.0"
+extends: []
+policies:
+  cbn_transaction_limits:
+    type: rego
+    bundle: rego
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: cbn_transaction_limits
+      query: data.agt_policies_nigeria.cbn.acs_input_result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: cbn_transaction_limits
+      query: data.agt_policies_nigeria.cbn.acs_output_result

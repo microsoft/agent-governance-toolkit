@@ -1,167 +1,22 @@
-# agt-policies — African Regulatory Pack
-# Nigeria Data Protection Act 2023 — Data Residency & Privacy Policy
-#
-# Regulatory reference: Nigeria Data Protection Act 2023 (NDPA 2023)
-# Enforcing authority: Nigeria Data Protection Commission (NDPC)
-#
-# ⚠️  IMPORTANT: This is a community-maintained governance starter policy.
-# It is NOT a certified legal compliance instrument. Organisations must
-# perform their own compliance assessments with qualified advisors before
-# deploying in regulated environments.
-#
-# Key obligations enforced:
-#   s.25    — Cross-border transfer restrictions
-#   s.24    — Data minimisation principle
-#   s.30    — Accountability / audit trail requirements
-#   s.2(1)  — Definition of sensitive personal data (Schedule 1)
-#   s.22(5) — Breach notification (72h to NDPC)
-
-version: "1.0"
-name: ndpa-data-residency
-description: >
-  NDPA 2023 compliance policy for AI agents processing Nigerian personal data.
-  Enforces cross-border transfer restrictions, sensitive data handling controls,
-  and data minimisation obligations. Deny-by-default on cross-border data flows.
-
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+agent_control_specification_version: 0.3.1-beta
 metadata:
-  source_regulation: "Nigeria Data Protection Act 2023 (NDPA 2023) — ss. 22, 24, 25, 30"
-  jurisdiction: "NG"
-  enforcing_authority: "Nigeria Data Protection Commission (NDPC)"
-
-rules:
-
-  # =========================================================================
-  # NDPA s.25 — Cross-Border Data Transfer Restrictions
-  # Personal data may only leave Nigeria where the destination country
-  # has adequate data protection, or where explicit consent has been obtained
-  # and documented. AI agents must not autonomously route PII offshore.
-  # =========================================================================
-
-  - name: ndpa-crossborder-explicit-transfer-block
-    condition:
-      field: action
-      operator: matches
-      value: "^(send_to_external|export_data|upload_to_cloud|forward_to|relay_data|sync_to_remote)$"
-    action: block
-    priority: 95
-    message: "NDPA s.25: Cross-border data transfer requires human approval — destination adequacy must be verified"
-
-  - name: ndpa-crossborder-region-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(send(ing)?|transfer(ring)?|export(ing)?|upload(ing)?|forward(ing)?).{0,60}(outside\\s+nigeria|cross.?border|international\\s+transfer|foreign\\s+server|offshore)"
-    action: block
-    priority: 95
-    message: "NDPA s.25: Cross-border personal data transfer detected — requires NDPC adequacy verification or documented consent"
-
-  - name: ndpa-crossborder-us-eu-routing
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(aws\\s+us|azure\\s+(east|west|central)(?!\\s+africa)|gcp\\s+us|s3\\.amazonaws\\.com(?!\\.ng)|cloudflare\\s+us|server\\s+in\\s+(usa|uk|germany|france|ireland|netherlands))"
-    action: block
-    priority: 90
-    message: "NDPA s.25: Detected routing to non-Nigerian cloud region — cross-border transfer approval required"
-
-  # =========================================================================
-  # NDPA Schedule 1 — Sensitive Personal Data
-  # Processing of health data, biometric data, genetic data, ethnic/racial
-  # origin, political opinions, religious beliefs, trade union membership,
-  # and sexual life requires explicit lawful basis and heightened controls.
-  # =========================================================================
-
-  - name: ndpa-sensitive-health-data-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(diagnosis|medical\\s+record|health\\s+condition|HIV|mental\\s+health|prescription|blood\\s+type|patient\\s+data)"
-    action: block
-    priority: 95
-    message: "NDPA Schedule 1: Health/medical data detected — sensitive personal data processing requires explicit lawful basis"
-
-  - name: ndpa-sensitive-biometric-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(fingerprint|facial\\s+recognition|retina\\s+scan|voice\\s+print|biometric\\s+(data|template|hash))"
-    action: deny
-    priority: 100
-    message: "NDPA Schedule 1: Biometric data must not be processed or transmitted by AI agents without a documented lawful basis and DPO sign-off"
-
-  - name: ndpa-sensitive-ethnic-political-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(ethnic\\s+origin|tribe|political\\s+(affiliation|opinion|party)|religious\\s+(belief|denomination)|trade\\s+union)"
-    action: audit
-    priority: 85
-    message: "NDPA Schedule 1: Sensitive special-category data detected — audit logged for NDPC accountability requirement"
-
-  # =========================================================================
-  # NDPA s.24 — Data Minimisation
-  # Agents must not collect or process more personal data than is necessary
-  # for the stated purpose. Bulk data collection and mass exports are
-  # presumptively disproportionate.
-  # =========================================================================
-
-  - name: ndpa-bulk-data-export-block
-    condition:
-      field: action
-      operator: matches
-      value: "^(bulk_export|export_all|download_all_records|dump_database|full_table_export|batch_download_pii)$"
-    action: deny
-    priority: 100
-    message: "NDPA s.24: Bulk personal data export violates data minimisation principle — not permitted without documented legal basis"
-
-  - name: ndpa-mass-data-collection-flag
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(collect\\s+all\\s+(user|customer|patient)\\s+(data|records)|scrape\\s+(all|every)\\s+(profile|account)|harvest\\s+(phone|email|address)\\s+list)"
-    action: deny
-    priority: 100
-    message: "NDPA s.24: Mass personal data collection detected — violates data minimisation and purpose limitation principles"
-
-  # =========================================================================
-  # NDPA s.30 — Accountability & Audit Trail
-  # Data controllers must demonstrate compliance. Every AI agent decision
-  # touching personal data must be logged for NDPC accountability purposes.
-  # =========================================================================
-
-  - name: ndpa-pii-audit-all-operations
-    condition:
-      field: action
-      operator: matches
-      value: "^(read_user|get_customer|lookup_account|fetch_profile|query_personal|access_pii|retrieve_record).*"
-    action: audit
-    priority: 80
-    message: "NDPA s.30: Personal data access logged — accountability audit trail for NDPC compliance"
-
-  - name: ndpa-pii-update-audit
-    condition:
-      field: action
-      operator: matches
-      value: "^(update_user|modify_profile|patch_account|edit_customer|change_personal).*"
-    action: audit
-    priority: 80
-    message: "NDPA s.30: Personal data modification logged — accountability audit trail for NDPC compliance"
-
-  # =========================================================================
-  # NDPA s.22(5) — Breach Notification (72-hour window)
-  # Agents must not suppress, delay, or obscure breach-related signals.
-  # =========================================================================
-
-  - name: ndpa-breach-suppression-block
-    condition:
-      field: output
-      operator: matches
-      value: "(?i)(don'?t\\s+(report|notify|disclose)|hide\\s+(the\\s+)?(breach|incident|leak)|suppress\\s+(alert|notification|report)|delay\\s+(breach|incident)\\s+(report|notification))"
-    action: deny
-    priority: 100
-    message: "NDPA s.22(5): Agent cannot suppress or delay breach notifications — 72-hour NDPC reporting obligation applies"
-
-defaults:
-  action: audit
-  max_tokens: 8000
-  max_tool_calls: 25
+  name: ndpa-data-residency
+  version: "1.0"
+extends: []
+policies:
+  ndpa_data_residency:
+    type: rego
+    bundle: rego
+intervention_points:
+  input:
+    policy_target: $.input.body
+    policy:
+      id: ndpa_data_residency
+      query: data.agt_policies_nigeria.ndpa.acs_input_result
+  output:
+    policy_target: $.output.content
+    policy:
+      id: ndpa_data_residency
+      query: data.agt_policies_nigeria.ndpa.acs_output_result

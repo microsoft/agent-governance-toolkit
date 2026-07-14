@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from agent_os.policies import PolicyEvaluator
+from agt.policies.runtime import AgtRuntime
 from agentmesh.governance import AuditLog, FileAuditSink
 
 try:
@@ -39,7 +39,7 @@ class AGTGuardrailProvider:
     def __init__(
         self,
         *,
-        policy_path: str | os.PathLike[str] | None = None,
+        manifest_path: str | os.PathLike[str] | None = None,
         audit_path: str | os.PathLike[str] | None = None,
         fail_closed: bool = True,
         framework: str = "deerflow",
@@ -49,11 +49,12 @@ class AGTGuardrailProvider:
         self.fail_closed = fail_closed
 
         base_dir = Path(__file__).resolve().parents[1]
-        self.policy_path = Path(policy_path or base_dir / "policies" / "deerflow-policy.yaml").expanduser()
+        self.manifest_path = Path(
+            manifest_path or base_dir / "policies" / "manifest.yaml"
+        ).expanduser()
         self.audit_path = Path(audit_path or base_dir / "audit" / "deerflow-agt-audit.jsonl").expanduser()
 
-        self._evaluator = PolicyEvaluator()
-        self._load_policy(self.policy_path)
+        self._runtime = AgtRuntime.from_manifest(self.manifest_path)
 
         self.audit_path.parent.mkdir(parents=True, exist_ok=True)
         secret = _audit_secret()
@@ -65,7 +66,15 @@ class AGTGuardrailProvider:
 
         context = self._normalize_request(request)
         try:
-            result = self._evaluator.evaluate(context)
+            result = self._runtime.evaluate(
+                "input",
+                {
+                    "envelope": {
+                        "agent_id": context.get("agent_id") or "deerflow-agent"
+                    },
+                    "input": {"body": context},
+                },
+            )
             decision = self._decision_from_result(result)
         except Exception as exc:
             decision = self._error_decision(exc)
@@ -79,15 +88,9 @@ class AGTGuardrailProvider:
         return self.evaluate(request)
 
     def close(self) -> None:
+        self._runtime.close()
         if hasattr(self._audit_sink, "close"):
             self._audit_sink.close()
-
-    def _load_policy(self, policy_path: Path) -> None:
-        resolved = policy_path.resolve()
-        if not resolved.exists():
-            raise FileNotFoundError(f"AGT policy path does not exist: {resolved}")
-        load_path = resolved.parent if resolved.is_file() else resolved
-        self._evaluator.load_policies(load_path)
 
     def _normalize_request(self, request: Any) -> dict[str, Any]:
         tool_name = _read(request, "tool_name") or ""
@@ -138,31 +141,28 @@ class AGTGuardrailProvider:
         return context
 
     def _decision_from_result(self, result: Any) -> GuardrailDecision:
-        allowed = bool(_read(result, "allowed"))
-        matched_rule = _read(result, "matched_rule")
-        reason = _read(result, "reason") or _read(result, "message")
-        action = _read(result, "action")
+        allowed = bool(result.is_allowed())
+        reason = result.reason_code or result.message
+        policy_id = reason.removeprefix("policy:") if reason else None
 
         code = "agt.allowed" if allowed else "agt.denied"
-        message = reason or ("allowed by AGT policy" if allowed else "denied by AGT policy")
-        if matched_rule:
-            message = f"{message} (rule: {matched_rule})"
+        message = result.public_error_message() if not allowed else (reason or "allowed")
 
         return GuardrailDecision(
             allow=allowed,
             reasons=[GuardrailReason(code=code, message=message)],
-            policy_id=str(matched_rule) if matched_rule else None,
+            policy_id=policy_id,
             metadata={
                 "framework": self.framework,
-                "agt_action": action,
-                "matched_rule": matched_rule,
+                "verdict": result.verdict,
+                "reason_code": result.reason_code,
             },
         )
 
     def _error_decision(self, exc: Exception) -> GuardrailDecision:
         allow = not self.fail_closed
-        code = "agt.evaluator_error_allow" if allow else "agt.evaluator_error_deny"
-        message = f"AGT policy evaluation failed: {exc}"
+        code = "agt.runtime_error_allow" if allow else "agt.runtime_error_deny"
+        message = f"AGT runtime evaluation failed: {exc}"
         return GuardrailDecision(
             allow=allow,
             reasons=[GuardrailReason(code=code, message=message)],
