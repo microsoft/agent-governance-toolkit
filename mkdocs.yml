@@ -127,6 +127,9 @@ nav:
     - OpenCode CLI governance package: packages/opencode-governance.md
     - .NET package: packages/dotnet-sdk.md
     - VS Code Extension: packages/agent-os-vscode.md
+  - Agent Skills:
+    - Overview: skills/index.md
+    - AGT policy authoring: skills/agt-policy-authoring/SKILL.md
   - Tutorials:
     - Overview: tutorials/index.md
     - Policy Engine: tutorials/01-policy-engine.md
