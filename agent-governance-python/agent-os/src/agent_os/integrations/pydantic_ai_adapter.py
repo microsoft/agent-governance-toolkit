@@ -367,9 +367,9 @@ class PydanticAIKernel(BaseIntegration):
                     )
                     raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None and isinstance(
-                    bridge_result.transform.value, str
+                    bridge_result.transformed_value, str
                 ):
-                    return bridge_result.transform.value
+                    return bridge_result.transformed_value
                 return prompt
 
             @property
@@ -475,9 +475,9 @@ class PydanticAIKernel(BaseIntegration):
 
         effective_args = arguments
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, dict
+            bridge_result.transformed_value, dict
         ):
-            effective_args = bridge_result.transform.value
+            effective_args = bridge_result.transformed_value
 
         if not bridge_result.allowed:
             return ToolCallResult(
@@ -766,9 +766,9 @@ class GovernanceCapability:
             raise bridge_result.to_policy_violation(PolicyViolationError)
         effective_prompt = prompt
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, str
+            bridge_result.transformed_value, str
         ):
-            effective_prompt = bridge_result.transform.value
+            effective_prompt = bridge_result.transformed_value
         self._audit.append(
             {"event": "run_start", "prompt_length": len(effective_prompt)}
         )

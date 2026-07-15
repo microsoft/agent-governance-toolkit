@@ -374,11 +374,11 @@ class A2AGovernanceAdapter:
                 ctx, body=combined_text, source="a2a-peer"
             )
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
                 # Capture the AGT-redacted payload so the host can
                 # substitute it into the outbound task per AGT-DELTA D1.1.
-                transform_value = bridge_result.transform.value
+                transform_value = bridge_result.transformed_value
             elif not bridge_result.allowed:
                 reason_text = (
                     bridge_result.reason

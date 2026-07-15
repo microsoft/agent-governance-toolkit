@@ -751,10 +751,10 @@ class AgentShieldKernel:
                 args=params,
             )
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, dict
+                bridge_result.transformed_value, dict
             ):
                 # Rewrite parameters per AGT-DELTA D1.1.
-                params = dict(bridge_result.transform.value)
+                params = dict(bridge_result.transformed_value)
             # Fold the AGT verdict into the execution stage so the
             # returned ToolCallVerdict reflects both layers.
             exec_verdict = self._merge_bridge_verdict(exec_verdict, bridge_result)
@@ -992,9 +992,9 @@ class AgentShieldKernel:
         # verdict already denied, the AGT engine may have produced a
         # redaction the host wants to surface.
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, str
+            bridge_result.transformed_value, str
         ):
-            shield_verdict.modified_value = bridge_result.transform.value
+            shield_verdict.modified_value = bridge_result.transformed_value
 
         if bridge_result.allowed:
             return shield_verdict
