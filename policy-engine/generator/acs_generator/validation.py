@@ -40,6 +40,8 @@ MAX_SOURCE_LABEL = 512
 # keys and numeric list indices only; the core rejects string bracket keys.
 _TRANSFORM_PATH_RE = re.compile(r"^\$policy_target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
 _YAML_BOOL_TAG = "tag:yaml.org,2002:bool"
+_YAML_FLOAT_TAG = "tag:yaml.org,2002:float"
+_YAML_INT_TAG = "tag:yaml.org,2002:int"
 _YAML_TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
 
 
@@ -51,7 +53,7 @@ _ManifestLoader.yaml_implicit_resolvers = {
     key: [
         (tag, pattern)
         for tag, pattern in resolvers
-        if tag not in {_YAML_BOOL_TAG, _YAML_TIMESTAMP_TAG}
+        if tag not in {_YAML_BOOL_TAG, _YAML_FLOAT_TAG, _YAML_INT_TAG, _YAML_TIMESTAMP_TAG}
     ]
     for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
 }
@@ -59,6 +61,20 @@ _ManifestLoader.add_implicit_resolver(
     _YAML_BOOL_TAG,
     re.compile(r"^(?:true|false)$", re.IGNORECASE),
     list("tTfF"),
+)
+_ManifestLoader.add_implicit_resolver(
+    _YAML_INT_TAG,
+    re.compile(r"^(?:[-+]?(?:0|[1-9][0-9]*)|[-+]?0o[0-7]+|[-+]?0x[0-9a-fA-F]+)$"),
+    list("-+0123456789"),
+)
+_ManifestLoader.add_implicit_resolver(
+    _YAML_FLOAT_TAG,
+    re.compile(
+        r"^(?:[-+]?(?:(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)"
+        r"(?:[eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+)"
+        r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
+    ),
+    list("-+0123456789."),
 )
 
 
@@ -70,7 +86,12 @@ def _construct_unique_mapping(
     seen: set[Any] = set()
     for key_node, _ in node.value:
         if key_node.tag == "tag:yaml.org,2002:merge":
-            continue
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                "YAML merge keys are not supported",
+                key_node.start_mark,
+            )
         key = loader.construct_object(key_node, deep=deep)
         try:
             duplicate = key in seen
@@ -279,7 +300,7 @@ def _validate_manifest_instance(manifest: dict[str, Any]) -> ValidationDiagnosti
         path="$",
         depth=0,
         active=set(),
-        validated=set(),
+        validated={},
     )
 
 
@@ -289,7 +310,7 @@ def _validate_json_value(
     path: str,
     depth: int,
     active: set[int],
-    validated: set[int],
+    validated: dict[int, int],
 ) -> ValidationDiagnostic | None:
     if depth > MAX_MANIFEST_DEPTH:
         return ValidationDiagnostic(
@@ -333,7 +354,8 @@ def _validate_json_value(
                 source="manifest",
                 path=path,
             )
-        if identity in validated:
+        validated_depth = validated.get(identity)
+        if validated_depth is not None and validated_depth >= depth:
             return None
         active.add(identity)
         for key, child in value.items():
@@ -368,7 +390,7 @@ def _validate_json_value(
                 active.remove(identity)
                 return child_diagnostic
         active.remove(identity)
-        validated.add(identity)
+        validated[identity] = max(depth, validated_depth or 0)
         return None
     if isinstance(value, list):
         identity = id(value)
@@ -380,7 +402,8 @@ def _validate_json_value(
                 source="manifest",
                 path=path,
             )
-        if identity in validated:
+        validated_depth = validated.get(identity)
+        if validated_depth is not None and validated_depth >= depth:
             return None
         active.add(identity)
         for index, child in enumerate(value):
@@ -395,7 +418,7 @@ def _validate_json_value(
                 active.remove(identity)
                 return child_diagnostic
         active.remove(identity)
-        validated.add(identity)
+        validated[identity] = max(depth, validated_depth or 0)
         return None
     return ValidationDiagnostic(
         component="manifest",

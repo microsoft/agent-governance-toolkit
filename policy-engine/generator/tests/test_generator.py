@@ -444,6 +444,74 @@ intervention_points:
     assert report.valid
 
 
+def test_string_validation_api_rejects_yaml_merge_keys() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  base: &base
+    name: base
+  child:
+    <<: *base
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_parse_error"
+    assert "merge keys are not supported" in report.diagnostics[0].message
+
+
+@pytest.mark.parametrize("value", ["010", "1_000", "1:2:3"])
+def test_string_validation_api_does_not_apply_yaml_11_numbers(value: str) -> None:
+    report = validate_acs_artifacts(
+        f"""
+agent_control_specification_version: "0.3.1-beta"
+metadata: {{}}
+approval:
+  timeout_seconds: {value}
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].path == "$.approval.timeout_seconds"
+
+
+def test_string_validation_api_accepts_yaml_12_prefixed_integer() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata: {}
+approval:
+  timeout_seconds: 0o12
+""",
+        {},
+    )
+
+    assert report.valid
+
+
+def test_string_validation_api_rechecks_aliases_at_deeper_paths() -> None:
+    lines = [
+        'agent_control_specification_version: "0.3.1-beta"',
+        "metadata:",
+        "  leaf: &leaf",
+        "    child: ok",
+        "  deep:",
+    ]
+    indent = "    "
+    for index in range(62):
+        lines.append(f"{indent}n{index}:")
+        indent += "  "
+    lines.append(f"{indent}*leaf")
+
+    report = validate_acs_artifacts("\n".join(lines) + "\n", {})
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_depth_exceeded"
+
+
 def test_string_validation_api_returns_diagnostics_for_hostile_text() -> None:
     nested = '{"metadata":{"value":' + "[" * 600 + "]" * 600 + "}}"
     manifest_report = validate_acs_artifacts(nested, {})
