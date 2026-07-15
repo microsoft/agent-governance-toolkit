@@ -1,15 +1,20 @@
-name: Python E2E
+name: E2E Python
 
 on:
   push:
     branches:
-      - "**"
+      - main
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "site/**"
+      - "mkdocs.yml"
   pull_request:
-    paths:
-      - "agent-governance-python/agent-governance-toolkit-core/**"
-      - "agent-governance-python/agent-os/**"
-      - "tests/e2e_python/**"
-      - ".github/workflows/e2e-python.yml"
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "site/**"
+      - "mkdocs.yml"
   workflow_dispatch: {}
 
 concurrency:
