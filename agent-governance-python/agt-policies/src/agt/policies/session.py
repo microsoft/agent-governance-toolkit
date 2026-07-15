@@ -19,10 +19,10 @@ class _RuntimeLike(Protocol):
     def evaluate(
         self, intervention_point: str, snapshot: Mapping[str, Any]
     ) -> PolicyEvaluation:
-        raise NotImplementedError
+        """Evaluate one native intervention-point snapshot."""
 
     def close(self) -> None:
-        raise NotImplementedError
+        """Release resources owned by the runtime."""
 
 
 class AdapterRuntimeSession:
