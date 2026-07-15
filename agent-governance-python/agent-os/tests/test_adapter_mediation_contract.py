@@ -186,6 +186,7 @@ def test_native_adapters_route_declared_intervention_points(
     assert "get_runtime_bridge(" not in source
     for call in required_calls:
         assert call in source, f"{adapter_name} must route through {call}"
+    assert ".transform.value" not in source
 
 
 @pytest.mark.parametrize("adapter_name", sorted(NATIVE_HOOK_CONTRACTS))

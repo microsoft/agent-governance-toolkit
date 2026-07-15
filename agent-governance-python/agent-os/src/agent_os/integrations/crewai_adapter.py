@@ -262,10 +262,10 @@ class GovernanceHooks:
                 call_id=getattr(context, "tool_call_id", "call-1"),
             )
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, dict
+                bridge_result.transformed_value, dict
             ):
                 try:
-                    context.tool_input = bridge_result.transform.value
+                    context.tool_input = bridge_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
             if not bridge_result.allowed:
@@ -358,10 +358,10 @@ class GovernanceHooks:
                     )
                     raise post_result.to_policy_violation(PolicyViolationError)
                 if post_result.transform is not None and isinstance(
-                    post_result.transform.value, str
+                    post_result.transformed_value, str
                 ):
                     try:
-                        context.tool_result = post_result.transform.value
+                        context.tool_result = post_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
 
@@ -459,20 +459,20 @@ class GovernanceHooks:
                     )
                     return False
                 if pre_result.transform is not None and isinstance(
-                    pre_result.transform.value, str
+                    pre_result.transformed_value, str
                 ):
                     # Rewrite the last user message content per AGT D1.1.
                     for msg in reversed(messages):
                         if isinstance(msg, dict) and isinstance(
                             msg.get("content"), str
                         ):
-                            msg["content"] = pre_result.transform.value
+                            msg["content"] = pre_result.transformed_value
                             break
                         if hasattr(msg, "content") and isinstance(
                             getattr(msg, "content"), str
                         ):
                             try:
-                                msg.content = pre_result.transform.value
+                                msg.content = pre_result.transformed_value
                             except Exception:  # noqa: BLE001 — best-effort rewrite
                                 pass
                             break
@@ -544,14 +544,14 @@ class GovernanceHooks:
                     )
                     raise post_result.to_policy_violation(PolicyViolationError)
                 if post_result.transform is not None and isinstance(
-                    post_result.transform.value, str
+                    post_result.transformed_value, str
                 ):
                     # Replace the LLM response per AGT D1.1.
                     try:
-                        context.response = post_result.transform.value
+                        context.response = post_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
-                    return post_result.transform.value
+                    return post_result.transformed_value
 
             return None  # keep original response
 

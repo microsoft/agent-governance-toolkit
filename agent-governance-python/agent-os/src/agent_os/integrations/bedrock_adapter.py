@@ -413,14 +413,14 @@ class _GovernedEventStream:
                             call_id=str(self._ctx.call_count + 1),
                         )
                         if bridge_result.transform is not None and isinstance(
-                            bridge_result.transform.value, dict
+                            bridge_result.transformed_value, dict
                         ):
                             # Rewrite the action-group parameters in
                             # place per AGT-DELTA D1.1 so the
                             # downstream Bedrock consumer sees the
                             # AGT-redacted payload.
                             try:
-                                ag["parameters"] = bridge_result.transform.value
+                                ag["parameters"] = bridge_result.transformed_value
                             except Exception:  # noqa: BLE001 — best-effort rewrite
                                 pass
                         if not bridge_result.allowed:
@@ -532,9 +532,9 @@ class GovernedBedrockClient:
         if self._kernel.enable_agt_pii_routing and input_text:
             bridge_result = self._kernel.evaluate_input(self._ctx, input_text)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
-                input_text = bridge_result.transform.value
+                input_text = bridge_result.transformed_value
                 kwargs["inputText"] = input_text
             if not bridge_result.allowed:
                 self._kernel.emit(GovernanceEventType.POLICY_VIOLATION, {
@@ -554,11 +554,11 @@ class GovernedBedrockClient:
             if input_text:
                 bridge_result = self._kernel.evaluate_input(self._ctx, input_text)
                 if bridge_result.transform is not None and isinstance(
-                    bridge_result.transform.value, str
+                    bridge_result.transformed_value, str
                 ):
                     # Rewrite the outbound inputText per AGT-DELTA D1.1 so
                     # the Bedrock client sees the AGT-redacted payload.
-                    input_text = bridge_result.transform.value
+                    input_text = bridge_result.transformed_value
                     kwargs["inputText"] = input_text
                 if not bridge_result.allowed:
                     self._kernel.emit(GovernanceEventType.POLICY_VIOLATION, {
