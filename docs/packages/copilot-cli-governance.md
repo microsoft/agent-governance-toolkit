@@ -1,7 +1,13 @@
+---
+title: "@microsoft/agent-governance-copilot-cli — Copilot CLI governance package"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 # @microsoft/agent-governance-copilot-cli — Copilot CLI governance package
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/%40microsoft/agent-governance-copilot-cli)](https://www.npmjs.com/package/@microsoft/agent-governance-copilot-cli)
 
 `@microsoft/agent-governance-copilot-cli` is the production install surface for AGT-backed
@@ -108,7 +114,7 @@ If a custom policy becomes invalid, remove `~/.copilot/agt/policy.json` or point
 For the scenario-driven tutorial, sample prompts, and expected outcomes, see:
 
 - [Tutorial 46 — Copilot CLI governance installer](../tutorials/46-copilot-cli-governance.md)
-- [`examples/copilot-cli-agt`](../../examples/copilot-cli-agt/README.md)
+- [`examples/copilot-cli-agt`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/copilot-cli-agt/README.md)
 
 ## Release model
 

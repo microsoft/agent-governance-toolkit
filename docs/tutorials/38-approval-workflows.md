@@ -1,3 +1,9 @@
+---
+title: "Tutorial 38: Human-in-the-Loop Approval Workflows"
+last_reviewed: 2026-04-23
+owner: agt-maintainers
+---
+
 # Tutorial 38: Human-in-the-Loop Approval Workflows
 
 > **Time**: 15 minutes · **Level**: Intermediate · **Prerequisites**: Tutorial 36 (govern basics)

@@ -1,3 +1,9 @@
+---
+title: "Proposal: EvidenceAnchor — Pluggable External Anchoring for agt-evidence.json"
+last_reviewed: 2026-05-18
+owner: agt-maintainers
+---
+
 # Proposal: EvidenceAnchor — Pluggable External Anchoring for agt-evidence.json
 
 **Author:** @giskard09

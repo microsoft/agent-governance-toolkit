@@ -1,3 +1,9 @@
+---
+title: "Citadel + AGT Integration Architecture"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Citadel + AGT Integration Architecture
 
 This document describes how the Agent Governance Toolkit (AGT) integrates with
@@ -206,7 +212,7 @@ to log AGT governance posture without adding AGT to the request hot path:
 3. Fragment strips AGT headers before forwarding to backend (defense in depth)
 4. Response includes `X-AGT-APIM-Request-Id` for cross-system correlation
 
-See [`examples/citadel-governed-agent/apim-policies/`](../../examples/citadel-governed-agent/apim-policies/)
+See [`examples/citadel-governed-agent/apim-policies/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/citadel-governed-agent/apim-policies)
 for the fragment XML, sample product policy, and deployment instructions.
 
 ## Getting Started
@@ -214,8 +220,8 @@ for the fragment XML, sample product policy, and deployment instructions.
 1. **Deploy Citadel Governance Hub**: Follow the [Citadel quickstart](https://github.com/Azure-Samples/ai-hub-gateway-solution-accelerator/tree/citadel-v1)
 2. **Install AGT**: `pip install agent-governance-toolkit[full]`
 3. **Configure the exporter**: Set `CITADEL_EVENTHUB_CONNECTION_STRING` and `CITADEL_APPINSIGHTS_CONNECTION_STRING`
-4. **Deploy the APIM fragment**: See [`apim-policies/README.md`](../../examples/citadel-governed-agent/apim-policies/README.md)
-5. **See the example**: [`examples/citadel-governed-agent/`](../../examples/citadel-governed-agent/)
+4. **Deploy the APIM fragment**: See [`apim-policies/README.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/citadel-governed-agent/apim-policies/README.md)
+5. **See the example**: [`examples/citadel-governed-agent/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/citadel-governed-agent)
 
 ## References
 

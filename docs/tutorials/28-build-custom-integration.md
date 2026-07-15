@@ -1,3 +1,9 @@
+---
+title: "Tutorial 28 — Building Custom Governance Integrations"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Tutorial 28 — Building Custom Governance Integrations
 
 > **Package:** `agent-os-kernel` / standalone · **Time:** 30 minutes · **Prerequisites:** Python 3.10+
@@ -849,7 +855,7 @@ to match the toolkit version on acceptance.
   credentials, DIDs, trust scoring
 - [Tutorial 03 — Framework Integrations](03-framework-integrations.md) — Built-in
   adapters for OpenAI, LangChain, CrewAI, and more
-- [CONTRIBUTING.md](../../CONTRIBUTING.md) — Contribution requirements
+- [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) — Contribution requirements
 
 ---
 

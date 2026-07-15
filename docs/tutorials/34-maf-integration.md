@@ -1,3 +1,9 @@
+---
+title: "Tutorial 34 — Governing Agents with Microsoft Agent Framework (MAF)"
+last_reviewed: 2026-05-16
+owner: agt-maintainers
+---
+
 # Tutorial 34 — Governing Agents with Microsoft Agent Framework (MAF)
 
 > **Level:** Intermediate · **Time:** 30 min · **Prerequisites:** Tutorial 01 (Policy Engine), Python 3.10+, `pip install agent-framework agent-os-kernel`
@@ -204,7 +210,7 @@ tier1_agent = Agent(name="tier1-support", kernel=tier1_kernel, ...)
 admin_agent = Agent(name="admin-support", kernel=admin_kernel, ...)
 ```
 
-See the full demo: [`examples/demos/maf-integration/02_helpdesk_it.py`](../../examples/demos/maf-integration/02_helpdesk_it.py)
+See the full demo: [`examples/demos/maf-integration/02_helpdesk_it.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/demos/maf-integration/02_helpdesk_it.py)
 
 ## Step 6 — Prompt Injection Detection
 
@@ -236,7 +242,7 @@ kernel.add_agent_middleware(
 support_agent = Agent(name="support", kernel=kernel, ...)
 ```
 
-See the full demo: [`examples/demos/maf-integration/03_contoso_support.py`](../../examples/demos/maf-integration/03_contoso_support.py)
+See the full demo: [`examples/demos/maf-integration/03_contoso_support.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/demos/maf-integration/03_contoso_support.py)
 
 ## Step 7 — Folder-Level Policies for Multi-Agent Systems
 
@@ -266,9 +272,9 @@ result = evaluator.evaluate({
 
 | Demo | Scenario | Key Governance Features |
 |---|---|---|
-| [`01_contoso_bank.py`](../../examples/demos/maf-integration/01_contoso_bank.py) | Banking | PII blocking, fund transfer denial, SOC2 audit trail |
-| [`02_helpdesk_it.py`](../../examples/demos/maf-integration/02_helpdesk_it.py) | IT Support | Role-based tool access, privilege escalation prevention |
-| [`03_contoso_support.py`](../../examples/demos/maf-integration/03_contoso_support.py) | Customer Chat | Jailbreak detection, system prompt extraction defense |
+| [`01_contoso_bank.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/demos/maf-integration/01_contoso_bank.py) | Banking | PII blocking, fund transfer denial, SOC2 audit trail |
+| [`02_helpdesk_it.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/demos/maf-integration/02_helpdesk_it.py) | IT Support | Role-based tool access, privilege escalation prevention |
+| [`03_contoso_support.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/demos/maf-integration/03_contoso_support.py) | Customer Chat | Jailbreak detection, system prompt extraction defense |
 
 ## Next Steps
 

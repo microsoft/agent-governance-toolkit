@@ -1,3 +1,9 @@
+---
+title: "Tutorial 52: Chaos Testing Your AI Agents"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 # Tutorial 52: Chaos Testing Your AI Agents
 
 > **Package:** `agent-sre` · **Time:** 20 minutes · **Level:** Intermediate

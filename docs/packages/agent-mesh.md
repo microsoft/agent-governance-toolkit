@@ -1,3 +1,9 @@
+---
+title: "AgentMesh — Public Preview"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # AgentMesh — Public Preview
@@ -9,7 +15,7 @@
 *Identity · Trust · Reward · Governance*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agentmesh-platform)](https://pypi.org/project/agentmesh-platform/)
 [![awesome-AI-Agents](https://img.shields.io/badge/Awesome--AI--Agents-listed-orange)](https://github.com/Jenqyang/Awesome-AI-Agents/pull/45)
@@ -25,7 +31,7 @@
 
 > 📦 **Install the full stack:** `pip install agent-governance-toolkit[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#quick-start) • [MCP Proxy](#the-agentmesh-proxy-ssl-for-ai-agents) • [Examples](#examples--integrations) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#quick-start) • [MCP Proxy](#the-agentmesh-proxy-ssl-for-ai-agents) • [Examples](#examples-integrations) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -310,22 +316,22 @@ pip install -e .
 
 | Example | Use Case | Key Features |
 |---------|----------|--------------|
-| [Registration Hello World](./examples/00-registration-hello-world/) | Agent registration walkthrough | Identity, DID, sponsor handshake |
-| [MCP Tool Server](./examples/01-mcp-tool-server/) | Secure MCP server with governance | Rate limiting, output sanitization, audit logs |
-| [Multi-Agent Customer Service](./examples/02-customer-service/) | Customer support automation | Trust handshakes, delegation, A2A |
-| [Healthcare HIPAA](./examples/03-healthcare-hipaa/) | HIPAA-compliant data analysis | Compliance automation, PHI protection, audit logs |
-| [DevOps Automation](./examples/04-devops-automation/) | Just-in-time DevOps credentials | Ephemeral creds, capability scoping |
-| [GitHub PR Review](./examples/05-github-integration/) | Code review agent | Output policies, trust decay. Shadow mode has been moved to Agent SRE. |
+| [Registration Hello World](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/00-registration-hello-world) | Agent registration walkthrough | Identity, DID, sponsor handshake |
+| [MCP Tool Server](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/01-mcp-tool-server) | Secure MCP server with governance | Rate limiting, output sanitization, audit logs |
+| [Multi-Agent Customer Service](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/02-customer-service) | Customer support automation | Trust handshakes, delegation, A2A |
+| [Healthcare HIPAA](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/03-healthcare-hipaa) | HIPAA-compliant data analysis | Compliance automation, PHI protection, audit logs |
+| [DevOps Automation](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/04-devops-automation) | Just-in-time DevOps credentials | Ephemeral creds, capability scoping |
+| [GitHub PR Review](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/examples/05-github-integration) | Code review agent | Output policies, trust decay. Shadow mode has been moved to Agent SRE. |
 
 **Framework integrations:**
-- **[Claude Desktop](./docs/integrations/claude-desktop.md)** - Secure MCP tools with one command
-- [LangChain Integration](./examples/integrations/langchain.md) - Secure LangChain agents with policies
-- [CrewAI Integration](./examples/integrations/crewai.md) - Multi-agent crew governance
-- [LangGraph](./src/agentmesh/integrations/langgraph/) - Trust checkpoints for graph workflows (built-in)
-- [OpenAI Swarm](./src/agentmesh/integrations/swarm/) - Trust-verified handoffs (built-in)
-- [Dify](../../agent-governance-python/agentmesh-integrations/dify/README.md) - Trust middleware for Dify workflows
+- **[Claude Desktop](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/integrations/claude-desktop.md)** - Secure MCP tools with one command
+- [LangChain Integration](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/examples/integrations/langchain.md) - Secure LangChain agents with policies
+- [CrewAI Integration](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/examples/integrations/crewai.md) - Multi-agent crew governance
+- [LangGraph](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/src/agentmesh/integrations/langgraph) - Trust checkpoints for graph workflows (built-in)
+- [OpenAI Swarm](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-mesh/src/agentmesh/integrations/swarm) - Trust-verified handoffs (built-in)
+- [Dify](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agentmesh-integrations/dify/README.md) - Trust middleware for Dify workflows
 
-📚 **[Browse all examples →](./examples/)**
+📚 **[Browse all examples →](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples)**
 
 ### Trust Visualization Dashboard
 
@@ -384,7 +390,7 @@ agentmesh init-integration --claude
 # Restart Claude Desktop - done!
 ```
 
-Learn more: **[Claude Desktop Integration Guide](./docs/integrations/claude-desktop.md)**
+Learn more: **[Claude Desktop Integration Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mesh/docs/integrations/claude-desktop.md)**
 
 ## Core Concepts
 
@@ -617,7 +623,7 @@ classifier = EUAIActRiskClassifier(config_path="my_updated_annex_iii.yaml")
 | **Q3 2026** | AI Card spec contribution, CNCF Sandbox application |
 | **Q4 2026** | Managed cloud service (AgentMesh Cloud), SOC2 Type II |
 
-See our [full roadmap](docs/roadmap.md) for details.
+See the repository [roadmap](../ROADMAP.md) for details.
 
 ## Known Limitations & Open Work
 
@@ -635,7 +641,7 @@ See our [full roadmap](docs/roadmap.md) for details.
 
 ### Integration Caveats (Dify)
 
-The [Dify integration](../../agent-governance-python/agentmesh-integrations/dify/README.md) has these documented limitations:
+The [Dify integration](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agentmesh-integrations/dify/README.md) has these documented limitations:
 - Request body signature verification (`X-Agent-Signature` header) is not yet verified by middleware
 - Trust score time decay is not yet implemented (scores don't decay over time)
 - Audit logs are in-memory only (not persistent across multi-worker deployments)
@@ -679,11 +685,11 @@ Yes. AgentMesh provides automated compliance mapping for EU AI Act, SOC 2, HIPAA
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT — See [LICENSE](LICENSE) for details.
+MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) for details.
 
 ---
 

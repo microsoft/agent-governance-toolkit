@@ -1,3 +1,9 @@
+---
+title: "Tutorial 03 — Wrapping AI Frameworks with Governance"
+last_reviewed: 2026-06-22
+owner: agt-maintainers
+---
+
 # Tutorial 03 — Wrapping AI Frameworks with Governance
 
 > **Package:** `agent-os-kernel` · **Time:** 25 minutes · **Prerequisites:** Python 3.10+
@@ -771,6 +777,6 @@ violations route to the same handler, and the audit trail is unified.
 
 - [Tutorial 01 — Policy Engine](./01-policy-engine.md)
 - [Tutorial 02 — Trust & Identity](./02-trust-and-identity.md)
-- [OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)
-- [API Reference — `BaseIntegration`](../../agent-governance-python/agent-os/src/agent_os/integrations/base.py)
-- [Framework adapters](../../agent-governance-python/agent-os/src/agent_os/integrations/)
+- [OWASP Compliance Mapping](../compliance/owasp-agentic-top10-architecture.md)
+- [API Reference — `BaseIntegration`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/integrations/base.py)
+- [Framework adapters](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/src/agent_os/integrations)

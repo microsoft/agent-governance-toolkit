@@ -1,3 +1,9 @@
+---
+title: "Tutorial 13 — Observability & Distributed Tracing"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 # Tutorial 13 — Observability & Distributed Tracing
 
 > **Package:** `agentmesh-runtime` · **Time:** 30 minutes · **Prerequisites:** Python 3.11+
@@ -15,7 +21,7 @@
 
 **Instrument autonomous agents with structured events, causal trace IDs, Prometheus metrics, and OpenTelemetry-compatible span export.**
 
-See also: [Tutorial 05 — Agent Reliability](05-agent-reliability.md) | [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md) | [Deployment Guide](../deployment/README.md)
+See also: [Tutorial 05 — Agent Reliability](05-agent-reliability.md) | [Tutorial 06 — Execution Sandboxing](06-execution-sandboxing.md) | [Deployment Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md)
 
 ---
 
@@ -30,7 +36,7 @@ See also: [Tutorial 05 — Agent Reliability](05-agent-reliability.md) | [Tutori
 7. [SagaSpanExporter: Distributed Tracing Spans](#7-sagaspanexporter-distributed-tracing-spans)
 8. [Integration with OpenTelemetry](#8-integration-with-opentelemetry)
 9. [.NET Governance Metrics](#9-net-governance-metrics)
-10. [Prometheus & Grafana Dashboard](#10-prometheus--grafana-dashboard)
+10. [Prometheus & Grafana Dashboard](#10-prometheus-grafana-dashboard)
 11. [Next Steps](#11-next-steps)
 
 ---
@@ -853,7 +859,7 @@ Here's where to go next:
 | Add circuit breakers and SLOs alongside metrics | [Tutorial 05 — Agent Reliability](05-agent-reliability.md) |
 | Configure audit logging for compliance | [Tutorial 04 — Audit & Compliance](04-audit-and-compliance.md) |
 | Set up trust scoring that feeds the trust gauge | [Tutorial 02 — Trust & Identity](02-trust-and-identity.md) |
-| Deploy with Prometheus and Grafana in production | [Deployment Guide](../deployment/README.md) |
+| Deploy with Prometheus and Grafana in production | [Deployment Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md) |
 
 ### Key takeaways
 

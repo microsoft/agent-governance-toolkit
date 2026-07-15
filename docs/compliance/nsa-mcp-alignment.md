@@ -1,3 +1,9 @@
+---
+title: "NSA MCP Security Considerations — Compliance Mapping"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # NSA MCP Security Considerations — Compliance Mapping
@@ -42,7 +48,7 @@
 ## Methodology
 
 - **Assessment date:** 2026-05-22
-- **Scope reviewed:** [README.md](../../README.md), [MCP Security Gateway spec](../specs/MCP-SECURITY-GATEWAY-1.0.md), [MCP trust guide](../integrations/mcp-trust-guide.md), [MCP gateway tutorial](../tutorials/07-mcp-security-gateway.md), [OWASP MCP mapping](mcp-owasp-top10-mapping.md), and the Python MCP implementation modules in `agent-governance-python/agent-os/src/agent_os/`
+- **Scope reviewed:** [README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md), [MCP Security Gateway spec](../specs/MCP-SECURITY-GATEWAY-1.0.md), [MCP trust guide](../integrations/mcp-trust-guide.md), [MCP gateway tutorial](../tutorials/07-mcp-security-gateway.md), [OWASP MCP mapping](mcp-owasp-top10-mapping.md), and the Python MCP implementation modules in `agent-governance-python/agent-os/src/agent_os/`
 - **Approach:** Map the principal security design themes reflected in the NSA MCP publication to concrete AGT runtime controls, security scanners, trust components, and compliance evidence already present in the repository
 - **Limitations:** This is a repository-backed documentation assessment only. It does not validate live production deployment posture, operational procedures, or runtime telemetry from a deployed AGT environment.
 
@@ -165,7 +171,7 @@ AGT records MCP decisions and integrates MCP governance into its broader audit a
 - **Observability integration** — broader AGT audit and telemetry patterns documented across the repo
 
 **Evidence:**
-- [README.md](../../README.md)
+- [README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md)
 - `agent-governance-python/agent-os/src/agent_os/mcp_gateway.py`
 - [OWASP MCP Top 10 mapping](mcp-owasp-top10-mapping.md)
 

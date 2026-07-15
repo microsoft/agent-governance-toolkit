@@ -1,3 +1,9 @@
+---
+title: "NIST AI Risk Management Framework (AI RMF 1.0) — Alignment Assessment"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!--
   MIT License
 
@@ -39,10 +45,10 @@
 
 1. [Executive Summary](#1-executive-summary)
 2. [Methodology](#2-methodology)
-3. [GOVERN — Policies, Processes, and Procedures](#3-govern--policies-processes-and-procedures)
-4. [MAP — Context and Risk Identification](#4-map--context-and-risk-identification)
-5. [MEASURE — Assessment, Analysis, and Tracking](#5-measure--assessment-analysis-and-tracking)
-6. [MANAGE — Risk Response and Monitoring](#6-manage--risk-response-and-monitoring)
+3. [GOVERN — Policies, Processes, and Procedures](#3-govern-policies-processes-and-procedures)
+4. [MAP — Context and Risk Identification](#4-map-context-and-risk-identification)
+5. [MEASURE — Assessment, Analysis, and Tracking](#5-measure-assessment-analysis-and-tracking)
+6. [MANAGE — Risk Response and Monitoring](#6-manage-risk-response-and-monitoring)
 7. [Coverage Summary Matrix](#7-coverage-summary-matrix)
 8. [Gap Analysis and Recommended Actions](#8-gap-analysis-and-recommended-actions)
 9. [Cross-References to Other Compliance Frameworks](#9-cross-references-to-other-compliance-frameworks)
@@ -714,7 +720,7 @@ requirements overlap with other frameworks.
 ### Related Documents
 
 - **ATF Conformance Assessment:** [`docs/compliance/atf-conformance-assessment.md`](atf-conformance-assessment.md)
-- **OWASP Agentic Top 10:** [`../../docs/compliance/owasp-agentic-top10-architecture.md`](../../docs/compliance/owasp-agentic-top10-architecture.md)
+- **OWASP Agentic Top 10:** [`../../docs/compliance/owasp-agentic-top10-architecture.md`](./owasp-agentic-top10-architecture.md)
 - **OWASP LLM Top 10:** [`docs/compliance/owasp-llm-top10-mapping.md`](owasp-llm-top10-mapping.md)
 - **EU AI Act Checklist:** [`docs/compliance/eu-ai-act-checklist.md`](eu-ai-act-checklist.md)
 - **SOC 2 Mapping:** [`docs/compliance/soc2-mapping.md`](soc2-mapping.md)
@@ -728,4 +734,4 @@ requirements overlap with other frameworks.
 and Technology (NIST) in response to the AI Risk Management Framework (AI RMF
 1.0) alignment assessment process. It reflects the state of the Agent Governance
 Toolkit as of 2026-07-14. For questions or clarifications, please refer to the
-project's [SUPPORT.md](../../SUPPORT.md) or open an issue on GitHub.*
+project's [SUPPORT.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/SUPPORT.md) or open an issue on GitHub.*

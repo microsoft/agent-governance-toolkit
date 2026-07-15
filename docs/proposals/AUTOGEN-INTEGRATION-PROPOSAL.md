@@ -1,3 +1,9 @@
+---
+title: "Microsoft AutoGen — Governance Extension"
+last_reviewed: 2026-03-15
+owner: agt-maintainers
+---
+
 # Microsoft AutoGen — Governance Extension
 
 **Submission:** [microsoft/autogen#7212](https://github.com/microsoft/autogen/pull/7212)

@@ -1,3 +1,9 @@
+---
+title: "ADR 0014: Parent deny rules are immutable in policy merge"
+last_reviewed: 2026-05-16
+owner: agt-maintainers
+---
+
 # ADR 0014: Parent deny rules are immutable in policy merge
 
 - Status: accepted

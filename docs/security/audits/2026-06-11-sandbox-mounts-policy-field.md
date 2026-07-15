@@ -1,3 +1,9 @@
+---
+title: "2026-06-11 — Sandbox Mounts Policy Field"
+last_reviewed: 2026-06-12
+owner: agt-maintainers
+---
+
 # 2026-06-11 — Sandbox Mounts Policy Field
 
 PR: [microsoft/agent-governance-toolkit#2951](https://github.com/microsoft/agent-governance-toolkit/pull/2951)
@@ -6,7 +12,7 @@ PR: [microsoft/agent-governance-toolkit#2951](https://github.com/microsoft/agent
 
 This PR adds a **`sandbox_mounts` extension field** to the canonical
 `PolicyDocument` schema in
-[`agent-governance-python/agent-os/src/agent_os/policies/schema.py`](../../../agent-governance-python/agent-os/src/agent_os/policies/schema.py)
+[`agent-governance-python/agent-os/src/agent_os/policies/schema.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/policies/schema.py)
 so the new MXC (`MxcSandboxProvider`) backend — and the existing Docker,
 Hyperlight, and ACA providers — can read filesystem mount configuration
 from a single canonical policy document instead of from out-of-band
@@ -54,7 +60,7 @@ capability or weaken any existing check.
 - **Protected-path validation is shared and fail-closed.** Mount paths
   (`input_dir` / `output_dir`, plus any provider session paths) are
   validated against a single
-  [`agent-governance-python/agent-sandbox/src/agent_sandbox/_hardening.py`](../../../agent-governance-python/agent-sandbox/src/agent_sandbox/_hardening.py)
+  [`agent-governance-python/agent-sandbox/src/agent_sandbox/_hardening.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/src/agent_sandbox/_hardening.py)
   denylist of system roots (`/`, `/etc`, `/usr`, `C:\Windows`, every
   user's profile root, …). A policy requesting a read-write mount of a
   system directory raises `ValueError` before any sandbox is spawned.
@@ -93,8 +99,8 @@ capability or weaken any existing check.
 
 | File | Purpose |
 |---|---|
-| [`agent-sandbox/tests/test_mxc_sandbox.py`](../../../agent-governance-python/agent-sandbox/tests/test_mxc_sandbox.py) | `TestFailClosedHardening` pins the new guarantees: `extra_config` cannot flip `allowOutbound` or swap mounts/timeout, dangerous guest env vars are stripped, `tool_allowlist` fails closed, protected mount paths are rejected (`input_dir` / `output_dir` / policy mounts), caller context / policy env does not leak into the runner env, and the egress contract (`network_default`, unrestricted opt-in) is enforced. |
-| [`agent-sandbox/tests/test_docker_sandbox.py`](../../../agent-governance-python/agent-sandbox/tests/test_docker_sandbox.py) | Protected-path and env-sanitisation tests retargeted to the shared `agent_sandbox._hardening` module so both providers exercise one definition. |
+| [`agent-sandbox/tests/test_mxc_sandbox.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/tests/test_mxc_sandbox.py) | `TestFailClosedHardening` pins the new guarantees: `extra_config` cannot flip `allowOutbound` or swap mounts/timeout, dangerous guest env vars are stripped, `tool_allowlist` fails closed, protected mount paths are rejected (`input_dir` / `output_dir` / policy mounts), caller context / policy env does not leak into the runner env, and the egress contract (`network_default`, unrestricted opt-in) is enforced. |
+| [`agent-sandbox/tests/test_docker_sandbox.py`](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sandbox/tests/test_docker_sandbox.py) | Protected-path and env-sanitisation tests retargeted to the shared `agent_sandbox._hardening` module so both providers exercise one definition. |
 
 Full `pytest` run on `agent-governance-python/agent-sandbox/` is green
 (459 passed, 62 skipped); `ruff check --select E,F,W --ignore E501` is

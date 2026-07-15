@@ -63,6 +63,30 @@ def test_anchor_in_other_file_validates(tmp_path):
     assert "missing" in report.findings[0].reason
 
 
+def test_heading_anchor_preserves_identifier_underscores(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        "## Approach 1: `max_tool_calls` in YAML\n\n"
+        "[jump](#approach-1-max_tool_calls-in-yaml)\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.ok
+
+
+def test_heading_anchor_collapses_removed_punctuation(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        "## Security & Red-Team Benchmarks\n\n"
+        "## Step 1 — Create a policy\n\n"
+        "[security](#security-red-team-benchmarks)\n"
+        "[step](#step-1-create-a-policy)\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.ok
+
+
 def test_reference_style_links(tmp_path):
     docs = tmp_path / "docs"
     _write(
@@ -85,6 +109,17 @@ def test_code_fences_are_ignored(tmp_path):
     _write(docs / "b.md", "ok")
     report = check_links.check(tmp_path)
     assert report.ok, [f.format(tmp_path) for f in report.findings]
+
+
+def test_inline_code_spans_are_ignored(tmp_path):
+    docs = tmp_path / "docs"
+    _write(
+        docs / "a.md",
+        "`^[a-z]([a-z]*)?$` and ``[not](a-link.md)`` are code, not links.\n",
+    )
+    report = check_links.check(tmp_path)
+    assert report.ok
+    assert report.links_checked == 0
 
 
 def test_images_are_not_treated_as_links(tmp_path):
@@ -268,3 +303,14 @@ def test_target_escaping_repo_root_is_rejected(tmp_path):
         assert "outside the repository root" in report.findings[0].reason
     finally:
         outside.unlink(missing_ok=True)
+
+
+def test_non_site_docs_are_excluded_but_translations_are_checked(tmp_path):
+    _write(tmp_path / "docs" / "AGENTS.md", "[bad](missing.md)\n")
+    _write(tmp_path / "docs" / "dependency-audits" / "audit.md", "[bad](missing.md)\n")
+    translated = _write(tmp_path / "docs" / "i18n" / "README.es.md", "[bad](missing.md)\n")
+
+    report = check_links.check(tmp_path)
+
+    assert report.files_scanned == 1
+    assert report.findings[0].source == translated.resolve()

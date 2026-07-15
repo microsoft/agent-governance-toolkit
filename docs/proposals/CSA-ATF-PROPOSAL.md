@@ -1,3 +1,9 @@
+---
+title: "Proposal: CSA Agentic Trust Framework (ATF) Integration"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Proposal: CSA Agentic Trust Framework (ATF) Integration
 
 **Status:** 🔄 Active — ATF author (Josh Woodruff) engaged. Conformance spec published. Async assessment in progress. All 15 requirements mapped.  
@@ -31,7 +37,7 @@ The ATF defines 5 core pillars and 15 security requirements. The Agent Governanc
 
 ## Detailed Compliance Mapping
 
-See [docs/compliance/csa-atf-mapping.md](compliance/csa-atf-mapping.md) for the full requirement-by-requirement mapping.
+See the [ATF conformance assessment](../compliance/atf-conformance-assessment.md) for the current requirement-by-requirement mapping.
 
 ## Proposed Engagement
 
@@ -46,8 +52,8 @@ See [docs/compliance/csa-atf-mapping.md](compliance/csa-atf-mapping.md) for the 
 
 - [CSA Agentic Trust Framework](https://github.com/massivescale-ai/agentic-trust-framework)
 - [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit)
-- [Full ATF Compliance Mapping](compliance/csa-atf-mapping.md)
-- [OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md)
+- [ATF Conformance Assessment](../compliance/atf-conformance-assessment.md)
+- [OWASP Compliance Mapping](../compliance/owasp-agentic-top10-architecture.md)
 
 ## Progress
 

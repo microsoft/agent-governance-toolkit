@@ -1,3 +1,9 @@
+---
+title: "Agent Hypervisor Execution Control -- Version 1.0"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Agent Hypervisor Execution Control -- Version 1.0

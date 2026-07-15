@@ -1,3 +1,9 @@
+---
+title: "Chapter 5: Approval Workflows"
+last_reviewed: 2026-04-11
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. -->
 <!-- Licensed under the MIT License. -->
 
@@ -18,7 +24,7 @@ transferring money, or sending a mass email — these are cases where you want a
 | [Create an escalation request](#step-2-create-an-escalation-request) | Building a "ticket" for human review |
 | [Human approves](#step-3-human-approves) | What happens when the reviewer says yes |
 | [Human denies](#step-4-human-denies) | What happens when the reviewer says no |
-| [Timeout](#step-5-timeout--nobody-responds) | What happens when nobody responds |
+| [Timeout](#step-5-timeout-nobody-responds) | What happens when nobody responds |
 | [Try it yourself](#try-it-yourself) | Exercises |
 
 ---

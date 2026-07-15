@@ -1,3 +1,9 @@
+---
+title: "Agent SRE"
+last_reviewed: 2026-06-08
+owner: agt-maintainers
+---
+
 <div align="center">
 
 # Agent SRE
@@ -7,7 +13,7 @@
 *SLOs · Error Budgets · Chaos Testing · Progressive Delivery · Cost Guardrails*
 
 [![CI](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/microsoft/agent-governance-toolkit/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/agent-sre)](https://pypi.org/project/agent-governance-python/agent-sre/)
 
@@ -20,7 +26,7 @@
 
 > 📦 **Install the full stack:** `pip install agent-governance-toolkit[full]` — [PyPI](https://pypi.org/project/ai-agent-governance/) | [GitHub](https://github.com/microsoft/agent-governance-toolkit)
 
-[Quick Start](#-quick-start-in-30-seconds) • [Architecture](#-architecture-diagram) • [Examples](examples/) • [Benchmarks](agent-governance-python/benchmarks/results/BENCHMARKS.md) • [Docs](docs/) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
+[Quick Start](#quick-start-in-30-seconds) • [Architecture](#architecture-diagram) • [Examples](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples) • [Benchmarks](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/benchmarks/results/BENCHMARKS.md) • [Docs](../index.md) • [Agent OS](https://github.com/microsoft/agent-governance-toolkit) • [AgentMesh](https://github.com/microsoft/agent-governance-toolkit) • [Agent Runtime](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>
 
@@ -162,7 +168,7 @@ status = slo.evaluate()  # HEALTHY, WARNING, CRITICAL, or EXHAUSTED
 print(f"Budget remaining: {slo.error_budget.remaining_percent:.1f}%")
 ```
 
-That's it. Your agent now has SLOs, error budgets, and burn rate alerts. [See all examples →](examples/)
+That's it. Your agent now has SLOs, error budgets, and burn rate alerts. [See all examples →](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples)
 
 ---
 
@@ -554,11 +560,11 @@ Agent SRE tells you *if it was within budget* and *what to do about it*.
 
 | Example | Description | Command |
 |---|---|---|
-| [Quickstart](examples/quickstart.py) | SLO + cost + incident in one script | `python examples/quickstart.py` |
-| [LangChain Monitor](examples/langchain_monitor.py) | LangChain RAG agent with SLOs + evals | `python examples/langchain_monitor.py` |
-| [Cost Guard](examples/cost_guard.py) | Budget enforcement with throttling | `python examples/cost_guard.py` |
-| [Canary Rollout](examples/canary_rollout.py) | Preview + staged rollout with manual rollback | `python examples/canary_rollout.py` |
-| [Chaos Test](examples/chaos_test.py) | Fault injection and fault impact scoring | `python examples/chaos_test.py` |
+| [Quickstart](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/quickstart.py) | SLO + cost + incident in one script | `python examples/quickstart.py` |
+| [LangChain Monitor](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/langchain_monitor.py) | LangChain RAG agent with SLOs + evals | `python examples/langchain_monitor.py` |
+| [Cost Guard](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/cost_guard.py) | Budget enforcement with throttling | `python examples/cost_guard.py` |
+| [Canary Rollout](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/canary_rollout.py) | Preview + staged rollout with manual rollback | `python examples/canary_rollout.py` |
+| [Chaos Test](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/examples/chaos_test.py) | Fault injection and fault impact scoring | `python examples/chaos_test.py` |
 
 **Docker:**
 
@@ -602,12 +608,12 @@ Tabs: SLO Health | Cost Management | Chaos Engineering | Incidents | Progressive
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md) — Install and define your first SLO in 5 minutes
-- [Deployment Guide](docs/deployment.md) — Docker, integration patterns, production checklist
-- [Security Model](docs/security.md) — Threat model, attack vectors, best practices
-- [Concepts](docs/concepts.md) — Why agent reliability is different from infrastructure reliability
-- [Integration Guide](docs/integration-guide.md) — Use with Agent OS, AgentMesh, and OpenTelemetry
-- [Comparison](docs/comparison.md) — Detailed comparison with other tools
+- [Getting Started](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/docs/getting-started.md) — Install and define your first SLO in 5 minutes
+- [Deployment Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/docs/deployment.md) — Docker, integration patterns, production checklist
+- [Security Model](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/docs/security.md) — Threat model, attack vectors, best practices
+- [Concepts](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/docs/concepts.md) — Why agent reliability is different from infrastructure reliability
+- [Integration Guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/docs/integration-guide.md) — Use with Agent OS, AgentMesh, and OpenTelemetry
+- [Comparison](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/docs/comparison.md) — Detailed comparison with other tools
 
 ---
 
@@ -636,7 +642,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for guidelines.
 
 ## 🗺️ Roadmap
 
@@ -650,7 +656,7 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT — See [LICENSE](LICENSE) for details.
+MIT — See [LICENSE](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) for details.
 
 ---
 
@@ -672,6 +678,6 @@ MIT — See [LICENSE](LICENSE) for details.
 | **Agent Marketplace** | Plugin lifecycle — discover, install, verify, sign |
 | **Agent Lightning** | RL training governance — governed runners, policy rewards |
 
-[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](docs/) · [PyPI](https://pypi.org/project/agent-governance-python/agent-sre/) · [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions) · [Sponsor](https://github.com/microsoft/agent-governance-toolkit)
+[GitHub](https://github.com/microsoft/agent-governance-toolkit) · [Docs](../index.md) · [PyPI](https://pypi.org/project/agent-governance-python/agent-sre/) · [Discussions](https://github.com/microsoft/agent-governance-toolkit/discussions) · [Sponsor](https://github.com/microsoft/agent-governance-toolkit)
 
 </div>

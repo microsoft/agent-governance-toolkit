@@ -1,3 +1,9 @@
+---
+title: "Private Endpoint Deployment Examples"
+last_reviewed: 2026-03-30
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Private Endpoint Deployment Examples

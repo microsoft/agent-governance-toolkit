@@ -1,3 +1,9 @@
+---
+title: "🚀 10분 만에 끝내는 에이전트 거버넌스 시작 가이드"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # 🚀 10분 만에 끝내는 에이전트 거버넌스 시작 가이드
 
 10분 안에 거버넌스가 적용된 AI 에이전트 환경을 구축해 보세요.
@@ -341,14 +347,14 @@ agt integrity --manifest integrity.json
 
 | 항목 | 위치 |
 |------|-------|
-| 전체 API 레퍼런스 (Python) | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
-| TypeScript 패키지 문서 | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
-| .NET 패키지 문서 | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
-| OWASP 커버리지 맵 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
-| 프레임워크 통합 가이드 | [agent-governance-python/agent-os/src/agent_os/integrations/](../../agent-governance-python/agent-os/src/agent_os/integrations/) |
-| 예제 애플리케이션 | [agent-governance-python/agent-os/examples/](../../agent-governance-python/agent-os/examples/) |
-| 기여하기 | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
-| 변경 이력 | [CHANGELOG.md](../../CHANGELOG.md) |
+| 전체 API 레퍼런스 (Python) | [agent-governance-python/agent-os/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/README.md) |
+| TypeScript 패키지 문서 | [agent-governance-typescript/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-typescript/README.md) |
+| .NET 패키지 문서 | [agent-governance-dotnet/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/README.md) |
+| OWASP 커버리지 맵 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../compliance/owasp-agentic-top10-architecture.md) |
+| 프레임워크 통합 가이드 | [agent-governance-python/agent-os/src/agent_os/integrations/](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/src/agent_os/integrations) |
+| 예제 애플리케이션 | [agent-governance-python/agent-os/examples/](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os/examples) |
+| 기여하기 | [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) |
+| 변경 이력 | [CHANGELOG.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CHANGELOG.md) |
 
 ---
 

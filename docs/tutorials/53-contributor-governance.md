@@ -1,3 +1,9 @@
+---
+title: "Tutorial 53: Contributor Governance"
+last_reviewed: 2026-05-22
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 53: Contributor Governance

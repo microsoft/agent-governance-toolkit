@@ -1,3 +1,9 @@
+---
+title: "Tutorial 21 — Rust SDK (agent-governance-rust/ workspace)"
+last_reviewed: 2026-05-16
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 21 — Rust SDK (`agent-governance-rust/` workspace)

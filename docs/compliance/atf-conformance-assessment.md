@@ -1,3 +1,9 @@
+---
+title: "ATF Conformance Assessment — Agent Governance Toolkit"
+last_reviewed: 2026-07-02
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # ATF Conformance Assessment — Agent Governance Toolkit

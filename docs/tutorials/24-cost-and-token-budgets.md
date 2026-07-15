@@ -1,3 +1,9 @@
+---
+title: "Tutorial 24 — Cost and Token Budgets"
+last_reviewed: 2026-05-09
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Tutorial 24 — Cost and Token Budgets

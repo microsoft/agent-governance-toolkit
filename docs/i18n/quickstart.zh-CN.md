@@ -1,3 +1,9 @@
+---
+title: "🚀 10分钟快速入门指南"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # 🚀 10分钟快速入门指南
 
 从零开始，在10分钟内构建受治理的AI智能体。
@@ -155,11 +161,11 @@ agent-governance verify --badge
 
 | 内容 | 位置 |
 |------|------|
-| 完整 API 参考（Python） | [agent-governance-python/agent-os/README.md](../../agent-governance-python/agent-os/README.md) |
-| TypeScript 包文档 | [agent-governance-typescript/README.md](../../agent-governance-typescript/README.md) |
-| .NET 包文档 | [agent-governance-dotnet/README.md](../../agent-governance-dotnet/README.md) |
-| OWASP 覆盖图 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../../docs/compliance/owasp-agentic-top10-architecture.md) |
-| 贡献指南 | [CONTRIBUTING.md](../../CONTRIBUTING.md) |
+| 完整 API 参考（Python） | [agent-governance-python/agent-os/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/README.md) |
+| TypeScript 包文档 | [agent-governance-typescript/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-typescript/README.md) |
+| .NET 包文档 | [agent-governance-dotnet/README.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-dotnet/README.md) |
+| OWASP 覆盖图 | [../../docs/compliance/owasp-agentic-top10-architecture.md](../compliance/owasp-agentic-top10-architecture.md) |
+| 贡献指南 | [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) |
 
 ---
 

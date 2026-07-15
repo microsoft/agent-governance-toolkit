@@ -1,3 +1,9 @@
+---
+title: "MetaGPT — Trust Layer Integration"
+last_reviewed: 2026-03-15
+owner: agt-maintainers
+---
+
 # MetaGPT — Trust Layer Integration
 
 **Submission:** [FoundationAgents/MetaGPT#1936](https://github.com/FoundationAgents/MetaGPT/pull/1936)

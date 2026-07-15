@@ -1,3 +1,9 @@
+---
+title: "Hyperlight Sandbox Isolation Design"
+last_reviewed: 2026-05-15
+owner: agt-maintainers
+---
+
 # Hyperlight Sandbox Isolation Design
 
 | Field       | Value                                       |
@@ -65,7 +71,7 @@ async defaults are reused unchanged.
 | `execute_code(agent_id, session_id, code, *, context)` | Evaluates the policy, then forwards `code` to `Sandbox.run(code)`. The guest is responsible for calling `call_tool(name, **args)` and `http_get(url)` as needed. Returns stdout/stderr in a `SandboxResult`. |
 | `destroy_session(agent_id, session_id)` | Drops the `Sandbox` (Python `__del__` releases the underlying VM); removes the session entry and the policy evaluator. |
 | `is_available()` | `True` if `hyperlight_sandbox` imports successfully and a hypervisor (KVM, mshv, or WHP) is reachable. |
-| `save_state` / `restore_state` / `list_checkpoints` / `delete_checkpoint` | Not implemented. Hyperlight has no filesystem to commit. Use `snapshot_session` / `restore_snapshot` instead — see [Snapshots](#snapshots). |
+| `save_state` / `restore_state` / `list_checkpoints` / `delete_checkpoint` | Not implemented. Hyperlight has no filesystem to commit. Use `snapshot_session` / `restore_snapshot` instead; see [Snapshots](#snapshots-provider-specific-not-on-the-abc). |
 
 Code written against the `SandboxProvider` ABC works unchanged on Hyperlight.
 Docker-only methods raise `NotImplementedError` on this provider; callers

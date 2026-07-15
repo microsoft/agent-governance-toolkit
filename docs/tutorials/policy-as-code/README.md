@@ -1,3 +1,9 @@
+---
+title: "Tutorial: Policy-as-Code for AI Agents"
+last_reviewed: 2026-05-07
+owner: agt-maintainers
+---
+
 # Tutorial: Policy-as-Code for AI Agents
 
 A step-by-step guide to governing AI agents with declarative policies, progressing
@@ -28,7 +34,7 @@ pip install agent-os-kernel[full]
 
 ## Running Examples
 
-Every chapter has a matching Python script in [`examples/`](examples/) that you
+Every chapter has a matching Python script in [`examples/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/tutorials/policy-as-code/examples) that you
 can run directly:
 
 ```bash
@@ -39,7 +45,7 @@ python examples/01_first_policy.py
 ## Related Resources
 
 - [Tutorial 01 — Policy Engine](../01-policy-engine.md) — Full YAML syntax and operator reference
-- [Policy Schema Source](../../../agent-governance-python/agent-os/src/agent_os/policies/schema.py) — PolicyDocument and PolicyRule models
+- [Policy Schema Source](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-os/src/agent_os/policies/schema.py) — PolicyDocument and PolicyRule models
 - [quickstart.md](../../quickstart.md) — 10-minute getting started guide
 
 ## Supplemental Guides

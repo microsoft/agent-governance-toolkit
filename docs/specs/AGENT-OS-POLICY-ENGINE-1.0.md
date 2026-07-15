@@ -1,3 +1,9 @@
+---
+title: "Agent OS Policy Engine -- Version 1.0"
+last_reviewed: 2026-05-16
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Agent OS Policy Engine -- Version 1.0

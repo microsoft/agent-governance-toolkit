@@ -313,7 +313,7 @@ residual safety requirements are implemented and validated by the system owner.
 
 ### Shipped Evidence and Limits
 
-The [physical-attestation governed example](../../examples/physical-attestation-governed/)
+The [physical-attestation governed example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/physical-attestation-governed)
 demonstrates policy evaluation for simulated temperature, humidity, GPS, and
 shock readings, with hashes binding readings to policy decisions. It is useful
 evidence for ASI02, ASI06, and traceability controls.

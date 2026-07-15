@@ -1,3 +1,9 @@
+---
+title: "🎓 Workshop: Introduction to AI Agent Governance"
+last_reviewed: 2026-05-04
+owner: agt-maintainers
+---
+
 # 🎓 Workshop: Introduction to AI Agent Governance
 
 > **Duration:** 2 hours · **Level:** Beginner–Intermediate · **Format:** Lecture + Hands-on Labs

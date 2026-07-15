@@ -1,3 +1,9 @@
+---
+title: "Integrating with NVIDIA OpenShell"
+last_reviewed: 2026-05-16
+owner: agt-maintainers
+---
+
 # Integrating with NVIDIA OpenShell
 
 Deploy the Agent Governance Toolkit as the governance layer inside (or alongside) [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) sandboxes to combine **runtime isolation** with **governance intelligence**.
@@ -69,7 +75,7 @@ Neither replaces the other — they're complementary layers in a defense-in-dept
 
 ### Option A: Governance Skill Inside the Sandbox (Python Library)
 
-Install the [OpenShell governance skill](../../agent-governance-python/agentmesh-integrations/openshell-skill/) and use it from your agent's code:
+Install the [OpenShell governance skill](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/openshell-skill) and use it from your agent's code:
 
 ```python
 # Inside the sandbox
@@ -84,7 +90,7 @@ if not decision.allowed:
     print(f"Blocked: {decision.reason}")
 ```
 
-See the [runnable example](../../examples/openshell-governed/) for a complete demo.
+See the [runnable example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/openshell-governed) for a complete demo.
 
 ### Option B: Governance Sidecar
 
@@ -177,7 +183,7 @@ When running both layers, you get two complementary telemetry streams:
 - Process execution logs
 - Inference routing logs
 
-Both can feed into the same Grafana dashboard for a unified view. See the [Agent SRE monitoring guide](../../agent-governance-python/agent-sre/README.md) for SLO configuration.
+Both can feed into the same Grafana dashboard for a unified view. See the [Agent SRE monitoring guide](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-sre/README.md) for SLO configuration.
 
 ---
 
@@ -199,8 +205,8 @@ OpenShell can *host* the sidecar. The governance sidecar runs inside or alongsid
 
 ## Related
 
-- [OpenShell Governance Skill](../../agent-governance-python/agentmesh-integrations/openshell-skill/) — Python skill package for OpenShell agents
-- [Runnable Example](../../examples/openshell-governed/) — Self-contained demo with policy enforcement
+- [OpenShell Governance Skill](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agentmesh-integrations/openshell-skill) — Python skill package for OpenShell agents
+- [Runnable Example](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/openshell-governed) — Self-contained demo with policy enforcement
 - [OpenClaw Sidecar Deployment](../deployment/openclaw-sidecar.md) — AKS and Docker Compose guide
 - [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) — Runtime sandbox for AI agents
 - [Architecture](../ARCHITECTURE.md) — Full toolkit architecture

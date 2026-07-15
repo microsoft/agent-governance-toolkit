@@ -1,3 +1,9 @@
+---
+title: "Google ADK — GovernancePlugin Proposal"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Google ADK — GovernancePlugin Proposal
 
 **Submission:** [google/adk-python#4543](https://github.com/google/adk-python/issues/4543)

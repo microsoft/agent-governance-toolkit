@@ -1,10 +1,16 @@
+---
+title: "Adopters"
+last_reviewed: 2026-05-31
+owner: agt-maintainers
+---
+
 # Adopters
 
 Organizations using the Agent Governance Toolkit in production or evaluation.
 
 _If your organization uses AGT, please add it here! It helps the project gain
 momentum and credibility. Submit a PR editing this file — see
-[CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines._
+[CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for guidelines._
 
 ## Production
 

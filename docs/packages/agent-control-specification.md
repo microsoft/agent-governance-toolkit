@@ -8,7 +8,7 @@ owner: docs-team
 
 **Stateless, deterministic, fail-closed policy decisions for agent security**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../../LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE)
 [![Rust](https://img.shields.io/badge/core-Rust-orange.svg)](https://www.rust-lang.org/)
 
 !!! important "Public Preview"
@@ -94,17 +94,17 @@ The Rust core emits structured telemetry through a `TelemetrySink`. Telemetry is
 
 ## Where it lives in AGT
 
-ACS is vendored into [`policy-engine/`](../../policy-engine/) as the AGT 5.0 policy layer and is now AGT-owned source. It is the decision-runtime core that backs policy evaluation. Agent OS remains the kernel and host layer that calls into ACS and enforces the verdicts.
+ACS is vendored into [`policy-engine/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine) as the AGT 5.0 policy layer and is now AGT-owned source. It is the decision-runtime core that backs policy evaluation. Agent OS remains the kernel and host layer that calls into ACS and enforces the verdicts.
 
 ## SDKs and specification
 
 | Surface | Path |
 | --- | --- |
-| Python SDK | [`policy-engine/sdk/python/`](../../policy-engine/sdk/python/) |
-| Node.js SDK | [`policy-engine/sdk/node/`](../../policy-engine/sdk/node/) |
-| .NET SDK | [`policy-engine/sdk/dotnet/`](../../policy-engine/sdk/dotnet/) |
-| Rust SDK | [`policy-engine/sdk/rust/`](../../policy-engine/sdk/rust/) |
-| Normative specification | [`policy-engine/spec/SPECIFICATION.md`](../../policy-engine/spec/SPECIFICATION.md) |
+| Python SDK | [`policy-engine/sdk/python/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/python) |
+| Node.js SDK | [`policy-engine/sdk/node/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/node) |
+| .NET SDK | [`policy-engine/sdk/dotnet/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/dotnet) |
+| Rust SDK | [`policy-engine/sdk/rust/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/policy-engine/sdk/rust) |
+| Normative specification | [`policy-engine/spec/SPECIFICATION.md`](https://github.com/microsoft/agent-governance-toolkit/blob/main/policy-engine/spec/SPECIFICATION.md) |
 
 The Python SDK distribution is named `agent-control-specification` in `policy-engine/sdk/python/pyproject.toml` and is built with maturin from the vendored source.
 

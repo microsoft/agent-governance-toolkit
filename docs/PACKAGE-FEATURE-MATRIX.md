@@ -1,3 +1,9 @@
+---
+title: "Language Package Matrix"
+last_reviewed: 2026-05-21
+owner: agt-maintainers
+---
+
 # Language Package Matrix
 
 > **Last updated:** April 2026
@@ -66,7 +72,7 @@ governance stack for enterprise deployments:
 ### TypeScript package
 
 **Package:** [`@microsoft/agent-governance-sdk`](https://www.npmjs.com/package/@microsoft/agent-governance-sdk) ·
-**Source:** [`agent-governance-typescript/`](../agent-governance-typescript/)
+**Source:** [`agent-governance-typescript/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-typescript)
 
 | Module | Features |
 |--------|----------|
@@ -87,7 +93,7 @@ governance stack for enterprise deployments:
 ### .NET package
 
 **Package:** [`Microsoft.AgentGovernance`](https://www.nuget.org/packages/Microsoft.AgentGovernance) ·
-**Source:** [`agent-governance-dotnet/`](../agent-governance-dotnet/)
+**Source:** [`agent-governance-dotnet/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-dotnet)
 
 | Namespace | Features |
 |-----------|----------|
@@ -110,7 +116,7 @@ governance stack for enterprise deployments:
 
 **Crate:** [`agentmesh`](https://crates.io/crates/agentmesh) +
 [`agentmesh-mcp`](https://crates.io/crates/agentmesh-mcp) ·
-**Source:** [`agent-governance-rust/`](../agent-governance-rust/)
+**Source:** [`agent-governance-rust/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-rust)
 
 | Module | Features |
 |--------|----------|
@@ -132,7 +138,7 @@ full governance stack.
 ### Go module
 
 **Module:** `github.com/microsoft/agent-governance-toolkit/agent-governance-golang` ·
-**Source:** [`agent-governance-golang/`](../agent-governance-golang/)
+**Source:** [`agent-governance-golang/`](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-golang)
 
 | Python parity area | Go status |
 |---|---|
@@ -197,5 +203,5 @@ full governance stack.
 ## Contributing
 
 Want to add a feature to a non-Python SDK? We welcome contributions!
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines. The Python
+See [CONTRIBUTING.md](https://github.com/microsoft/agent-governance-toolkit/blob/main/CONTRIBUTING.md) for guidelines. The Python
 implementation serves as the reference — match its behavior and test patterns.

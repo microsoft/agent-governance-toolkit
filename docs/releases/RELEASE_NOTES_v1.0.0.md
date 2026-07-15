@@ -1,3 +1,9 @@
+---
+title: "Agent Governance Toolkit v1.0.0"
+last_reviewed: 2026-04-26
+owner: agt-maintainers
+---
+
 # Agent Governance Toolkit v1.0.0
 
 > [!IMPORTANT]
@@ -31,10 +37,9 @@
 
 | Framework | Coverage |
 |-----------|----------|
-| [OWASP Agentic Top 10 (2026)](docs/OWASP-COMPLIANCE.md) | 10/10 risks covered |
-| [CSA Agentic Trust Framework](docs/compliance/csa-atf-mapping.md) | 15/15 requirements |
+| [OWASP Agentic Top 10 (2026)](../compliance/owasp-agentic-top10-architecture.md) | Architecture mapping |
+| [CSA Agentic Trust Framework](../compliance/atf-conformance-assessment.md) | Conformance assessment |
 | [NIST AI RMF](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework) | Govern, Map, Measure, Manage |
-| [Singapore MGF for Agentic AI](docs/analyst/singapore-mgf-mapping.md) | Zero-trust, accountability, oversight |
 | [EU AI Act](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai) | Risk classification, audit trails, human oversight |
 
 ## Key Features in v1.0.0
@@ -74,7 +79,7 @@
 - **Merged:** GitHub Copilot (×3), Dify (×1)
 - **Under Review:** Microsoft Agent Framework, Google ADK, AutoGen, CrewAI, LangChain, OpenAI Swarm, MetaGPT, Anthropic, MCP, OpenLit, OWASP, LF AI, CoSAI, AAIF
 
-See [docs/proposals/](docs/proposals/) for the full list.
+See [docs/proposals/](https://github.com/microsoft/agent-governance-toolkit/tree/main/docs/proposals) for the full list.
 
 ## Quick Start
 
@@ -92,4 +97,4 @@ result = await kernel.execute(action="query_db", params={"table": "users"}, cont
 
 ## License
 
-[MIT](LICENSE) — © Microsoft Corporation
+[MIT](https://github.com/microsoft/agent-governance-toolkit/blob/main/LICENSE) — © Microsoft Corporation

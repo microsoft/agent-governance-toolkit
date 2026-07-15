@@ -1,3 +1,9 @@
+---
+title: "OpenAI Swarm — Trust-Verified Handoffs"
+last_reviewed: 2026-03-15
+owner: agt-maintainers
+---
+
 # OpenAI Swarm — Trust-Verified Handoffs
 
 **Submission:** [openai/swarm#65](https://github.com/openai/swarm/pull/65)

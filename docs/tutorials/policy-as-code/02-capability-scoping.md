@@ -1,3 +1,9 @@
+---
+title: "Chapter 2: Capability Scoping"
+last_reviewed: 2026-04-11
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. -->
 <!-- Licensed under the MIT License. -->
 

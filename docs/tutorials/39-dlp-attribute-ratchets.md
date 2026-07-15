@@ -1,3 +1,9 @@
+---
+title: "Tutorial 39: DLP with Attribute Ratchets"
+last_reviewed: 2026-04-23
+owner: agt-maintainers
+---
+
 # Tutorial 39: DLP with Attribute Ratchets
 
 > **Time**: 15 minutes · **Level**: Intermediate · **Prerequisites**: Tutorial 37 (multi-stage pipeline)

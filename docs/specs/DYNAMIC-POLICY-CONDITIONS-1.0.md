@@ -1,3 +1,9 @@
+---
+title: "Dynamic Policy Conditions 1.0"
+last_reviewed: 2026-06-14
+owner: agt-maintainers
+---
+
 # Dynamic Policy Conditions 1.0
 
 Status: Draft (v1)

@@ -1,3 +1,9 @@
+---
+title: "Python Package Audit: Agent Governance Toolkit"
+last_reviewed: 2026-06-11
+owner: agt-maintainers
+---
+
 # Python Package Audit: Agent Governance Toolkit
 
 Tracks issue [#2482](https://github.com/microsoft/agent-governance-toolkit/issues/2482)

@@ -1,3 +1,9 @@
+---
+title: "Wire-Protocol-Aware Policy Evaluation"
+last_reviewed: 2026-05-27
+owner: agt-maintainers
+---
+
 # Wire-Protocol-Aware Policy Evaluation
 
 AGT policy rules can now reference wire-level protocol semantics — not just HTTP
@@ -157,7 +163,7 @@ write rules like:
   action: deny
 ```
 
-See [`examples/policy-templates/wire-protocol-rules.yaml`](../examples/policy-templates/wire-protocol-rules.yaml)
+See [`examples/policy-templates/wire-protocol-rules.yaml`](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/policy-templates/wire-protocol-rules.yaml)
 for a full set of example rules.
 
 ## Language parity

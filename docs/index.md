@@ -232,7 +232,7 @@ These documents define runtime and interoperability contracts. Each document car
 | [Audit and Compliance](specs/AUDIT-COMPLIANCE-1.0.md) | Audit events, integrity, evidence, and export |
 | [Dynamic Policy Conditions](specs/DYNAMIC-POLICY-CONDITIONS-1.0.md) | Draft time-window and budget conditions |
 
-[Architecture Decision Records](adr/) document the reasoning behind key design choices.
+[Architecture Decision Records](./adr/index.md) document the reasoning behind key design choices.
 
 </div>
 

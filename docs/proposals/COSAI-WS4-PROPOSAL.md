@@ -1,3 +1,9 @@
+---
+title: "CoSAI/OASIS WS4 — RFC: Kernel-Based Runtime Governance"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # CoSAI/OASIS WS4 — RFC: Kernel-Based Runtime Governance
 
 **Submission:** [cosai-oasis/ws4-secure-design-agentic-systems#42](https://github.com/cosai-oasis/ws4-secure-design-agentic-systems/issues/42)

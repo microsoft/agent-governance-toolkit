@@ -1,3 +1,9 @@
+---
+title: "RAG Governance — Retrieval-Level Policy Enforcement"
+last_reviewed: 2026-05-05
+owner: agt-maintainers
+---
+
 # RAG Governance — Retrieval-Level Policy Enforcement
 
 **Submissions:**
@@ -218,6 +224,6 @@ End-to-end example demonstrating `agent-rag-governance` in action:
 ## Links
 
 - [Issue #1700](https://github.com/microsoft/agent-governance-toolkit/issues/1700)
-- [agent-mcp-governance](../../agent-governance-python/agent-mcp-governance/README.md)
-- [agent-os PolicyEvaluator](../../agent-governance-python/agent-os/)
-- [Agent Governance Toolkit](../../README.md)
+- [agent-mcp-governance](https://github.com/microsoft/agent-governance-toolkit/blob/main/agent-governance-python/agent-mcp-governance/README.md)
+- [agent-os PolicyEvaluator](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os)
+- [Agent Governance Toolkit](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md)

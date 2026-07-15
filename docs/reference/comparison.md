@@ -1,3 +1,9 @@
+---
+title: "Competitive Comparison: Agent Governance Toolkit vs. Alternatives"
+last_reviewed: 2026-05-25
+owner: agt-maintainers
+---
+
 # Competitive Comparison: Agent Governance Toolkit vs. Alternatives
 
 > **TL;DR:** They guard LLM outputs. We govern agent actions. Complementary, not competing.
@@ -23,7 +29,7 @@ When evaluating agent security tooling, developers often encounter [NeMo Guardra
 | Feature | Agent Governance Toolkit | NeMo Guardrails | Guardrails AI | LiteLLM | Portkey |
 |---------|:----------------------:|:---------------:|:-------------:|:-------:|:-------:|
 | **Agent action governance** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **LLM output validation** | ✅ (via [content-policy adapters](../../agent-governance-python/agent-os/)) | ✅ | ✅ | ✅ | ✅ |
+| **LLM output validation** | ✅ (via [content-policy adapters](https://github.com/microsoft/agent-governance-toolkit/tree/main/agent-governance-python/agent-os)) | ✅ | ✅ | ✅ | ✅ |
 | **Agent identity (cryptographic)** | ✅ Ed25519 / SPIFFE | ❌ | ❌ | ❌ | ❌ |
 | **Execution sandboxing** | ✅ 4-tier rings | ❌ | ❌ | ❌ | ❌ |
 | **SRE (SLOs / error budgets)** | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -171,4 +177,4 @@ For production agentic systems, you likely need the Agent Governance Toolkit **p
 
 ---
 
-*See also: [OWASP Compliance Mapping](../../docs/compliance/owasp-agentic-top10-architecture.md) · [Architecture Overview](../../README.md#architecture) · [Quick Start](../quickstart.md)*
+*See also: [OWASP Compliance Mapping](../compliance/owasp-agentic-top10-architecture.md) · [Architecture Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/README.md#architecture) · [Quick Start](../quickstart.md)*

@@ -1,3 +1,9 @@
+---
+title: "Publishing"
+last_reviewed: 2026-06-24
+owner: agt-maintainers
+---
+
 # Publishing
 
 This document describes the canonical publishing model for Agent Governance Toolkit

@@ -32,6 +32,11 @@ from pathlib import Path
 from typing import Iterable
 from urllib.parse import unquote, urlparse
 
+try:
+    from .docs_scope import is_excluded_doc
+except ImportError:  # pragma: no cover - direct script execution
+    from docs_scope import is_excluded_doc
+
 # ---------------------------------------------------------------------------
 # Markdown parsing
 # ---------------------------------------------------------------------------
@@ -89,6 +94,30 @@ def _strip_code_blocks(text: str) -> str:
     return "\n".join(out)
 
 
+def _strip_inline_code_spans(text: str) -> str:
+    """Replace inline code spans with spaces while preserving line numbers."""
+    out: list[str] = []
+    for line in text.splitlines():
+        chars = list(line)
+        index = 0
+        while index < len(line):
+            if line[index] != "`":
+                index += 1
+                continue
+            end = index
+            while end < len(line) and line[end] == "`":
+                end += 1
+            marker = line[index:end]
+            close = line.find(marker, end)
+            if close == -1:
+                index = end
+                continue
+            chars[index:close + len(marker)] = " " * (close + len(marker) - index)
+            index = close + len(marker)
+        out.append("".join(chars))
+    return "\n".join(out)
+
+
 def _slugify_heading(text: str) -> str:
     """Approximate GitHub/MkDocs heading-to-anchor slugification.
 
@@ -96,13 +125,13 @@ def _slugify_heading(text: str) -> str:
     drops characters other than letters, digits, hyphen, underscore.
     """
     # Strip inline markdown emphasis/code markers
-    text = re.sub(r"[`*_~]", "", text)
+    text = re.sub(r"[`*~]", "", text)
     # Strip link wrappers but keep the link text
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     text = text.strip().lower()
     text = re.sub(r"\s+", "-", text)
     text = re.sub(r"[^\w\-]", "", text)
-    return text
+    return re.sub(r"-{2,}", "-", text).strip("-")
 
 
 def _extract_anchors(markdown: str) -> set[str]:
@@ -207,7 +236,7 @@ def write_baseline(path: Path, findings: Iterable[Finding], root: Path) -> int:
 
 def extract_links(path: Path, text: str) -> list[Link]:
     """Return all inline and reference-style relative links in ``text``."""
-    cleaned = _strip_code_blocks(text)
+    cleaned = _strip_inline_code_spans(_strip_code_blocks(text))
     links: list[Link] = []
 
     # Collect reference definitions (label -> target). Definitions are
@@ -380,6 +409,8 @@ def discover_markdown(root: Path, extra_paths: Iterable[Path] = ()) -> list[Path
     if docs_dir.is_dir():
         for p in docs_dir.rglob("*.md"):
             if any(part in DEFAULT_EXCLUDES for part in p.parts):
+                continue
+            if is_excluded_doc(p, docs_dir):
                 continue
             found.append(p.resolve())
     for p in root.glob("*.md"):

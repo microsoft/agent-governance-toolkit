@@ -1,3 +1,9 @@
+---
+title: "Dify — AgentMesh Trust Layer Plugin"
+last_reviewed: 2026-03-23
+owner: agt-maintainers
+---
+
 # Dify — AgentMesh Trust Layer Plugin
 
 **Submission:** [langgenius/dify-plugins#2060](https://github.com/langgenius/dify-plugins/pull/2060)

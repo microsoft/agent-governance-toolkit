@@ -1,3 +1,9 @@
+---
+title: "CrewAI — Governance Integration"
+last_reviewed: 2026-03-15
+owner: agt-maintainers
+---
+
 # CrewAI — Governance Integration
 
 **Submissions:**

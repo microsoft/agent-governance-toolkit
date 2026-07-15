@@ -1,3 +1,9 @@
+---
+title: "Migration Plan: Package Consolidation"
+last_reviewed: 2026-05-24
+owner: agt-maintainers
+---
+
 # Migration Plan: Package Consolidation
 
 Tracks issue [#2482](https://github.com/microsoft/agent-governance-toolkit/issues/2482)

@@ -1,3 +1,9 @@
+---
+title: "Deploying AGT on AWS ECS/Fargate"
+last_reviewed: 2026-04-11
+owner: agt-maintainers
+---
+
 # Deploying AGT on AWS ECS/Fargate
 
 > **No Azure Required** — AGT is pure Python with zero cloud-vendor dependencies.
@@ -79,10 +85,10 @@ aws ecs create-service \
 
 AGT works with any agent framework. For Bedrock agents, wrap the agent's
 tool calls with `PolicyEvaluator.evaluate()` — see
-[examples/quickstart/govern_in_60_seconds.py](../../examples/quickstart/govern_in_60_seconds.py).
+[examples/quickstart/govern_in_60_seconds.py](https://github.com/microsoft/agent-governance-toolkit/blob/main/examples/quickstart/govern_in_60_seconds.py).
 
 ## See Also
 
 - [GCP GKE Deployment](gcp-gke.md)
 - [Azure Container Apps Deployment](azure-container-apps.md)
-- [Deployment Overview](README.md)
+- [Deployment Overview](https://github.com/microsoft/agent-governance-toolkit/blob/main/docs/deployment/README.md)

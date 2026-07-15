@@ -1,3 +1,9 @@
+---
+title: "Adding Governance and Trust to MCP Servers"
+last_reviewed: 2026-04-04
+owner: agt-maintainers
+---
+
 <!-- Copyright (c) Microsoft Corporation. Licensed under the MIT License. -->
 
 # Adding Governance and Trust to MCP Servers
@@ -792,7 +798,7 @@ The MCP client can then invoke the six trust tools directly:
 
 ### Working Example
 
-- [Trust-Verified MCP Server](../../examples/mcp-trust-verified-server/) -- Runnable FastMCP server with trust proxy authorization, security scanning, and audit logging
+- [Trust-Verified MCP Server](https://github.com/microsoft/agent-governance-toolkit/tree/main/examples/mcp-trust-verified-server) -- Runnable FastMCP server with trust proxy authorization, security scanning, and audit logging
 
 ### Related Tutorials
 
