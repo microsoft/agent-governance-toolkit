@@ -33,7 +33,7 @@ import pytest
 pytest.importorskip("agent_control_specification")
 pytest.importorskip("agent_os")
 
-from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402
+from agt.policies import EvaluationResult  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 

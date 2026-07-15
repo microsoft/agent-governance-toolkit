@@ -69,7 +69,7 @@ if "autogen_core" not in sys.modules:
     sys.modules["autogen_core.intervention"] = _intervention_mod
 
 
-from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402
+from agt.policies import EvaluationResult  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
