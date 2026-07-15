@@ -24,13 +24,13 @@ class _PolicyEvaluationLike(Protocol):
     reason_code: str
 
     def is_allowed(self) -> bool:
-        raise NotImplementedError
+        """Return whether the evaluation permits the host to continue."""
 
     def audit_record(self) -> dict[str, Any]:
-        raise NotImplementedError
+        """Return the restricted structured audit payload."""
 
     def public_error_message(self) -> str:
-        raise NotImplementedError
+        """Return the sanitized message safe to expose to callers."""
 
 
 class AgentOSError(Exception):
