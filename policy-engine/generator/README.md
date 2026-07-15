@@ -39,6 +39,20 @@ File based `extends` is confined to the top level manifest root. Keep parent man
 
 The init flow validates the manifest against `schema/manifest.schema.json` from the artifact kit or `spec/schema/manifest.schema.json` from a repository checkout, asks the Python SDK core loader to check semantic manifest constraints, rejects deprecated policy input keys, and uses OPA for Rego syntax and evaluation when `opa` is available. `--strict` makes missing OPA a failure. The generator wheel also carries the manifest schema and the wire request/result schemas under `acs_generator.schema` for artifact-only schema checks.
 
+Services can call `validate_acs_artifacts` with a YAML or JSON manifest string and either one Rego string or a mapping of source names to Rego strings. The result is JSON-ready and is valid only when the manifest matches the packaged canonical schema and OPA accepts every supplied module.
+
+```python
+from acs_generator import validate_acs_artifacts
+
+report = validate_acs_artifacts(
+    manifest=request.manifest,
+    rego={"payments.rego": request.rego},
+)
+return report.to_dict()
+```
+
+Failures include stable component and code fields plus the schema path or Rego source, line, column, and source snippet when available. This is an initial artifact check. Runtime semantic checks such as manifest reference resolution remain in the SDK core loader and the generator's existing `validate_artifacts` path.
+
 Artifact-only kits include a local Node optional OPA package. Install or extract `agent-control-specification-opa-<platform>-<version>.tgz`, then prepend its `bin` directory to `PATH` before running `acs-generate init --strict`.
 
 ```bash

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import warnings
+from collections.abc import Mapping
 from importlib import resources
 import shutil
 import subprocess
@@ -23,7 +25,9 @@ from .vocabulary import (
 OPA_TIMEOUT_SECONDS = 10
 SCHEMA_PACKAGE = "acs_generator.schema"
 SCHEMA_NAME = "manifest.schema.json"
+APPROVAL_SCHEMA_NAME = "approval.schema.json"
 VALIDATION_DIR_NAME = ".acs_generator_validation"
+OPA_OUTPUT_LIMIT = 4096
 # Core transform-path grammar (see rego_builder._TRANSFORM_PATH_RE): dotted object
 # keys and numeric list indices only; the core rejects string bracket keys.
 _TRANSFORM_PATH_RE = re.compile(r"^\$policy_target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
@@ -34,8 +38,365 @@ class ValidationResult:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ValidationDiagnostic:
+    component: str
+    code: str
+    message: str
+    source: str
+    path: str | None = None
+    line: int | None = None
+    column: int | None = None
+    snippet: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "component": self.component,
+            "code": self.code,
+            "message": self.message,
+            "source": self.source,
+            "path": self.path,
+            "line": self.line,
+            "column": self.column,
+            "snippet": self.snippet,
+        }
+
+
+@dataclass(frozen=True)
+class ArtifactValidationResult:
+    diagnostics: tuple[ValidationDiagnostic, ...] = ()
+
+    @property
+    def valid(self) -> bool:
+        return not self.diagnostics
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "valid": self.valid,
+            "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
+        }
+
+
 class ValidationError(RuntimeError):
     pass
+
+
+def validate_acs_artifacts(
+    manifest: str,
+    rego: str | Mapping[str, str],
+    *,
+    opa_path: str | None = None,
+) -> ArtifactValidationResult:
+    """Validate an ACS manifest string and one or more Rego module strings.
+
+    The check is intentionally suitable for an API boundary. It returns
+    structured diagnostics instead of raising for invalid artifacts. Manifest
+    validation uses the packaged canonical schema. Rego validation uses the OPA
+    compiler so syntax and cross-module compile failures are reported together.
+    """
+
+    diagnostics: list[ValidationDiagnostic] = []
+    parsed_manifest, manifest_diagnostic = _parse_manifest_string(manifest)
+    if manifest_diagnostic is not None:
+        diagnostics.append(manifest_diagnostic)
+    elif parsed_manifest is not None:
+        diagnostics.extend(_manifest_schema_diagnostics(parsed_manifest))
+
+    rego_modules, input_diagnostics = _normalize_rego_modules(rego)
+    diagnostics.extend(input_diagnostics)
+    if rego_modules:
+        executable = opa_path or shutil.which("opa")
+        if executable is None:
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="opa_unavailable",
+                    message="OPA is required to validate Rego. Install opa on PATH or pass opa_path.",
+                    source="opa",
+                )
+            )
+        else:
+            diagnostics.extend(_validate_rego_modules(executable, rego_modules))
+
+    return ArtifactValidationResult(tuple(diagnostics))
+
+
+def _parse_manifest_string(
+    manifest: str,
+) -> tuple[dict[str, Any] | None, ValidationDiagnostic | None]:
+    if not isinstance(manifest, str):
+        return None, ValidationDiagnostic(
+            component="manifest",
+            code="manifest_input_invalid",
+            message="Manifest input must be a YAML or JSON string.",
+            source="manifest",
+        )
+    try:
+        parsed = yaml.safe_load(manifest)
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        message = getattr(exc, "problem", None) or str(exc)
+        return None, ValidationDiagnostic(
+            component="manifest",
+            code="manifest_parse_error",
+            message=message,
+            source="manifest",
+            line=mark.line + 1 if mark is not None else None,
+            column=mark.column + 1 if mark is not None else None,
+        )
+    if not isinstance(parsed, dict):
+        return None, ValidationDiagnostic(
+            component="manifest",
+            code="manifest_root_invalid",
+            message="Manifest must decode to a YAML or JSON object.",
+            source="manifest",
+            path="$",
+        )
+    return parsed, None
+
+
+def _load_packaged_schema(name: str) -> dict[str, Any]:
+    with resources.files(SCHEMA_PACKAGE).joinpath(name).open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _manifest_validator() -> jsonschema.Draft202012Validator:
+    schema = _load_packaged_schema(SCHEMA_NAME)
+    approval_schema = _load_packaged_schema(APPROVAL_SCHEMA_NAME)
+    try:
+        from referencing import Registry, Resource
+
+        registry = Registry().with_resource(
+            approval_schema["$id"],
+            Resource.from_contents(approval_schema),
+        )
+        return jsonschema.Draft202012Validator(schema, registry=registry)
+    except (ImportError, TypeError):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            resolver = jsonschema.RefResolver.from_schema(
+                schema,
+                store={approval_schema["$id"]: approval_schema},
+            )
+        return jsonschema.Draft202012Validator(schema, resolver=resolver)
+
+
+def _manifest_schema_diagnostics(manifest: dict[str, Any]) -> list[ValidationDiagnostic]:
+    errors = sorted(
+        _manifest_validator().iter_errors(manifest),
+        key=lambda error: tuple(str(part) for part in error.absolute_path),
+    )
+    return [
+        ValidationDiagnostic(
+            component="manifest",
+            code="manifest_schema_error",
+            message=error.message,
+            source="manifest",
+            path=_json_path(error.absolute_path),
+        )
+        for error in errors
+    ]
+
+
+def _json_path(parts: Any) -> str:
+    path = "$"
+    for part in parts:
+        if isinstance(part, int):
+            path += f"[{part}]"
+        elif isinstance(part, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", part):
+            path += f".{part}"
+        else:
+            path += f"[{json.dumps(part)}]"
+    return path
+
+
+def _normalize_rego_modules(
+    rego: str | Mapping[str, str],
+) -> tuple[list[tuple[str, str]], list[ValidationDiagnostic]]:
+    if isinstance(rego, str):
+        items: list[tuple[Any, Any]] = [("policy.rego", rego)]
+    elif isinstance(rego, Mapping):
+        items = list(rego.items())
+    else:
+        return [], [
+            ValidationDiagnostic(
+                component="rego",
+                code="rego_input_invalid",
+                message="Rego input must be a string or a mapping of source names to strings.",
+                source="rego",
+            )
+        ]
+
+    modules: list[tuple[str, str]] = []
+    diagnostics: list[ValidationDiagnostic] = []
+    for index, (source, contents) in enumerate(items):
+        if not isinstance(source, str) or not source.strip():
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_source_invalid",
+                    message="Each Rego module must have a non-empty string source name.",
+                    source=f"rego[{index}]",
+                )
+            )
+            continue
+        if not isinstance(contents, str):
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_input_invalid",
+                    message="Each Rego module value must be a string.",
+                    source=source,
+                )
+            )
+            continue
+        if not contents.strip():
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_empty",
+                    message="Rego module must not be empty.",
+                    source=source,
+                )
+            )
+            continue
+        modules.append((source, contents))
+    return modules, diagnostics
+
+
+def _validate_rego_modules(
+    opa: str,
+    modules: list[tuple[str, str]],
+) -> list[ValidationDiagnostic]:
+    with tempfile.TemporaryDirectory(prefix="acs-validation-") as tmp:
+        root = Path(tmp)
+        paths: list[Path] = []
+        source_by_file: dict[str, str] = {}
+        try:
+            for index, (source, contents) in enumerate(modules):
+                path = root / f"module-{index:04d}.rego"
+                path.write_text(contents, encoding="utf-8")
+                paths.append(path)
+                source_by_file[str(path)] = source
+                source_by_file[str(path.resolve())] = source
+                source_by_file[path.name] = source
+        except OSError as exc:
+            return [
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_staging_error",
+                    message=f"Could not stage Rego modules for OPA validation. {exc}",
+                    source="rego",
+                )
+            ]
+
+        try:
+            completed = subprocess.run(
+                [opa, "check", "--format=json", *(str(path) for path in paths)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=OPA_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            return [
+                ValidationDiagnostic(
+                    component="rego",
+                    code="opa_timeout",
+                    message=f"OPA validation exceeded {OPA_TIMEOUT_SECONDS} seconds.",
+                    source="opa",
+                )
+            ]
+        except OSError as exc:
+            return [
+                ValidationDiagnostic(
+                    component="rego",
+                    code="opa_execution_error",
+                    message=f"OPA could not be executed. {exc}",
+                    source="opa",
+                )
+            ]
+
+        if completed.returncode == 0:
+            return []
+        return _opa_check_diagnostics(completed, source_by_file)
+
+
+def _opa_check_diagnostics(
+    completed: subprocess.CompletedProcess[str],
+    source_by_file: dict[str, str],
+) -> list[ValidationDiagnostic]:
+    payload: dict[str, Any] | None = None
+    for candidate in (completed.stderr.strip(), completed.stdout.strip()):
+        if not candidate:
+            continue
+        try:
+            decoded = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(decoded, dict):
+            payload = decoded
+            break
+
+    errors = payload.get("errors") if payload is not None else None
+    if isinstance(errors, list) and errors:
+        diagnostics: list[ValidationDiagnostic] = []
+        for error in errors:
+            if not isinstance(error, dict):
+                continue
+            location = error.get("location")
+            location = location if isinstance(location, dict) else {}
+            details = error.get("details")
+            details = details if isinstance(details, dict) else {}
+            file_name = location.get("file")
+            source = _rego_source_label(file_name, source_by_file)
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code=str(error.get("code") or "rego_validation_error"),
+                    message=_replace_opa_paths(
+                        str(error.get("message") or "OPA rejected the Rego module."),
+                        source_by_file,
+                    ),
+                    source=source,
+                    line=location.get("row") if isinstance(location.get("row"), int) else None,
+                    column=location.get("col") if isinstance(location.get("col"), int) else None,
+                    snippet=details.get("line") if isinstance(details.get("line"), str) else None,
+                )
+            )
+        if diagnostics:
+            return diagnostics
+
+    detail = completed.stderr.strip() or completed.stdout.strip()
+    detail = _replace_opa_paths(detail, source_by_file)
+    if len(detail) > OPA_OUTPUT_LIMIT:
+        detail = detail[:OPA_OUTPUT_LIMIT] + "..."
+    return [
+        ValidationDiagnostic(
+            component="rego",
+            code="opa_validation_error",
+            message=detail or f"OPA exited with status {completed.returncode} without diagnostics.",
+            source="opa",
+        )
+    ]
+
+
+def _rego_source_label(file_name: Any, source_by_file: dict[str, str]) -> str:
+    if not isinstance(file_name, str):
+        return "rego"
+    return (
+        source_by_file.get(file_name)
+        or source_by_file.get(str(Path(file_name).resolve()))
+        or source_by_file.get(Path(file_name).name)
+        or Path(file_name).name
+    )
+
+
+def _replace_opa_paths(value: str, source_by_file: dict[str, str]) -> str:
+    replaced = value
+    for path, source in sorted(source_by_file.items(), key=lambda item: len(item[0]), reverse=True):
+        replaced = replaced.replace(path, source)
+    return replaced
 
 
 class _NoopAnnotator:
@@ -528,10 +889,8 @@ def _validate_regex_patterns(opa: str, rego: str, regex_patterns: tuple[str, ...
 
 
 def _validate_schema(manifest: dict[str, Any]) -> None:
-    with resources.files(SCHEMA_PACKAGE).joinpath(SCHEMA_NAME).open("r", encoding="utf-8") as handle:
-        schema = json.load(handle)
     try:
-        jsonschema.validate(manifest, schema)
+        _manifest_validator().validate(manifest)
     except jsonschema.ValidationError as exc:
         path = ".".join(str(part) for part in exc.absolute_path) or "<root>"
         raise ValidationError(f"manifest schema validation failed at {path}: {exc.message}") from exc

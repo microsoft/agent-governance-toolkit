@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from acs_generator import FakeLanguageModel, GenerationEngine, GenerationError
+from acs_generator import FakeLanguageModel, GenerationEngine, GenerationError, validate_acs_artifacts
 from acs_generator.llm import OpenAICompatibleLanguageModel
 from acs_generator.validation import validate_artifacts
 
@@ -146,7 +146,10 @@ def test_generator_package_includes_wire_schemas() -> None:
 
 def test_packaged_schemas_match_canonical_spec_schemas() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    pairs = [("spec/schema/manifest.schema.json", "generator/acs_generator/schema/manifest.schema.json")]
+    pairs = [
+        ("spec/schema/approval.schema.json", "generator/acs_generator/schema/approval.schema.json"),
+        ("spec/schema/manifest.schema.json", "generator/acs_generator/schema/manifest.schema.json"),
+    ]
     pairs.extend(
         (
             f"spec/schema/wire/{name}",
@@ -318,6 +321,136 @@ def test_opa_missing_warns_and_strict_fails(monkeypatch: pytest.MonkeyPatch) -> 
     assert "opa not found" in warning_result.warnings[0]
     with pytest.raises(Exception, match="opa not found"):
         validate_artifacts(result.manifest, result.manifest_yaml, result.rego, result.slug, out, strict=True)
+
+
+def test_string_validation_api_returns_json_ready_success() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: validation-api
+policies:
+  guard:
+    type: rego
+    query: data.acs.guard.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy:
+      id: guard
+      query: data.acs.guard.verdict
+""",
+        """
+package acs.guard
+
+import rego.v1
+
+default verdict := {"decision": "allow"}
+""",
+    )
+
+    assert report.valid
+    assert report.to_dict() == {"valid": True, "diagnostics": []}
+
+
+def test_string_validation_api_aggregates_manifest_and_rego_diagnostics() -> None:
+    report = validate_acs_artifacts(
+        """
+metadata: []
+""",
+        {
+            "../../unsafe-name.rego": """
+package acs.guard
+
+allow if { value := }
+""",
+        },
+    )
+
+    assert not report.valid
+    codes = {diagnostic.code for diagnostic in report.diagnostics}
+    assert "manifest_schema_error" in codes
+    assert "rego_parse_error" in codes
+    rego_diagnostic = next(
+        diagnostic for diagnostic in report.diagnostics if diagnostic.code == "rego_parse_error"
+    )
+    assert rego_diagnostic.source == "../../unsafe-name.rego"
+    assert rego_diagnostic.line == 4
+    assert rego_diagnostic.column is not None
+    assert "/tmp/" not in str(report.to_dict())
+
+
+def test_string_validation_api_checks_rego_modules_together() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: validation-api
+""",
+        {
+            "one.rego": """
+package acs.guard
+
+import rego.v1
+
+helper(value) := value
+""",
+            "two.rego": """
+package acs.guard
+
+import rego.v1
+
+helper(left, right) := left
+""",
+        },
+    )
+
+    assert not report.valid
+    diagnostic = next(
+        diagnostic for diagnostic in report.diagnostics if diagnostic.code == "rego_type_error"
+    )
+    assert diagnostic.source == "one.rego"
+    assert "conflicting rules" in diagnostic.message
+
+
+def test_string_validation_api_resolves_packaged_approval_schema() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: validation-api
+approval:
+  timeout_seconds: 0
+""",
+        {},
+    )
+
+    assert not report.valid
+    diagnostic = next(
+        diagnostic
+        for diagnostic in report.diagnostics
+        if diagnostic.path == "$.approval.timeout_seconds"
+    )
+    assert diagnostic.code == "manifest_schema_error"
+    assert "minimum of 1" in diagnostic.message
+
+
+def test_string_validation_api_requires_opa_for_rego(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("acs_generator.validation.shutil.which", lambda name: None)
+
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  name: validation-api
+""",
+        "package acs.guard",
+    )
+
+    assert not report.valid
+    assert [diagnostic.code for diagnostic in report.diagnostics] == ["opa_unavailable"]
 
 
 def test_package_imports_without_credentials_or_network(monkeypatch: pytest.MonkeyPatch) -> None:
