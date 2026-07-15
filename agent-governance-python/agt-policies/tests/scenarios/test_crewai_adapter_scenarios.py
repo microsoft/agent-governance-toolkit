@@ -69,7 +69,7 @@ if "crewai" not in sys.modules:
     sys.modules["crewai.hooks"] = crewai_hooks_mod
 
 
-from agt.policies import EvaluationResult, SnapshotBuilder  # noqa: E402
+from agt.policies import EvaluationResult  # noqa: E402
 from agt.policies.runtime import AgtRuntime, ApprovalDecision  # noqa: E402
 
 
