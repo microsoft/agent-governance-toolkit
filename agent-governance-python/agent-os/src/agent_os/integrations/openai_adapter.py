@@ -623,19 +623,23 @@ class GovernedAssistant:
             }
             self._ctx.function_calls.append(call_info)
             self._ctx.tool_calls.append(call_info)
-            self._ctx.call_count = len(self._ctx.tool_calls)
+            current_call_count = len(self._ctx.tool_calls)
+            self._ctx.call_count = max(0, current_call_count - 1)
 
             try:
                 parsed_args = json.loads(raw_args) if raw_args else {}
             except (TypeError, ValueError):
                 parsed_args = {}
 
-            bridge_result = self._kernel.evaluate_pre_tool_call(
-                self._ctx,
-                tool_name=func_name or "",
-                args=parsed_args,
-                call_id=tool_call.id,
-            )
+            try:
+                bridge_result = self._kernel.evaluate_pre_tool_call(
+                    self._ctx,
+                    tool_name=func_name or "",
+                    args=parsed_args,
+                    call_id=tool_call.id,
+                )
+            finally:
+                self._ctx.call_count = current_call_count
             if bridge_result.transform is not None and isinstance(
                 bridge_result.transform.value, dict
             ):

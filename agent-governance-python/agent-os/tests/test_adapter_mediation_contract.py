@@ -221,6 +221,29 @@ def test_openai_stream_buffers_before_yielding() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("filename", "expected_occurrences"),
+    [
+        ("anthropic_adapter.py", 2),
+        ("gemini_adapter.py", 1),
+        ("openai_adapter.py", 1),
+        ("semantic_kernel_adapter.py", 1),
+    ],
+)
+def test_precounted_tool_calls_evaluate_with_previous_budget_count(
+    filename: str,
+    expected_occurrences: int,
+) -> None:
+    source = _source(filename)
+
+    assert source.count(
+        "self._ctx.call_count = max(0, current_call_count - 1)"
+    ) == expected_occurrences
+    assert source.count(
+        "self._ctx.call_count = current_call_count"
+    ) >= expected_occurrences
+
+
 def test_llamaindex_stream_chat_post_checks_before_replay() -> None:
     source = _source("llamaindex_adapter.py")
 

@@ -307,13 +307,17 @@ class GovernedSemanticKernel:
 
         # Route the function invocation through the native runtime.
         self._ctx.tool_calls.append(invocation)
-        self._ctx.call_count = len(self._ctx.tool_calls)
-        bridge_result = self._wrapper.evaluate_pre_tool_call(
-            self._ctx,
-            tool_name=func_id,
-            args=dict(kwargs),
-            call_id=f"sk-call-{self._ctx.call_count}",
-        )
+        current_call_count = len(self._ctx.tool_calls)
+        self._ctx.call_count = max(0, current_call_count - 1)
+        try:
+            bridge_result = self._wrapper.evaluate_pre_tool_call(
+                self._ctx,
+                tool_name=func_id,
+                args=dict(kwargs),
+                call_id=f"sk-call-{current_call_count}",
+            )
+        finally:
+            self._ctx.call_count = current_call_count
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
         if bridge_result.transform is not None and isinstance(

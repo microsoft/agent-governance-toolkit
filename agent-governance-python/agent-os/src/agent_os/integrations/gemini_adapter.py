@@ -267,14 +267,17 @@ class GovernedGeminiModel:
                 }
                 self._ctx.function_calls.append(call_info)
                 self._ctx.tool_calls.append(call_info)
-                self._ctx.call_count = len(self._ctx.tool_calls)
-
-                tool_result = self._kernel.evaluate_pre_tool_call(
-                    self._ctx,
-                    tool_name=fn_name,
-                    args=fn_args,
-                    call_id=f"call-{len(self._ctx.tool_calls)}",
-                )
+                current_call_count = len(self._ctx.tool_calls)
+                self._ctx.call_count = max(0, current_call_count - 1)
+                try:
+                    tool_result = self._kernel.evaluate_pre_tool_call(
+                        self._ctx,
+                        tool_name=fn_name,
+                        args=fn_args,
+                        call_id=f"call-{current_call_count}",
+                    )
+                finally:
+                    self._ctx.call_count = current_call_count
                 if not tool_result.allowed:
                     raise tool_result.to_policy_violation(PolicyViolationError)
                 if tool_result.transform is not None and isinstance(
