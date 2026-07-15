@@ -513,9 +513,9 @@ class GovernedAssistant:
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, str
+            bridge_result.transformed_value, str
         ):
-            content = bridge_result.transform.value
+            content = bridge_result.transformed_value
 
         message = self._client.beta.threads.messages.create(
             thread_id=thread_id,
@@ -578,9 +578,9 @@ class GovernedAssistant:
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
-                instructions = bridge_result.transform.value
+                instructions = bridge_result.transformed_value
 
         # Validate tools against policy
         if tools:
@@ -621,9 +621,9 @@ class GovernedAssistant:
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
-                instructions = bridge_result.transform.value
+                instructions = bridge_result.transformed_value
 
         # Create streaming run
         with self._client.beta.threads.runs.stream(
@@ -645,7 +645,7 @@ class GovernedAssistant:
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None:
-                transformed = bridge_result.transform.value
+                transformed = bridge_result.transformed_value
                 if not isinstance(transformed, list):
                     raise PolicyViolationError(
                         "OpenAI stream output transform must return a list of stream events "
@@ -750,9 +750,9 @@ class GovernedAssistant:
             finally:
                 self._ctx.call_count = current_call_count
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, dict
+                bridge_result.transformed_value, dict
             ):
-                parsed_args = bridge_result.transform.value
+                parsed_args = bridge_result.transformed_value
                 raw_args = json.dumps(parsed_args)
             if not bridge_result.allowed:
                 self._kernel.cancel_run(thread_id, run.id, self._client)

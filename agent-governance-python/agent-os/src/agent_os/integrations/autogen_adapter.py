@@ -227,7 +227,7 @@ class GovernanceInterventionHandler:
             if bridge_result.transform is not None:
                 # Rewrite the FunctionCall arguments per AGT D1.1 before
                 # forwarding the message to the recipient.
-                replacement = bridge_result.transform.value
+                replacement = bridge_result.transformed_value
                 if isinstance(replacement, dict) and "arguments" in replacement:
                     try:
                         message.arguments = replacement["arguments"]
@@ -263,10 +263,10 @@ class GovernanceInterventionHandler:
         if content:
             bridge_result = kernel.evaluate_input(ctx, content)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
                 try:
-                    self._apply_content(message, bridge_result.transform.value)
+                    self._apply_content(message, bridge_result.transformed_value)
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
             if not bridge_result.allowed:
