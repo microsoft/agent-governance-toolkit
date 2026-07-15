@@ -64,6 +64,16 @@ AGT does not try to win that fight inside the prompt. Every tool call, message s
 pip install agent-governance-toolkit[full]
 ```
 
+Use the `[full]` extra for the quick-start imports below. The base
+`agent-governance-toolkit` wheel installs the compliance CLI only; the governance
+modules live in the consolidated core distribution. The `agentmesh` quick-start
+import remains the current wrapper API. The `agent_os` `PolicyEvaluator` example
+below is legacy compatibility: importing `agent_os` currently emits a
+`DeprecationWarning` because the old `agent-os-kernel` distribution is deprecated.
+Use `agent-governance-toolkit-core` (or the `[full]` extra that includes it) as
+the replacement distribution, and prefer the AGT 5 `agt-policies`/ACS APIs for
+new policy-engine host code.
+
 For Claude Code, add AGT as a plugin marketplace and install the governance plugin:
 
 ```text

@@ -20,11 +20,14 @@ class _PolicyEvaluationLike(Protocol):
     message: str
     reason_code: str
 
-    def is_allowed(self) -> bool: ...
+    def is_allowed(self) -> bool:
+        raise NotImplementedError
 
-    def audit_record(self) -> dict[str, Any]: ...
+    def audit_record(self) -> dict[str, Any]:
+        raise NotImplementedError
 
-    def public_error_message(self) -> str: ...
+    def public_error_message(self) -> str:
+        raise NotImplementedError
 
 
 class AgentOSError(Exception):
