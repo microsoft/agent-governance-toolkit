@@ -120,9 +120,12 @@ ALLOWED_V4_FILES: frozenset[str] = frozenset(
         "agent-governance-python/agt-policies/src/agt/cli/__main__.py",
         "agent-governance-python/agt-policies/src/agt/cli/__init__.py",
         "agent-governance-python/agt-policies/src/agt/cli/_migrate_bridge.py",
+<<<<<<< HEAD
         "agent-governance-python/agt-policies/tests/test_migrate.py",
         "agent-governance-python/agt-policies/tests/test_migration_boundary.py",
         "agent-governance-python/agt-policies/tests/test_migration_equivalence.py",
+=======
+>>>>>>> origin/main
         "docs/v4-removal.md",
         # The ratchet's own test fixtures reference v4 names deliberately.
         "scripts/tests/test_check_v4_ratchet.py",

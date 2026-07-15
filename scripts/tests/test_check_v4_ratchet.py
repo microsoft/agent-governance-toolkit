@@ -324,12 +324,15 @@ def test_allowed_root_is_exact_migration_files_not_whole_cli():
     assert ratchet._in_allowed_root(
         "agent-governance-python/agt-policies/src/agt/cli/migrate.py"
     )
+<<<<<<< HEAD
     assert ratchet._in_allowed_root(
         "agent-governance-python/agt-policies/tests/test_migrate.py"
     )
     assert ratchet._in_allowed_root(
         "agent-governance-python/agt-policies/tests/test_migration_boundary.py"
     )
+=======
+>>>>>>> origin/main
     assert ratchet._in_allowed_root("agent-governance-python/agt-v4-migrate/src/x.py")
     assert ratchet._in_allowed_root("docs/v4-removal.md")
     assert not ratchet._in_allowed_root(
