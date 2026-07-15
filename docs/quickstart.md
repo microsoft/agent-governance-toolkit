@@ -1,6 +1,16 @@
+---
+title: Quick Start
+last_reviewed: 2026-07-15
+owner: docs-team
+---
+
 # Quick Start
 
 Get from zero to governed AI agents in under 5 minutes.
+
+!!! important "Public Preview"
+    APIs may change before general availability. The canonical package names
+    and extras below match the current published package family.
 
 ## Install
 
@@ -21,7 +31,7 @@ policy-engine host code.
 !!! info "Other languages"
     **TypeScript:** `npm install @microsoft/agent-governance-sdk` ·
     **.NET:** `dotnet add package Microsoft.AgentGovernance` ·
-    **Rust:** `cargo add agent-governance` ·
+    **Rust:** `cargo add agentmesh` ·
     **Go:** `go get github.com/microsoft/agent-governance-toolkit/agent-governance-golang`
 
 ## Govern any tool in 2 lines
@@ -94,29 +104,27 @@ GovernanceDenied: Action denied by policy rule 'block-dangerous-tools':
 
 ## Use with your framework
 
-AGT works with any agent framework. Use the `govern()` wrapper on tool
-functions, or use framework-specific adapters for deeper integration:
+AGT works with any agent framework. The stable starting point is the `govern()`
+wrapper on tool functions:
 
 ```python
-# Option A: wrap any tool function (works everywhere)
 from agentmesh.governance import govern
 safe_tool = govern(my_langchain_tool.run, policy="policy.yaml")
-
-# Option B: use a framework adapter (deeper integration)
-from agent_os.integrations import LangChainKernel
-kernel = LangChainKernel(policy_directory="policies/")
 ```
 
-Framework adapters available for: **LangChain**, **OpenAI Agents SDK**,
-**AutoGen**, **CrewAI**, **Google ADK**, **Semantic Kernel**, **LlamaIndex**,
-**Anthropic**, **Gemini**, **Mistral**, **PydanticAI**, **smolagents**, and more.
+Install an optional adapter extra when you need framework-specific hooks.
+Canonical extras currently cover **LangChain**, **CrewAI**, **OpenAI Agents**,
+**LangGraph**, **LlamaIndex**, **Haystack**, **PydanticAI**, and **Google ADK**.
 
 ```bash
-pip install agentmesh-langchain       # LangChain
-pip install openai-agents-agentmesh   # OpenAI Agents SDK
-pip install crewai-agentmesh          # CrewAI
-pip install adk-agentmesh             # Google ADK
+pip install "agent-governance-toolkit[langchain]"
+pip install "agent-governance-toolkit[crewai]"
+pip install "agent-governance-toolkit[openai-agents]"
+pip install "agent-governance-toolkit[adk]"
 ```
+
+See the [package guide](packages/index.md#framework-integrations) for direct
+integration-package installs and the complete extra list.
 
 ## Verify OWASP coverage
 

@@ -13,18 +13,18 @@ theme:
   favicon: assets/agent-governance-toolkit.svg
   custom_dir: docs/overrides
   palette:
-    - scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
     - scheme: slate
       primary: custom
       accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
   features:
     - navigation.instant
     - navigation.tracking
@@ -113,20 +113,22 @@ nav:
     - Architecture: ARCHITECTURE.md
     - Glossary: GLOSSARY.md
   - Packages:
-    - Overview: packages/index.md
-    - Agent OS: packages/agent-os.md
-    - Agent Mesh: packages/agent-mesh.md
-    - Agent Runtime: packages/agent-runtime.md
-    - Agent SRE: packages/agent-sre.md
-    - Agent Compliance: packages/agent-compliance.md
-    - Agent Marketplace: packages/agent-marketplace.md
-    - Agent Lightning: packages/agent-lightning.md
-    - Agent Hypervisor: packages/agent-hypervisor.md
+    - Package guide: packages/index.md
     - Agent Control Specification: packages/agent-control-specification.md
-    - Antigravity CLI governance package: packages/antigravity-cli-governance.md
-    - OpenCode CLI governance package: packages/opencode-governance.md
-    - .NET package: packages/dotnet-sdk.md
-    - VS Code Extension: packages/agent-os-vscode.md
+    - Standalone packages:
+      - Agent Marketplace: packages/agent-marketplace.md
+      - Agent Lightning: packages/agent-lightning.md
+    - SDKs and developer tools:
+      - .NET package: packages/dotnet-sdk.md
+      - VS Code Extension: packages/agent-os-vscode.md
+      - Antigravity CLI governance: packages/antigravity-cli-governance.md
+      - OpenCode CLI governance: packages/opencode-governance.md
+    - Compatibility component docs:
+      - Agent OS: packages/agent-os.md
+      - Agent Mesh: packages/agent-mesh.md
+      - Agent Runtime: packages/agent-runtime.md
+      - Agent SRE: packages/agent-sre.md
+      - Agent Hypervisor: packages/agent-hypervisor.md
   - Tutorials:
     - Overview: tutorials/index.md
     - Policy Engine: tutorials/01-policy-engine.md
@@ -217,6 +219,7 @@ nav:
     - "Agent Lightning Fast-Path": specs/AGENT-LIGHTNING-FAST-PATH-1.0.md
     - "Framework Adapter Contract": specs/FRAMEWORK-ADAPTER-CONTRACT-1.0.md
     - "Audit & Compliance": specs/AUDIT-COMPLIANCE-1.0.md
+    - "Dynamic Policy Conditions (Draft)": specs/DYNAMIC-POLICY-CONDITIONS-1.0.md
   - Architecture Decisions:
     - Overview: adr/index.md
     - "ADR-0001: Ed25519 for Identity": adr/0001-use-ed25519-for-agent-identity.md
