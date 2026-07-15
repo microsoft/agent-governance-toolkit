@@ -82,7 +82,6 @@ reported but never counted against the ratchet. The gate, its unit tests, and
 lint run on every pull request through `.github/workflows/v4-removal-ratchet.yml`.
 The final gate in phase 6 drives the non-migration total to zero, including
 normative specs.
-<<<<<<< HEAD
 
 ## Phase 1 native contracts
 
@@ -182,5 +181,3 @@ semantics cannot drift during the transition. REGEX and GLOB use OPA's Go RE2
 validator, and GLOB uses the RE2 `\z` end anchor rather than Python's unsupported
 `\Z`. Both constructor and governance-chain migrations refuse existing
 manifests, bundles, and backups instead of overwriting them.
-=======
->>>>>>> origin/main
