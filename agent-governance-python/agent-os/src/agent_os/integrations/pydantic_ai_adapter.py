@@ -303,9 +303,9 @@ class GovernanceCapability:
             raise bridge_result.to_policy_violation(PolicyViolationError)
         effective_prompt = prompt
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, str
+            bridge_result.transformed_value, str
         ):
-            effective_prompt = bridge_result.transform.value
+            effective_prompt = bridge_result.transformed_value
         self._audit.append(
             {"event": "run_start", "prompt_length": len(effective_prompt)}
         )
@@ -326,7 +326,7 @@ class GovernanceCapability:
             raise evaluation.to_policy_violation(PolicyViolationError)
         self._audit.append({"event": "run_complete"})
         if evaluation.transform is not None:
-            return evaluation.transform.value
+            return evaluation.transformed_value
         return result
 
     def before_tool_execute(
@@ -368,9 +368,9 @@ class GovernanceCapability:
             raise evaluation.to_policy_violation(PolicyViolationError)
         effective_args = arguments
         if evaluation.transform is not None and isinstance(
-            evaluation.transform.value, dict
+            evaluation.transformed_value, dict
         ):
-            effective_args = evaluation.transform.value
+            effective_args = evaluation.transformed_value
         self._tool_call_count += 1
         self._ctx.call_count += 1
         self._audit.append({
@@ -404,7 +404,7 @@ class GovernanceCapability:
             "tool": tool_name,
         })
         if evaluation.transform is not None:
-            return evaluation.transform.value
+            return evaluation.transformed_value
         return result
 
     def __repr__(self) -> str:

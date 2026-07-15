@@ -359,16 +359,16 @@ class GovernanceStepCallback:
                 call_id=f"{agent_name}:{tool_name}:{self._step_count}",
             )
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, dict
+                bridge_result.transformed_value, dict
             ):
                 # Rewrite the tool-call args in place per AGT-DELTA D1.1
                 # so the subsequent smolagents executor sees the
                 # sanitised payload.
                 try:
                     if hasattr(tc, "tool_arguments"):
-                        tc.tool_arguments = bridge_result.transform.value
+                        tc.tool_arguments = bridge_result.transformed_value
                     elif hasattr(tc, "arguments"):
-                        tc.arguments = bridge_result.transform.value
+                        tc.arguments = bridge_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
             if not bridge_result.allowed:
@@ -398,7 +398,7 @@ class GovernanceStepCallback:
             bridge_result = self._kernel.evaluate_output(ctx, observation)
             if bridge_result.transform is not None:
                 try:
-                    step.observation = bridge_result.transform.value
+                    step.observation = bridge_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
             elif not bridge_result.allowed:

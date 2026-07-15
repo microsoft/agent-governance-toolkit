@@ -84,6 +84,32 @@ def test_native_result_exposes_transform_without_legacy_conversion() -> None:
     assert result.transform.value == "safe"
 
 
+def test_native_result_exposes_materialized_nested_transform() -> None:
+    runtime = NativeAdapterRuntime(
+        _Runtime(
+            PolicyEvaluation(
+                verdict="transform",
+                transform=TransformResult(
+                    path="$policy_target.secret",
+                    value="[REDACTED]",
+                    applied_value={"secret": "[REDACTED]", "safe": "visible"},
+                ),
+            )
+        )
+    )
+
+    result = runtime.evaluate_pre_tool_call(
+        _Context(),
+        tool_name="send",
+        args={"secret": "123", "safe": "visible"},
+    )
+
+    assert result.transformed_value == {
+        "secret": "[REDACTED]",
+        "safe": "visible",
+    }
+
+
 def test_native_path_charges_attempts_and_records_tokens_once() -> None:
     source = _Runtime(PolicyEvaluation(verdict="allow"))
     runtime = NativeAdapterRuntime(source)

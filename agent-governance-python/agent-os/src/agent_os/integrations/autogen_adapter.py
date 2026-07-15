@@ -146,7 +146,7 @@ class GovernanceInterventionHandler:
             if bridge_result.transform is not None:
                 # Rewrite the FunctionCall arguments per AGT D1.1 before
                 # forwarding the message to the recipient.
-                replacement = bridge_result.transform.value
+                replacement = bridge_result.transformed_value
                 if isinstance(replacement, dict) and "arguments" in replacement:
                     try:
                         message.arguments = replacement["arguments"]
@@ -182,10 +182,10 @@ class GovernanceInterventionHandler:
         if content:
             bridge_result = kernel.evaluate_input(ctx, content)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
                 try:
-                    self._apply_content(message, bridge_result.transform.value)
+                    self._apply_content(message, bridge_result.transformed_value)
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
             if not bridge_result.allowed:
@@ -241,9 +241,9 @@ class GovernanceInterventionHandler:
         content = self._extract_content(message)
         if content:
             result = kernel.evaluate_input(self._ctx, content)
-            if result.transform is not None and isinstance(result.transform.value, str):
-                self._apply_content(message, result.transform.value)
-                content = result.transform.value
+            if result.transform is not None and isinstance(result.transformed_value, str):
+                self._apply_content(message, result.transformed_value)
+                content = result.transformed_value
             if not result.allowed:
                 logger.info("[%s] Policy DENY (publish): %s", name, result.reason)
                 return DropMessage

@@ -169,9 +169,9 @@ class LlamaIndexKernel(BaseIntegration):
                 if not bridge_result.allowed:
                     raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None and isinstance(
-                    bridge_result.transform.value, str
+                    bridge_result.transformed_value, str
                 ):
-                    return bridge_result.transform.value
+                    return bridge_result.transformed_value
                 return input_data
 
             def _post(self, result: Any) -> Any:
@@ -184,22 +184,22 @@ class LlamaIndexKernel(BaseIntegration):
                 if not bridge_result.allowed:
                     raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None and isinstance(
-                    bridge_result.transform.value, str
+                    bridge_result.transformed_value, str
                 ):
                     # Rewrite the response content if the result exposes one.
                     if hasattr(result, "response"):
                         try:
-                            result.response = bridge_result.transform.value
+                            result.response = bridge_result.transformed_value
                             return result
                         except Exception:  # noqa: BLE001 — best-effort rewrite
                             pass
                     if hasattr(result, "content"):
                         try:
-                            result.content = bridge_result.transform.value
+                            result.content = bridge_result.transformed_value
                             return result
                         except Exception:  # noqa: BLE001 — best-effort rewrite
                             pass
-                    return bridge_result.transform.value
+                    return bridge_result.transformed_value
                 return result
 
             def query(self, query_str: Any, **kwargs) -> Any:

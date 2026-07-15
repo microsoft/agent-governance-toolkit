@@ -321,9 +321,9 @@ class GovernedSemanticKernel:
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, dict
+            bridge_result.transformed_value, dict
         ):
-            kwargs = dict(bridge_result.transform.value)
+            kwargs = dict(bridge_result.transformed_value)
 
         # Execute
         try:
@@ -348,15 +348,15 @@ class GovernedSemanticKernel:
             if not post_result.allowed:
                 raise post_result.to_policy_violation(PolicyViolationError)
             if post_result.transform is not None and isinstance(
-                post_result.transform.value, str
+                post_result.transformed_value, str
             ):
                 if hasattr(result, "value"):
                     try:
-                        result.value = post_result.transform.value
+                        result.value = post_result.transformed_value
                         return result
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
-                return post_result.transform.value
+                return post_result.transformed_value
 
             return result
 
@@ -499,9 +499,9 @@ class GovernedSemanticKernel:
         if not bridge_result.allowed:
             raise _prefixed_violation("Memory save blocked", bridge_result)
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, str
+            bridge_result.transformed_value, str
         ):
-            text = bridge_result.transform.value
+            text = bridge_result.transformed_value
 
         # Record operation
         self._ctx.memory_operations.append({
@@ -594,9 +594,9 @@ class GovernedSemanticKernel:
         if not bridge_result.allowed:
             raise _prefixed_violation("Prompt blocked", bridge_result)
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, str
+            bridge_result.transformed_value, str
         ):
-            prompt = bridge_result.transform.value
+            prompt = bridge_result.transformed_value
 
         # Record
         self._ctx.functions_invoked.append({
@@ -618,15 +618,15 @@ class GovernedSemanticKernel:
         if not post_result.allowed:
             raise post_result.to_policy_violation(PolicyViolationError)
         if post_result.transform is not None and isinstance(
-            post_result.transform.value, str
+            post_result.transformed_value, str
         ):
             if hasattr(result, "value"):
                 try:
-                    result.value = post_result.transform.value
+                    result.value = post_result.transformed_value
                     return result
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
-            return post_result.transform.value
+            return post_result.transformed_value
 
         return result
 
@@ -667,9 +667,9 @@ class GovernedSemanticKernel:
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, str
+            bridge_result.transformed_value, str
         ):
-            goal = bridge_result.transform.value
+            goal = bridge_result.transformed_value
 
         # Create plan
         if planner:
@@ -982,10 +982,10 @@ class GovernanceFunctionFilter:
         if not bridge_result.allowed:
             raise bridge_result.to_policy_violation(PolicyViolationError)
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, dict
+            bridge_result.transformed_value, dict
         ):
             try:
-                context.arguments = bridge_result.transform.value
+                context.arguments = bridge_result.transformed_value
             except Exception:  # noqa: BLE001 — best-effort rewrite
                 pass
 
@@ -1001,10 +1001,10 @@ class GovernanceFunctionFilter:
             if not post_result.allowed:
                 raise post_result.to_policy_violation(PolicyViolationError)
             if post_result.transform is not None and isinstance(
-                post_result.transform.value, str
+                post_result.transformed_value, str
             ):
                 try:
-                    context.result = post_result.transform.value
+                    context.result = post_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite
                     pass
 

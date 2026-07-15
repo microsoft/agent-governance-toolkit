@@ -215,14 +215,14 @@ class _GovernedEventStream:
                             call_id=str(self._ctx.call_count + 1),
                         )
                         if bridge_result.transform is not None and isinstance(
-                            bridge_result.transform.value, dict
+                            bridge_result.transformed_value, dict
                         ):
                             # Rewrite the action-group parameters in
                             # place per AGT-DELTA D1.1 so the
                             # downstream Bedrock consumer sees the
                             # AGT-redacted payload.
                             try:
-                                ag["parameters"] = bridge_result.transform.value
+                                ag["parameters"] = bridge_result.transformed_value
                             except Exception:  # noqa: BLE001 — best-effort rewrite
                                 pass
                         if not bridge_result.allowed:
@@ -299,8 +299,8 @@ class GovernedBedrockClient:
         input_text = kwargs.get("inputText", "")
         if input_text:
             result = self._kernel.evaluate_input(self._ctx, input_text)
-            if result.transform is not None and isinstance(result.transform.value, str):
-                input_text = result.transform.value
+            if result.transform is not None and isinstance(result.transformed_value, str):
+                input_text = result.transformed_value
                 kwargs["inputText"] = input_text
             if not result.allowed:
                 self._kernel.emit(GovernanceEventType.POLICY_VIOLATION, {

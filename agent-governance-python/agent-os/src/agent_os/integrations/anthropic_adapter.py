@@ -266,10 +266,10 @@ class _GovernedMessages:
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
                 if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transform.value
+                    msg["content"] = bridge_result.transformed_value
                     messages[idx] = msg
 
         # Audit log
@@ -330,10 +330,10 @@ class _GovernedMessages:
                 if not tool_result.allowed:
                     raise tool_result.to_policy_violation(PolicyViolationError)
                 if tool_result.transform is not None and isinstance(
-                    tool_result.transform.value, dict
+                    tool_result.transformed_value, dict
                 ):
                     try:
-                        block.input = tool_result.transform.value
+                        block.input = tool_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
 
@@ -466,10 +466,10 @@ class GovernanceMessageHook:
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
                 if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transform.value
+                    msg["content"] = bridge_result.transformed_value
                     messages[idx] = msg
 
         # Audit log
@@ -522,13 +522,13 @@ class GovernanceMessageHook:
                 if not tool_result.allowed:
                     raise tool_result.to_policy_violation(PolicyViolationError)
                 if tool_result.transform is not None and isinstance(
-                    tool_result.transform.value, dict
+                    tool_result.transformed_value, dict
                 ):
                     # Rewrite the tool-use block's input per AGT D1.1
                     # so any subsequent host-side tool executor sees
                     # the sanitised arguments.
                     try:
-                        block.input = tool_result.transform.value
+                        block.input = tool_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
 

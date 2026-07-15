@@ -21,52 +21,71 @@ class AdapterResult(Protocol):
     transform: Any | None
 
     @property
-    def allowed(self) -> bool: ...
+    def transformed_value(self) -> Any:
+        """Return the materialized policy target after transformation."""
 
     @property
-    def verdict(self) -> str: ...
+    def allowed(self) -> bool:
+        """Return whether the adapter may continue."""
 
     @property
-    def reason(self) -> str: ...
+    def verdict(self) -> str:
+        """Return the native policy verdict."""
 
     @property
-    def input_identity(self) -> str | None: ...
+    def reason(self) -> str:
+        """Return the normalized reason code."""
 
     @property
-    def enforced_identity(self) -> str | None: ...
-
-    def to_legacy_tuple(self) -> tuple[bool, str]: ...
+    def input_identity(self) -> str | None:
+        """Return the identity of the evaluated input."""
 
     @property
-    def public_message(self) -> str: ...
+    def enforced_identity(self) -> str | None:
+        """Return the identity of the enforced action."""
 
-    def to_policy_violation(self, error_type: Any) -> Exception: ...
+    def to_legacy_tuple(self) -> tuple[bool, str]:
+        """Return the temporary tuple compatibility shape."""
+
+    @property
+    def public_message(self) -> str:
+        """Return the sanitized public policy message."""
+
+    def to_policy_violation(self, error_type: Any) -> Exception:
+        """Create the canonical policy exception for this result."""
 
 
 class AdapterRuntime(Protocol):
     runtime: Any
 
-    def evaluate_input(self, *args: Any, **kwargs: Any) -> AdapterResult: ...
+    def evaluate_input(self, *args: Any, **kwargs: Any) -> AdapterResult:
+        """Evaluate an input intervention point."""
 
     def evaluate_pre_tool_call(
         self, *args: Any, **kwargs: Any
-    ) -> AdapterResult: ...
+    ) -> AdapterResult:
+        """Evaluate before a tool call."""
 
     def evaluate_post_tool_call(
         self, *args: Any, **kwargs: Any
-    ) -> AdapterResult: ...
+    ) -> AdapterResult:
+        """Evaluate after a tool call."""
 
     def evaluate_pre_model_call(
         self, *args: Any, **kwargs: Any
-    ) -> AdapterResult: ...
+    ) -> AdapterResult:
+        """Evaluate before a model call."""
 
     def evaluate_post_model_call(
         self, *args: Any, **kwargs: Any
-    ) -> AdapterResult: ...
+    ) -> AdapterResult:
+        """Evaluate after a model call."""
 
-    def evaluate_output(self, *args: Any, **kwargs: Any) -> AdapterResult: ...
+    def evaluate_output(self, *args: Any, **kwargs: Any) -> AdapterResult:
+        """Evaluate an output intervention point."""
 
-    def record_post_execute(self, *args: Any, **kwargs: Any) -> None: ...
+    def record_post_execute(self, *args: Any, **kwargs: Any) -> None:
+        """Record host usage after execution."""
 
 
 @dataclass(frozen=True)
@@ -99,6 +118,14 @@ class NativeAdapterResult:
     @property
     def transform(self) -> Any | None:
         return self.evaluation.transform
+
+    @property
+    def transformed_value(self) -> Any:
+        transform = self.transform
+        if transform is None:
+            return None
+        applied_value = getattr(transform, "applied_value", None)
+        return applied_value if applied_value is not None else transform.value
 
     @property
     def public_message(self) -> str:

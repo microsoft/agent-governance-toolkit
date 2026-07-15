@@ -375,9 +375,9 @@ class GuardrailsKernel:
                 metadata={"verdict": verdict, "reason": reason},
             )
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
-                final_value = bridge_result.transform.value
+                final_value = bridge_result.transformed_value
                 outcome.fixed_value = final_value
                 outcome.metadata["transform_applied"] = True
             outcomes.append(outcome)

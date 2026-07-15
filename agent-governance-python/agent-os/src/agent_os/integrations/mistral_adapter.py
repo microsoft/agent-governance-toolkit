@@ -214,10 +214,10 @@ class GovernedMistralClient:
             if not bridge_result.allowed:
                 raise bridge_result.to_policy_violation(PolicyViolationError)
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
                 if isinstance(msg, dict):
-                    msg["content"] = bridge_result.transform.value
+                    msg["content"] = bridge_result.transformed_value
                     messages[idx] = msg
 
         # Validate tools against policy (host-side allowlist guard — the
@@ -303,14 +303,14 @@ class GovernedMistralClient:
                 if not tool_result.allowed:
                     raise tool_result.to_policy_violation(PolicyViolationError)
                 if tool_result.transform is not None and isinstance(
-                    tool_result.transform.value, dict
+                    tool_result.transformed_value, dict
                 ):
                     # Rewrite the Mistral tool-call arguments per AGT D1.1.
                     try:
                         import json as _json
 
                         if fn is not None:
-                            fn.arguments = _json.dumps(tool_result.transform.value)
+                            fn.arguments = _json.dumps(tool_result.transformed_value)
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
 

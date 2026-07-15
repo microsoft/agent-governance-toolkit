@@ -330,16 +330,16 @@ class RuntimeGovernanceMiddleware(AgentMiddleware):
         # see the AGT-sanitised text.
         if (
             bridge_result.transform is not None
-            and isinstance(bridge_result.transform.value, str)
+            and isinstance(bridge_result.transformed_value, str)
             and last_msg is not None
         ):
             try:
                 if hasattr(last_msg, "text"):
-                    last_msg.text = bridge_result.transform.value
+                    last_msg.text = bridge_result.transformed_value
                 if hasattr(last_msg, "contents") and isinstance(
                     getattr(last_msg, "contents"), list
                 ):
-                    last_msg.contents = [bridge_result.transform.value]
+                    last_msg.contents = [bridge_result.transformed_value]
             except Exception:  # noqa: BLE001 — best-effort rewrite
                 pass
 
@@ -458,10 +458,10 @@ class CapabilityGuardMiddleware(FunctionMiddleware):
         # engine returned a transform verdict so the next filter sees
         # the AGT-sanitised payload.
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, dict
+            bridge_result.transformed_value, dict
         ):
             try:
-                context.arguments = bridge_result.transform.value
+                context.arguments = bridge_result.transformed_value
             except Exception:  # noqa: BLE001 — best-effort rewrite
                 pass
 
