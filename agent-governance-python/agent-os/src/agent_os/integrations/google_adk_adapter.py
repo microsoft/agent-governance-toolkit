@@ -778,11 +778,11 @@ class GoogleADKKernel(BaseIntegration):
                 },
             )
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, dict
+            bridge_result.transformed_value, dict
         ):
             if isinstance(tool_args, dict):
                 tool_args.clear()
-                tool_args.update(bridge_result.transform.value)
+                tool_args.update(bridge_result.transformed_value)
                 if tool_context is not None and hasattr(tool_context, "tool_args"):
                     try:
                         tool_context.tool_args = tool_args
@@ -884,13 +884,13 @@ class GoogleADKKernel(BaseIntegration):
                 return {"error": str(error)}
             if bridge_result.transform is not None:
                 if isinstance(tool_result, str) and isinstance(
-                    bridge_result.transform.value, str
+                    bridge_result.transformed_value, str
                 ):
-                    tool_result = bridge_result.transform.value
+                    tool_result = bridge_result.transformed_value
                 elif isinstance(tool_result, dict) and isinstance(
-                    bridge_result.transform.value, dict
+                    bridge_result.transformed_value, dict
                 ):
-                    tool_result = bridge_result.transform.value
+                    tool_result = bridge_result.transformed_value
 
         return tool_result
 
@@ -1001,9 +1001,9 @@ class GoogleADKKernel(BaseIntegration):
                 )
                 return {"error": str(error)}
             if bridge_result.transform is not None and isinstance(
-                bridge_result.transform.value, str
+                bridge_result.transformed_value, str
             ):
-                content = bridge_result.transform.value
+                content = bridge_result.transformed_value
 
         return content
 

@@ -767,7 +767,7 @@ class LangChainKernel(BaseIntegration):
                     logger.info("Policy DENY on stream result: %s", bridge_result.reason)
                     raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None:
-                    transformed = bridge_result.transform.value
+                    transformed = bridge_result.transformed_value
                     chunks = transformed if isinstance(transformed, list) else [transformed]
                 valid, reason = self._kernel.post_execute(self._ctx, chunks)
                 if not valid:
@@ -812,7 +812,7 @@ class LangChainKernel(BaseIntegration):
                     logger.info("Policy DENY on %s result: %s", method_name, bridge_result.reason)
                     raise bridge_result.to_policy_violation(PolicyViolationError)
                 if bridge_result.transform is not None:
-                    transformed = bridge_result.transform.value
+                    transformed = bridge_result.transformed_value
                     if isinstance(transformed, list):
                         chunks = transformed
                     elif method_name in {"astream_log", "astream_events"}:
@@ -1023,9 +1023,9 @@ class GovernanceMiddleware(_MiddlewareBase):
             call_id=tool_call.get("id", "call-1") if isinstance(tool_call, dict) else "call-1",
         )
         if bridge_result.transform is not None and isinstance(
-            bridge_result.transform.value, dict
+            bridge_result.transformed_value, dict
         ) and isinstance(tool_call, dict):
-            tool_args = bridge_result.transform.value
+            tool_args = bridge_result.transformed_value
             tool_call["args"] = tool_args
         if not bridge_result.allowed:
             logger.info(
@@ -1068,13 +1068,13 @@ class GovernanceMiddleware(_MiddlewareBase):
             )
             raise post_result.to_policy_violation(PolicyViolationError)
         if post_result.transform is not None and isinstance(
-            post_result.transform.value, str
+            post_result.transformed_value, str
         ):
             # Rewrite the tool result content so downstream consumers see
             # the AGT-redacted text per AGT-DELTA D1.1.
             if hasattr(result, "content"):
                 try:
-                    result.content = post_result.transform.value
+                    result.content = post_result.transformed_value
                 except Exception:  # noqa: BLE001 — best-effort rewrite on opaque message
                     pass
 
@@ -1166,7 +1166,7 @@ class GovernanceMiddleware(_MiddlewareBase):
                 )
                 raise pre_result.to_policy_violation(PolicyViolationError)
             if pre_result.transform is not None and isinstance(
-                pre_result.transform.value, str
+                pre_result.transformed_value, str
             ):
                 # Rewrite the most recent user message content per AGT D1.1.
                 for msg in reversed(messages):
@@ -1174,7 +1174,7 @@ class GovernanceMiddleware(_MiddlewareBase):
                         getattr(msg, "content"), str
                     ):
                         try:
-                            msg.content = pre_result.transform.value
+                            msg.content = pre_result.transformed_value
                         except Exception:  # noqa: BLE001 — best-effort rewrite
                             pass
                         break
@@ -1203,11 +1203,11 @@ class GovernanceMiddleware(_MiddlewareBase):
                 )
                 raise post_result.to_policy_violation(PolicyViolationError)
             if post_result.transform is not None and isinstance(
-                post_result.transform.value, str
+                post_result.transformed_value, str
             ):
                 if hasattr(response_msg, "content"):
                     try:
-                        response_msg.content = post_result.transform.value
+                        response_msg.content = post_result.transformed_value
                     except Exception:  # noqa: BLE001 — best-effort rewrite
                         pass
 

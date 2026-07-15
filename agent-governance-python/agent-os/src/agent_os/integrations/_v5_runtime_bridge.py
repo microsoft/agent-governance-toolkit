@@ -111,6 +111,14 @@ class BridgeResult:
     def enforced_identity(self) -> str | None:
         return self.evaluation.enforced_identity
 
+    @property
+    def transformed_value(self) -> Any:
+        if self.transform is None:
+            return None
+        if self.transform.applied_value is not None:
+            return self.transform.applied_value
+        return self.transform.value
+
     def to_legacy_tuple(self) -> tuple[bool, str]:
         """Return the v4 ``(allowed, reason)`` tuple."""
         return self.allowed, self.reason
