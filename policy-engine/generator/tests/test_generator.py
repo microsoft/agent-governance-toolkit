@@ -377,10 +377,11 @@ allow if { value := }
     assert rego_diagnostic.source == "../../unsafe-name.rego"
     assert rego_diagnostic.line == 4
     assert rego_diagnostic.column is not None
+    assert rego_diagnostic.snippet == "allow if { value := }"
     assert "/tmp/" not in str(report.to_dict())
 
 
-def test_string_validation_api_checks_rego_modules_together() -> None:
+def test_string_validation_api_parses_rego_modules_independently() -> None:
     report = validate_acs_artifacts(
         """
 agent_control_specification_version: "0.3.1-beta"
@@ -405,12 +406,277 @@ helper(left, right) := left
         },
     )
 
-    assert not report.valid
-    diagnostic = next(
-        diagnostic for diagnostic in report.diagnostics if diagnostic.code == "rego_type_error"
+    assert report.valid
+
+
+def test_string_validation_api_rejects_duplicate_manifest_keys() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.0"
+agent_control_specification_version: "0.3.1-beta"
+metadata: {}
+""",
+        {},
     )
-    assert diagnostic.source == "one.rego"
-    assert "conflicting rules" in diagnostic.message
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_parse_error"
+    assert "duplicate key" in report.diagnostics[0].message
+
+
+def test_string_validation_api_uses_yaml_12_boolean_keys() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+policies:
+  on:
+    type: rego
+    query: data.on.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy:
+      id: on
+""",
+        "package on",
+    )
+
+    assert report.valid
+
+
+def test_string_validation_api_returns_diagnostics_for_hostile_text() -> None:
+    nested = '{"metadata":{"value":' + "[" * 600 + "]" * 600 + "}}"
+    manifest_report = validate_acs_artifacts(nested, {})
+    rego_report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        json.loads('"package invalid\\n\\ud800"'),
+    )
+
+    assert not manifest_report.valid
+    assert manifest_report.diagnostics[0].code == "manifest_parse_error"
+    assert not rego_report.valid
+    assert rego_report.diagnostics[0].code == "rego_encoding_error"
+
+
+def test_string_validation_api_rejects_non_json_yaml_values() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  payload: !!binary SGVsbG8=
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_value_invalid"
+    assert report.diagnostics[0].path == "$.metadata.payload"
+
+
+def test_string_validation_api_bounds_diagnostics_and_snippets() -> None:
+    manifest_report = validate_acs_artifacts(
+        json.dumps(
+            {
+                "agent_control_specification_version": "0.3.1-beta",
+                "extends": [0] * 200,
+            }
+        ),
+        {},
+    )
+    rego_report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        "package invalid\nallow if { " + "x" * 10_000 + " := }\n",
+    )
+
+    assert len(manifest_report.diagnostics) == 101
+    assert manifest_report.diagnostics[-1].code == "validation_diagnostics_truncated"
+    assert len(rego_report.diagnostics[0].snippet or "") <= 4099
+
+
+def test_string_validation_api_requires_modules_for_rego_manifest() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+policies:
+  guard:
+    type: rego
+    query: data.guard.verdict
+intervention_points:
+  input:
+    policy_target: "$.input"
+    policy:
+      id: guard
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert [diagnostic.code for diagnostic in report.diagnostics] == ["rego_missing"]
+
+
+def test_string_validation_api_rejects_non_opa_executable() -> None:
+    report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        "package invalid",
+        opa_path="/bin/true",
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "opa_invalid_executable"
+
+
+def test_string_validation_api_bounds_mapping_iteration() -> None:
+    class EndlessMapping(dict):
+        def items(self):
+            while True:
+                yield "policy.rego", "package valid"
+
+    report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        EndlessMapping(),
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "rego_module_limit_exceeded"
+
+
+def test_string_validation_api_counts_empty_rego_toward_size_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("acs_generator.validation.MAX_REGO_BYTES", 8)
+
+    report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        " " * 9,
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "rego_size_exceeded"
+
+
+@pytest.mark.parametrize(
+    ("manifest", "rego", "expected_code"),
+    [
+        (123, {}, "manifest_input_invalid"),
+        ("[]", {}, "manifest_root_invalid"),
+        (
+            'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+            {1: "package invalid"},
+            "rego_source_invalid",
+        ),
+        (
+            'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+            {"invalid.rego": 1},
+            "rego_input_invalid",
+        ),
+        (
+            'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+            "",
+            "rego_empty",
+        ),
+    ],
+)
+def test_string_validation_api_rejects_malformed_inputs(
+    manifest: object,
+    rego: object,
+    expected_code: str,
+) -> None:
+    report = validate_acs_artifacts(manifest, rego)  # type: ignore[arg-type]
+
+    assert not report.valid
+    assert expected_code in {diagnostic.code for diagnostic in report.diagnostics}
+
+
+def test_string_validation_api_bounds_opa_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if args[1] == "version":
+            return subprocess.CompletedProcess(args, 0, "Version: 0.70.0\n", "")
+        raise subprocess.TimeoutExpired(args, timeout=1)
+
+    monkeypatch.setattr("acs_generator.validation.subprocess.run", run)
+
+    report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        "package invalid",
+        opa_path="opa",
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "opa_timeout"
+
+
+def test_string_validation_api_handles_unstructured_opa_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if args[1] == "version":
+            return subprocess.CompletedProcess(args, 0, "Version: 0.70.0\n", "")
+        return subprocess.CompletedProcess(args, 1, None, "not json")
+
+    monkeypatch.setattr("acs_generator.validation.subprocess.run", run)
+
+    report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        "package invalid",
+        opa_path="opa",
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "opa_validation_error"
+    assert report.diagnostics[0].message == "not json"
+
+
+def test_string_validation_api_handles_staging_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "acs_generator.validation.tempfile.TemporaryDirectory",
+        lambda **kwargs: (_ for _ in ()).throw(OSError("read only")),
+    )
+
+    report = validate_acs_artifacts(
+        'agent_control_specification_version: "0.3.1-beta"\nmetadata: {}\n',
+        "package invalid",
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "rego_staging_error"
+
+
+def test_string_validation_api_legacy_schema_resolver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import builtins
+
+    real_import = builtins.__import__
+
+    def without_referencing(
+        name: str,
+        globals: object = None,
+        locals: object = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> object:
+        if name == "referencing":
+            raise ImportError("blocked for fallback test")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", without_referencing)
+
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata: {}
+approval:
+  timeout_seconds: 0
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].path == "$.approval.timeout_seconds"
 
 
 def test_string_validation_api_resolves_packaged_approval_schema() -> None:

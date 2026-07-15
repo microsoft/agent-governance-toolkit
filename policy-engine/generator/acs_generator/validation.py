@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
 import re
+import time
 import warnings
 from collections.abc import Mapping
 from importlib import resources
@@ -27,10 +29,73 @@ SCHEMA_PACKAGE = "acs_generator.schema"
 SCHEMA_NAME = "manifest.schema.json"
 APPROVAL_SCHEMA_NAME = "approval.schema.json"
 VALIDATION_DIR_NAME = ".acs_generator_validation"
-OPA_OUTPUT_LIMIT = 4096
+MAX_MANIFEST_BYTES = 1_048_576
+MAX_MANIFEST_DEPTH = 64
+MAX_REGO_BYTES = 1_048_576
+MAX_REGO_MODULES = 64
+MAX_DIAGNOSTICS = 100
+MAX_DIAGNOSTIC_TEXT = 4096
+MAX_SOURCE_LABEL = 512
 # Core transform-path grammar (see rego_builder._TRANSFORM_PATH_RE): dotted object
 # keys and numeric list indices only; the core rejects string bracket keys.
 _TRANSFORM_PATH_RE = re.compile(r"^\$policy_target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$")
+_YAML_BOOL_TAG = "tag:yaml.org,2002:bool"
+_YAML_TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
+
+
+class _ManifestLoader(yaml.SafeLoader):
+    pass
+
+
+_ManifestLoader.yaml_implicit_resolvers = {
+    key: [
+        (tag, pattern)
+        for tag, pattern in resolvers
+        if tag not in {_YAML_BOOL_TAG, _YAML_TIMESTAMP_TAG}
+    ]
+    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+_ManifestLoader.add_implicit_resolver(
+    _YAML_BOOL_TAG,
+    re.compile(r"^(?:true|false)$", re.IGNORECASE),
+    list("tTfF"),
+)
+
+
+def _construct_unique_mapping(
+    loader: _ManifestLoader,
+    node: yaml.MappingNode,
+    deep: bool = False,
+) -> dict[Any, Any]:
+    seen: set[Any] = set()
+    for key_node, _ in node.value:
+        if key_node.tag == "tag:yaml.org,2002:merge":
+            continue
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in seen
+        except TypeError as exc:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                "found an unhashable mapping key",
+                key_node.start_mark,
+            ) from exc
+        if duplicate:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        seen.add(key)
+    return yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+
+
+_ManifestLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
 
 
 @dataclass
@@ -48,6 +113,17 @@ class ValidationDiagnostic:
     line: int | None = None
     column: int | None = None
     snippet: str | None = None
+
+    def __post_init__(self) -> None:
+        for field_name, limit in (
+            ("message", MAX_DIAGNOSTIC_TEXT),
+            ("source", MAX_SOURCE_LABEL),
+            ("path", MAX_DIAGNOSTIC_TEXT),
+            ("snippet", MAX_DIAGNOSTIC_TEXT),
+        ):
+            value = getattr(self, field_name)
+            if isinstance(value, str) and len(value) > limit:
+                object.__setattr__(self, field_name, value[:limit] + "...")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -92,7 +168,8 @@ def validate_acs_artifacts(
     The check is intentionally suitable for an API boundary. It returns
     structured diagnostics instead of raising for invalid artifacts. Manifest
     validation uses the packaged canonical schema. Rego validation uses the OPA
-    compiler so syntax and cross-module compile failures are reported together.
+    parser for each supplied module, without assuming independent policies share
+    one runtime bundle.
     """
 
     diagnostics: list[ValidationDiagnostic] = []
@@ -100,10 +177,28 @@ def validate_acs_artifacts(
     if manifest_diagnostic is not None:
         diagnostics.append(manifest_diagnostic)
     elif parsed_manifest is not None:
-        diagnostics.extend(_manifest_schema_diagnostics(parsed_manifest))
+        instance_diagnostic = _validate_manifest_instance(parsed_manifest)
+        if instance_diagnostic is not None:
+            diagnostics.append(instance_diagnostic)
+        else:
+            diagnostics.extend(_manifest_schema_diagnostics(parsed_manifest))
 
     rego_modules, input_diagnostics = _normalize_rego_modules(rego)
     diagnostics.extend(input_diagnostics)
+    if (
+        parsed_manifest is not None
+        and _manifest_declares_rego(parsed_manifest)
+        and not rego_modules
+        and not input_diagnostics
+    ):
+        diagnostics.append(
+            ValidationDiagnostic(
+                component="rego",
+                code="rego_missing",
+                message="The manifest declares a Rego policy but no Rego module was supplied.",
+                source="rego",
+            )
+        )
     if rego_modules:
         executable = opa_path or shutil.which("opa")
         if executable is None:
@@ -118,7 +213,7 @@ def validate_acs_artifacts(
         else:
             diagnostics.extend(_validate_rego_modules(executable, rego_modules))
 
-    return ArtifactValidationResult(tuple(diagnostics))
+    return ArtifactValidationResult(tuple(_limit_diagnostics(diagnostics)))
 
 
 def _parse_manifest_string(
@@ -132,8 +227,31 @@ def _parse_manifest_string(
             source="manifest",
         )
     try:
-        parsed = yaml.safe_load(manifest)
-    except yaml.YAMLError as exc:
+        encoded = manifest.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        return None, ValidationDiagnostic(
+            component="manifest",
+            code="manifest_encoding_error",
+            message=f"Manifest is not valid UTF-8 text. {exc}",
+            source="manifest",
+        )
+    if len(encoded) > MAX_MANIFEST_BYTES:
+        return None, ValidationDiagnostic(
+            component="manifest",
+            code="manifest_size_exceeded",
+            message=(
+                f"Manifest is {len(encoded)} bytes, exceeding the "
+                f"{MAX_MANIFEST_BYTES}-byte validation limit."
+            ),
+            source="manifest",
+        )
+    try:
+        loader = _ManifestLoader(manifest)
+        try:
+            parsed = loader.get_single_data()
+        finally:
+            loader.dispose()
+    except (yaml.YAMLError, RecursionError, ValueError) as exc:
         mark = getattr(exc, "problem_mark", None)
         message = getattr(exc, "problem", None) or str(exc)
         return None, ValidationDiagnostic(
@@ -153,6 +271,142 @@ def _parse_manifest_string(
             path="$",
         )
     return parsed, None
+
+
+def _validate_manifest_instance(manifest: dict[str, Any]) -> ValidationDiagnostic | None:
+    return _validate_json_value(
+        manifest,
+        path="$",
+        depth=0,
+        active=set(),
+        validated=set(),
+    )
+
+
+def _validate_json_value(
+    value: Any,
+    *,
+    path: str,
+    depth: int,
+    active: set[int],
+    validated: set[int],
+) -> ValidationDiagnostic | None:
+    if depth > MAX_MANIFEST_DEPTH:
+        return ValidationDiagnostic(
+            component="manifest",
+            code="manifest_depth_exceeded",
+            message=f"Manifest JSON nesting exceeds the limit of {MAX_MANIFEST_DEPTH}.",
+            source="manifest",
+            path=path,
+        )
+    if value is None or isinstance(value, (bool, int)):
+        return None
+    if isinstance(value, float):
+        if math.isfinite(value):
+            return None
+        return ValidationDiagnostic(
+            component="manifest",
+            code="manifest_value_invalid",
+            message="Manifest numbers must be finite JSON numbers.",
+            source="manifest",
+            path=path,
+        )
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            return ValidationDiagnostic(
+                component="manifest",
+                code="manifest_encoding_error",
+                message=f"Manifest contains text that is not valid UTF-8. {exc}",
+                source="manifest",
+                path=path,
+            )
+        return None
+    if isinstance(value, dict):
+        identity = id(value)
+        if identity in active:
+            return ValidationDiagnostic(
+                component="manifest",
+                code="manifest_cycle",
+                message="Manifest must not contain cyclic YAML aliases.",
+                source="manifest",
+                path=path,
+            )
+        if identity in validated:
+            return None
+        active.add(identity)
+        for key, child in value.items():
+            if not isinstance(key, str):
+                active.remove(identity)
+                return ValidationDiagnostic(
+                    component="manifest",
+                    code="manifest_key_invalid",
+                    message=f"Manifest object keys must be strings, not {type(key).__name__}.",
+                    source="manifest",
+                    path=path,
+                )
+            try:
+                key.encode("utf-8")
+            except UnicodeEncodeError as exc:
+                active.remove(identity)
+                return ValidationDiagnostic(
+                    component="manifest",
+                    code="manifest_encoding_error",
+                    message=f"Manifest object key is not valid UTF-8 text. {exc}",
+                    source="manifest",
+                    path=path,
+                )
+            child_diagnostic = _validate_json_value(
+                child,
+                path=_append_json_path(path, key),
+                depth=depth + 1,
+                active=active,
+                validated=validated,
+            )
+            if child_diagnostic is not None:
+                active.remove(identity)
+                return child_diagnostic
+        active.remove(identity)
+        validated.add(identity)
+        return None
+    if isinstance(value, list):
+        identity = id(value)
+        if identity in active:
+            return ValidationDiagnostic(
+                component="manifest",
+                code="manifest_cycle",
+                message="Manifest must not contain cyclic YAML aliases.",
+                source="manifest",
+                path=path,
+            )
+        if identity in validated:
+            return None
+        active.add(identity)
+        for index, child in enumerate(value):
+            child_diagnostic = _validate_json_value(
+                child,
+                path=f"{path}[{index}]",
+                depth=depth + 1,
+                active=active,
+                validated=validated,
+            )
+            if child_diagnostic is not None:
+                active.remove(identity)
+                return child_diagnostic
+        active.remove(identity)
+        validated.add(identity)
+        return None
+    return ValidationDiagnostic(
+        component="manifest",
+        code="manifest_value_invalid",
+        message=(
+            "Manifest values must use JSON-compatible null, boolean, number, "
+            f"string, array, or object types, not {type(value).__name__}."
+        ),
+        source="manifest",
+        path=path,
+    )
 
 
 def _load_packaged_schema(name: str) -> dict[str, Any]:
@@ -182,11 +436,25 @@ def _manifest_validator() -> jsonschema.Draft202012Validator:
 
 
 def _manifest_schema_diagnostics(manifest: dict[str, Any]) -> list[ValidationDiagnostic]:
-    errors = sorted(
-        _manifest_validator().iter_errors(manifest),
-        key=lambda error: tuple(str(part) for part in error.absolute_path),
-    )
-    return [
+    errors: list[jsonschema.ValidationError] = []
+    truncated = False
+    try:
+        for error in _manifest_validator().iter_errors(manifest):
+            if len(errors) >= MAX_DIAGNOSTICS:
+                truncated = True
+                break
+            errors.append(error)
+    except RecursionError:
+        return [
+            ValidationDiagnostic(
+                component="manifest",
+                code="manifest_depth_exceeded",
+                message=f"Manifest JSON nesting exceeds the limit of {MAX_MANIFEST_DEPTH}.",
+                source="manifest",
+            )
+        ]
+    errors.sort(key=lambda error: tuple(str(part) for part in error.absolute_path))
+    diagnostics = [
         ValidationDiagnostic(
             component="manifest",
             code="manifest_schema_error",
@@ -196,18 +464,26 @@ def _manifest_schema_diagnostics(manifest: dict[str, Any]) -> list[ValidationDia
         )
         for error in errors
     ]
+    if truncated:
+        diagnostics.append(_diagnostics_truncated())
+    return diagnostics
 
 
 def _json_path(parts: Any) -> str:
     path = "$"
     for part in parts:
-        if isinstance(part, int):
-            path += f"[{part}]"
-        elif isinstance(part, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", part):
-            path += f".{part}"
-        else:
-            path += f"[{json.dumps(part)}]"
+        path = (
+            f"{path}[{part}]"
+            if isinstance(part, int)
+            else _append_json_path(path, str(part))
+        )
     return path
+
+
+def _append_json_path(path: str, part: str) -> str:
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", part):
+        return f"{path}.{part}"
+    return f"{path}[{json.dumps(part)}]"
 
 
 def _normalize_rego_modules(
@@ -216,7 +492,18 @@ def _normalize_rego_modules(
     if isinstance(rego, str):
         items: list[tuple[Any, Any]] = [("policy.rego", rego)]
     elif isinstance(rego, Mapping):
-        items = list(rego.items())
+        items = []
+        for index, item in enumerate(rego.items()):
+            if index >= MAX_REGO_MODULES:
+                return [], [
+                    ValidationDiagnostic(
+                        component="rego",
+                        code="rego_module_limit_exceeded",
+                        message=f"Received more than the limit of {MAX_REGO_MODULES} Rego modules.",
+                        source="rego",
+                    )
+                ]
+            items.append(item)
     else:
         return [], [
             ValidationDiagnostic(
@@ -229,6 +516,7 @@ def _normalize_rego_modules(
 
     modules: list[tuple[str, str]] = []
     diagnostics: list[ValidationDiagnostic] = []
+    total_bytes = 0
     for index, (source, contents) in enumerate(items):
         if not isinstance(source, str) or not source.strip():
             diagnostics.append(
@@ -236,6 +524,28 @@ def _normalize_rego_modules(
                     component="rego",
                     code="rego_source_invalid",
                     message="Each Rego module must have a non-empty string source name.",
+                    source=f"rego[{index}]",
+                )
+            )
+            continue
+        try:
+            source.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_source_invalid",
+                    message=f"Rego source name is not valid UTF-8 text. {exc}",
+                    source=f"rego[{index}]",
+                )
+            )
+            continue
+        if len(source) > MAX_SOURCE_LABEL:
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_source_invalid",
+                    message=f"Rego source name exceeds {MAX_SOURCE_LABEL} characters.",
                     source=f"rego[{index}]",
                 )
             )
@@ -250,6 +560,32 @@ def _normalize_rego_modules(
                 )
             )
             continue
+        try:
+            encoded = contents.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_encoding_error",
+                    message=f"Rego module is not valid UTF-8 text. {exc}",
+                    source=source,
+                )
+            )
+            continue
+        total_bytes += len(encoded)
+        if total_bytes > MAX_REGO_BYTES:
+            diagnostics.append(
+                ValidationDiagnostic(
+                    component="rego",
+                    code="rego_size_exceeded",
+                    message=(
+                        f"Rego modules exceed the {MAX_REGO_BYTES}-byte "
+                        "total validation limit."
+                    ),
+                    source="rego",
+                )
+            )
+            return [], diagnostics
         if not contents.strip():
             diagnostics.append(
                 ValidationDiagnostic(
@@ -264,22 +600,60 @@ def _normalize_rego_modules(
     return modules, diagnostics
 
 
+def _manifest_declares_rego(manifest: dict[str, Any]) -> bool:
+    policies = manifest.get("policies")
+    return isinstance(policies, dict) and any(
+        isinstance(config, dict) and config.get("type") == "rego"
+        for config in policies.values()
+    )
+
+
+def _limit_diagnostics(
+    diagnostics: list[ValidationDiagnostic],
+) -> list[ValidationDiagnostic]:
+    if len(diagnostics) <= MAX_DIAGNOSTICS:
+        return diagnostics
+    return [*diagnostics[:MAX_DIAGNOSTICS], _diagnostics_truncated()]
+
+
+def _diagnostics_truncated() -> ValidationDiagnostic:
+    return ValidationDiagnostic(
+        component="validation",
+        code="validation_diagnostics_truncated",
+        message=f"Additional diagnostics were omitted after the first {MAX_DIAGNOSTICS}.",
+        source="validation",
+    )
+
+
 def _validate_rego_modules(
     opa: str,
     modules: list[tuple[str, str]],
 ) -> list[ValidationDiagnostic]:
-    with tempfile.TemporaryDirectory(prefix="acs-validation-") as tmp:
+    deadline = time.monotonic() + OPA_TIMEOUT_SECONDS
+    opa_diagnostic = _validate_opa_executable(opa, deadline)
+    if opa_diagnostic is not None:
+        return [opa_diagnostic]
+
+    try:
+        scratch = tempfile.TemporaryDirectory(prefix="acs-validation-")
+    except OSError as exc:
+        return [
+            ValidationDiagnostic(
+                component="rego",
+                code="rego_staging_error",
+                message=f"Could not create temporary storage for OPA validation. {exc}",
+                source="rego",
+            )
+        ]
+
+    with scratch as tmp:
         root = Path(tmp)
-        paths: list[Path] = []
-        source_by_file: dict[str, str] = {}
+        staged: list[tuple[str, Path]] = []
         try:
             for index, (source, contents) in enumerate(modules):
                 path = root / f"module-{index:04d}.rego"
                 path.write_text(contents, encoding="utf-8")
-                paths.append(path)
-                source_by_file[str(path)] = source
-                source_by_file[str(path.resolve())] = source
-                source_by_file[path.name] = source
+                staged.append((source, path))
         except OSError as exc:
             return [
                 ValidationDiagnostic(
@@ -290,44 +664,103 @@ def _validate_rego_modules(
                 )
             ]
 
-        try:
-            completed = subprocess.run(
-                [opa, "check", "--format=json", *(str(path) for path in paths)],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=OPA_TIMEOUT_SECONDS,
-            )
-        except subprocess.TimeoutExpired:
-            return [
-                ValidationDiagnostic(
-                    component="rego",
-                    code="opa_timeout",
-                    message=f"OPA validation exceeded {OPA_TIMEOUT_SECONDS} seconds.",
-                    source="opa",
+        diagnostics: list[ValidationDiagnostic] = []
+        for source, path in staged:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                diagnostics.append(_opa_timeout_diagnostic())
+                break
+            try:
+                completed = subprocess.run(
+                    [opa, "parse", str(path), "--format=json"],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=remaining,
                 )
-            ]
-        except OSError as exc:
-            return [
-                ValidationDiagnostic(
-                    component="rego",
-                    code="opa_execution_error",
-                    message=f"OPA could not be executed. {exc}",
-                    source="opa",
+            except subprocess.TimeoutExpired:
+                diagnostics.append(_opa_timeout_diagnostic())
+                break
+            except (OSError, UnicodeError) as exc:
+                diagnostics.append(
+                    ValidationDiagnostic(
+                        component="rego",
+                        code="opa_execution_error",
+                        message=f"OPA could not parse the Rego module. {exc}",
+                        source=source,
+                    )
                 )
-            ]
+                continue
 
-        if completed.returncode == 0:
-            return []
-        return _opa_check_diagnostics(completed, source_by_file)
+            if completed.returncode != 0:
+                source_by_file = {
+                    str(path): source,
+                    str(path.resolve()): source,
+                    path.name: source,
+                }
+                diagnostics.extend(_opa_diagnostics(completed, source_by_file))
+            if len(diagnostics) > MAX_DIAGNOSTICS:
+                return _limit_diagnostics(diagnostics)
+        return diagnostics
 
 
-def _opa_check_diagnostics(
+def _validate_opa_executable(
+    opa: str,
+    deadline: float,
+) -> ValidationDiagnostic | None:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return _opa_timeout_diagnostic()
+    try:
+        completed = subprocess.run(
+            [opa, "version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=remaining,
+        )
+    except subprocess.TimeoutExpired:
+        return _opa_timeout_diagnostic()
+    except (OSError, UnicodeError) as exc:
+        return ValidationDiagnostic(
+            component="rego",
+            code="opa_execution_error",
+            message=f"OPA could not be executed. {exc}",
+            source="opa",
+        )
+    version_output = completed.stdout.strip()
+    if completed.returncode != 0 or not version_output.startswith("Version:"):
+        detail = completed.stderr.strip() or version_output
+        return ValidationDiagnostic(
+            component="rego",
+            code="opa_invalid_executable",
+            message=(
+                "Configured OPA executable did not return the expected version banner."
+                + (f" {detail}" if detail else "")
+            ),
+            source="opa",
+        )
+    return None
+
+
+def _opa_timeout_diagnostic() -> ValidationDiagnostic:
+    return ValidationDiagnostic(
+        component="rego",
+        code="opa_timeout",
+        message=f"OPA validation exceeded {OPA_TIMEOUT_SECONDS} seconds.",
+        source="opa",
+    )
+
+
+def _opa_diagnostics(
     completed: subprocess.CompletedProcess[str],
     source_by_file: dict[str, str],
 ) -> list[ValidationDiagnostic]:
     payload: dict[str, Any] | None = None
-    for candidate in (completed.stderr.strip(), completed.stdout.strip()):
+    stdout = completed.stdout if isinstance(completed.stdout, str) else ""
+    stderr = completed.stderr if isinstance(completed.stderr, str) else ""
+    for candidate in (stderr.strip(), stdout.strip()):
         if not candidate:
             continue
         try:
@@ -367,10 +800,8 @@ def _opa_check_diagnostics(
         if diagnostics:
             return diagnostics
 
-    detail = completed.stderr.strip() or completed.stdout.strip()
+    detail = stderr.strip() or stdout.strip()
     detail = _replace_opa_paths(detail, source_by_file)
-    if len(detail) > OPA_OUTPUT_LIMIT:
-        detail = detail[:OPA_OUTPUT_LIMIT] + "..."
     return [
         ValidationDiagnostic(
             component="rego",
