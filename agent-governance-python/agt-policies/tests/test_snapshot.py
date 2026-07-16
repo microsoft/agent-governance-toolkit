@@ -213,6 +213,29 @@ def test_builder_validates_agent_and_session_ids() -> None:
         SnapshotBuilder(agent_id="bot", cost_usd=-0.01)
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_builder_rejects_non_finite_budget_counters(bad: float) -> None:
+    """Non-finite cost/elapsed must be rejected at every mutation surface.
+
+    NaN reaches OPA as a non-number, so budgets.rego's malformed-counter deny
+    fires on every subsequent evaluation (deny-all DoS); inf compares >= any
+    limit. The session validator alone did not cover the builder, which is the
+    reachable counter owner via ``session.builder`` / the envelope ctor.
+    """
+    with pytest.raises(ValueError, match="finite"):
+        SnapshotBuilder(agent_id="bot", session_id="s", cost_usd=bad)
+    with pytest.raises(ValueError, match="finite"):
+        SnapshotBuilder(agent_id="bot", session_id="s", elapsed_seconds=bad)
+
+    b = SnapshotBuilder(agent_id="bot", session_id="s")
+    with pytest.raises(ValueError, match="finite"):
+        b.record_cost(bad)
+    with pytest.raises(ValueError, match="finite"):
+        b.record_elapsed(bad)
+    assert b.cost_usd == 0.0
+    assert b.elapsed_seconds == 0.0
+
+
 def test_builder_emits_each_intervention_point_with_running_budgets() -> None:
     b = SnapshotBuilder(
         agent_id="bot",
