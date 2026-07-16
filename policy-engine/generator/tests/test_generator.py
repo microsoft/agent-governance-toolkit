@@ -444,6 +444,18 @@ intervention_points:
     assert report.valid
 
 
+def test_string_validation_api_does_not_coerce_mixed_case_boolean() -> None:
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: tRuE
+metadata: {}
+""",
+        {},
+    )
+
+    assert report.valid
+
+
 def test_string_validation_api_rejects_yaml_merge_keys() -> None:
     report = validate_acs_artifacts(
         """
@@ -478,18 +490,37 @@ approval:
     assert report.diagnostics[0].path == "$.approval.timeout_seconds"
 
 
-def test_string_validation_api_accepts_yaml_12_prefixed_integer() -> None:
+@pytest.mark.parametrize("value", ["0b1010", "0o12", "0xA"])
+def test_string_validation_api_accepts_yaml_12_prefixed_integer(value: str) -> None:
     report = validate_acs_artifacts(
-        """
+        f"""
 agent_control_specification_version: "0.3.1-beta"
-metadata: {}
+metadata: {{}}
 approval:
-  timeout_seconds: 0o12
+  timeout_seconds: {value}
 """,
         {},
     )
 
     assert report.valid
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["!!bool nope", "!!int 010", "!!null nope", "!!timestamp not-a-date"],
+)
+def test_string_validation_api_rejects_invalid_explicit_tags(value: str) -> None:
+    report = validate_acs_artifacts(
+        f"""
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  value: {value}
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_parse_error"
 
 
 def test_string_validation_api_rechecks_aliases_at_deeper_paths() -> None:
@@ -510,6 +541,44 @@ def test_string_validation_api_rechecks_aliases_at_deeper_paths() -> None:
 
     assert not report.valid
     assert report.diagnostics[0].code == "manifest_depth_exceeded"
+
+
+def test_string_validation_api_bounds_alias_expansion() -> None:
+    labels = ", ".join(f'"label-{index}"' for index in range(1500))
+    tools = "\n".join(
+        f"  tool-{index}: {{security_labels: *labels}}" for index in range(1500)
+    )
+    manifest = f"""
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  labels: &labels [{labels}]
+tools:
+{tools}
+"""
+
+    report = validate_acs_artifacts(manifest, {})
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_expansion_exceeded"
+
+
+def test_string_validation_api_bounds_yaml_source_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("acs_generator.validation.MAX_MANIFEST_SOURCE_NODES", 8)
+
+    report = validate_acs_artifacts(
+        """
+agent_control_specification_version: "0.3.1-beta"
+metadata:
+  values: [one, two, three, four, five]
+""",
+        {},
+    )
+
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_parse_error"
+    assert "manifest source exceeds" in report.diagnostics[0].message
 
 
 def test_string_validation_api_returns_diagnostics_for_hostile_text() -> None:
@@ -535,10 +604,9 @@ metadata:
 """,
         {},
     )
-
     assert not report.valid
-    assert report.diagnostics[0].code == "manifest_value_invalid"
-    assert report.diagnostics[0].path == "$.metadata.payload"
+    assert not report.valid
+    assert report.diagnostics[0].code == "manifest_parse_error"
 
 
 def test_string_validation_api_bounds_diagnostics_and_snippets() -> None:

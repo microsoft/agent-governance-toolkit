@@ -51,7 +51,7 @@ report = validate_acs_artifacts(
 return report.to_dict()
 ```
 
-Failures include component and code fields plus the schema path or Rego source, line, column, and a bounded source snippet when available. Validation rejects duplicate manifest keys, non-JSON YAML values, manifests deeper than 64 levels, manifests larger than 1 MiB, more than 64 Rego modules, and Rego input larger than 1 MiB. At most 100 detailed diagnostics are returned before a truncation marker. This is an initial artifact check. Runtime semantic checks such as manifest reference resolution and Rego bundle compilation remain in the SDK core loader and the generator's existing `validate_artifacts` path.
+Failures include component and code fields plus the schema path or Rego source, line, column, and a bounded source snippet when available. Validation rejects duplicate manifest keys, YAML merge keys, non-JSON YAML values, manifests deeper than 64 levels, source manifests above 100,000 YAML nodes, alias-expanded manifests above one million nodes, manifests larger than 1 MiB, more than 64 Rego modules, and Rego input larger than 1 MiB. At most 100 detailed diagnostics are returned before a truncation marker. This is an initial artifact check. Runtime semantic checks such as manifest reference resolution and Rego bundle compilation remain in the SDK core loader and the generator's existing `validate_artifacts` path.
 
 Artifact-only kits include a local Node optional OPA package. Install or extract `agent-control-specification-opa-<platform>-<version>.tgz`, then prepend its `bin` directory to `PATH` before running `acs-generate init --strict`.
 

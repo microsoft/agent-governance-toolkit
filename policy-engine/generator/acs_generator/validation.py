@@ -31,6 +31,8 @@ APPROVAL_SCHEMA_NAME = "approval.schema.json"
 VALIDATION_DIR_NAME = ".acs_generator_validation"
 MAX_MANIFEST_BYTES = 1_048_576
 MAX_MANIFEST_DEPTH = 64
+MAX_MANIFEST_EXPANDED_NODES = 1_000_000
+MAX_MANIFEST_SOURCE_NODES = 100_000
 MAX_REGO_BYTES = 1_048_576
 MAX_REGO_MODULES = 64
 MAX_DIAGNOSTICS = 100
@@ -42,11 +44,36 @@ _TRANSFORM_PATH_RE = re.compile(r"^\$policy_target(\.[A-Za-z_][A-Za-z0-9_]*|\[[0
 _YAML_BOOL_TAG = "tag:yaml.org,2002:bool"
 _YAML_FLOAT_TAG = "tag:yaml.org,2002:float"
 _YAML_INT_TAG = "tag:yaml.org,2002:int"
+_YAML_NULL_TAG = "tag:yaml.org,2002:null"
 _YAML_TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
+_YAML_BOOL_RE = re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$")
+_YAML_INT_RE = re.compile(
+    r"^(?:[-+]?(?:0|[1-9][0-9]*)|[-+]?0b[01]+|[-+]?0o[0-7]+|[-+]?0x[0-9a-fA-F]+)$"
+)
+_YAML_FLOAT_RE = re.compile(
+    r"^(?:[-+]?(?:(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)"
+    r"(?:[eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+)"
+    r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
+)
+_YAML_NULL_RE = re.compile(r"^(?:~|null|Null|NULL)?$")
 
 
 class _ManifestLoader(yaml.SafeLoader):
-    pass
+    def __init__(self, stream: str) -> None:
+        super().__init__(stream)
+        self._source_nodes = 0
+
+    def compose_node(self, parent: yaml.Node | None, index: Any) -> yaml.Node:
+        self._source_nodes += 1
+        if self._source_nodes > MAX_MANIFEST_SOURCE_NODES:
+            event = self.peek_event()
+            raise yaml.composer.ComposerError(
+                "while composing a manifest",
+                event.start_mark,
+                f"manifest source exceeds the {MAX_MANIFEST_SOURCE_NODES}-node limit",
+                event.start_mark,
+            )
+        return super().compose_node(parent, index)
 
 
 _ManifestLoader.yaml_implicit_resolvers = {
@@ -59,23 +86,85 @@ _ManifestLoader.yaml_implicit_resolvers = {
 }
 _ManifestLoader.add_implicit_resolver(
     _YAML_BOOL_TAG,
-    re.compile(r"^(?:true|false)$", re.IGNORECASE),
+    _YAML_BOOL_RE,
     list("tTfF"),
 )
 _ManifestLoader.add_implicit_resolver(
     _YAML_INT_TAG,
-    re.compile(r"^(?:[-+]?(?:0|[1-9][0-9]*)|[-+]?0o[0-7]+|[-+]?0x[0-9a-fA-F]+)$"),
+    _YAML_INT_RE,
     list("-+0123456789"),
 )
 _ManifestLoader.add_implicit_resolver(
     _YAML_FLOAT_TAG,
-    re.compile(
-        r"^(?:[-+]?(?:(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)"
-        r"(?:[eE][-+]?[0-9]+)?|[0-9]+[eE][-+]?[0-9]+)"
-        r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
-    ),
+    _YAML_FLOAT_RE,
     list("-+0123456789."),
 )
+
+
+def _construct_yaml_bool(loader: _ManifestLoader, node: yaml.ScalarNode) -> bool:
+    value = yaml.SafeLoader.construct_scalar(loader, node)
+    if not _YAML_BOOL_RE.fullmatch(value):
+        raise _invalid_tag_value(node, "boolean", value)
+    return value.lower() == "true"
+
+
+def _construct_yaml_int(loader: _ManifestLoader, node: yaml.ScalarNode) -> int:
+    value = yaml.SafeLoader.construct_scalar(loader, node)
+    if not _YAML_INT_RE.fullmatch(value):
+        raise _invalid_tag_value(node, "integer", value)
+    return int(value, 0)
+
+
+def _construct_yaml_float(loader: _ManifestLoader, node: yaml.ScalarNode) -> float:
+    value = yaml.SafeLoader.construct_scalar(loader, node)
+    if not _YAML_FLOAT_RE.fullmatch(value):
+        raise _invalid_tag_value(node, "float", value)
+    normalized = value.lower()
+    if normalized.endswith(".inf"):
+        return -math.inf if normalized.startswith("-") else math.inf
+    if normalized.endswith(".nan"):
+        return math.nan
+    return float(value)
+
+
+def _construct_yaml_null(loader: _ManifestLoader, node: yaml.ScalarNode) -> None:
+    value = yaml.SafeLoader.construct_scalar(loader, node)
+    if not _YAML_NULL_RE.fullmatch(value):
+        raise _invalid_tag_value(node, "null", value)
+    return None
+
+
+def _reject_yaml_timestamp(
+    loader: _ManifestLoader,
+    node: yaml.ScalarNode,
+) -> None:
+    value = yaml.SafeLoader.construct_scalar(loader, node)
+    raise _invalid_tag_value(node, "timestamp", value)
+
+
+def _reject_non_json_yaml_tag(
+    loader: _ManifestLoader,
+    node: yaml.Node,
+) -> None:
+    raise yaml.constructor.ConstructorError(
+        "while constructing a manifest",
+        node.start_mark,
+        f"YAML tag {node.tag!r} is not JSON-compatible",
+        node.start_mark,
+    )
+
+
+def _invalid_tag_value(
+    node: yaml.ScalarNode,
+    tag_name: str,
+    value: str,
+) -> yaml.constructor.ConstructorError:
+    return yaml.constructor.ConstructorError(
+        f"while constructing a YAML {tag_name}",
+        node.start_mark,
+        f"invalid {tag_name} value {value!r}",
+        node.start_mark,
+    )
 
 
 def _construct_unique_mapping(
@@ -117,6 +206,18 @@ _ManifestLoader.add_constructor(
     yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
     _construct_unique_mapping,
 )
+_ManifestLoader.add_constructor(_YAML_BOOL_TAG, _construct_yaml_bool)
+_ManifestLoader.add_constructor(_YAML_FLOAT_TAG, _construct_yaml_float)
+_ManifestLoader.add_constructor(_YAML_INT_TAG, _construct_yaml_int)
+_ManifestLoader.add_constructor(_YAML_NULL_TAG, _construct_yaml_null)
+_ManifestLoader.add_constructor(_YAML_TIMESTAMP_TAG, _reject_yaml_timestamp)
+for _tag in (
+    "tag:yaml.org,2002:binary",
+    "tag:yaml.org,2002:omap",
+    "tag:yaml.org,2002:pairs",
+    "tag:yaml.org,2002:set",
+):
+    _ManifestLoader.add_constructor(_tag, _reject_non_json_yaml_tag)
 
 
 @dataclass
@@ -295,137 +396,204 @@ def _parse_manifest_string(
 
 
 def _validate_manifest_instance(manifest: dict[str, Any]) -> ValidationDiagnostic | None:
-    return _validate_json_value(
+    diagnostic, _ = _profile_json_value(
         manifest,
         path="$",
         depth=0,
         active=set(),
-        validated={},
+        profiles={},
     )
+    return diagnostic
 
 
-def _validate_json_value(
+@dataclass(frozen=True)
+class _JsonProfile:
+    height: int
+    expanded_nodes: int
+
+
+def _profile_json_value(
     value: Any,
     *,
     path: str,
     depth: int,
     active: set[int],
-    validated: dict[int, int],
-) -> ValidationDiagnostic | None:
+    profiles: dict[int, _JsonProfile],
+) -> tuple[ValidationDiagnostic | None, _JsonProfile | None]:
     if depth > MAX_MANIFEST_DEPTH:
-        return ValidationDiagnostic(
-            component="manifest",
-            code="manifest_depth_exceeded",
-            message=f"Manifest JSON nesting exceeds the limit of {MAX_MANIFEST_DEPTH}.",
-            source="manifest",
-            path=path,
-        )
+        return _manifest_depth_diagnostic(path), None
     if value is None or isinstance(value, (bool, int)):
-        return None
+        return None, _JsonProfile(height=0, expanded_nodes=1)
     if isinstance(value, float):
         if math.isfinite(value):
-            return None
-        return ValidationDiagnostic(
-            component="manifest",
-            code="manifest_value_invalid",
-            message="Manifest numbers must be finite JSON numbers.",
-            source="manifest",
-            path=path,
+            return None, _JsonProfile(height=0, expanded_nodes=1)
+        return (
+            ValidationDiagnostic(
+                component="manifest",
+                code="manifest_value_invalid",
+                message="Manifest numbers must be finite JSON numbers.",
+                source="manifest",
+                path=path,
+            ),
+            None,
         )
     if isinstance(value, str):
         try:
             value.encode("utf-8")
         except UnicodeEncodeError as exc:
-            return ValidationDiagnostic(
-                component="manifest",
-                code="manifest_encoding_error",
-                message=f"Manifest contains text that is not valid UTF-8. {exc}",
-                source="manifest",
-                path=path,
+            return (
+                ValidationDiagnostic(
+                    component="manifest",
+                    code="manifest_encoding_error",
+                    message=f"Manifest contains text that is not valid UTF-8. {exc}",
+                    source="manifest",
+                    path=path,
+                ),
+                None,
             )
-        return None
+        return None, _JsonProfile(height=0, expanded_nodes=1)
     if isinstance(value, dict):
         identity = id(value)
         if identity in active:
-            return ValidationDiagnostic(
-                component="manifest",
-                code="manifest_cycle",
-                message="Manifest must not contain cyclic YAML aliases.",
-                source="manifest",
-                path=path,
+            return (
+                ValidationDiagnostic(
+                    component="manifest",
+                    code="manifest_cycle",
+                    message="Manifest must not contain cyclic YAML aliases.",
+                    source="manifest",
+                    path=path,
+                ),
+                None,
             )
-        validated_depth = validated.get(identity)
-        if validated_depth is not None and validated_depth >= depth:
-            return None
+        cached = profiles.get(identity)
+        if cached is not None:
+            if depth + cached.height > MAX_MANIFEST_DEPTH:
+                return _manifest_depth_diagnostic(path), None
+            return None, cached
         active.add(identity)
-        for key, child in value.items():
-            if not isinstance(key, str):
-                active.remove(identity)
-                return ValidationDiagnostic(
-                    component="manifest",
-                    code="manifest_key_invalid",
-                    message=f"Manifest object keys must be strings, not {type(key).__name__}.",
-                    source="manifest",
-                    path=path,
+        try:
+            height = 1
+            expanded_nodes = 1
+            for key, child in value.items():
+                if not isinstance(key, str):
+                    return (
+                        ValidationDiagnostic(
+                            component="manifest",
+                            code="manifest_key_invalid",
+                            message=f"Manifest object keys must be strings, not {type(key).__name__}.",
+                            source="manifest",
+                            path=path,
+                        ),
+                        None,
+                    )
+                try:
+                    key.encode("utf-8")
+                except UnicodeEncodeError as exc:
+                    return (
+                        ValidationDiagnostic(
+                            component="manifest",
+                            code="manifest_encoding_error",
+                            message=f"Manifest object key is not valid UTF-8 text. {exc}",
+                            source="manifest",
+                            path=path,
+                        ),
+                        None,
+                    )
+                child_diagnostic, child_profile = _profile_json_value(
+                    child,
+                    path=_append_json_path(path, key),
+                    depth=depth + 1,
+                    active=active,
+                    profiles=profiles,
                 )
-            try:
-                key.encode("utf-8")
-            except UnicodeEncodeError as exc:
-                active.remove(identity)
-                return ValidationDiagnostic(
-                    component="manifest",
-                    code="manifest_encoding_error",
-                    message=f"Manifest object key is not valid UTF-8 text. {exc}",
-                    source="manifest",
-                    path=path,
-                )
-            child_diagnostic = _validate_json_value(
-                child,
-                path=_append_json_path(path, key),
-                depth=depth + 1,
-                active=active,
-                validated=validated,
-            )
-            if child_diagnostic is not None:
-                active.remove(identity)
-                return child_diagnostic
-        active.remove(identity)
-        validated[identity] = max(depth, validated_depth or 0)
-        return None
+                if child_diagnostic is not None or child_profile is None:
+                    return child_diagnostic, None
+                height = max(height, 1 + child_profile.height)
+                expanded_nodes += 1 + child_profile.expanded_nodes
+                if expanded_nodes > MAX_MANIFEST_EXPANDED_NODES:
+                    return _manifest_expansion_diagnostic(path), None
+            profile = _JsonProfile(height=height, expanded_nodes=expanded_nodes)
+            if depth + profile.height > MAX_MANIFEST_DEPTH:
+                return _manifest_depth_diagnostic(path), None
+            profiles[identity] = profile
+            return None, profile
+        finally:
+            active.remove(identity)
     if isinstance(value, list):
         identity = id(value)
         if identity in active:
-            return ValidationDiagnostic(
-                component="manifest",
-                code="manifest_cycle",
-                message="Manifest must not contain cyclic YAML aliases.",
-                source="manifest",
-                path=path,
+            return (
+                ValidationDiagnostic(
+                    component="manifest",
+                    code="manifest_cycle",
+                    message="Manifest must not contain cyclic YAML aliases.",
+                    source="manifest",
+                    path=path,
+                ),
+                None,
             )
-        validated_depth = validated.get(identity)
-        if validated_depth is not None and validated_depth >= depth:
-            return None
+        cached = profiles.get(identity)
+        if cached is not None:
+            if depth + cached.height > MAX_MANIFEST_DEPTH:
+                return _manifest_depth_diagnostic(path), None
+            return None, cached
         active.add(identity)
-        for index, child in enumerate(value):
-            child_diagnostic = _validate_json_value(
-                child,
-                path=f"{path}[{index}]",
-                depth=depth + 1,
-                active=active,
-                validated=validated,
-            )
-            if child_diagnostic is not None:
-                active.remove(identity)
-                return child_diagnostic
-        active.remove(identity)
-        validated[identity] = max(depth, validated_depth or 0)
-        return None
+        try:
+            height = 1
+            expanded_nodes = 1
+            for index, child in enumerate(value):
+                child_diagnostic, child_profile = _profile_json_value(
+                    child,
+                    path=f"{path}[{index}]",
+                    depth=depth + 1,
+                    active=active,
+                    profiles=profiles,
+                )
+                if child_diagnostic is not None or child_profile is None:
+                    return child_diagnostic, None
+                height = max(height, 1 + child_profile.height)
+                expanded_nodes += child_profile.expanded_nodes
+                if expanded_nodes > MAX_MANIFEST_EXPANDED_NODES:
+                    return _manifest_expansion_diagnostic(path), None
+            profile = _JsonProfile(height=height, expanded_nodes=expanded_nodes)
+            if depth + profile.height > MAX_MANIFEST_DEPTH:
+                return _manifest_depth_diagnostic(path), None
+            profiles[identity] = profile
+            return None, profile
+        finally:
+            active.remove(identity)
+    return (
+        ValidationDiagnostic(
+            component="manifest",
+            code="manifest_value_invalid",
+            message=(
+                "Manifest values must use JSON-compatible null, boolean, number, "
+                f"string, array, or object types, not {type(value).__name__}."
+            ),
+            source="manifest",
+            path=path,
+        ),
+        None,
+    )
+
+
+def _manifest_depth_diagnostic(path: str) -> ValidationDiagnostic:
     return ValidationDiagnostic(
         component="manifest",
-        code="manifest_value_invalid",
+        code="manifest_depth_exceeded",
+        message=f"Manifest JSON nesting exceeds the limit of {MAX_MANIFEST_DEPTH}.",
+        source="manifest",
+        path=path,
+    )
+
+
+def _manifest_expansion_diagnostic(path: str) -> ValidationDiagnostic:
+    return ValidationDiagnostic(
+        component="manifest",
+        code="manifest_expansion_exceeded",
         message=(
-            "Manifest values must use JSON-compatible null, boolean, number, "
-            f"string, array, or object types, not {type(value).__name__}."
+            "Manifest YAML aliases expand beyond the "
+            f"{MAX_MANIFEST_EXPANDED_NODES}-node validation limit."
         ),
         source="manifest",
         path=path,
